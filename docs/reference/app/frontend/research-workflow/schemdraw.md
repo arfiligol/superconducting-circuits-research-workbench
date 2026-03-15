@@ -14,18 +14,19 @@ route: /circuit-schemdraw
 status: draft
 owner: docs-team
 audience: team
-scope: "/circuit-schemdraw 的 linked schema、relation config、live editor、backend syntax check 與 live preview 契約"
-version: v0.6.0
-last_updated: 2026-03-14
-updated_by: team
+scope: "/circuit-schemdraw 的 linked schema context、source editor、SVG live preview、backend diagnostics 與 advanced mapping disclosure 契約"
+version: v0.7.0
+last_updated: 2026-03-16
+updated_by: codex
 ---
 
 # Schemdraw
 
-本頁定義 Schemdraw workspace 的 editor、relation config、backend syntax check 與 live preview 契約。
+本頁定義 Schemdraw workspace 的 linked schema context、source editor、SVG live preview、backend diagnostics 與 advanced mapping disclosure 契約。
 
 !!! info "Page Frame"
-    Frontend 只負責編輯 source、編輯 relation config、送出 render request、顯示 diagnostics 與 SVG preview。
+    Frontend 只負責編輯 source、顯示 linked schema context、送出 render request、呈現 diagnostics 與 SVG preview。
+    relation mapping / config 只屬於 optional advanced concern，不再佔據主工作區層級。
     authoritative syntax validation、controlled execution 與 render result 組裝由 backend 擁有。
 
 !!! warning "Backend Owns Live Preview"
@@ -40,10 +41,11 @@ updated_by: team
 
 | Responsibility | Meaning |
 |---|---|
-| Python source editing | 使用者在 code editor 中撰寫 Schemdraw Python source |
-| Relation config editing | 編輯 relation JSON 作為 schema metadata / labels / probe context |
-| Linked schema context | 可選地附加 canonical schema metadata |
-| Backend validation & preview | 將 source snapshot 送往 backend，回收 diagnostics 與 SVG |
+| Source editing | 使用者在 code editor 中撰寫 Schemdraw Python source |
+| SVG live preview | 直接檢視最新成功 render 的 SVG |
+| Linked schema context | 在工作區頂部顯示 linked schema 選擇與 lightweight context summary |
+| Backend diagnostics | 需要時查看 authoritative syntax / runtime diagnostics |
+| Advanced mapping | optional advanced metadata / mapping UI，用於精修 relation metadata，不得搶過 editor / preview |
 
 ## Shell Context Requirements
 
@@ -57,23 +59,26 @@ updated_by: team
 
 ```mermaid
 flowchart TD
-    Header["Workspace Header"] --> ContextRow["Linked Schema + Render Status"]
-    ContextRow --> Workspace["Two-column Workspace"]
-    Workspace --> Left["Relation Config + Diagnostics"]
-    Workspace --> Right["Python Editor + Preview Panel"]
-    Right --> PreviewControls["Zoom / Fit / Render Controls"]
+    Header["Workspace Header"] --> Context["Linked Schema Context"]
+    Context --> Main["Primary Work Area"]
+    Main --> Editor["Schemdraw Source Editor"]
+    Main --> Preview["SVG Live Preview"]
+    Main --> Controls["Render Controls"]
+    Main --> Diagnostics["Backend Diagnostics"]
+    Diagnostics --> Snapshot["Linked Schema Snapshot"]
 ```
 
 ## Component Inventory
 
 | ID | Component | Required behavior |
 |---|---|---|
-| `C1` | Linked Schema Selector | 選擇可附加的 schema metadata context |
-| `C2` | Relation Config Editor | 編輯 JSON relation config |
-| `C3` | Python Source Editor | 編輯 Schemdraw Python source |
+| `C1` | Linked Schema Context | 全寬顯示 linked schema selection 與 lightweight summary |
+| `C2` | Schemdraw Source Editor | 左側 primary editor，負責 source editing |
+| `C3` | SVG Live Preview | 右側 primary preview，顯示最新成功 render 的 SVG |
 | `C4` | Render Controls | 至少包含 `Render Now`、`Reset Template` |
-| `C5` | Diagnostics Panel | 顯示 backend diagnostics 與 render status |
-| `C6` | SVG Preview Panel | 顯示最新成功 render 的 SVG 與 preview metadata |
+| `C5` | Backend Diagnostics | 全寬 support/debug surface，顯示 backend diagnostics 與 render status |
+| `C6` | Linked Schema Snapshot | 全寬 read-only reference surface，顯示 linked schema snapshot |
+| `C7` | Advanced Mapping Disclosure | optional advanced disclosure，用於 relation metadata / mapping，不得佔據 main workspace slot |
 
 ## Three-step Processing Flow
 
@@ -81,7 +86,7 @@ flowchart TD
     Schemdraw live preview 應被視為三步驟流程，而不是單一 editor 小技巧。
 
 1. **Edit locally**
-   前端更新 Python source、relation config、linked schema context。
+   前端更新 Python source、linked schema context，必要時再調整 advanced mapping。
 2. **Send snapshot**
    停止輸入後以 debounce 方式送出 request snapshot；手動點擊 `Render Now` 可跳過 debounce。
 3. **Validate and render on backend**
@@ -101,9 +106,12 @@ flowchart TD
 | Rule | Meaning |
 |---|---|
 | Local cues are lightweight | editor 可做 syntax highlighting、indent guides、cursor hints |
-| Preview becomes stale on edit | 任何 source / relation 變動都應把 preview 標為 `Stale` |
+| Preview becomes stale on edit | 任何 source / advanced mapping 變動都應把 preview 標為 `Stale` |
 | Latest-only apply | 前端只採用最新 `document_version` / `request_id` 的 response |
 | No implicit persistence | 本頁不保存 schema source、不保存 render draft |
+| Advanced mapping is secondary | relation mapping / config 只能作 advanced disclosure，不得比 editor 或 preview 更顯眼 |
+| Diagnostics are support-only | diagnostics 應位於 editor / preview 之下，不得和 primary work area 同級競爭注意力 |
+| Snapshot is reference-only | linked schema snapshot 為 read-only reference，不得壓過 editor / preview 的主要工作流 |
 
 ??? example "Edit-to-preview behavior"
     1. 使用者修改 Python source。
@@ -129,7 +137,7 @@ flowchart TD
 | Situation | Required behavior |
 |---|---|
 | linked schema 在 workspace switch 後不可見 | 清除 linked schema 並提示使用者重新選擇 |
-| relation config 與 backend schema contract 不符 | diagnostics 顯示為 blocking，不更新 preview |
+| advanced mapping 與 backend schema contract 不符 | diagnostics 顯示為 blocking，不更新 preview |
 | manual render during stale response race | 只保留最新 response；舊回應直接丟棄 |
 
 ## Authority Pair
@@ -143,10 +151,12 @@ flowchart TD
 ## Acceptance Checklist
 
 !!! success "Implementation-ready outcome"
-    * [ ] frontend 只負責 source / relation 編輯與 response 呈現
+    * [ ] frontend 只負責 source editing、response 呈現與 linked schema context
     * [ ] backend 擁有 authoritative syntax check 與 live preview
     * [ ] three-step flow 已明確：edit -> send snapshot -> backend validate/render
     * [ ] stale preview 與 latest-only apply 有正式定義
+    * [ ] main hierarchy 明確是 `Linked Schema Context -> Source Editor + SVG Live Preview -> Backend Diagnostics -> Linked Schema Snapshot`
+    * [ ] relation mapping / config 被定義為 optional advanced concern，不佔 main workspace slot
     * [ ] page 不會把 preview workflow誤寫成 task queue 或 persistence workflow
 
 ## Related

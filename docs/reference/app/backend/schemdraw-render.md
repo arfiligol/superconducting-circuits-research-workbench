@@ -10,10 +10,10 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Schemdraw render service 的 three-step flow、request/response、diagnostics 與 authoritative syntax/live preview 契約
-version: v0.5.0
-last_updated: 2026-03-14
-updated_by: team
+scope: Schemdraw render service 的 three-step flow、request/response、diagnostics、authoritative syntax/live preview 與 advanced mapping envelope 契約
+version: v0.6.0
+last_updated: 2026-03-16
+updated_by: codex
 ---
 
 # Schemdraw Render
@@ -21,7 +21,7 @@ updated_by: team
 本頁定義 `Schemdraw` workspace 依賴的 backend render service 契約。
 
 !!! info "Surface Boundary"
-    本契約負責接收 frontend source snapshot、驗證 relation config、進行 authoritative syntax check、執行 controlled render，並回傳 diagnostics 與 SVG preview。
+    本契約負責接收 frontend source snapshot、linked schema context 與 optional advanced mapping、進行 authoritative syntax check、執行 controlled render，並回傳 diagnostics 與 SVG preview。
     canonical definition persistence、task queue 建立與 streaming transport 不屬於本頁責任。
 
 !!! warning "Backend Is The Syntax And Preview Authority"
@@ -40,7 +40,7 @@ updated_by: team
 ## Three-step Processing Flow
 
 1. **Frontend edits source**
-   使用者在 editor 中修改 Python source、relation config、linked schema。
+   使用者在 editor 中修改 Python source、linked schema，必要時再提供 optional advanced mapping。
 2. **Frontend sends snapshot**
    debounce 後送出 request；或由 `Render Now` 立即送出。
 3. **Backend validates and renders**
@@ -55,7 +55,7 @@ updated_by: team
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `source_text` | `string` | required | Schemdraw Python source |
-| `relation_config` | `object` | required | relation config JSON object |
+| `relation_config` | `object | null` | optional | optional advanced mapping / relation metadata object |
 | `linked_schema` | `object | null` | optional | linked schema metadata snapshot |
 | `document_version` | `integer` | required | editor version |
 | `request_id` | `string` | required | single render request identity |
@@ -75,7 +75,7 @@ linked schema object baseline：
 | Layer | Meaning |
 |---|---|
 | Request validation | body shape 與必要欄位是否合法 |
-| Relation validation | relation config 是否符合最低 shape |
+| Relation validation | optional advanced mapping 是否符合最低 shape |
 | Syntax validation | Python source 是否可 parse |
 | Entrypoint validation | `build_drawing(relation)` 是否存在且可呼叫 |
 | Runtime render | controlled execution 是否成功產生 preview |
@@ -111,15 +111,16 @@ linked schema object baseline：
 |---|---|
 | Linked schema visibility check | backend 必須拒絕目前 session 不可見的 linked schema |
 | No implicit task creation | render request 不能靜默建立 persisted task |
-| No implicit save | render request 不會保存 source / relation config |
+| No implicit save | render request 不會保存 source / advanced mapping |
 | Controlled runtime only | backend 僅允許受控 entrypoint 與受限 import boundary |
+| Mapping stays secondary | backend 可驗證 `relation_config`，但它只屬於 optional advanced mapping，不應成為 page primary workflow 的理由 |
 
 ## Delivery Rules
 
 | Rule | Meaning |
 |---|---|
 | Formal errors stay in envelope | syntax / runtime errors 應回正式 response envelope，而不是 transport failure |
-| No implicit persistence | source、relation config、SVG 都不能被默默保存 |
+| No implicit persistence | source、advanced mapping 與 SVG 都不能被默默保存 |
 | Latest-only safe | response 必須帶 `request_id` 與 `document_version`，讓 frontend 丟棄 stale result |
 | Cancellation is best-effort | 新 request 來時可嘗試取消舊 render |
 
@@ -188,7 +189,7 @@ linked schema object baseline：
 
 | Code | Category | When it applies |
 |---|---|---|
-| `schemdraw_relation_invalid` | `validation_error` | relation config 不符合 contract |
+| `schemdraw_relation_invalid` | `validation_error` | optional advanced mapping 不符合 contract |
 | `schemdraw_linked_schema_not_visible` | `permission_denied` | linked schema 對目前 session 不可見 |
 | `schemdraw_syntax_error` | `validation_error` | Python source parse 失敗 |
 | `schemdraw_runtime_error` | `task_execution_failed` | controlled render 執行失敗 |

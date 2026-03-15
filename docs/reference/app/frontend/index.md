@@ -13,7 +13,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
-version: v0.15.0
+version: v0.16.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -64,7 +64,7 @@ updated_by: codex
 
     | Page | Core focus | Authority pair |
     |---|---|---|
-    | [Schemdraw](research-workflow/schemdraw.md) | linked schema、relation config、live editor、backend-owned syntax/live preview | [Backend / Schemdraw Render](../backend/schemdraw-render.md), [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
+    | [Schemdraw](research-workflow/schemdraw.md) | linked schema context、source editor、SVG live preview、backend-owned diagnostics/render | [Backend / Schemdraw Render](../backend/schemdraw-render.md), [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
     | [Circuit Simulation](research-workflow/circuit-simulation.md) | definition-bound run setup、task attach、result handoff、shared queue | [Backend / Circuit Definitions](../backend/circuit-definitions.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
     | [Characterization](research-workflow/characterization.md) | design scope、run analysis、task attach、run history、result view | [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Characterization Results](../backend/characterization-results.md) |
 
