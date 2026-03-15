@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import Link from "next/link";
 import useSWR, { useSWRConfig } from "swr";
 import {
@@ -37,6 +44,7 @@ import {
 type WorkspaceStatusStripProps = Readonly<{
   open: boolean;
   onOpenChange: (nextOpen: boolean) => void;
+  interactionBoundaryRef?: RefObject<HTMLElement | null>;
 }>;
 
 function ActionButton({
@@ -132,7 +140,11 @@ function isRetryableError(error: Error | undefined): boolean {
   return !("retryable" in error) || (error as { retryable?: boolean | null }).retryable !== false;
 }
 
-export function WorkspaceStatusStrip({ open, onOpenChange }: WorkspaceStatusStripProps) {
+export function WorkspaceStatusStrip({
+  open,
+  onOpenChange,
+  interactionBoundaryRef,
+}: WorkspaceStatusStripProps) {
   const { mutate } = useSWRConfig();
   const [datasetSearch, setDatasetSearch] = useState("");
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
@@ -344,6 +356,7 @@ export function WorkspaceStatusStrip({ open, onOpenChange }: WorkspaceStatusStri
         title="Global Context"
         subtitle="Global context for header-owned workspace, dataset, queue, and worker state."
         variant="context"
+        interactionBoundaryRef={interactionBoundaryRef}
       >
         <div className="space-y-4">
           {(sessionError || taskQueueError || activeTaskError || activeDatasetError) && (

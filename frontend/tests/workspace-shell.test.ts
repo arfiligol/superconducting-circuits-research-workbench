@@ -138,12 +138,15 @@ describe("workspace shell source contracts", () => {
     expect(headerSource).toContain('useState<"account" | "context" | null>');
     expect(headerSource).toContain('activePanel === "account"');
     expect(headerSource).toContain('activePanel === "context"');
+    expect(headerSource).toContain("shellControlsRef");
     expect(shellSidePanelSource).toContain('offsetTopClassName = "top-[74px]"');
-    expect(shellSidePanelSource).toContain("fixed inset-x-0 bottom-0 z-40");
+    expect(shellSidePanelSource).toContain("createPortal");
     expect(shellSidePanelSource).toContain('variant?: "context" | "account"');
     expect(shellSidePanelSource).toContain('const isContextSurface = variant === "context"');
-    expect(shellSidePanelSource).toContain("inset-x-4 bottom-4 mx-auto");
-    expect(shellSidePanelSource).toContain("bottom-0 right-0 w-full max-w-[460px]");
+    expect(shellSidePanelSource).toContain('variant !== "account"');
+    expect(shellSidePanelSource).toContain("interactionBoundaryRef");
+    expect(shellSidePanelSource).toContain("inset-x-4 top-[calc(74px+1rem)]");
+    expect(shellSidePanelSource).toContain("h-[calc(100dvh-74px)]");
   });
 
   it("splits context and account into different shell surface models", () => {

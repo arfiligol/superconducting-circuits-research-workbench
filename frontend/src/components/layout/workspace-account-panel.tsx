@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { RefObject } from "react";
 import { useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LogIn, LogOut, MailPlus, ShieldAlert, UserMinus, Users } from "lucide-react";
@@ -36,11 +37,13 @@ type PendingAccountAction =
 type WorkspaceAccountPanelProps = Readonly<{
   open: boolean;
   onOpenChange: (nextOpen: boolean) => void;
+  interactionBoundaryRef?: RefObject<HTMLElement | null>;
 }>;
 
 export function WorkspaceAccountPanel({
   open,
   onOpenChange,
+  interactionBoundaryRef,
 }: WorkspaceAccountPanelProps) {
   const { session, status, sessionError } = useAppSession();
   const collaboration = useWorkspaceCollaboration();
@@ -123,6 +126,7 @@ export function WorkspaceAccountPanel({
         subtitle="Session, appearance, and workspace collaboration."
         variant="account"
         className="max-w-[440px]"
+        interactionBoundaryRef={interactionBoundaryRef}
       >
         <div className="space-y-5">
           <ShellNotice tone={authSummary.tone} title={authSummary.menuTitle}>

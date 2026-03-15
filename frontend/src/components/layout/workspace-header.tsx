@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ChevronRight, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { WorkspaceAccountPanel } from "@/components/layout/workspace-account-panel";
 import { WorkspaceStatusStrip } from "@/components/layout/workspace-status-strip";
@@ -17,6 +17,7 @@ import { resolveWorkspacePageIdentity } from "@/lib/navigation";
 export function WorkspaceHeader() {
   const pathname = usePathname();
   const [activePanel, setActivePanel] = useState<"account" | "context" | null>(null);
+  const shellControlsRef = useRef<HTMLDivElement | null>(null);
   const { session, sessionError, status } = useAppSession();
   const identity = resolveWorkspacePageIdentity(pathname);
   const authSummary = resolveShellAuthSummary({
@@ -75,7 +76,7 @@ export function WorkspaceHeader() {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div ref={shellControlsRef} className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={() => {
@@ -121,6 +122,7 @@ export function WorkspaceHeader() {
             onOpenChange={(nextOpen) => {
               setActivePanel(nextOpen ? "context" : null);
             }}
+            interactionBoundaryRef={shellControlsRef}
           />
         </div>
       </div>
@@ -130,6 +132,7 @@ export function WorkspaceHeader() {
         onOpenChange={(nextOpen) => {
           setActivePanel(nextOpen ? "account" : null);
         }}
+        interactionBoundaryRef={shellControlsRef}
       />
     </>
   );

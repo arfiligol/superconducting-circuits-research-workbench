@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import { cx } from "@/features/shared/components/surface-kit";
@@ -14,6 +15,7 @@ type ShellSidePanelProps = Readonly<{
   className?: string;
   offsetTopClassName?: string;
   variant?: "context" | "account";
+  interactionBoundaryRef?: RefObject<HTMLElement | null>;
 }>;
 
 export function ShellSidePanel({
@@ -25,7 +27,10 @@ export function ShellSidePanel({
   className,
   offsetTopClassName = "top-[74px]",
   variant = "account",
+  interactionBoundaryRef,
 }: ShellSidePanelProps) {
+  const panelRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -43,30 +48,63 @@ export function ShellSidePanel({
     };
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open || variant !== "account") {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (panelRef.current?.contains(target)) {
+        return;
+      }
+
+      if (interactionBoundaryRef?.current?.contains(target)) {
+        return;
+      }
+
+      onClose();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [interactionBoundaryRef, onClose, open, variant]);
+
   if (!open) {
     return null;
   }
 
-  const isContextSurface = variant === "context";
+  if (typeof document === "undefined") {
+    return null;
+  }
 
-  return (
+  const isContextSurface = variant === "context";
+  const content = (
     <>
-      <button
-        type="button"
-        aria-label="Close panel backdrop"
-        className={cx(
-          "fixed inset-x-0 bottom-0 z-40 bg-slate-950/40 backdrop-blur-[2px]",
-          offsetTopClassName,
-        )}
-        onClick={onClose}
-      />
+      {isContextSurface ? (
+        <button
+          type="button"
+          aria-label="Close panel backdrop"
+          className={cx(
+            "fixed inset-x-0 bottom-0 z-[60] bg-slate-950/42 backdrop-blur-[3px]",
+            offsetTopClassName,
+          )}
+          onClick={onClose}
+        />
+      ) : null}
       <aside
+        ref={panelRef}
         className={cx(
-          "fixed z-40 flex flex-col overflow-hidden border border-border bg-card shadow-[0_28px_90px_rgba(15,23,42,0.22)]",
-          offsetTopClassName,
+          "fixed z-[61] flex flex-col overflow-hidden border border-border bg-card shadow-[0_28px_90px_rgba(15,23,42,0.22)]",
           isContextSurface
-            ? "inset-x-4 bottom-4 mx-auto max-w-[min(1040px,calc(100vw-2rem))] rounded-[1.4rem] sm:inset-x-6 sm:bottom-6"
-            : "bottom-0 right-0 w-full max-w-[460px] border-l border-t border-border rounded-none shadow-[-24px_0_70px_rgba(15,23,42,0.24)]",
+            ? "inset-x-4 top-[calc(74px+1rem)] bottom-4 mx-auto w-auto max-w-[min(1040px,calc(100vw-2rem))] rounded-[1.4rem] sm:inset-x-6 sm:bottom-6"
+            : "right-0 h-[calc(100dvh-74px)] w-full border-l border-border shadow-[-24px_0_70px_rgba(15,23,42,0.24)] top-[74px] max-w-[440px]",
           className,
         )}
         aria-modal="true"
@@ -108,4 +146,6 @@ export function ShellSidePanel({
       </aside>
     </>
   );
+
+  return createPortal(content, document.body);
 }
