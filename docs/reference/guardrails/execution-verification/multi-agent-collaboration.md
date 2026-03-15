@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: "Documentation / Planning & Reviewing / Implementation / Test Agents 的責任分工、交接順序與並行協作規範"
-version: v2.4.0
+version: v2.5.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -75,6 +75,7 @@ updated_by: codex
   - 主線回收與 regression summary
   - 重讀 SoT 與實際程式碼脈絡後做實質判斷，而不是只檢查 prompt 是否被逐字遵守
   - 若實作過寬或仍有缺口，透過新的 fixup prompt 收縮，而不是要求第一輪 prompt 過度窄化
+  - 對 user-visible frontend 交付執行 Playwright-based smoke 驗證，並用 screenshot / 等價視覺證據確認 layout 與互動沒有跑掉
 
 ### Implementation Agents
 
@@ -209,6 +210,7 @@ Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
     - may edit `Plans/` artifacts only; if SoT must change, hand off to Documentation Agents
     - define `Allowed Area` + `Do Not Touch` for implementation prompts by default
     - review implementation against SoT and product need, not prompt literalism alone
+    - use Playwright-based smoke verification plus screenshot or equivalent visual evidence when reviewing user-visible frontend changes
 - Implementation Agents:
     - use four implementation lanes:
         - Frontend

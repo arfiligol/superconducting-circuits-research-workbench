@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: "Planning & Reviewing / Implementation / Test Agents 的標準交接格式"
-version: v2.4.0
+version: v2.5.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -198,6 +198,9 @@ updated_by: codex
 - Code context reread:
   - <path>
   - <path>
+- UI evidence (required for user-visible frontend changes):
+  - Playwright flow: <path-or-summary>
+  - Screenshot(s): <path-or-summary>
 - Judgement:
   - <why the implementation does / does not satisfy product need and current SoT>
 ```
@@ -237,6 +240,7 @@ updated_by: codex
 - Review merge reports MUST include:
     - SoT pages reread
     - code context reread
+    - UI evidence for user-visible frontend changes
     - explicit judgement against current docs and product need
 - Reporting quality rules:
     - lead with conclusion, then evidence

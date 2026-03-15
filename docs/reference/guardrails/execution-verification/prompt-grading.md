@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: "定義 Planning & Reviewing Agents 在多 Agent 協作時使用的 prompt 分級、適用時機與驗收要求"
-version: v1.3.0
+version: v1.4.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -163,6 +163,7 @@ Done Definition：
 - review 時必須重新讀 SoT、delivery report 與實際實作上下文；不得只檢查 agent 是否逐字遵照 prompt。
 - review 允許 `Implementation Agent` 在 `Allowed Area` 內自行選擇具體修改點；判準是結果是否對齊 SoT、產品需求與驗收，而不是是否完全照 prompt 的檔案想像實作。
 - 若實作過寬或仍未達需求，`Planning & Reviewing Agent` 應透過新的 fixup prompt 收斂，而不是預設把第一輪 prompt 寫成過度窄化的檔案清單。
+- 若交付內容是 user-visible frontend surface，review 還必須用真實瀏覽器互動驗收；至少要有一次 Playwright smoke 與 screenshot / 等價視覺證據。
 
 ## Anti-Patterns
 
@@ -207,6 +208,7 @@ Done Definition：
 - Review rule:
     - re-read SoT, delivery reports, and implementation context during review.
     - evaluate outcome against product need and authority docs, not prompt literalism alone.
+    - for user-visible frontend changes, include Playwright-based browser verification with screenshot or equivalent visual evidence.
 - Required prompt fields:
     - Task ID / Topic
     - Prompt Level

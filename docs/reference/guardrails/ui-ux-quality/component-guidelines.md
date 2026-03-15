@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: frontend component 選型、表單、dialog 與資料表格規範。
-version: v2.2.0
-last_updated: 2026-03-15
+version: v2.3.0
+last_updated: 2026-03-16
 updated_by: codex
 ---
 
@@ -63,6 +63,17 @@ updated_by: codex
 - 詳細 payload 僅在 row selection 或 detail panel 時抓取
 - 不要因為單純切頁就重抓大型 payload
 
+## Copy Density Contract
+
+- 元件與卡片應優先靠標題、status、metadata 與 action hierarchy 自我說明
+- helper text 僅在風險高、歧義高或表單輸入需要額外說明時出現
+- empty / loading / error state 應簡短直接，不應變成一大段說明牆
+- shell、sidebar、header 與 login entry 尤其應避免多餘文字
+
+!!! tip "Use copy as support, not scaffolding"
+    若一個 surface 需要大量文字才能被理解，優先先調整 component hierarchy、grouping 與 layout。
+    只有在這些都不足時，再加入精簡的輔助文案。
+
 ## Agent Rule { #agent-rule }
 
 ```markdown
@@ -77,4 +88,6 @@ updated_by: codex
 - Clickable icons must provide a clear hover state, including pointer feedback and visible hover styling.
 - Data-dense tables must support sorting, filtering, and pagination or a clear virtualization strategy.
 - Load summary rows first; fetch heavy detail payload only on explicit detail interaction.
+- Prefer hierarchy, metadata, and status over long helper copy in dense product UI.
+- Keep error, empty, and recovery copy concise; do not turn product surfaces into diagnostics walls.
 ```

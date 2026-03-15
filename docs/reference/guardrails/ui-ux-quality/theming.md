@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: frontend theme system、semantic tokens 與 dark mode 規範。
-version: v2.1.0
-last_updated: 2026-03-14
+version: v2.2.0
+last_updated: 2026-03-16
 updated_by: docs-team
 ---
 
@@ -62,6 +62,19 @@ updated_by: docs-team
 - 圖表主題需跟隨目前 theme
 - 任何 theme 切換不可造成表單或選取狀態重置
 
+## Light Mode Direction
+
+| Concern | Baseline |
+|---|---|
+| Base surface | 以乾淨 white base 或較暖的 neutral base 為主，不應被過冷的 blue-gray wash 蓋住整個 app |
+| Accent language | 保留淡 accent fills、soft icon accents 與 restrained semantic states |
+| Mood | light mode 應是 dark mode 的 sibling，不是另一個產品語言 |
+| Rejection | 不接受大面積偏冷、偏藍、像 debug shell 一樣的 light-mode wash |
+
+!!! tip "Light mode should stay calm"
+    light mode 的視覺重點應來自層次、邊框、間距與狀態，而不是大面積帶色底。
+    若需要區分狀態，優先使用局部 accent、badge、icon chip 與 card hierarchy，而不是整頁偏色。
+
 ## Agent Rule { #agent-rule }
 
 ```markdown
@@ -73,4 +86,6 @@ updated_by: docs-team
 - Every component must remain readable in both light and dark themes.
 - Chart styling must follow the active theme.
 - Theme switching must not trigger avoidable state loss.
+- Light mode should prefer a clean white base or warmer neutral base over a cool blue-gray wash.
+- Preserve restrained accent fills and icon accents, but do not tint the whole dashboard as if it were a diagnostics shell.
 ```

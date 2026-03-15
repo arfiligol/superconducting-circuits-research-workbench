@@ -13,14 +13,14 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared sidebar 的導航、route grouping 與 responsive shell contract
-version: v0.2.0
-last_updated: 2026-03-14
-updated_by: team
+version: v0.4.0
+last_updated: 2026-03-16
+updated_by: codex
 ---
 
 # Sidebar
 
-本頁定義 frontend shared sidebar 的正式契約。它是 app shell 的 primary navigation surface。
+本頁定義 frontend shared sidebar 的正式契約。它是 app shell 的 navigation-only surface。
 
 !!! info "Surface Boundary"
     Sidebar 負責全域導航、route grouping 與 responsive shell entry。
@@ -30,13 +30,45 @@ updated_by: team
     Sidebar 只決定「如何在 app surfaces 之間移動」。
     它不得承擔 page body 內的 workflow 邏輯，也不得重複 page-local controls。
 
+!!! warning "Navigation-Only Sidebar"
+    本產品的 Sidebar 應收斂成 navigation-only surface。
+    它只允許 group labels、nav item title、icon 與 active state；
+    shell identity、brand helper text、explanatory copy、item summary、group description、onboarding CTA 與 intro card 都不屬於 Sidebar。
+
 ## Sidebar Composition
 
 | Area | Responsibility |
 |---|---|
-| Branding | 顯示 app identity，提供回到主要 workspace 的穩定入口 |
 | Navigation Groups | 以穩定資訊架構列出 app pages |
 | Collapse Control | 在窄螢幕下提供展開 / 收合行為 |
+
+## Density Contract
+
+| Sidebar element | Allowed | Notes |
+|---|---|---|
+| Shell identity / app title | no | 只允許 Header 顯示 shell identity |
+| Brand helper text / monogram | no | 不得顯示 `SC`、`Navigation`、`Workspace routes` 等 shell copy |
+| Group label | yes | 只作 IA grouping |
+| Nav item icon | yes | 幫助快速掃讀 |
+| Nav item title | yes | 作為主要 navigation label |
+| Active highlight | yes | 必須清楚顯示目前 route |
+| Group description | no | 移到 page body、overview 頁或 onboarding surface |
+| Item summary / subtitle | no | 不應佔用持久導航密度 |
+| Intro paragraph / explanatory copy | no | 不應放在 shared sidebar |
+| CTA card / onboarding card | no | 應移到 dashboard、empty state 或 dedicated onboarding surface |
+| Global status / queue summary | no | 屬於 [Header](header.md) / shell context controls |
+
+## Group Label Contract
+
+| Allowed label | Meaning |
+|---|---|
+| `DASHBOARD` | app 主入口群組 |
+| `PIPELINE` | dataset-driven workflow 群組 |
+| `CIRCUIT SIMULATION` | definition-driven workflow 群組 |
+
+!!! tip "No helper copy in the sidebar"
+    若使用者需要理解群組用途，應透過 page body、overview page、empty state 或 onboarding surface 引導。
+    不要把持久導航變成一個需要閱讀段落說明的資訊牆。
 
 ## Navigation Contract
 
@@ -44,21 +76,22 @@ updated_by: team
 
     | Group | Purpose |
     |---|---|
-    | `Dashboard` | app 主入口與總覽 |
-    | `Pipeline` | dataset-driven workflow：Dashboard、Raw Data、Characterization |
-    | `Circuit Simulation` | definition-driven workflow：Schemas、Simulation、Schemdraw |
+    | `DASHBOARD` | app 主入口與總覽 |
+    | `PIPELINE` | dataset-driven workflow：Dashboard、Raw Data、Characterization |
+    | `CIRCUIT SIMULATION` | definition-driven workflow：Schemas、Simulation、Schemdraw |
 
 === "Required Behaviors"
 
-    | Behavior | Meaning |
-    |---|---|
-    | Active route highlight | 目前 route 必須在 Sidebar 中有清楚的 active 狀態 |
-    | Stable entry points | 主要頁面不得只靠 page-internal links 才能抵達 |
-    | Responsive collapse | 窄螢幕可收合，但不可丟失 active route 與導覽分組 |
+| Behavior | Meaning |
+|---|---|
+| Active route highlight | 目前 route 必須在 Sidebar 中有清楚的 active 狀態 |
+| Stable entry points | 主要頁面不得只靠 page-internal links 才能抵達 |
+| Responsive collapse | 窄螢幕可收合，但不可丟失 active route 與導覽分組 |
+| Dense-but-quiet presentation | 側欄是持久導航，不應承擔教育文案或管理面板 |
 
 !!! tip "Sidebar vs Header"
     Sidebar 負責持久導航。
-    [Header](header.md) 負責 `Active Dataset`、`Tasks Queue`、worker status 與 user menu。
+    [Header](header.md) 負責 `Active Workspace`、`Active Dataset`、`Tasks Queue`、worker status 與 user menu 的 compact entry points。
 
 ## Primary Consumers
 

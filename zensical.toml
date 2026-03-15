@@ -127,6 +127,7 @@ nav = [
         { "Shared Shell" = [
           { "Header" = "reference/app/frontend/shared-shell/header.md" },
           { "Sidebar" = "reference/app/frontend/shared-shell/sidebar.md" },
+          { "Auth Entry" = "reference/app/frontend/shared-shell/auth-entry.md" },
         ] },
         { "Shared Workflow" = [
           { "Task Management" = "reference/app/frontend/shared-workflow/task-management.md" },

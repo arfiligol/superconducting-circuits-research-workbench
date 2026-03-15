@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared header task queue、task attachment、worker summary、control actions 與 refresh recovery contract
-version: v0.5.0
-last_updated: 2026-03-14
+version: v0.7.0
+last_updated: 2026-03-16
 updated_by: codex
 ---
 
@@ -38,14 +38,15 @@ updated_by: codex
 
 | Object | Responsibility |
 |---|---|
-| Header Task Trigger | 在所有 app pages 上可直接打開 queue |
-| Task Queue Panel | 顯示最近可見的 tasks，支援 filter、attach、cancel、terminate、retry |
-| Worker Summary | 顯示每個 lane 的 processor health 與 busy / degraded 狀態 |
+| Header Task Trigger | 在所有 app pages 上可直接打開右側 shell-side panel 的 queue section |
+| Shell-Side Panel | shared shell 的右側 management surface，承接 queue、worker、workspace、dataset 與 account sections |
+| Task Queue Section | 顯示最近可見的 tasks，支援 filter、attach、cancel、terminate、retry |
+| Worker Summary | Header 顯示 compact summary；drawer 顯示 lane-level detail |
 | Attached Task | 表示目前 page body 正在關注的單一 persisted task |
 | Lifecycle Summary | 顯示 queued / running / completed / failed / cancelled / terminated 與最近 event 概況 |
 | Result Handoff | terminal task 完成後，將 page context 切到 persisted result surface |
 
-## Task Queue Panel Contract
+## Task Queue Section Contract
 
 | Field / affordance | Required meaning |
 |---|---|
@@ -60,7 +61,7 @@ updated_by: codex
 | `Attach` action | 明確將 page body 切到指定 persisted task |
 | `Cancel` / `Terminate` / `Retry` actions | 依 task 狀態與使用者權限顯示 |
 | result availability | 表示是否已有 persisted result 可供 handoff |
-| `next_cursor` / `prev_cursor` | 若 queue panel 支援延伸瀏覽 recent rows，應使用 cursor-based meta |
+| `next_cursor` / `prev_cursor` | 若 queue section 支援延伸瀏覽 recent rows，應使用 cursor-based meta |
 
 ## Queue Filters And Ordering
 
@@ -76,6 +77,14 @@ updated_by: codex
 !!! tip "`Mine` is a filter, not a visibility scope"
     queue 的 `Mine` 來自 owner-based filter。
     persisted `visibility_scope` 仍只有 `private` 與 `workspace`。
+
+!!! tip "Drawer, not inline strip"
+    `Tasks Queue` 是 shared shell management surface，應集中在右側 `Shell-Side Panel`。
+    Header 只保留 trigger / badge / compact worker summary，不應再鋪一條第二層大型 queue strip。
+
+!!! warning "Single Active Shell Panel"
+    queue section 與 account section 屬於同一套右側 shell-side panel interaction model。
+    同一時間只能有一個 active panel section；切換 trigger 時應切換 active section，而不是留下被 overlay 擋住的不可點 header trigger。
 
 ## Worker Summary Contract
 
@@ -101,8 +110,8 @@ updated_by: codex
 
 | State | Meaning |
 |---|---|
-| `Queue Closed` | Header queue 尚未展開 |
-| `Queue Open` | Header queue 已展開並可進行 task management |
+| `Queue Closed` | Header queue trigger 未開啟 shell-side panel |
+| `Queue Open` | 右側 shell-side panel 的 queue section 為 active |
 | `Loading` | task list / task detail / worker summary 請求中 |
 | `Workspace Switching` | shell 正在切換 active workspace，queue 需暫停舊內容 |
 | `Attached` | 頁面已附加到一筆 persisted task |
@@ -116,8 +125,8 @@ updated_by: codex
 
 | Situation | Baseline behavior |
 |---|---|
-| queue panel open | 定期重抓 queue rows 與 worker summary |
-| queue panel closed | 只維持 badge / worker summary 的低頻更新 |
+| shell-side panel open on queue | 定期重抓 queue rows 與 worker summary |
+| panel closed / queue section hidden | 只維持 badge / worker summary 的低頻更新 |
 | after control action | 立即重新抓取對應 task row 與 summary |
 | after workspace switch | 停止舊 queue 更新，改抓新 workspace queue |
 | after refresh / reconnect | 若存在 attached `task_id`，先抓 task detail，再同步 queue summary |
@@ -148,7 +157,7 @@ updated_by: codex
 
 === "Attach Existing"
 
-    1. 從 Header task queue 或 `Attach Latest` 選擇既有 task
+    1. 從 Header 打開右側 shell-side panel 的 queue section，或使用 `Attach Latest`
     2. page body 切換到該 task
     3. 以 persisted task detail / events / result refs 重建畫面
 
@@ -184,7 +193,7 @@ updated_by: codex
 
     | Aspect | Requirement |
     |---|---|
-    | Queue entry | queue 由 Header 提供，頁面不重複造一份全域 queue |
+    | Queue entry | queue 由 Header trigger + shell-side panel 提供，頁面不重複造一份全域 queue |
     | Result handoff | 任務完成後切到 raw / post-processing result surface |
     | Context binding | task 與 active definition、dataset 必須可同時被看見 |
 
@@ -192,7 +201,7 @@ updated_by: codex
 
     | Aspect | Requirement |
     |---|---|
-    | Queue entry | 透過 Header queue 觀察 shared task activity 與 worker status |
+    | Queue entry | 透過 Header trigger + shell-side panel 觀察 shared task activity 與 worker status |
     | Run history relation | `Run History` 是 analysis artifact surface，不取代 shared task semantics |
     | Result handoff | completed task 之後切到 persisted characterization results |
 

@@ -13,9 +13,9 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
-version: v0.13.0
-last_updated: 2026-03-14
-updated_by: team
+version: v0.15.0
+last_updated: 2026-03-16
+updated_by: codex
 ---
 
 # Frontend Reference
@@ -36,14 +36,15 @@ updated_by: team
 
     | Page | Core focus | Authority pair |
     |---|---|---|
-    | [Header](shared-shell/header.md) | global context、active workspace、active dataset、tasks queue trigger、worker summary、user menu | [App / Shared / Identity & Workspace Model](../shared/identity-workspace-model.md), [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md) |
-    | [Sidebar](shared-shell/sidebar.md) | primary navigation、route grouping、responsive shell behavior | [Backend / Session & Workspace](../backend/session-workspace.md) |
+    | [Header](shared-shell/header.md) | single-line shell identity、compact global context triggers、right-side shell panel、worker summary、user menu | [App / Shared / Identity & Workspace Model](../shared/identity-workspace-model.md), [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md) |
+    | [Sidebar](shared-shell/sidebar.md) | navigation-only sidebar、strict group labels、responsive shell behavior | [Backend / Session & Workspace](../backend/session-workspace.md) |
+    | [Auth Entry](shared-shell/auth-entry.md) | login / logout / recovery entry、concise auth status、secondary diagnostics disclosure | [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [Backend / Session & Workspace](../backend/session-workspace.md) |
 
 === "Shared Workflow"
 
     | Page | Core focus | Authority pair |
     |---|---|---|
-    | [Task Management](shared-workflow/task-management.md) | header queue、attach、cancel、terminate、retry、refresh recovery | [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Audit Logging](../shared/audit-logging.md) |
+    | [Task Management](shared-workflow/task-management.md) | right-side shell-panel queue、attach、cancel、terminate、retry、refresh recovery | [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Audit Logging](../shared/audit-logging.md) |
 
 === "Workspace"
 
@@ -72,6 +73,7 @@ updated_by: team
 | Question | Frontend surface | Authority |
 |---|---|---|
 | 哪裡切換 active workspace、active dataset、打開 task queue、看 worker 狀態、開 user menu？ | [Header](shared-shell/header.md) | [Identity & Workspace Model](../shared/identity-workspace-model.md), [Session & Workspace](../backend/session-workspace.md), [Tasks & Execution](../backend/tasks-execution.md), [Authentication & Authorization](../shared/authentication-and-authorization.md), [Task Runtime & Processors](../shared/task-runtime-and-processors.md) |
+| 哪裡定義登入 / 登出 / 恢復入口的產品密度，而不是診斷頁？ | [Auth Entry](shared-shell/auth-entry.md) | [Authentication & Authorization](../shared/authentication-and-authorization.md), [Session & Workspace](../backend/session-workspace.md) |
 | 哪裡看 shared task queue 與管理 actions？ | [Task Management](shared-workflow/task-management.md) | [Tasks & Execution](../backend/tasks-execution.md), [Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [Authentication & Authorization](../shared/authentication-and-authorization.md), [Task Runtime & Processors](../shared/task-runtime-and-processors.md), [Audit Logging](../shared/audit-logging.md) |
 | 哪裡編輯 schema 並取得可讀 hints？ | [Schema Editor](definition/schema-editor.md) | [Circuit Definitions](../backend/circuit-definitions.md), [Circuit Netlist](../../data-formats/circuit-netlist.md) |
 | 哪裡做 schemdraw live preview？ | [Schemdraw](research-workflow/schemdraw.md) | [Schemdraw Render](../backend/schemdraw-render.md) |
