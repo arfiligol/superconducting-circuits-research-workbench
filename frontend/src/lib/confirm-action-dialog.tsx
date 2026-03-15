@@ -39,7 +39,7 @@ export function ConfirmActionDialog({
             className={cx(
               "mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border",
               tone === "destructive"
-                ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+                ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200"
                 : "border-primary/30 bg-primary/10 text-primary",
             )}
           >

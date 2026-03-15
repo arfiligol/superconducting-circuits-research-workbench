@@ -3,6 +3,7 @@
 import { useDeferredValue } from "react";
 
 import { useRawDataBrowserData } from "@/features/data-browser/hooks/use-raw-data-browser-data";
+import { AppSelectField } from "@/features/shared/components/app-select";
 import { SurfaceHeader, SurfacePanel, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
 
 function readinessTone(value: "ready" | "inspect_only" | "blocked") {
@@ -412,21 +413,14 @@ function FilterSelect({
   options: readonly string[];
 }>) {
   return (
-    <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-      <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-        className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-      >
-        {options.map((option) => (
-          <option key={option || "all"} value={option}>
-            {option || "All"}
-          </option>
-        ))}
-      </select>
-    </label>
+    <AppSelectField
+      label={label}
+      value={value}
+      onChange={onChange}
+      options={options.map((option) => ({
+        value: option,
+        label: option || "All",
+      }))}
+    />
   );
 }

@@ -6,7 +6,9 @@ import { LoaderCircle, Save } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { useAppSession } from "@/lib/app-state";
 import { useDashboardData } from "@/features/data-browser/hooks/use-dashboard-data";
+import { AppSelectField } from "@/features/shared/components/app-select";
 import { SurfaceHeader, SurfacePanel, SurfaceStat, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
 
 const profileSchema = z.object({
@@ -39,6 +41,7 @@ function readinessTone(count: number) {
 }
 
 export function DashboardWorkspace() {
+  const { session } = useAppSession();
   const [saveState, setSaveState] = useState<{
     tone: "success" | "warning";
     message: string;
@@ -100,6 +103,7 @@ export function DashboardWorkspace() {
 
   const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? "";
   const catalogRows = catalog?.rows ?? [];
+  const canSwitchDataset = session?.capabilities.canSwitchDataset ?? false;
 
   return (
     <div className="space-y-8">
@@ -143,36 +147,42 @@ export function DashboardWorkspace() {
           ) : null}
 
           <div className="space-y-4">
-            <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Session Active Dataset
-              </span>
-              <div className="mt-2 flex items-center gap-3">
-                <select
-                  value={activeDatasetId}
-                  disabled={isCatalogLoading || catalogRows.length === 0 || isSelectingDataset}
-                  onChange={(event) => {
-                    setSaveState(null);
-                    startDatasetTransition(() => {
-                      void activeDatasetState.setActiveDataset(event.target.value);
-                    });
-                  }}
-                  className="min-h-11 flex-1 rounded-md border border-border bg-card px-4 text-sm text-foreground"
-                >
-                  <option value="" disabled>
-                    {isCatalogLoading ? "Loading visible datasets..." : "Select a dataset"}
-                  </option>
-                  {catalogRows.map((row) => (
-                    <option key={row.dataset_id} value={row.dataset_id}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-                {isSelectingDataset ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin text-muted-foreground" />
-                ) : null}
+            <div className="flex items-end gap-3">
+              <AppSelectField
+                className="flex-1"
+                label="Session Active Dataset"
+                value={activeDatasetId}
+                disabled={
+                  !canSwitchDataset ||
+                  isCatalogLoading ||
+                  catalogRows.length === 0 ||
+                  isSelectingDataset
+                }
+                placeholder={
+                  isCatalogLoading ? "Loading visible datasets..." : "Select a dataset"
+                }
+                onChange={(nextValue) => {
+                  setSaveState(null);
+                  startDatasetTransition(() => {
+                    void activeDatasetState.setActiveDataset(nextValue);
+                  });
+                }}
+                options={catalogRows.map((row) => ({
+                  value: row.dataset_id,
+                  label: row.name,
+                  description: `${row.family} · ${row.owner_display_name}`,
+                }))}
+              />
+              {isSelectingDataset ? (
+                <LoaderCircle className="mb-3 h-4 w-4 animate-spin text-muted-foreground" />
+              ) : null}
+            </div>
+
+            {!canSwitchDataset ? (
+              <div className="rounded-xl border border-amber-500/35 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/35 dark:text-amber-100">
+                Dataset switching is disabled for the current session authority.
               </div>
-            </label>
+            ) : null}
 
             {profile ? (
               <div className="rounded-xl border border-border/80 bg-surface px-4 py-4 text-sm">

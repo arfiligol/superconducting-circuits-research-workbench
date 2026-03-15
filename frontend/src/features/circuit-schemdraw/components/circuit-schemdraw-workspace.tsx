@@ -17,7 +17,8 @@ import CodeMirror from "@uiw/react-codemirror";
 import { useCircuitSchemdrawData } from "@/features/circuit-schemdraw/hooks/use-circuit-schemdraw-data";
 import { parseSchemdrawDefinitionIdParam } from "@/features/circuit-schemdraw/lib/definition-id";
 import { resolveSchemdrawSelectionRecovery } from "@/features/circuit-schemdraw/lib/workflow";
-import { cx } from "@/features/shared/components/surface-kit";
+import { AppSelectField } from "@/features/shared/components/app-select";
+import { cx, resolveSurfaceInsetToneClass } from "@/features/shared/components/surface-kit";
 
 function definitionSearchHref(
   pathname: string,
@@ -137,13 +138,13 @@ export function CircuitSchemdrawWorkspace() {
       </section>
 
       {definitionsError ? (
-        <div className="rounded-[1rem] border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-100">
+        <div className={cx("rounded-[1rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("error"))}>
           Unable to load linked schemas. {definitionsError.message}
         </div>
       ) : null}
 
       {activeDefinitionError ? (
-        <div className="rounded-[1rem] border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-100">
+        <div className={cx("rounded-[1rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("error"))}>
           Unable to load linked schema detail. {activeDefinitionError.message}
         </div>
       ) : null}
@@ -178,9 +179,11 @@ export function CircuitSchemdrawWorkspace() {
               <span
                 className={cx(
                   "rounded-full px-3 py-1 text-xs font-medium",
-                  renderTone(renderSurface.phase) === "success" && "bg-emerald-500/12 text-emerald-300",
+                  renderTone(renderSurface.phase) === "success" &&
+                    "bg-emerald-500/12 text-emerald-800 dark:text-emerald-200",
                   renderTone(renderSurface.phase) === "primary" && "bg-primary/10 text-primary",
-                  renderTone(renderSurface.phase) === "warning" && "bg-amber-500/12 text-amber-300",
+                  renderTone(renderSurface.phase) === "warning" &&
+                    "bg-amber-500/12 text-amber-800 dark:text-amber-200",
                   renderTone(renderSurface.phase) === "default" && "bg-surface text-muted-foreground",
                 )}
               >
@@ -189,29 +192,23 @@ export function CircuitSchemdrawWorkspace() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_140px]">
-              <label className="rounded-[0.9rem] border border-border bg-surface px-4 py-3">
-                <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Linked Schema
-                </span>
-                <select
-                  value={resolvedDefinitionId ?? ""}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    replaceDefinitionId(nextValue ? Number(nextValue) : null);
-                  }}
-                  disabled={isDefinitionsLoading || isNavigating}
-                  className="w-full bg-transparent text-sm text-foreground outline-none"
-                >
-                  <option value="">
-                    {isDefinitionsLoading ? "Loading schemas..." : "No linked schema"}
-                  </option>
-                  {(definitions ?? []).map((definition) => (
-                    <option key={definition.definition_id} value={definition.definition_id}>
-                      {definition.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <AppSelectField
+                label="Linked Schema"
+                value={resolvedDefinitionId === null ? "" : String(resolvedDefinitionId)}
+                disabled={isDefinitionsLoading || isNavigating}
+                placeholder={isDefinitionsLoading ? "Loading schemas..." : "No linked schema"}
+                onChange={(nextValue) => {
+                  replaceDefinitionId(nextValue ? Number(nextValue) : null);
+                }}
+                options={[
+                  { value: "", label: "No linked schema" },
+                  ...(definitions ?? []).map((definition) => ({
+                    value: String(definition.definition_id),
+                    label: definition.name,
+                    description: `Definition #${definition.definition_id}`,
+                  })),
+                ]}
+              />
 
               <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
@@ -307,9 +304,9 @@ export function CircuitSchemdrawWorkspace() {
                     className={cx(
                       "rounded-[0.9rem] border px-4 py-3 text-sm",
                       diagnostic.severity === "error"
-                        ? "border-rose-500/30 bg-rose-500/8 text-rose-100"
+                        ? resolveSurfaceInsetToneClass("error")
                         : diagnostic.severity === "warning"
-                          ? "border-amber-500/30 bg-amber-500/8 text-foreground"
+                          ? resolveSurfaceInsetToneClass("warning")
                           : "border-border bg-surface text-muted-foreground",
                     )}
                   >
@@ -388,16 +385,18 @@ export function CircuitSchemdrawWorkspace() {
                 <span
                   className={cx(
                     "rounded-full px-3 py-1 font-medium",
-                    renderTone(renderSurface.phase) === "success" && "bg-emerald-500/12 text-emerald-300",
+                    renderTone(renderSurface.phase) === "success" &&
+                      "bg-emerald-500/12 text-emerald-800 dark:text-emerald-200",
                     renderTone(renderSurface.phase) === "primary" && "bg-primary/10 text-primary",
-                    renderTone(renderSurface.phase) === "warning" && "bg-amber-500/12 text-amber-300",
+                    renderTone(renderSurface.phase) === "warning" &&
+                      "bg-amber-500/12 text-amber-800 dark:text-amber-200",
                     renderTone(renderSurface.phase) === "default" && "bg-surface text-muted-foreground",
                   )}
                 >
                   {renderSurface.statusLabel}
                 </span>
                 {renderSurface.isStale ? (
-                  <span className="rounded-full bg-amber-500/12 px-3 py-1 text-amber-300">
+                  <span className="rounded-full bg-amber-500/12 px-3 py-1 text-amber-800 dark:text-amber-200">
                     Stale preview
                   </span>
                 ) : null}
@@ -455,7 +454,7 @@ export function CircuitSchemdrawWorkspace() {
                 {renderSurface.phase === "rendered" ? (
                   <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                 ) : (
-                  <AlertTriangle className="h-4 w-4 text-amber-300" />
+                  <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
                 )}
                 <span>
                   {renderSurface.phase === "rendered"

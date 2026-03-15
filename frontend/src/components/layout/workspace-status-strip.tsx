@@ -47,6 +47,7 @@ type TriggerCardProps = Readonly<{
   value: string;
   detail?: string | null;
   active?: boolean;
+  compact?: boolean;
   onClick?: () => void;
   trailing?: React.ReactNode;
 }>;
@@ -65,38 +66,51 @@ function TriggerCard({
   value,
   detail,
   active = false,
+  compact = false,
   onClick,
   trailing,
 }: TriggerCardProps) {
   const content = (
     <>
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2.5">
         <span
           className={cx(
-            "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+            "inline-flex shrink-0 items-center justify-center rounded-full",
+            compact ? "h-8 w-8" : "h-9 w-9",
             active ? "bg-primary/12 text-primary" : "bg-surface-elevated text-primary/80",
           )}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
         </span>
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {label}
           </p>
-          <p className="truncate text-sm font-medium text-foreground">{value}</p>
-          {detail ? <p className="truncate text-[11px] text-muted-foreground">{detail}</p> : null}
+          <p className={cx("truncate font-medium text-foreground", compact ? "text-[13px]" : "text-sm")}>
+            {value}
+          </p>
+          {detail ? (
+            <p className={cx("truncate text-muted-foreground", compact ? "text-[10px]" : "text-[11px]")}>
+              {detail}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {trailing}
-        {onClick ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : null}
+        {onClick ? <ChevronDown className={cx("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} /> : null}
       </div>
     </>
   );
 
   if (!onClick) {
     return (
-      <div className="flex min-h-[58px] items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-surface px-3 py-3">
+      <div
+        className={cx(
+          "flex items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-surface px-3",
+          compact ? "min-h-[52px] py-2.5" : "min-h-[58px] py-3",
+        )}
+      >
         {content}
       </div>
     );
@@ -107,7 +121,8 @@ function TriggerCard({
       type="button"
       onClick={onClick}
       className={cx(
-        "flex min-h-[58px] w-full cursor-pointer items-center justify-between gap-3 rounded-[0.95rem] border px-3 py-3 text-left transition",
+        "flex w-full cursor-pointer items-center justify-between gap-3 rounded-[0.95rem] border px-3 text-left transition",
+        compact ? "min-h-[52px] py-2.5" : "min-h-[58px] py-3",
         active
           ? "border-primary/35 bg-primary/10"
           : "border-border bg-surface hover:border-primary/20 hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-header",
@@ -203,6 +218,7 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
     refreshActiveTask,
   } = useActiveTask();
   const datasetCatalogQuery = useSWR(datasetCatalogKey, listDatasetCatalog);
+  const canSwitchDataset = session?.capabilities.canSwitchDataset ?? false;
 
   useEffect(() => {
     setOpenPanel(null);
@@ -227,8 +243,8 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
   const workspaceDetail = sessionError
     ? (describeShellError(sessionError) ?? sessionError.message)
     : workspace
-      ? `${workspace.role} role · ${session?.memberships.length ?? 0} memberships · session authority`
-      : "Waiting for session authority";
+      ? `${workspace.role} role · ${session?.memberships.length ?? 0} memberships`
+      : "Session authority pending";
 
   const datasetValue =
     activeDatasetStatus === "syncing-route" || isUpdatingActiveDataset
@@ -237,12 +253,12 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
   const datasetDetail = activeDatasetError
     ? (describeShellError(activeDatasetError) ?? activeDatasetError.message)
     : source === "url" && routeDatasetId !== sessionDatasetId
-      ? "URL-selected dataset is waiting to attach to the session"
+      ? "Route selection waiting on session attach"
       : source === "url"
-        ? "Route selection is attached to the session"
+        ? "Route-attached dataset context"
         : source === "session"
           ? "Session-backed dataset context"
-          : "Select a dataset from Raw Data";
+          : "No dataset attached";
   const datasetSummary = resolveShellActiveDatasetSummary(activeDataset, {
     status: activeDatasetStatus,
     source,
@@ -264,9 +280,9 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
       ? (describeShellError(activeTaskError) ?? activeTaskError.message)
       : activeTaskDetail
         ? `Attached #${activeTaskDetail.taskId} · ${activeTaskDetail.progress.phase}`
-        : latestTask
-      ? `Latest #${latestTask.taskId} · ${latestTask.status}`
-      : "Open queue to inspect workspace-visible tasks";
+      : latestTask
+        ? `Latest #${latestTask.taskId} · ${latestTask.status}`
+        : "Attach from queue or workflow";
 
   async function handleWorkspaceSwitch(workspaceId: string) {
     setWorkspaceNotice(null);
@@ -328,7 +344,7 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
     <div className="space-y-3">
       <div
         className={cx(
-          "grid gap-3",
+          "grid gap-2.5",
           compact
             ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)]"
             : "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)]",
@@ -339,6 +355,7 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
           label="Active Workspace"
           value={workspaceValue}
           detail={workspaceDetail}
+          compact={compact}
           active={openPanel === "workspace"}
           onClick={() => {
             setOpenPanel((current) => (current === "workspace" ? null : "workspace"));
@@ -353,6 +370,7 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
           label="Active Dataset"
           value={compact ? datasetSummary.value : datasetValue}
           detail={compact ? datasetSummary.detail : datasetDetail}
+          compact={compact}
           active={openPanel === "dataset"}
           onClick={() => {
             setOpenPanel((current) => (current === "dataset" ? null : "dataset"));
@@ -363,7 +381,7 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
                 <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
               ) : null}
               {compact && datasetSummary.badge ? (
-                <span className="rounded-full border border-border bg-surface-elevated px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                <span className="rounded-full border border-border bg-surface-elevated px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                   {datasetSummary.badge}
                 </span>
               ) : null}
@@ -376,6 +394,7 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
           label="Tasks Queue"
           value={queueValue}
           detail={queueDetail}
+          compact={compact}
           active={openPanel === "queue"}
           onClick={() => {
             setOpenPanel((current) => (current === "queue" ? null : "queue"));
@@ -392,10 +411,11 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
           label={workerSummary.label}
           value={workerSummary.value}
           detail={workerSummary.detail}
+          compact={compact}
           trailing={
             <span
               className={cx(
-                "rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em]",
+                "rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.18em]",
                 workerSummary.tone === "success"
                   ? "bg-emerald-500/12 text-emerald-800 dark:text-emerald-200"
                   : "bg-amber-500/12 text-amber-800 dark:text-amber-200",
@@ -580,7 +600,7 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
                   onClick={() => {
                     void handleDatasetSelection(null);
                   }}
-                  disabled={selectingDatasetId !== null}
+                  disabled={selectingDatasetId !== null || !canSwitchDataset}
                   className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -608,6 +628,12 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
           {datasetCatalogQuery.error ? (
             <ShellNotice className="mt-4" tone="warning" title="Dataset Visibility Error">
               Unable to load visible datasets. {(datasetCatalogQuery.error as Error).message}
+            </ShellNotice>
+          ) : null}
+
+          {!canSwitchDataset ? (
+            <ShellNotice className="mt-4" tone="warning" title="Dataset Switching Unavailable">
+              The current session authority does not allow switching the active dataset from the shell.
             </ShellNotice>
           ) : null}
 
@@ -640,7 +666,7 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
                     <button
                       key={row.dataset_id}
                       type="button"
-                      disabled={isSelected || isBusy || !row.allowed_actions.select}
+                      disabled={isSelected || isBusy || !row.allowed_actions.select || !canSwitchDataset}
                       onClick={() => {
                         void handleDatasetSelection(row.dataset_id);
                       }}
@@ -649,7 +675,8 @@ export function WorkspaceStatusStrip({ compact = false }: WorkspaceStatusStripPr
                         isSelected
                           ? "border-primary/35 bg-primary/10"
                           : "border-border bg-surface hover:border-primary/25 hover:bg-surface-elevated",
-                        (!row.allowed_actions.select || isBusy) && "cursor-not-allowed opacity-70",
+                        (!row.allowed_actions.select || isBusy || !canSwitchDataset) &&
+                          "cursor-not-allowed opacity-70",
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">

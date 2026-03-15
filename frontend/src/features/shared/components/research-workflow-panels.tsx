@@ -2,6 +2,7 @@ import { RefreshCcw, Search } from "lucide-react";
 
 import type { ResearchWorkflowSurfaceSummary } from "@/lib/research-workflow-surface";
 
+import { AppSelectField } from "./app-select";
 import { SurfaceHeader, SurfacePanel, SurfaceStat, SurfaceTag, cx } from "./surface-kit";
 
 type SurfaceTone = "default" | "primary" | "success" | "warning";
@@ -148,43 +149,19 @@ export function ResearchTaskQueuePanel({
           />
         </label>
 
-        <label className="rounded-[0.9rem] border border-border bg-surface px-4 py-3">
-          <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            Scope
-          </span>
-          <select
-            value={scopeValue}
-            onChange={(event) => {
-              onScopeChange(event.target.value);
-            }}
-            className="w-full bg-transparent text-sm text-foreground outline-none"
-          >
-            {scopeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AppSelectField
+          label="Scope"
+          value={scopeValue}
+          onChange={onScopeChange}
+          options={scopeOptions}
+        />
 
-        <label className="rounded-[0.9rem] border border-border bg-surface px-4 py-3">
-          <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            Status
-          </span>
-          <select
-            value={statusValue}
-            onChange={(event) => {
-              onStatusChange(event.target.value);
-            }}
-            className="w-full bg-transparent text-sm text-foreground outline-none"
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AppSelectField
+          label="Status"
+          value={statusValue}
+          onChange={onStatusChange}
+          options={statusOptions}
+        />
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3 rounded-[0.9rem] border border-border bg-surface px-4 py-3 text-xs text-muted-foreground">

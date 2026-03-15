@@ -10,7 +10,13 @@ import {
   type TaskResultSurfaceSummary,
 } from "@/lib/task-surface";
 
-import { SurfacePanel, SurfaceStat, SurfaceTag, cx } from "./surface-kit";
+import {
+  SurfacePanel,
+  SurfaceStat,
+  SurfaceTag,
+  cx,
+  resolveSurfaceInsetToneClass,
+} from "./surface-kit";
 
 function taskStatusTone(status: "queued" | "running" | "completed" | "failed") {
   if (status === "completed") {
@@ -115,7 +121,12 @@ export function TaskAttachmentPanel({
       </div>
 
       {recoveryNotice ? (
-        <div className="mt-4 rounded-[0.9rem] border border-amber-500/30 bg-amber-500/8 px-4 py-3 text-sm text-foreground">
+        <div
+          className={cx(
+            "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
+            resolveSurfaceInsetToneClass("warning"),
+          )}
+        >
           <p className="font-medium">{recoveryNotice.title}</p>
           <p className="mt-1">{recoveryNotice.message}</p>
           {connectionState.latestTaskId !== null && onAttachLatest ? (
@@ -138,7 +149,7 @@ export function TaskAttachmentPanel({
       ) : null}
 
       {connectionState.hasNewerLatestTask && connectionState.latestTaskId !== null ? (
-        <div className="mt-4 rounded-[0.9rem] border border-primary/30 bg-primary/8 px-4 py-3 text-sm text-foreground">
+        <div className={cx("mt-4 rounded-[0.9rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("primary"))}>
           <p className="font-medium">Newer task available</p>
           <p className="mt-1">
             You are inspecting task #{connectionState.selectedTaskId}, while newer persisted
@@ -169,7 +180,12 @@ export function TaskAttachmentPanel({
       ) : null}
 
       {taskErrorMessage ? (
-        <div className="mt-4 rounded-[0.9rem] border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-100">
+        <div
+          className={cx(
+            "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
+            resolveSurfaceInsetToneClass("error"),
+          )}
+        >
           Unable to load task detail. {taskErrorMessage}
         </div>
       ) : null}
@@ -177,7 +193,12 @@ export function TaskAttachmentPanel({
       {connectionState.isStaleSnapshot &&
       connectionState.attachedTaskId !== null &&
       connectionState.selectedTaskId !== null ? (
-        <div className="mt-4 rounded-[0.9rem] border border-amber-500/30 bg-amber-500/8 px-4 py-3 text-sm text-foreground">
+        <div
+          className={cx(
+            "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
+            resolveSurfaceInsetToneClass("warning"),
+          )}
+        >
           Retaining task #{connectionState.attachedTaskId} while task #
           {connectionState.selectedTaskId} attaches so the task/result surface stays readable
           during refresh or route switching.

@@ -36,6 +36,7 @@ import {
   SurfacePanel,
   SurfaceTag,
   cx,
+  resolveSurfaceInsetToneClass,
 } from "@/features/shared/components/surface-kit";
 import { TaskEventHistoryPanel } from "@/features/shared/components/task-event-history-panel";
 import {
@@ -496,7 +497,7 @@ export function SimulationWorkbenchShell() {
       />
 
       {definitionsError ? (
-        <div className="rounded-[1rem] border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-100">
+        <div className={cx("rounded-[1rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("error"))}>
           Unable to load circuit definitions. {definitionsErrorMessage}
         </div>
       ) : null}
@@ -506,7 +507,7 @@ export function SimulationWorkbenchShell() {
           className={cx(
             "rounded-[1rem] border px-4 py-3 text-sm",
             taskMutationStatus.state === "error"
-              ? "border-rose-500/30 bg-rose-500/8 text-rose-100"
+              ? resolveSurfaceInsetToneClass("error")
               : "border-primary/30 bg-primary/8 text-foreground",
           )}
         >
@@ -538,11 +539,11 @@ export function SimulationWorkbenchShell() {
             {definitionRecovery ? (
               <div
                 className={cx(
-                  "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
-                  definitionRecovery.tone === "warning"
-                    ? "border-amber-500/30 bg-amber-500/8 text-foreground"
+                "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
+                definitionRecovery.tone === "warning"
+                    ? resolveSurfaceInsetToneClass("warning")
                     : "border-border bg-surface text-muted-foreground",
-                )}
+              )}
               >
                 <p className="font-medium text-foreground">{definitionRecovery.title}</p>
                 <p className="mt-1">{definitionRecovery.message}</p>
@@ -642,7 +643,7 @@ export function SimulationWorkbenchShell() {
                 />
               </label>
               {form.formState.errors.summaryNote ? (
-                <p className="text-sm text-rose-300">
+                <p className="text-sm text-rose-700 dark:text-rose-300">
                   {form.formState.errors.summaryNote.message}
                 </p>
               ) : null}
@@ -803,7 +804,7 @@ export function SimulationWorkbenchShell() {
             </div>
 
             {!taskActionGates.hasActionAuthority ? (
-              <div className="mt-4 rounded-[0.9rem] border border-amber-500/30 bg-amber-500/8 px-4 py-3 text-sm text-foreground">
+              <div className={cx("mt-4 rounded-[0.9rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("warning"))}>
                 Backend `allowed_actions` are not present in the current task payload, so control
                 buttons stay gated instead of guessing permissions in the page body.
               </div>
@@ -812,11 +813,11 @@ export function SimulationWorkbenchShell() {
             {taskContextBinding ? (
               <div
                 className={cx(
-                  "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
-                  taskContextBinding.tone === "warning"
-                    ? "border-amber-500/30 bg-amber-500/8 text-foreground"
-                    : "border-emerald-500/25 bg-emerald-500/10 text-foreground",
-                )}
+                "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
+                taskContextBinding.tone === "warning"
+                    ? resolveSurfaceInsetToneClass("warning")
+                    : resolveSurfaceInsetToneClass("success"),
+              )}
               >
                 <p className="font-medium">{taskContextBinding.title}</p>
                 <p className="mt-1">{taskContextBinding.message}</p>
@@ -827,9 +828,9 @@ export function SimulationWorkbenchShell() {
               className={cx(
                 "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
                 taskResultHandoff.tone === "success"
-                  ? "border-emerald-500/25 bg-emerald-500/10 text-foreground"
+                  ? resolveSurfaceInsetToneClass("success")
                   : taskResultHandoff.tone === "warning"
-                    ? "border-amber-500/30 bg-amber-500/8 text-foreground"
+                    ? resolveSurfaceInsetToneClass("warning")
                     : taskResultHandoff.tone === "primary"
                       ? "border-primary/30 bg-primary/8 text-foreground"
                       : "border-border bg-surface text-muted-foreground",
@@ -860,7 +861,7 @@ export function SimulationWorkbenchShell() {
             description="The simulation surface stays anchored to the selected backend definition detail, even while task state refreshes or reattaches."
           >
             {activeDefinitionError ? (
-              <div className="rounded-[0.9rem] border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-100">
+              <div className={cx("rounded-[0.9rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("error"))}>
                 Unable to load definition detail. {activeDefinitionErrorMessage}
               </div>
             ) : null}

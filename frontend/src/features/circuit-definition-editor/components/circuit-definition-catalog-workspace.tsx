@@ -21,7 +21,9 @@ import {
 } from "@/features/circuit-definition-editor/lib/catalog";
 import { isCircuitDefinitionMutationPending } from "@/features/circuit-definition-editor/lib/editor-state";
 import { buildCircuitDefinitionEditorHref } from "@/features/circuit-definition-editor/lib/routes";
-import { cx } from "@/features/shared/components/surface-kit";
+import { AppSelectField } from "@/features/shared/components/app-select";
+import { cx, resolveSurfaceInsetToneClass } from "@/features/shared/components/surface-kit";
+import { useAppSession } from "@/lib/app-state";
 import { ConfirmActionDialog } from "@/lib/confirm-action-dialog";
 
 type PendingCatalogAction =
@@ -34,11 +36,12 @@ type PendingCatalogAction =
 
 function visibilityTone(scope: "private" | "workspace" | undefined) {
   return scope === "workspace"
-    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
     : "border-border bg-surface text-muted-foreground";
 }
 
 export function CircuitDefinitionCatalogWorkspace() {
+  const { session } = useAppSession();
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
@@ -55,6 +58,7 @@ export function CircuitDefinitionCatalogWorkspace() {
     mutationStatus,
   } = useCircuitDefinitionEditorData(null);
   const isMutationPending = isCircuitDefinitionMutationPending(mutationStatus.state);
+  const canCreateDefinition = session?.capabilities.canManageDefinitions ?? false;
 
   const visibleDefinitions = useMemo(
     () => filterCircuitDefinitionCatalog(definitions, searchQuery, sortMode),
@@ -100,7 +104,12 @@ export function CircuitDefinitionCatalogWorkspace() {
           onClick={() => {
             openEditor("new");
           }}
-          disabled={isMutationPending}
+          disabled={isMutationPending || !canCreateDefinition}
+          title={
+            canCreateDefinition
+              ? "Create a new workspace-scoped schema draft."
+              : "This session cannot create circuit definitions in the active workspace."
+          }
           className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
         >
           <Plus className="h-4 w-4" />
@@ -109,7 +118,7 @@ export function CircuitDefinitionCatalogWorkspace() {
       </section>
 
       {definitionsError ? (
-        <div className="rounded-[1rem] border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-100">
+        <div className={cx("rounded-[1rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("error"))}>
           Unable to load circuit schema catalog. {definitionsError.message}
         </div>
       ) : null}
@@ -119,7 +128,7 @@ export function CircuitDefinitionCatalogWorkspace() {
           className={cx(
             "rounded-[1rem] border px-4 py-3 text-sm",
             mutationStatus.state === "error"
-              ? "border-rose-500/30 bg-rose-500/8 text-rose-100"
+              ? resolveSurfaceInsetToneClass("error")
               : "border-primary/30 bg-primary/8 text-foreground",
           )}
         >
@@ -144,21 +153,17 @@ export function CircuitDefinitionCatalogWorkspace() {
             />
           </label>
 
-          <label className="rounded-[0.9rem] border border-border bg-surface px-4 py-3">
-            <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Sort
-            </span>
-            <select
-              value={sortMode}
-              onChange={(event) => {
-                setSortMode(event.target.value as CircuitDefinitionCatalogSort);
-              }}
-              className="w-full bg-transparent text-sm text-foreground outline-none"
-            >
-              <option value="recent">Newest first</option>
-              <option value="name">Name A-Z</option>
-            </select>
-          </label>
+          <AppSelectField
+            label="Sort"
+            value={sortMode}
+            onChange={(nextValue) => {
+              setSortMode(nextValue as CircuitDefinitionCatalogSort);
+            }}
+            options={[
+              { value: "recent", label: "Newest first" },
+              { value: "name", label: "Name A-Z" },
+            ]}
+          />
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 rounded-[0.9rem] border border-border bg-surface px-4 py-3 text-xs text-muted-foreground">
@@ -217,7 +222,7 @@ export function CircuitDefinitionCatalogWorkspace() {
                           className={cx(
                             "rounded-full border px-3 py-1",
                             definition.allowed_actions?.publish
-                              ? "border-emerald-500/30 text-emerald-200"
+                              ? "border-emerald-500/30 text-emerald-950 dark:text-emerald-100"
                               : "border-border text-muted-foreground",
                           )}
                         >
@@ -302,7 +307,7 @@ export function CircuitDefinitionCatalogWorkspace() {
                             ? "Wait for the current catalog mutation to finish."
                             : actionState.delete.reason
                         }
-                        className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-rose-500/30 text-rose-300 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-rose-500/30 text-rose-700 transition hover:bg-rose-500/10 dark:text-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

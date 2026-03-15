@@ -34,19 +34,24 @@ export function WorkspaceHeader() {
 
   return (
     <div className="flex min-w-0 flex-1 items-start justify-between gap-4">
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Research Workbench
-        </p>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <p className="truncate text-base font-semibold text-foreground md:mt-1 md:text-lg">
-            {identity.pageTitle}
+      <div className="min-w-0 space-y-2">
+        <div className="min-w-0">
+          <p className="truncate whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            SUPERCONDUCTING CIRCUITS
           </p>
+          <p className="truncate whitespace-nowrap text-sm font-semibold text-foreground md:text-base">
+            Research Workbench
+          </p>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {identity.sectionLabel !== identity.pageTitle ? (
             <span className="inline-flex rounded-full border border-border bg-surface px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               {identity.sectionLabel}
             </span>
           ) : null}
+          <p className="truncate text-base font-semibold text-foreground md:text-lg">
+            {identity.pageTitle}
+          </p>
         </div>
       </div>
 

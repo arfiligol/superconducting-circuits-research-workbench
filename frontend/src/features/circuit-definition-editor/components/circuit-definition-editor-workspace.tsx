@@ -43,7 +43,7 @@ import {
   isCircuitDefinitionMutationPending,
 } from "@/features/circuit-definition-editor/lib/editor-state";
 import { ConfirmActionDialog } from "@/lib/confirm-action-dialog";
-import { cx } from "@/features/shared/components/surface-kit";
+import { cx, resolveSurfaceInsetToneClass } from "@/features/shared/components/surface-kit";
 
 import type { CircuitDefinitionDetail } from "@/features/circuit-definition-editor/lib/contracts";
 
@@ -411,13 +411,23 @@ export function CircuitDefinitionEditorWorkspace() {
       </section>
 
       {definitionsError ? (
-        <div className="rounded-[1rem] border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-100">
+        <div
+          className={cx(
+            "rounded-[1rem] border px-4 py-3 text-sm",
+            resolveSurfaceInsetToneClass("error"),
+          )}
+        >
           Unable to load circuit definitions. {definitionsError.message}
         </div>
       ) : null}
 
       {activeDefinitionError ? (
-        <div className="rounded-[1rem] border border-rose-500/30 bg-rose-500/8 px-4 py-3 text-sm text-rose-100">
+        <div
+          className={cx(
+            "rounded-[1rem] border px-4 py-3 text-sm",
+            resolveSurfaceInsetToneClass("error"),
+          )}
+        >
           Unable to load the selected definition. {activeDefinitionError.message}
         </div>
       ) : null}
@@ -427,7 +437,7 @@ export function CircuitDefinitionEditorWorkspace() {
           className={cx(
             "rounded-[1rem] border px-4 py-3 text-sm",
             mutationStatus.state === "error"
-              ? "border-rose-500/30 bg-rose-500/8 text-rose-100"
+              ? resolveSurfaceInsetToneClass("error")
               : "border-primary/30 bg-primary/8 text-foreground",
           )}
         >
@@ -530,7 +540,7 @@ export function CircuitDefinitionEditorWorkspace() {
                         className={cx(
                           "rounded-full border px-2.5 py-1 text-[11px]",
                           definition.visibility_scope === "workspace"
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
                             : "border-border bg-background text-muted-foreground",
                         )}
                       >
@@ -650,7 +660,7 @@ export function CircuitDefinitionEditorWorkspace() {
                         ? "Wait for the current definition mutation to finish."
                         : editorActionState.delete.reason
                     }
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-rose-500/30 px-3 py-2 text-sm text-rose-200 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-rose-500/30 px-3 py-2 text-sm text-rose-700 transition hover:bg-rose-500/10 dark:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete
@@ -816,7 +826,7 @@ export function CircuitDefinitionEditorWorkspace() {
                     {...form.register("name")}
                   />
                   {form.formState.errors.name ? (
-                    <span className="text-xs text-rose-300">
+                    <span className="text-xs text-rose-700 dark:text-rose-300">
                       {form.formState.errors.name.message}
                     </span>
                   ) : null}
@@ -844,7 +854,7 @@ export function CircuitDefinitionEditorWorkspace() {
                     `Cmd/Ctrl + Shift + F` runs explicit format only. It does not save.
                   </p>
                   {form.formState.errors.source_text ? (
-                    <span className="text-xs text-rose-300">
+                    <span className="text-xs text-rose-700 dark:text-rose-300">
                       {form.formState.errors.source_text.message}
                     </span>
                   ) : null}
@@ -885,7 +895,7 @@ export function CircuitDefinitionEditorWorkspace() {
                   className={cx(
                     "mt-3",
                     draftSurface.serializerBoundary.willRewriteSourceName
-                      ? "text-amber-200"
+                      ? "text-amber-700 dark:text-amber-300"
                       : "text-muted-foreground",
                   )}
                 >
@@ -919,8 +929,8 @@ export function CircuitDefinitionEditorWorkspace() {
                     className={cx(
                       "rounded-[0.8rem] border px-4 py-3 text-sm",
                       diagnostic.severity === "error"
-                        ? "border-rose-500/30 bg-rose-500/8 text-rose-100"
-                        : "border-amber-500/30 bg-amber-500/8 text-foreground",
+                        ? resolveSurfaceInsetToneClass("error")
+                        : resolveSurfaceInsetToneClass("warning"),
                     )}
                   >
                     <p className="font-medium">{diagnostic.path}</p>
@@ -929,7 +939,12 @@ export function CircuitDefinitionEditorWorkspace() {
                 ))}
               </div>
             ) : (
-              <div className="mt-4 rounded-[0.8rem] border border-emerald-500/20 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-100">
+              <div
+                className={cx(
+                  "mt-4 rounded-[0.8rem] border px-4 py-3 text-sm",
+                  resolveSurfaceInsetToneClass("success"),
+                )}
+              >
                 Local source currently matches the canonical circuit-netlist contract.
               </div>
             )}
@@ -950,7 +965,7 @@ export function CircuitDefinitionEditorWorkspace() {
                 className={cx(
                   "rounded-full px-3 py-1 text-xs font-medium",
                   persistedPreviewSurface.persistedPreviewState.tone === "warning"
-                    ? "bg-amber-500/12 text-amber-300"
+                    ? "bg-amber-500/12 text-amber-800 dark:text-amber-200"
                     : persistedPreviewSurface.persistedPreviewState.tone === "accent"
                       ? "bg-primary/10 text-primary"
                       : "bg-surface text-muted-foreground",
@@ -965,7 +980,7 @@ export function CircuitDefinitionEditorWorkspace() {
               className={cx(
                 "mt-4 rounded-[0.8rem] border px-4 py-3 text-sm",
                 persistedPreviewSurface.persistedPreviewState.tone === "warning"
-                  ? "border-amber-500/20 bg-amber-500/8 text-amber-100"
+                  ? resolveSurfaceInsetToneClass("warning")
                   : persistedPreviewSurface.persistedPreviewState.tone === "accent"
                     ? "border-primary/20 bg-primary/8 text-foreground"
                     : "border-border bg-surface text-muted-foreground",
@@ -1044,7 +1059,7 @@ export function CircuitDefinitionEditorWorkspace() {
                 ) : (
                   <div className="mt-4 space-y-4">
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-rose-300">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-rose-700 dark:text-rose-300">
                         <AlertTriangle className="h-4 w-4" />
                         Blocking
                       </div>
@@ -1056,7 +1071,10 @@ export function CircuitDefinitionEditorWorkspace() {
                         persistedPreviewSurface.validationGroups.blocking.map((notice) => (
                           <div
                             key={`blocking-${notice.code}-${notice.message}`}
-                            className="rounded-[0.8rem] border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-sm text-rose-100"
+                            className={cx(
+                              "rounded-[0.8rem] border px-4 py-3 text-sm",
+                              resolveSurfaceInsetToneClass("error"),
+                            )}
                           >
                             <p className="font-medium">
                               {notice.code} · {notice.source}
@@ -1068,19 +1086,27 @@ export function CircuitDefinitionEditorWorkspace() {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-300">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
                         <AlertTriangle className="h-4 w-4" />
                         Warnings
                       </div>
                       {persistedPreviewSurface.validationGroups.warnings.length === 0 ? (
-                        <div className="rounded-[0.8rem] border border-emerald-500/20 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-100">
+                        <div
+                          className={cx(
+                            "rounded-[0.8rem] border px-4 py-3 text-sm",
+                            resolveSurfaceInsetToneClass("success"),
+                          )}
+                        >
                           No persisted warnings were recorded.
                         </div>
                       ) : (
                         persistedPreviewSurface.validationGroups.warnings.map((notice) => (
                           <div
                             key={`warning-${notice.code}-${notice.message}`}
-                            className="rounded-[0.8rem] border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-sm text-amber-100"
+                            className={cx(
+                              "rounded-[0.8rem] border px-4 py-3 text-sm",
+                              resolveSurfaceInsetToneClass("warning"),
+                            )}
                           >
                             <p className="font-medium">
                               {notice.code} · {notice.source}
@@ -1092,7 +1118,7 @@ export function CircuitDefinitionEditorWorkspace() {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-300">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
                         <BadgeCheck className="h-4 w-4" />
                         Checks
                       </div>
@@ -1104,7 +1130,10 @@ export function CircuitDefinitionEditorWorkspace() {
                         persistedPreviewSurface.validationGroups.checks.map((notice) => (
                           <div
                             key={`check-${notice.code}-${notice.message}`}
-                            className="rounded-[0.8rem] border border-emerald-500/20 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-100"
+                            className={cx(
+                              "rounded-[0.8rem] border px-4 py-3 text-sm",
+                              resolveSurfaceInsetToneClass("success"),
+                            )}
                           >
                             <p className="font-medium">
                               {notice.code} · {notice.source}

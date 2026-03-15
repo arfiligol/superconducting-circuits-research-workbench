@@ -20,6 +20,7 @@ import {
   ResearchWorkflowHero,
   ResearchWorkflowOverviewPanel,
 } from "@/features/shared/components/research-workflow-panels";
+import { AppSelectField } from "@/features/shared/components/app-select";
 import {
   SurfacePanel,
   SurfaceStat,
@@ -915,19 +916,17 @@ export function CharacterizationWorkspace() {
                     className="w-full rounded-xl border border-border bg-surface py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary/40"
                   />
                 </label>
-                <select
+                <AppSelectField
+                  className="min-w-[220px]"
+                  triggerClassName="min-h-10"
+                  menuClassName="right-0 left-auto w-[280px]"
+                  label="Status"
                   value={statusFilter}
-                  onChange={(event) => {
-                    setStatusFilter(event.target.value as CharacterizationResultStatusFilter);
+                  onChange={(nextValue) => {
+                    setStatusFilter(nextValue as CharacterizationResultStatusFilter);
                   }}
-                  className="rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary/40"
-                >
-                  {statusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={statusOptions}
+                />
               </div>
 
               <div className="mt-4 space-y-3">
@@ -1152,52 +1151,34 @@ export function CharacterizationWorkspace() {
                     {resultDetail.identifySurface.sourceParameters.length > 0 &&
                     resultDetail.identifySurface.designatedMetrics.length > 0 ? (
                       <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
-                        <label className="block rounded-xl border border-border bg-card px-4 py-3">
-                          <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                            Source Parameter
-                          </span>
-                          <select
-                            value={selectedSourceSelection}
-                            onChange={(event) => {
-                              setSelectedSourceSelection(event.target.value);
-                            }}
-                            className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                          >
-                            {resultDetail.identifySurface.sourceParameters.map((option) => (
-                              <option
-                                key={`${option.artifactId}:${option.sourceParameter}`}
-                                value={buildSourceSelectionValue(
-                                  option.artifactId,
-                                  option.sourceParameter,
-                                )}
-                              >
-                                {option.artifactTitle} · {option.label}
-                                {option.currentDesignatedMetric
-                                  ? ` (tagged: ${option.currentDesignatedMetric})`
-                                  : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <AppSelectField
+                          className="bg-card"
+                          label="Source Parameter"
+                          value={selectedSourceSelection}
+                          onChange={setSelectedSourceSelection}
+                          options={resultDetail.identifySurface.sourceParameters.map((option) => ({
+                            value: buildSourceSelectionValue(
+                              option.artifactId,
+                              option.sourceParameter,
+                            ),
+                            label: `${option.artifactTitle} · ${option.label}`,
+                            description: option.currentDesignatedMetric
+                              ? `Tagged: ${option.currentDesignatedMetric}`
+                              : "Not tagged yet",
+                          }))}
+                        />
 
-                        <label className="block rounded-xl border border-border bg-card px-4 py-3">
-                          <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                            Designated Metric
-                          </span>
-                          <select
-                            value={selectedDesignatedMetric}
-                            onChange={(event) => {
-                              setSelectedDesignatedMetric(event.target.value);
-                            }}
-                            className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                          >
-                            {resultDetail.identifySurface.designatedMetrics.map((option) => (
-                              <option key={option.metricKey} value={option.metricKey}>
-                                {option.label} ({option.metricKey})
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <AppSelectField
+                          className="bg-card"
+                          label="Designated Metric"
+                          value={selectedDesignatedMetric}
+                          onChange={setSelectedDesignatedMetric}
+                          options={resultDetail.identifySurface.designatedMetrics.map((option) => ({
+                            value: option.metricKey,
+                            label: option.label,
+                            description: option.metricKey,
+                          }))}
+                        />
 
                         <button
                           type="button"
