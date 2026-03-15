@@ -37,6 +37,7 @@ import { datasetCatalogKey, listDatasetCatalog } from "@/lib/api/datasets";
 import {
   useActiveDataset,
   useActiveTask,
+  useDeveloperMode,
   useAppSession,
   useTaskQueue,
 } from "@/lib/app-state";
@@ -46,6 +47,8 @@ type WorkspaceStatusStripProps = Readonly<{
   onOpenChange: (nextOpen: boolean) => void;
   interactionBoundaryRef?: RefObject<HTMLElement | null>;
 }>;
+
+type ContextSectionId = "workspace" | "dataset" | "queue" | "worker";
 
 function ActionButton({
   label,
@@ -132,6 +135,64 @@ function CompactContextCard({
   );
 }
 
+function ContextSectionCard({
+  id,
+  label,
+  value,
+  detail,
+  icon: Icon,
+  selected,
+  onSelect,
+}: Readonly<{
+  id: ContextSectionId;
+  label: string;
+  value: string;
+  detail: string;
+  icon: ComponentType<{ className?: string }>;
+  selected: boolean;
+  onSelect: (section: ContextSectionId) => void;
+}>) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onSelect(id);
+      }}
+      aria-pressed={selected}
+      className={cx(
+        "relative rounded-[1rem] border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+        selected
+          ? "border-primary/40 bg-primary/10 shadow-[0_14px_32px_rgba(37,99,235,0.12)]"
+          : "border-border bg-background hover:border-primary/20 hover:bg-surface-elevated",
+      )}
+    >
+      <span
+        className={cx(
+          "absolute left-3 top-3 h-2.5 w-2.5 rounded-full border border-background/80",
+          selected ? "bg-primary shadow-[0_0_0_3px_rgba(37,99,235,0.16)]" : "bg-border",
+        )}
+      />
+      <div className="flex items-start gap-3 pl-3.5">
+        <span
+          className={cx(
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+            selected ? "bg-primary/14 text-primary" : "bg-primary/8 text-primary/90",
+          )}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-1 truncate text-sm font-semibold text-foreground">{value}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function isRetryableError(error: Error | undefined): boolean {
   if (!error) {
     return false;
@@ -147,6 +208,7 @@ export function WorkspaceStatusStrip({
 }: WorkspaceStatusStripProps) {
   const { mutate } = useSWRConfig();
   const [datasetSearch, setDatasetSearch] = useState("");
+  const [selectedSection, setSelectedSection] = useState<ContextSectionId>("workspace");
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const [selectingDatasetId, setSelectingDatasetId] = useState<string | null>(null);
   const [workspaceNotice, setWorkspaceNotice] = useState<{
@@ -184,6 +246,7 @@ export function WorkspaceStatusStrip({
     clearActiveDataset,
     syncRouteDataset,
   } = useActiveDataset();
+  const { enabled: developerModeEnabled, toggle: toggleDeveloperMode } = useDeveloperMode();
   const {
     tasks,
     activeTasks,
@@ -223,7 +286,11 @@ export function WorkspaceStatusStrip({
   const datasetSummary = resolveShellActiveDatasetSummary(activeDataset, {
     status: activeDatasetStatus,
     source,
-    errorDetail: activeDatasetError ? describeShellError(activeDatasetError) : null,
+    errorDetail: activeDatasetError
+      ? developerModeEnabled
+        ? describeShellError(activeDatasetError)
+        : "The dataset attachment is unavailable right now."
+      : null,
     isUpdating: isUpdatingActiveDataset,
   });
   const workspaceValue =
@@ -231,7 +298,9 @@ export function WorkspaceStatusStrip({
       ? "Loading workspace..."
       : workspace?.displayName ?? "Workspace unavailable";
   const workspaceDetail = sessionError
-    ? (describeShellError(sessionError) ?? sessionError.message)
+    ? developerModeEnabled
+      ? (describeShellError(sessionError) ?? sessionError.message)
+      : "Session authority is unavailable."
     : workspace
       ? `${workspace.role} role · ${session?.memberships.length ?? 0} memberships`
       : "Session authority pending";
@@ -259,6 +328,8 @@ export function WorkspaceStatusStrip({
 
     return "Context";
   }, [sessionStatus, sessionError, taskQueueError, activeTaskError, activeDatasetError]);
+  const contextWarning =
+    sessionError ?? taskQueueError ?? activeTaskError ?? activeDatasetError ?? undefined;
 
   async function handleWorkspaceSwitch(workspaceId: string) {
     setWorkspaceNotice(null);
@@ -316,6 +387,15 @@ export function WorkspaceStatusStrip({
     }
   }
 
+  const selectedSectionTitle =
+    selectedSection === "workspace"
+      ? "Active Workspace"
+      : selectedSection === "dataset"
+        ? "Active Dataset"
+        : selectedSection === "queue"
+          ? "Tasks Queue"
+          : "Worker Summary";
+
   return (
     <>
       <button
@@ -359,34 +439,47 @@ export function WorkspaceStatusStrip({
         interactionBoundaryRef={interactionBoundaryRef}
       >
         <div className="space-y-4">
-          {(sessionError || taskQueueError || activeTaskError || activeDatasetError) && (
+          {contextWarning && (
             <ShellNotice tone="warning" title="Context warning">
-              {describeShellError(
-                sessionError ?? taskQueueError ?? activeTaskError ?? activeDatasetError,
-              ) ?? "The shell could not fully resolve the current global context."}
+              {developerModeEnabled
+                ? (describeShellError(contextWarning) ??
+                  "The shell could not fully resolve the current global context.")
+                : "Some shared context data is unavailable. Open Developer Mode for technical detail."}
             </ShellNotice>
           )}
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <CompactContextCard
+            <ContextSectionCard
+              id="workspace"
+              selected={selectedSection === "workspace"}
+              onSelect={setSelectedSection}
               icon={FolderKanban}
               label="Active Workspace"
               value={workspaceValue}
               detail={workspaceDetail}
             />
-            <CompactContextCard
+            <ContextSectionCard
+              id="dataset"
+              selected={selectedSection === "dataset"}
+              onSelect={setSelectedSection}
               icon={Database}
               label="Active Dataset"
               value={datasetSummary.value}
               detail={datasetSummary.detail ?? datasetSummary.badge ?? "No attached dataset"}
             />
-            <CompactContextCard
+            <ContextSectionCard
+              id="queue"
+              selected={selectedSection === "queue"}
+              onSelect={setSelectedSection}
               icon={Workflow}
               label="Tasks Queue"
               value={queueValue}
               detail={queueDetail}
             />
-            <CompactContextCard
+            <ContextSectionCard
+              id="worker"
+              selected={selectedSection === "worker"}
+              onSelect={setSelectedSection}
               icon={ServerCog}
               label={workerSummary.label}
               value={workerSummary.value}
@@ -394,387 +487,422 @@ export function WorkspaceStatusStrip({
             />
           </div>
 
-          <SectionFrame
-            icon={FolderKanban}
-            title="Active Workspace"
-            description="Session-backed workspace switching."
-            actions={
-              <ActionButton
-                label="Refresh session"
-                spinning={isSessionRefreshing}
-                disabled={isSessionLoading}
-                onClick={() => {
-                  void refreshSession();
-                }}
-              />
-            }
-          >
-            {workspaceNotice ? (
-              <ShellNotice
-                className="mb-4"
-                tone={
-                  workspaceNotice.tone === "success"
-                    ? "success"
-                    : workspaceNotice.tone === "primary"
-                      ? "info"
-                      : "warning"
-                }
-              >
-                {workspaceNotice.message}
-              </ShellNotice>
-            ) : null}
-
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-              <div className="space-y-3">
-                {workspaceMemberships.length > 0 ? (
-                  workspaceMemberships.map((membership) => {
-                    const isSwitching = switchingWorkspaceId === membership.workspaceId;
-
-                    return (
-                      <button
-                        key={membership.workspaceId}
-                        type="button"
-                        disabled={
-                          membership.isActive ||
-                          !membership.allowedActions.switchTo ||
-                          isSwitching ||
-                          isSessionLoading
-                        }
-                        onClick={() => {
-                          if (!membership.isActive) {
-                            void handleWorkspaceSwitch(membership.workspaceId);
-                          }
-                        }}
-                        className={cx(
-                          "w-full rounded-[0.95rem] border px-4 py-4 text-left transition",
-                          membership.isActive
-                            ? "border-primary/35 bg-primary/10"
-                            : "border-border bg-background hover:border-primary/25 hover:bg-surface-elevated",
-                          (!membership.allowedActions.switchTo || isSwitching || isSessionLoading) &&
-                            "cursor-not-allowed opacity-70",
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-foreground">
-                              {membership.displayName}
-                            </p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                              {membership.role} role · {membership.defaultTaskScope} tasks
-                            </p>
-                          </div>
-                          <span className="inline-flex items-center gap-2">
-                            {isSwitching ? (
-                              <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-                            ) : null}
-                            <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                              {membership.isActive ? "active" : "switch"}
-                            </span>
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="rounded-[0.9rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                    No switchable workspace memberships are available in this session.
-                  </div>
-                )}
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
-                <CompactContextCard
-                  icon={FolderKanban}
-                  label="Workspace"
-                  value={workspace?.displayName ?? "Unavailable"}
-                  detail={`${workspace?.role ?? "Pending"} role`}
-                />
-                <CompactContextCard
-                  icon={Workflow}
-                  label="Task Scope"
-                  value={workspace?.defaultTaskScope ?? "Pending"}
-                  detail={
-                    session?.capabilities.canSwitchWorkspace
-                      ? "Switching rebinds dataset and queue state."
-                      : "This session currently exposes a single workspace context."
-                  }
-                />
-                <CompactContextCard
-                  icon={ServerCog}
-                  label="Allowed Actions"
-                  value={workspace?.allowedActions.switchTo ? "Switchable" : "Pinned"}
-                  detail="Backend workspace allowed_actions are the only switch authority."
-                />
-              </div>
+          <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-border/80 bg-surface px-4 py-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Focused Section
+              </p>
+              <p className="mt-1 text-sm font-medium text-foreground">{selectedSectionTitle}</p>
             </div>
-          </SectionFrame>
+            <button
+              type="button"
+              onClick={toggleDeveloperMode}
+              className={cx(
+                "inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] transition",
+                developerModeEnabled
+                  ? "border-primary/35 bg-primary/10 text-foreground"
+                  : "border-border bg-background text-muted-foreground hover:border-primary/25 hover:bg-surface-elevated hover:text-foreground",
+              )}
+            >
+              {developerModeEnabled ? "Developer Mode On" : "Developer Mode Off"}
+            </button>
+          </div>
 
-          <SectionFrame
-            icon={Database}
-            title="Active Dataset"
-            description="Single-select dataset context from session authority."
-            actions={
-              <div className="flex flex-wrap gap-2">
+          {selectedSection === "workspace" ? (
+            <SectionFrame
+              icon={FolderKanban}
+              title="Active Workspace"
+              description="Session-backed workspace switching."
+              actions={
                 <ActionButton
-                  label="Refresh dataset"
-                  spinning={
-                    isUpdatingActiveDataset || isRouteSyncPending || datasetCatalogQuery.isLoading
-                  }
-                  disabled={isUpdatingActiveDataset}
+                  label="Refresh session"
+                  spinning={isSessionRefreshing}
+                  disabled={isSessionLoading}
                   onClick={() => {
-                    void Promise.all([refreshActiveDataset(), mutate(datasetCatalogKey)]);
+                    void refreshSession();
                   }}
                 />
-                {canRetryRouteSync && isRetryableError(activeDatasetError) ? (
-                  <ActionButton
-                    label="Retry attach"
-                    onClick={() => {
-                      void retryRouteSync();
-                    }}
-                  />
-                ) : null}
-                <Link
-                  href="/raw-data"
-                  className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+              }
+            >
+              {workspaceNotice ? (
+                <ShellNotice
+                  className="mb-4"
+                  tone={
+                    workspaceNotice.tone === "success"
+                      ? "success"
+                      : workspaceNotice.tone === "primary"
+                        ? "info"
+                        : "warning"
+                  }
                 >
-                  Open Raw Data
-                </Link>
-              </div>
-            }
-          >
-            {datasetNotice ? (
-              <ShellNotice
-                className="mb-4"
-                tone={datasetNotice.tone === "success" ? "success" : "warning"}
-              >
-                {datasetNotice.message}
-              </ShellNotice>
-            ) : null}
+                  {workspaceNotice.message}
+                </ShellNotice>
+              ) : null}
 
-            {!canSwitchDataset ? (
-              <ShellNotice className="mb-4" tone="warning" title="Dataset switching unavailable">
-                The current session authority does not allow switching the active dataset from the shell.
-              </ShellNotice>
-            ) : null}
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                <div className="space-y-3">
+                  {workspaceMemberships.length > 0 ? (
+                    workspaceMemberships.map((membership) => {
+                      const isSwitching = switchingWorkspaceId === membership.workspaceId;
 
-            {datasetCatalogQuery.error ? (
-              <ShellNotice className="mb-4" tone="error" title="Dataset visibility error">
-                Unable to load visible datasets. {(datasetCatalogQuery.error as Error).message}
-              </ShellNotice>
-            ) : null}
+                      return (
+                        <button
+                          key={membership.workspaceId}
+                          type="button"
+                          disabled={
+                            membership.isActive ||
+                            !membership.allowedActions.switchTo ||
+                            isSwitching ||
+                            isSessionLoading
+                          }
+                          onClick={() => {
+                            if (!membership.isActive) {
+                              void handleWorkspaceSwitch(membership.workspaceId);
+                            }
+                          }}
+                          className={cx(
+                            "w-full rounded-[0.95rem] border px-4 py-4 text-left transition",
+                            membership.isActive
+                              ? "border-primary/35 bg-primary/10"
+                              : "border-border bg-background hover:border-primary/25 hover:bg-surface-elevated",
+                            (!membership.allowedActions.switchTo || isSwitching || isSessionLoading) &&
+                              "cursor-not-allowed opacity-70",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {membership.displayName}
+                              </p>
+                              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                                {membership.role} role · {membership.defaultTaskScope} tasks
+                              </p>
+                            </div>
+                            <span className="inline-flex items-center gap-2">
+                              {isSwitching ? (
+                                <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
+                              ) : null}
+                              <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                                {membership.isActive ? "active" : "switch"}
+                              </span>
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-[0.9rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                      No switchable workspace memberships are available in this session.
+                    </div>
+                  )}
+                </div>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-              <div className="space-y-3">
-                <label className="block rounded-[0.95rem] border border-border bg-background px-4 py-3">
-                  <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Search Datasets
-                  </span>
-                  <input
-                    value={datasetSearch}
-                    onChange={(event) => {
-                      setDatasetSearch(event.target.value);
-                    }}
-                    className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                    placeholder="Search by name, id, family, owner, or device"
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
+                  <CompactContextCard
+                    icon={FolderKanban}
+                    label="Workspace"
+                    value={workspace?.displayName ?? "Unavailable"}
+                    detail={`${workspace?.role ?? "Pending"} role`}
                   />
-                </label>
+                  <CompactContextCard
+                    icon={Workflow}
+                    label="Task Scope"
+                    value={workspace?.defaultTaskScope ?? "Pending"}
+                    detail={
+                      session?.capabilities.canSwitchWorkspace
+                        ? "Switching rebinds dataset and queue state."
+                        : "This session currently exposes a single workspace context."
+                    }
+                  />
+                  <CompactContextCard
+                    icon={ServerCog}
+                    label="Allowed Actions"
+                    value={workspace?.allowedActions.switchTo ? "Switchable" : "Pinned"}
+                    detail="Backend workspace allowed_actions are the only switch authority."
+                  />
+                </div>
+              </div>
+            </SectionFrame>
+          ) : null}
 
-                {activeDataset ? (
-                  <button
-                    type="button"
+          {selectedSection === "dataset" ? (
+            <SectionFrame
+              icon={Database}
+              title="Active Dataset"
+              description="Single-select dataset context from session authority."
+              actions={
+                <div className="flex flex-wrap gap-2">
+                  <ActionButton
+                    label="Refresh dataset"
+                    spinning={
+                      isUpdatingActiveDataset || isRouteSyncPending || datasetCatalogQuery.isLoading
+                    }
+                    disabled={isUpdatingActiveDataset}
                     onClick={() => {
-                      void handleDatasetSelection(null);
+                      void Promise.all([refreshActiveDataset(), mutate(datasetCatalogKey)]);
                     }}
-                    disabled={selectingDatasetId !== null || !canSwitchDataset}
-                    className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  {canRetryRouteSync && isRetryableError(activeDatasetError) ? (
+                    <ActionButton
+                      label="Retry attach"
+                      onClick={() => {
+                        void retryRouteSync();
+                      }}
+                    />
+                  ) : null}
+                  <Link
+                    href="/raw-data"
+                    className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
                   >
-                    Clear active dataset
-                  </button>
-                ) : null}
+                    Open Raw Data
+                  </Link>
+                </div>
+              }
+            >
+              {datasetNotice ? (
+                <ShellNotice
+                  className="mb-4"
+                  tone={datasetNotice.tone === "success" ? "success" : "warning"}
+                >
+                  {datasetNotice.message}
+                </ShellNotice>
+              ) : null}
 
-                {datasetCatalogQuery.isLoading ? (
-                  <div className="rounded-[0.9rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                    Loading workspace-visible datasets...
-                  </div>
-                ) : filteredDatasetRows.length > 0 ? (
-                  filteredDatasetRows.map((row) => {
-                    const isSelected = row.dataset_id === activeDataset?.datasetId;
-                    const isBusy = selectingDatasetId === row.dataset_id;
+              {!canSwitchDataset ? (
+                <ShellNotice className="mb-4" tone="warning" title="Dataset switching unavailable">
+                  The current session authority does not allow switching the active dataset from the shell.
+                </ShellNotice>
+              ) : null}
 
-                    return (
-                      <button
-                        key={row.dataset_id}
-                        type="button"
-                        disabled={isSelected || isBusy || !row.allowed_actions.select || !canSwitchDataset}
-                        onClick={() => {
-                          void handleDatasetSelection(row.dataset_id);
-                        }}
-                        className={cx(
-                          "w-full rounded-[0.95rem] border px-4 py-4 text-left transition",
-                          isSelected
-                            ? "border-primary/35 bg-primary/10"
-                            : "border-border bg-background hover:border-primary/25 hover:bg-surface-elevated",
-                          (!row.allowed_actions.select || isBusy || !canSwitchDataset) &&
-                            "cursor-not-allowed opacity-70",
-                        )}
+              {datasetCatalogQuery.error ? (
+                <ShellNotice className="mb-4" tone="error" title="Dataset visibility error">
+                  {developerModeEnabled
+                    ? `Unable to load visible datasets. ${(datasetCatalogQuery.error as Error).message}`
+                    : "Unable to load visible datasets for the current workspace."}
+                </ShellNotice>
+              ) : null}
+
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                <div className="space-y-3">
+                  <label className="block rounded-[0.95rem] border border-border bg-background px-4 py-3">
+                    <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Search Datasets
+                    </span>
+                    <input
+                      value={datasetSearch}
+                      onChange={(event) => {
+                        setDatasetSearch(event.target.value);
+                      }}
+                      className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                      placeholder="Search by name, id, family, owner, or device"
+                    />
+                  </label>
+
+                  {activeDataset ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleDatasetSelection(null);
+                      }}
+                      disabled={selectingDatasetId !== null || !canSwitchDataset}
+                      className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Clear active dataset
+                    </button>
+                  ) : null}
+
+                  {datasetCatalogQuery.isLoading ? (
+                    <div className="rounded-[0.9rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                      Loading workspace-visible datasets...
+                    </div>
+                  ) : filteredDatasetRows.length > 0 ? (
+                    filteredDatasetRows.map((row) => {
+                      const isSelected = row.dataset_id === activeDataset?.datasetId;
+                      const isBusy = selectingDatasetId === row.dataset_id;
+
+                      return (
+                        <button
+                          key={row.dataset_id}
+                          type="button"
+                          disabled={
+                            isSelected || isBusy || !row.allowed_actions.select || !canSwitchDataset
+                          }
+                          onClick={() => {
+                            void handleDatasetSelection(row.dataset_id);
+                          }}
+                          className={cx(
+                            "w-full rounded-[0.95rem] border px-4 py-4 text-left transition",
+                            isSelected
+                              ? "border-primary/35 bg-primary/10"
+                              : "border-border bg-background hover:border-primary/25 hover:bg-surface-elevated",
+                            (!row.allowed_actions.select || isBusy || !canSwitchDataset) &&
+                              "cursor-not-allowed opacity-70",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {row.name}
+                              </p>
+                              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                                {row.dataset_id}
+                              </p>
+                              <p className="mt-2 text-sm text-muted-foreground">
+                                {row.family} · {row.device_type} · {row.owner_display_name}
+                              </p>
+                            </div>
+                            <span className="inline-flex items-center gap-2">
+                              {isBusy ? (
+                                <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
+                              ) : null}
+                              <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                                {isSelected ? "active" : row.lifecycle_state}
+                              </span>
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-[0.9rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                      {datasetSearch.trim().length > 0
+                        ? `No datasets match “${datasetSearch.trim()}”.`
+                        : "No workspace-visible datasets are available."}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+                  <CompactContextCard
+                    icon={Database}
+                    label="Dataset"
+                    value={activeDataset?.name ?? "None selected"}
+                    detail={activeDataset?.status ?? "Pending"}
+                  />
+                  <CompactContextCard
+                    icon={Database}
+                    label="Source"
+                    value={source === "none" ? "No selection" : source}
+                    detail={
+                      source === "url" && routeDatasetId !== sessionDatasetId
+                        ? "Route selection is waiting on session attach."
+                        : "The session remains the canonical dataset authority."
+                    }
+                  />
+                  <CompactContextCard
+                    icon={Database}
+                    label="Family"
+                    value={activeDataset?.family ?? "Pending"}
+                    detail={
+                      activeDataset
+                        ? "Dashboard and raw-data surfaces rebind from this session selection."
+                        : "Attach a dataset only when a workflow needs a canonical context."
+                    }
+                  />
+                </div>
+              </div>
+            </SectionFrame>
+          ) : null}
+
+          {selectedSection === "queue" ? (
+            <SectionFrame
+              icon={Workflow}
+              title="Tasks Queue"
+              description="Queue visibility and latest attachment summary."
+              actions={
+                <ActionButton
+                  label="Refresh queue"
+                  spinning={isTaskQueueRefreshing || isActiveTaskLoading}
+                  disabled={isTaskQueueLoading}
+                  onClick={() => {
+                    void refreshTaskQueue();
+                    void refreshActiveTask();
+                  }}
+                />
+              }
+            >
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+                <div className="space-y-3">
+                  <CompactContextCard
+                    icon={Workflow}
+                    label="Attached Task"
+                    value={activeTaskDetail ? `#${activeTaskDetail.taskId}` : "No attached task"}
+                    detail={
+                      activeTaskDetail
+                        ? `${activeTaskDetail.progress.phase} · ${Math.round(activeTaskDetail.progress.percentComplete)}%`
+                        : resolvedTaskId
+                          ? `Waiting for task #${resolvedTaskId} detail`
+                          : "Open a workflow surface or use queue links below to attach a task."
+                    }
+                  />
+                  <CompactContextCard
+                    icon={Workflow}
+                    label="Queue Summary"
+                    value={queueValue}
+                    detail={
+                      taskQueueError
+                        ? developerModeEnabled
+                          ? (describeShellError(taskQueueError) ?? taskQueueError.message)
+                          : "Task queue detail is unavailable right now."
+                        : queueDetail
+                    }
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  {queueRows.length > 0 ? (
+                    queueRows.map((task) => (
+                      <Link
+                        key={task.taskId}
+                        href={resolveShellTaskHref(task)}
+                        className="block rounded-[0.9rem] border border-border bg-background px-4 py-3 transition hover:border-primary/25 hover:bg-surface-elevated"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-foreground">
-                              {row.name}
+                            <p className="text-sm font-semibold text-foreground">
+                              #{task.taskId} · {resolveShellTaskLabel(task)}
                             </p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                              {row.dataset_id}
-                            </p>
-                            <p className="mt-2 text-sm text-muted-foreground">
-                              {row.family} · {row.device_type} · {row.owner_display_name}
+                            <p className="mt-1 truncate text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                              {task.status} · {task.summary}
                             </p>
                           </div>
-                          <span className="inline-flex items-center gap-2">
-                            {isBusy ? (
-                              <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-                            ) : null}
-                            <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                              {isSelected ? "active" : row.lifecycle_state}
-                            </span>
+                          <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                            {task.lane}
                           </span>
                         </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="rounded-[0.9rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                    {datasetSearch.trim().length > 0
-                      ? `No datasets match “${datasetSearch.trim()}”.`
-                      : "No workspace-visible datasets are available."}
-                  </div>
-                )}
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="rounded-[0.9rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                      No workspace-visible tasks are available yet.
+                    </div>
+                  )}
+                </div>
               </div>
+            </SectionFrame>
+          ) : null}
 
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+          {selectedSection === "worker" ? (
+            <SectionFrame
+              icon={ServerCog}
+              title="Worker Summary"
+              description="Runtime summary for the active workspace."
+            >
+              <div className="grid gap-3 md:grid-cols-2">
                 <CompactContextCard
-                  icon={Database}
-                  label="Dataset"
-                  value={activeDataset?.name ?? "None selected"}
-                  detail={activeDataset?.status ?? "Pending"}
+                  icon={ServerCog}
+                  label={workerSummary.label}
+                  value={workerSummary.value}
+                  detail={workerSummary.detail}
                 />
-                <CompactContextCard
-                  icon={Database}
-                  label="Source"
-                  value={source === "none" ? "No selection" : source}
-                  detail={
-                    source === "url" && routeDatasetId !== sessionDatasetId
-                      ? "Route selection is waiting on session attach."
-                      : "The session remains the canonical dataset authority."
-                  }
-                />
-                <CompactContextCard
-                  icon={Database}
-                  label="Family"
-                  value={activeDataset?.family ?? "Pending"}
-                  detail={
-                    activeDataset
-                      ? "Dashboard and raw-data surfaces rebind from this session selection."
-                      : "Attach a dataset only when a workflow needs a canonical context."
-                  }
-                />
+                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm leading-6 text-muted-foreground">
+                  {workerSummary.tone === "success"
+                    ? "Worker runtime authority is available for the active workspace."
+                    : "The backend has not materialized a worker summary payload for this workspace yet."}
+                </div>
               </div>
-            </div>
-          </SectionFrame>
-
-          <SectionFrame
-            icon={Workflow}
-            title="Tasks Queue"
-            description="Queue visibility and latest attachment summary."
-            actions={
-              <ActionButton
-                label="Refresh queue"
-                spinning={isTaskQueueRefreshing || isActiveTaskLoading}
-                disabled={isTaskQueueLoading}
-                onClick={() => {
-                  void refreshTaskQueue();
-                  void refreshActiveTask();
-                }}
-              />
-            }
-          >
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
-              <div className="space-y-3">
-                <CompactContextCard
-                  icon={Workflow}
-                  label="Attached Task"
-                  value={activeTaskDetail ? `#${activeTaskDetail.taskId}` : "No attached task"}
-                  detail={
-                    activeTaskDetail
-                      ? `${activeTaskDetail.progress.phase} · ${Math.round(activeTaskDetail.progress.percentComplete)}%`
-                      : resolvedTaskId
-                        ? `Waiting for task #${resolvedTaskId} detail`
-                        : "Open a workflow surface or use queue links below to attach a task."
-                  }
-                />
-                <CompactContextCard
-                  icon={Workflow}
-                  label="Queue Summary"
-                  value={queueValue}
-                  detail={
-                    taskQueueError
-                      ? (describeShellError(taskQueueError) ?? taskQueueError.message)
-                      : queueDetail
-                  }
-                />
-              </div>
-
-              <div className="space-y-3">
-                {queueRows.length > 0 ? (
-                  queueRows.map((task) => (
-                    <Link
-                      key={task.taskId}
-                      href={resolveShellTaskHref(task)}
-                      className="block rounded-[0.9rem] border border-border bg-background px-4 py-3 transition hover:border-primary/25 hover:bg-surface-elevated"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-foreground">
-                            #{task.taskId} · {resolveShellTaskLabel(task)}
-                          </p>
-                          <p className="mt-1 truncate text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                            {task.status} · {task.summary}
-                          </p>
-                        </div>
-                        <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                          {task.lane}
-                        </span>
-                      </div>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="rounded-[0.9rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                    No workspace-visible tasks are available yet.
-                  </div>
-                )}
-              </div>
-            </div>
-          </SectionFrame>
-
-          <SectionFrame
-            icon={ServerCog}
-            title="Worker Summary"
-            description="Runtime summary for the active workspace."
-          >
-            <div className="grid gap-3 md:grid-cols-2">
-              <CompactContextCard
-                icon={ServerCog}
-                label={workerSummary.label}
-                value={workerSummary.value}
-                detail={workerSummary.detail}
-              />
-              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm leading-6 text-muted-foreground">
-                {workerSummary.tone === "success"
-                  ? "Worker runtime authority is available for the active workspace."
-                  : "The backend has not materialized a worker summary payload for this workspace yet."}
-              </div>
-            </div>
-          </SectionFrame>
+            </SectionFrame>
+          ) : null}
         </div>
       </ShellSidePanel>
     </>

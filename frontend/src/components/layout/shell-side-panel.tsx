@@ -11,6 +11,7 @@ type ShellSidePanelProps = Readonly<{
   onClose: () => void;
   title: string;
   subtitle?: string;
+  eyebrow?: string | null;
   children: ReactNode;
   className?: string;
   offsetTopClassName?: string;
@@ -23,6 +24,7 @@ export function ShellSidePanel({
   onClose,
   title,
   subtitle,
+  eyebrow = "SUPERCONDUCTING CIRCUITS",
   children,
   className,
   offsetTopClassName = "top-[74px]",
@@ -117,9 +119,11 @@ export function ShellSidePanel({
           )}
         >
           <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              SUPERCONDUCTING CIRCUITS
-            </p>
+            {eyebrow ? (
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                {eyebrow}
+              </p>
+            ) : null}
             <h2 className="mt-2 text-lg font-semibold text-foreground">{title}</h2>
             {subtitle ? (
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>

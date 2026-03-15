@@ -42,7 +42,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
 
               setDesktopSidebarCollapsed((collapsed) => !collapsed);
             }}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-primary transition hover:border-primary/35 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-header"
+            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-transparent text-primary transition hover:border-primary/35 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-header"
           >
             <Menu size={18} strokeWidth={2} />
           </button>

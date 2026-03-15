@@ -82,11 +82,16 @@ const logoutPageSource = readFileSync(
   fileURLToPath(new URL("../src/app/logout/page.tsx", import.meta.url)),
   "utf8",
 );
+const developerModeSource = readFileSync(
+  fileURLToPath(new URL("../src/lib/app-state/developer-mode.tsx", import.meta.url)),
+  "utf8",
+);
 
 describe("workspace shell source contracts", () => {
   it("keeps the sticky header layered above the sidebar and gives the hamburger trigger feedback", () => {
     expect(shellSource).toContain("sticky top-0 z-50");
     expect(shellSource).toContain("z-30 w-[220px]");
+    expect(shellSource).toContain("cursor-pointer items-center justify-center");
     expect(shellSource).toContain("hover:border-primary/35 hover:bg-primary/10");
     expect(shellSource).toContain("focus-visible:ring-2");
     expect(shellSource).not.toContain("<WorkspaceStatusStrip compact");
@@ -134,6 +139,19 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("Global context");
   });
 
+  it("turns the global context cards into an obvious section switcher", () => {
+    expect(statusStripSource).toContain("type ContextSectionId");
+    expect(statusStripSource).toContain("ContextSectionCard");
+    expect(statusStripSource).toContain("selectedSection");
+    expect(statusStripSource).toContain("aria-pressed={selected}");
+    expect(statusStripSource).toContain('selectedSection === "workspace"');
+    expect(statusStripSource).toContain('selectedSection === "dataset"');
+    expect(statusStripSource).toContain('selectedSection === "queue"');
+    expect(statusStripSource).toContain('selectedSection === "worker"');
+    expect(statusStripSource).toContain("Focused Section");
+    expect(statusStripSource).not.toContain('title="Active Workspace"\n            description="Session-backed workspace switching."\n            actions=');
+  });
+
   it("uses a single active shell-panel model so triggers can switch without overlay dead-zones", () => {
     expect(headerSource).toContain('useState<"account" | "context" | null>');
     expect(headerSource).toContain('activePanel === "account"');
@@ -153,6 +171,7 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain('variant="context"');
     expect(accountPanelSource).toContain('variant="account"');
     expect(accountPanelSource).toContain('className="max-w-[440px]"');
+    expect(accountPanelSource).toContain("eyebrow={null}");
   });
 
   it("keeps workspace and dataset switchers inside the shared shell", () => {
@@ -174,6 +193,28 @@ describe("workspace shell source contracts", () => {
     expect(authEntrySource).toContain("await logout()");
     expect(authEntrySource).not.toContain("Auth State");
     expect(authEntrySource).not.toContain("Session Mode");
+  });
+
+  it("keeps the account drawer focused on account and preferences instead of workspace collaboration management", () => {
+    expect(accountPanelSource).toContain('title="Account"');
+    expect(accountPanelSource).toContain("Preferences");
+    expect(accountPanelSource).toContain("Developer Mode");
+    expect(accountPanelSource).toContain("Theme ownership stays in the account drawer.");
+    expect(accountPanelSource).not.toContain("Workspace Collaboration");
+    expect(accountPanelSource).not.toContain("Pending Invitations");
+    expect(accountPanelSource).not.toContain("Remove Member by User ID");
+    expect(accountPanelSource).not.toContain("Transfer Ownership to User ID");
+    expect(accountPanelSource).not.toContain("SUPERCONDUCTING CIRCUITS");
+  });
+
+  it("keeps technical detail behind app-level developer mode instead of always-visible shell diagnostics", () => {
+    expect(developerModeSource).toContain("DEVELOPER_MODE_STORAGE_KEY");
+    expect(developerModeSource).toContain("localStorage");
+    expect(developerModeSource).toContain("useDeveloperMode");
+    expect(accountPanelSource).toContain("Debug details");
+    expect(accountPanelSource).toContain("developerModeEnabled ? (");
+    expect(statusStripSource).toContain("Open Developer Mode for technical detail");
+    expect(statusStripSource).toContain("toggleDeveloperMode");
   });
 
   it("removes low-contrast auth-adjacent rose notices from the shared shell", () => {
