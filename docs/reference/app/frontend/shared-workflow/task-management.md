@@ -13,7 +13,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared header task queue、task attachment、worker summary、control actions 與 refresh recovery contract
-version: v0.7.0
+version: v0.8.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -39,8 +39,9 @@ updated_by: codex
 | Object | Responsibility |
 |---|---|
 | Header Task Trigger | 在所有 app pages 上可直接打開右側 shell-side panel 的 queue section |
-| Shell-Side Panel | shared shell 的右側 management surface，承接 queue、worker、workspace、dataset 與 account sections |
-| Task Queue Section | 顯示最近可見的 tasks，支援 filter、attach、cancel、terminate、retry |
+| Shell-Side Panel | shared shell 的右側 management surface，承接 `Global Context` 與 `Account` 兩大 panel families |
+| Global Context Panel | 先以 summary cards 呈現 workspace、dataset、queue、worker 四個 sections，再顯示 selected section detail |
+| Task Queue Section | `Global Context` 內的一個 selectable section；顯示最近可見的 tasks，支援 filter、attach、cancel、terminate、retry |
 | Worker Summary | Header 顯示 compact summary；drawer 顯示 lane-level detail |
 | Attached Task | 表示目前 page body 正在關注的單一 persisted task |
 | Lifecycle Summary | 顯示 queued / running / completed / failed / cancelled / terminated 與最近 event 概況 |
@@ -82,6 +83,10 @@ updated_by: codex
     `Tasks Queue` 是 shared shell management surface，應集中在右側 `Shell-Side Panel`。
     Header 只保留 trigger / badge / compact worker summary，不應再鋪一條第二層大型 queue strip。
 
+!!! info "Section switcher, not stacked dump"
+    `Tasks Queue` 是 `Global Context` panel 內的一個 section。
+    queue detail 只有在 queue card 為 selected section 時才展開；workspace、dataset、worker 在非 selected 狀態只保留 cards 摘要。
+
 !!! warning "Single Active Shell Panel"
     queue section 與 account section 屬於同一套右側 shell-side panel interaction model。
     同一時間只能有一個 active panel section；切換 trigger 時應切換 active section，而不是留下被 overlay 擋住的不可點 header trigger。
@@ -111,7 +116,7 @@ updated_by: codex
 | State | Meaning |
 |---|---|
 | `Queue Closed` | Header queue trigger 未開啟 shell-side panel |
-| `Queue Open` | 右側 shell-side panel 的 queue section 為 active |
+| `Queue Open` | 右側 shell-side panel 的 `Global Context` queue section 為 active |
 | `Loading` | task list / task detail / worker summary 請求中 |
 | `Workspace Switching` | shell 正在切換 active workspace，queue 需暫停舊內容 |
 | `Attached` | 頁面已附加到一筆 persisted task |

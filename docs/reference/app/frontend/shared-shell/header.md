@@ -12,19 +12,19 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend shared header 的 shell identity、active workspace、global context controls、shell-side panel、task queue 與 user menu contract
-version: v0.5.0
+scope: Frontend shared header 的 shell identity、global context entry、account surface、developer mode 與 shell-side panel contract
+version: v0.6.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
 
 # Header
 
-本頁定義 frontend shared header 的正式契約。它是 app shell 的 single-line identity 與 global context entry surface。
+本頁定義 frontend shared header 的正式契約。它是 app shell 的 single-line identity、global context entry 與 account-preference entry surface。
 
 !!! info "Surface Boundary"
-    Header 負責唯一可見的 shell identity、`Active Workspace`、`Active Dataset`、`Tasks Queue`、worker status summary 與 user menu。
-    page-local title、form、table filter、result table 與 editor internals 不屬於 Header。
+    Header 負責唯一可見的 shell identity、`Active Workspace`、`Active Dataset`、`Tasks Queue`、worker status summary、account surface 與 app-level preferences。
+    page-local title、workspace management page、membership management、form、table filter、result table 與 editor internals 不屬於 Header。
 
 !!! warning "Single Visible Shell Identity"
     Header 只允許一個可見 shell identity：`SUPERCONDUCTING CIRCUITS`。
@@ -36,7 +36,7 @@ updated_by: codex
 
 !!! tip "Compact Trigger, Heavy Management Elsewhere"
     Header 仍然是 global context owner，但應優先承載 compact triggers / chips。
-    實際的 workspace switch、dataset switch、queue rows、worker detail 與 user controls，應集中在右側 `Shell-Side Panel`，而不是把大型管理面板攤平在 top bar 下方。
+    實際的 workspace switch、dataset switch、queue rows、worker detail、account preference 與 debug disclosure，應集中在右側 `Shell-Side Panel`，而不是把大型管理面板攤平在 top bar 下方。
 
 !!! tip "Read With Task Management"
     Header 負責「從哪裡切換 active workspace、切換 dataset、打開 queue、看 worker 狀態、開啟 user menu」。
@@ -47,7 +47,7 @@ updated_by: codex
 | Slot | Responsibility |
 |---|---|
 | Left Cluster | Sidebar toggle、single-line shell identity |
-| Global Context Cluster | `Active Workspace`、`Active Dataset`、`Tasks Queue` 與 worker summary 的 compact triggers / chips |
+| Global Context Cluster | `Active Workspace`、`Active Dataset`、`Tasks Queue` 與 worker summary 的 compact summary cards / chips |
 | Right Cluster | user menu / account trigger |
 
 ## Shell Identity Contract
@@ -66,7 +66,7 @@ updated_by: codex
 |---|---|
 | Owner | 由 Header triggers 開啟，是 shared shell 的正式 management surface |
 | Placement | 右側 drawer / panel；不得要求使用者離開當前頁面才能切換 shell context |
-| Sections | 至少承接 workspace switch、dataset switch、queue rows、worker summary 與 account controls |
+| Sections | 至少承接 `Global Context` 與 `Account` 兩大 panel families |
 | Density rule | Header 顯示 compact summary，panel 顯示 management UI；不得把兩者同時鋪平造成雙重密度 |
 | Top strip rule | Header 下方不再擁有大型常駐 status strip；若保留 summary strip，也只能是 summary-only，不得承擔 management actions |
 
@@ -82,6 +82,22 @@ updated_by: codex
 | Close CTA | 不需要顯式 `Close menu` / `Close panel` CTA 才能關閉 |
 | Z-order / hit-testing | open panel 不得把其他 header triggers 變成不可互動；若 panel 開著，其他 trigger 仍必須可切換 active panel |
 | Shared model | account panel 與 global-context panel 屬於同一套 shell-side panel interaction model，不是彼此無關的 overlays |
+
+## Global Context Panel
+
+| Concern | Required behavior |
+|---|---|
+| Role | shared shell 的大型 management surface，承接 workspace、dataset、queue 與 worker detail |
+| Top row | 先顯示 4 張 summary cards：`Active Workspace`、`Active Dataset`、`Tasks Queue`、`Worker Summary` |
+| Card role | 4 張 cards 是 section switchers，不只是 summary badges |
+| Detail model | cards 下方只顯示目前 selected section 的 detailed content，不得把所有 section 一次整疊鋪開 |
+| Non-selected sections | 非 selected section 只保留卡片摘要，不顯示完整 detail body |
+| Selected affordance | selected / unselected 狀態必須明確可辨；建議以 card style 差異與小型 indicator dot 處理 |
+| Density rule | `Global Context` 可以很大，但必須 summary-first；不得變成一面從上到下的 shell-state 管理牆 |
+
+!!! tip "Selected-section detail only"
+    `Global Context` 的核心是「summary cards 切 section，detail 區只顯示一個 active section」。
+    不要把 workspace、dataset、queue、worker 四段內容整包常駐展開。
 
 ## Global Context Order
 
@@ -100,7 +116,7 @@ updated_by: codex
     | Element | Required behavior |
     |---|---|
     | workspace chip / button | 直接顯示目前 active workspace 名稱與 role 摘要 |
-    | open behavior | 點擊後打開右側 shell-side panel，聚焦 workspace section，只列出目前 user memberships |
+    | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context`，聚焦 workspace section，只列出目前 user memberships |
     | propagation | 切換後必須同步更新 active dataset、queue visibility、role / capabilities |
     | unsafe-context handling | 若切換造成 attached task 或 active dataset 不再可見，Header 必須觸發清理或重選流程 |
     | dirty-state handling | 若目前頁存在 dirty draft，Header 先顯示 confirm，再送出 switch mutation |
@@ -110,7 +126,7 @@ updated_by: codex
     | Element | Required behavior |
     |---|---|
     | dataset chip / button | 直接顯示目前 active dataset 名稱與狀態 |
-    | open behavior | 點擊後打開右側 shell-side panel 的 dataset section，僅列出 active workspace 中可見的 datasets，並支援 search 與 select |
+    | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context` dataset section，僅列出 active workspace 中可見的 datasets，並支援 search 與 select |
     | propagation | 切換後必須同步更新 Dashboard、Raw Data、Simulation、Characterization |
     | no-dataset state | 若目前 workspace 尚無可用 dataset，trigger 必須顯示 clear empty state 與 next step |
 
@@ -119,8 +135,8 @@ updated_by: codex
     | Element | Required behavior |
     |---|---|
     | queue button / badge | 顯示目前可見 active tasks 數量 |
-    | open behavior | 點擊後打開右側 shell-side panel 的 queue section |
-    | queue section | 展示 queue rows、worker summary、filter (`Workspace` / `Mine`) |
+    | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context` queue section |
+    | queue section | 展示 queue rows、worker summary、filter (`Workspace` / `Mine`)；非 selected sections 只留在 cards 摘要 |
     | worker summary | 在 drawer 內可看到各 lane 的 `healthy / busy / degraded / draining / offline` 摘要；header 只保留 compact summary |
     | row action entry | 每列至少支援 `Attach`，並依權限顯示 `Cancel` / `Terminate` / `Retry` |
     | default ordering | active tasks 優先，之後按 `updated_at desc` 顯示最近 terminal tasks |
@@ -131,10 +147,47 @@ updated_by: codex
     |---|---|
     | user icon trigger | 關閉狀態只顯示 compact identity / avatar / initials 與必要的 compact warning indicator |
     | closed-state density | 關閉狀態不得攤開完整錯誤文案、session diagnostics 或 recovery instructions |
-    | open behavior | 可直接打開 account panel，或導向右側 shell-side panel 的 account section |
-    | menu sections | 至少包含 `Profile Summary`、`Settings`、`Appearance`、`Sign out` |
+    | open behavior | 可直接打開右側 shell-side panel 的 `Account` section，不得打開第二套獨立 overlay 模型 |
+    | menu sections | 至少包含 `Profile Summary`、`Appearance`、`Developer Mode`、`Sign out` |
     | opened-state detail | 完整 degraded / warning / recovery detail 只在打開後顯示 |
     | appearance control | `Light / Dark / System` 由 User Menu 擁有，不由 Sidebar 擁有 |
+
+## Account Surface Contract
+
+| Concern | Required behavior |
+|---|---|
+| Role | lightweight personal / app-preference surface，不是 shell-wide state-management surface |
+| Allowed content | account summary、sign-in state、appearance、developer mode、sign in / sign out |
+| Excluded content | workspace state、session diagnostics、membership management、queue detail、heavy collaboration controls |
+| Header density | account panel header 應保持簡潔，可使用 `Account`、`Appearance` 或等價輕量標題 |
+| Branding rule | account panel 不得再次重複 `SUPERCONDUCTING CIRCUITS` 或其他 shell identity |
+| Diagnostics rule | 若需要顯示 degraded / error / debug detail，必須在 opened panel 內以 disclosure 或 secondary block 呈現 |
+
+## Developer Mode Preference
+
+| Concern | Required behavior |
+|---|---|
+| Ownership | app-level preference，與 `Appearance` 同層，由 account surface 擁有 |
+| Scope | 不屬於 workspace-scoped，也不屬於 session-scoped |
+| Default | local development build 可預設 `On`；產品向 user-facing sessions 預設 `Off` |
+| `Off` behavior | primary product UI 只顯示 concise status 與 recovery messaging；若仍需保留 technical detail，應放在 secondary disclosure、debug panel 或 compact debug block |
+| `On` behavior | 允許 raw backend / JS exception detail 直接出現在發生問題的主內容區，幫助辨識是哪個 UI surface 壞掉；debug panel 仍可保留作更完整的 structured detail |
+| Covered surfaces | shell-side panels、auth entry、page-level error blocks、diagnostics-heavy workflow surfaces |
+
+!!! info "Developer Mode controls message density, not panel existence"
+    `Developer Mode` 決定的是主內容區錯誤訊息要顯示 user-safe summary，還是 raw technical detail。
+    它不負責決定 debug panel 是否存在；secondary debug surface 在 `On` 與 `Off` 兩種模式下都可以存在。
+
+!!! warning "Inline raw detail should stay local to the failing surface"
+    即使 `Developer Mode` 為 `On`，raw technical detail 也應出現在對應的壞掉區塊，而不是把整個頁面變成 diagnostics wall。
+
+## Toggle And Trigger Affordance
+
+| Control | Required behavior |
+|---|---|
+| Sidebar toggle | 必須有 pointer cursor、清楚 hover state 與 focus-visible state |
+| Global context cards / chips | 必須明確可點、selected state 明顯、不可只靠文字說明理解互動 |
+| Account trigger | 必須有 pointer cursor、hover 與 focus-visible state；closed state 保持 compact |
 
 ## Context Switching Outcomes
 
@@ -155,6 +208,7 @@ updated_by: codex
 | Worker summary is runtime-driven | Header 顯示的 worker status 必須來自 runtime summary，不可由 UI 推測 |
 | Header is summary-first | Header 可以提示 dirty / attached / stale，但不應攤平大型管理 UI |
 | Shell-side panel owns heavy management | workspace switch、dataset switch、queue rows、worker detail 與 account detail 應集中在右側 panel |
+| Account is preference-first | account panel 優先承擔 personal/app preference，不承擔 workspace 與 collaboration 管理面 |
 | Responsive collapse | 窄螢幕可縮成 icon + chips，但仍必須保留 dataset、queue 與 user menu trigger |
 
 !!! tip "Header vs Sidebar"

@@ -13,7 +13,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend login、logout、anonymous / degraded session entry 與 auth-diagnostics density contract
-version: v0.1.0
+version: v0.2.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -70,6 +70,15 @@ updated_by: codex
 | `Session Mode` | secondary disclosure only |
 | transport / debug refs | secondary disclosure only |
 | recovery detail | 可在 secondary disclosure 或 opened panel 顯示，不得搶過 primary action |
+
+## Developer Mode Interaction
+
+| Concern | Required behavior |
+|---|---|
+| Preference owner | 由 [Header](header.md) 的 account surface 擁有，屬於 app-level preference |
+| `Developer Mode = Off` | auth entry 只顯示 concise status、action 與 minimal recovery guidance；raw transport / exception detail 保留在 secondary disclosure 或 debug block |
+| `Developer Mode = On` | 允許 transport / technical detail 直接出現在發生錯誤的 auth surface，幫助辨識壞掉區塊；secondary debug block 仍可存在 |
+| Guardrail | `Developer Mode` 影響的是錯誤訊息密度，不是 debug surface 是否存在；auth entry 仍不得整頁退化成 diagnostics dashboard |
 
 ## Layout Baseline
 

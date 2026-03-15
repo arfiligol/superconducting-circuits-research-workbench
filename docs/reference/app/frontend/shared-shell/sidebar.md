@@ -13,7 +13,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared sidebar 的導航、route grouping 與 responsive shell contract
-version: v0.4.0
+version: v0.5.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -58,6 +58,19 @@ updated_by: codex
 | CTA card / onboarding card | no | 應移到 dashboard、empty state 或 dedicated onboarding surface |
 | Global status / queue summary | no | 屬於 [Header](header.md) / shell context controls |
 
+## Taxonomy Stability Rule
+
+| Concern | Current SoT |
+|---|---|
+| `Dashboard` page | 目前仍是單一 canonical page，不得在 frontend implementation 中自行拆成 `Workspace` / `Session` 雙頁 |
+| `DASHBOARD` group | 目前仍是 top-level nav group，不得未經 SoT 更新就改成其他 label 或改成 purely abstract container |
+| `PIPELINE` overview | 若未新增正式 page spec，不得自行在 sidebar 補一個 pipeline overview route |
+| Route / label changes | route naming、sidebar labels 與 group hierarchy 需要先更新 SoT，再進行 frontend implementation |
+
+!!! warning "No silent IA rewrite in frontend"
+    如果產品想把 `Dashboard` 改成群組容器，或新增 `Workspace` / `Session` dedicated pages，必須先更新 frontend reference 與相關 page specs。
+    不得由 sidebar implementation 先行改名、補頁或變更 route taxonomy。
+
 ## Group Label Contract
 
 | Allowed label | Meaning |
@@ -88,6 +101,15 @@ updated_by: codex
 | Stable entry points | 主要頁面不得只靠 page-internal links 才能抵達 |
 | Responsive collapse | 窄螢幕可收合，但不可丟失 active route 與導覽分組 |
 | Dense-but-quiet presentation | 側欄是持久導航，不應承擔教育文案或管理面板 |
+
+## Collapse Toggle Contract
+
+| Concern | Required behavior |
+|---|---|
+| Pointer affordance | toggle button 必須顯示 pointer cursor |
+| Hover state | 必須有清楚但克制的 hover feedback |
+| Focus-visible state | keyboard navigation 時必須有可見 focus ring / outline |
+| Meaning | toggle 只負責展開 / 收合 sidebar，不承擔 global context 或 account management |
 
 !!! tip "Sidebar vs Header"
     Sidebar 負責持久導航。

@@ -14,8 +14,8 @@ owner: docs-team
 audience: team
 scope: Pipeline /dashboard 的資料摘要與 Dataset Metadata 單一編輯入口契約
 version: v0.4.0
-last_updated: 2026-03-13
-updated_by: team
+last_updated: 2026-03-16
+updated_by: codex
 ---
 
 # Dashboard
@@ -29,6 +29,10 @@ updated_by: team
 !!! tip "Shared Shell"
     本頁使用 shared [Header](../shared-shell/header.md) 與 [Sidebar](../shared-shell/sidebar.md)。
     active dataset context 必須與 shell-level session state 一致。
+
+!!! warning "Current IA Baseline"
+    `/dashboard` 目前仍是 canonical dashboard page。
+    若產品未來要改成 `Workspace` / `Session` dedicated pages，或把 `Dashboard` 改為純 group container，必須先更新 frontend SoT，再改 sidebar / route implementation。
 
 ---
 
