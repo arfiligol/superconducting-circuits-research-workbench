@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Final, cast
 
 from sc_core.execution import (
@@ -13,7 +13,7 @@ from sc_core.execution import (
     build_reconcile_stale_task_operation,
 )
 
-from core.shared.persistence.models import TraceBatchRecord
+from core.shared.persistence.models import TraceBatchRecord, utc_now
 from core.shared.persistence.trace_store import (
     LocalZarrTraceStoreBackend,
     get_trace_store_backend_binding,
@@ -33,11 +33,6 @@ class ReconcileSummary:
     orphan_batch_ids: list[int] = field(default_factory=list)
     deleted_store_keys: list[str] = field(default_factory=list)
     audit_log_ids: list[int] = field(default_factory=list)
-
-
-def _utcnow() -> datetime:
-    """Return one naive UTC timestamp without using deprecated utcnow()."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _extract_store_keys(batch: TraceBatchRecord) -> list[str]:
@@ -145,7 +140,7 @@ def reconcile_stale_tasks_and_batches(
         audit_log_id = _persist_task_reconcile_operation(
             uow,
             task_id=int(task.id),
-            recorded_at=_utcnow(),
+            recorded_at=utc_now(),
             stale_before=stale_before,
         )
         if audit_log_id is not None:
@@ -174,7 +169,7 @@ def reconcile_stale_tasks_and_batches(
             actor_id=None,
             event=build_reconcile_batch_failed_event(
                 batch_id=batch_id,
-                recorded_at=_utcnow(),
+                recorded_at=utc_now(),
                 stale_before=stale_before,
             ),
         )

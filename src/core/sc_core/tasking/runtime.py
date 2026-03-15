@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from sc_core.tasking.routing import LaneName
@@ -531,10 +531,16 @@ def _sanitize_runtime_metadata_value(value: object) -> ProcessorRuntimeMetadataV
 
 def _coerce_datetime(value: object) -> datetime:
     if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        return datetime.fromisoformat(value)
-    raise ValueError("Expected datetime-compatible last_heartbeat_at value.")
+        coerced = value
+    elif isinstance(value, str):
+        text = value.strip()
+        normalized_text = text[:-1] + "+00:00" if text.endswith("Z") else text
+        coerced = datetime.fromisoformat(normalized_text)
+    else:
+        raise ValueError("Expected datetime-compatible last_heartbeat_at value.")
+    if coerced.tzinfo is None:
+        return coerced.replace(tzinfo=UTC)
+    return coerced.astimezone(UTC)
 
 
 def _coerce_optional_int(value: object) -> int | None:

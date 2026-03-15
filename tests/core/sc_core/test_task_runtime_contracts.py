@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 from sc_core.execution import (
     TaskExecutionHistoryEvent,
@@ -12,7 +12,9 @@ from sc_core.execution import (
     build_task_control_history_event,
     build_task_lifecycle_history_metadata,
     build_task_submission_history_metadata,
+    canonicalize_execution_timestamp,
     canonicalize_task_history_event_metadata,
+    canonicalize_utc_datetime,
     normalize_task_history_event_metadata,
     project_task_control_transition,
     project_task_runtime_state_from_history,
@@ -387,6 +389,43 @@ def test_task_event_metadata_canonicalizer_supports_projection_and_strict_valida
     assert projected == "completed"
 
 
+def test_execution_timestamp_helpers_normalize_naive_and_offset_inputs_to_utc() -> None:
+    assert canonicalize_utc_datetime(datetime(2026, 3, 16, 12, 0)) == datetime(
+        2026,
+        3,
+        16,
+        12,
+        0,
+        tzinfo=UTC,
+    )
+    assert canonicalize_execution_timestamp("2026-03-16T12:00:00Z") == "2026-03-16T12:00:00+00:00"
+    assert canonicalize_execution_timestamp(
+        datetime(2026, 3, 16, 12, 0, tzinfo=timezone(timedelta(hours=8)))
+    ) == "2026-03-16T04:00:00+00:00"
+
+    context = build_task_execution_history_context(
+        task_status="running",
+        submitted_at="2026-03-16T12:00:00+08:00",
+        progress_updated_at="2026-03-16T12:05:00",
+        progress_percent_complete=50,
+        dispatch=build_task_dispatch_record(
+            task_id=1,
+            worker_task_name="simulation_run_task",
+            task_status="queued",
+            submitted_from_active_dataset=False,
+            dataset_id="dataset-1",
+            accepted_at="2026-03-16T12:00:00Z",
+            last_updated_at="2026-03-16T12:05:00+08:00",
+            submission_source="api",
+        ),
+        worker_task_name="simulation_run_task",
+        dataset_id="dataset-1",
+        definition_id=7,
+    )
+    assert context.submitted_at == "2026-03-16T04:00:00+00:00"
+    assert context.progress_updated_at == "2026-03-16T12:05:00+00:00"
+
+
 def test_task_history_projection_recovers_control_runtime_states() -> None:
     cancel_history = (
         _history_event(
@@ -505,7 +544,19 @@ def test_processor_snapshot_projection_preserves_lane_scope() -> None:
 
     heartbeat = build_processor_heartbeat_from_snapshot(snapshots[0])
     assert heartbeat.current_task_id == 12
+    assert heartbeat.last_heartbeat_at.tzinfo == UTC
     assert heartbeat.runtime_metadata == {"host": REDACTED_RUNTIME_METADATA_VALUE}
+
+    naive_heartbeat = build_processor_heartbeat_from_snapshot(
+        {
+            "processor_id": "sim-2",
+            "lane": "simulation",
+            "state": "healthy",
+            "last_heartbeat_at": "2026-03-16T12:00:00",
+            "runtime_metadata": {},
+        }
+    )
+    assert naive_heartbeat.last_heartbeat_at.tzinfo == UTC
 
     summaries = build_lane_processor_summaries_from_snapshots(
         snapshots,

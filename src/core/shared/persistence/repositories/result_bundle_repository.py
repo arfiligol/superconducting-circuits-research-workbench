@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, cast
 
 from sc_core.storage import (
@@ -20,6 +20,7 @@ from core.shared.persistence.models import (
     TraceRecord,
     require_explicit_scope_ids,
     resolve_scope_ids_for_write,
+    utc_now,
 )
 from core.shared.persistence.repositories.analysis_run_repository import AnalysisRunRepository
 from core.shared.persistence.repositories.contracts import (
@@ -29,11 +30,6 @@ from core.shared.persistence.repositories.contracts import (
     TraceBatchSnapshot,
 )
 from core.shared.persistence.repositories.query_objects import TraceIndexPageQuery
-
-
-def _utcnow() -> datetime:
-    """Return one naive UTC timestamp without using deprecated utcnow()."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _sideband_parameter_predicate(parameter_col: Any) -> Any:
@@ -184,7 +180,7 @@ class TraceBatchRepository:
         if batch is None:
             raise ValueError(f"Trace batch ID {batch_id} not found.")
         batch.status = "completed"
-        batch.completed_at = _utcnow()
+        batch.completed_at = utc_now()
         if isinstance(summary_payload, dict):
             batch.result_payload = cast(
                 dict[str, Any],
@@ -208,7 +204,7 @@ class TraceBatchRepository:
         if batch is None:
             raise ValueError(f"Trace batch ID {batch_id} not found.")
         batch.status = "failed"
-        batch.completed_at = _utcnow()
+        batch.completed_at = utc_now()
         if isinstance(summary_payload, dict):
             batch.result_payload = cast(
                 dict[str, Any],

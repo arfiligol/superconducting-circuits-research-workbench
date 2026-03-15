@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from sc_core.tasking import (
@@ -189,7 +189,7 @@ class TaskExecutionHistoryEvent:
             event_key=event_key,
             event_type=event_type,
             level=level,
-            occurred_at=occurred_at,
+            occurred_at=canonicalize_execution_timestamp(occurred_at),
             message=message,
             metadata=coerce_task_execution_history_metadata(metadata),
         )
@@ -985,8 +985,8 @@ def build_task_execution_history_context(
     """Build the canonical task-history context from one task snapshot."""
     return TaskExecutionHistoryContext(
         task_status=task_status,
-        submitted_at=submitted_at,
-        progress_updated_at=progress_updated_at,
+        submitted_at=canonicalize_execution_timestamp(submitted_at),
+        progress_updated_at=canonicalize_execution_timestamp(progress_updated_at),
         progress_percent_complete=progress_percent_complete,
         dispatch=dispatch,
         worker_task_name=worker_task_name,
@@ -1636,10 +1636,28 @@ def _optional_int(value: object) -> int | None:
     raise ValueError("Expected integer-compatible value.")
 
 
+def canonicalize_utc_datetime(value: datetime) -> datetime:
+    """Normalize one datetime into a timezone-aware UTC instant."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def canonicalize_execution_timestamp(value: datetime | str) -> str:
+    """Normalize one execution timestamp into a canonical UTC ISO-8601 string."""
+    if isinstance(value, datetime):
+        return canonicalize_utc_datetime(value).isoformat()
+    text = str(value).strip()
+    if not text:
+        raise ValueError("Execution timestamps must not be empty.")
+    normalized_text = text[:-1] + "+00:00" if text.endswith("Z") else text
+    return canonicalize_utc_datetime(datetime.fromisoformat(normalized_text)).isoformat()
+
+
 def _optional_isoformat(value: datetime | None) -> str | None:
     if value is None:
         return None
-    return value.isoformat()
+    return canonicalize_execution_timestamp(value)
 
 
 def _copy_payload(payload: Mapping[str, object] | None) -> dict[str, object] | None:

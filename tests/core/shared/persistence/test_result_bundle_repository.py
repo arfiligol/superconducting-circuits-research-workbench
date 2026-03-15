@@ -1,5 +1,7 @@
 """Tests for design/trace/trace-batch persistence helpers."""
 
+from datetime import UTC
+
 from sqlmodel import Session, SQLModel, create_engine
 
 from core.shared.persistence.models import (
@@ -221,6 +223,7 @@ def test_result_bundle_repository_get_snapshot_returns_detached_dto() -> None:
         assert refreshed is not None
         assert refreshed.source_meta["origin"] == "simulation_postprocess"
         assert refreshed.result_payload["points"][0]["source_point_index"] == 0
+        assert refreshed.created_at.tzinfo == UTC
 
 
 def test_result_bundle_repository_hides_incomplete_snapshots_and_lists_incomplete_batches() -> None:
@@ -333,6 +336,8 @@ def test_result_bundle_repository_merges_summary_into_trace_batch_payload() -> N
         )
 
         assert updated.status == "failed"
+        assert updated.completed_at is not None
+        assert updated.completed_at.tzinfo == UTC
         assert updated.result_payload["trace_batch_record"]["summary_payload"] == {
             "trace_count": 3,
             "error_code": "write_failed",

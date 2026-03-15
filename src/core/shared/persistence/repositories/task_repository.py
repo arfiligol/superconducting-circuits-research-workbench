@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from sc_core.execution import (
@@ -24,14 +24,9 @@ from sc_core.storage import TraceResultLinkage
 from sqlalchemy import desc, or_
 from sqlmodel import Session, col, select
 
-from core.shared.persistence.models import TaskRecord
+from core.shared.persistence.models import TaskRecord, utc_now
 
 _ACTIVE_TASK_STATUSES = ("queued", "running")
-
-
-def _utcnow() -> datetime:
-    """Return one naive UTC timestamp without using deprecated utcnow()."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _normalize_status_filter(
@@ -162,7 +157,7 @@ class TaskRepository:
         """Mark one task as running and stamp start/heartbeat timestamps."""
         self.apply_lifecycle_mutation(
             task_id,
-            build_task_running_mutation(recorded_at=_utcnow()),
+            build_task_running_mutation(recorded_at=utc_now()),
         )
 
     def heartbeat(self, task_id: int, progress_payload: dict[str, Any]) -> None:
@@ -170,7 +165,7 @@ class TaskRepository:
         self.apply_execution_operation(
             build_task_heartbeat_operation(
                 task_id=task_id,
-                recorded_at=_utcnow(),
+                recorded_at=utc_now(),
                 progress_payload=progress_payload,
             ),
         )
@@ -187,7 +182,7 @@ class TaskRepository:
         self.apply_lifecycle_mutation(
             task_id,
             build_task_completed_mutation(
-                recorded_at=_utcnow(),
+                recorded_at=utc_now(),
                 result_summary_payload=result_summary_payload,
                 result_handle=self._result_handle_from_inputs(
                     result_linkage,
@@ -201,7 +196,7 @@ class TaskRepository:
         self.apply_lifecycle_mutation(
             task_id,
             build_task_failed_mutation(
-                recorded_at=_utcnow(),
+                recorded_at=utc_now(),
                 error_payload=error_payload,
             ),
         )

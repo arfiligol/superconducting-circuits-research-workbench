@@ -4,18 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from core.shared.persistence import get_unit_of_work
+from core.shared.persistence.models import utc_now
 from core.shared.persistence.reconcile import ReconcileSummary, reconcile_stale_tasks_and_batches
 
 logger = logging.getLogger(__name__)
-
-
-def _utcnow() -> datetime:
-    """Return one naive UTC timestamp without deprecated utcnow()."""
-    return datetime.now(UTC).replace(tzinfo=None)
-
 
 def default_stale_timeout_seconds() -> int:
     """Return the safe startup reconcile timeout from environment."""
@@ -34,7 +29,7 @@ def run_startup_reconcile(
         if stale_after_seconds is None
         else max(1, int(stale_after_seconds))
     )
-    stale_before = _utcnow() - timedelta(seconds=timeout_seconds)
+    stale_before = utc_now() - timedelta(seconds=timeout_seconds)
     with get_unit_of_work() as uow:
         summary = reconcile_stale_tasks_and_batches(uow, stale_before=stale_before)
     logger.info(

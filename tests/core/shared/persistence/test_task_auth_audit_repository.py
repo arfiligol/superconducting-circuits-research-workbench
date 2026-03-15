@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from sc_core.execution import build_execution_event_log
 from sqlmodel import Session, SQLModel, create_engine
 
-from core.shared.persistence.models import DesignRecord, TraceBatchRecord
+from core.shared.persistence.models import DesignRecord, TraceBatchRecord, utc_now
 from core.shared.persistence.repositories.audit_log_repository import AuditLogRepository
 from core.shared.persistence.repositories.task_repository import TaskRepository
 from core.shared.persistence.repositories.user_repository import UserRepository
@@ -17,11 +17,6 @@ def _memory_session() -> Session:
     engine = create_engine("sqlite://")
     SQLModel.metadata.create_all(engine)
     return Session(engine)
-
-
-def _utcnow() -> datetime:
-    """Return one naive UTC timestamp without using deprecated utcnow()."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def test_task_repository_lifecycle_roundtrips_payloads_and_links() -> None:
@@ -94,9 +89,13 @@ def test_task_repository_lifecycle_roundtrips_payloads_and_links() -> None:
         assert persisted.progress_payload == {"phase": "simulate", "step": "2/5"}
         assert persisted.result_summary_payload == {"summary": "5 traces written"}
         assert persisted.error_payload == {}
+        assert persisted.created_at.tzinfo == UTC
         assert persisted.started_at is not None
+        assert persisted.started_at.tzinfo == UTC
         assert persisted.heartbeat_at is not None
+        assert persisted.heartbeat_at.tzinfo == UTC
         assert persisted.completed_at is not None
+        assert persisted.completed_at.tzinfo == UTC
 
 
 def test_task_repository_marks_failures_and_finds_latest_active_and_stale_tasks() -> None:
@@ -118,9 +117,9 @@ def test_task_repository_marks_failures_and_finds_latest_active_and_stale_tasks(
             dedupe_key="simulation:filters",
         )
         assert first.id is not None
-        first.created_at = _utcnow() - timedelta(minutes=10)
+        first.created_at = utc_now() - timedelta(minutes=10)
         repo.mark_running(first.id)
-        first.heartbeat_at = _utcnow() - timedelta(minutes=10)
+        first.heartbeat_at = utc_now() - timedelta(minutes=10)
 
         second = repo.create_task(
             "simulation_run",
@@ -164,6 +163,7 @@ def test_task_repository_marks_failures_and_finds_latest_active_and_stale_tasks(
         assert failed.status == "failed"
         assert failed.error_payload["error_code"] == "simulation_failed"
         assert failed.completed_at is not None
+        assert failed.completed_at.tzinfo == UTC
 
         active = repo.find_active_by_dedupe_key("simulation:filters")
         assert active is not None
@@ -177,7 +177,7 @@ def test_task_repository_marks_failures_and_finds_latest_active_and_stale_tasks(
         assert [task.id for task in design_tasks] == [latest.id, second.id, first.id]
         queued_only = repo.list_tasks_by_design(design.id, status_filter="queued")
         assert [task.id for task in queued_only] == [latest.id]
-        stale = repo.list_stale_running_tasks(_utcnow() - timedelta(minutes=5))
+        stale = repo.list_stale_running_tasks(utc_now() - timedelta(minutes=5))
         assert [task.id for task in stale] == [first.id]
 
 

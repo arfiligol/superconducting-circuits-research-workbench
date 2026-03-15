@@ -8,7 +8,7 @@ from pathlib import Path
 from sqlmodel import Session, SQLModel, create_engine
 
 import core.shared.persistence.reconcile as reconcile_module
-from core.shared.persistence.models import DesignRecord, TraceBatchRecord
+from core.shared.persistence.models import DesignRecord, TraceBatchRecord, utc_now
 from core.shared.persistence.reconcile import reconcile_stale_tasks_and_batches
 from core.shared.persistence.unit_of_work import SqliteUnitOfWork
 
@@ -17,11 +17,6 @@ def _memory_session() -> Session:
     engine = create_engine("sqlite://")
     SQLModel.metadata.create_all(engine)
     return Session(engine)
-
-
-def _utcnow() -> datetime:
-    """Return one naive UTC timestamp without using deprecated utcnow()."""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def test_reconcile_marks_stale_tasks_and_orphan_batches_failed(
@@ -91,7 +86,7 @@ def test_reconcile_marks_stale_tasks_and_orphan_batches_failed(
         )
         assert stale_task.id is not None
         uow.tasks.mark_running(stale_task.id)
-        stale_task.heartbeat_at = _utcnow() - timedelta(minutes=10)
+        stale_task.heartbeat_at = utc_now() - timedelta(minutes=10)
 
         for store_key in [
             "designs/1/runtime/stale-batch.zarr",
@@ -102,7 +97,7 @@ def test_reconcile_marks_stale_tasks_and_orphan_batches_failed(
 
         summary = reconcile_stale_tasks_and_batches(
             uow,
-            stale_before=_utcnow() - timedelta(minutes=5),
+            stale_before=utc_now() - timedelta(minutes=5),
         )
 
         reconciled_task = uow.tasks.get_task(stale_task.id)
@@ -175,7 +170,7 @@ def test_reconcile_preserves_batch_payload_shape_and_adds_only_small_summary_pay
 
         summary = reconcile_stale_tasks_and_batches(
             uow,
-            stale_before=_utcnow() - timedelta(minutes=5),
+            stale_before=utc_now() - timedelta(minutes=5),
         )
 
         reconciled_batch = uow.result_bundles.get(batch.id)
@@ -268,7 +263,7 @@ def test_reconcile_commits_failed_state_before_cleanup(
 
         summary = reconcile_stale_tasks_and_batches(
             uow,
-            stale_before=_utcnow() - timedelta(minutes=5),
+            stale_before=utc_now() - timedelta(minutes=5),
         )
 
         assert summary.failed_batch_ids == [batch.id]
@@ -323,7 +318,7 @@ def test_reconcile_skips_cleanup_when_persistence_commit_fails(
         )
         assert stale_task.id is not None
         uow.tasks.mark_running(stale_task.id)
-        stale_task.heartbeat_at = _utcnow() - timedelta(minutes=10)
+        stale_task.heartbeat_at = utc_now() - timedelta(minutes=10)
         uow.commit()
 
         store_path = tmp_path / "designs/1/runtime/commit-failure.zarr"
@@ -341,7 +336,7 @@ def test_reconcile_skips_cleanup_when_persistence_commit_fails(
         try:
             reconcile_stale_tasks_and_batches(
                 uow,
-                stale_before=_utcnow() - timedelta(minutes=5),
+                stale_before=utc_now() - timedelta(minutes=5),
             )
         except RuntimeError as exc:
             assert str(exc) == "commit failed"

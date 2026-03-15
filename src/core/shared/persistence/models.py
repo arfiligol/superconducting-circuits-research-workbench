@@ -5,14 +5,49 @@ architecture. Physical table names remain legacy-shaped until a dedicated
 schema migration workstream lands.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from sqlalchemy import DateTime, TypeDecorator
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 ALLOWED_USER_ROLES = frozenset({"admin", "user"})
+
+
+def utc_now() -> datetime:
+    """Return one timezone-aware UTC timestamp for canonical core writes."""
+    return datetime.now(UTC)
+
+
+def canonicalize_utc_datetime(value: datetime) -> datetime:
+    """Normalize one datetime into a timezone-aware UTC instant."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+class UTCDateTime(TypeDecorator[datetime]):
+    """Store UTC timestamps in legacy SQL columns while round-tripping aware UTC values."""
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: object) -> datetime | None:
+        if value is None:
+            return None
+        return canonicalize_utc_datetime(value).replace(tzinfo=None)
+
+    def process_result_value(self, value: datetime | None, dialect: object) -> datetime | None:
+        if value is None:
+            return None
+        return canonicalize_utc_datetime(value)
+
+
+def _utc_datetime_column(*, index: bool = False, nullable: bool = False) -> Column:
+    """Return one shared SQLAlchemy column configured for UTC datetime round-trips."""
+    return Column(UTCDateTime(), index=index, nullable=nullable)
 
 
 @dataclass(frozen=True)
@@ -138,7 +173,7 @@ class DesignRecord(SQLModel, table=True):
     # storage location for design-scoped metadata until the schema migration lands.
     source_meta: dict = Field(default_factory=dict, sa_column=Column(JSON))
     parameters: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=_utc_datetime_column())
 
     tags: list["Tag"] = Relationship(back_populates="datasets", link_model=DesignTagLink)
     data_records: list["TraceRecord"] = Relationship(
@@ -183,7 +218,7 @@ class TraceRecord(SQLModel, table=True):
     axes: list = Field(default_factory=list, sa_column=Column(JSON))
     values: list = Field(default_factory=list, sa_column=Column(JSON))
     store_ref: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=_utc_datetime_column())
 
     dataset: Optional["DesignRecord"] = Relationship(back_populates="data_records")
     result_bundles: list["TraceBatchRecord"] = Relationship(
@@ -260,8 +295,11 @@ class TraceBatchRecord(SQLModel, table=True):
     config_snapshot: dict = Field(default_factory=dict, sa_column=Column(JSON))
     result_payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    completed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utc_now, sa_column=_utc_datetime_column())
+    completed_at: datetime | None = Field(
+        default=None,
+        sa_column=_utc_datetime_column(nullable=True),
+    )
 
     dataset: Optional["DesignRecord"] = Relationship(back_populates="result_bundles")
     data_records: list["TraceRecord"] = Relationship(
@@ -337,7 +375,7 @@ class AnalysisRunRecord(SQLModel, table=False):
     trace_mode_group: str = ""
     config_payload: dict = Field(default_factory=dict)
     summary_payload: dict = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     completed_at: datetime | None = None
 
 
@@ -351,8 +389,11 @@ class UserRecord(SQLModel, table=True):
     password_hash: str
     role: str = Field(index=True)
     is_active: bool = Field(default=True, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    last_login_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utc_now, sa_column=_utc_datetime_column())
+    last_login_at: datetime | None = Field(
+        default=None,
+        sa_column=_utc_datetime_column(nullable=True),
+    )
 
 
 class AuditLogRecord(SQLModel, table=True):
@@ -367,7 +408,10 @@ class AuditLogRecord(SQLModel, table=True):
     resource_id: str = Field(index=True)
     summary: str
     payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=_utc_datetime_column(index=True),
+    )
 
 
 class TaskRecord(SQLModel, table=True):
@@ -396,10 +440,22 @@ class TaskRecord(SQLModel, table=True):
     progress_payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
     result_summary_payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
     error_payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    started_at: datetime | None = Field(default=None, index=True)
-    heartbeat_at: datetime | None = Field(default=None, index=True)
-    completed_at: datetime | None = Field(default=None, index=True)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=_utc_datetime_column(index=True),
+    )
+    started_at: datetime | None = Field(
+        default=None,
+        sa_column=_utc_datetime_column(index=True, nullable=True),
+    )
+    heartbeat_at: datetime | None = Field(
+        default=None,
+        sa_column=_utc_datetime_column(index=True, nullable=True),
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        sa_column=_utc_datetime_column(index=True, nullable=True),
+    )
 
 
 class DerivedParameter(SQLModel, table=True):
@@ -417,7 +473,7 @@ class DerivedParameter(SQLModel, table=True):
     unit: str | None = None
     method: str | None = None
     extra: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=_utc_datetime_column())
 
     dataset: Optional["DesignRecord"] = Relationship(back_populates="derived_params")
 
@@ -434,7 +490,7 @@ class ParameterDesignation(SQLModel, table=True):
     designated_name: str = Field(index=True)
     source_analysis_type: str
     source_parameter_name: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=_utc_datetime_column())
 
     dataset: Optional["DesignRecord"] = Relationship(back_populates="designations")
 
@@ -447,7 +503,7 @@ class CircuitRecord(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     definition_json: str = Field(sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now, sa_column=_utc_datetime_column())
 
 
 # Legacy aliases retained until callers fully migrate to canonical names.

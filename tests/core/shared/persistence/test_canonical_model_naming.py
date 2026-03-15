@@ -1,5 +1,7 @@
 """Tests for canonical dataset/design persistence naming."""
 
+from datetime import UTC
+
 from core.shared.persistence.models import (
     DerivedParameter,
     DeviceType,
@@ -54,12 +56,16 @@ def test_design_scoped_records_keep_dataset_and_design_scope_distinct() -> None:
 
     assert trace.dataset_id == 11
     assert trace.design_id == 101
+    assert trace.created_at.tzinfo == UTC
     assert batch.dataset_id == 12
     assert batch.design_id == 102
+    assert batch.created_at.tzinfo == UTC
     assert derived.dataset_id == 13
     assert derived.design_id == 103
+    assert derived.created_at.tzinfo == UTC
     assert designation.dataset_id == 14
     assert designation.design_id == 104
+    assert designation.created_at.tzinfo == UTC
 
 
 def test_canonical_scope_write_requires_explicit_dataset_and_design_ids() -> None:
