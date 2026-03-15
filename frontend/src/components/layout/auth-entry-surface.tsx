@@ -114,11 +114,11 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
           : "Already signed out";
   const statusDescription = isLogin
     ? authSummary.state === "authenticated"
-      ? "This shell already has an authenticated session. Return to the app or log out before switching accounts."
-      : "Authentication stays owned by the shared backend session. A login only counts after the canonical session surface resolves as attached."
+      ? "This shell already has an authenticated session."
+      : "Login only completes after the shared backend session resolves as attached."
     : authSummary.state === "authenticated"
-      ? "Sign out clears the current backend-backed session and then rehydrates the shell from the canonical session owner."
-      : "If the shell is already anonymous or degraded, refresh the shared session before treating logout as complete.";
+      ? "Sign out clears the current backend-backed session."
+      : "Refresh the shared session if you need to confirm the current state.";
 
   async function handleLogin(values: LoginFormValues) {
     setMutationNotice(null);
@@ -243,14 +243,14 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
                 {isLogin ? (
                   <ActionLink
                     href="/logout"
-                    label="Need logout instead?"
+                    label="Logout instead"
                     icon={<LogOut className="h-4 w-4" />}
                     secondary
                   />
                 ) : (
                   <ActionLink
                     href="/login"
-                    label="Need login instead?"
+                    label="Login instead"
                     icon={<LogIn className="h-4 w-4" />}
                     secondary
                   />
@@ -320,8 +320,7 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
                 <div className="rounded-[1rem] border border-border bg-card px-4 py-4">
                   <p className="text-sm font-semibold text-foreground">Logout confirmation</p>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Use logout when you want the shell to return to an anonymous session. The final
-                    result is always taken from the refreshed canonical session surface.
+                    Return the shell to an anonymous session. Final state is always confirmed by the refreshed canonical session surface.
                   </p>
                 </div>
 

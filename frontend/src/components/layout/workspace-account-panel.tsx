@@ -35,12 +35,12 @@ type PendingAccountAction =
 
 type WorkspaceAccountPanelProps = Readonly<{
   open: boolean;
-  onClose: () => void;
+  onOpenChange: (nextOpen: boolean) => void;
 }>;
 
 export function WorkspaceAccountPanel({
   open,
-  onClose,
+  onOpenChange,
 }: WorkspaceAccountPanelProps) {
   const { session, status, sessionError } = useAppSession();
   const collaboration = useWorkspaceCollaboration();
@@ -116,9 +116,11 @@ export function WorkspaceAccountPanel({
     <>
       <ShellSidePanel
         open={open}
-        onClose={onClose}
+        onClose={() => {
+          onOpenChange(false);
+        }}
         title={authSummary.triggerName}
-        subtitle="Account, authentication, collaboration, and appearance stay under the shared session authority."
+        subtitle="Account, authentication, collaboration, and appearance."
       >
         <div className="space-y-5">
           <ShellNotice tone={authSummary.tone} title={authSummary.menuTitle}>
@@ -228,8 +230,7 @@ export function WorkspaceAccountPanel({
               <p className="text-sm font-semibold text-foreground">Workspace Collaboration</p>
             </div>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Invite, revoke, leave, remove, and transfer actions stay gated by backend
-              capabilities and workspace allowed actions.
+              Invite, revoke, leave, remove, and transfer stay gated by backend authority.
             </p>
 
             <div className="mt-4 space-y-4">

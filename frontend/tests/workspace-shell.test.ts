@@ -31,6 +31,10 @@ const accountPanelSource = readFileSync(
   fileURLToPath(new URL("../src/components/layout/workspace-account-panel.tsx", import.meta.url)),
   "utf8",
 );
+const shellSidePanelSource = readFileSync(
+  fileURLToPath(new URL("../src/components/layout/shell-side-panel.tsx", import.meta.url)),
+  "utf8",
+);
 const schemaCatalogSource = readFileSync(
   fileURLToPath(
     new URL(
@@ -127,6 +131,15 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("resolveShellActiveDatasetSummary");
     expect(statusStripSource).toContain("datasetSummary.value");
     expect(statusStripSource).toContain("Global context");
+  });
+
+  it("uses a single active shell-panel model so triggers can switch without overlay dead-zones", () => {
+    expect(headerSource).toContain('useState<"account" | "context" | null>');
+    expect(headerSource).toContain('activePanel === "account"');
+    expect(headerSource).toContain('activePanel === "context"');
+    expect(shellSidePanelSource).toContain('offsetTopClassName = "top-[74px]"');
+    expect(shellSidePanelSource).toContain("fixed inset-x-0 bottom-0 z-40");
+    expect(shellSidePanelSource).toContain("fixed bottom-0 right-0 z-40");
   });
 
   it("keeps workspace and dataset switchers inside the shared shell", () => {

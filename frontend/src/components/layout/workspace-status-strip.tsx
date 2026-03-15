@@ -35,7 +35,8 @@ import {
 } from "@/lib/app-state";
 
 type WorkspaceStatusStripProps = Readonly<{
-  compact?: boolean;
+  open: boolean;
+  onOpenChange: (nextOpen: boolean) => void;
 }>;
 
 function ActionButton({
@@ -131,9 +132,8 @@ function isRetryableError(error: Error | undefined): boolean {
   return !("retryable" in error) || (error as { retryable?: boolean | null }).retryable !== false;
 }
 
-export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripProps) {
+export function WorkspaceStatusStrip({ open, onOpenChange }: WorkspaceStatusStripProps) {
   const { mutate } = useSWRConfig();
-  const [open, setOpen] = useState(false);
   const [datasetSearch, setDatasetSearch] = useState("");
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
   const [selectingDatasetId, setSelectingDatasetId] = useState<string | null>(null);
@@ -238,14 +238,14 @@ export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripPro
       : "No attached task";
   const triggerLabel = useMemo(() => {
     if (sessionStatus === "loading") {
-      return "Resolving context";
+      return "Context";
     }
 
     if (sessionError || taskQueueError || activeTaskError || activeDatasetError) {
-      return "Context warning";
+      return "Context";
     }
 
-    return "Global context";
+    return "Context";
   }, [sessionStatus, sessionError, taskQueueError, activeTaskError, activeDatasetError]);
 
   async function handleWorkspaceSwitch(workspaceId: string) {
@@ -309,14 +309,14 @@ export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripPro
       <button
         type="button"
         onClick={() => {
-          setOpen((current) => !current);
+          onOpenChange(!open);
         }}
         className={cx(
           "inline-flex min-h-11 cursor-pointer items-center gap-3 rounded-full border px-3 py-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-header",
           open
             ? "border-primary/35 bg-primary/10"
             : "border-border bg-background hover:border-primary/25 hover:bg-surface",
-          compact && "max-w-[280px]",
+          "max-w-[248px]",
         )}
         aria-expanded={open}
         aria-label="Open global context panel"
@@ -328,7 +328,7 @@ export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripPro
             <Workflow className="h-4 w-4" />
           )}
         </span>
-        <span className="hidden min-w-0 md:block">
+        <span className="hidden min-w-0 xl:block">
           <span className="block truncate text-sm font-medium text-foreground">{triggerLabel}</span>
           <span className="block truncate text-[11px] text-muted-foreground">
             {workspace?.displayName ?? "Workspace pending"} · {datasetSummary.value} · {queueValue}
@@ -336,15 +336,15 @@ export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripPro
         </span>
       </button>
 
-      <ShellSidePanel
-        open={open}
-        onClose={() => {
-          setOpen(false);
-        }}
-        title="Global Context"
-        subtitle="Active workspace, dataset, queue, and worker summary remain header-owned shell state. Management lives here instead of an always-visible top strip."
-        className="max-w-[720px]"
-      >
+        <ShellSidePanel
+          open={open}
+          onClose={() => {
+            onOpenChange(false);
+          }}
+          title="Global Context"
+          subtitle="Global context for header-owned workspace, dataset, queue, and worker state."
+          className="max-w-[720px]"
+        >
         <div className="space-y-4">
           {(sessionError || taskQueueError || activeTaskError || activeDatasetError) && (
             <ShellNotice tone="warning" title="Context warning">
@@ -384,7 +384,7 @@ export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripPro
           <SectionFrame
             icon={FolderKanban}
             title="Active Workspace"
-            description="Workspace switching stays session-backed. The list below is driven only by memberships and allowed actions returned by the canonical session authority."
+            description="Session-backed workspace switching."
             actions={
               <ActionButton
                 label="Refresh session"
@@ -499,7 +499,7 @@ export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripPro
           <SectionFrame
             icon={Database}
             title="Active Dataset"
-            description="Dataset selection stays single-select and session-backed. The drawer only reflects datasets visible to the active workspace and allowed by backend authority."
+            description="Single-select dataset context from session authority."
             actions={
               <div className="flex flex-wrap gap-2">
                 <ActionButton
@@ -672,7 +672,7 @@ export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripPro
           <SectionFrame
             icon={Workflow}
             title="Tasks Queue"
-            description="Queue visibility comes from persisted task authority. The shell exposes attachable entries and latest-task recovery without taking over task-row workflows."
+            description="Queue visibility and latest attachment summary."
             actions={
               <ActionButton
                 label="Refresh queue"
@@ -746,7 +746,7 @@ export function WorkspaceStatusStrip({ compact = true }: WorkspaceStatusStripPro
           <SectionFrame
             icon={ServerCog}
             title="Worker Summary"
-            description="Runtime summary remains a shell-owned read surface. This drawer keeps the slot compact in the header while still making the current worker authority explicit."
+            description="Runtime summary for the active workspace."
           >
             <div className="grid gap-3 md:grid-cols-2">
               <CompactContextCard

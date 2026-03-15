@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -31,6 +32,16 @@ import {
   markSchemdrawPreviewStale,
   shouldApplySchemdrawResponse,
 } from "../src/features/circuit-schemdraw/lib/render";
+
+const schemdrawWorkspaceSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/circuit-schemdraw/components/circuit-schemdraw-workspace.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 
 describe("circuit schemdraw routing helpers", () => {
   const definitions = [
@@ -441,6 +452,28 @@ describe("circuit schemdraw render helpers", () => {
         },
       ],
     });
+  });
+});
+
+describe("circuit schemdraw workspace source contracts", () => {
+  it("keeps linked schema context first, editor/preview as the primary row, then diagnostics and snapshot", () => {
+    const linkedIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Context");
+    const editorIndex = schemdrawWorkspaceSource.indexOf("Schemdraw Source Editor");
+    const previewIndex = schemdrawWorkspaceSource.indexOf("SVG Live Preview");
+    const diagnosticsIndex = schemdrawWorkspaceSource.indexOf("Backend Diagnostics");
+    const snapshotIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Snapshot");
+
+    expect(linkedIndex).toBeGreaterThan(-1);
+    expect(editorIndex).toBeGreaterThan(linkedIndex);
+    expect(previewIndex).toBeGreaterThan(editorIndex);
+    expect(diagnosticsIndex).toBeGreaterThan(previewIndex);
+    expect(snapshotIndex).toBeGreaterThan(diagnosticsIndex);
+  });
+
+  it("demotes relation config into an advanced disclosure instead of a primary workspace card", () => {
+    expect(schemdrawWorkspaceSource).toContain("Advanced relation mapping");
+    expect(schemdrawWorkspaceSource).not.toContain("Relation Config Editor");
+    expect(schemdrawWorkspaceSource).toContain("<details");
   });
 });
 

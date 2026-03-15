@@ -16,7 +16,7 @@ import { resolveWorkspacePageIdentity } from "@/lib/navigation";
 
 export function WorkspaceHeader() {
   const pathname = usePathname();
-  const [accountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<"account" | "context" | null>(null);
   const { session, sessionError, status } = useAppSession();
   const identity = resolveWorkspacePageIdentity(pathname);
   const authSummary = resolveShellAuthSummary({
@@ -45,14 +45,14 @@ export function WorkspaceHeader() {
     if (authSummary.state === "anonymous") {
       return {
         label: "Anonymous session",
-        detail: "Sign in to unlock workspace actions",
+        detail: "Sign in",
         tone: "warning" as const,
       };
     }
 
     return {
       label: "Session warning",
-      detail: "Recovery required",
+      detail: "Recover",
       tone: "error" as const,
     };
   }, [authSummary, session]);
@@ -79,15 +79,15 @@ export function WorkspaceHeader() {
           <button
             type="button"
             onClick={() => {
-              setAccountPanelOpen((current) => !current);
+              setActivePanel((current) => (current === "account" ? null : "account"));
             }}
             className={cx(
               "inline-flex min-h-11 cursor-pointer items-center gap-3 rounded-full border px-2.5 py-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-header",
-              accountPanelOpen
+              activePanel === "account"
                 ? "border-primary/35 bg-primary/10"
                 : "border-border bg-background hover:border-primary/25 hover:bg-surface",
             )}
-            aria-expanded={accountPanelOpen}
+            aria-expanded={activePanel === "account"}
             aria-label="Open account panel"
           >
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-[12px] font-semibold text-primary">
@@ -99,7 +99,7 @@ export function WorkspaceHeader() {
                 <UserRound className="h-4 w-4" />
               )}
             </span>
-            <span className="hidden min-w-0 md:block">
+            <span className="hidden min-w-0 lg:block">
               <span className="block truncate text-sm font-medium text-foreground">
                 {accountTriggerStatus.label}
               </span>
@@ -116,14 +116,19 @@ export function WorkspaceHeader() {
             </span>
           </button>
 
-          <WorkspaceStatusStrip />
+          <WorkspaceStatusStrip
+            open={activePanel === "context"}
+            onOpenChange={(nextOpen) => {
+              setActivePanel(nextOpen ? "context" : null);
+            }}
+          />
         </div>
       </div>
 
       <WorkspaceAccountPanel
-        open={accountPanelOpen}
-        onClose={() => {
-          setAccountPanelOpen(false);
+        open={activePanel === "account"}
+        onOpenChange={(nextOpen) => {
+          setActivePanel(nextOpen ? "account" : null);
         }}
       />
     </>

@@ -12,6 +12,7 @@ type ShellSidePanelProps = Readonly<{
   subtitle?: string;
   children: ReactNode;
   className?: string;
+  offsetTopClassName?: string;
 }>;
 
 export function ShellSidePanel({
@@ -21,6 +22,7 @@ export function ShellSidePanel({
   subtitle,
   children,
   className,
+  offsetTopClassName = "top-[74px]",
 }: ShellSidePanelProps) {
   useEffect(() => {
     if (!open) {
@@ -48,12 +50,16 @@ export function ShellSidePanel({
       <button
         type="button"
         aria-label="Close panel backdrop"
-        className="fixed inset-0 z-40 bg-slate-950/42 backdrop-blur-[1px]"
+        className={cx(
+          "fixed inset-x-0 bottom-0 z-40 bg-slate-950/42 backdrop-blur-[1px]",
+          offsetTopClassName,
+        )}
         onClick={onClose}
       />
       <aside
         className={cx(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-[560px] flex-col border-l border-border bg-card shadow-[-24px_0_70px_rgba(15,23,42,0.24)]",
+          "fixed bottom-0 right-0 z-40 flex w-full max-w-[560px] flex-col border-l border-border bg-card shadow-[-24px_0_70px_rgba(15,23,42,0.24)]",
+          offsetTopClassName,
           className,
         )}
         aria-modal="true"
