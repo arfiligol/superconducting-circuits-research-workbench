@@ -22,6 +22,19 @@ from sc_cli.runtime import get_task as runtime_get_task
 from sc_cli.runtime import list_tasks as runtime_list_tasks
 from sc_cli.runtime import reset_runtime_state
 
+PUBLISHED_ROOT_COMMANDS = (
+    "core",
+    "session",
+    "datasets",
+    "tasks",
+    "ops",
+    "events",
+    "results",
+    "characterization",
+)
+
+HIDDEN_COMPATIBILITY_COMMANDS = ("simulation", "circuit-definition")
+
 
 @pytest.fixture(autouse=True)
 def reset_cli_runtime() -> Iterator[None]:
@@ -145,6 +158,29 @@ def _canonical_definition_source(name: str) -> str:
             '  - [C2, "2", "0", "C2"]',
         ]
     )
+
+
+def test_root_help_aligns_with_published_cli_surface() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    for command_name in PUBLISHED_ROOT_COMMANDS:
+        assert command_name in result.stdout
+    for command_name in HIDDEN_COMPATIBILITY_COMMANDS:
+        assert command_name not in result.stdout
+
+
+def test_root_help_keeps_analysis_first_copy() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "Standalone-first CLI for local datasets, runs, results" in result.stdout
+    assert "characterization" in result.stdout
+    assert "analysis-first operator workflows" in result.stdout
 
 def test_preview_artifacts_command_lists_sc_core_exports() -> None:
     runner = CliRunner()
@@ -1252,7 +1288,7 @@ def test_simulation_show_command_reads_simulation_lane_task() -> None:
     runner = CliRunner()
     task_id = _running_simulation_task_id()
 
-    result = runner.invoke(app, ["simulation", "show", str(task_id)])
+    result = runner.invoke(simulation.app, ["show", str(task_id)])
 
     assert result.exit_code == 0
     assert f"task_id: {task_id}" in result.stdout
@@ -1264,7 +1300,7 @@ def test_simulation_inspect_command_groups_operator_view() -> None:
     runner = CliRunner()
     task_id = _completed_simulation_task_id()
 
-    result = runner.invoke(app, ["simulation", "inspect", str(task_id)])
+    result = runner.invoke(simulation.app, ["inspect", str(task_id)])
 
     assert result.exit_code == 0
     assert f"task_id: {task_id}" in result.stdout
@@ -1276,7 +1312,7 @@ def test_simulation_show_command_supports_json_output() -> None:
     runner = CliRunner()
     task_id = _running_simulation_task_id()
 
-    result = runner.invoke(app, ["simulation", "show", str(task_id), "--output", "json"])
+    result = runner.invoke(simulation.app, ["show", str(task_id), "--output", "json"])
 
     assert result.exit_code == 0
     assert f'"task_id": {task_id}' in result.stdout
@@ -1287,7 +1323,7 @@ def test_simulation_latest_command_reads_latest_simulation_lane_task() -> None:
     runner = CliRunner()
     task_id = _running_simulation_task_id()
 
-    result = runner.invoke(app, ["simulation", "latest", "--status", "running"])
+    result = runner.invoke(simulation.app, ["latest", "--status", "running"])
 
     assert result.exit_code == 0
     assert f"task_id: {task_id}" in result.stdout
@@ -1298,9 +1334,7 @@ def test_simulation_latest_command_supports_json_output() -> None:
     runner = CliRunner()
     task_id = _completed_simulation_task_id()
 
-    result = runner.invoke(
-        app, ["simulation", "latest", "--status", "completed", "--output", "json"]
-    )
+    result = runner.invoke(simulation.app, ["latest", "--status", "completed", "--output", "json"])
 
     assert result.exit_code == 0
     assert f'"task_id": {task_id}' in result.stdout
@@ -1311,7 +1345,7 @@ def test_simulation_latest_command_supports_json_output() -> None:
 def test_simulation_submit_command_submits_simulation_task() -> None:
     runner = CliRunner()
 
-    result = runner.invoke(app, ["simulation", "submit", "--definition-id", "18"])
+    result = runner.invoke(simulation.app, ["submit", "--definition-id", "18"])
 
     assert result.exit_code == 0
     assert "kind: simulation" in result.stdout
@@ -1322,10 +1356,7 @@ def test_simulation_submit_command_submits_simulation_task() -> None:
 def test_simulation_submit_command_supports_json_output() -> None:
     runner = CliRunner()
 
-    result = runner.invoke(
-        app,
-        ["simulation", "submit", "--definition-id", "18", "--output", "json"],
-    )
+    result = runner.invoke(simulation.app, ["submit", "--definition-id", "18", "--output", "json"])
 
     assert result.exit_code == 0
     assert '"kind": "simulation"' in result.stdout
@@ -1337,10 +1368,7 @@ def test_simulation_submit_command_falls_back_to_local_active_dataset() -> None:
     runner = CliRunner()
 
     set_result = runner.invoke(app, ["session", "set-active-dataset", "transmon-coupler-014"])
-    result = runner.invoke(
-        app,
-        ["simulation", "submit", "--definition-id", "18", "--output", "json"],
-    )
+    result = runner.invoke(simulation.app, ["submit", "--definition-id", "18", "--output", "json"])
 
     assert set_result.exit_code == 0
     assert result.exit_code == 0
@@ -1353,8 +1381,8 @@ def test_simulation_wait_command_returns_terminal_simulation_lane_task() -> None
     task_id = _completed_simulation_task_id()
 
     result = runner.invoke(
-        app,
-        ["simulation", "wait", str(task_id), "--interval", "0.1", "--timeout", "0.2"],
+        simulation.app,
+        ["wait", str(task_id), "--interval", "0.1", "--timeout", "0.2"],
     )
 
     assert result.exit_code == 0
@@ -1368,9 +1396,8 @@ def test_simulation_wait_command_supports_json_output() -> None:
     task_id = _completed_simulation_task_id()
 
     result = runner.invoke(
-        app,
+        simulation.app,
         [
-            "simulation",
             "wait",
             str(task_id),
             "--interval",
@@ -1393,9 +1420,8 @@ def test_simulation_wait_command_supports_until_status_option() -> None:
     task_id = _running_simulation_task_id()
 
     result = runner.invoke(
-        app,
+        simulation.app,
         [
-            "simulation",
             "wait",
             str(task_id),
             "--until-status",
@@ -1416,7 +1442,7 @@ def test_simulation_show_command_rejects_non_simulation_lane_task() -> None:
     runner = CliRunner()
     task_id = _queued_characterization_task_id()
 
-    result = runner.invoke(app, ["simulation", "show", str(task_id)])
+    result = runner.invoke(simulation.app, ["show", str(task_id)])
 
     assert result.exit_code == 1
     assert f"error: Task {task_id} is not part of the simulation lane." in result.output
@@ -1742,7 +1768,7 @@ def test_simulation_wait_command_handles_backend_contract_errors(
     runner = CliRunner()
     monkeypatch.setattr(simulation, "get_task", lambda _: _raise_backend_error("Task read failed."))
 
-    result = runner.invoke(app, ["simulation", "wait", "301"])
+    result = runner.invoke(simulation.app, ["wait", "301"])
 
     assert result.exit_code == 2
     assert "error: Task read failed. [validation/request_failed]" in result.output
