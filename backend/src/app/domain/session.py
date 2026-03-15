@@ -4,8 +4,13 @@ from typing import Literal
 from src.app.domain.datasets import DatasetLifecycleState, DatasetStatus, DatasetVisibilityScope
 
 AuthState = Literal["authenticated", "anonymous", "degraded"]
-AuthMode = Literal["jwt_cookie", "local_stub"]
-AuthReason = Literal["session_expired", "session_invalid"]
+AuthMode = Literal["jwt_refresh_cookie", "local_stub"]
+AuthReason = Literal[
+    "session_expired",
+    "session_invalid",
+    "refresh_expired",
+    "refresh_invalid",
+]
 PlatformRole = Literal["admin", "user"]
 WorkspaceRole = Literal["owner", "member", "viewer"]
 TaskScope = Literal["workspace", "owned"]
@@ -27,6 +32,11 @@ class WorkspaceAllowedActions:
     invite_members: bool
     remove_members: bool
     transfer_owner: bool
+    leave_workspace: bool
+    view_audit_logs: bool
+    manage_definitions: bool
+    manage_datasets: bool
+    manage_tasks: bool
 
 
 @dataclass(frozen=True)
@@ -47,8 +57,14 @@ class SessionCapabilities:
     can_invite_members: bool
     can_remove_members: bool
     can_transfer_workspace_owner: bool
+    can_leave_workspace: bool
     can_submit_tasks: bool
     can_manage_workspace_tasks: bool
+    can_cancel_own_tasks: bool
+    can_cancel_workspace_tasks: bool
+    can_terminate_workspace_tasks: bool
+    can_retry_own_tasks: bool
+    can_retry_workspace_tasks: bool
     can_manage_definitions: bool
     can_manage_datasets: bool
     can_view_audit_logs: bool
@@ -121,3 +137,11 @@ class WorkspaceSwitchResult:
 class SessionLoginResult:
     session: AppSession
     access_token: str
+    refresh_token: str
+
+
+@dataclass(frozen=True)
+class SessionRefreshResult:
+    session: AppSession
+    access_token: str
+    refresh_token: str

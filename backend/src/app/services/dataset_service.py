@@ -26,6 +26,8 @@ from src.app.domain.datasets import (
     TraceMetadataSummary,
 )
 from src.app.domain.session import SessionState
+from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
+from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
 
 
@@ -106,9 +108,13 @@ class DatasetService:
         self,
         repository: DatasetRepository,
         session_repository: SessionRepository,
+        authorization_service: AuthorizationService | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
+        self._authorization_service = authorization_service or AuthorizationService(
+            CasbinAuthorizationAdapter()
+        )
 
     def list_dataset_catalog(self) -> list[DatasetCatalogRow]:
         state = self._session_repository.get_session_state()
@@ -417,7 +423,7 @@ class DatasetService:
                 category="not_found",
                 message=f"Dataset {dataset_id} was not found.",
             )
-        if not _dataset_is_visible_to_state(dataset, state):
+        if not self._authorization_service.is_visible_dataset(dataset, state):
             raise service_error(
                 403,
                 code="dataset_not_visible_in_workspace",
@@ -435,7 +441,7 @@ class DatasetService:
         rows = [
             dataset
             for dataset in self._repository.list_dataset_details()
-            if _dataset_is_visible_to_state(dataset, state)
+            if self._authorization_service.is_visible_dataset(dataset, state)
         ]
         return sorted(rows, key=lambda dataset: dataset.updated_at, reverse=True)
 
@@ -444,17 +450,7 @@ class DatasetService:
         dataset: DatasetDetail,
         state: SessionState,
     ) -> DatasetAllowedActions:
-        membership = _membership_role_for_workspace(state, dataset.workspace_id)
-        is_admin = state.user is not None and state.user.platform_role == "admin"
-        can_manage = membership in {"owner", "member"} or is_admin
-        can_archive = membership == "owner" or is_admin
-        can_publish = (membership == "owner" or is_admin) and dataset.visibility_scope == "private"
-        return DatasetAllowedActions(
-            select=dataset.lifecycle_state == "active",
-            update_profile=dataset.lifecycle_state == "active" and can_manage,
-            publish=dataset.lifecycle_state == "active" and can_publish,
-            archive=dataset.lifecycle_state == "active" and can_archive,
-        )
+        return self._authorization_service.build_dataset_allowed_actions(dataset, state)
 
     def _updated_fields(
         self,
@@ -469,28 +465,3 @@ class DatasetService:
         if current.source != updated.source:
             changed_fields.append("source")
         return tuple(changed_fields)
-
-
-def _membership_role_for_workspace(
-    state: SessionState,
-    workspace_id: str,
-) -> str | None:
-    for membership in state.memberships:
-        if membership.workspace_id == workspace_id:
-            return membership.role
-    return None
-
-
-def _dataset_is_visible_to_state(dataset: DatasetDetail, state: SessionState) -> bool:
-    if dataset.workspace_id != state.workspace_id or dataset.lifecycle_state != "active":
-        return False
-    if dataset.visibility_scope == "workspace":
-        return True
-    if state.user is None:
-        return False
-    if state.user.platform_role == "admin":
-        return True
-    membership_role = _membership_role_for_workspace(state, state.workspace_id)
-    if membership_role == "owner":
-        return True
-    return dataset.owner_user_id == state.user.user_id

@@ -14,6 +14,8 @@ from src.app.domain.audit import (
     AuditRecord,
 )
 from src.app.domain.session import SessionState
+from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
+from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
 
 
@@ -32,9 +34,13 @@ class AuditLogService:
         self,
         repository: AuditLogRepository,
         session_repository: AuditSessionRepository,
+        authorization_service: AuthorizationService | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
+        self._authorization_service = authorization_service or AuthorizationService(
+            CasbinAuthorizationAdapter()
+        )
 
     def list_audit_logs(self, query: AuditListQuery) -> AuditListView:
         resolved_query = self._resolve_query(query, export=False)
@@ -128,7 +134,11 @@ class AuditLogService:
         export: bool = False,
     ) -> str | None:
         state = self._session_repository.get_session_state()
-        if not _can_view_audit_logs(state):
+        if not self._authorization_service.is_allowed(
+            state,
+            "view_audit_log",
+            resource=_workspace_resource(state.workspace_id),
+        ):
             raise service_error(
                 403,
                 code="audit_export_denied" if export else "audit_access_denied",
@@ -182,17 +192,20 @@ def _build_export_id(query: AuditListQuery) -> str:
     return f"audit-export:{query.workspace_id or 'global'}:{signature}"
 
 
-def _can_view_audit_logs(state: SessionState) -> bool:
-    if _is_admin(state):
-        return True
-    for membership in state.memberships:
-        if membership.workspace_id == state.workspace_id:
-            return membership.role == "owner"
-    return False
-
-
 def _is_admin(state: SessionState) -> bool:
     return state.user is not None and state.user.platform_role == "admin"
+
+
+def _workspace_resource(workspace_id: str):
+    from src.app.domain.authorization import AuthorizationResourceEnvelope
+
+    return AuthorizationResourceEnvelope(
+        resource_kind="audit_log",
+        workspace_id=workspace_id,
+        owner_user_id=None,
+        visibility_scope="workspace",
+        lifecycle_state="active",
+    )
 
 
 def _redact_payload(payload: dict[str, object]) -> dict[str, object]:

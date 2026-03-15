@@ -14,6 +14,8 @@ from src.app.domain.circuit_definitions import (
     CircuitDefinitionUpdate,
 )
 from src.app.domain.session import SessionState
+from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
+from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
 
 
@@ -65,9 +67,13 @@ class CircuitDefinitionService:
         *,
         repository: CircuitDefinitionRepository,
         session_repository: CircuitDefinitionSessionRepository,
+        authorization_service: AuthorizationService | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
+        self._authorization_service = authorization_service or AuthorizationService(
+            CasbinAuthorizationAdapter()
+        )
 
     def list_circuit_definitions(
         self,
@@ -77,7 +83,7 @@ class CircuitDefinitionService:
         visible_records = [
             record
             for record in self._repository.list_circuit_definitions()
-            if _is_visible(record, session)
+            if self._authorization_service.is_visible_definition(record, session)
         ]
         filtered_records = [
             record
@@ -88,7 +94,9 @@ class CircuitDefinitionService:
         ordered_records = _sort_records(filtered_records, query)
         page_records, next_cursor, prev_cursor, has_more = _slice_records(ordered_records, query)
         return CircuitDefinitionCatalogPage(
-            rows=tuple(_build_summary(record, session) for record in page_records),
+            rows=tuple(
+                _build_summary(record, self._allowed_actions(record, session)) for record in page_records
+            ),
             total_count=len(filtered_records),
             next_cursor=next_cursor,
             prev_cursor=prev_cursor,
@@ -105,14 +113,14 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
-        if not _is_visible(record, session):
+        if not self._authorization_service.is_visible_definition(record, session):
             raise service_error(
                 403,
                 code="definition_not_visible",
                 category="permission_denied",
                 message=f"Definition {definition_id} is not visible in the active workspace.",
             )
-        return _build_detail(record, session)
+        return _build_detail(record, self._allowed_actions(record, session))
 
     def create_circuit_definition(self, draft: CircuitDefinitionDraft) -> CircuitDefinitionDetail:
         session = self._session_repository.get_session_state()
@@ -130,7 +138,7 @@ class CircuitDefinitionService:
                 category="validation_error",
                 message=str(exc),
             ) from exc
-        return _build_detail(record, session)
+        return _build_detail(record, self._allowed_actions(record, session))
 
     def update_circuit_definition(
         self,
@@ -146,14 +154,14 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
-        if not _is_visible(current, session):
+        if not self._authorization_service.is_visible_definition(current, session):
             raise service_error(
                 403,
                 code="definition_not_visible",
                 category="permission_denied",
                 message=f"Definition {definition_id} is not visible in the active workspace.",
             )
-        if not _allowed_actions(current, session).update:
+        if not self._allowed_actions(current, session).update:
             raise service_error(
                 409,
                 code="definition_conflict",
@@ -183,7 +191,7 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
-        return _build_detail(record, session)
+        return _build_detail(record, self._allowed_actions(record, session))
 
     def publish_circuit_definition(self, definition_id: int) -> CircuitDefinitionDetail:
         session = self._session_repository.get_session_state()
@@ -195,14 +203,14 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
-        if not _is_visible(current, session):
+        if not self._authorization_service.is_visible_definition(current, session):
             raise service_error(
                 403,
                 code="definition_not_visible",
                 category="permission_denied",
                 message=f"Definition {definition_id} is not visible in the active workspace.",
             )
-        if not _allowed_actions(current, session).publish:
+        if not self._allowed_actions(current, session).publish:
             raise service_error(
                 409,
                 code="definition_conflict",
@@ -217,7 +225,7 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
-        return _build_detail(record, session)
+        return _build_detail(record, self._allowed_actions(record, session))
 
     def clone_circuit_definition(
         self,
@@ -233,7 +241,7 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
-        if not _is_visible(current, session):
+        if not self._authorization_service.is_visible_definition(current, session):
             raise service_error(
                 403,
                 code="definition_not_visible",
@@ -254,7 +262,7 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
-        return _build_detail(record, session)
+        return _build_detail(record, self._allowed_actions(record, session))
 
     def delete_circuit_definition(self, definition_id: int) -> None:
         session = self._session_repository.get_session_state()
@@ -266,14 +274,14 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
-        if not _is_visible(current, session):
+        if not self._authorization_service.is_visible_definition(current, session):
             raise service_error(
                 403,
                 code="definition_not_visible",
                 category="permission_denied",
                 message=f"Definition {definition_id} is not visible in the active workspace.",
             )
-        if not _allowed_actions(current, session).delete:
+        if not self._allowed_actions(current, session).delete:
             raise service_error(
                 409,
                 code="definition_delete_blocked",
@@ -288,10 +296,17 @@ class CircuitDefinitionService:
                 message=f"Definition {definition_id} was not found.",
             )
 
+    def _allowed_actions(
+        self,
+        record: CircuitDefinitionRecord,
+        session: SessionState,
+    ) -> AllowedActions:
+        return self._authorization_service.build_definition_allowed_actions(record, session)
+
 
 def _build_summary(
     record: CircuitDefinitionRecord,
-    session: SessionState,
+    allowed_actions: AllowedActions,
 ) -> CircuitDefinitionSummary:
     return CircuitDefinitionSummary(
         definition_id=record.definition_id,
@@ -299,13 +314,13 @@ def _build_summary(
         created_at=record.created_at,
         visibility_scope=record.visibility_scope,
         owner_display_name=record.owner_display_name,
-        allowed_actions=_allowed_actions(record, session),
+        allowed_actions=allowed_actions,
     )
 
 
 def _build_detail(
     record: CircuitDefinitionRecord,
-    session: SessionState,
+    allowed_actions: AllowedActions,
 ) -> CircuitDefinitionDetail:
     return CircuitDefinitionDetail(
         definition_id=record.definition_id,
@@ -314,7 +329,7 @@ def _build_detail(
         lifecycle_state=record.lifecycle_state,
         owner_user_id=record.owner_user_id,
         owner_display_name=record.owner_display_name,
-        allowed_actions=_allowed_actions(record, session),
+        allowed_actions=allowed_actions,
         name=record.name,
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -327,33 +342,6 @@ def _build_detail(
         preview_artifacts=record.preview_artifacts,
         lineage_parent_id=record.lineage_parent_id,
     )
-
-
-def _allowed_actions(
-    record: CircuitDefinitionRecord,
-    session: SessionState,
-) -> AllowedActions:
-    owned = record.owner_user_id == _session_user_id(session)
-    visible = _is_visible(record, session)
-    return AllowedActions(
-        update=visible and owned and record.lifecycle_state == "active",
-        delete=visible and owned and record.lifecycle_state == "active",
-        publish=(
-            visible
-            and owned
-            and record.lifecycle_state == "active"
-            and record.visibility_scope == "private"
-        ),
-        clone=visible and record.lifecycle_state == "active",
-    )
-
-
-def _is_visible(record: CircuitDefinitionRecord, session: SessionState) -> bool:
-    if record.workspace_id != session.workspace_id:
-        return False
-    if record.visibility_scope == "workspace":
-        return True
-    return record.owner_user_id == _session_user_id(session)
 
 
 def _session_user_id(session: SessionState) -> str:

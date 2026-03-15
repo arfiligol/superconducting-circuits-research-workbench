@@ -45,7 +45,7 @@ def test_get_session_returns_anonymous_baseline_without_cookie() -> None:
     assert session["session_id"] is None
     assert session["auth"] == {
         "state": "anonymous",
-        "mode": "jwt_cookie",
+        "mode": "jwt_refresh_cookie",
         "reason": None,
     }
     assert session["user"] is None
@@ -60,8 +60,14 @@ def test_get_session_returns_anonymous_baseline_without_cookie() -> None:
         "can_invite_members": False,
         "can_remove_members": False,
         "can_transfer_workspace_owner": False,
+        "can_leave_workspace": False,
         "can_submit_tasks": False,
         "can_manage_workspace_tasks": False,
+        "can_cancel_own_tasks": False,
+        "can_cancel_workspace_tasks": False,
+        "can_terminate_workspace_tasks": False,
+        "can_retry_own_tasks": False,
+        "can_retry_workspace_tasks": False,
         "can_manage_definitions": False,
         "can_manage_datasets": False,
         "can_view_audit_logs": False,
@@ -75,7 +81,7 @@ def test_login_returns_canonical_authenticated_workspace_surface() -> None:
 
     assert session["auth"] == {
         "state": "authenticated",
-        "mode": "jwt_cookie",
+        "mode": "jwt_refresh_cookie",
         "reason": None,
     }
     assert session["user"] == {
@@ -96,8 +102,14 @@ def test_login_returns_canonical_authenticated_workspace_surface() -> None:
         "can_invite_members": True,
         "can_remove_members": True,
         "can_transfer_workspace_owner": True,
+        "can_leave_workspace": False,
         "can_submit_tasks": True,
         "can_manage_workspace_tasks": True,
+        "can_cancel_own_tasks": True,
+        "can_cancel_workspace_tasks": True,
+        "can_terminate_workspace_tasks": True,
+        "can_retry_own_tasks": True,
+        "can_retry_workspace_tasks": True,
         "can_manage_definitions": True,
         "can_manage_datasets": True,
         "can_view_audit_logs": True,
@@ -133,7 +145,7 @@ def test_logout_clears_session_continuity() -> None:
     assert payload["ok"] is True
     assert payload["data"]["auth"] == {
         "state": "anonymous",
-        "mode": "jwt_cookie",
+        "mode": "jwt_refresh_cookie",
         "reason": None,
     }
     assert payload["data"]["user"] is None
@@ -196,7 +208,7 @@ def test_get_session_returns_degraded_when_continuity_cannot_be_restored() -> No
     assert payload["ok"] is True
     assert payload["data"]["auth"] == {
         "state": "degraded",
-        "mode": "jwt_cookie",
+        "mode": "jwt_refresh_cookie",
         "reason": "session_expired",
     }
     assert payload["data"]["workspace"]["memberships"] == []

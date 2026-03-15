@@ -13,13 +13,23 @@ from src.app.domain.session import (
     WorkspaceMembership,
     WorkspaceSwitchResult,
 )
-from src.app.infrastructure.runtime import get_session_service
+from src.app.domain.workspace_collaboration import (
+    WorkspaceInvitation,
+    WorkspaceInvitationAcceptance,
+    WorkspaceMembershipListView,
+)
+from src.app.infrastructure.runtime import (
+    get_session_service,
+    get_workspace_collaboration_service,
+)
 from src.app.infrastructure.session_jwt_transport import (
     DEFAULT_SESSION_TOKEN_LIFETIME_SECONDS,
+    REFRESH_COOKIE_NAME,
     SESSION_COOKIE_NAME,
 )
 from src.app.services.service_errors import ServiceError, service_error
 from src.app.services.session_service import SessionService
+from src.app.services.workspace_collaboration_service import WorkspaceCollaborationService
 from src.app.settings import get_settings
 
 router = APIRouter(prefix="/session", tags=["session"])
@@ -58,7 +68,7 @@ def login(
             "memberships_count": len(result.session.memberships),
         },
     )
-    _set_session_cookie(response, result)
+    _set_session_cookies(response, result.access_token, result.refresh_token)
     return response
 
 
@@ -73,6 +83,27 @@ def logout(
         meta={"generated_at": _generated_at(), "memberships_count": len(session.memberships)},
     )
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    response.delete_cookie(REFRESH_COOKIE_NAME, path="/")
+    return response
+
+
+@router.post("/refresh")
+def refresh_session(
+    request: Request,
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> JSONResponse:
+    try:
+        result = session_service.refresh(_refresh_token_from_request(request))
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    response = _success_response(
+        data=_serialize_session(result.session),
+        meta={
+            "generated_at": _generated_at(),
+            "memberships_count": len(result.session.memberships),
+        },
+    )
+    _set_session_cookies(response, result.access_token, result.refresh_token)
     return response
 
 
@@ -116,6 +147,215 @@ def update_active_dataset(
     return _success_response(
         data=_serialize_session(session),
         meta={"generated_at": _generated_at(), "memberships_count": len(session.memberships)},
+    )
+
+
+@router.get("/workspace-invitations")
+def list_workspace_invitations(
+    request: Request,
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+    workspace_id: str | None = None,
+) -> JSONResponse:
+    try:
+        view = collaboration_service.list_invitations(
+            _session_token_from_request(request),
+            workspace_id=workspace_id,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={"rows": [_serialize_workspace_invitation(row) for row in view.rows]},
+        meta={"generated_at": _generated_at(), "total_count": view.total_count},
+    )
+
+
+@router.post("/workspace-invitations")
+def create_workspace_invitation(
+    request: Request,
+    payload: Annotated[object, Body(...)],
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+) -> JSONResponse:
+    try:
+        workspace_id, email, role = _parse_workspace_invitation_payload(payload)
+        invitation = collaboration_service.create_invitation(
+            _session_token_from_request(request),
+            workspace_id=workspace_id,
+            email=email,
+            role=role,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={"operation": "created", "invitation": _serialize_workspace_invitation(invitation)},
+        status_code=201,
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.get("/workspace-invitations/{invite_id}")
+def get_workspace_invitation(
+    invite_id: str,
+    request: Request,
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+) -> JSONResponse:
+    try:
+        invitation = collaboration_service.get_invitation_detail(
+            _session_token_from_request(request),
+            invite_id,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=_serialize_workspace_invitation(invitation),
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/workspace-invitations/{invite_id}/revoke")
+def revoke_workspace_invitation(
+    invite_id: str,
+    request: Request,
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+) -> JSONResponse:
+    try:
+        invitation = collaboration_service.revoke_invitation(
+            _session_token_from_request(request),
+            invite_id,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={"operation": "revoked", "invitation": _serialize_workspace_invitation(invitation)},
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/workspace-invitations/accept")
+def accept_workspace_invitation(
+    request: Request,
+    payload: Annotated[object, Body(...)],
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+) -> JSONResponse:
+    try:
+        invite_token = _parse_invite_accept_payload(payload)
+        result = collaboration_service.accept_invitation(
+            _session_token_from_request(request),
+            invite_token,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=_serialize_workspace_invitation_acceptance(result),
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.get("/workspace-memberships")
+def list_workspace_memberships(
+    request: Request,
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+    workspace_id: str | None = None,
+) -> JSONResponse:
+    try:
+        view = collaboration_service.list_memberships(
+            _session_token_from_request(request),
+            workspace_id=workspace_id,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=_serialize_workspace_membership_view(view),
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/workspace-memberships/leave")
+def leave_workspace(
+    request: Request,
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+    payload: Annotated[object | None, Body()] = None,
+) -> JSONResponse:
+    try:
+        workspace_id = _optional_workspace_id(payload)
+        view = collaboration_service.leave_workspace(
+            _session_token_from_request(request),
+            workspace_id=workspace_id,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={"operation": "left", **_serialize_workspace_membership_view(view)},
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/workspace-memberships/{user_id}/remove")
+def remove_workspace_member(
+    user_id: str,
+    request: Request,
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+    payload: Annotated[object | None, Body()] = None,
+) -> JSONResponse:
+    try:
+        workspace_id = _optional_workspace_id(payload)
+        view = collaboration_service.remove_member(
+            _session_token_from_request(request),
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={"operation": "removed", **_serialize_workspace_membership_view(view)},
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/workspace-memberships/transfer-ownership")
+def transfer_workspace_ownership(
+    request: Request,
+    payload: Annotated[object, Body(...)],
+    collaboration_service: Annotated[
+        WorkspaceCollaborationService,
+        Depends(get_workspace_collaboration_service),
+    ],
+) -> JSONResponse:
+    try:
+        workspace_id, new_owner_user_id = _parse_transfer_ownership_payload(payload)
+        view = collaboration_service.transfer_ownership(
+            _session_token_from_request(request),
+            workspace_id=workspace_id,
+            new_owner_user_id=new_owner_user_id,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={"operation": "ownership_transferred", **_serialize_workspace_membership_view(view)},
+        meta={"generated_at": _generated_at()},
     )
 
 
@@ -175,6 +415,75 @@ def _parse_dataset_activation_payload(payload: object) -> str | None:
     return dataset_id.strip()
 
 
+def _parse_workspace_invitation_payload(payload: object) -> tuple[str | None, str, str]:
+    body = _as_mapping(payload)
+    workspace_id = _optional_string(body.get("workspace_id"), field_name="workspace_id")
+    email = body.get("email")
+    role = body.get("role")
+    if not isinstance(email, str) or len(email.strip()) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="email must be a non-empty string.",
+        )
+    if role not in {"member", "viewer"}:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="role must be member or viewer.",
+        )
+    return workspace_id, email.strip().lower(), role
+
+
+def _parse_invite_accept_payload(payload: object) -> str:
+    body = _as_mapping(payload)
+    invite_token = body.get("invite_token")
+    if not isinstance(invite_token, str) or len(invite_token.strip()) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="invite_token must be a non-empty string.",
+        )
+    return invite_token.strip()
+
+
+def _parse_transfer_ownership_payload(payload: object) -> tuple[str | None, str]:
+    body = _as_mapping(payload)
+    workspace_id = _optional_string(body.get("workspace_id"), field_name="workspace_id")
+    new_owner_user_id = body.get("new_owner_user_id")
+    if not isinstance(new_owner_user_id, str) or len(new_owner_user_id.strip()) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="new_owner_user_id must be a non-empty string.",
+        )
+    return workspace_id, new_owner_user_id.strip()
+
+
+def _optional_workspace_id(payload: object | None) -> str | None:
+    if payload is None:
+        return None
+    body = _as_mapping(payload)
+    return _optional_string(body.get("workspace_id"), field_name="workspace_id")
+
+
+def _optional_string(value: object, *, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value.strip()) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be a non-empty string or null.",
+        )
+    return value.strip()
+
+
 def _serialize_workspace_switch_result(result: WorkspaceSwitchResult) -> dict[str, object]:
     payload = _serialize_session(result.session)
     payload["active_dataset_resolution"] = result.active_dataset_resolution
@@ -212,6 +521,11 @@ def _serialize_session(session: AppSession) -> dict[str, object]:
                 "invite_members": session.workspace.allowed_actions.invite_members,
                 "remove_members": session.workspace.allowed_actions.remove_members,
                 "transfer_owner": session.workspace.allowed_actions.transfer_owner,
+                "leave_workspace": session.workspace.allowed_actions.leave_workspace,
+                "view_audit_logs": session.workspace.allowed_actions.view_audit_logs,
+                "manage_definitions": session.workspace.allowed_actions.manage_definitions,
+                "manage_datasets": session.workspace.allowed_actions.manage_datasets,
+                "manage_tasks": session.workspace.allowed_actions.manage_tasks,
             },
             "memberships": [_serialize_membership(item) for item in session.memberships],
         },
@@ -222,8 +536,14 @@ def _serialize_session(session: AppSession) -> dict[str, object]:
             "can_invite_members": session.capabilities.can_invite_members,
             "can_remove_members": session.capabilities.can_remove_members,
             "can_transfer_workspace_owner": session.capabilities.can_transfer_workspace_owner,
+            "can_leave_workspace": session.capabilities.can_leave_workspace,
             "can_submit_tasks": session.capabilities.can_submit_tasks,
             "can_manage_workspace_tasks": session.capabilities.can_manage_workspace_tasks,
+            "can_cancel_own_tasks": session.capabilities.can_cancel_own_tasks,
+            "can_cancel_workspace_tasks": session.capabilities.can_cancel_workspace_tasks,
+            "can_terminate_workspace_tasks": session.capabilities.can_terminate_workspace_tasks,
+            "can_retry_own_tasks": session.capabilities.can_retry_own_tasks,
+            "can_retry_workspace_tasks": session.capabilities.can_retry_workspace_tasks,
             "can_manage_definitions": session.capabilities.can_manage_definitions,
             "can_manage_datasets": session.capabilities.can_manage_datasets,
             "can_view_audit_logs": session.capabilities.can_view_audit_logs,
@@ -245,7 +565,50 @@ def _serialize_membership(membership: WorkspaceMembership) -> dict[str, object]:
             "invite_members": membership.allowed_actions.invite_members,
             "remove_members": membership.allowed_actions.remove_members,
             "transfer_owner": membership.allowed_actions.transfer_owner,
+            "leave_workspace": membership.allowed_actions.leave_workspace,
+            "view_audit_logs": membership.allowed_actions.view_audit_logs,
+            "manage_definitions": membership.allowed_actions.manage_definitions,
+            "manage_datasets": membership.allowed_actions.manage_datasets,
+            "manage_tasks": membership.allowed_actions.manage_tasks,
         },
+    }
+
+
+def _serialize_workspace_invitation(invitation: WorkspaceInvitation) -> dict[str, object]:
+    return {
+        "invite_id": invitation.invite_id,
+        "invite_token": invitation.invite_token,
+        "workspace_id": invitation.workspace_id,
+        "workspace_name": invitation.workspace_name,
+        "email": invitation.email,
+        "role": invitation.role,
+        "state": invitation.state,
+        "expires_at": invitation.expires_at,
+        "created_at": invitation.created_at,
+        "delivery_state": invitation.delivery_state,
+        "created_by_user_id": invitation.created_by_user_id,
+        "delivery_error": invitation.delivery_error,
+    }
+
+
+def _serialize_workspace_invitation_acceptance(
+    result: WorkspaceInvitationAcceptance,
+) -> dict[str, object]:
+    return {
+        "invitation": _serialize_workspace_invitation(result.invitation),
+        "memberships": [_serialize_membership(item) for item in result.memberships],
+        "switch_available": result.switch_available,
+        "post_accept_context": result.post_accept_context,
+    }
+
+
+def _serialize_workspace_membership_view(
+    view: WorkspaceMembershipListView,
+) -> dict[str, object]:
+    return {
+        "workspace_id": view.workspace_id,
+        "workspace_name": view.workspace_name,
+        "memberships": [_serialize_membership(item) for item in view.memberships],
     }
 
 
@@ -314,14 +677,34 @@ def _session_token_from_request(request: Request) -> str | None:
     return token
 
 
-def _set_session_cookie(response: JSONResponse, result: SessionLoginResult) -> None:
+def _refresh_token_from_request(request: Request) -> str | None:
+    token = request.cookies.get(REFRESH_COOKIE_NAME)
+    if token is None or len(token.strip()) == 0:
+        return None
+    return token
+
+
+def _set_session_cookies(
+    response: JSONResponse,
+    access_token: str,
+    refresh_token: str,
+) -> None:
     settings = get_settings()
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
-        value=result.access_token,
+        value=access_token,
         httponly=True,
         samesite="lax",
         secure=settings.environment not in {"development", "test"},
         max_age=DEFAULT_SESSION_TOKEN_LIFETIME_SECONDS,
+        path="/",
+    )
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.environment not in {"development", "test"},
+        max_age=60 * 60 * 24 * 14,
         path="/",
     )

@@ -10,6 +10,7 @@ from sc_core.tasking import evaluate_task_control_action, resolve_worker_task_ro
 from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import DatasetDetail
 from src.app.domain.session import SessionState
+from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.domain.tasks import (
     TaskAllowedActions,
     TaskCreateDraft,
@@ -30,6 +31,7 @@ from src.app.domain.tasks import (
     build_task_retry_event,
     task_submission_source_for,
 )
+from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import ServiceFieldError, service_error
 
 
@@ -87,6 +89,7 @@ class TaskService:
         session_repository: TaskSessionRepository,
         dataset_repository: TaskDatasetRepository,
         circuit_definition_repository: TaskCircuitDefinitionRepository,
+        authorization_service: AuthorizationService | None = None,
         audit_repository: TaskAuditRepository | None = None,
         processor_summary_repository: TaskProcessorSummaryRepository | None = None,
     ) -> None:
@@ -94,6 +97,9 @@ class TaskService:
         self._session_repository = session_repository
         self._dataset_repository = dataset_repository
         self._circuit_definition_repository = circuit_definition_repository
+        self._authorization_service = authorization_service or AuthorizationService(
+            CasbinAuthorizationAdapter()
+        )
         self._audit_repository = audit_repository
         self._processor_summary_repository = processor_summary_repository
 
@@ -106,19 +112,23 @@ class TaskService:
         return _sort_tasks(tasks)[: query.limit]
 
     def get_queue_view(self, query: TaskListQuery) -> TaskQueueView:
+        session = self._session_repository.get_session_state()
         visible_tasks = [
             self._normalize_task(task)
             for task in self._repository.list_tasks()
             if self._matches_query(task, query)
         ]
         sorted_tasks = _sort_tasks(visible_tasks)
-        rows = tuple(_build_queue_row(task) for task in sorted_tasks[: query.limit])
+        rows = tuple(
+            _build_queue_row(task, self._build_allowed_actions(task, session))
+            for task in sorted_tasks[: query.limit]
+        )
         visible_workspace_tasks = [
             self._normalize_task(task)
             for task in self._repository.list_tasks()
             if self._is_visible(
                 task,
-                self._session_repository.get_session_state(),
+                session,
                 scope="workspace",
             )
         ]
@@ -128,7 +138,7 @@ class TaskService:
                 visible_tasks=visible_workspace_tasks,
                 processor_summaries=(
                     self._processor_summary_repository.list_lane_summaries(
-                        self._session_repository.get_session_state().workspace_id
+                        session.workspace_id
                     )
                     if self._processor_summary_repository is not None
                     else ()
@@ -159,10 +169,26 @@ class TaskService:
         return _build_result_handoff(self.get_task(task_id))
 
     def get_task_allowed_actions(self, task_id: int) -> TaskAllowedActions:
-        return _build_allowed_actions(self.get_task(task_id))
+        task = self.get_task(task_id)
+        session = self._session_repository.get_session_state()
+        return self._build_allowed_actions(task, session)
 
     def submit_task(self, draft: TaskSubmissionDraft) -> TaskDetail:
         session = self._session_repository.get_session_state()
+        if session.user is None:
+            raise service_error(
+                401,
+                code="auth_required",
+                category="auth_required",
+                message="Submitting tasks requires an authenticated session.",
+            )
+        self._authorization_service.authorize(
+            session,
+            "submit_task",
+            resource=_workspace_resource(session.workspace_id),
+            denied_code="task_submit_denied",
+            denied_message="The current session cannot submit tasks in the active workspace.",
+        )
         resolved_dataset_id = draft.dataset_id or session.active_dataset_id
         submitted_from_active_dataset = draft.dataset_id is None and resolved_dataset_id is not None
 
@@ -253,6 +279,15 @@ class TaskService:
 
     def cancel_task(self, task_id: int) -> TaskDetail:
         task = self.get_task(task_id)
+        session = self._session_repository.get_session_state()
+        self._authorize_task_action(
+            session,
+            task,
+            own_action="cancel_own_task",
+            workspace_action="cancel_workspace_task",
+            denied_code="task_cancel_denied",
+            denied_message="The current session cannot cancel this task.",
+        )
         decision = evaluate_task_control_action("cancel", current_state=task.status)
         if not decision.accepted or decision.requested_state is None:
             raise service_error(
@@ -303,6 +338,15 @@ class TaskService:
 
     def terminate_task(self, task_id: int) -> TaskDetail:
         task = self.get_task(task_id)
+        session = self._session_repository.get_session_state()
+        self._authorize_task_action(
+            session,
+            task,
+            own_action="terminate_workspace_task",
+            workspace_action="terminate_workspace_task",
+            denied_code="task_terminate_denied",
+            denied_message="The current session cannot terminate this task.",
+        )
         decision = evaluate_task_control_action("terminate", current_state=task.status)
         if not decision.accepted or decision.requested_state is None:
             raise service_error(
@@ -343,7 +387,16 @@ class TaskService:
 
     def retry_task(self, task_id: int) -> TaskDetail:
         source_task = self.get_task(task_id)
-        allowed_actions = _build_allowed_actions(source_task)
+        session = self._session_repository.get_session_state()
+        self._authorize_task_action(
+            session,
+            source_task,
+            own_action="retry_own_task",
+            workspace_action="retry_workspace_task",
+            denied_code="task_retry_denied",
+            denied_message="The current session cannot retry this task.",
+        )
+        allowed_actions = self._build_allowed_actions(source_task, session)
         if not allowed_actions.retry:
             raise service_error(
                 409,
@@ -526,13 +579,45 @@ class TaskService:
         *,
         scope: str,
     ) -> bool:
-        if task.workspace_id != session.workspace_id:
-            return False
-        if task.visibility_scope == "owned" and task.owner_user_id != _session_user_id(session):
+        if not self._authorization_service.is_visible_task(task, session):
             return False
         if scope == "owned":
             return task.owner_user_id == _session_user_id(session)
         return True
+
+    def _build_allowed_actions(
+        self,
+        task: TaskDetail,
+        session: SessionState,
+    ) -> TaskAllowedActions:
+        runtime_actions = _build_runtime_allowed_actions(task)
+        authorization_actions = self._authorization_service.build_task_allowed_actions(task, session)
+        rejection_reason = runtime_actions.rejection_reason or authorization_actions.rejection_reason
+        return TaskAllowedActions(
+            attach=runtime_actions.attach and authorization_actions.attach,
+            cancel=runtime_actions.cancel and authorization_actions.cancel,
+            terminate=runtime_actions.terminate and authorization_actions.terminate,
+            retry=runtime_actions.retry and authorization_actions.retry,
+            rejection_reason=rejection_reason,
+        )
+
+    def _authorize_task_action(
+        self,
+        session: SessionState,
+        task: TaskDetail,
+        *,
+        own_action: str,
+        workspace_action: str,
+        denied_code: str,
+        denied_message: str,
+    ) -> None:
+        self._authorization_service.authorize(
+            session,
+            own_action if task.owner_user_id == _session_user_id(session) else workspace_action,  # type: ignore[arg-type]
+            resource=_task_resource(task),
+            denied_code=denied_code,
+            denied_message=denied_message,
+        )
 
     def _normalize_task(self, task: TaskDetail) -> TaskDetail:
         return replace(
@@ -743,7 +828,7 @@ def _task_priority(task: TaskDetail) -> int:
     return 0
 
 
-def _build_queue_row(task: TaskDetail) -> TaskQueueRow:
+def _build_queue_row(task: TaskDetail, allowed_actions: TaskAllowedActions) -> TaskQueueRow:
     return TaskQueueRow(
         task_id=task.task_id,
         summary=task.summary,
@@ -755,11 +840,11 @@ def _build_queue_row(task: TaskDetail) -> TaskQueueRow:
         visibility_scope=task.visibility_scope,
         updated_at=task.progress.updated_at,
         result_availability=_result_availability_for(task),
-        allowed_actions=_build_allowed_actions(task),
+        allowed_actions=allowed_actions,
     )
 
 
-def _build_allowed_actions(task: TaskDetail) -> TaskAllowedActions:
+def _build_runtime_allowed_actions(task: TaskDetail) -> TaskAllowedActions:
     if task.status in {"completed", "failed", "cancelled", "terminated"}:
         return TaskAllowedActions(
             attach=True,
@@ -861,6 +946,30 @@ def _build_worker_summary(
             )
         )
     return tuple(summaries)
+
+
+def _workspace_resource(workspace_id: str):
+    from src.app.domain.authorization import AuthorizationResourceEnvelope
+
+    return AuthorizationResourceEnvelope(
+        resource_kind="workspace",
+        workspace_id=workspace_id,
+        owner_user_id=None,
+        visibility_scope="workspace",
+        lifecycle_state="active",
+    )
+
+
+def _task_resource(task: TaskDetail):
+    from src.app.domain.authorization import AuthorizationResourceEnvelope
+
+    return AuthorizationResourceEnvelope(
+        resource_kind="task",
+        workspace_id=task.workspace_id,
+        owner_user_id=task.owner_user_id,
+        visibility_scope=task.visibility_scope,
+        lifecycle_state="active",
+    )
 
 
 def _generated_at() -> str:

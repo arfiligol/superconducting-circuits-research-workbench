@@ -1,9 +1,13 @@
-from dataclasses import replace
+from contextvars import ContextVar, Token
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
+from secrets import token_urlsafe
 from typing import Protocol
 
 from sc_core.execution import TaskResultHandle
 
 from src.app.domain.session import (
+    AuthMode,
     SessionState,
     SessionUser,
     WorkspaceAllowedActions,
@@ -26,12 +30,50 @@ from src.app.domain.tasks import (
     resolve_retry_of_task_id,
     resolve_task_control_state,
 )
+from src.app.domain.workspace_collaboration import WorkspaceInvitation
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
     build_result_handle_ref,
     build_result_provenance_ref,
     build_trace_payload_ref,
 )
+
+DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS = 60 * 60 * 24 * 14
+_REQUEST_SESSION_STATE: ContextVar[SessionState | None] = ContextVar(
+    "rewrite_request_session_state",
+    default=None,
+)
+
+
+@dataclass(frozen=True)
+class _RefreshTokenRecord:
+    token: str
+    session_id: str
+    family_id: str
+    expires_at: str
+    revoked: bool = False
+
+
+@dataclass(frozen=True)
+class _AccountSeed:
+    password: str
+    prototype: SessionState
+
+
+@dataclass(frozen=True)
+class _WorkspaceInvitationRecord:
+    invite_id: str
+    invite_token: str
+    workspace_id: str
+    workspace_name: str
+    email: str
+    role: str
+    state: str
+    expires_at: str
+    created_at: str
+    delivery_state: str
+    created_by_user_id: str
+    delivery_error: str | None = None
 
 
 class StorageMetadataRepository(Protocol):
@@ -92,12 +134,19 @@ class InMemoryRewriteAppStateRepository:
             "ws-device-lab": "fluxonium-2025-031",
             "ws-modeling": "transmon-coupler-014",
         }
-        self._auth_accounts = {
-            "rewrite.local@example.com": "rewrite-local-password",
+        self._auth_accounts = _seed_auth_accounts()
+        self._users_by_id = {
+            account.prototype.user.user_id: email
+            for email, account in self._auth_accounts.items()
+            if account.prototype.user is not None
         }
         self._authenticated_sessions: dict[str, SessionState] = {}
         self._session_last_active_dataset_ids: dict[str, dict[str, str]] = {}
         self._next_transport_session_id = 1
+        self._refresh_tokens: dict[str, _RefreshTokenRecord] = {}
+        self._refresh_family_index: dict[str, set[str]] = {}
+        self._workspace_invitations: dict[str, _WorkspaceInvitationRecord] = {}
+        self._next_invite_id = 1
         self._tasks = (
             {task.task_id: task for task in build_seed_tasks()} if include_task_scaffold else {}
         )
@@ -106,7 +155,16 @@ class InMemoryRewriteAppStateRepository:
         self._persist_seed_storage_metadata()
 
     def get_session_state(self) -> SessionState:
+        request_state = _REQUEST_SESSION_STATE.get()
+        if request_state is not None:
+            return request_state
         return self._session_state
+
+    def bind_request_session_state(self, session_state: SessionState) -> Token[SessionState | None]:
+        return _REQUEST_SESSION_STATE.set(session_state)
+
+    def reset_request_session_state(self, token: Token[SessionState | None]) -> None:
+        _REQUEST_SESSION_STATE.reset(token)
 
     def create_authenticated_session(
         self,
@@ -115,16 +173,17 @@ class InMemoryRewriteAppStateRepository:
         password: str,
     ) -> SessionState | None:
         normalized_email = email.strip().lower()
-        if self._auth_accounts.get(normalized_email) != password:
+        account = self._auth_accounts.get(normalized_email)
+        if account is None or account.password != password:
             return None
 
         session_id = f"rewrite-auth-session-{self._next_transport_session_id}"
         self._next_transport_session_id += 1
         session_state = replace(
-            self._session_state,
+            account.prototype,
             session_id=session_id,
             auth_state="authenticated",
-            auth_mode="jwt_cookie",
+            auth_mode="jwt_refresh_cookie",
         )
         self._authenticated_sessions[session_id] = session_state
         self._session_last_active_dataset_ids[session_id] = dict(self._last_active_dataset_ids)
@@ -136,8 +195,222 @@ class InMemoryRewriteAppStateRepository:
 
     def invalidate_authenticated_session(self, session_id: str) -> bool:
         removed = self._authenticated_sessions.pop(session_id, None)
+        self.revoke_refresh_family_for_session(session_id)
         self._session_last_active_dataset_ids.pop(session_id, None)
         return removed is not None
+
+    def issue_refresh_token(self, session_id: str) -> str | None:
+        if session_id not in self._authenticated_sessions:
+            return None
+        family_id = f"refresh-family:{session_id}"
+        self._revoke_family_tokens(family_id)
+        token = token_urlsafe(32)
+        record = _RefreshTokenRecord(
+            token=token,
+            session_id=session_id,
+            family_id=family_id,
+            expires_at=_expires_at(DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS),
+        )
+        self._refresh_tokens[token] = record
+        self._refresh_family_index[family_id] = {token}
+        return token
+
+    def rotate_refresh_token(
+        self,
+        refresh_token: str,
+    ) -> tuple[SessionState | None, str | None, str]:
+        record = self._refresh_tokens.get(refresh_token)
+        if record is None:
+            return None, None, "invalid"
+        if record.revoked:
+            return None, None, "invalid"
+        if _is_expired(record.expires_at):
+            self._refresh_tokens[refresh_token] = replace(record, revoked=True)
+            return None, None, "expired"
+        session_state = self._authenticated_sessions.get(record.session_id)
+        if session_state is None:
+            return None, None, "expired"
+        self._refresh_tokens[refresh_token] = replace(record, revoked=True)
+        rotated_token = token_urlsafe(32)
+        rotated_record = _RefreshTokenRecord(
+            token=rotated_token,
+            session_id=record.session_id,
+            family_id=record.family_id,
+            expires_at=_expires_at(DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS),
+        )
+        self._refresh_tokens[rotated_token] = rotated_record
+        self._refresh_family_index.setdefault(record.family_id, set()).add(rotated_token)
+        return session_state, rotated_token, "valid"
+
+    def revoke_refresh_family_for_session(self, session_id: str) -> None:
+        family_id = f"refresh-family:{session_id}"
+        self._revoke_family_tokens(family_id)
+
+    def list_workspace_invitations(self, workspace_id: str) -> tuple[WorkspaceInvitation, ...]:
+        return tuple(
+            _to_workspace_invitation(record)
+            for record in sorted(
+                self._workspace_invitations.values(),
+                key=lambda item: (item.created_at, item.invite_id),
+                reverse=True,
+            )
+            if record.workspace_id == workspace_id
+        )
+
+    def create_workspace_invitation(
+        self,
+        *,
+        workspace_id: str,
+        workspace_name: str,
+        email: str,
+        role: str,
+        created_by_user_id: str,
+    ) -> WorkspaceInvitation:
+        invite_id = f"invite:{self._next_invite_id}"
+        self._next_invite_id += 1
+        record = _WorkspaceInvitationRecord(
+            invite_id=invite_id,
+            invite_token=token_urlsafe(24),
+            workspace_id=workspace_id,
+            workspace_name=workspace_name,
+            email=email,
+            role=role,
+            state="pending",
+            expires_at=_expires_at(DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS),
+            created_at=_now_iso(),
+            delivery_state="manual_link_ready",
+            created_by_user_id=created_by_user_id,
+        )
+        self._workspace_invitations[invite_id] = record
+        return _to_workspace_invitation(record)
+
+    def get_workspace_invitation(self, invite_id: str) -> WorkspaceInvitation | None:
+        record = self._workspace_invitations.get(invite_id)
+        if record is None:
+            return None
+        return _to_workspace_invitation(self._refresh_invitation_state(record))
+
+    def get_workspace_invitation_by_token(self, invite_token: str) -> WorkspaceInvitation | None:
+        for record in self._workspace_invitations.values():
+            if record.invite_token == invite_token:
+                return _to_workspace_invitation(self._refresh_invitation_state(record))
+        return None
+
+    def revoke_workspace_invitation(self, invite_id: str) -> WorkspaceInvitation | None:
+        record = self._workspace_invitations.get(invite_id)
+        if record is None:
+            return None
+        updated = replace(record, state="revoked")
+        self._workspace_invitations[invite_id] = updated
+        return _to_workspace_invitation(updated)
+
+    def accept_workspace_invitation(
+        self,
+        *,
+        invite_token: str,
+        user_email: str,
+    ) -> WorkspaceInvitation | None:
+        for invite_id, record in self._workspace_invitations.items():
+            if record.invite_token != invite_token:
+                continue
+            refreshed = self._refresh_invitation_state(record)
+            self._workspace_invitations[invite_id] = refreshed
+            if refreshed.state != "pending":
+                return _to_workspace_invitation(refreshed)
+            account = self._auth_accounts.get(user_email)
+            if account is None or account.prototype.user is None:
+                return _to_workspace_invitation(refreshed)
+            updated_prototype = _upsert_membership(
+                account.prototype,
+                workspace_id=refreshed.workspace_id,
+                workspace_slug=_workspace_slug(refreshed.workspace_id),
+                workspace_name=refreshed.workspace_name,
+                role=refreshed.role,
+                default_task_scope="workspace" if refreshed.role == "owner" else "owned",
+            )
+            self._auth_accounts[user_email] = _AccountSeed(
+                password=account.password,
+                prototype=updated_prototype,
+            )
+            self._users_by_id[updated_prototype.user.user_id] = user_email
+            self._update_authenticated_sessions_for_user(updated_prototype.user.user_id, updated_prototype)
+            accepted = replace(refreshed, state="accepted")
+            self._workspace_invitations[invite_id] = accepted
+            return _to_workspace_invitation(accepted)
+        return None
+
+    def list_workspace_memberships(self, workspace_id: str) -> tuple[WorkspaceMembership, ...]:
+        memberships: list[WorkspaceMembership] = []
+        for account in self._auth_accounts.values():
+            prototype = account.prototype
+            for membership in prototype.memberships:
+                if membership.workspace_id == workspace_id:
+                    memberships.append(membership)
+        return tuple(memberships)
+
+    def remove_workspace_member(self, workspace_id: str, user_id: str) -> bool:
+        email = self._users_by_id.get(user_id)
+        if email is None:
+            return False
+        account = self._auth_accounts.get(email)
+        if account is None:
+            return False
+        updated_memberships = tuple(
+            membership
+            for membership in account.prototype.memberships
+            if membership.workspace_id != workspace_id
+        )
+        if len(updated_memberships) == len(account.prototype.memberships):
+            return False
+        active_membership = updated_memberships[0] if len(updated_memberships) > 0 else None
+        updated_prototype = replace(
+            account.prototype,
+            memberships=updated_memberships,
+            workspace_id=active_membership.workspace_id if active_membership is not None else "",
+            workspace_slug=active_membership.slug if active_membership is not None else "",
+            workspace_display_name=active_membership.display_name if active_membership is not None else "",
+            workspace_role=active_membership.role if active_membership is not None else "viewer",
+            default_task_scope=active_membership.default_task_scope if active_membership is not None else "owned",
+            active_dataset_id=None,
+        )
+        self._auth_accounts[email] = _AccountSeed(
+            password=account.password,
+            prototype=updated_prototype,
+        )
+        self._update_authenticated_sessions_for_user(user_id, updated_prototype)
+        return True
+
+    def transfer_workspace_owner(
+        self,
+        workspace_id: str,
+        new_owner_user_id: str,
+        current_owner_user_id: str,
+    ) -> bool:
+        new_owner_email = self._users_by_id.get(new_owner_user_id)
+        current_owner_email = self._users_by_id.get(current_owner_user_id)
+        if new_owner_email is None or current_owner_email is None:
+            return False
+        new_owner = self._auth_accounts.get(new_owner_email)
+        current_owner = self._auth_accounts.get(current_owner_email)
+        if new_owner is None or current_owner is None:
+            return False
+        self._auth_accounts[new_owner_email] = _AccountSeed(
+            password=new_owner.password,
+            prototype=_replace_membership_role(new_owner.prototype, workspace_id, "owner"),
+        )
+        self._auth_accounts[current_owner_email] = _AccountSeed(
+            password=current_owner.password,
+            prototype=_replace_membership_role(current_owner.prototype, workspace_id, "member"),
+        )
+        self._update_authenticated_sessions_for_user(
+            new_owner_user_id,
+            self._auth_accounts[new_owner_email].prototype,
+        )
+        self._update_authenticated_sessions_for_user(
+            current_owner_user_id,
+            self._auth_accounts[current_owner_email].prototype,
+        )
+        return True
 
     def set_authenticated_active_workspace_id(
         self,
@@ -264,6 +537,49 @@ class InMemoryRewriteAppStateRepository:
     def override_session_state(self, **changes: object) -> SessionState:
         self._session_state = replace(self._session_state, **changes)
         return self._session_state
+
+    def _revoke_family_tokens(self, family_id: str) -> None:
+        for token in self._refresh_family_index.get(family_id, set()):
+            record = self._refresh_tokens.get(token)
+            if record is not None:
+                self._refresh_tokens[token] = replace(record, revoked=True)
+
+    def _refresh_invitation_state(
+        self,
+        record: _WorkspaceInvitationRecord,
+    ) -> _WorkspaceInvitationRecord:
+        if record.state != "pending":
+            return record
+        if _is_expired(record.expires_at):
+            return replace(record, state="expired")
+        return record
+
+    def _update_authenticated_sessions_for_user(
+        self,
+        user_id: str,
+        prototype: SessionState,
+    ) -> None:
+        for session_id, session_state in list(self._authenticated_sessions.items()):
+            if session_state.user is None or session_state.user.user_id != user_id:
+                continue
+            active_membership = _membership_for_workspace(
+                prototype.memberships,
+                session_state.workspace_id,
+            ) or (prototype.memberships[0] if len(prototype.memberships) > 0 else None)
+            updated_state = replace(
+                prototype,
+                session_id=session_id,
+                auth_state=session_state.auth_state,
+                auth_mode=session_state.auth_mode,
+                active_dataset_id=None if active_membership is None else session_state.active_dataset_id,
+                workspace_id=active_membership.workspace_id if active_membership is not None else "",
+                workspace_slug=active_membership.slug if active_membership is not None else "",
+                workspace_display_name=active_membership.display_name if active_membership is not None else "",
+                workspace_role=active_membership.role if active_membership is not None else "viewer",
+                default_task_scope=active_membership.default_task_scope if active_membership is not None else "owned",
+            )
+            self._authenticated_sessions[session_id] = updated_state
+            self._session_state = updated_state
 
     def list_tasks(self) -> list[TaskDetail]:
         if self._task_snapshot_repository is not None:
@@ -523,6 +839,11 @@ def _seed_session_state() -> SessionState:
                 invite_members=True,
                 remove_members=True,
                 transfer_owner=True,
+                leave_workspace=False,
+                view_audit_logs=True,
+                manage_definitions=True,
+                manage_datasets=True,
+                manage_tasks=True,
             ),
         ),
         WorkspaceMembership(
@@ -538,6 +859,11 @@ def _seed_session_state() -> SessionState:
                 invite_members=False,
                 remove_members=False,
                 transfer_owner=False,
+                leave_workspace=True,
+                view_audit_logs=False,
+                manage_definitions=False,
+                manage_datasets=False,
+                manage_tasks=False,
             ),
         ),
     )
@@ -561,6 +887,123 @@ def _seed_session_state() -> SessionState:
     )
 
 
+def _seed_auth_accounts() -> dict[str, _AccountSeed]:
+    collaborator_memberships = (
+        WorkspaceMembership(
+            workspace_id="ws-modeling",
+            slug="modeling",
+            display_name="Modeling Workspace",
+            role="viewer",
+            default_task_scope="owned",
+            is_active=True,
+            allowed_actions=WorkspaceAllowedActions(
+                switch_to=True,
+                activate_dataset=True,
+                invite_members=False,
+                remove_members=False,
+                transfer_owner=False,
+                leave_workspace=True,
+                view_audit_logs=False,
+                manage_definitions=False,
+                manage_datasets=False,
+                manage_tasks=False,
+            ),
+        ),
+    )
+    admin_memberships = (
+        WorkspaceMembership(
+            workspace_id="ws-device-lab",
+            slug="device-lab",
+            display_name="Device Lab Workspace",
+            role="owner",
+            default_task_scope="workspace",
+            is_active=True,
+            allowed_actions=WorkspaceAllowedActions(
+                switch_to=True,
+                activate_dataset=True,
+                invite_members=True,
+                remove_members=True,
+                transfer_owner=True,
+                leave_workspace=False,
+                view_audit_logs=True,
+                manage_definitions=True,
+                manage_datasets=True,
+                manage_tasks=True,
+            ),
+        ),
+        WorkspaceMembership(
+            workspace_id="ws-modeling",
+            slug="modeling",
+            display_name="Modeling Workspace",
+            role="owner",
+            default_task_scope="workspace",
+            is_active=False,
+            allowed_actions=WorkspaceAllowedActions(
+                switch_to=True,
+                activate_dataset=True,
+                invite_members=True,
+                remove_members=True,
+                transfer_owner=True,
+                leave_workspace=False,
+                view_audit_logs=True,
+                manage_definitions=True,
+                manage_datasets=True,
+                manage_tasks=True,
+            ),
+        ),
+    )
+    collaborator_state = SessionState(
+        session_id="rewrite-collaborator-session",
+        auth_state="authenticated",
+        auth_mode="jwt_refresh_cookie",
+        user=SessionUser(
+            user_id="researcher-02",
+            display_name="Collaborator User",
+            email="collaborator.local@example.com",
+            platform_role="user",
+        ),
+        workspace_id="ws-modeling",
+        workspace_slug="modeling",
+        workspace_display_name="Modeling Workspace",
+        workspace_role="viewer",
+        default_task_scope="owned",
+        memberships=collaborator_memberships,
+        active_dataset_id=None,
+    )
+    admin_state = SessionState(
+        session_id="rewrite-admin-session",
+        auth_state="authenticated",
+        auth_mode="jwt_refresh_cookie",
+        user=SessionUser(
+            user_id="admin-01",
+            display_name="Rewrite Admin",
+            email="admin.local@example.com",
+            platform_role="admin",
+        ),
+        workspace_id="ws-device-lab",
+        workspace_slug="device-lab",
+        workspace_display_name="Device Lab Workspace",
+        workspace_role="owner",
+        default_task_scope="workspace",
+        memberships=admin_memberships,
+        active_dataset_id="fluxonium-2025-031",
+    )
+    return {
+        "rewrite.local@example.com": _AccountSeed(
+            password="rewrite-local-password",
+            prototype=replace(_seed_session_state(), auth_mode="jwt_refresh_cookie"),
+        ),
+        "collaborator.local@example.com": _AccountSeed(
+            password="collaborator-local-password",
+            prototype=collaborator_state,
+        ),
+        "admin.local@example.com": _AccountSeed(
+            password="admin-local-password",
+            prototype=admin_state,
+        ),
+    }
+
+
 def _membership_for_workspace(
     memberships: tuple[WorkspaceMembership, ...],
     workspace_id: str,
@@ -569,6 +1012,106 @@ def _membership_for_workspace(
         if membership.workspace_id == workspace_id:
             return membership
     return None
+
+
+def _workspace_slug(workspace_id: str) -> str:
+    return {
+        "ws-device-lab": "device-lab",
+        "ws-modeling": "modeling",
+    }.get(workspace_id, workspace_id)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _expires_at(lifetime_seconds: int) -> str:
+    return (
+        datetime.now(timezone.utc) + timedelta(seconds=lifetime_seconds)
+    ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _is_expired(iso_timestamp: str) -> bool:
+    normalized = iso_timestamp.replace("Z", "+00:00")
+    return datetime.now(timezone.utc) >= datetime.fromisoformat(normalized)
+
+
+def _to_workspace_invitation(record: _WorkspaceInvitationRecord) -> WorkspaceInvitation:
+    return WorkspaceInvitation(
+        invite_id=record.invite_id,
+        invite_token=record.invite_token,
+        workspace_id=record.workspace_id,
+        workspace_name=record.workspace_name,
+        email=record.email,
+        role=record.role,  # type: ignore[arg-type]
+        state=record.state,  # type: ignore[arg-type]
+        expires_at=record.expires_at,
+        created_at=record.created_at,
+        delivery_state=record.delivery_state,  # type: ignore[arg-type]
+        created_by_user_id=record.created_by_user_id,
+        delivery_error=record.delivery_error,
+    )
+
+
+def _upsert_membership(
+    state: SessionState,
+    *,
+    workspace_id: str,
+    workspace_slug: str,
+    workspace_name: str,
+    role: str,
+    default_task_scope: str,
+) -> SessionState:
+    existing = _membership_for_workspace(state.memberships, workspace_id)
+    updated_membership = WorkspaceMembership(
+        workspace_id=workspace_id,
+        slug=workspace_slug,
+        display_name=workspace_name,
+        role=role,  # type: ignore[arg-type]
+        default_task_scope=default_task_scope,  # type: ignore[arg-type]
+        is_active=existing.is_active if existing is not None else False,
+        allowed_actions=existing.allowed_actions if existing is not None else WorkspaceAllowedActions(
+            switch_to=True,
+            activate_dataset=True,
+            invite_members=False,
+            remove_members=False,
+            transfer_owner=False,
+            leave_workspace=True,
+            view_audit_logs=False,
+            manage_definitions=False,
+            manage_datasets=False,
+            manage_tasks=False,
+        ),
+    )
+    memberships = tuple(
+        membership
+        for membership in state.memberships
+        if membership.workspace_id != workspace_id
+    ) + (updated_membership,)
+    return replace(state, memberships=memberships)
+
+
+def _replace_membership_role(state: SessionState, workspace_id: str, role: str) -> SessionState:
+    memberships = []
+    active_membership: WorkspaceMembership | None = None
+    for membership in state.memberships:
+        if membership.workspace_id == workspace_id:
+            updated = replace(membership, role=role)  # type: ignore[arg-type]
+            memberships.append(updated)
+            if membership.is_active:
+                active_membership = updated
+            continue
+        memberships.append(membership)
+        if membership.is_active:
+            active_membership = membership
+    updated_state = replace(state, memberships=tuple(memberships))
+    if active_membership is not None:
+        return replace(
+            updated_state,
+            workspace_role=active_membership.role,
+            default_task_scope=active_membership.default_task_scope,
+        )
+    return updated_state
 
 
 def build_seed_tasks() -> tuple[TaskDetail, ...]:

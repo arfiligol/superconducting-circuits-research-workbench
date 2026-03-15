@@ -11,6 +11,7 @@ from typing import Literal
 VerificationStatus = Literal["valid", "expired", "invalid"]
 
 SESSION_COOKIE_NAME = "sc_session_access"
+REFRESH_COOKIE_NAME = "sc_session_refresh"
 DEFAULT_SESSION_TOKEN_LIFETIME_SECONDS = 900
 
 
