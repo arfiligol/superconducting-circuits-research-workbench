@@ -11,8 +11,8 @@ owner: team
 status: stable
 audience: user
 scope: "目前正式支援的 CLI 指令快速索引與常見查詢入口"
-version: v1.2.0
-last_updated: 2026-03-12
+version: v1.3.0
+last_updated: 2026-03-16
 updated_by: codex
 ---
 
@@ -34,7 +34,10 @@ uv run sc <GROUP> <COMMAND>
 | **Session / Workspace** | `sc session ...` | [sc session](../../reference/cli/sc-session.md) |
 | **Datasets** | `sc datasets ...` | [sc datasets](../../reference/cli/sc-datasets.md) |
 | **Tasks** | `sc tasks ...` | [sc tasks](../../reference/cli/sc-tasks.md) |
-| **Circuit Definition** | `sc circuit-definition ...` | [sc circuit-definition](../../reference/cli/sc-circuit-definition.md) |
+| **Characterization / Analysis** | `sc characterization ...` | [sc characterization](../../reference/cli/sc-characterization.md) |
+| **Run Events** | `sc events ...` | [sc events](../../reference/cli/sc-events.md) |
+| **Run Results** | `sc results ...` | [sc results](../../reference/cli/sc-results.md) |
+| **Operator Bundle** | `sc ops ...` | [sc ops](../../reference/cli/sc-ops.md) |
 
 ## 查看說明
 
@@ -45,7 +48,7 @@ uv run sc --help
 uv run sc session --help
 uv run sc datasets --help
 uv run sc tasks --help
-uv run sc circuit-definition --help
+uv run sc characterization --help
 ```
 
 ## 相關參考

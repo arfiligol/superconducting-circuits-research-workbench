@@ -12,9 +12,9 @@ status: stable
 owner: docs-team
 audience: user
 scope: "`sc ops` standalone CLI operator bundle 指令。"
-version: v0.1.0
-last_updated: 2026-03-13
-updated_by: team
+version: v0.2.0
+last_updated: 2026-03-16
+updated_by: codex
 title: sc ops
 ---
 
@@ -35,9 +35,9 @@ title: sc ops
 | Subcommand | Focus | Key inputs |
 |---|---|---|
 | `inspect` | 單筆 task 的 operator bundle | `TASK_ID`, `--recent-events` |
-| `latest` | 依條件取最新 task bundle | `--status`, `--lane`, `--scope`, `--dataset-id`, `--recent-events` |
+| `latest` | 依條件取最新 task bundle | `--status`, `--lane`, `--dataset-id`, `--recent-events` |
 | `wait` | 等待 task 後再輸出 bundle | `TASK_ID`, `--until-status`, `--interval`, `--timeout`, `--recent-events` |
-| `submit` | 送出 task 並輸出 bundle | `KIND`, `--dataset-id`, `--definition-id`, `--summary`, `--wait`, `--until-status`, `--interval`, `--timeout`, `--recent-events` |
+| `submit` | 送出 task 並輸出 bundle | `KIND`, `--dataset-id`, `--summary`, `--wait`, `--until-status`, `--interval`, `--timeout`, `--recent-events` |
 
 ## Shared Option
 
@@ -50,16 +50,15 @@ title: sc ops
 
 | Value | Meaning |
 |---|---|
-| `simulation` | definition-driven simulation task |
-| `post_processing` | post-processing task |
 | `characterization` | dataset-driven characterization task |
+| `post_processing` | dataset-bound analysis / post-processing task |
 
 !!! example "Common Usage"
     ```bash
-    uv run sc ops latest --lane simulation --recent-events 5
+    uv run sc ops latest --lane characterization --recent-events 5
     uv run sc ops inspect 306
     uv run sc ops wait 306 --until-status terminal
-    uv run sc ops submit simulation --definition-id 18 --wait
+    uv run sc ops submit characterization --dataset-id DATASET-001 --wait
     ```
 
 ## Standalone Pairing

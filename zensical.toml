@@ -167,10 +167,8 @@ nav = [
       { "sc tasks" = "reference/cli/sc-tasks.md" },
       { "sc events" = "reference/cli/sc-events.md" },
       { "sc results" = "reference/cli/sc-results.md" },
-      { "sc simulation" = "reference/cli/sc-simulation.md" },
       { "sc characterization" = "reference/cli/sc-characterization.md" },
       { "sc ops" = "reference/cli/sc-ops.md" },
-      { "sc circuit-definition" = "reference/cli/sc-circuit-definition.md" },
     ] },
     { "Core" = [
       { "Overview" = "reference/core/index.md" },

@@ -11,9 +11,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: standalone CLI local artifacts 與 multi-user app surfaces 之間的 import/export/copy-with-lineage bridge contract
-version: v0.1.0
-last_updated: 2026-03-14
+scope: standalone CLI local dataset / result artifacts 與 multi-user app surfaces 之間的 import/export/copy-with-lineage bridge contract
+version: v0.2.0
+last_updated: 2026-03-16
 updated_by: codex
 title: Local / App Interchange
 ---
@@ -47,7 +47,6 @@ title: Local / App Interchange
 
 | Payload | Minimum contents |
 | --- | --- |
-| Definition bundle | canonical source text、inspection summary、lineage |
 | Dataset bundle | dataset profile、design scopes、trace metadata、TraceStore locator manifest |
 | Result bundle | analysis run summary、artifact manifest、derived parameters、lineage |
 

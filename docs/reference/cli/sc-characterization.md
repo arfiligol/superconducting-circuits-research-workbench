@@ -11,16 +11,16 @@ tags:
 status: stable
 owner: docs-team
 audience: user
-scope: "`sc characterization` standalone CLI characterization-lane local run 操作指令。"
-version: v0.2.0
-last_updated: 2026-03-14
+scope: "`sc characterization` standalone CLI characterization / analysis-lane local run 操作指令。"
+version: v0.3.0
+last_updated: 2026-03-16
 updated_by: codex
 title: sc characterization
 ---
 
 # sc characterization
 
-操作 characterization lane 上的 local run。
+操作 characterization / analysis lane 上的 local run。
 
 !!! info "Lane Wrapper"
     `sc characterization` 是 generic local run contract 的 lane-specific wrapper。

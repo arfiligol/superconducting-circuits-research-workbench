@@ -11,20 +11,20 @@ tags:
 status: stable
 owner: docs-team
 audience: user
-scope: "`sc tasks` standalone CLI local run registry 查詢與操作指令。"
-version: v0.2.0
-last_updated: 2026-03-13
-updated_by: team
+scope: "`sc tasks` standalone CLI local analysis run registry 查詢與操作指令。"
+version: v0.3.0
+last_updated: 2026-03-16
+updated_by: codex
 title: sc tasks
 ---
 
 # sc tasks
 
-查詢 local run registry，並對任務做 submit、latest、wait 等操作。
+查詢 local analysis run registry，並對任務做 submit、latest、wait 等操作。
 
 !!! info "Command Role"
     `sc tasks` 是 standalone CLI 的 generic local run surface。
-    `sc simulation` 與 `sc characterization` 只是 lane-specific wrappers；底層仍依賴同一組 local run semantics。
+    `sc characterization` 是 lane-specific wrapper；底層仍依賴同一組 local run semantics。
 
 !!! warning "No Shared Queue"
     `sc tasks` 看的是 local run registry，不是 multi-user shared queue。
@@ -32,7 +32,7 @@ title: sc tasks
 
 !!! warning "Primary Recovery Key"
     `task_id` 是 attach、inspect、wait 的 primary key。
-    `dataset_id` 與 `definition_id` 只能當輔助查詢條件，不可取代 `task_id`。
+    `dataset_id` 只能當輔助查詢條件，不可取代 `task_id`。
 
 ## Command Map
 
@@ -55,7 +55,7 @@ title: sc tasks
     | Subcommand | Focus | Key inputs |
     |---|---|---|
     | `wait` | 輪詢到指定狀態 | `TASK_ID`, `--until-status`, `--interval`, `--timeout` |
-    | `submit` | 建立 local run record 並啟動工作 | `KIND`, `--dataset-id`, `--definition-id`, `--summary` |
+    | `submit` | 建立 local analysis run record 並啟動工作 | `KIND`, `--dataset-id`, `--summary` |
 
 ## Shared Option
 
@@ -68,7 +68,7 @@ title: sc tasks
 | Option | Values | Default |
 |---|---|---|
 | `--status` | `queued`, `running`, `completed`, `failed` | `None` |
-| `--lane` | `simulation`, `characterization` | `None` |
+| `--lane` | `characterization`, `post_processing` | `None` |
 | `--dataset-id` | free text | `None` |
 | `--limit` | `1..50` | `20` (`list` only) |
 
@@ -76,16 +76,15 @@ title: sc tasks
 
 | Value | Meaning |
 |---|---|
-| `simulation` | definition-driven simulation task |
-| `post_processing` | post-processing task |
 | `characterization` | dataset-driven characterization task |
+| `post_processing` | dataset-bound analysis / post-processing task |
 
 !!! example "Common Usage"
     ```bash
-    uv run sc tasks list --lane simulation --status running
+    uv run sc tasks list --lane characterization --status running
     uv run sc tasks show 306
     uv run sc tasks inspect 306
-    uv run sc tasks submit simulation --definition-id 18 --dataset-id DATASET-001
+    uv run sc tasks submit characterization --dataset-id DATASET-001
     uv run sc tasks wait 306 --until-status terminal
     ```
 
@@ -98,12 +97,11 @@ title: sc tasks
 | Concern | Authority |
 |---|---|
 | local run lifecycle、wait semantics、result attachment | [Standalone Runtime](standalone-runtime.md) |
-| canonical simulation / characterization execution inputs | [Core / Python Core](../core/python-core.md) |
+| characterization / analysis result payload compatibility | [Data Formats / Analysis Result](../data-formats/analysis-result.md) |
 
 ## Related
 
 - [sc events](sc-events.md)
 - [sc results](sc-results.md)
-- [sc simulation](sc-simulation.md)
 - [sc characterization](sc-characterization.md)
 - [Standalone Runtime](standalone-runtime.md)

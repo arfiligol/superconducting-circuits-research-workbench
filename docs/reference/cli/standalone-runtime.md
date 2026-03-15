@@ -11,9 +11,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: standalone-first CLI 的 local context、local catalogs、local run registry、local artifacts 與 direct execution model
-version: v0.2.0
-last_updated: 2026-03-14
+scope: standalone-first CLI 的 local context、local dataset catalog、local run registry、local artifacts 與 direct execution model
+version: v0.3.0
+last_updated: 2026-03-16
 updated_by: codex
 title: Standalone Runtime
 ---
@@ -37,7 +37,6 @@ title: Standalone Runtime
 | Local Profile | 目前 CLI 使用的本地身份與偏好設定 |
 | Local Workspace Root | 目前 project / filesystem working root |
 | Active Dataset | standalone CLI 的預設 dataset context |
-| Local Definition Catalog | 本地 persisted circuit definitions |
 | Local Run Registry | 本地 task / run 清單與 lifecycle state |
 | Local Event Store | 每筆 local run 的 persisted event history |
 | Local Result Store | result handles、trace refs、artifact metadata |
@@ -58,14 +57,12 @@ title: Standalone Runtime
 |---|---|
 | Active dataset fallback | 支援 `--dataset-id` 的命令，省略時可回退到 `sc session` 定義的 active dataset |
 | Local workspace switching | 若 CLI 暴露 workspace command，它只切換本地 working context |
-| Definition binding | simulation run 需能綁定 local definition catalog 或 source-inspection result |
 | Refresh / re-entry | 重新打開 terminal 後，若 local registry 仍存在，就應能透過 `task_id` 重新 inspect |
 
 ## Data Compatibility
 
 | Concern | SoT |
 |---|---|
-| circuit-definition source / preview artifact semantics | [Core / Python Core](../core/python-core.md), [Data Formats / Circuit Netlist](../data-formats/circuit-netlist.md) |
 | dataset / trace metadata compatibility | [Data Formats / Dataset / Design / Trace Schema](../data-formats/dataset-record.md) |
 | result payload / artifact compatibility | [Data Formats / Analysis Result](../data-formats/analysis-result.md) |
 
@@ -75,9 +72,7 @@ title: Standalone Runtime
 |---|---|
 | [sc session](sc-session.md) | 顯示與更新 local context |
 | [sc datasets](sc-datasets.md) | 檢查本地 dataset catalog |
-| [sc circuit-definition](sc-circuit-definition.md) | 讀寫本地 definition catalog，並對接 `sc_core` inspection |
 | [sc tasks](sc-tasks.md) | 檢查本地 run registry |
-| [sc simulation](sc-simulation.md) | 啟動本地 simulation run |
 | [sc characterization](sc-characterization.md) | 啟動本地 characterization run |
 
 ## Related

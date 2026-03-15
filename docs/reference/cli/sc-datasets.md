@@ -12,8 +12,8 @@ status: stable
 owner: docs-team
 audience: user
 scope: "`sc datasets` standalone CLI local dataset catalog 查詢與 metadata mutation 指令。"
-version: v0.2.1
-last_updated: 2026-03-14
+version: v0.2.2
+last_updated: 2026-03-16
 updated_by: codex
 title: sc datasets
 ---
@@ -71,7 +71,7 @@ title: sc datasets
       --device-type FloatingQubit \
       --source inferred \
       --capability characterization \
-      --capability simulation
+      --capability analysis
     ```
 
 ## Standalone Pair
