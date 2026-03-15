@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from src.app.domain.session import WorkspaceMembership, WorkspaceRole
+from src.app.domain.session import PlatformRole, WorkspaceMembership, WorkspaceRole
 
 InvitationState = Literal[
     "pending",
@@ -14,6 +14,42 @@ InvitationState = Literal[
 DeliveryStatus = Literal["queued_for_delivery", "sent", "delivery_failed", "manual_link"]
 DeliveryChannel = Literal["smtp", "manual_link"]
 PostAcceptSuggestion = Literal["switch_available", "stay_current", "sign_in_to_accept"]
+
+
+@dataclass(frozen=True)
+class CollaborationUserSummary:
+    user_id: str
+    display_name: str
+    email: str | None
+    platform_role: PlatformRole | None
+
+
+@dataclass(frozen=True)
+class WorkspaceMemberAllowedActions:
+    remove: bool
+    transfer_owner: bool
+    leave: bool
+
+
+@dataclass(frozen=True)
+class WorkspaceMemberRecord:
+    user: CollaborationUserSummary
+    workspace_role: WorkspaceRole
+
+
+@dataclass(frozen=True)
+class WorkspaceMemberRow:
+    user: CollaborationUserSummary
+    workspace_role: WorkspaceRole
+    is_current_user: bool
+    allowed_actions: WorkspaceMemberAllowedActions
+
+
+@dataclass(frozen=True)
+class WorkspaceInvitationAllowedActions:
+    revoke: bool
+    accept: bool
+    copy_link: bool
 
 
 @dataclass(frozen=True)
@@ -36,6 +72,8 @@ class WorkspaceInvitation:
     expires_at: str
     created_at: str
     delivery: WorkspaceInvitationDelivery
+    inviter: CollaborationUserSummary | None
+    allowed_actions: WorkspaceInvitationAllowedActions
     created_by_user_id: str
     delivery_error: str | None
 
@@ -60,4 +98,4 @@ class WorkspaceInvitationAcceptance:
 class WorkspaceMembershipListView:
     workspace_id: str
     workspace_name: str
-    memberships: tuple[WorkspaceMembership, ...]
+    memberships: tuple[WorkspaceMemberRow, ...]

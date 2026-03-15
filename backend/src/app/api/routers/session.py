@@ -13,8 +13,10 @@ from src.app.domain.session import (
     WorkspaceSwitchResult,
 )
 from src.app.domain.workspace_collaboration import (
+    CollaborationUserSummary,
     WorkspaceInvitation,
     WorkspaceInvitationAcceptance,
+    WorkspaceMemberRow,
     WorkspaceMembershipListView,
 )
 from src.app.infrastructure.request_debug import current_debug_ref
@@ -610,6 +612,12 @@ def _serialize_workspace_invitation(invitation: WorkspaceInvitation) -> dict[str
             "invite_url": invitation.delivery.invite_url,
             "failure_reason": invitation.delivery.failure_reason,
         },
+        "inviter": _serialize_user_summary(invitation.inviter),
+        "allowed_actions": {
+            "revoke": invitation.allowed_actions.revoke,
+            "accept": invitation.allowed_actions.accept,
+            "copy_link": invitation.allowed_actions.copy_link,
+        },
         "created_by_user_id": invitation.created_by_user_id,
         "delivery_error": invitation.delivery_error,
     }
@@ -635,7 +643,37 @@ def _serialize_workspace_membership_view(
     return {
         "workspace_id": view.workspace_id,
         "workspace_name": view.workspace_name,
-        "memberships": [_serialize_membership(item) for item in view.memberships],
+        "memberships": [_serialize_workspace_member_row(item) for item in view.memberships],
+    }
+
+
+def _serialize_workspace_member_row(row: WorkspaceMemberRow) -> dict[str, object]:
+    return {
+        "user_id": row.user.user_id,
+        "display_name": row.user.display_name,
+        "email": row.user.email,
+        "platform_role": row.user.platform_role,
+        "workspace_role": row.workspace_role,
+        "is_current_user": row.is_current_user,
+        "user": _serialize_user_summary(row.user),
+        "allowed_actions": {
+            "remove": row.allowed_actions.remove,
+            "transfer_owner": row.allowed_actions.transfer_owner,
+            "leave": row.allowed_actions.leave,
+        },
+    }
+
+
+def _serialize_user_summary(
+    user: CollaborationUserSummary | None,
+) -> dict[str, object] | None:
+    if user is None:
+        return None
+    return {
+        "user_id": user.user_id,
+        "display_name": user.display_name,
+        "email": user.email,
+        "platform_role": user.platform_role,
     }
 
 

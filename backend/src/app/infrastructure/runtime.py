@@ -99,6 +99,14 @@ def get_authorization_service() -> AuthorizationService:
 
 
 @lru_cache(maxsize=1)
+def get_session_token_transport() -> SessionJwtTransport:
+    settings = get_settings()
+    return SessionJwtTransport(
+        secret=settings.session_secret.get_secret_value(),
+    )
+
+
+@lru_cache(maxsize=1)
 def get_dataset_service() -> DatasetService:
     return DatasetService(
         repository=get_rewrite_catalog_repository(),
@@ -128,13 +136,10 @@ def get_schemdraw_render_service() -> SchemdrawRenderService:
 
 @lru_cache(maxsize=1)
 def get_session_service() -> SessionService:
-    settings = get_settings()
     return SessionService(
         repository=get_rewrite_app_state_repository(),
         dataset_repository=get_rewrite_catalog_repository(),
-        token_transport=SessionJwtTransport(
-            secret=settings.session_secret.get_secret_value(),
-        ),
+        token_transport=get_session_token_transport(),
         authorization_service=get_authorization_service(),
         audit_repository=get_task_audit_repository(),
     )
@@ -194,6 +199,7 @@ def reset_runtime_state() -> None:
     get_processor_runtime_repository.cache_clear()
     get_dataset_service.cache_clear()
     get_authorization_service.cache_clear()
+    get_session_token_transport.cache_clear()
     get_circuit_definition_service.cache_clear()
     get_schemdraw_render_service.cache_clear()
     get_session_service.cache_clear()

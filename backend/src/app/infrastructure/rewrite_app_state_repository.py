@@ -29,7 +29,13 @@ from src.app.domain.tasks import (
     resolve_retry_of_task_id,
     resolve_task_control_state,
 )
-from src.app.domain.workspace_collaboration import WorkspaceInvitation
+from src.app.domain.workspace_collaboration import (
+    CollaborationUserSummary,
+    WorkspaceInvitation,
+    WorkspaceInvitationAllowedActions,
+    WorkspaceInvitationDelivery,
+    WorkspaceMemberRecord,
+)
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
     build_result_handle_ref,
@@ -169,6 +175,9 @@ class InMemoryRewriteAppStateRepository:
             return request_state
         return self._session_state
 
+    def build_public_request_session_state(self, auth_state: str) -> SessionState:
+        return _build_public_request_session_state(auth_state)
+
     def bind_request_session_state(self, session_state: SessionState) -> Token[SessionState | None]:
         return _REQUEST_SESSION_STATE.set(session_state)
 
@@ -257,7 +266,7 @@ class InMemoryRewriteAppStateRepository:
 
     def list_workspace_invitations(self, workspace_id: str) -> tuple[WorkspaceInvitation, ...]:
         return tuple(
-            _to_workspace_invitation(record)
+            _to_workspace_invitation(record, self._resolve_user_summary(record.created_by_user_id))
             for record in sorted(
                 self._workspace_invitations.values(),
                 key=lambda item: (item.created_at, item.invite_id),
@@ -293,7 +302,7 @@ class InMemoryRewriteAppStateRepository:
             created_by_user_id=created_by_user_id,
         )
         self._workspace_invitations[invite_id] = record
-        return _to_workspace_invitation(record)
+        return _to_workspace_invitation(record, self._resolve_user_summary(created_by_user_id))
 
     def update_workspace_invitation_delivery(
         self,
@@ -317,18 +326,29 @@ class InMemoryRewriteAppStateRepository:
             delivery_error=delivery_error,
         )
         self._workspace_invitations[invite_id] = updated
-        return _to_workspace_invitation(updated)
+        return _to_workspace_invitation(
+            updated,
+            self._resolve_user_summary(updated.created_by_user_id),
+        )
 
     def get_workspace_invitation(self, invite_id: str) -> WorkspaceInvitation | None:
         record = self._workspace_invitations.get(invite_id)
         if record is None:
             return None
-        return _to_workspace_invitation(self._refresh_invitation_state(record))
+        refreshed = self._refresh_invitation_state(record)
+        return _to_workspace_invitation(
+            refreshed,
+            self._resolve_user_summary(refreshed.created_by_user_id),
+        )
 
     def get_workspace_invitation_by_token(self, invite_token: str) -> WorkspaceInvitation | None:
         for record in self._workspace_invitations.values():
             if record.invite_token == invite_token:
-                return _to_workspace_invitation(self._refresh_invitation_state(record))
+                refreshed = self._refresh_invitation_state(record)
+                return _to_workspace_invitation(
+                    refreshed,
+                    self._resolve_user_summary(refreshed.created_by_user_id),
+                )
         return None
 
     def revoke_workspace_invitation(self, invite_id: str) -> WorkspaceInvitation | None:
@@ -337,7 +357,10 @@ class InMemoryRewriteAppStateRepository:
             return None
         updated = replace(record, state="revoked")
         self._workspace_invitations[invite_id] = updated
-        return _to_workspace_invitation(updated)
+        return _to_workspace_invitation(
+            updated,
+            self._resolve_user_summary(updated.created_by_user_id),
+        )
 
     def accept_workspace_invitation(
         self,
@@ -351,10 +374,16 @@ class InMemoryRewriteAppStateRepository:
             refreshed = self._refresh_invitation_state(record)
             self._workspace_invitations[invite_id] = refreshed
             if refreshed.state not in {"pending", "delivered"}:
-                return _to_workspace_invitation(refreshed)
+                return _to_workspace_invitation(
+                    refreshed,
+                    self._resolve_user_summary(refreshed.created_by_user_id),
+                )
             account = self._auth_accounts.get(user_email)
             if account is None or account.prototype.user is None:
-                return _to_workspace_invitation(refreshed)
+                return _to_workspace_invitation(
+                    refreshed,
+                    self._resolve_user_summary(refreshed.created_by_user_id),
+                )
             updated_prototype = _upsert_membership(
                 account.prototype,
                 workspace_id=refreshed.workspace_id,
@@ -373,7 +402,10 @@ class InMemoryRewriteAppStateRepository:
             )
             accepted = replace(refreshed, state="accepted")
             self._workspace_invitations[invite_id] = accepted
-            return _to_workspace_invitation(accepted)
+            return _to_workspace_invitation(
+                accepted,
+                self._resolve_user_summary(accepted.created_by_user_id),
+            )
         return None
 
     def create_pending_invitation_acceptance(self, invite_token: str) -> str:
@@ -393,14 +425,29 @@ class InMemoryRewriteAppStateRepository:
             return None
         return record.invite_token
 
-    def list_workspace_memberships(self, workspace_id: str) -> tuple[WorkspaceMembership, ...]:
-        memberships: list[WorkspaceMembership] = []
+    def list_workspace_memberships(self, workspace_id: str) -> tuple[WorkspaceMemberRecord, ...]:
+        memberships: list[WorkspaceMemberRecord] = []
         for account in self._auth_accounts.values():
             prototype = account.prototype
+            if prototype.user is None:
+                continue
             for membership in prototype.memberships:
                 if membership.workspace_id == workspace_id:
-                    memberships.append(membership)
-        return tuple(memberships)
+                    memberships.append(
+                        WorkspaceMemberRecord(
+                            user=_to_user_summary(prototype.user),
+                            workspace_role=membership.role,
+                        )
+                    )
+        return tuple(
+            sorted(
+                memberships,
+                key=lambda item: (
+                    _workspace_role_sort_key(item.workspace_role),
+                    item.user.display_name,
+                ),
+            )
+        )
 
     def remove_workspace_member(self, workspace_id: str, user_id: str) -> bool:
         email = self._users_by_id.get(user_id)
@@ -545,6 +592,15 @@ class InMemoryRewriteAppStateRepository:
         else:
             session_dataset_state[updated_state.workspace_id] = dataset_id
         return updated_state
+
+    def _resolve_user_summary(self, user_id: str) -> CollaborationUserSummary | None:
+        email = self._users_by_id.get(user_id)
+        if email is None:
+            return None
+        account = self._auth_accounts.get(email)
+        if account is None or account.prototype.user is None:
+            return None
+        return _to_user_summary(account.prototype.user)
 
     def get_authenticated_last_active_dataset_id(
         self,
@@ -1128,9 +1184,10 @@ def _is_expired(iso_timestamp: str) -> bool:
     return datetime.now(UTC) >= datetime.fromisoformat(normalized)
 
 
-def _to_workspace_invitation(record: _WorkspaceInvitationRecord) -> WorkspaceInvitation:
-    from src.app.domain.workspace_collaboration import WorkspaceInvitationDelivery
-
+def _to_workspace_invitation(
+    record: _WorkspaceInvitationRecord,
+    inviter: CollaborationUserSummary | None,
+) -> WorkspaceInvitation:
     return WorkspaceInvitation(
         invite_id=record.invite_id,
         invite_token=record.invite_token,
@@ -1147,9 +1204,48 @@ def _to_workspace_invitation(record: _WorkspaceInvitationRecord) -> WorkspaceInv
             invite_url=record.invite_url,
             failure_reason=record.delivery_error,
         ),
+        inviter=inviter,
+        allowed_actions=WorkspaceInvitationAllowedActions(
+            revoke=False,
+            accept=False,
+            copy_link=False,
+        ),
         created_by_user_id=record.created_by_user_id,
         delivery_error=record.delivery_error,
     )
+
+
+def _to_user_summary(user: SessionUser) -> CollaborationUserSummary:
+    return CollaborationUserSummary(
+        user_id=user.user_id,
+        display_name=user.display_name,
+        email=user.email,
+        platform_role=user.platform_role,
+    )
+
+
+def _build_public_request_session_state(auth_state: str) -> SessionState:
+    return SessionState(
+        session_id=f"request-{auth_state}",
+        auth_state=auth_state,  # type: ignore[arg-type]
+        auth_mode="jwt_refresh_cookie",
+        user=None,
+        workspace_id="",
+        workspace_slug="",
+        workspace_display_name="",
+        workspace_role="viewer",
+        default_task_scope="owned",
+        memberships=(),
+        active_dataset_id=None,
+    )
+
+
+def _workspace_role_sort_key(role: str) -> int:
+    return {
+        "owner": 0,
+        "member": 1,
+        "viewer": 2,
+    }.get(role, 99)
 
 
 def _upsert_membership(

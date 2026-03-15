@@ -5,11 +5,15 @@ from typing import Protocol
 
 from src.app.domain.audit import AuditOutcome, AuditRecord
 from src.app.domain.authorization import AuthorizationResourceEnvelope
-from src.app.domain.session import SessionState, WorkspaceMembership
+from src.app.domain.session import SessionState
 from src.app.domain.workspace_collaboration import (
     WorkspaceInvitation,
     WorkspaceInvitationAcceptance,
+    WorkspaceInvitationAllowedActions,
     WorkspaceInvitationListView,
+    WorkspaceMemberAllowedActions,
+    WorkspaceMemberRecord,
+    WorkspaceMemberRow,
     WorkspaceMembershipListView,
 )
 from src.app.infrastructure.audit_records import build_audit_record
@@ -67,7 +71,10 @@ class CollaborationRepository(Protocol):
 
     def consume_pending_invitation_acceptance(self, continuation_token: str) -> str | None: ...
 
-    def list_workspace_memberships(self, workspace_id: str) -> tuple[WorkspaceMembership, ...]: ...
+    def list_workspace_memberships(
+        self,
+        workspace_id: str,
+    ) -> tuple[WorkspaceMemberRecord, ...]: ...
 
     def remove_workspace_member(self, workspace_id: str, user_id: str) -> bool: ...
 
@@ -112,7 +119,10 @@ class WorkspaceCollaborationService:
             denied_code="workspace_invitation_denied",
             denied_message="The current session cannot list invitations for this workspace.",
         )
-        rows = self._repository.list_workspace_invitations(resolved_workspace_id)
+        rows = tuple(
+            self._materialize_invitation(row, state)
+            for row in self._repository.list_workspace_invitations(resolved_workspace_id)
+        )
         return WorkspaceInvitationListView(rows=rows, total_count=len(rows))
 
     def create_invitation(
@@ -172,7 +182,7 @@ class WorkspaceCollaborationService:
             delivery_error=delivery_attempt.delivery_error,
         )
         if delivered is None:
-            return invitation
+            return self._materialize_invitation(invitation, state)
         self._append_delivery_audit_record(
             state=state,
             invitation=delivered,
@@ -194,7 +204,7 @@ class WorkspaceCollaborationService:
                 delivered.invite_id,
                 delivery_attempt.delivery_error,
             )
-        return delivered
+        return self._materialize_invitation(delivered, state)
 
     def get_invitation_detail(
         self,
@@ -217,7 +227,7 @@ class WorkspaceCollaborationService:
             denied_code="workspace_invitation_denied",
             denied_message="The current session cannot view this workspace invitation.",
         )
-        return invitation
+        return self._materialize_invitation(invitation, state)
 
     def revoke_invitation(
         self,
@@ -258,7 +268,7 @@ class WorkspaceCollaborationService:
             payload={"workspace_id": revoked.workspace_id},
             workspace_id=revoked.workspace_id,
         )
-        return revoked
+        return self._materialize_invitation(revoked, state)
 
     def accept_invitation(
         self,
@@ -318,7 +328,7 @@ class WorkspaceCollaborationService:
                 invitation.invite_id,
             )
             return WorkspaceInvitationAcceptance(
-                invitation=invitation,
+                invitation=self._materialize_invitation(invitation, None),
                 memberships=(),
                 switch_available=False,
                 post_accept_context="sign_in_to_accept",
@@ -355,11 +365,12 @@ class WorkspaceCollaborationService:
                 category="not_found",
                 message="The requested workspace invitation was not found.",
             )
-        memberships = self._repository.list_workspace_memberships(accepted.workspace_id)
         switch_available = state.workspace_id != accepted.workspace_id
         result = WorkspaceInvitationAcceptance(
-            invitation=accepted,
-            memberships=memberships,
+            invitation=self._materialize_invitation(accepted, state),
+            memberships=self._session_service.require_authenticated_session_state(
+                session_token
+            ).memberships,
             switch_available=switch_available,
             post_accept_context="switch_available" if switch_available else "stay_current",
         )
@@ -386,6 +397,7 @@ class WorkspaceCollaborationService:
     ) -> WorkspaceMembershipListView:
         state = self._session_service.require_authenticated_session_state(session_token)
         resolved_workspace_id = workspace_id or state.workspace_id
+        self._require_workspace_membership(state, resolved_workspace_id)
         memberships = self._repository.list_workspace_memberships(resolved_workspace_id)
         workspace_name = next(
             (
@@ -398,7 +410,11 @@ class WorkspaceCollaborationService:
         return WorkspaceMembershipListView(
             workspace_id=resolved_workspace_id,
             workspace_name=workspace_name,
-            memberships=memberships,
+            memberships=self._materialize_member_rows(
+                memberships,
+                state=state,
+                workspace_id=resolved_workspace_id,
+            ),
         )
 
     def leave_workspace(
@@ -451,7 +467,11 @@ class WorkspaceCollaborationService:
         result = WorkspaceMembershipListView(
             workspace_id=resolved_workspace_id,
             workspace_name=active_membership.display_name,
-            memberships=self._repository.list_workspace_memberships(resolved_workspace_id),
+            memberships=self._materialize_member_rows(
+                self._repository.list_workspace_memberships(resolved_workspace_id),
+                state=state,
+                workspace_id=resolved_workspace_id,
+            ),
         )
         logger.info(
             "Workspace left workspace_id=%s user_id=%s",
@@ -503,7 +523,11 @@ class WorkspaceCollaborationService:
         result = WorkspaceMembershipListView(
             workspace_id=resolved_workspace_id,
             workspace_name=workspace_name,
-            memberships=self._repository.list_workspace_memberships(resolved_workspace_id),
+            memberships=self._materialize_member_rows(
+                self._repository.list_workspace_memberships(resolved_workspace_id),
+                state=state,
+                workspace_id=resolved_workspace_id,
+            ),
         )
         logger.info(
             "Workspace member removed workspace_id=%s user_id=%s",
@@ -567,7 +591,11 @@ class WorkspaceCollaborationService:
         result = WorkspaceMembershipListView(
             workspace_id=resolved_workspace_id,
             workspace_name=workspace_name,
-            memberships=self._repository.list_workspace_memberships(resolved_workspace_id),
+            memberships=self._materialize_member_rows(
+                self._repository.list_workspace_memberships(resolved_workspace_id),
+                state=state,
+                workspace_id=resolved_workspace_id,
+            ),
         )
         logger.info(
             "Workspace ownership transferred workspace_id=%s new_owner_user_id=%s",
@@ -592,6 +620,108 @@ class WorkspaceCollaborationService:
             owner_user_id=None,
             visibility_scope="workspace",
             lifecycle_state="active",
+        )
+
+    def _materialize_invitation(
+        self,
+        invitation: WorkspaceInvitation,
+        state: SessionState | None,
+    ) -> WorkspaceInvitation:
+        can_revoke = False
+        if state is not None:
+            can_revoke = self._authorization_service.is_allowed(
+                state,
+                "revoke_invite",
+                resource=_invitation_resource(invitation),
+            )
+        can_accept = (
+            state is not None
+            and state.user is not None
+            and state.user.email is not None
+            and state.user.email.casefold() == invitation.email.casefold()
+            and invitation.state in {"pending", "delivered"}
+        )
+        return WorkspaceInvitation(
+            invite_id=invitation.invite_id,
+            invite_token=invitation.invite_token,
+            workspace_id=invitation.workspace_id,
+            workspace_name=invitation.workspace_name,
+            email=invitation.email,
+            role=invitation.role,
+            state=invitation.state,
+            expires_at=invitation.expires_at,
+            created_at=invitation.created_at,
+            delivery=invitation.delivery,
+            inviter=invitation.inviter,
+            allowed_actions=WorkspaceInvitationAllowedActions(
+                revoke=can_revoke,
+                accept=can_accept,
+                copy_link=can_revoke and invitation.delivery.invite_url is not None,
+            ),
+            created_by_user_id=invitation.created_by_user_id,
+            delivery_error=invitation.delivery_error,
+        )
+
+    def _materialize_member_rows(
+        self,
+        memberships: tuple[WorkspaceMemberRecord, ...],
+        *,
+        state: SessionState,
+        workspace_id: str,
+    ) -> tuple[WorkspaceMemberRow, ...]:
+        rows: list[WorkspaceMemberRow] = []
+        current_user_id = state.user.user_id if state.user is not None else None
+        for membership in memberships:
+            is_current_user = membership.user.user_id == current_user_id
+            can_remove = (not is_current_user) and self._authorization_service.is_allowed(
+                state,
+                "remove_member",
+                resource=_membership_resource(workspace_id, membership.user.user_id),
+            )
+            can_transfer_owner = (
+                not is_current_user
+                and membership.workspace_role != "owner"
+                and self._authorization_service.is_allowed(
+                    state,
+                    "transfer_workspace_owner",
+                    resource=_membership_resource(workspace_id, membership.user.user_id),
+                )
+            )
+            can_leave = (
+                is_current_user
+                and membership.workspace_role != "owner"
+                and self._authorization_service.is_allowed(
+                    state,
+                    "leave_workspace",
+                    resource=self._workspace_resource(workspace_id),
+                )
+            )
+            rows.append(
+                WorkspaceMemberRow(
+                    user=membership.user,
+                    workspace_role=membership.workspace_role,
+                    is_current_user=is_current_user,
+                    allowed_actions=WorkspaceMemberAllowedActions(
+                        remove=can_remove,
+                        transfer_owner=can_transfer_owner,
+                        leave=can_leave,
+                    ),
+                )
+            )
+        return tuple(rows)
+
+    def _require_workspace_membership(
+        self,
+        state: SessionState,
+        workspace_id: str,
+    ) -> None:
+        if any(membership.workspace_id == workspace_id for membership in state.memberships):
+            return
+        raise service_error(
+            403,
+            code="workspace_membership_required",
+            category="permission_denied",
+            message="The current session does not belong to the selected workspace.",
         )
 
     def _append_delivery_audit_record(
