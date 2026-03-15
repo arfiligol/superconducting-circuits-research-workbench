@@ -33,11 +33,11 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 export function resolveSurfaceInsetToneClass(tone: SurfaceInsetTone) {
   switch (tone) {
     case "success":
-      return "border-emerald-500/30 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/35 dark:text-emerald-100";
+      return "border-emerald-500/30 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/35 dark:text-emerald-200";
     case "warning":
-      return "border-amber-500/35 bg-amber-50 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100";
+      return "border-amber-500/35 bg-amber-50 text-amber-950 dark:bg-amber-950/35 dark:text-amber-200";
     case "error":
-      return "border-rose-600/35 bg-rose-50 text-rose-950 dark:bg-rose-950/35 dark:text-rose-100";
+      return "border-rose-600/35 bg-rose-50 text-rose-950 dark:bg-rose-950/35 dark:text-rose-200";
     case "primary":
       return "border-primary/30 bg-primary/10 text-foreground";
     case "default":
@@ -111,9 +111,9 @@ export function SurfaceTag({ children, tone = "default" }: SurfaceTagProps) {
       className={cx(
         "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
         tone === "primary" && "border-primary/25 bg-primary/10 text-foreground",
-        tone === "success" && "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100",
-        tone === "warning" && "border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100",
-        tone === "error" && "border-rose-600/25 bg-rose-500/10 text-rose-950 dark:text-rose-100",
+        tone === "success" && "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200",
+        tone === "warning" && "border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-200",
+        tone === "error" && "border-rose-600/25 bg-rose-500/10 text-rose-950 dark:text-rose-200",
         tone === "default" && "border-border bg-muted/50 text-muted-foreground",
       )}
     >

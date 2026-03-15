@@ -187,7 +187,7 @@ export function resolveWorkspacePageIdentity(pathname: string | null | undefined
   if (!pathname) {
     return {
       sectionLabel: "Workspace",
-      pageTitle: "Research Workbench",
+      pageTitle: "Overview",
     } as const;
   }
 
@@ -204,7 +204,7 @@ export function resolveWorkspacePageIdentity(pathname: string | null | undefined
   if (!match) {
     return {
       sectionLabel: "Workspace",
-      pageTitle: "Research Workbench",
+      pageTitle: "Overview",
     } as const;
   }
 

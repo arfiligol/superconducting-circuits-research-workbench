@@ -8,6 +8,7 @@ import {
   getSession,
   loginWithPassword,
   logoutCurrentSession,
+  refreshCurrentSession,
   type SessionAuthState,
   type SessionLoginCredentials,
   patchActiveWorkspace,
@@ -70,18 +71,19 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
         isAnonymousSession: authState === "anonymous",
         isDegradedSession: authState === "degraded",
         async refreshSession() {
-          return sessionQuery.mutate();
+          const nextSession = await refreshCurrentSession();
+          return sessionQuery.mutate(nextSession, { revalidate: false });
         },
         async replaceSession(nextSession) {
           return sessionQuery.mutate(nextSession, { revalidate: false });
         },
         async login(credentials) {
-          await loginWithPassword(credentials);
-          return sessionQuery.mutate();
+          const nextSession = await loginWithPassword(credentials);
+          return sessionQuery.mutate(nextSession, { revalidate: false });
         },
         async logout() {
-          await logoutCurrentSession();
-          return sessionQuery.mutate();
+          const nextSession = await logoutCurrentSession();
+          return sessionQuery.mutate(nextSession, { revalidate: false });
         },
         async switchWorkspace(workspaceId) {
           const result = await patchActiveWorkspace(workspaceId);

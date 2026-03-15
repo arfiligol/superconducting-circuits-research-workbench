@@ -21,23 +21,11 @@ export function WorkspaceNav({ onNavigate }: WorkspaceNavProps) {
 
   return (
     <div className="flex h-full flex-col gap-6">
-      <div className="flex items-center gap-3 px-2 pb-1">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-[0.95rem] border border-border bg-surface text-[11px] font-semibold uppercase tracking-[0.18em] text-foreground">
-          SC
-        </span>
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Navigation
-          </p>
-          <p className="text-sm font-medium text-foreground">Workspace routes</p>
-        </div>
-      </div>
-
       <div className="space-y-6">
         {workspaceNavigationGroups.map((group) => (
           <section key={group.id}>
             <div className="px-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                 {group.label}
               </p>
             </div>

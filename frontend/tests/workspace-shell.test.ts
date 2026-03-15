@@ -27,6 +27,10 @@ const statusStripSource = readFileSync(
   fileURLToPath(new URL("../src/components/layout/workspace-status-strip.tsx", import.meta.url)),
   "utf8",
 );
+const accountPanelSource = readFileSync(
+  fileURLToPath(new URL("../src/components/layout/workspace-account-panel.tsx", import.meta.url)),
+  "utf8",
+);
 const schemaCatalogSource = readFileSync(
   fileURLToPath(
     new URL(
@@ -81,11 +85,12 @@ describe("workspace shell source contracts", () => {
     expect(shellSource).toContain("z-30 w-[220px]");
     expect(shellSource).toContain("hover:border-primary/35 hover:bg-primary/10");
     expect(shellSource).toContain("focus-visible:ring-2");
+    expect(shellSource).not.toContain("<WorkspaceStatusStrip compact");
   });
 
   it("keeps header page identity concise while restoring the required shell identity hierarchy", () => {
     expect(headerSource).toContain("SUPERCONDUCTING CIRCUITS");
-    expect(headerSource).toContain("Research Workbench");
+    expect(headerSource).not.toContain("Research Workbench");
     expect(headerSource).toContain("truncate whitespace-nowrap");
     expect(headerSource).toContain("identity.pageTitle");
     expect(headerSource).toContain("identity.sectionLabel");
@@ -93,9 +98,9 @@ describe("workspace shell source contracts", () => {
     expect(headerSource).not.toContain("WORKSPACE SURFACE");
   });
 
-  it("keeps the sidebar title-only without intro copy, item summaries, or duplicated shell identity", () => {
-    expect(navSource).toContain("Workspace routes");
-    expect(navSource).toContain("SC");
+  it("keeps the sidebar title-only without intro copy, helper labels, or duplicated shell identity", () => {
+    expect(navSource).not.toContain("Workspace routes");
+    expect(navSource).not.toContain("SC");
     expect(navSource).not.toContain("SUPERCONDUCTING CIRCUITS");
     expect(navSource).not.toContain("Research Workbench");
     expect(navSource).toContain("group.label");
@@ -106,16 +111,22 @@ describe("workspace shell source contracts", () => {
     expect(navSource).not.toContain("Session-backed landing and shell context.");
   });
 
-  it("moves the secondary shell identity into the header instead of duplicating it in the sidebar", () => {
-    expect(headerSource).toContain("Research Workbench");
+  it("keeps the shell identity only in the header and not in the sidebar", () => {
+    expect(headerSource).toContain("SUPERCONDUCTING CIRCUITS");
+    expect(navSource).not.toContain("SUPERCONDUCTING CIRCUITS");
     expect(navSource).not.toContain("Research Workbench");
   });
 
-  it("routes the collapsed active dataset trigger through the compact shell helper", () => {
+  it("routes the global context through the right-side drawer instead of an always-visible top strip", () => {
+    expect(statusStripSource).toContain("ShellSidePanel");
+    expect(statusStripSource).toContain('title="Global Context"');
+    expect(statusStripSource).toContain("Active Workspace");
+    expect(statusStripSource).toContain("Active Dataset");
+    expect(statusStripSource).toContain("Tasks Queue");
+    expect(statusStripSource).toContain("Worker Summary");
     expect(statusStripSource).toContain("resolveShellActiveDatasetSummary");
     expect(statusStripSource).toContain("datasetSummary.value");
-    expect(statusStripSource).toContain("datasetSummary.badge");
-    expect(statusStripSource).toContain("compact ? \"min-h-[52px] py-2.5\"");
+    expect(statusStripSource).toContain("Global context");
   });
 
   it("keeps workspace and dataset switchers inside the shared shell", () => {
@@ -126,13 +137,17 @@ describe("workspace shell source contracts", () => {
   });
 
   it("adopts explicit auth entry routes instead of disabled user-menu wording", () => {
-    expect(headerSource).toContain("authSummary.primaryActionHref");
-    expect(headerSource).not.toContain("Account settings are not expanded");
+    expect(accountPanelSource).toContain("authSummary.primaryActionHref");
+    expect(headerSource).toContain("WorkspaceAccountPanel");
+    expect(accountPanelSource).not.toContain("Close menu");
+    expect(accountPanelSource).not.toContain("CLOSE MENU");
     expect(loginPageSource).toContain('mode="login"');
     expect(logoutPageSource).toContain('mode="logout"');
     expect(authEntrySource).toContain("useForm<LoginFormValues>");
     expect(authEntrySource).toContain("await login(values)");
     expect(authEntrySource).toContain("await logout()");
+    expect(authEntrySource).not.toContain("Auth State");
+    expect(authEntrySource).not.toContain("Session Mode");
   });
 
   it("removes low-contrast auth-adjacent rose notices from the shared shell", () => {
@@ -161,6 +176,7 @@ describe("workspace shell source contracts", () => {
       schemdrawSource,
       characterizationSource,
       statusStripSource,
+      accountPanelSource,
     ]) {
       expect(source).not.toContain("text-rose-100");
       expect(source).not.toContain("text-amber-100");

@@ -19,18 +19,18 @@
 
 :root {
   color-scheme: light;
-  --app: oklch(0.96 0.01 245);
-  --background: oklch(0.94 0.018 250);
-  --foreground: oklch(0.21 0.025 256);
-  --card: oklch(0.985 0.01 247);
-  --card-foreground: oklch(0.21 0.025 256);
-  --header: oklch(0.97 0.012 248);
-  --sidebar: oklch(0.93 0.02 248);
-  --surface: oklch(0.965 0.012 248);
-  --surface-elevated: oklch(0.94 0.018 248);
-  --muted: oklch(0.9 0.012 245);
-  --muted-foreground: oklch(0.48 0.03 248);
-  --border: oklch(0.83 0.02 246);
+  --app: oklch(0.972 0.006 92);
+  --background: oklch(0.955 0.01 88);
+  --foreground: oklch(0.23 0.02 252);
+  --card: oklch(0.992 0.004 95);
+  --card-foreground: oklch(0.23 0.02 252);
+  --header: oklch(0.985 0.006 92);
+  --sidebar: oklch(0.945 0.01 86);
+  --surface: oklch(0.975 0.007 90);
+  --surface-elevated: oklch(0.95 0.011 88);
+  --muted: oklch(0.918 0.009 90);
+  --muted-foreground: oklch(0.49 0.02 252);
+  --border: oklch(0.86 0.012 88);
   --primary: oklch(0.58 0.13 244);
   --primary-foreground: oklch(0.98 0.01 240);
 }
@@ -59,8 +59,9 @@
 
 html {
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 8%, transparent), transparent 24%),
-    linear-gradient(180deg, color-mix(in srgb, var(--header) 70%, transparent), transparent 16%),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 10%, transparent), transparent 22%),
+    radial-gradient(circle at top right, color-mix(in srgb, white 55%, transparent), transparent 18%),
+    linear-gradient(180deg, color-mix(in srgb, var(--header) 76%, transparent), transparent 18%),
     var(--app);
   color: var(--foreground);
   font-family: "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;

@@ -14,11 +14,11 @@ type ShellNoticeProps = Readonly<{
 export function resolveShellNoticeToneClass(tone: ShellNoticeTone = "info") {
   switch (tone) {
     case "success":
-      return "border-emerald-500/35 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/35 dark:text-emerald-100";
+      return "border-emerald-500/35 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/35 dark:text-emerald-200";
     case "warning":
-      return "border-amber-500/35 bg-amber-50 text-amber-950 dark:bg-amber-950/35 dark:text-amber-100";
+      return "border-amber-500/35 bg-amber-50 text-amber-950 dark:bg-amber-950/35 dark:text-amber-200";
     case "error":
-      return "border-rose-600/35 bg-rose-50 text-rose-950 dark:bg-rose-950/35 dark:text-rose-100";
+      return "border-rose-600/35 bg-rose-50 text-rose-950 dark:bg-rose-950/35 dark:text-rose-200";
     case "info":
     default:
       return "border-primary/30 bg-primary/10 text-foreground";

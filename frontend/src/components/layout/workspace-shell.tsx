@@ -5,7 +5,6 @@ import { Menu } from "lucide-react";
 
 import { WorkspaceHeader } from "@/components/layout/workspace-header";
 import { WorkspaceNav } from "@/components/layout/workspace-nav";
-import { WorkspaceStatusStrip } from "@/components/layout/workspace-status-strip";
 
 type WorkspaceShellProps = Readonly<{
   children: React.ReactNode;
@@ -49,10 +48,6 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
           </button>
 
           <WorkspaceHeader />
-        </div>
-
-        <div className="border-t border-border/80 px-4 py-3 md:px-6">
-          <WorkspaceStatusStrip compact />
         </div>
       </header>
 

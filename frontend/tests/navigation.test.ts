@@ -58,6 +58,10 @@ describe("workspaceNavigation", () => {
       sectionLabel: "Pipeline",
       pageTitle: "Raw Data Browser",
     });
+    expect(resolveWorkspacePageIdentity(null)).toEqual({
+      sectionLabel: "Workspace",
+      pageTitle: "Overview",
+    });
   });
 
   it("does not treat the schema editor route as an active alias of the schemas nav item", () => {
