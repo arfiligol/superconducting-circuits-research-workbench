@@ -124,6 +124,7 @@ describe("workspace shell source contracts", () => {
   it("routes the global context through the right-side drawer instead of an always-visible top strip", () => {
     expect(statusStripSource).toContain("ShellSidePanel");
     expect(statusStripSource).toContain('title="Global Context"');
+    expect(statusStripSource).toContain('variant="context"');
     expect(statusStripSource).toContain("Active Workspace");
     expect(statusStripSource).toContain("Active Dataset");
     expect(statusStripSource).toContain("Tasks Queue");
@@ -139,7 +140,16 @@ describe("workspace shell source contracts", () => {
     expect(headerSource).toContain('activePanel === "context"');
     expect(shellSidePanelSource).toContain('offsetTopClassName = "top-[74px]"');
     expect(shellSidePanelSource).toContain("fixed inset-x-0 bottom-0 z-40");
-    expect(shellSidePanelSource).toContain("fixed bottom-0 right-0 z-40");
+    expect(shellSidePanelSource).toContain('variant?: "context" | "account"');
+    expect(shellSidePanelSource).toContain('const isContextSurface = variant === "context"');
+    expect(shellSidePanelSource).toContain("inset-x-4 bottom-4 mx-auto");
+    expect(shellSidePanelSource).toContain("bottom-0 right-0 w-full max-w-[460px]");
+  });
+
+  it("splits context and account into different shell surface models", () => {
+    expect(statusStripSource).toContain('variant="context"');
+    expect(accountPanelSource).toContain('variant="account"');
+    expect(accountPanelSource).toContain('className="max-w-[440px]"');
   });
 
   it("keeps workspace and dataset switchers inside the shared shell", () => {

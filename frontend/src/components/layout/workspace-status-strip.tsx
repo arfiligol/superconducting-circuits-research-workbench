@@ -336,15 +336,15 @@ export function WorkspaceStatusStrip({ open, onOpenChange }: WorkspaceStatusStri
         </span>
       </button>
 
-        <ShellSidePanel
-          open={open}
-          onClose={() => {
-            onOpenChange(false);
-          }}
-          title="Global Context"
-          subtitle="Global context for header-owned workspace, dataset, queue, and worker state."
-          className="max-w-[720px]"
-        >
+      <ShellSidePanel
+        open={open}
+        onClose={() => {
+          onOpenChange(false);
+        }}
+        title="Global Context"
+        subtitle="Global context for header-owned workspace, dataset, queue, and worker state."
+        variant="context"
+      >
         <div className="space-y-4">
           {(sessionError || taskQueueError || activeTaskError || activeDatasetError) && (
             <ShellNotice tone="warning" title="Context warning">

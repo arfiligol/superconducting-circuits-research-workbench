@@ -120,7 +120,9 @@ export function WorkspaceAccountPanel({
           onOpenChange(false);
         }}
         title={authSummary.triggerName}
-        subtitle="Account, authentication, collaboration, and appearance."
+        subtitle="Session, appearance, and workspace collaboration."
+        variant="account"
+        className="max-w-[440px]"
       >
         <div className="space-y-5">
           <ShellNotice tone={authSummary.tone} title={authSummary.menuTitle}>
