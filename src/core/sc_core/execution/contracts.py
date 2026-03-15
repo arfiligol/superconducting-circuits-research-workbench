@@ -1160,8 +1160,22 @@ def validate_task_history_event_metadata(
     metadata: Mapping[str, object] | None,
 ) -> dict[str, TaskExecutionHistoryMetadataValue]:
     """Validate one task-history metadata payload and return its canonical form."""
+    return canonicalize_task_history_event_metadata(
+        event_type,
+        metadata,
+        require_complete=True,
+    )
+
+
+def canonicalize_task_history_event_metadata(
+    event_type: TaskExecutionHistoryEventType,
+    metadata: Mapping[str, object] | None,
+    *,
+    require_complete: bool = False,
+) -> dict[str, TaskExecutionHistoryMetadataValue]:
+    """Normalize one task-history metadata payload and optionally require completeness."""
     normalized = normalize_task_history_event_metadata(event_type, metadata)
-    if not normalized.is_complete:
+    if require_complete and not normalized.is_complete:
         missing = ", ".join(normalized.missing_fields)
         raise ValueError(
             f"Task history metadata for '{event_type}' is missing required fields: {missing}"
@@ -1177,10 +1191,12 @@ def project_task_runtime_state_from_history(
     """Project the canonical runtime state from persisted task-history events."""
     projected_state = initial_state
     for event in _sort_task_history_events(history_events):
-        normalized = normalize_task_history_event_metadata(event.event_type, event.metadata)
         next_state = _task_runtime_state_from_normalized_metadata(
             event_type=event.event_type,
-            metadata=normalized.metadata,
+            metadata=canonicalize_task_history_event_metadata(
+                event.event_type,
+                event.metadata,
+            ),
         )
         if next_state is None:
             continue
@@ -1210,11 +1226,14 @@ def project_task_control_transition(
             "task_retried",
         }:
             continue
-        normalized_event = normalize_task_history_event_metadata(event.event_type, event.metadata)
-        if _optional_task_control_outcome(normalized_event.metadata.get("outcome")) == "accepted" and (
+        normalized_event = canonicalize_task_history_event_metadata(
+            event.event_type,
+            event.metadata,
+        )
+        if _optional_task_control_outcome(normalized_event.get("outcome")) == "accepted" and (
             _control_event_matches_runtime_state(
                 event_type=event.event_type,
-                metadata=normalized_event.metadata,
+                metadata=normalized_event,
                 runtime_state=projected_runtime_state,
             )
         ):
@@ -1223,16 +1242,16 @@ def project_task_control_transition(
     if accepted_control_event is None:
         return None
 
-    normalized_control_event = normalize_task_history_event_metadata(
+    normalized_control_event = canonicalize_task_history_event_metadata(
         accepted_control_event.event_type,
         accepted_control_event.metadata,
     )
     action = _control_action_from_normalized_metadata(
         event_type=accepted_control_event.event_type,
-        metadata=normalized_control_event.metadata,
+        metadata=normalized_control_event,
     )
     requested_state = _requested_state_from_normalized_metadata(
-        metadata=normalized_control_event.metadata,
+        metadata=normalized_control_event,
         action=action,
     )
 
@@ -1241,10 +1260,13 @@ def project_task_control_transition(
     for event in ordered_events:
         if _event_precedes(event, accepted_control_event):
             continue
-        normalized_event = normalize_task_history_event_metadata(event.event_type, event.metadata)
+        normalized_event = canonicalize_task_history_event_metadata(
+            event.event_type,
+            event.metadata,
+        )
         event_state = _task_runtime_state_from_normalized_metadata(
             event_type=event.event_type,
-            metadata=normalized_event.metadata,
+            metadata=normalized_event,
         )
         if event_state is None:
             continue
@@ -1280,7 +1302,7 @@ def project_task_control_transition(
         acknowledged_at=acknowledged_at,
         terminal_at=terminal_at,
         creates_new_task_lineage=bool(
-            normalized_control_event.metadata.get("creates_new_task_lineage", False)
+            normalized_control_event.get("creates_new_task_lineage", False)
         ),
     )
 

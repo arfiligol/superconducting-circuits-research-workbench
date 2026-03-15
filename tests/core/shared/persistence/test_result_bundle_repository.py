@@ -18,6 +18,7 @@ from core.shared.persistence.models import (
 from core.shared.persistence.models import (
     TraceRecord as DataRecord,
 )
+from core.shared.persistence.repositories.analysis_run_repository import AnalysisRunRepository
 from core.shared.persistence.repositories.circuit_repository import CircuitRepository
 from core.shared.persistence.repositories.data_record_repository import (
     TraceRepository,
@@ -267,6 +268,37 @@ def test_result_bundle_repository_hides_incomplete_snapshots_and_lists_incomplet
         assert [batch.id for batch in repo.list_incomplete_batches()] == [incomplete.id]
 
 
+def test_result_bundle_snapshot_reads_reject_missing_explicit_design_scope() -> None:
+    with _memory_session() as session:
+        dataset = DatasetRepository(session).add(
+            DatasetRecord(name="Legacy Batch", source_meta={}, parameters={})
+        )
+        session.flush()
+        assert dataset.id is not None
+
+        legacy_batch = TraceBatchRecord(
+            dataset_id=dataset.id,
+            bundle_type="circuit_simulation",
+            role="cache",
+            status="completed",
+            source_meta={},
+            config_snapshot={},
+            result_payload={},
+        )
+        session.add(legacy_batch)
+        session.commit()
+        assert legacy_batch.id is not None
+
+        repo = ResultBundleRepository(session)
+        for loader in (repo.get_snapshot, repo.get_trace_batch_snapshot):
+            try:
+                loader(legacy_batch.id)
+            except ValueError as exc:
+                assert str(exc) == "Explicit design_id is required for canonical persistence writes."
+            else:
+                raise AssertionError("Expected snapshot read path to reject legacy scope fallback.")
+
+
 def test_result_bundle_repository_merges_summary_into_trace_batch_payload() -> None:
     with _memory_session() as session:
         dataset = DatasetRepository(session).add(
@@ -305,6 +337,44 @@ def test_result_bundle_repository_merges_summary_into_trace_batch_payload() -> N
             "trace_count": 3,
             "error_code": "write_failed",
         }
+
+
+def test_analysis_run_repository_legacy_write_path_round_trips_explicit_scope_columns() -> None:
+    with _memory_session() as session:
+        dataset = DatasetRepository(session).add(
+            DatasetRecord(name="Analysis Legacy Scope", source_meta={}, parameters={})
+        )
+        session.flush()
+        assert dataset.id is not None
+
+        repo = AnalysisRunRepository(session)
+        analysis_run = AnalysisRunRecord(
+            dataset_id=dataset.id,
+            design_id=dataset.id,
+            analysis_id="fit_lc",
+            analysis_label="Fit LC",
+            run_id="run-1",
+            status="completed",
+            input_trace_ids=[7, 8],
+            input_batch_ids=[9],
+            input_scope="design",
+            trace_mode_group="all",
+            config_payload={"method": "fit"},
+            summary_payload={"quality": "ok"},
+        )
+        analysis_run.design_id = None
+
+        persisted = repo.add(analysis_run)
+        session.commit()
+
+        assert persisted.id is not None
+        assert persisted.dataset_id == dataset.id
+        assert persisted.design_id == dataset.id
+
+        raw_batch = session.get(ResultBundleRecord, persisted.id)
+        assert raw_batch is not None
+        assert raw_batch.dataset_id == dataset.id
+        assert raw_batch.design_id == dataset.id
 
 
 def test_data_record_repository_index_page_filters_and_sorts() -> None:

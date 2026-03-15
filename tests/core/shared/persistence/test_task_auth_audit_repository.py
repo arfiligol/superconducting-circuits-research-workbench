@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from sc_core.execution import build_execution_event_log
 from sqlmodel import Session, SQLModel, create_engine
 
 from core.shared.persistence.models import DesignRecord, TraceBatchRecord
@@ -292,4 +293,30 @@ def test_audit_log_repository_redacts_secret_and_raw_numeric_payloads() -> None:
                 "trace_values": "[OMITTED]",
                 "safe": {"trace_batch_id": 7},
             },
+        }
+
+
+def test_audit_log_repository_appends_canonical_execution_events_with_safe_copy() -> None:
+    with _memory_session() as session:
+        event = build_execution_event_log(
+            action_kind="task.control_requested",
+            resource_kind="task",
+            resource_id=17,
+            summary="Requested cancellation for task 17",
+            payload={
+                "token": "secret-token",
+                "result_refs": {"trace_batch_id": 5},
+                "values": [1.0, 2.0],
+            },
+        )
+        repo = AuditLogRepository(session)
+
+        log = repo.append_execution_event(actor_id=None, event=event)
+        session.commit()
+        event.payload["result_refs"] = {"trace_batch_id": 99}
+
+        assert log.payload == {
+            "token": "[REDACTED]",
+            "result_refs": {"trace_batch_id": 5},
+            "values": "[OMITTED]",
         }

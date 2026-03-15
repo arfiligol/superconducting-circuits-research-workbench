@@ -11,8 +11,8 @@ from sqlmodel import Session, select
 from core.shared.persistence.models import (
     AnalysisRunRecord,
     TraceBatchRecord,
-    ensure_scope_ids,
     require_explicit_scope_ids,
+    resolve_scope_ids_for_write,
 )
 from core.shared.persistence.repositories.contracts import AnalysisRunSummary
 
@@ -131,8 +131,7 @@ class AnalysisRunRepository:
 
     def add(self, analysis_run: AnalysisRunRecord) -> AnalysisRunRecord:
         """Persist one logical analysis run using the batch-backed storage row."""
-        if analysis_run.dataset_id is None:
-            ensure_scope_ids(analysis_run)
+        resolve_scope_ids_for_write(analysis_run, allow_legacy_design_fallback=True)
         batch = analysis_run_batch_from_record(analysis_run)
         self._session.add(batch)
         self._session.flush()

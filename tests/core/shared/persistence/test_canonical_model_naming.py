@@ -4,10 +4,12 @@ from core.shared.persistence.models import (
     DerivedParameter,
     DeviceType,
     ParameterDesignation,
+    PersistedScopeIds,
     TraceBatchRecord,
     TraceRecord,
     ensure_scope_ids,
     require_explicit_scope_ids,
+    resolve_scope_ids_for_write,
 )
 
 
@@ -96,3 +98,65 @@ def test_design_scoped_records_apply_explicit_legacy_scope_shim_when_design_id_m
     assert trace.design_id == 21
     assert scope_ids.dataset_id == 21
     assert scope_ids.design_id == 21
+    assert scope_ids.used_legacy_design_fallback is True
+
+
+def test_resolve_scope_ids_for_write_marks_canonical_and_legacy_paths_explicitly() -> None:
+    canonical_trace = TraceRecord(
+        dataset_id=31,
+        design_id=41,
+        data_type="y_parameters",
+        parameter="Y11",
+        representation="imaginary",
+        axes=[],
+        values=[],
+        store_ref={},
+    )
+    legacy_trace = TraceRecord(
+        dataset_id=32,
+        data_type="y_parameters",
+        parameter="Y21",
+        representation="real",
+        axes=[],
+        values=[],
+        store_ref={},
+    )
+
+    canonical_scope_ids = resolve_scope_ids_for_write(canonical_trace)
+    legacy_scope_ids = resolve_scope_ids_for_write(
+        legacy_trace,
+        allow_legacy_design_fallback=True,
+    )
+
+    assert canonical_scope_ids == PersistedScopeIds(
+        dataset_id=31,
+        design_id=41,
+        used_legacy_design_fallback=False,
+    )
+    assert legacy_scope_ids == PersistedScopeIds(
+        dataset_id=32,
+        design_id=32,
+        used_legacy_design_fallback=True,
+    )
+
+
+def test_require_explicit_scope_ids_does_not_mutate_missing_design_scope() -> None:
+    trace = TraceRecord(
+        dataset_id=51,
+        data_type="y_parameters",
+        parameter="Y11",
+        representation="imaginary",
+        axes=[],
+        values=[],
+        store_ref={},
+    )
+
+    try:
+        require_explicit_scope_ids(trace)
+    except ValueError as exc:
+        assert str(exc) == "Explicit design_id is required for canonical persistence writes."
+    else:
+        raise AssertionError("Expected explicit scope validation to reject missing design_id.")
+
+    assert trace.dataset_id == 51
+    assert trace.design_id is None

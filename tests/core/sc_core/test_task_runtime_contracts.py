@@ -12,6 +12,7 @@ from sc_core.execution import (
     build_task_control_history_event,
     build_task_lifecycle_history_metadata,
     build_task_submission_history_metadata,
+    canonicalize_task_history_event_metadata,
     normalize_task_history_event_metadata,
     project_task_control_transition,
     project_task_runtime_state_from_history,
@@ -329,6 +330,61 @@ def test_incomplete_task_event_metadata_has_stable_normalization_or_failure() ->
         assert "retry_source_task_id" in str(exc)
     else:
         raise AssertionError("Expected retry metadata validation to fail.")
+
+
+def test_task_event_metadata_canonicalizer_supports_projection_and_strict_validation() -> None:
+    normalized_cancel = canonicalize_task_history_event_metadata(
+        "task_cancel_requested",
+        {"task_status": "cancelling", "outcome": "accepted"},
+    )
+    assert normalized_cancel == {
+        "task_status": "cancelling",
+        "outcome": "accepted",
+        "control_action": "cancel",
+        "requested_state": "cancellation_requested",
+        "control_phase": "acknowledged",
+    }
+
+    try:
+        canonicalize_task_history_event_metadata(
+            "task_retried",
+            {"control_action": "retry"},
+            require_complete=True,
+        )
+    except ValueError as exc:
+        assert "retry_root_task_id" in str(exc)
+    else:
+        raise AssertionError("Expected strict canonicalization to reject incomplete retry metadata.")
+
+    projected = project_task_runtime_state_from_history(
+        (
+            _history_event(
+                event_key="task_completed:1",
+                event_type="task_completed",
+                occurred_at=_utc(2026, 3, 15, 12, 0),
+                message="done",
+                metadata={
+                    "dispatch_status": "queued",
+                    "dispatch_key": "dispatch:1",
+                    "progress_percent_complete": 100,
+                    "worker_task_name": "simulation_run_task",
+                },
+            ),
+            _history_event(
+                event_key="task_running:2",
+                event_type="task_running",
+                occurred_at=_utc(2026, 3, 15, 12, 1),
+                message="late running",
+                metadata={
+                    "dispatch_status": "queued",
+                    "dispatch_key": "dispatch:1",
+                    "progress_percent_complete": 50,
+                    "worker_task_name": "simulation_run_task",
+                },
+            ),
+        )
+    )
+    assert projected == "completed"
 
 
 def test_task_history_projection_recovers_control_runtime_states() -> None:

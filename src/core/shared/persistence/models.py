@@ -21,6 +21,7 @@ class PersistedScopeIds:
 
     dataset_id: int
     design_id: int
+    used_legacy_design_fallback: bool = False
 
 
 def normalize_user_role(role: str) -> str:
@@ -32,33 +33,56 @@ def normalize_user_role(role: str) -> str:
     return normalized
 
 
-def require_explicit_scope_ids(record: object) -> PersistedScopeIds:
-    """Return explicit persisted scope ids or raise when either side is missing."""
+def _resolve_scope_ids(
+    record: object,
+    *,
+    allow_legacy_design_fallback: bool,
+    mutate_record: bool,
+) -> PersistedScopeIds:
+    """Resolve persisted scope ids under one explicit read/write policy."""
     raw_dataset_id = getattr(record, "dataset_id", None)
     raw_design_id = getattr(record, "design_id", None)
     if raw_dataset_id is None:
         raise ValueError("Explicit dataset_id is required for canonical persistence writes.")
-    if raw_design_id is None:
+    used_legacy_design_fallback = raw_design_id is None
+    if used_legacy_design_fallback and not allow_legacy_design_fallback:
         raise ValueError("Explicit design_id is required for canonical persistence writes.")
-    return PersistedScopeIds(
+    scope_ids = PersistedScopeIds(
         dataset_id=int(raw_dataset_id),
-        design_id=int(raw_design_id),
+        design_id=int(raw_dataset_id if raw_design_id is None else raw_design_id),
+        used_legacy_design_fallback=used_legacy_design_fallback,
+    )
+    if mutate_record:
+        setattr(record, "dataset_id", scope_ids.dataset_id)
+        setattr(record, "design_id", scope_ids.design_id)
+    return scope_ids
+
+
+def require_explicit_scope_ids(record: object) -> PersistedScopeIds:
+    """Return explicit persisted scope ids or raise when either side is missing."""
+    return _resolve_scope_ids(
+        record,
+        allow_legacy_design_fallback=False,
+        mutate_record=False,
+    )
+
+
+def resolve_scope_ids_for_write(
+    record: object,
+    *,
+    allow_legacy_design_fallback: bool = False,
+) -> PersistedScopeIds:
+    """Normalize one write-boundary scope payload under the configured compatibility policy."""
+    return _resolve_scope_ids(
+        record,
+        allow_legacy_design_fallback=allow_legacy_design_fallback,
+        mutate_record=True,
     )
 
 
 def ensure_scope_ids(record: object) -> PersistedScopeIds:
     """Apply the temporary write-time compatibility shim for missing design scope."""
-    raw_dataset_id = getattr(record, "dataset_id", None)
-    if raw_dataset_id is None:
-        raise ValueError("Explicit dataset_id is required before applying scope compatibility.")
-    raw_design_id = getattr(record, "design_id", None)
-    scope_ids = PersistedScopeIds(
-        dataset_id=int(raw_dataset_id),
-        design_id=int(raw_dataset_id if raw_design_id is None else raw_design_id),
-    )
-    setattr(record, "dataset_id", scope_ids.dataset_id)
-    setattr(record, "design_id", scope_ids.design_id)
-    return scope_ids
+    return resolve_scope_ids_for_write(record, allow_legacy_design_fallback=True)
 
 
 class DeviceType(str, Enum):

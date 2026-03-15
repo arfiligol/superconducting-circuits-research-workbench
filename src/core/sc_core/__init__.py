@@ -70,6 +70,7 @@ from sc_core.execution import (
     build_worker_failed_transition,
     build_worker_running_operation,
     build_worker_running_transition,
+    canonicalize_task_history_event_metadata,
     coerce_task_execution_history_metadata,
     normalize_task_dedupe_key,
 )
@@ -216,6 +217,7 @@ __all__ = [
     "build_worker_failed_transition",
     "build_worker_running_operation",
     "build_worker_running_transition",
+    "canonicalize_task_history_event_metadata",
     "coerce_task_execution_history_metadata",
     "extract_parameters_payload",
     "inspect_circuit_definition_source",
