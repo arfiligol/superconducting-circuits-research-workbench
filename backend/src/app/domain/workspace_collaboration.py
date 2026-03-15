@@ -11,8 +11,17 @@ InvitationState = Literal[
     "expired",
     "delivery_failed",
 ]
-DeliveryState = Literal["manual_link_ready", "delivered", "delivery_failed"]
-PostAcceptSuggestion = Literal["switch_available", "already_active"]
+DeliveryStatus = Literal["queued_for_delivery", "sent", "delivery_failed", "manual_link"]
+DeliveryChannel = Literal["smtp", "manual_link"]
+PostAcceptSuggestion = Literal["switch_available", "stay_current", "sign_in_to_accept"]
+
+
+@dataclass(frozen=True)
+class WorkspaceInvitationDelivery:
+    status: DeliveryStatus
+    channel: DeliveryChannel
+    invite_url: str | None
+    failure_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -26,7 +35,7 @@ class WorkspaceInvitation:
     state: InvitationState
     expires_at: str
     created_at: str
-    delivery_state: DeliveryState
+    delivery: WorkspaceInvitationDelivery
     created_by_user_id: str
     delivery_error: str | None
 
@@ -43,6 +52,8 @@ class WorkspaceInvitationAcceptance:
     memberships: tuple[WorkspaceMembership, ...]
     switch_available: bool
     post_accept_context: PostAcceptSuggestion
+    requires_authentication: bool = False
+    continuation_saved: bool = False
 
 
 @dataclass(frozen=True)

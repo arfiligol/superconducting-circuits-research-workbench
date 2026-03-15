@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Query
@@ -17,6 +17,7 @@ from src.app.domain.datasets import (
     DesignBrowseQuery,
     TraceBrowseQuery,
 )
+from src.app.infrastructure.request_debug import current_debug_ref
 from src.app.infrastructure.runtime import get_dataset_service
 from src.app.services.dataset_service import DatasetService
 from src.app.services.service_errors import ServiceError, service_error
@@ -343,8 +344,7 @@ def get_characterization_result(
                     for metric_option in detail.identify_surface.designated_metrics
                 ],
                 "applied_tags": [
-                    asdict(applied_tag)
-                    for applied_tag in detail.identify_surface.applied_tags
+                    asdict(applied_tag) for applied_tag in detail.identify_surface.applied_tags
                 ],
             },
         }
@@ -505,8 +505,7 @@ def _normalize_source_kind(value: str | None) -> str | None:
             code="request_validation_failed",
             category="validation_error",
             message=(
-                "source_kind must be one of circuit_simulation, layout_simulation, "
-                "or measurement."
+                "source_kind must be one of circuit_simulation, layout_simulation, or measurement."
             ),
         )
     return normalized
@@ -635,10 +634,11 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
                 "category": exc.category,
                 "message": exc.message,
                 "retryable": exc.category == "internal_error",
+                "debug_ref": current_debug_ref(),
             },
         },
     )
 
 
 def _generated_at() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

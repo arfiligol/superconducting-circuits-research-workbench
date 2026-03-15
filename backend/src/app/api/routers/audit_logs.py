@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from src.app.domain.audit import AuditListQuery
+from src.app.infrastructure.request_debug import current_debug_ref
 from src.app.infrastructure.runtime import get_audit_log_service
 from src.app.services.audit_log_service import AuditLogService
 from src.app.services.service_errors import ServiceError, service_error
@@ -206,6 +207,7 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
         "category": exc.category,
         "message": exc.message,
         "retryable": exc.category in {"internal_error", "persistence_error"},
+        "debug_ref": current_debug_ref(),
     }
     if len(exc.field_errors) > 0:
         error["details"] = {
@@ -218,4 +220,4 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
 
 
 def _generated_at() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

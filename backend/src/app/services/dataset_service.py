@@ -1,10 +1,12 @@
+import logging
 from collections.abc import Sequence
 from typing import Protocol
 
+from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import (
-    CharacterizationAnalysisTraceCompatibility,
     CharacterizationAnalysisRegistryQuery,
     CharacterizationAnalysisRegistryRow,
+    CharacterizationAnalysisTraceCompatibility,
     CharacterizationResultBrowseQuery,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
@@ -26,9 +28,12 @@ from src.app.domain.datasets import (
     TraceMetadataSummary,
 )
 from src.app.domain.session import SessionState
+from src.app.infrastructure.audit_records import build_audit_record
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
+
+logger = logging.getLogger(__name__)
 
 
 class DatasetRepository(Protocol):
@@ -103,18 +108,24 @@ class SessionRepository(Protocol):
     def get_session_state(self) -> SessionState: ...
 
 
+class DatasetAuditRepository(Protocol):
+    def append(self, record: AuditRecord) -> None: ...
+
+
 class DatasetService:
     def __init__(
         self,
         repository: DatasetRepository,
         session_repository: SessionRepository,
         authorization_service: AuthorizationService | None = None,
+        audit_repository: DatasetAuditRepository | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
         self._authorization_service = authorization_service or AuthorizationService(
             CasbinAuthorizationAdapter()
         )
+        self._audit_repository = audit_repository
 
     def list_dataset_catalog(self) -> list[DatasetCatalogRow]:
         state = self._session_repository.get_session_state()
@@ -166,9 +177,29 @@ class DatasetService:
                 "allowed_actions": self._allowed_actions(updated, state),
             }
         )
+        updated_fields = self._updated_fields(current, updated)
+        logger.info("Dataset profile updated dataset_id=%s", dataset_id)
+        if self._audit_repository is not None:
+            self._audit_repository.append(
+                build_audit_record(
+                    state=state,
+                    action_kind="dataset.profile_updated",
+                    resource_kind="dataset",
+                    resource_id=dataset_id,
+                    outcome="completed",
+                    payload={
+                        "dataset_id": dataset_id,
+                        "updated_fields": [
+                            field if isinstance(field, str) else field.value
+                            for field in updated_fields
+                        ],
+                    },
+                    workspace_id=updated.workspace_id,
+                )
+            )
         return DatasetProfileUpdateResult(
             dataset=updated,
-            updated_fields=self._updated_fields(current, updated),
+            updated_fields=updated_fields,
         )
 
     def list_tagged_core_metrics(self, dataset_id: str) -> list[TaggedCoreMetricSummary]:
@@ -207,9 +238,7 @@ class DatasetService:
             filtered = [row for row in filtered if row.family == query.family]
         if query.representation is not None:
             normalized = query.representation.casefold()
-            filtered = [
-                row for row in filtered if row.representation.casefold() == normalized
-            ]
+            filtered = [row for row in filtered if row.representation.casefold() == normalized]
         if query.source_kind is not None:
             filtered = [row for row in filtered if row.source_kind == query.source_kind]
         if query.trace_mode_group is not None:
@@ -299,9 +328,7 @@ class DatasetService:
         if query.analysis_id is None:
             return rows
         normalized_analysis_id = query.analysis_id.casefold()
-        return [
-            row for row in rows if row.analysis_id.casefold() == normalized_analysis_id
-        ]
+        return [row for row in rows if row.analysis_id.casefold() == normalized_analysis_id]
 
     def get_characterization_result(
         self,
@@ -316,7 +343,10 @@ class DatasetService:
                 404,
                 code="run_not_found",
                 category="not_found",
-                message="The requested characterization result is not available in the selected design scope.",
+                message=(
+                    "The requested characterization result is not available "
+                    "in the selected design scope."
+                ),
             )
         return detail
 
@@ -342,7 +372,10 @@ class DatasetService:
                 400,
                 code="trace_selection_invalid",
                 category="validation_error",
-                message="The requested source parameter is not available in this persisted result detail.",
+                message=(
+                    "The requested source parameter is not available in this "
+                    "persisted result detail."
+                ),
             )
 
         metric_option = next(
@@ -403,7 +436,10 @@ class DatasetService:
                 409,
                 code="tagging_conflict",
                 category="conflict",
-                message="The selected source parameter or designated metric is already tagged to a different pairing.",
+                message=(
+                    "The selected source parameter or designated metric is "
+                    "already tagged to a different pairing."
+                ),
             )
 
         return self._repository.apply_characterization_tagging(

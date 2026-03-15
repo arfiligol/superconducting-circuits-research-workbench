@@ -22,7 +22,7 @@ class ServiceFieldError:
     message: str
 
 
-@dataclass(frozen=True)
+@dataclass
 class ServiceError(Exception):
     status_code: int
     code: str

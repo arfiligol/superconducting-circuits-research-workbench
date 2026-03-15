@@ -1,11 +1,27 @@
 import pytest
 from fastapi.testclient import TestClient
-
+from sqlalchemy import inspect
 from src.app.domain.audit import AuditRecord
+from src.app.infrastructure.audit_store import create_audit_engine
+from src.app.infrastructure.persistence.database import create_metadata_engine
 from src.app.infrastructure.runtime import get_task_audit_repository
 from src.app.main import app
+from src.app.settings import get_settings
 
 client = TestClient(app)
+
+_AUDIT_DEFINITION_SOURCE = """{
+    "name": "AuditDefinition",
+    "components": [
+        {"name": "R1", "default": 50.0, "unit": "Ohm"},
+        {"name": "C1", "default": 100.0, "unit": "fF"}
+    ],
+    "topology": [
+        ("P1", "1", "0", 1),
+        ("R1", "1", "0", "R1"),
+        ("C1", "1", "0", "C1")
+    ]
+}"""
 
 
 @pytest.fixture(autouse=True)
@@ -129,7 +145,9 @@ def test_audit_export_summary_returns_read_surface() -> None:
 
 def test_audit_query_denies_member_without_governance_permission() -> None:
     _login()
-    switch_response = client.patch("/session/active-workspace", json={"workspace_id": "ws-modeling"})
+    switch_response = client.patch(
+        "/session/active-workspace", json={"workspace_id": "ws-modeling"}
+    )
     assert switch_response.status_code == 200
 
     response = client.get("/audit-logs")
@@ -167,3 +185,55 @@ def test_audit_query_rejects_invalid_cursor_combination() -> None:
     assert response.status_code == 400
     assert response.json()["ok"] is False
     assert response.json()["error"]["code"] == "audit_query_invalid"
+
+
+def test_audit_store_uses_separate_sqlite_database() -> None:
+    client.post("/tasks", json={"kind": "characterization"})
+
+    metadata_tables = inspect(
+        create_metadata_engine(get_settings().database_path)
+    ).get_table_names()
+    audit_tables = inspect(
+        create_audit_engine(get_settings().audit_database_path)
+    ).get_table_names()
+
+    assert "audit_log_records" not in metadata_tables
+    assert "audit_log_records" in audit_tables
+
+
+def test_resource_lifecycle_audit_rows_are_queryable() -> None:
+    dataset_detail = client.get("/datasets/fluxonium-2025-031/profile")
+    assert dataset_detail.status_code == 200
+    dataset_response = client.patch(
+        "/datasets/fluxonium-2025-031/profile",
+        json={
+            "device_type": dataset_detail.json()["data"]["device_type"],
+            "source": "Audit profile update proof.",
+            "capabilities": dataset_detail.json()["data"]["capabilities"],
+        },
+    )
+    assert dataset_response.status_code == 200
+
+    create_definition = client.post(
+        "/circuit-definitions",
+        json={
+            "name": "Audit Definition",
+            "source_text": _AUDIT_DEFINITION_SOURCE,
+        },
+    )
+    assert create_definition.status_code == 201
+    definition_id = create_definition.json()["data"]["definition"]["definition_id"]
+    publish_definition = client.post(f"/circuit-definitions/{definition_id}/publish")
+    assert publish_definition.status_code == 200
+
+    dataset_audit = client.get(
+        "/audit-logs?action_kind=dataset.profile_updated&resource_kind=dataset"
+    )
+    assert dataset_audit.status_code == 200
+    assert dataset_audit.json()["data"]["rows"][0]["resource_id"] == "fluxonium-2025-031"
+
+    definition_audit = client.get(
+        "/audit-logs?action_kind=definition.published&resource_kind=definition"
+    )
+    assert definition_audit.status_code == 200
+    assert definition_audit.json()["data"]["rows"][0]["resource_id"] == str(definition_id)

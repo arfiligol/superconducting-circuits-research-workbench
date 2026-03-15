@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, Depends, Query
@@ -24,6 +24,7 @@ from src.app.domain.schemdraw_render import (
     SchemdrawRenderRequest,
     SchemdrawRenderResult,
 )
+from src.app.infrastructure.request_debug import current_debug_ref
 from src.app.infrastructure.runtime import (
     get_circuit_definition_service,
     get_schemdraw_render_service,
@@ -43,12 +44,12 @@ def list_circuit_definitions(
         CircuitDefinitionService,
         Depends(get_circuit_definition_service),
     ],
-    search_query: str | None = Query(default=None),
-    sort_by: CircuitDefinitionSortBy = Query(default="updated_at"),
-    sort_order: SortOrder = Query(default="desc"),
-    limit: int = Query(default=20, ge=1, le=100),
-    after: str | None = Query(default=None),
-    before: str | None = Query(default=None),
+    search_query: Annotated[str | None, Query()] = None,
+    sort_by: Annotated[CircuitDefinitionSortBy, Query()] = "updated_at",
+    sort_order: Annotated[SortOrder, Query()] = "desc",
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    after: Annotated[str | None, Query()] = None,
+    before: Annotated[str | None, Query()] = None,
 ) -> JSONResponse:
     try:
         page = definition_service.list_circuit_definitions(
@@ -378,10 +379,10 @@ def _serialize_schemdraw_result(result: SchemdrawRenderResult) -> dict[str, obje
 
 def _serialize_allowed_actions(allowed_actions: object) -> dict[str, bool]:
     return {
-        "update": bool(getattr(allowed_actions, "update")),
-        "delete": bool(getattr(allowed_actions, "delete")),
-        "publish": bool(getattr(allowed_actions, "publish")),
-        "clone": bool(getattr(allowed_actions, "clone")),
+        "update": bool(allowed_actions.update),
+        "delete": bool(allowed_actions.delete),
+        "publish": bool(allowed_actions.publish),
+        "clone": bool(allowed_actions.clone),
     }
 
 
@@ -424,7 +425,7 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
                 "message": exc.message,
                 "retryable": False,
                 "details": details or None,
-                "debug_ref": None,
+                "debug_ref": current_debug_ref(),
             },
         },
     )
@@ -459,7 +460,7 @@ def _collection_meta(
 
 
 def _generated_at() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _as_mapping(payload: object) -> dict[str, object]:

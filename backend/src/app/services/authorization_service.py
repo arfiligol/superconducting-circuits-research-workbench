@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from src.app.domain.authorization import (
     AuthorizationAction,
     AuthorizationResourceEnvelope,
@@ -18,13 +20,17 @@ from src.app.domain.tasks import TaskAllowedActions, TaskDetail
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.service_errors import service_error
 
+logger = logging.getLogger(__name__)
+
 
 class AuthorizationService:
     def __init__(self, adapter: CasbinAuthorizationAdapter) -> None:
         self._adapter = adapter
 
     def build_session_capabilities(self, state: SessionState) -> SessionCapabilities:
-        workspace_actions = self.build_workspace_allowed_actions(state, self._active_membership(state))
+        workspace_actions = self.build_workspace_allowed_actions(
+            state, self._active_membership(state)
+        )
         return SessionCapabilities(
             can_switch_workspace=len(state.memberships) > 1,
             can_switch_dataset=workspace_actions.activate_dataset,
@@ -35,52 +41,60 @@ class AuthorizationService:
             can_submit_tasks=self.is_allowed(
                 state,
                 "submit_task",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource("task", workspace_id=state.workspace_id),
             ),
             can_manage_workspace_tasks=self.is_allowed(
                 state,
                 "cancel_workspace_task",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource("task", workspace_id=state.workspace_id),
             ),
             can_cancel_own_tasks=self.is_allowed(
                 state,
                 "cancel_own_task",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource(
+                    "task",
+                    workspace_id=state.workspace_id,
+                    owner_user_id=state.user.user_id if state.user is not None else None,
+                ),
             ),
             can_cancel_workspace_tasks=self.is_allowed(
                 state,
                 "cancel_workspace_task",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource("task", workspace_id=state.workspace_id),
             ),
             can_terminate_workspace_tasks=self.is_allowed(
                 state,
                 "terminate_workspace_task",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource("task", workspace_id=state.workspace_id),
             ),
             can_retry_own_tasks=self.is_allowed(
                 state,
                 "retry_own_task",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource(
+                    "task",
+                    workspace_id=state.workspace_id,
+                    owner_user_id=state.user.user_id if state.user is not None else None,
+                ),
             ),
             can_retry_workspace_tasks=self.is_allowed(
                 state,
                 "retry_workspace_task",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource("task", workspace_id=state.workspace_id),
             ),
             can_manage_definitions=self.is_allowed(
                 state,
                 "manage_definition",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource("definition", workspace_id=state.workspace_id),
             ),
             can_manage_datasets=self.is_allowed(
                 state,
                 "manage_dataset",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource("dataset", workspace_id=state.workspace_id),
             ),
             can_view_audit_logs=self.is_allowed(
                 state,
                 "view_audit_log",
-                resource=self._workspace_resource(state.workspace_id),
+                resource=self._resource("audit_log", workspace_id=state.workspace_id),
             ),
         )
 
@@ -90,27 +104,63 @@ class AuthorizationService:
         membership: WorkspaceMembership | None,
     ) -> WorkspaceAllowedActions:
         workspace_id = membership.workspace_id if membership is not None else state.workspace_id
-        resource = self._workspace_resource(workspace_id)
         return WorkspaceAllowedActions(
             switch_to=membership is not None,
             activate_dataset=membership is not None
-            and self.is_allowed(state, "switch_dataset", resource=resource),
+            and self.is_allowed(
+                state,
+                "switch_dataset",
+                resource=self._resource("dataset", workspace_id=workspace_id),
+            ),
             invite_members=membership is not None
-            and self.is_allowed(state, "invite_member", resource=resource),
+            and self.is_allowed(
+                state,
+                "invite_member",
+                resource=self._workspace_resource(workspace_id),
+            ),
             remove_members=membership is not None
-            and self.is_allowed(state, "remove_member", resource=resource),
+            and self.is_allowed(
+                state,
+                "remove_member",
+                resource=self._resource("workspace_membership", workspace_id=workspace_id),
+            ),
             transfer_owner=membership is not None
-            and self.is_allowed(state, "transfer_workspace_owner", resource=resource),
+            and self.is_allowed(
+                state,
+                "transfer_workspace_owner",
+                resource=self._resource("workspace_membership", workspace_id=workspace_id),
+            ),
             leave_workspace=membership is not None
-            and self.is_allowed(state, "leave_workspace", resource=resource),
+            and membership.role != "owner"
+            and self.is_allowed(
+                state,
+                "leave_workspace",
+                resource=self._workspace_resource(workspace_id),
+            ),
             view_audit_logs=membership is not None
-            and self.is_allowed(state, "view_audit_log", resource=resource),
+            and self.is_allowed(
+                state,
+                "view_audit_log",
+                resource=self._resource("audit_log", workspace_id=workspace_id),
+            ),
             manage_definitions=membership is not None
-            and self.is_allowed(state, "manage_definition", resource=resource),
+            and self.is_allowed(
+                state,
+                "manage_definition",
+                resource=self._resource("definition", workspace_id=workspace_id),
+            ),
             manage_datasets=membership is not None
-            and self.is_allowed(state, "manage_dataset", resource=resource),
+            and self.is_allowed(
+                state,
+                "manage_dataset",
+                resource=self._resource("dataset", workspace_id=workspace_id),
+            ),
             manage_tasks=membership is not None
-            and self.is_allowed(state, "cancel_workspace_task", resource=resource),
+            and self.is_allowed(
+                state,
+                "cancel_workspace_task",
+                resource=self._resource("task", workspace_id=workspace_id),
+            ),
         )
 
     def build_dataset_allowed_actions(
@@ -167,7 +217,9 @@ class AuthorizationService:
         )
         can_cancel = self.is_allowed(
             state,
-            "cancel_workspace_task" if task.owner_user_id != state.user.user_id else "cancel_own_task",
+            "cancel_workspace_task"
+            if task.owner_user_id != state.user.user_id
+            else "cancel_own_task",
             resource=task_resource,
         )
         can_terminate = self.is_allowed(
@@ -177,7 +229,9 @@ class AuthorizationService:
         )
         can_retry = self.is_allowed(
             state,
-            "retry_workspace_task" if task.owner_user_id != state.user.user_id else "retry_own_task",
+            "retry_workspace_task"
+            if task.owner_user_id != state.user.user_id
+            else "retry_own_task",
             resource=task_resource,
         )
         return TaskAllowedActions(
@@ -198,6 +252,17 @@ class AuthorizationService:
         denied_message: str,
     ) -> None:
         if not self.is_allowed(state, action, resource=resource):
+            logger.warning(
+                (
+                    "Authorization denied action=%s workspace_id=%s "
+                    "resource_kind=%s resource_workspace_id=%s user_id=%s"
+                ),
+                action,
+                state.workspace_id,
+                resource.resource_kind,
+                resource.workspace_id,
+                state.user.user_id if state.user is not None else "anonymous",
+            )
             raise service_error(
                 403,
                 code=denied_code,
@@ -229,12 +294,17 @@ class AuthorizationService:
             return True
         return dataset.owner_user_id == state.user.user_id if state.user is not None else False
 
-    def is_visible_definition(self, definition: CircuitDefinitionRecord, state: SessionState) -> bool:
+    def is_visible_definition(
+        self, definition: CircuitDefinitionRecord, state: SessionState
+    ) -> bool:
         if definition.workspace_id != state.workspace_id:
             return False
         if definition.lifecycle_state == "deleted":
             return False
-        if definition.visibility_scope == "workspace" and definition.workspace_id == state.workspace_id:
+        if (
+            definition.visibility_scope == "workspace"
+            and definition.workspace_id == state.workspace_id
+        ):
             return True
         if state.user is not None and state.user.platform_role == "admin":
             return True
@@ -262,6 +332,21 @@ class AuthorizationService:
             resource_kind="workspace",
             workspace_id=workspace_id,
             owner_user_id=None,
+            visibility_scope="workspace",
+            lifecycle_state="active",
+        )
+
+    def _resource(
+        self,
+        resource_kind: str,
+        *,
+        workspace_id: str | None,
+        owner_user_id: str | None = None,
+    ) -> AuthorizationResourceEnvelope:
+        return AuthorizationResourceEnvelope(
+            resource_kind=resource_kind,  # type: ignore[arg-type]
+            workspace_id=workspace_id,
+            owner_user_id=owner_user_id,
             visibility_scope="workspace",
             lifecycle_state="active",
         )

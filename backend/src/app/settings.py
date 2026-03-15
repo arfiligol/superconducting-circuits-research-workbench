@@ -11,9 +11,18 @@ class AppSettings(BaseSettings):
     app_version: str = "0.1.0"
     environment: str = "development"
     database_path: str = "data/database.db"
+    audit_database_path: str = "data/audit-log.db"
     session_secret: SecretStr = SecretStr("change-me-session-secret")
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_password: SecretStr = SecretStr("change-me-bootstrap-password")
+    app_base_url: str = "http://localhost:8000"
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from_email: str | None = None
+    smtp_from_name: str | None = None
+    smtp_use_tls: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="SC_",

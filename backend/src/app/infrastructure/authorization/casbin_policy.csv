@@ -1,0 +1,29 @@
+p, admin, *, *, *
+p, owner, *, workspace, switch_workspace
+p, owner, *, dataset, switch_dataset
+p, owner, *, workspace, invite_member
+p, owner, *, workspace_invitation, revoke_invite
+p, owner, *, workspace, leave_workspace
+p, owner, *, workspace_membership, remove_member
+p, owner, *, workspace_membership, transfer_workspace_owner
+p, owner, *, task, submit_task
+p, owner, *, task, cancel_workspace_task
+p, owner, *, task, terminate_workspace_task
+p, owner, *, task, retry_workspace_task
+p, owner, *, definition, manage_definition
+p, owner, *, dataset, manage_dataset
+p, owner, *, audit_log, view_audit_log
+
+p, member, *, workspace, switch_workspace
+p, member, *, dataset, switch_dataset
+p, member, *, workspace, leave_workspace
+p, member, *, task, submit_task
+
+p, viewer, *, workspace, switch_workspace
+p, viewer, *, dataset, switch_dataset
+p, viewer, *, workspace, leave_workspace
+
+p, resource_owner, *, task, cancel_own_task
+p, resource_owner, *, task, retry_own_task
+p, resource_owner, *, dataset, manage_dataset
+p, resource_owner, *, definition, manage_definition

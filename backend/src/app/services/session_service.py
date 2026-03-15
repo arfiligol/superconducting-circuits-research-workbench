@@ -1,18 +1,17 @@
+import logging
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import datetime, timezone
 from typing import Literal, Protocol
 
 from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import DatasetDetail
-from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.domain.session import (
     ActiveDatasetContext,
     AppSession,
     DatasetResolution,
     SessionAuth,
-    SessionLoginResult,
     SessionCapabilities,
+    SessionLoginResult,
     SessionRefreshResult,
     SessionState,
     WorkspaceAllowedActions,
@@ -20,11 +19,15 @@ from src.app.domain.session import (
     WorkspaceMembership,
     WorkspaceSwitchResult,
 )
+from src.app.infrastructure.audit_records import build_audit_record
+from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
 
 TokenVerificationStatus = Literal["valid", "expired", "invalid"]
 RefreshVerificationStatus = Literal["valid", "expired", "invalid"]
+
+logger = logging.getLogger(__name__)
 
 
 class VerifiedSessionToken(Protocol):
@@ -110,6 +113,11 @@ class SessionService:
     def get_session(self, session_token: str | None) -> AppSession:
         state, auth_state, auth_reason = self._resolve_session_context(session_token)
         if state is None:
+            if auth_state == "degraded":
+                logger.warning(
+                    "Returning degraded session auth_reason=%s",
+                    auth_reason,
+                )
             return _build_public_session(auth_state=auth_state, auth_reason=auth_reason)
         return self._build_authenticated_session(state)
 
@@ -137,6 +145,7 @@ class SessionService:
             password=password,
         )
         if state is None:
+            logger.warning("Login failed for email=%s", email.strip().lower())
             self._append_audit_record(
                 state=None,
                 action_kind="auth.login_failed",
@@ -154,6 +163,10 @@ class SessionService:
         refresh_token = self._repository.issue_refresh_token(state.session_id)
         if refresh_token is None:
             raise _auth_session_expired_error()
+        logger.info(
+            "Login succeeded for user_id=%s",
+            state.user.user_id if state.user is not None else "anonymous",
+        )
         self._append_audit_record(
             state=state,
             action_kind="auth.login_succeeded",
@@ -168,6 +181,7 @@ class SessionService:
 
     def refresh(self, refresh_token: str | None) -> SessionRefreshResult:
         if refresh_token is None:
+            logger.warning("Refresh rejected because refresh token is missing")
             self._append_audit_record(
                 state=None,
                 action_kind="auth.refresh_failed",
@@ -182,6 +196,7 @@ class SessionService:
             )
         state, rotated_token, refresh_status = self._repository.rotate_refresh_token(refresh_token)
         if refresh_status == "invalid":
+            logger.warning("Refresh rejected because refresh token family is invalid")
             self._append_audit_record(
                 state=None,
                 action_kind="auth.refresh_failed",
@@ -195,6 +210,7 @@ class SessionService:
                 message="The refresh token is missing or invalid.",
             )
         if refresh_status == "expired" or state is None or rotated_token is None:
+            logger.warning("Refresh failed because refresh token family expired")
             self._append_audit_record(
                 state=state,
                 action_kind="auth.refresh_failed",
@@ -207,6 +223,7 @@ class SessionService:
                 category="auth_required",
                 message="The refresh token family has expired.",
             )
+        logger.info("Refresh succeeded for session_id=%s", state.session_id)
         self._append_audit_record(
             state=state,
             action_kind="auth.refresh_succeeded",
@@ -228,6 +245,7 @@ class SessionService:
             if verified.status == "valid" and verified.session_id is not None:
                 state = self._repository.get_authenticated_session_state(verified.session_id)
                 self._repository.invalidate_authenticated_session(verified.session_id)
+                logger.info("Logout completed for session_id=%s", verified.session_id)
                 self._append_audit_record(
                     state=state,
                     action_kind="auth.logout",
@@ -243,7 +261,34 @@ class SessionService:
     ) -> WorkspaceSwitchResult:
         current_state = self.require_authenticated_session_state(session_token)
         target_membership = _membership_for_workspace(current_state, workspace_id)
+        self._authorization_service.authorize(
+            replace(
+                current_state,
+                workspace_id=workspace_id,
+                workspace_role=target_membership.role
+                if target_membership is not None
+                else current_state.workspace_role,
+            ),
+            "switch_workspace",
+            resource=_workspace_resource(workspace_id),
+            denied_code="workspace_membership_required",
+            denied_message="The requested workspace is not available to the current session.",
+        )
         if target_membership is None:
+            logger.warning(
+                "Workspace switch rejected for session_id=%s target_workspace_id=%s",
+                current_state.session_id,
+                workspace_id,
+            )
+            self._append_audit_record(
+                state=current_state,
+                action_kind="session.active_workspace_switch_rejected",
+                outcome="rejected",
+                payload={"target_workspace_id": workspace_id},
+                resource_kind="workspace",
+                resource_id=workspace_id,
+                workspace_id=workspace_id,
+            )
             raise service_error(
                 403,
                 code="workspace_membership_required",
@@ -269,6 +314,25 @@ class SessionService:
         )
         if final_state is None:
             raise _auth_session_expired_error()
+        logger.info(
+            "Workspace switched session_id=%s workspace_id=%s dataset_resolution=%s",
+            final_state.session_id,
+            final_state.workspace_id,
+            resolution,
+        )
+        self._append_audit_record(
+            state=final_state,
+            action_kind="session.active_workspace_switched",
+            outcome="completed",
+            payload={
+                "workspace_id": final_state.workspace_id,
+                "active_dataset_resolution": resolution,
+                "active_dataset_id": resolved_dataset_id,
+            },
+            resource_kind="workspace",
+            resource_id=final_state.workspace_id,
+            workspace_id=final_state.workspace_id,
+        )
 
         return WorkspaceSwitchResult(
             session=self._build_authenticated_session(final_state),
@@ -289,10 +353,30 @@ class SessionService:
             )
             if cleared_state is None:
                 raise _auth_session_expired_error()
+            logger.info("Active dataset cleared for session_id=%s", state.session_id)
+            self._append_audit_record(
+                state=cleared_state,
+                action_kind="session.active_dataset_cleared",
+                outcome="completed",
+                payload={"workspace_id": cleared_state.workspace_id},
+                resource_kind="dataset",
+                resource_id=state.active_dataset_id or "none",
+            )
             return self._build_authenticated_session(cleared_state)
 
         dataset = self._dataset_repository.get_dataset(dataset_id)
         if dataset is None:
+            logger.warning(
+                "Active dataset switch rejected because dataset %s was not found", dataset_id
+            )
+            self._append_audit_record(
+                state=state,
+                action_kind="session.active_dataset_switch_rejected",
+                outcome="rejected",
+                payload={"dataset_id": dataset_id, "reason": "dataset_not_found"},
+                resource_kind="dataset",
+                resource_id=dataset_id,
+            )
             raise service_error(
                 404,
                 code="dataset_not_found",
@@ -300,6 +384,17 @@ class SessionService:
                 message=f"Dataset {dataset_id} was not found.",
             )
         if dataset.lifecycle_state == "archived":
+            logger.warning(
+                "Active dataset switch rejected because dataset %s is archived", dataset_id
+            )
+            self._append_audit_record(
+                state=state,
+                action_kind="session.active_dataset_switch_rejected",
+                outcome="rejected",
+                payload={"dataset_id": dataset_id, "reason": "dataset_archived"},
+                resource_kind="dataset",
+                resource_id=dataset_id,
+            )
             raise service_error(
                 409,
                 code="dataset_archived",
@@ -307,6 +402,19 @@ class SessionService:
                 message=f"Dataset {dataset_id} is archived and cannot be activated.",
             )
         if not self._authorization_service.is_visible_dataset(dataset, state):
+            logger.warning(
+                "Active dataset switch rejected because dataset %s is not visible in workspace %s",
+                dataset_id,
+                state.workspace_id,
+            )
+            self._append_audit_record(
+                state=state,
+                action_kind="session.active_dataset_switch_rejected",
+                outcome="rejected",
+                payload={"dataset_id": dataset_id, "reason": "dataset_not_visible_in_workspace"},
+                resource_kind="dataset",
+                resource_id=dataset_id,
+            )
             raise service_error(
                 403,
                 code="dataset_not_visible_in_workspace",
@@ -327,6 +435,19 @@ class SessionService:
         )
         if updated_state is None:
             raise _auth_session_expired_error()
+        logger.info(
+            "Active dataset switched session_id=%s dataset_id=%s",
+            updated_state.session_id,
+            dataset_id,
+        )
+        self._append_audit_record(
+            state=updated_state,
+            action_kind="session.active_dataset_switched",
+            outcome="completed",
+            payload={"dataset_id": dataset_id, "workspace_id": updated_state.workspace_id},
+            resource_kind="dataset",
+            resource_id=dataset_id,
+        )
         return self._build_authenticated_session(updated_state)
 
     def _resolve_workspace_dataset(
@@ -390,7 +511,14 @@ class SessionService:
         active_dataset = None
         if state.active_dataset_id is not None:
             dataset = self._dataset_repository.get_dataset(state.active_dataset_id)
-            if dataset is None or not self._authorization_service.is_visible_dataset(dataset, state):
+            if dataset is None or not self._authorization_service.is_visible_dataset(
+                dataset, state
+            ):
+                logger.warning(
+                    "Session context rebind required for session_id=%s active_dataset_id=%s",
+                    state.session_id,
+                    state.active_dataset_id,
+                )
                 raise service_error(
                     409,
                     code="context_rebind_required",
@@ -458,12 +586,18 @@ class SessionService:
 
         verified = self._token_transport.verify_token(session_token)
         if verified.status == "invalid":
+            logger.warning("Session token verification failed with invalid token")
             return None, "degraded", "session_invalid"
         if verified.status == "expired" or verified.session_id is None:
+            logger.warning("Session token verification failed with expired token")
             return None, "degraded", "session_expired"
 
         state = self._repository.get_authenticated_session_state(verified.session_id)
         if state is None or state.user is None or state.auth_state != "authenticated":
+            logger.warning(
+                "Session continuity could not be restored for session_id=%s",
+                verified.session_id,
+            )
             return None, "degraded", "session_expired"
         return state, "authenticated", None
 
@@ -474,33 +608,38 @@ class SessionService:
         action_kind: str,
         outcome: str,
         payload: dict[str, object],
+        resource_kind: str = "session",
+        resource_id: str | None = None,
+        workspace_id: str | None = None,
     ) -> None:
         if self._audit_repository is None:
             return
-        session_id = state.session_id if state is not None else "anonymous"
-        actor_user_id = state.user.user_id if state is not None and state.user is not None else "anonymous"
-        actor_display_name = (
-            state.user.display_name if state is not None and state.user is not None else "anonymous"
+        resolved_resource_id = resource_id or (
+            state.session_id if state is not None else "anonymous"
         )
-        workspace_id = state.workspace_id if state is not None else "auth"
-        occurred_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         self._audit_repository.append(
-            AuditRecord(
-                audit_id=f"audit:{action_kind}:{session_id}:{occurred_at}",
-                occurred_at=occurred_at,
-                actor_user_id=actor_user_id,
-                actor_display_name=actor_display_name,
-                session_id=session_id,
-                correlation_id=f"corr:{action_kind}:{session_id}",
-                workspace_id=workspace_id,
+            build_audit_record(
+                state=state,
                 action_kind=action_kind,
-                resource_kind="session",
-                resource_id=session_id,
+                resource_kind=resource_kind,
+                resource_id=resolved_resource_id,
                 outcome=outcome,  # type: ignore[arg-type]
                 payload=payload,
-                debug_ref=f"debug:{action_kind}:{session_id}",
+                workspace_id=workspace_id,
             )
         )
+
+
+def _workspace_resource(workspace_id: str):
+    from src.app.domain.authorization import AuthorizationResourceEnvelope
+
+    return AuthorizationResourceEnvelope(
+        resource_kind="workspace",
+        workspace_id=workspace_id,
+        owner_user_id=None,
+        visibility_scope="workspace",
+        lifecycle_state="active",
+    )
 
 
 def _dataset_resource(dataset: DatasetDetail):

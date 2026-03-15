@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Query, status
@@ -24,6 +24,7 @@ from src.app.domain.tasks import (
     TaskSubmissionDraft,
     TaskVisibilityScope,
 )
+from src.app.infrastructure.request_debug import current_debug_ref
 from src.app.infrastructure.runtime import get_task_service
 from src.app.services.service_errors import ServiceError, service_error
 from src.app.services.task_service import TaskService
@@ -164,7 +165,10 @@ def cancel_task(
     except ServiceError as exc:
         return _service_error_response(exc)
     return _success_response(
-        data={"operation": "cancel_requested", "task": _serialize_task_detail(detail, task_service)},
+        data={
+            "operation": "cancel_requested",
+            "task": _serialize_task_detail(detail, task_service),
+        },
         meta={"generated_at": _generated_at()},
     )
 
@@ -179,7 +183,10 @@ def terminate_task(
     except ServiceError as exc:
         return _service_error_response(exc)
     return _success_response(
-        data={"operation": "terminate_requested", "task": _serialize_task_detail(detail, task_service)},
+        data={
+            "operation": "terminate_requested",
+            "task": _serialize_task_detail(detail, task_service),
+        },
         meta={"generated_at": _generated_at()},
     )
 
@@ -358,6 +365,7 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
         "category": exc.category,
         "message": exc.message,
         "retryable": exc.category in {"internal_error", "persistence_error"},
+        "debug_ref": current_debug_ref(),
     }
     if len(exc.field_errors) > 0:
         error["details"] = {
@@ -370,7 +378,7 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
 
 
 def _generated_at() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _as_mapping(payload: object) -> dict[str, object]:

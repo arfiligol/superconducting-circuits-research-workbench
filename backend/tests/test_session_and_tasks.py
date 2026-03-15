@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.domain.tasks import TaskLifecycleUpdate, TaskSubmissionDraft
 from src.app.infrastructure.runtime import (
+    get_rewrite_app_state_repository,
     get_rewrite_catalog_repository,
     get_task_audit_repository,
     get_task_execution_runtime,
@@ -262,6 +263,73 @@ def test_switch_workspace_rejects_missing_membership() -> None:
     assert response.status_code == 403
     assert response.json()["ok"] is False
     assert response.json()["error"]["code"] == "workspace_membership_required"
+
+
+def test_session_rebind_after_member_removal_does_not_keep_old_workspace_dataset() -> None:
+    _login()
+    repository = get_rewrite_app_state_repository()
+
+    assert repository.remove_workspace_member("ws-device-lab", "researcher-01") is True
+
+    response = client.get("/session")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["workspace"]["id"] == "ws-modeling"
+    assert payload["active_dataset"]["id"] == "transmon-coupler-014"
+    assert payload["active_dataset"]["workspace_id"] == "ws-modeling"
+
+
+def test_leave_workspace_rebinds_active_dataset_to_remaining_workspace_context() -> None:
+    _login()
+    invitation_response = client.post(
+        "/session/workspace-invitations",
+        json={
+            "workspace_id": "ws-device-lab",
+            "email": "collaborator.local@example.com",
+            "role": "member",
+        },
+    )
+    invite_token = invitation_response.json()["data"]["invitation"]["invite_token"]
+    client.post("/session/logout")
+    client.post(
+        "/session/login",
+        json={
+            "email": "collaborator.local@example.com",
+            "password": "collaborator-local-password",
+        },
+    )
+    accept_response = client.post(
+        "/session/workspace-invitations/accept",
+        json={"invite_token": invite_token},
+    )
+    assert accept_response.status_code == 200
+    switch_response = client.patch(
+        "/session/active-workspace", json={"workspace_id": "ws-device-lab"}
+    )
+    assert switch_response.status_code == 200
+
+    leave_response = client.post(
+        "/session/workspace-memberships/leave",
+        json={"workspace_id": "ws-device-lab"},
+    )
+
+    assert leave_response.status_code == 200
+    session_response = client.get("/session")
+    payload = session_response.json()["data"]
+    assert payload["workspace"]["id"] == "ws-modeling"
+    assert payload["active_dataset"]["id"] == "transmon-coupler-014"
+    assert payload["active_dataset"]["workspace_id"] == "ws-modeling"
+
+
+def test_permission_failure_returns_debug_ref_header_and_payload() -> None:
+    _login()
+
+    response = client.patch("/session/active-dataset", json={"dataset_id": "transmon-coupler-014"})
+
+    assert response.status_code == 403
+    assert response.headers["X-Debug-Ref"] == response.json()["error"]["debug_ref"]
+    assert response.json()["error"]["debug_ref"].startswith("debug:req:")
 
 
 def test_list_tasks_returns_backend_owned_queue_read_model() -> None:

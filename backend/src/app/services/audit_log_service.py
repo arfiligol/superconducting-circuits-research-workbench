@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from hashlib import sha1
 from typing import Protocol
 
@@ -17,6 +18,8 @@ from src.app.domain.session import SessionState
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
+
+logger = logging.getLogger(__name__)
 
 
 class AuditLogRepository(Protocol):
@@ -44,12 +47,20 @@ class AuditLogService:
 
     def list_audit_logs(self, query: AuditListQuery) -> AuditListView:
         resolved_query = self._resolve_query(query, export=False)
+        logger.info(
+            "Listing audit logs workspace_id=%s action_kind=%s resource_kind=%s",
+            resolved_query.workspace_id,
+            resolved_query.action_kind,
+            resolved_query.resource_kind,
+        )
         records = self._repository.query_records(resolved_query)
         rows = tuple(_to_list_row(record) for record in records[: resolved_query.limit])
         return AuditListView(
             rows=rows,
             total_count=len(records),
-            next_cursor=rows[-1].audit_id if len(records) > resolved_query.limit and len(rows) > 0 else None,
+            next_cursor=rows[-1].audit_id
+            if len(records) > resolved_query.limit and len(rows) > 0
+            else None,
             prev_cursor=resolved_query.before,
             has_more=len(records) > resolved_query.limit,
             filter_echo=resolved_query,
@@ -58,6 +69,7 @@ class AuditLogService:
     def get_audit_detail(self, audit_id: str) -> AuditDetail:
         record = self._repository.get_record(audit_id)
         if record is None:
+            logger.warning("Audit detail requested for missing audit_id=%s", audit_id)
             raise service_error(
                 404,
                 code="audit_record_not_found",
@@ -66,6 +78,11 @@ class AuditLogService:
             )
         workspace_id = self._resolve_workspace_access(record.workspace_id)
         if workspace_id != record.workspace_id:
+            logger.warning(
+                "Audit detail denied for audit_id=%s requested_workspace_id=%s",
+                audit_id,
+                workspace_id,
+            )
             raise service_error(
                 403,
                 code="audit_access_denied",
@@ -89,6 +106,11 @@ class AuditLogService:
 
     def get_export_summary(self, query: AuditListQuery) -> AuditExportSummary:
         resolved_query = self._resolve_query(query, export=True)
+        logger.info(
+            "Building audit export summary workspace_id=%s action_kind=%s",
+            resolved_query.workspace_id,
+            resolved_query.action_kind,
+        )
         export_id = _build_export_id(resolved_query)
         workspace_id = resolved_query.workspace_id
         return AuditExportSummary(
@@ -106,6 +128,7 @@ class AuditLogService:
 
     def _resolve_query(self, query: AuditListQuery, *, export: bool) -> AuditListQuery:
         if query.after is not None and query.before is not None:
+            logger.warning("Audit query invalid because after and before were supplied together")
             raise service_error(
                 400,
                 code="audit_query_invalid" if not export else "audit_export_denied",
@@ -139,6 +162,11 @@ class AuditLogService:
             "view_audit_log",
             resource=_workspace_resource(state.workspace_id),
         ):
+            logger.warning(
+                "Audit query denied for user_id=%s workspace_id=%s",
+                state.user.user_id if state.user is not None else "anonymous",
+                state.workspace_id,
+            )
             raise service_error(
                 403,
                 code="audit_export_denied" if export else "audit_access_denied",

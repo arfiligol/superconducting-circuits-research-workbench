@@ -1,7 +1,8 @@
+import logging
 from collections.abc import Sequence
-from dataclasses import replace
 from typing import Protocol
 
+from src.app.domain.audit import AuditRecord
 from src.app.domain.circuit_definitions import (
     AllowedActions,
     CircuitDefinitionCatalogPage,
@@ -14,9 +15,12 @@ from src.app.domain.circuit_definitions import (
     CircuitDefinitionUpdate,
 )
 from src.app.domain.session import SessionState
+from src.app.infrastructure.audit_records import build_audit_record
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
+
+logger = logging.getLogger(__name__)
 
 
 class CircuitDefinitionRepository(Protocol):
@@ -61,6 +65,10 @@ class CircuitDefinitionSessionRepository(Protocol):
     def get_session_state(self) -> SessionState: ...
 
 
+class CircuitDefinitionAuditRepository(Protocol):
+    def append(self, record: AuditRecord) -> None: ...
+
+
 class CircuitDefinitionService:
     def __init__(
         self,
@@ -68,12 +76,14 @@ class CircuitDefinitionService:
         repository: CircuitDefinitionRepository,
         session_repository: CircuitDefinitionSessionRepository,
         authorization_service: AuthorizationService | None = None,
+        audit_repository: CircuitDefinitionAuditRepository | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
         self._authorization_service = authorization_service or AuthorizationService(
             CasbinAuthorizationAdapter()
         )
+        self._audit_repository = audit_repository
 
     def list_circuit_definitions(
         self,
@@ -88,14 +98,14 @@ class CircuitDefinitionService:
         filtered_records = [
             record
             for record in visible_records
-            if query.search_query is None
-            or query.search_query.casefold() in record.name.casefold()
+            if query.search_query is None or query.search_query.casefold() in record.name.casefold()
         ]
         ordered_records = _sort_records(filtered_records, query)
         page_records, next_cursor, prev_cursor, has_more = _slice_records(ordered_records, query)
         return CircuitDefinitionCatalogPage(
             rows=tuple(
-                _build_summary(record, self._allowed_actions(record, session)) for record in page_records
+                _build_summary(record, self._allowed_actions(record, session))
+                for record in page_records
             ),
             total_count=len(filtered_records),
             next_cursor=next_cursor,
@@ -138,6 +148,12 @@ class CircuitDefinitionService:
                 category="validation_error",
                 message=str(exc),
             ) from exc
+        self._append_audit_record(
+            session,
+            action_kind="definition.created",
+            record=record,
+            payload={"name": record.name},
+        )
         return _build_detail(record, self._allowed_actions(record, session))
 
     def update_circuit_definition(
@@ -183,7 +199,9 @@ class CircuitDefinitionService:
                     409,
                     code="definition_conflict",
                     category="conflict",
-                    message="The provided concurrency token does not match the persisted definition.",
+                    message=(
+                        "The provided concurrency token does not match the persisted definition."
+                    ),
                 )
             raise service_error(
                 404,
@@ -191,6 +209,12 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
+        self._append_audit_record(
+            session,
+            action_kind="definition.updated",
+            record=record,
+            payload={"definition_id": definition_id},
+        )
         return _build_detail(record, self._allowed_actions(record, session))
 
     def publish_circuit_definition(self, definition_id: int) -> CircuitDefinitionDetail:
@@ -225,6 +249,12 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
+        self._append_audit_record(
+            session,
+            action_kind="definition.published",
+            record=record,
+            payload={"definition_id": definition_id},
+        )
         return _build_detail(record, self._allowed_actions(record, session))
 
     def clone_circuit_definition(
@@ -262,6 +292,12 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
+        self._append_audit_record(
+            session,
+            action_kind="definition.cloned",
+            record=record,
+            payload={"source_definition_id": definition_id},
+        )
         return _build_detail(record, self._allowed_actions(record, session))
 
     def delete_circuit_definition(self, definition_id: int) -> None:
@@ -295,6 +331,12 @@ class CircuitDefinitionService:
                 category="not_found",
                 message=f"Definition {definition_id} was not found.",
             )
+        self._append_audit_record(
+            session,
+            action_kind="definition.deleted",
+            record=current,
+            payload={"definition_id": definition_id},
+        )
 
     def _allowed_actions(
         self,
@@ -302,6 +344,33 @@ class CircuitDefinitionService:
         session: SessionState,
     ) -> AllowedActions:
         return self._authorization_service.build_definition_allowed_actions(record, session)
+
+    def _append_audit_record(
+        self,
+        session: SessionState,
+        *,
+        action_kind: str,
+        record: CircuitDefinitionRecord,
+        payload: dict[str, object],
+    ) -> None:
+        if self._audit_repository is None:
+            return
+        logger.info(
+            "Circuit definition mutation action=%s definition_id=%s",
+            action_kind,
+            record.definition_id,
+        )
+        self._audit_repository.append(
+            build_audit_record(
+                state=session,
+                action_kind=action_kind,
+                resource_kind="definition",
+                resource_id=str(record.definition_id),
+                outcome="completed",
+                payload=payload,
+                workspace_id=record.workspace_id,
+            )
+        )
 
 
 def _build_summary(

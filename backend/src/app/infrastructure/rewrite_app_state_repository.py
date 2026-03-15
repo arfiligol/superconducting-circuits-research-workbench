@@ -1,13 +1,12 @@
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from typing import Protocol
 
 from sc_core.execution import TaskResultHandle
 
 from src.app.domain.session import (
-    AuthMode,
     SessionState,
     SessionUser,
     WorkspaceAllowedActions,
@@ -71,9 +70,18 @@ class _WorkspaceInvitationRecord:
     state: str
     expires_at: str
     created_at: str
-    delivery_state: str
+    delivery_status: str
+    delivery_channel: str
+    invite_url: str | None
     created_by_user_id: str
     delivery_error: str | None = None
+
+
+@dataclass(frozen=True)
+class _PendingInvitationAcceptanceRecord:
+    continuation_token: str
+    invite_token: str
+    created_at: str
 
 
 class StorageMetadataRepository(Protocol):
@@ -146,6 +154,7 @@ class InMemoryRewriteAppStateRepository:
         self._refresh_tokens: dict[str, _RefreshTokenRecord] = {}
         self._refresh_family_index: dict[str, set[str]] = {}
         self._workspace_invitations: dict[str, _WorkspaceInvitationRecord] = {}
+        self._pending_invitation_acceptances: dict[str, _PendingInvitationAcceptanceRecord] = {}
         self._next_invite_id = 1
         self._tasks = (
             {task.task_id: task for task in build_seed_tasks()} if include_task_scaffold else {}
@@ -278,11 +287,37 @@ class InMemoryRewriteAppStateRepository:
             state="pending",
             expires_at=_expires_at(DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS),
             created_at=_now_iso(),
-            delivery_state="manual_link_ready",
+            delivery_status="queued_for_delivery",
+            delivery_channel="manual_link",
+            invite_url=None,
             created_by_user_id=created_by_user_id,
         )
         self._workspace_invitations[invite_id] = record
         return _to_workspace_invitation(record)
+
+    def update_workspace_invitation_delivery(
+        self,
+        *,
+        invite_id: str,
+        state: str,
+        delivery_status: str,
+        delivery_channel: str,
+        invite_url: str | None,
+        delivery_error: str | None,
+    ) -> WorkspaceInvitation | None:
+        record = self._workspace_invitations.get(invite_id)
+        if record is None:
+            return None
+        updated = replace(
+            record,
+            state=state,
+            delivery_status=delivery_status,
+            delivery_channel=delivery_channel,
+            invite_url=invite_url,
+            delivery_error=delivery_error,
+        )
+        self._workspace_invitations[invite_id] = updated
+        return _to_workspace_invitation(updated)
 
     def get_workspace_invitation(self, invite_id: str) -> WorkspaceInvitation | None:
         record = self._workspace_invitations.get(invite_id)
@@ -315,7 +350,7 @@ class InMemoryRewriteAppStateRepository:
                 continue
             refreshed = self._refresh_invitation_state(record)
             self._workspace_invitations[invite_id] = refreshed
-            if refreshed.state != "pending":
+            if refreshed.state not in {"pending", "delivered"}:
                 return _to_workspace_invitation(refreshed)
             account = self._auth_accounts.get(user_email)
             if account is None or account.prototype.user is None:
@@ -333,11 +368,30 @@ class InMemoryRewriteAppStateRepository:
                 prototype=updated_prototype,
             )
             self._users_by_id[updated_prototype.user.user_id] = user_email
-            self._update_authenticated_sessions_for_user(updated_prototype.user.user_id, updated_prototype)
+            self._update_authenticated_sessions_for_user(
+                updated_prototype.user.user_id, updated_prototype
+            )
             accepted = replace(refreshed, state="accepted")
             self._workspace_invitations[invite_id] = accepted
             return _to_workspace_invitation(accepted)
         return None
+
+    def create_pending_invitation_acceptance(self, invite_token: str) -> str:
+        continuation_token = token_urlsafe(24)
+        self._pending_invitation_acceptances[continuation_token] = (
+            _PendingInvitationAcceptanceRecord(
+                continuation_token=continuation_token,
+                invite_token=invite_token,
+                created_at=_now_iso(),
+            )
+        )
+        return continuation_token
+
+    def consume_pending_invitation_acceptance(self, continuation_token: str) -> str | None:
+        record = self._pending_invitation_acceptances.pop(continuation_token, None)
+        if record is None:
+            return None
+        return record.invite_token
 
     def list_workspace_memberships(self, workspace_id: str) -> tuple[WorkspaceMembership, ...]:
         memberships: list[WorkspaceMembership] = []
@@ -368,10 +422,22 @@ class InMemoryRewriteAppStateRepository:
             memberships=updated_memberships,
             workspace_id=active_membership.workspace_id if active_membership is not None else "",
             workspace_slug=active_membership.slug if active_membership is not None else "",
-            workspace_display_name=active_membership.display_name if active_membership is not None else "",
+            workspace_display_name=active_membership.display_name
+            if active_membership is not None
+            else "",
             workspace_role=active_membership.role if active_membership is not None else "viewer",
-            default_task_scope=active_membership.default_task_scope if active_membership is not None else "owned",
-            active_dataset_id=None,
+            default_task_scope=active_membership.default_task_scope
+            if active_membership is not None
+            else "owned",
+            active_dataset_id=_resolve_rebound_dataset_id(
+                current_workspace_id=account.prototype.workspace_id,
+                current_dataset_id=account.prototype.active_dataset_id,
+                target_workspace_id=active_membership.workspace_id
+                if active_membership is not None
+                else None,
+                last_active_dataset_ids=self._last_active_dataset_ids,
+                default_dataset_ids=self._default_dataset_ids,
+            ),
         )
         self._auth_accounts[email] = _AccountSeed(
             password=account.password,
@@ -490,7 +556,9 @@ class InMemoryRewriteAppStateRepository:
     def set_active_workspace_id(self, workspace_id: str) -> SessionState:
         current_workspace_id = self._session_state.workspace_id
         if self._session_state.active_dataset_id is not None:
-            self._last_active_dataset_ids[current_workspace_id] = self._session_state.active_dataset_id
+            self._last_active_dataset_ids[current_workspace_id] = (
+                self._session_state.active_dataset_id
+            )
 
         membership = _membership_for_workspace(self._session_state.memberships, workspace_id)
         if membership is None:
@@ -566,17 +634,39 @@ class InMemoryRewriteAppStateRepository:
                 prototype.memberships,
                 session_state.workspace_id,
             ) or (prototype.memberships[0] if len(prototype.memberships) > 0 else None)
+            session_dataset_state = self._session_last_active_dataset_ids.setdefault(
+                session_id,
+                dict(self._last_active_dataset_ids),
+            )
+            if session_state.active_dataset_id is not None and len(session_state.workspace_id) > 0:
+                session_dataset_state[session_state.workspace_id] = session_state.active_dataset_id
             updated_state = replace(
                 prototype,
                 session_id=session_id,
                 auth_state=session_state.auth_state,
                 auth_mode=session_state.auth_mode,
-                active_dataset_id=None if active_membership is None else session_state.active_dataset_id,
-                workspace_id=active_membership.workspace_id if active_membership is not None else "",
+                active_dataset_id=_resolve_rebound_dataset_id(
+                    current_workspace_id=session_state.workspace_id,
+                    current_dataset_id=session_state.active_dataset_id,
+                    target_workspace_id=active_membership.workspace_id
+                    if active_membership is not None
+                    else None,
+                    last_active_dataset_ids=session_dataset_state,
+                    default_dataset_ids=self._default_dataset_ids,
+                ),
+                workspace_id=active_membership.workspace_id
+                if active_membership is not None
+                else "",
                 workspace_slug=active_membership.slug if active_membership is not None else "",
-                workspace_display_name=active_membership.display_name if active_membership is not None else "",
-                workspace_role=active_membership.role if active_membership is not None else "viewer",
-                default_task_scope=active_membership.default_task_scope if active_membership is not None else "owned",
+                workspace_display_name=active_membership.display_name
+                if active_membership is not None
+                else "",
+                workspace_role=active_membership.role
+                if active_membership is not None
+                else "viewer",
+                default_task_scope=active_membership.default_task_scope
+                if active_membership is not None
+                else "owned",
             )
             self._authenticated_sessions[session_id] = updated_state
             self._session_state = updated_state
@@ -584,8 +674,7 @@ class InMemoryRewriteAppStateRepository:
     def list_tasks(self) -> list[TaskDetail]:
         if self._task_snapshot_repository is not None:
             return [
-                self._hydrate_task(task)
-                for task in self._task_snapshot_repository.list_tasks()
+                self._hydrate_task(task) for task in self._task_snapshot_repository.list_tasks()
             ]
         return [self._hydrate_task(task) for task in self._tasks.values()]
 
@@ -1022,21 +1111,26 @@ def _workspace_slug(workspace_id: str) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _expires_at(lifetime_seconds: int) -> str:
     return (
-        datetime.now(timezone.utc) + timedelta(seconds=lifetime_seconds)
-    ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        (datetime.now(UTC) + timedelta(seconds=lifetime_seconds))
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def _is_expired(iso_timestamp: str) -> bool:
     normalized = iso_timestamp.replace("Z", "+00:00")
-    return datetime.now(timezone.utc) >= datetime.fromisoformat(normalized)
+    return datetime.now(UTC) >= datetime.fromisoformat(normalized)
 
 
 def _to_workspace_invitation(record: _WorkspaceInvitationRecord) -> WorkspaceInvitation:
+    from src.app.domain.workspace_collaboration import WorkspaceInvitationDelivery
+
     return WorkspaceInvitation(
         invite_id=record.invite_id,
         invite_token=record.invite_token,
@@ -1047,7 +1141,12 @@ def _to_workspace_invitation(record: _WorkspaceInvitationRecord) -> WorkspaceInv
         state=record.state,  # type: ignore[arg-type]
         expires_at=record.expires_at,
         created_at=record.created_at,
-        delivery_state=record.delivery_state,  # type: ignore[arg-type]
+        delivery=WorkspaceInvitationDelivery(
+            status=record.delivery_status,  # type: ignore[arg-type]
+            channel=record.delivery_channel,  # type: ignore[arg-type]
+            invite_url=record.invite_url,
+            failure_reason=record.delivery_error,
+        ),
         created_by_user_id=record.created_by_user_id,
         delivery_error=record.delivery_error,
     )
@@ -1070,7 +1169,9 @@ def _upsert_membership(
         role=role,  # type: ignore[arg-type]
         default_task_scope=default_task_scope,  # type: ignore[arg-type]
         is_active=existing.is_active if existing is not None else False,
-        allowed_actions=existing.allowed_actions if existing is not None else WorkspaceAllowedActions(
+        allowed_actions=existing.allowed_actions
+        if existing is not None
+        else WorkspaceAllowedActions(
             switch_to=True,
             activate_dataset=True,
             invite_members=False,
@@ -1084,10 +1185,15 @@ def _upsert_membership(
         ),
     )
     memberships = tuple(
-        membership
-        for membership in state.memberships
-        if membership.workspace_id != workspace_id
-    ) + (updated_membership,)
+        [
+            *(
+                membership
+                for membership in state.memberships
+                if membership.workspace_id != workspace_id
+            ),
+            updated_membership,
+        ]
+    )
     return replace(state, memberships=memberships)
 
 
@@ -1112,6 +1218,24 @@ def _replace_membership_role(state: SessionState, workspace_id: str, role: str) 
             default_task_scope=active_membership.default_task_scope,
         )
     return updated_state
+
+
+def _resolve_rebound_dataset_id(
+    *,
+    current_workspace_id: str,
+    current_dataset_id: str | None,
+    target_workspace_id: str | None,
+    last_active_dataset_ids: dict[str, str],
+    default_dataset_ids: dict[str, str],
+) -> str | None:
+    if target_workspace_id is None or len(target_workspace_id) == 0:
+        return None
+    if target_workspace_id == current_workspace_id:
+        return current_dataset_id
+    rebound_dataset_id = last_active_dataset_ids.get(target_workspace_id)
+    if rebound_dataset_id is not None:
+        return rebound_dataset_id
+    return default_dataset_ids.get(target_workspace_id)
 
 
 def build_seed_tasks() -> tuple[TaskDetail, ...]:

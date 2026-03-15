@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 from sc_core.tasking import evaluate_task_control_action, resolve_worker_task_route
@@ -10,7 +10,6 @@ from sc_core.tasking import evaluate_task_control_action, resolve_worker_task_ro
 from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import DatasetDetail
 from src.app.domain.session import SessionState
-from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.domain.tasks import (
     TaskAllowedActions,
     TaskCreateDraft,
@@ -31,6 +30,8 @@ from src.app.domain.tasks import (
     build_task_retry_event,
     task_submission_source_for,
 )
+from src.app.infrastructure.audit_records import build_audit_record
+from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import ServiceFieldError, service_error
 
@@ -137,15 +138,15 @@ class TaskService:
             worker_summary=_build_worker_summary(
                 visible_tasks=visible_workspace_tasks,
                 processor_summaries=(
-                    self._processor_summary_repository.list_lane_summaries(
-                        session.workspace_id
-                    )
+                    self._processor_summary_repository.list_lane_summaries(session.workspace_id)
                     if self._processor_summary_repository is not None
                     else ()
                 ),
             ),
             total_count=len(sorted_tasks),
-            next_cursor=str(rows[-1].task_id) if len(sorted_tasks) > query.limit and len(rows) > 0 else None,
+            next_cursor=str(rows[-1].task_id)
+            if len(sorted_tasks) > query.limit and len(rows) > 0
+            else None,
             prev_cursor=None,
             has_more=len(sorted_tasks) > query.limit,
         )
@@ -185,7 +186,7 @@ class TaskService:
         self._authorization_service.authorize(
             session,
             "submit_task",
-            resource=_workspace_resource(session.workspace_id),
+            resource=_task_resource(session.workspace_id),
             denied_code="task_submit_denied",
             denied_message="The current session cannot submit tasks in the active workspace.",
         )
@@ -302,7 +303,9 @@ class TaskService:
                 task_id=task_id,
                 status=decision.requested_state,
                 progress_percent_complete=(
-                    100 if decision.requested_state == "cancelled" else task.progress.percent_complete
+                    100
+                    if decision.requested_state == "cancelled"
+                    else task.progress.percent_complete
                 ),
                 progress_summary=(
                     "Task was cancelled before execution started."
@@ -482,7 +485,11 @@ class TaskService:
     ) -> TaskHistoryView:
         history = self._load_visible_task_history(task_id)
         selected_events = tuple(_select_task_events(history.task.events, query))
-        latest_event = selected_events[0] if query.order == "desc" and len(selected_events) > 0 else history.latest_event
+        latest_event = (
+            selected_events[0]
+            if query.order == "desc" and len(selected_events) > 0
+            else history.latest_event
+        )
         return TaskHistoryView(
             task=replace(history.task, events=selected_events),
             event_count=history.event_count,
@@ -591,8 +598,12 @@ class TaskService:
         session: SessionState,
     ) -> TaskAllowedActions:
         runtime_actions = _build_runtime_allowed_actions(task)
-        authorization_actions = self._authorization_service.build_task_allowed_actions(task, session)
-        rejection_reason = runtime_actions.rejection_reason or authorization_actions.rejection_reason
+        authorization_actions = self._authorization_service.build_task_allowed_actions(
+            task, session
+        )
+        rejection_reason = (
+            runtime_actions.rejection_reason or authorization_actions.rejection_reason
+        )
         return TaskAllowedActions(
             attach=runtime_actions.attach and authorization_actions.attach,
             cancel=runtime_actions.cancel and authorization_actions.cancel,
@@ -674,25 +685,14 @@ class TaskService:
         if self._audit_repository is None:
             return
         session = self._session_repository.get_session_state()
-        occurred_at = _generated_at()
-        actor_display_name = session.user.display_name if session.user is not None else "anonymous"
-        correlation_id = f"corr:{action_kind}:{resource_id}"
-        audit_suffix = occurred_at.replace(":", "-").replace("+", "z")
         self._audit_repository.append(
-            AuditRecord(
-                audit_id=f"audit:{action_kind}:{resource_id}:{audit_suffix}",
-                occurred_at=occurred_at,
-                actor_user_id=_session_user_id(session),
-                actor_display_name=actor_display_name,
-                session_id=session.session_id,
-                correlation_id=correlation_id,
-                workspace_id=session.workspace_id,
+            build_audit_record(
+                state=session,
                 action_kind=action_kind,
                 resource_kind="task",
                 resource_id=resource_id,
                 outcome=outcome,
                 payload=payload,
-                debug_ref=f"debug:{action_kind}:{resource_id}",
             )
         )
 
@@ -734,7 +734,11 @@ def _validate_task_lifecycle_update(
                 message="Dispatching tasks must report 0 percent_complete.",
             )
         )
-    if update.status in {"running", "cancellation_requested", "cancelling", "termination_requested"} and update.progress_percent_complete == 100:
+    if (
+        update.status
+        in {"running", "cancellation_requested", "cancelling", "termination_requested"}
+        and update.progress_percent_complete == 100
+    ):
         field_errors.append(
             ServiceFieldError(
                 field="progress_percent_complete",
@@ -783,9 +787,7 @@ def _select_task_events(
 
 def _redact_task_event(event: TaskEvent) -> TaskEvent:
     safe_metadata = {
-        key: value
-        for key, value in event.metadata.items()
-        if not _is_sensitive_event_field(key)
+        key: value for key, value in event.metadata.items() if not _is_sensitive_event_field(key)
     }
     return replace(event, metadata=safe_metadata)
 
@@ -903,7 +905,9 @@ def _build_result_handoff(task: TaskDetail) -> TaskResultHandoff:
     return TaskResultHandoff(
         availability=_result_availability_for(task),
         primary_result_handle_id=(
-            task.result_refs.result_handles[0].handle_id if len(task.result_refs.result_handles) > 0 else None
+            task.result_refs.result_handles[0].handle_id
+            if len(task.result_refs.result_handles) > 0
+            else None
         ),
         result_handle_count=len(task.result_refs.result_handles),
         trace_payload_available=task.result_refs.trace_payload is not None,
@@ -931,14 +935,18 @@ def _build_worker_summary(
     for lane in ("simulation", "characterization"):
         lane_tasks = [task for task in visible_tasks if task.lane == lane]
         busy_processors = sum(1 for task in lane_tasks if task.status in {"dispatching", "running"})
-        degraded_processors = sum(1 for task in lane_tasks if task.status == "termination_requested")
+        degraded_processors = sum(
+            1 for task in lane_tasks if task.status == "termination_requested"
+        )
         draining_processors = sum(
             1 for task in lane_tasks if task.status in {"cancellation_requested", "cancelling"}
         )
         summaries.append(
             WorkerLaneSummary(
                 lane=lane,
-                healthy_processors=max(1 - min(busy_processors + degraded_processors + draining_processors, 1), 0),
+                healthy_processors=max(
+                    1 - min(busy_processors + degraded_processors + draining_processors, 1), 0
+                ),
                 busy_processors=busy_processors,
                 degraded_processors=degraded_processors,
                 draining_processors=draining_processors,
@@ -960,9 +968,17 @@ def _workspace_resource(workspace_id: str):
     )
 
 
-def _task_resource(task: TaskDetail):
+def _task_resource(task: TaskDetail | str):
     from src.app.domain.authorization import AuthorizationResourceEnvelope
 
+    if isinstance(task, str):
+        return AuthorizationResourceEnvelope(
+            resource_kind="task",
+            workspace_id=task,
+            owner_user_id=None,
+            visibility_scope="workspace",
+            lifecycle_state="active",
+        )
     return AuthorizationResourceEnvelope(
         resource_kind="task",
         workspace_id=task.workspace_id,
@@ -973,4 +989,4 @@ def _task_resource(task: TaskDetail):
 
 
 def _generated_at() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

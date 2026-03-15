@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Request
@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 from src.app.domain.session import (
     ActiveDatasetContext,
     AppSession,
-    SessionLoginResult,
     WorkspaceMembership,
     WorkspaceSwitchResult,
 )
@@ -18,6 +17,7 @@ from src.app.domain.workspace_collaboration import (
     WorkspaceInvitationAcceptance,
     WorkspaceMembershipListView,
 )
+from src.app.infrastructure.request_debug import current_debug_ref
 from src.app.infrastructure.runtime import (
     get_session_service,
     get_workspace_collaboration_service,
@@ -33,6 +33,7 @@ from src.app.services.workspace_collaboration_service import WorkspaceCollaborat
 from src.app.settings import get_settings
 
 router = APIRouter(prefix="/session", tags=["session"])
+PENDING_INVITATION_CONTINUATION_COOKIE_NAME = "sc_pending_invitation"
 
 
 @router.get("")
@@ -245,24 +246,37 @@ def revoke_workspace_invitation(
 @router.post("/workspace-invitations/accept")
 def accept_workspace_invitation(
     request: Request,
-    payload: Annotated[object, Body(...)],
     collaboration_service: Annotated[
         WorkspaceCollaborationService,
         Depends(get_workspace_collaboration_service),
     ],
+    payload: Annotated[object | None, Body()] = None,
 ) -> JSONResponse:
     try:
         invite_token = _parse_invite_accept_payload(payload)
-        result = collaboration_service.accept_invitation(
+        result, continuation_token = collaboration_service.accept_invitation(
             _session_token_from_request(request),
-            invite_token,
+            invite_token=invite_token,
+            continuation_token=_pending_invitation_continuation_from_request(request),
         )
     except ServiceError as exc:
         return _service_error_response(exc)
-    return _success_response(
+    response = _success_response(
         data=_serialize_workspace_invitation_acceptance(result),
         meta={"generated_at": _generated_at()},
     )
+    if result.requires_authentication and continuation_token is not None:
+        response.set_cookie(
+            key=PENDING_INVITATION_CONTINUATION_COOKIE_NAME,
+            value=continuation_token,
+            httponly=True,
+            samesite="lax",
+            secure=get_settings().environment not in {"development", "test"},
+            path="/",
+        )
+    else:
+        response.delete_cookie(PENDING_INVITATION_CONTINUATION_COOKIE_NAME, path="/")
+    return response
 
 
 @router.get("/workspace-memberships")
@@ -437,9 +451,13 @@ def _parse_workspace_invitation_payload(payload: object) -> tuple[str | None, st
     return workspace_id, email.strip().lower(), role
 
 
-def _parse_invite_accept_payload(payload: object) -> str:
+def _parse_invite_accept_payload(payload: object) -> str | None:
+    if payload is None:
+        return None
     body = _as_mapping(payload)
     invite_token = body.get("invite_token")
+    if invite_token is None:
+        return None
     if not isinstance(invite_token, str) or len(invite_token.strip()) == 0:
         raise service_error(
             400,
@@ -585,7 +603,13 @@ def _serialize_workspace_invitation(invitation: WorkspaceInvitation) -> dict[str
         "state": invitation.state,
         "expires_at": invitation.expires_at,
         "created_at": invitation.created_at,
-        "delivery_state": invitation.delivery_state,
+        "delivery_state": invitation.delivery.status,
+        "delivery": {
+            "status": invitation.delivery.status,
+            "channel": invitation.delivery.channel,
+            "invite_url": invitation.delivery.invite_url,
+            "failure_reason": invitation.delivery.failure_reason,
+        },
         "created_by_user_id": invitation.created_by_user_id,
         "delivery_error": invitation.delivery_error,
     }
@@ -599,6 +623,9 @@ def _serialize_workspace_invitation_acceptance(
         "memberships": [_serialize_membership(item) for item in result.memberships],
         "switch_available": result.switch_available,
         "post_accept_context": result.post_accept_context,
+        "recommended_next_action": result.post_accept_context,
+        "requires_authentication": result.requires_authentication,
+        "continuation_saved": result.continuation_saved,
     }
 
 
@@ -612,7 +639,9 @@ def _serialize_workspace_membership_view(
     }
 
 
-def _serialize_active_dataset(active_dataset: ActiveDatasetContext | None) -> dict[str, object] | None:
+def _serialize_active_dataset(
+    active_dataset: ActiveDatasetContext | None,
+) -> dict[str, object] | None:
     if active_dataset is None:
         return None
     return {
@@ -650,13 +679,14 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
                 "category": exc.category,
                 "message": exc.message,
                 "retryable": exc.category == "internal_error",
+                "debug_ref": current_debug_ref(),
             },
         },
     )
 
 
 def _generated_at() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _as_mapping(payload: object) -> dict[str, object]:
@@ -679,6 +709,13 @@ def _session_token_from_request(request: Request) -> str | None:
 
 def _refresh_token_from_request(request: Request) -> str | None:
     token = request.cookies.get(REFRESH_COOKIE_NAME)
+    if token is None or len(token.strip()) == 0:
+        return None
+    return token
+
+
+def _pending_invitation_continuation_from_request(request: Request) -> str | None:
+    token = request.cookies.get(PENDING_INVITATION_CONTINUATION_COOKIE_NAME)
     if token is None or len(token.strip()) == 0:
         return None
     return token

@@ -11,6 +11,7 @@ def reset_runtime_dependencies(
     tmp_path: Path,
 ) -> Generator[None, None, None]:
     monkeypatch.setenv("SC_DATABASE_PATH", str(tmp_path / "runtime-metadata.db"))
+    monkeypatch.setenv("SC_AUDIT_DATABASE_PATH", str(tmp_path / "runtime-audit.db"))
     reset_runtime_state()
     get_task_audit_repository().clear()
     yield

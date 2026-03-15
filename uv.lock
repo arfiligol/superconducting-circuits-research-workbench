@@ -237,6 +237,18 @@ wheels = [
 ]
 
 [[package]]
+name = "casbin"
+version = "1.43.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "simpleeval" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ad/df/ff2aa55cf0d7c14622ce4f9252cdc34c828c81d4213965d73207ac5434ae/casbin-1.43.0.tar.gz", hash = "sha256:d2e90ce8e72f912877851e94d37999f32c558c6ba7aba0437d483275262e86e0", size = 425727, upload-time = "2025-05-10T06:57:18.902Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/07/facef6abd81378e6153b757dc1848621675d971fbc88ebb5d182ebc1c37f/casbin-1.43.0-py3-none-any.whl", hash = "sha256:63a3d1228870250e859ccd94133fe478821093f71dd37f05e0baa0c6fea26623", size = 475059, upload-time = "2025-05-10T06:57:16.89Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -2333,6 +2345,15 @@ wheels = [
 ]
 
 [[package]]
+name = "simpleeval"
+version = "1.0.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/4f/6247534503a9dd0e72e4ed68ba6f9d35ff878d635dddbada1206ab00cec0/simpleeval-1.0.6.tar.gz", hash = "sha256:3a5a743a4f17c53854648144ae41f73eb4f573438d039a59f42cc3172b336141", size = 41004, upload-time = "2026-03-13T16:51:21.389Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/3d/f95b256ba280d0d5e46a5103cab17769aa8d07401293ed41439ec13049a4/simpleeval-1.0.6-py3-none-any.whl", hash = "sha256:cbbf6427157c881bd790d7fcc6449dc2c1766f7bc7af2deb582e1d475b653eba", size = 18661, upload-time = "2026-03-13T16:51:19.491Z" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2447,6 +2468,7 @@ version = "0.1.0"
 source = { editable = "backend" }
 dependencies = [
     { name = "alembic" },
+    { name = "casbin" },
     { name = "fastapi" },
     { name = "pydantic-settings" },
     { name = "sc-core" },
@@ -2457,6 +2479,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.17.0" },
+    { name = "casbin", specifier = ">=1.43.0" },
     { name = "fastapi", specifier = ">=0.133.0" },
     { name = "pydantic-settings", specifier = ">=2.11.0" },
     { name = "sc-core", editable = "src/core" },

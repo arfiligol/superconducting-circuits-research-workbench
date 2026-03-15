@@ -5,6 +5,7 @@ description = "FastAPI rewrite foundation for superconducting circuits services.
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.17.0",
+    "casbin>=1.43.0",
     "fastapi>=0.133.0",
     "pydantic-settings>=2.11.0",
     "sc-core",

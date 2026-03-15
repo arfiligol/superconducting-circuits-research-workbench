@@ -1,21 +1,27 @@
 from functools import lru_cache
 
+from src.app.infrastructure.audit_store import (
+    SqliteAuditLogRepository,
+    bootstrap_audit_store,
+    create_audit_session_factory,
+)
+from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
+from src.app.infrastructure.invitation_delivery import WorkspaceInvitationDeliveryService
 from src.app.infrastructure.persistence import (
     SqliteRewriteStorageMetadataRepository,
     SqliteRewriteTaskSnapshotRepository,
     bootstrap_metadata_schema,
     create_metadata_session_factory,
 )
-from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
+from src.app.infrastructure.request_debug import configure_backend_logging
 from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
+from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
+from src.app.infrastructure.rewrite_execution_runtime import RewriteExecutionRuntime
 from src.app.infrastructure.rewrite_processor_runtime_repository import (
     InMemoryProcessorRuntimeRepository,
 )
-from src.app.infrastructure.session_jwt_transport import SessionJwtTransport
-from src.app.infrastructure.rewrite_task_audit_repository import InMemoryTaskAuditRepository
-from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
-from src.app.infrastructure.rewrite_execution_runtime import RewriteExecutionRuntime
 from src.app.infrastructure.rewrite_task_repository import PersistedRewriteTaskRepository
+from src.app.infrastructure.session_jwt_transport import SessionJwtTransport
 from src.app.services.audit_log_service import AuditLogService
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.circuit_definition_service import CircuitDefinitionService
@@ -67,8 +73,10 @@ def get_rewrite_task_repository() -> PersistedRewriteTaskRepository:
 
 
 @lru_cache(maxsize=1)
-def get_task_audit_repository() -> InMemoryTaskAuditRepository:
-    return InMemoryTaskAuditRepository()
+def get_task_audit_repository() -> SqliteAuditLogRepository:
+    settings = get_settings()
+    bootstrap_audit_store(settings.audit_database_path)
+    return SqliteAuditLogRepository(create_audit_session_factory(settings.audit_database_path))
 
 
 @lru_cache(maxsize=1)
@@ -77,6 +85,7 @@ def get_processor_runtime_repository() -> InMemoryProcessorRuntimeRepository:
 
 
 def get_health_service() -> HealthService:
+    configure_backend_logging()
     settings = get_settings()
     return HealthService(
         app_name=settings.app_name,
@@ -95,6 +104,7 @@ def get_dataset_service() -> DatasetService:
         repository=get_rewrite_catalog_repository(),
         session_repository=get_rewrite_app_state_repository(),
         authorization_service=get_authorization_service(),
+        audit_repository=get_task_audit_repository(),
     )
 
 
@@ -104,6 +114,7 @@ def get_circuit_definition_service() -> CircuitDefinitionService:
         repository=get_rewrite_catalog_repository(),
         session_repository=get_rewrite_app_state_repository(),
         authorization_service=get_authorization_service(),
+        audit_repository=get_task_audit_repository(),
     )
 
 
@@ -135,6 +146,7 @@ def get_workspace_collaboration_service() -> WorkspaceCollaborationService:
         repository=get_rewrite_app_state_repository(),
         session_service=get_session_service(),
         authorization_service=get_authorization_service(),
+        delivery_service=WorkspaceInvitationDeliveryService(get_settings()),
         audit_repository=get_task_audit_repository(),
     )
 

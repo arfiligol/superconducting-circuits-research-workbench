@@ -1,5 +1,9 @@
 from fastapi.testclient import TestClient
-
+from src.app.infrastructure.runtime import (
+    get_task_audit_repository,
+    get_workspace_collaboration_service,
+    reset_runtime_state,
+)
 from src.app.main import app
 
 client = TestClient(app)
@@ -117,10 +121,7 @@ def test_workspace_invitation_acceptance_handles_account_mismatch_then_accepts()
     payload = accept_response.json()["data"]
     assert payload["invitation"]["state"] == "accepted"
     assert payload["switch_available"] is True
-    assert any(
-        membership["id"] == "ws-device-lab"
-        for membership in payload["memberships"]
-    )
+    assert any(membership["id"] == "ws-device-lab" for membership in payload["memberships"])
 
 
 def test_membership_transfer_and_leave_flow_updates_membership_surface() -> None:
@@ -187,4 +188,75 @@ def test_auth_and_collaboration_actions_are_visible_via_audit_query() -> None:
         "/audit-logs?workspace_id=ws-device-lab&action_kind=workspace.invite_revoked"
     )
     assert collaboration_audit.status_code == 200
-    assert collaboration_audit.json()["data"]["rows"][0]["action_kind"] == "workspace.invite_revoked"
+    assert (
+        collaboration_audit.json()["data"]["rows"][0]["action_kind"] == "workspace.invite_revoked"
+    )
+
+
+def test_unauthenticated_invitation_acceptance_can_resume_after_login() -> None:
+    _login()
+    invitation_response = client.post(
+        "/session/workspace-invitations",
+        json={
+            "workspace_id": "ws-device-lab",
+            "email": "collaborator.local@example.com",
+            "role": "member",
+        },
+    )
+    invite_token = invitation_response.json()["data"]["invitation"]["invite_token"]
+    _logout()
+
+    deferred_accept = client.post(
+        "/session/workspace-invitations/accept",
+        json={"invite_token": invite_token},
+    )
+
+    assert deferred_accept.status_code == 200
+    deferred_payload = deferred_accept.json()["data"]
+    assert deferred_payload["requires_authentication"] is True
+    assert deferred_payload["continuation_saved"] is True
+    assert deferred_payload["recommended_next_action"] == "sign_in_to_accept"
+    assert client.cookies.get("sc_pending_invitation") is not None
+
+    _login(email="collaborator.local@example.com", password="collaborator-local-password")
+    resumed_accept = client.post("/session/workspace-invitations/accept", json={})
+
+    assert resumed_accept.status_code == 200
+    resumed_payload = resumed_accept.json()["data"]
+    assert resumed_payload["requires_authentication"] is False
+    assert resumed_payload["invitation"]["state"] == "accepted"
+    assert client.cookies.get("sc_pending_invitation") is None
+
+
+def test_invitation_delivery_failure_uses_canonical_state_and_audit(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("SC_ENVIRONMENT", "production")
+    monkeypatch.setenv("SC_SESSION_SECRET", "production-session-secret-2026-baseline")
+    monkeypatch.setenv("SC_BOOTSTRAP_ADMIN_PASSWORD", "production-bootstrap-password")
+    reset_runtime_state()
+    client.cookies.clear()
+    _login()
+    access_token = _cookie_value("sc_session_access")
+    assert access_token is not None
+
+    invitation = get_workspace_collaboration_service().create_invitation(
+        access_token,
+        workspace_id="ws-device-lab",
+        email="collaborator.local@example.com",
+        role="viewer",
+    )
+    assert invitation.state == "delivery_failed"
+    assert invitation.delivery.status == "delivery_failed"
+    assert invitation.delivery.channel == "manual_link"
+    assert invitation.delivery.invite_url is not None
+    assert invitation.delivery.failure_reason == "smtp_not_configured"
+
+    audit_records = get_task_audit_repository().list_records_for_resource(
+        resource_kind="workspace_invitation",
+        resource_id=invitation.invite_id,
+    )
+    assert [record.action_kind for record in audit_records] == [
+        "workspace.invite_delivery_failed",
+        "workspace.invite_created",
+    ]
