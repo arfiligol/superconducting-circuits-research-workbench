@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from importlib.resources import files
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -10,9 +11,11 @@ from sc_cli.local_circuit_definitions import (
     get_local_circuit_definition,
     reload_local_circuit_definition_state,
 )
+from sc_cli.local_datasets import get_local_dataset, reload_local_dataset_state
 from sc_cli.local_runtime import reload_runtime_state
 from sc_cli.local_store import (
     bundle_receipts_path,
+    dataset_catalog_path,
     definition_catalog_path,
     task_events_path,
     task_registry_path,
@@ -44,6 +47,25 @@ def _canonical_definition_source(name: str) -> str:
             '  - [C1, "1", "0", "C1"]',
         ]
     )
+
+
+def test_cli_local_runtime_modules_do_not_import_sc_backend() -> None:
+    checked_paths = [
+        "runtime.py",
+        "errors.py",
+        "presenters.py",
+        "local_runtime.py",
+        "local_circuit_definitions.py",
+        "local_datasets.py",
+        "commands/datasets.py",
+        "commands/tasks.py",
+        "commands/session.py",
+    ]
+
+    for relative_path in checked_paths:
+        source = files("sc_cli").joinpath(relative_path).read_text(encoding="utf-8")
+        assert "from sc_backend import" not in source
+        assert "import sc_backend" not in source
 
 
 def test_local_task_registry_persists_across_restart_reload() -> None:
@@ -214,3 +236,77 @@ def test_definition_catalog_and_bundle_receipts_persist_across_reload(tmp_path: 
 
     assert inspect_result.exit_code == 0
     assert json.loads(inspect_result.stdout)["definition_id"] == imported_definition_id
+
+
+def test_dataset_catalog_and_bundle_receipts_persist_across_reload(tmp_path: Path) -> None:
+    reset_runtime_state()
+    runner = CliRunner()
+    bundle_file = tmp_path / "persisted-dataset.bundle.json"
+
+    update_result = runner.invoke(
+        app,
+        [
+            "datasets",
+            "set-metadata",
+            "fluxonium-2025-031",
+            "--device-type",
+            "Fluxonium",
+            "--source",
+            "measured",
+            "--capability",
+            "fit-ready",
+            "--capability",
+            "trace-export",
+            "--output",
+            "json",
+        ],
+    )
+    export_result = runner.invoke(
+        app,
+        [
+            "datasets",
+            "export-bundle",
+            "fluxonium-2025-031",
+            str(bundle_file),
+            "--output",
+            "json",
+        ],
+    )
+    import_result = runner.invoke(
+        app,
+        [
+            "datasets",
+            "import-bundle",
+            str(bundle_file),
+            "--output",
+            "json",
+        ],
+    )
+
+    assert update_result.exit_code == 0
+    assert export_result.exit_code == 0
+    assert import_result.exit_code == 0
+    assert dataset_catalog_path().exists()
+
+    receipts = json.loads(bundle_receipts_path().read_text(encoding="utf-8"))
+    dataset_receipts = [
+        entry for entry in receipts if entry["bundle_family"] == "dataset_bundle"
+    ]
+    assert [entry["operation"] for entry in dataset_receipts[-2:]] == ["export", "import"]
+
+    imported_dataset_id = json.loads(import_result.stdout)["imported_dataset"]["dataset_id"]
+    reload_local_dataset_state()
+    seeded_dataset = get_local_dataset("fluxonium-2025-031")
+    imported_dataset = get_local_dataset(imported_dataset_id)
+
+    assert seeded_dataset.capability_count == 2
+    assert imported_dataset.lineage is not None
+    assert imported_dataset.lineage.source_dataset_id == "fluxonium-2025-031"
+
+    show_result = runner.invoke(
+        app,
+        ["datasets", "show", imported_dataset_id, "--output", "json"],
+    )
+
+    assert show_result.exit_code == 0
+    assert json.loads(show_result.stdout)["dataset_id"] == imported_dataset_id

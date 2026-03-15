@@ -4,9 +4,9 @@ from enum import Enum
 from typing import Annotated
 
 import typer
-from sc_backend import BackendContractError
 
-from sc_cli.errors import exit_for_backend_error
+from sc_cli.errors import exit_for_contract_error
+from sc_cli.local_errors import CliContractError
 from sc_cli.output import OutputMode, OutputOption
 from sc_cli.presenters import render_task_operations_bundle
 from sc_cli.runtime import get_task, list_tasks, submit_task
@@ -189,8 +189,8 @@ def submit_command(
             definition_id=definition_id,
             summary=summary,
         )
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     if wait:
         task = wait_for_task_or_exit(
             load_task=lambda: get_task_or_exit(

@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from sc_backend import BackendContractError
 
-from sc_cli.errors import exit_for_backend_error, exit_with_runtime_error
+from sc_cli.errors import exit_for_contract_error, exit_with_runtime_error
+from sc_cli.local_errors import CliContractError
 from sc_cli.local_interchange import (
     LocalResultBundle,
     LocalResultBundleExportReceipt,
@@ -81,8 +81,8 @@ def export_bundle_command(
     """Export one local result bundle for interchange with app/archive consumers."""
     try:
         bundle = export_task_result_bundle(task_id)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     try:
         bundle_file.parent.mkdir(parents=True, exist_ok=True)
         bundle_file.write_text(bundle.model_dump_json(indent=2), encoding="utf-8")
@@ -123,8 +123,8 @@ def import_bundle_command(
         exit_with_runtime_error(f"Could not parse result bundle {bundle_file}: {error}")
     try:
         imported_task = import_task_result_bundle(bundle)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     receipt = LocalResultBundleImportReceipt(
         bundle_file=str(bundle_file),
         bundle=bundle,

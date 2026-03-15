@@ -3,9 +3,9 @@
 from typing import Annotated
 
 import typer
-from sc_backend import BackendContractError
 
-from sc_cli.errors import exit_for_backend_error, exit_with_usage_error
+from sc_cli.errors import exit_for_contract_error, exit_with_usage_error
+from sc_cli.local_errors import CliContractError
 from sc_cli.local_runtime import LocalSession
 from sc_cli.output import OutputMode, OutputOption
 from sc_cli.presenters import (
@@ -68,13 +68,13 @@ def set_active_dataset_command(
 
     try:
         session = set_active_dataset(None if clear else dataset_id)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(render_session(session, output=output))
 
 
 def _get_session_or_exit(output: OutputMode) -> LocalSession:
     try:
         return get_session()
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)

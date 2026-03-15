@@ -4,9 +4,9 @@ from enum import Enum
 from typing import Annotated
 
 import typer
-from sc_backend import BackendContractError
 
-from sc_cli.errors import exit_for_backend_error
+from sc_cli.errors import exit_for_contract_error
+from sc_cli.local_errors import CliContractError
 from sc_cli.local_runtime import LocalTaskDetail
 from sc_cli.output import OutputMode, OutputOption
 from sc_cli.presenters import render_task_detail, render_task_inspection, render_task_summaries
@@ -67,8 +67,8 @@ def list_command(
             dataset_id=dataset_id,
             limit=limit,
         )
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(render_task_summaries(tasks, output=output))
 
 
@@ -80,8 +80,8 @@ def show_command(
     """Show one task from the standalone local run registry."""
     try:
         task = get_task(task_id)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(render_task_detail(task, output=output))
 
 
@@ -93,8 +93,8 @@ def inspect_command(
     """Show one task with operator-oriented event/result summary."""
     try:
         task = get_task(task_id)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(render_task_inspection(task, output=output))
 
 
@@ -202,8 +202,8 @@ def submit_command(
             definition_id=definition_id,
             summary=summary,
         )
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(render_task_detail(task, output=output))
 
 
@@ -214,8 +214,8 @@ def _get_task_or_exit(
 ) -> LocalTaskDetail:
     try:
         return get_task(task_id)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
 
 
 def _has_reached_wait_target(

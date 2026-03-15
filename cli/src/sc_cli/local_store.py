@@ -28,6 +28,10 @@ def definition_catalog_path() -> Path:
     return runtime_store_root() / "definitions" / "catalog.json"
 
 
+def dataset_catalog_path() -> Path:
+    return runtime_store_root() / "datasets" / "catalog.json"
+
+
 def task_registry_path() -> Path:
     return runtime_store_root() / "tasks" / "registry.json"
 

@@ -5,10 +5,13 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from sc_backend import BackendContractError
 from sc_core import inspect_circuit_definition_source
 
-from sc_cli.errors import exit_for_backend_error, exit_with_runtime_error, exit_with_usage_error
+from sc_cli.errors import (
+    exit_for_contract_error,
+    exit_with_runtime_error,
+    exit_with_usage_error,
+)
 from sc_cli.local_circuit_definitions import (
     LocalDefinitionBundle,
     LocalDefinitionBundleExportReceipt,
@@ -17,6 +20,7 @@ from sc_cli.local_circuit_definitions import (
     build_local_circuit_definition_inspection,
     build_local_circuit_definition_summary,
 )
+from sc_cli.local_errors import CliContractError
 from sc_cli.local_store import record_bundle_receipt
 from sc_cli.output import OutputMode, OutputOption
 from sc_cli.presenters import (
@@ -74,8 +78,8 @@ def list_command(
             sort_by=sort_by.value,
             sort_order=sort_order.value,
         )
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(
         render_circuit_definition_summaries(
             [build_local_circuit_definition_summary(definition) for definition in definitions],
@@ -113,8 +117,8 @@ def inspect_command(
     if definition_id is not None:
         try:
             definition = get_circuit_definition(definition_id)
-        except BackendContractError as error:
-            exit_for_backend_error(error, output=output)
+        except CliContractError as error:
+            exit_for_contract_error(error, output=output)
         typer.echo(
             render_circuit_definition_detail(
                 build_local_circuit_definition_detail(definition),
@@ -167,8 +171,8 @@ def create_command(
 
     try:
         definition = create_circuit_definition(name=name, source_text=source_text)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(
         render_circuit_definition_detail(
             build_local_circuit_definition_detail(definition),
@@ -211,8 +215,8 @@ def update_command(
             name=name,
             source_text=source_text,
         )
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(
         render_circuit_definition_detail(
             build_local_circuit_definition_detail(definition),
@@ -242,8 +246,8 @@ def delete_command(
 
     try:
         delete_circuit_definition(definition_id)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     typer.echo(render_circuit_definition_delete_result(definition_id, output=output))
 
 
@@ -266,8 +270,8 @@ def export_bundle_command(
     """Export one local definition bundle for interchange with app/archive consumers."""
     try:
         bundle = export_definition_bundle(definition_id)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     try:
         bundle_file.parent.mkdir(parents=True, exist_ok=True)
         bundle_file.write_text(bundle.model_dump_json(indent=2), encoding="utf-8")
@@ -308,8 +312,8 @@ def import_bundle_command(
         exit_with_runtime_error(f"Could not parse definition bundle {bundle_file}: {error}")
     try:
         imported_definition = import_definition_bundle(bundle)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
     receipt = LocalDefinitionBundleImportReceipt(
         bundle_file=str(bundle_file),
         bundle=bundle,

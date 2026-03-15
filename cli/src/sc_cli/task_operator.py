@@ -4,9 +4,8 @@ from collections.abc import Callable
 from enum import Enum
 from time import monotonic, sleep
 
-from sc_backend import BackendContractError
-
-from sc_cli.errors import exit_for_backend_error, exit_with_runtime_error
+from sc_cli.errors import exit_for_contract_error, exit_with_runtime_error
+from sc_cli.local_errors import CliContractError
 from sc_cli.local_runtime import LocalTaskDetail, LocalTaskEvent, LocalTaskSummary
 from sc_cli.output import OutputMode
 
@@ -41,8 +40,8 @@ def get_task_or_exit(
 ) -> LocalTaskDetail:
     try:
         return get_task_fn(task_id)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
 
 
 def get_lane_task_or_exit(
@@ -67,8 +66,8 @@ def list_tasks_or_exit(
 ) -> list[LocalTaskSummary]:
     try:
         return list_tasks_fn(**filters)
-    except BackendContractError as error:
-        exit_for_backend_error(error, output=output)
+    except CliContractError as error:
+        exit_for_contract_error(error, output=output)
 
 
 def latest_task_or_exit(

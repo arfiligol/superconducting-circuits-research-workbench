@@ -1,13 +1,8 @@
-import importlib
 import json
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from sc_backend import (
-    ApiErrorBodyResponse,
-    BackendContractError,
-)
 from typer.testing import CliRunner
 
 from sc_cli.app import app
@@ -21,6 +16,7 @@ from sc_cli.commands import (
     simulation,
     tasks,
 )
+from sc_cli.local_errors import build_contract_error
 from sc_cli.local_runtime import LocalTaskDetail, LocalTaskSummary
 from sc_cli.runtime import get_task as runtime_get_task
 from sc_cli.runtime import list_tasks as runtime_list_tasks
@@ -149,14 +145,6 @@ def _canonical_definition_source(name: str) -> str:
             '  - [C2, "2", "0", "C2"]',
         ]
     )
-
-
-def _require_backend_catalog_facade() -> None:
-    try:
-        importlib.import_module("sc_backend.rewrite_cli")
-    except ImportError:
-        pytest.skip("backend catalog facade is unavailable on this branch")
-
 
 def test_preview_artifacts_command_lists_sc_core_exports() -> None:
     runner = CliRunner()
@@ -621,7 +609,6 @@ def test_session_active_dataset_command_reports_cleared_context() -> None:
 
 
 def test_datasets_list_command_reads_rewrite_dataset_state() -> None:
-    _require_backend_catalog_facade()
     runner = CliRunner()
 
     result = runner.invoke(app, ["datasets", "list"])
@@ -633,7 +620,6 @@ def test_datasets_list_command_reads_rewrite_dataset_state() -> None:
 
 
 def test_datasets_list_command_supports_json_output() -> None:
-    _require_backend_catalog_facade()
     runner = CliRunner()
 
     result = runner.invoke(app, ["datasets", "list", "--output", "json"])
@@ -644,7 +630,6 @@ def test_datasets_list_command_supports_json_output() -> None:
 
 
 def test_datasets_show_command_reads_one_dataset() -> None:
-    _require_backend_catalog_facade()
     runner = CliRunner()
 
     result = runner.invoke(app, ["datasets", "show", "fluxonium-2025-031"])
@@ -656,7 +641,6 @@ def test_datasets_show_command_reads_one_dataset() -> None:
 
 
 def test_datasets_show_command_supports_json_output() -> None:
-    _require_backend_catalog_facade()
     runner = CliRunner()
 
     result = runner.invoke(app, ["datasets", "show", "transmon-coupler-014", "--output", "json"])
@@ -668,7 +652,6 @@ def test_datasets_show_command_supports_json_output() -> None:
 
 
 def test_datasets_set_metadata_command_updates_dataset_metadata() -> None:
-    _require_backend_catalog_facade()
     runner = CliRunner()
 
     result = runner.invoke(
@@ -697,7 +680,6 @@ def test_datasets_set_metadata_command_updates_dataset_metadata() -> None:
 
 
 def test_datasets_set_metadata_command_supports_json_output() -> None:
-    _require_backend_catalog_facade()
     runner = CliRunner()
 
     result = runner.invoke(
@@ -727,7 +709,6 @@ def test_datasets_set_metadata_command_supports_json_output() -> None:
 
 
 def test_datasets_set_metadata_command_uses_structured_validation_error() -> None:
-    _require_backend_catalog_facade()
     runner = CliRunner()
 
     result = runner.invoke(
@@ -752,6 +733,66 @@ def test_datasets_set_metadata_command_uses_structured_validation_error() -> Non
         "error: Request validation failed. [validation/request_validation_failed]" in result.output
     )
     assert "field_error: capabilities:" in result.output
+
+
+def test_datasets_export_bundle_command_supports_json_output(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle_file = tmp_path / "dataset.bundle.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "datasets",
+            "export-bundle",
+            "fluxonium-2025-031",
+            str(bundle_file),
+            "--output",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["bundle"]["metadata"]["bundle_family"] == "dataset_bundle"
+    assert payload["bundle"]["dataset"]["dataset_id"] == "fluxonium-2025-031"
+    assert payload["bundle"]["dataset"]["trace_manifest"][0]["trace_batch_id"] == "trace-batch:88"
+    assert bundle_file.exists()
+
+
+def test_datasets_import_bundle_command_preserves_lineage(tmp_path: Path) -> None:
+    runner = CliRunner()
+    bundle_file = tmp_path / "dataset.bundle.json"
+
+    export_result = runner.invoke(
+        app,
+        [
+            "datasets",
+            "export-bundle",
+            "transmon-coupler-014",
+            str(bundle_file),
+        ],
+    )
+    import_result = runner.invoke(
+        app,
+        [
+            "datasets",
+            "import-bundle",
+            str(bundle_file),
+            "--output",
+            "json",
+        ],
+    )
+
+    assert export_result.exit_code == 0
+    assert import_result.exit_code == 0
+    payload = json.loads(import_result.stdout)
+    imported_dataset = payload["imported_dataset"]
+    assert imported_dataset["dataset_id"].startswith("imported-dataset-")
+    assert imported_dataset["lineage"]["source_dataset_id"] == "transmon-coupler-014"
+    assert (
+        imported_dataset["lineage"]["imported_from_bundle_id"]
+        == payload["bundle"]["metadata"]["bundle_id"]
+    )
 
 
 def test_tasks_list_command_reads_rewrite_task_state() -> None:
@@ -1759,14 +1800,12 @@ def test_ops_inspect_command_handles_backend_contract_errors(
     assert "error: Task read failed. [validation/request_failed]" in result.output
 
 
-def _backend_error(message: str) -> BackendContractError:
-    return BackendContractError(
-        ApiErrorBodyResponse(
-            code="request_failed",
-            category="validation",
-            message=message,
-            status=422,
-        )
+def _backend_error(message: str):
+    return build_contract_error(
+        code="request_failed",
+        category="validation",
+        message=message,
+        status=422,
     )
 
 

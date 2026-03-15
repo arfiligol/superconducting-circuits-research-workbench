@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
-from sc_backend import ApiErrorBodyResponse, BackendContractError
 
+from sc_cli.local_errors import CliContractError, build_contract_error
 from sc_cli.local_store import (
     read_json,
     session_state_path,
@@ -188,7 +188,7 @@ class _PersistedTaskRegistry(BaseModel):
     tasks: list[LocalTaskDetail]
 
 
-LOCAL_DATASETS: dict[str, LocalSessionDataset] = {
+_SEEDED_SESSION_DATASETS: dict[str, LocalSessionDataset] = {
     "fluxonium-2025-031": LocalSessionDataset(
         dataset_id="fluxonium-2025-031",
         name="Fluxonium sweep 031",
@@ -208,22 +208,20 @@ LOCAL_DATASETS: dict[str, LocalSessionDataset] = {
 }
 
 
-def _backend_error(
+def _contract_error(
     *,
     code: str,
     category: Literal["not_found", "validation", "forbidden", "conflict"],
     message: str,
     status: int,
     field_errors: list[dict[str, str]] | None = None,
-) -> BackendContractError:
-    return BackendContractError(
-        ApiErrorBodyResponse(
-            code=code,
-            category=category,
-            message=message,
-            status=status,
-            field_errors=[] if field_errors is None else field_errors,
-        )
+) -> CliContractError:
+    return build_contract_error(
+        code=code,
+        category=category,
+        message=message,
+        status=status,
+        field_errors=field_errors,
     )
 
 
@@ -242,9 +240,7 @@ def _task_summary(task: LocalTaskDetail) -> LocalTaskSummary:
 
 
 def _session_with_active_dataset(dataset_id: str | None) -> LocalSession:
-    active_dataset = (
-        None if dataset_id is None else LOCAL_DATASETS[dataset_id].model_copy(deep=True)
-    )
+    active_dataset = None if dataset_id is None else _get_session_dataset(dataset_id)
     return LocalSession(
         session_id="rewrite-local-session",
         auth=LocalSessionAuth(
@@ -268,6 +264,22 @@ def _session_with_active_dataset(dataset_id: str | None) -> LocalSession:
             active_dataset=active_dataset,
         ),
     )
+
+
+def _get_session_dataset(dataset_id: str) -> LocalSessionDataset:
+    try:
+        from sc_cli.local_datasets import get_local_session_dataset
+    except ImportError:
+        return _SEEDED_SESSION_DATASETS[dataset_id].model_copy(deep=True)
+    return get_local_session_dataset(dataset_id)
+
+
+def _dataset_exists(dataset_id: str) -> bool:
+    try:
+        from sc_cli.local_datasets import has_local_dataset
+    except ImportError:
+        return dataset_id in _SEEDED_SESSION_DATASETS
+    return has_local_dataset(dataset_id)
 
 
 def _seed_running_simulation_task() -> LocalTaskDetail:
@@ -664,8 +676,8 @@ def get_session() -> LocalSession:
 
 
 def set_active_dataset(dataset_id: str | None) -> LocalSession:
-    if dataset_id is not None and dataset_id not in LOCAL_DATASETS:
-        raise _backend_error(
+    if dataset_id is not None and not _dataset_exists(dataset_id):
+        raise _contract_error(
             code="dataset_not_found",
             category="not_found",
             message=f"Dataset {dataset_id} was not found.",
@@ -702,7 +714,7 @@ def list_tasks(
 def get_task(task_id: int) -> LocalTaskDetail:
     task = _STATE.tasks.get(task_id)
     if task is None:
-        raise _backend_error(
+        raise _contract_error(
             code="task_not_found",
             category="not_found",
             message=f"Task {task_id} was not found.",
@@ -726,7 +738,7 @@ def submit_task(
         submitted_from_active_dataset = True
 
     if kind == "simulation" and definition_id is None:
-        raise _backend_error(
+        raise _contract_error(
             code="simulation_definition_required",
             category="validation",
             message="Simulation tasks require definition_id.",
@@ -734,15 +746,15 @@ def submit_task(
         )
 
     if kind in {"simulation", "characterization"} and effective_dataset_id is None:
-        raise _backend_error(
+        raise _contract_error(
             code="dataset_context_required",
             category="validation",
             message="Provide --dataset-id or configure an active dataset in the local session.",
             status=422,
         )
 
-    if effective_dataset_id is not None and effective_dataset_id not in LOCAL_DATASETS:
-        raise _backend_error(
+    if effective_dataset_id is not None and not _dataset_exists(effective_dataset_id):
+        raise _contract_error(
             code="dataset_not_found",
             category="not_found",
             message=f"Dataset {effective_dataset_id} was not found.",
@@ -816,7 +828,7 @@ def export_task_result_bundle(task_id: int):
 
     task = get_task(task_id)
     if not task.result_refs.result_handles and task.result_refs.trace_payload is None:
-        raise _backend_error(
+        raise _contract_error(
             code="result_bundle_unavailable",
             category="validation",
             message=f"Task {task_id} does not expose result payloads for bundle export.",

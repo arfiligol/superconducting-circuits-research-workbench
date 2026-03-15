@@ -8,9 +8,9 @@ from types import SimpleNamespace
 from typing import Any, Literal, cast
 
 from pydantic import BaseModel
-from sc_backend import ApiErrorBodyResponse, BackendContractError
 from sc_core import inspect_circuit_definition_source
 
+from sc_cli.local_errors import CliContractError, build_contract_error
 from sc_cli.local_store import definition_catalog_path, read_json, write_model
 
 LocalValidationLevel = Literal["ok", "warning", "invalid"]
@@ -104,22 +104,20 @@ class _PersistedDefinitionCatalog(BaseModel):
     definitions: list[LocalCircuitDefinitionDetail]
 
 
-def _backend_error(
+def _contract_error(
     *,
     code: str,
     category: Literal["not_found", "validation", "forbidden", "conflict"],
     message: str,
     status: int,
     field_errors: list[dict[str, str]] | None = None,
-) -> BackendContractError:
-    return BackendContractError(
-        ApiErrorBodyResponse(
-            code=code,
-            category=category,
-            message=message,
-            status=status,
-            field_errors=[] if field_errors is None else field_errors,
-        )
+) -> CliContractError:
+    return build_contract_error(
+        code=code,
+        category=category,
+        message=message,
+        status=status,
+        field_errors=field_errors,
     )
 
 
@@ -270,7 +268,7 @@ def _validate_source_text(source_text: str) -> str:
     normalized_source_text = source_text.strip()
     if normalized_source_text:
         return source_text
-    raise _backend_error(
+    raise _contract_error(
         code="request_validation_failed",
         category="validation",
         message="Request validation failed.",
@@ -443,7 +441,7 @@ def list_local_circuit_definitions(
 def get_local_circuit_definition(definition_id: int) -> LocalCircuitDefinitionDetail:
     definition = _STATE.definitions.get(definition_id)
     if definition is None:
-        raise _backend_error(
+        raise _contract_error(
             code="definition_not_found",
             category="not_found",
             message=f"Circuit definition {definition_id} was not found.",
@@ -491,7 +489,7 @@ def update_local_circuit_definition(
 
 def delete_local_circuit_definition(definition_id: int) -> None:
     if definition_id not in _STATE.definitions:
-        raise _backend_error(
+        raise _contract_error(
             code="definition_not_found",
             category="not_found",
             message=f"Circuit definition {definition_id} was not found.",

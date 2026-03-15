@@ -4,12 +4,6 @@ from collections.abc import Iterable, Sequence
 from json import dumps
 
 from pydantic import BaseModel
-from sc_backend import (
-    ApiErrorBodyResponse,
-    DatasetDetailResponse,
-    DatasetMetadataUpdateResponse,
-    DatasetSummaryResponse,
-)
 
 from sc_cli.local_circuit_definitions import (
     LocalCircuitDefinitionDetail,
@@ -18,6 +12,14 @@ from sc_cli.local_circuit_definitions import (
     LocalDefinitionBundleExportReceipt,
     LocalDefinitionBundleImportReceipt,
 )
+from sc_cli.local_datasets import (
+    LocalDatasetBundleExportReceipt,
+    LocalDatasetBundleImportReceipt,
+    LocalDatasetDetail,
+    LocalDatasetMetadataUpdateReceipt,
+    LocalDatasetSummary,
+)
+from sc_cli.local_errors import CliErrorBody
 from sc_cli.local_interchange import LocalResultBundleExportReceipt, LocalResultBundleImportReceipt
 from sc_cli.local_runtime import LocalSession, LocalTaskDetail, LocalTaskEvent, LocalTaskSummary
 from sc_cli.local_views import (
@@ -200,7 +202,7 @@ def render_session_active_dataset(
 
 
 def render_dataset_summaries(
-    datasets: list[DatasetSummaryResponse],
+    datasets: list[LocalDatasetSummary],
     *,
     output: OutputMode = OutputMode.TEXT,
 ) -> str:
@@ -224,7 +226,7 @@ def render_dataset_summaries(
 
 
 def render_dataset_detail(
-    dataset: DatasetDetailResponse,
+    dataset: LocalDatasetDetail,
     *,
     output: OutputMode = OutputMode.TEXT,
 ) -> str:
@@ -260,7 +262,24 @@ def render_dataset_detail(
     lines.extend(["artifacts:"])
     lines.extend(f"- {artifact}" for artifact in dataset.artifacts)
     lines.extend(["lineage:"])
-    lines.extend(f"- {item}" for item in dataset.lineage)
+    if dataset.lineage is None:
+        lines.append("- none")
+    else:
+        lines.extend(
+            [
+                f"- source_runtime={dataset.lineage.source_runtime}",
+                (
+                    "- source_dataset_id="
+                    f"{_render_nullable(dataset.lineage.source_dataset_id)}"
+                ),
+                f"- source_bundle_id={dataset.lineage.source_bundle_id or '-'}",
+                f"- parent_bundle_id={dataset.lineage.parent_bundle_id or '-'}",
+                (
+                    "- imported_from_bundle_id="
+                    f"{dataset.lineage.imported_from_bundle_id or '-'}"
+                ),
+            ]
+        )
     lines.extend(
         [
             f"metrics_capability_count: {dataset.metrics.capability_count}",
@@ -273,11 +292,17 @@ def render_dataset_detail(
             f"storage_result_handle_count: {len(dataset.storage.result_handles)}",
         ]
     )
+    lines.extend(
+        [
+            f"design_scope_count: {len(dataset.design_scopes)}",
+            f"trace_manifest_count: {len(dataset.trace_manifest)}",
+        ]
+    )
     return "\n".join(lines)
 
 
 def render_dataset_metadata_update(
-    result: DatasetMetadataUpdateResponse,
+    result: LocalDatasetMetadataUpdateReceipt,
     *,
     output: OutputMode = OutputMode.TEXT,
 ) -> str:
@@ -291,6 +316,62 @@ def render_dataset_metadata_update(
         render_dataset_detail(result.dataset, output=OutputMode.TEXT),
     ]
     return "\n".join(lines)
+
+
+def render_dataset_bundle_export_receipt(
+    receipt: LocalDatasetBundleExportReceipt,
+    *,
+    output: OutputMode = OutputMode.TEXT,
+) -> str:
+    if output is OutputMode.JSON:
+        return _render_json_model(receipt)
+    lineage = receipt.bundle.dataset.lineage
+    return "\n".join(
+        [
+            "operation: exported",
+            f"bundle_file: {receipt.bundle_file}",
+            f"bundle_id: {receipt.bundle.metadata.bundle_id}",
+            f"bundle_family: {receipt.bundle.metadata.bundle_family}",
+            f"bundle_version: {receipt.bundle.metadata.bundle_version}",
+            f"source_dataset_id: {receipt.bundle.dataset.dataset_id}",
+            f"source_dataset_name: {receipt.bundle.dataset.name}",
+            (
+                "lineage_source_dataset_id: "
+                f"{_render_nullable(None if lineage is None else lineage.source_dataset_id)}"
+            ),
+            (
+                "lineage_source_bundle_id: "
+                f"{_render_nullable(None if lineage is None else lineage.source_bundle_id)}"
+            ),
+        ]
+    )
+
+
+def render_dataset_bundle_import_receipt(
+    receipt: LocalDatasetBundleImportReceipt,
+    *,
+    output: OutputMode = OutputMode.TEXT,
+) -> str:
+    if output is OutputMode.JSON:
+        return _render_json_model(receipt)
+    lineage = receipt.imported_dataset.lineage
+    return "\n".join(
+        [
+            "operation: imported",
+            f"bundle_file: {receipt.bundle_file}",
+            f"bundle_id: {receipt.bundle.metadata.bundle_id}",
+            f"imported_dataset_id: {receipt.imported_dataset.dataset_id}",
+            f"imported_dataset_name: {receipt.imported_dataset.name}",
+            (
+                "source_dataset_id: "
+                f"{_render_nullable(None if lineage is None else lineage.source_dataset_id)}"
+            ),
+            (
+                "imported_from_bundle_id: "
+                f"{_render_nullable(None if lineage is None else lineage.imported_from_bundle_id)}"
+            ),
+        ]
+    )
 
 
 def render_task_summaries(
@@ -726,7 +807,7 @@ def render_circuit_definition_delete_result(
     )
 
 
-def render_api_error(error: ApiErrorBodyResponse, *, output: OutputMode = OutputMode.TEXT) -> str:
+def render_api_error(error: CliErrorBody, *, output: OutputMode = OutputMode.TEXT) -> str:
     if output is OutputMode.JSON:
         return _render_json_payload({"error": error.model_dump(mode="json")})
     suffix = f" [{error.category}/{error.code}]"
@@ -925,7 +1006,7 @@ def _render_event_metadata_value(value: object) -> str:
     return str(value)
 
 
-def _render_primary_trace_store_uri(dataset: DatasetDetailResponse) -> str:
+def _render_primary_trace_store_uri(dataset: LocalDatasetDetail) -> str:
     if dataset.storage.primary_trace is None:
         return "-"
     return dataset.storage.primary_trace.store_uri
