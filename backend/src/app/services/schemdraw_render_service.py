@@ -300,7 +300,10 @@ def _render_schemdraw_svg(
     namespace: dict[str, object] = {
         "__builtins__": _safe_builtins(),
     }
-    exec(code, namespace)
+    try:
+        exec(code, namespace)
+    except Exception as exc:
+        raise _runtime_error_from_exception(exc) from exc
     build_drawing = namespace.get("build_drawing")
     if not callable(build_drawing):
         raise SchemdrawRuntimeExecutionError(

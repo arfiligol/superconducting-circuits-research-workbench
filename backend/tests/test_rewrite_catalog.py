@@ -539,6 +539,33 @@ def test_schemdraw_render_returns_runtime_diagnostic_when_entrypoint_fails() -> 
     assert payload["diagnostics"][0]["line"] == 5
 
 
+def test_schemdraw_render_returns_runtime_diagnostic_for_top_level_source_failure() -> None:
+    response = client.post(
+        "/schemdraw/render",
+        json={
+            "source_text": (
+                "import schemdraw\n"
+                "boom = 1 / 0\n\n"
+                "def build_drawing(relation):\n"
+                "    return schemdraw.Drawing(show=False)\n"
+            ),
+            "relation_config": {"tag": "draft"},
+            "linked_schema": None,
+            "document_version": 23,
+            "request_id": "req_sdraw_23",
+            "render_mode": "manual",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["status"] == "runtime_error"
+    assert payload["svg"] is None
+    assert payload["diagnostics"][0]["code"] == "schemdraw_runtime_error"
+    assert payload["diagnostics"][0]["blocking"] is True
+    assert payload["diagnostics"][0]["line"] == 2
+
+
 def test_schemdraw_route_is_exposed_on_backend_canonical_path() -> None:
     route_paths = {route.path for route in app.router.routes}
 
