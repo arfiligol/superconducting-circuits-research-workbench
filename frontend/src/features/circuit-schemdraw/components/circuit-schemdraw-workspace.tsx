@@ -17,6 +17,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CodeMirror from "@uiw/react-codemirror";
 
+import { SchemdrawSvgViewer } from "@/features/circuit-schemdraw/components/schemdraw-svg-viewer";
 import { useCircuitSchemdrawData } from "@/features/circuit-schemdraw/hooks/use-circuit-schemdraw-data";
 import { parseSchemdrawDefinitionIdParam } from "@/features/circuit-schemdraw/lib/definition-id";
 import {
@@ -592,12 +593,10 @@ export function CircuitSchemdrawWorkspace() {
           ) : null}
 
           {renderSurface.svg ? (
-            <div className="mt-4 flex min-h-[520px] items-start justify-center overflow-auto rounded-[0.8rem] border border-border bg-white p-5 text-slate-900">
-              <div
-                className="max-w-full"
-                dangerouslySetInnerHTML={{ __html: renderSurface.svg }}
-              />
-            </div>
+            <SchemdrawSvgViewer
+              svg={renderSurface.svg}
+              previewMetadata={renderSurface.previewMetadata ?? null}
+            />
           ) : (
             <div className="mt-4 flex min-h-[520px] items-center justify-center rounded-[0.8rem] border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
               {renderSurface.failureDetail

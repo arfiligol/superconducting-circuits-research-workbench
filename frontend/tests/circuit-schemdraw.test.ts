@@ -30,6 +30,12 @@ import {
   summarizeSchemdrawEditorNotice,
 } from "../src/features/circuit-schemdraw/lib/editor-diagnostics";
 import {
+  calculateFitTransform,
+  deriveSvgViewport,
+  panByStep,
+  zoomAroundPoint,
+} from "../src/features/circuit-schemdraw/lib/svg-viewer";
+import {
   buildRenderSurfaceFromError,
   buildSchemdrawRenderRequest,
   buildRenderSurfaceFromResponse,
@@ -45,6 +51,15 @@ const schemdrawWorkspaceSource = readFileSync(
   fileURLToPath(
     new URL(
       "../src/features/circuit-schemdraw/components/circuit-schemdraw-workspace.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const schemdrawViewerSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/circuit-schemdraw/components/schemdraw-svg-viewer.tsx",
       import.meta.url,
     ),
   ),
@@ -657,6 +672,87 @@ describe("circuit schemdraw render helpers", () => {
   });
 });
 
+describe("circuit schemdraw svg viewer helpers", () => {
+  it("derives viewport dimensions from backend metadata and carries the viewBox", () => {
+    expect(
+      deriveSvgViewport(
+        '<svg width="640" height="480" viewBox="0 0 640 480"><rect width="640" height="480" /></svg>',
+        {
+          width: 1200,
+          height: 800,
+          view_box: "0 0 1200 800",
+        },
+      ),
+    ).toEqual({
+      width: 1200,
+      height: 800,
+      viewBox: {
+        minX: 0,
+        minY: 0,
+        width: 1200,
+        height: 800,
+      },
+    });
+  });
+
+  it("falls back to raw svg attributes when preview metadata is unavailable", () => {
+    expect(
+      deriveSvgViewport(
+        '<svg width="900" height="420" viewBox="10 20 900 420"><rect width="900" height="420" /></svg>',
+        null,
+      ),
+    ).toEqual({
+      width: 900,
+      height: 420,
+      viewBox: {
+        minX: 10,
+        minY: 20,
+        width: 900,
+        height: 420,
+      },
+    });
+  });
+
+  it("calculates a centered fit transform for the svg viewer", () => {
+    const fitTransform = calculateFitTransform(
+      { width: 1000, height: 700 },
+      { width: 900, height: 300 },
+    );
+
+    expect(fitTransform.scale).toBeCloseTo(1.0577777778, 7);
+    expect(fitTransform.translateX).toBeCloseTo(24, 7);
+    expect(fitTransform.translateY).toBeCloseTo(191.3333333, 7);
+  });
+
+  it("zooms around an anchor point without changing the anchored content location", () => {
+    const nextPan = zoomAroundPoint({
+      baseTransform: {
+        scale: 0.5,
+        translateX: 80,
+        translateY: 40,
+      },
+      currentZoom: 1,
+      nextZoom: 1.2,
+      currentPan: {
+        x: 20,
+        y: 12,
+      },
+      anchorX: 250,
+      anchorY: 180,
+    });
+
+    expect(nextPan.x).toBeCloseTo(-10, 8);
+    expect(nextPan.y).toBeCloseTo(-13.6, 8);
+  });
+
+  it("pans the view in each cardinal direction with stable step sizes", () => {
+    expect(panByStep({ x: 0, y: 0 }, "left")).toEqual({ x: -40, y: 0 });
+    expect(panByStep({ x: 0, y: 0 }, "right")).toEqual({ x: 40, y: 0 });
+    expect(panByStep({ x: 0, y: 0 }, "up")).toEqual({ x: 0, y: -40 });
+    expect(panByStep({ x: 0, y: 0 }, "down")).toEqual({ x: 0, y: 40 });
+  });
+});
+
 describe("circuit schemdraw workspace source contracts", () => {
   it("keeps linked schema context first, editor/preview as the primary row, then diagnostics and snapshot", () => {
     const linkedIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Context");
@@ -676,6 +772,16 @@ describe("circuit schemdraw workspace source contracts", () => {
     expect(schemdrawWorkspaceSource).toContain("Advanced relation mapping");
     expect(schemdrawWorkspaceSource).not.toContain("Relation Config Editor");
     expect(schemdrawWorkspaceSource).toContain("<details");
+  });
+
+  it("upgrades the preview pane from a raw svg box to a viewer with explicit controls", () => {
+    expect(schemdrawWorkspaceSource).toContain("SchemdrawSvgViewer");
+    expect(schemdrawViewerSource).toContain("Zoom in");
+    expect(schemdrawViewerSource).toContain("Zoom out");
+    expect(schemdrawViewerSource).toContain("Fit to view");
+    expect(schemdrawViewerSource).toContain("Reset view");
+    expect(schemdrawViewerSource).toContain("Drag to pan");
+    expect(schemdrawViewerSource).toContain("dangerouslySetInnerHTML");
   });
 });
 
