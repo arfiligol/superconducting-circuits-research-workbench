@@ -174,7 +174,7 @@ export function CircuitDefinitionCatalogWorkspace() {
             Showing {visibleDefinitions.length} of {definitionsTotalCount} persisted schemas
           </span>
           <span className="rounded-full border border-border px-3 py-1">
-            Catalog authority only
+            Persisted schema list
           </span>
         </div>
 

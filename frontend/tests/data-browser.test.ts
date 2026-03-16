@@ -147,6 +147,21 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).not.toContain("setActiveDataset(");
   });
 
+  it("strengthens raw-data search affordance and keeps the wording consistent", () => {
+    expect(rawDataWorkspaceSource).toContain("function SearchField");
+    expect(rawDataWorkspaceSource).toContain('label="Search Design"');
+    expect(rawDataWorkspaceSource).toContain('label="Search Trace Summaries"');
+    expect(rawDataWorkspaceSource).toContain("<Search className=");
+  });
+
+  it("rebuilds single trace preview as plot and table views over one payload", () => {
+    expect(rawDataWorkspaceSource).toContain("TracePreviewPlot");
+    expect(rawDataWorkspaceSource).toContain("previewMode");
+    expect(rawDataWorkspaceSource).toContain('mode === "plot" ? "Plot" : "Table"');
+    expect(rawDataWorkspaceSource).toContain("same preview payload");
+    expect(rawDataWorkspaceSource).not.toContain("Result Handles");
+  });
+
   it("keeps dashboard and raw-data hooks bound to the shared active dataset", () => {
     expect(dashboardDataHookSource).toContain("const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null");
     expect(dashboardDataHookSource).toContain("activeDatasetId ? datasetProfileKey(activeDatasetId) : null");

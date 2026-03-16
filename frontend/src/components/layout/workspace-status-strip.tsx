@@ -48,7 +48,7 @@ type WorkspaceStatusStripProps = Readonly<{
   interactionBoundaryRef?: RefObject<HTMLElement | null>;
 }>;
 
-type ContextSectionId = "runtime" | "workspace" | "dataset" | "queue" | "worker";
+type ContextSectionId = "runtime" | "workspace" | "dataset" | "tasks";
 
 type SurfaceNotice = Readonly<{
   tone: "success" | "info" | "warning" | "error";
@@ -79,13 +79,17 @@ function ActionButton({
   );
 }
 
-function ModeButton({
+function RuntimeModeCard({
   label,
+  title,
+  details,
   active = false,
   disabled = false,
   onClick,
 }: Readonly<{
   label: string;
+  title: string;
+  details: readonly string[];
   active?: boolean;
   disabled?: boolean;
   onClick: () => void;
@@ -96,13 +100,25 @@ function ModeButton({
       onClick={onClick}
       disabled={disabled}
       className={cx(
-        "inline-flex min-h-10 cursor-pointer items-center justify-center rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:opacity-60",
+        "flex min-h-[188px] w-full cursor-pointer flex-col items-start justify-between rounded-[1.1rem] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:opacity-60",
         active
-          ? "border-primary/40 bg-primary/12 text-foreground"
-          : "border-border bg-background text-foreground hover:border-primary/35 hover:bg-primary/10",
+          ? "border-primary/40 bg-primary/12 text-foreground shadow-[0_16px_34px_rgba(37,99,235,0.16)]"
+          : "border-border bg-background text-foreground hover:border-primary/35 hover:bg-primary/10 hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]",
       )}
     >
-      {label}
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-2 text-base font-semibold text-foreground">{title}</p>
+      </div>
+      <div className="space-y-2">
+        {details.map((detail) => (
+          <p key={detail} className="text-sm leading-6 text-foreground/74 dark:text-foreground/74">
+            {detail}
+          </p>
+        ))}
+      </div>
     </button>
   );
 }
@@ -236,6 +252,21 @@ function buildContextResetSearch(
   }
   const nextSearch = params.toString();
   return nextSearch.length > 0 ? `${pathname}?${nextSearch}` : pathname;
+}
+
+function formatTaskStatusLabel(
+  status: "queued" | "running" | "completed" | "failed",
+) {
+  switch (status) {
+    case "queued":
+      return "Pending";
+    case "running":
+      return "Running";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+  }
 }
 
 function isRetryableError(error: Error | undefined): boolean {
@@ -400,19 +431,19 @@ export function WorkspaceStatusStrip({
           : "Workspace selection is pending online auth.";
   const queueValue =
     isTaskQueueLoading && summary.total === 0
-      ? "Loading queue..."
-      : activeTasks.length > 0
-        ? `${activeTasks.length} active`
+      ? "Loading tasks..."
+      : summary.runningCount > 0 || summary.queuedCount > 0
+        ? `${summary.runningCount} Running · ${summary.queuedCount} Pending`
         : summary.total > 0
-          ? `${summary.completedCount} done · ${summary.failedCount} failed`
-          : "Idle";
+          ? `${summary.completedCount} Completed · ${summary.failedCount} Failed`
+          : "No active tasks";
   const queueDetail = activeTaskDetail
-    ? `Attached #${activeTaskDetail.taskId} · ${activeTaskDetail.progress.phase}`
+    ? `Attached #${activeTaskDetail.taskId} · ${formatTaskStatusLabel(activeTaskDetail.progress.phase)}`
     : latestTask
-      ? `Latest #${latestTask.taskId} · ${latestTask.status}`
+      ? `Latest #${latestTask.taskId} · ${formatTaskStatusLabel(latestTask.status)}`
       : runtimeMode === "local"
         ? "No Local Space task attached"
-        : "No attached online task";
+        : "No online task attached";
   const contextWarning =
     sessionError ?? taskQueueError ?? activeTaskError ?? activeDatasetError ?? undefined;
   const triggerLabel = runtimeValue;
@@ -422,10 +453,10 @@ export function WorkspaceStatusStrip({
       ? "Local backend"
       : ((session?.connection.label ?? session?.connection.origin ?? runtimeTargetInput.trim()) ||
           "Server target pending");
-  const runtimeStatusCopy =
+  const runtimeRefreshCopy =
     runtimeMode === "local"
-      ? "Mode switch rebuilds queue, dataset, and task context for Local Space."
-      : "Switching to online validates the target, clears stale shell context, and requires a fresh auth step.";
+      ? "Refresh rechecks the Local Space session envelope without changing runtime mode."
+      : "Refresh revalidates the current online session and target summary without switching modes.";
 
   async function handleWorkspaceSwitch(workspaceId: string) {
     setWorkspaceNotice(null);
@@ -465,7 +496,7 @@ export function WorkspaceStatusStrip({
         await clearActiveDataset();
         setDatasetNotice({
           tone: "success",
-          message: "Active dataset cleared for the current runtime context.",
+          message: "No active dataset is selected for the current runtime context.",
         });
       } else {
         await setActiveDataset(datasetId);
@@ -576,7 +607,7 @@ export function WorkspaceStatusStrip({
             </ShellNotice>
           ) : null}
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ContextSectionCard
               id="runtime"
               selected={selectedSection === "runtime"}
@@ -605,22 +636,13 @@ export function WorkspaceStatusStrip({
               detail={datasetSummary.detail ?? datasetSummary.badge ?? "No attached dataset"}
             />
             <ContextSectionCard
-              id="queue"
-              selected={selectedSection === "queue"}
+              id="tasks"
+              selected={selectedSection === "tasks"}
               onSelect={setSelectedSection}
               icon={Workflow}
-              label="Tasks Queue"
+              label="Tasks & Runtime"
               value={queueValue}
-              detail={queueDetail}
-            />
-            <ContextSectionCard
-              id="worker"
-              selected={selectedSection === "worker"}
-              onSelect={setSelectedSection}
-              icon={ServerCog}
-              label={workerSummary.label}
-              value={workerSummary.value}
-              detail={workerSummary.detail}
+              detail={`${queueDetail} · ${workerSummary.value}`}
             />
           </div>
 
@@ -628,17 +650,7 @@ export function WorkspaceStatusStrip({
             <SectionFrame
               icon={Globe}
               title="Runtime Mode"
-              description="Runtime mode is the outer shell boundary. Switching modes rebuilds context and never bridges local and online resources automatically."
-              actions={
-                <ActionButton
-                  label="Refresh session"
-                  spinning={isSessionRefreshing}
-                  disabled={isSessionLoading}
-                  onClick={() => {
-                    void refreshSession();
-                  }}
-                />
-              }
+              description="Runtime mode is the outer shell boundary. Choose the backend-owned context you want to operate in, then manage the server target beneath it."
             >
               {runtimeNotice ? (
                 <ShellNotice className="mb-4" tone={runtimeNotice.tone}>
@@ -646,81 +658,72 @@ export function WorkspaceStatusStrip({
                 </ShellNotice>
               ) : null}
 
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-                <div className="space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    <ModeButton
-                      label="Local Mode"
-                      active={runtimeMode === "local"}
-                      disabled={!canSwitchRuntimeMode || runtimeSwitchingTo !== null}
-                      onClick={() => {
-                        void handleRuntimeModeSwitch("local");
-                      }}
-                    />
-                    <ModeButton
-                      label={runtimeSwitchingTo === "online" ? "Connecting..." : "Online Mode"}
-                      active={runtimeMode === "online"}
-                      disabled={!canSwitchRuntimeMode || runtimeSwitchingTo !== null}
-                      onClick={() => {
-                        void handleRuntimeModeSwitch("online");
-                      }}
-                    />
-                    {runtimeMode === "online" ? (
-                      <Link
-                        href="/login"
-                        className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                      >
-                        Open Auth Entry
-                      </Link>
-                    ) : null}
-                  </div>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <RuntimeModeCard
+                    label="Local Mode"
+                    title="Local Space"
+                    details={[
+                      "Pairs the shell with the local backend and bypasses remote sign-in.",
+                      "Datasets, schemas, results, and tasks stay local until you explicitly import or export them.",
+                      "Queue and dataset context rebuild for Local Space on every mode switch.",
+                    ]}
+                    active={runtimeMode === "local"}
+                    disabled={!canSwitchRuntimeMode || runtimeSwitchingTo !== null}
+                    onClick={() => {
+                      void handleRuntimeModeSwitch("local");
+                    }}
+                  />
+                  <RuntimeModeCard
+                    label={runtimeSwitchingTo === "online" ? "Connecting..." : "Online Mode"}
+                    title={modeTargetValue}
+                    details={[
+                      "Validates the server target before rebuilding the online shell context.",
+                      "Requires sign-in when auth is missing and never silently carries a previous remote session across mode switches.",
+                      "Context reset is mode-only. Switching online never bridges local datasets, schemas, results, or tasks.",
+                    ]}
+                    active={runtimeMode === "online"}
+                    disabled={!canSwitchRuntimeMode || runtimeSwitchingTo !== null}
+                    onClick={() => {
+                      void handleRuntimeModeSwitch("online");
+                    }}
+                  />
+                </div>
 
-                  <label className="block rounded-[0.95rem] border border-border bg-background px-4 py-3">
-                    <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Server Target (IP:Port or origin)
-                    </span>
+                <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Server Target (IP:Port or origin)
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
                     <input
                       value={runtimeTargetInput}
                       onChange={(event) => {
                         setRuntimeTargetInput(event.target.value);
                         setServerTargetDraft(event.target.value);
                       }}
-                      className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                      className="min-w-[240px] flex-1 rounded-[0.85rem] border border-border/80 bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
                       placeholder="http://127.0.0.1:8000"
                     />
-                  </label>
-
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {runtimeStatusCopy}
-                  </p>
+                    {runtimeMode === "online" ? (
+                      <Link
+                        href="/login"
+                        className="inline-flex min-h-10 items-center rounded-full border border-border bg-surface px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                      >
+                        Open Auth Entry
+                      </Link>
+                    ) : null}
+                  </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
-                  <CompactContextCard
-                    icon={Globe}
-                    label="Active Mode"
-                    value={runtimeValue}
-                    detail={
-                      runtimeMode === "local"
-                        ? "Local Mode stays in Local Space and bypasses online auth."
-                        : "Online Mode validates the target, then re-enters auth if needed."
-                    }
-                  />
-                  <CompactContextCard
-                    icon={FolderKanban}
-                    label="Context Target"
-                    value={modeTargetValue}
-                    detail={
-                      runtimeMode === "local"
-                        ? "Local backend pairing is fixed in this mode."
-                        : "Switching back from local never silently restores a previous remote login."
-                    }
-                  />
-                  <CompactContextCard
-                    icon={Workflow}
-                    label="Context Reset"
-                    value="No data bridge"
-                    detail="Datasets, schemas, results, and tasks stay mode-scoped until explicit import or export."
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-border bg-background px-4 py-3">
+                  <p className="text-sm text-muted-foreground">{runtimeRefreshCopy}</p>
+                  <ActionButton
+                    label="Refresh session"
+                    spinning={isSessionRefreshing}
+                    disabled={isSessionLoading}
+                    onClick={() => {
+                      void refreshSession();
+                    }}
                   />
                 </div>
               </div>
@@ -934,41 +937,41 @@ export function WorkspaceStatusStrip({
                     />
                   </label>
 
-                  {activeDataset ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleDatasetSelection(null);
-                      }}
-                      disabled={selectingDatasetId !== null || !canSwitchDataset}
-                      className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Clear active dataset
-                    </button>
-                  ) : null}
-
                   {datasetCatalogQuery.isLoading || isDatasetDetailLoading ? (
                     <div className="rounded-[0.9rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
                       Loading {runtimeMode === "local" ? "Local Space" : "workspace-visible"} datasets...
                     </div>
                   ) : filteredDatasetRows.length > 0 ? (
-                    filteredDatasetRows.map((row) => {
+                    [
+                      {
+                        dataset_id: "__none__",
+                        name: "No active dataset",
+                        family: "Session context",
+                        device_type: "Dataset detached",
+                        owner_display_name: runtimeMode === "local" ? "Local Space" : "Current workspace",
+                        lifecycle_state: "active",
+                        allowed_actions: { select: canSwitchDataset, update_profile: false, publish: false, archive: false },
+                      },
+                      ...filteredDatasetRows,
+                    ].map((row) => {
+                      const isNullOption = row.dataset_id === "__none__";
                       const isSelected = row.dataset_id === activeDataset?.datasetId;
-                      const isBusy = selectingDatasetId === row.dataset_id;
+                      const isNullSelected = !activeDataset && isNullOption;
+                      const isBusy = selectingDatasetId === (isNullOption ? "__clear__" : row.dataset_id);
 
                       return (
                         <button
                           key={row.dataset_id}
                           type="button"
                           disabled={
-                            isSelected || isBusy || !row.allowed_actions.select || !canSwitchDataset
+                            (isSelected || isNullSelected) || isBusy || !row.allowed_actions.select || !canSwitchDataset
                           }
                           onClick={() => {
-                            void handleDatasetSelection(row.dataset_id);
+                            void handleDatasetSelection(isNullOption ? null : row.dataset_id);
                           }}
                           className={cx(
                             "w-full rounded-[0.95rem] border px-4 py-4 text-left transition",
-                            isSelected
+                            isSelected || isNullSelected
                               ? "border-primary/35 bg-primary/10"
                               : "border-border bg-background hover:border-primary/25 hover:bg-surface-elevated",
                             (!row.allowed_actions.select || isBusy || !canSwitchDataset) &&
@@ -980,11 +983,10 @@ export function WorkspaceStatusStrip({
                               <p className="truncate text-sm font-semibold text-foreground">
                                 {row.name}
                               </p>
-                              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                                {row.dataset_id}
-                              </p>
                               <p className="mt-2 text-sm text-muted-foreground">
-                                {row.family} · {row.device_type} · {row.owner_display_name}
+                                {isNullOption
+                                  ? "Keep the shell attached to the current runtime without selecting a dataset."
+                                  : `${row.family} · ${row.device_type} · ${row.owner_display_name}`}
                               </p>
                             </div>
                             <span className="inline-flex items-center gap-2">
@@ -992,7 +994,7 @@ export function WorkspaceStatusStrip({
                                 <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
                               ) : null}
                               <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                                {isSelected ? "active" : row.lifecycle_state}
+                                {isSelected || isNullSelected ? "active" : isNullOption ? "detach" : row.lifecycle_state}
                               </span>
                             </span>
                           </div>
@@ -1042,14 +1044,14 @@ export function WorkspaceStatusStrip({
             </SectionFrame>
           ) : null}
 
-          {selectedSection === "queue" ? (
+          {selectedSection === "tasks" ? (
             <SectionFrame
               icon={Workflow}
-              title="Tasks Queue"
+              title="Tasks & Runtime"
               description={
                 runtimeMode === "local"
-                  ? "Local Mode queue rows are isolated to Local Space and rebuilt on every mode switch."
-                  : "Online queue rows come from the active workspace authority and never merge with local task rows."
+                  ? "Local tasks and runtime status are isolated to Local Space and rebuilt on every mode switch."
+                  : "Online task rows and runtime status come from active workspace authority and never merge with local task context."
               }
               actions={
                 <ActionButton
@@ -1063,15 +1065,15 @@ export function WorkspaceStatusStrip({
                 />
               }
             >
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
-                <div className="space-y-3">
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
                   <CompactContextCard
                     icon={Workflow}
                     label="Attached Task"
                     value={activeTaskDetail ? `#${activeTaskDetail.taskId}` : "No attached task"}
                     detail={
                       activeTaskDetail
-                        ? `${activeTaskDetail.progress.phase} · ${Math.round(activeTaskDetail.progress.percentComplete)}%`
+                        ? `${formatTaskStatusLabel(activeTaskDetail.progress.phase)} · ${Math.round(activeTaskDetail.progress.percentComplete)}%`
                         : resolvedTaskId
                           ? `Waiting for task #${resolvedTaskId} detail`
                           : runtimeMode === "local"
@@ -1091,6 +1093,39 @@ export function WorkspaceStatusStrip({
                         : queueDetail
                     }
                   />
+                  <CompactContextCard
+                    icon={ServerCog}
+                    label={workerSummary.label}
+                    value={workerSummary.value}
+                    detail={workerSummary.detail}
+                  />
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-4">
+                  <CompactContextCard
+                    icon={Workflow}
+                    label="Pending"
+                    value={String(summary.queuedCount)}
+                    detail="Tasks waiting to start."
+                  />
+                  <CompactContextCard
+                    icon={Workflow}
+                    label="Running"
+                    value={String(summary.runningCount)}
+                    detail="Tasks currently executing."
+                  />
+                  <CompactContextCard
+                    icon={Workflow}
+                    label="Completed"
+                    value={String(summary.completedCount)}
+                    detail="Tasks finished successfully."
+                  />
+                  <CompactContextCard
+                    icon={AlertTriangle}
+                    label="Failed"
+                    value={String(summary.failedCount)}
+                    detail="Tasks that need review or retry."
+                  />
                 </div>
 
                 <div className="space-y-3">
@@ -1107,7 +1142,7 @@ export function WorkspaceStatusStrip({
                               #{task.taskId} · {resolveShellTaskLabel(task)}
                             </p>
                             <p className="mt-1 truncate text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                              {task.status} · {task.summary}
+                              {formatTaskStatusLabel(task.status)} · {task.summary}
                             </p>
                           </div>
                           <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -1123,34 +1158,6 @@ export function WorkspaceStatusStrip({
                         : "No workspace-visible tasks are available yet."}
                     </div>
                   )}
-                </div>
-              </div>
-            </SectionFrame>
-          ) : null}
-
-          {selectedSection === "worker" ? (
-            <SectionFrame
-              icon={ServerCog}
-              title="Worker Summary"
-              description={
-                runtimeMode === "local"
-                  ? "Local processors are summarized from the active local runtime."
-                  : "Server-side worker summary stays tied to the active online workspace."
-              }
-            >
-              <div className="grid gap-3 md:grid-cols-2">
-                <CompactContextCard
-                  icon={ServerCog}
-                  label={workerSummary.label}
-                  value={workerSummary.value}
-                  detail={workerSummary.detail}
-                />
-                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm leading-6 text-muted-foreground">
-                  {runtimeMode === "local"
-                    ? "Local Mode keeps worker/runtime summary in the same shell surface without online governance or collaboration controls."
-                    : workerSummary.tone === "success"
-                      ? "Worker runtime authority is available for the active workspace."
-                      : "The backend has not materialized a worker summary payload for this workspace yet."}
                 </div>
               </div>
             </SectionFrame>

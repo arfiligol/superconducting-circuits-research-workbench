@@ -45,6 +45,15 @@ import {
   resolvePersistedPreviewState,
 } from "../src/features/circuit-definition-editor/lib/preview";
 
+const editorWorkspaceSource = readFileSync(
+  new URL("../src/features/circuit-definition-editor/components/circuit-definition-editor-workspace.tsx", import.meta.url),
+  "utf8",
+);
+const catalogWorkspaceSource = readFileSync(
+  new URL("../src/features/circuit-definition-editor/components/circuit-definition-catalog-workspace.tsx", import.meta.url),
+  "utf8",
+);
+
 describe("circuit definition editor routing helpers", () => {
   const definitions = [
     {
@@ -792,6 +801,7 @@ describe("circuit definition workspace boundaries", () => {
     expect(schemasPageSource).toContain("CircuitDefinitionCatalogWorkspace");
     expect(schemasPageSource).not.toContain("CircuitDefinitionEditorWorkspace");
     expect(catalogWorkspaceSource).toContain("New Circuit");
+    expect(catalogWorkspaceSource).toContain("Persisted schema list");
     expect(catalogWorkspaceSource).toContain("Open");
     expect(catalogWorkspaceSource).toContain("Clone");
     expect(catalogWorkspaceSource).toContain("Publish");
@@ -800,6 +810,7 @@ describe("circuit definition workspace boundaries", () => {
     expect(catalogWorkspaceSource).not.toContain("CodeMirror");
     expect(catalogWorkspaceSource).not.toContain("Validation & Preview");
     expect(catalogWorkspaceSource).not.toContain("disabled={isMutationPending || !canCreateDefinition}");
+    expect(catalogWorkspaceSource).not.toContain("Catalog authority only");
     expect(catalogWorkspaceSource).toContain('openEditor("new")');
   });
 
@@ -808,10 +819,11 @@ describe("circuit definition workspace boundaries", () => {
     expect(editorPageSource).not.toContain("CircuitDefinitionCatalogWorkspace");
     expect(editorWorkspaceSource).toContain("Active Schema");
     expect(editorWorkspaceSource).toContain("Canonical Source");
+    expect(editorWorkspaceSource).toContain("Canonical Source Name");
     expect(editorWorkspaceSource).toContain("Validation & Preview");
     expect(editorWorkspaceSource).toContain("Circuit Netlist Quick Reference");
     expect(editorWorkspaceSource).toContain("Back to Schemas");
-    expect(editorWorkspaceSource).toContain("Format");
+    expect(editorWorkspaceSource).toContain("Format JSON");
     expect(editorWorkspaceSource).toContain("Save");
     expect(editorWorkspaceSource).toContain("Discard");
     expect(editorWorkspaceSource).toContain("Publish");
@@ -825,6 +837,6 @@ describe("circuit definition workspace boundaries", () => {
     expect(editorWorkspaceSource).not.toContain("Open another schema without leaving the editor workflow.");
     expect(editorWorkspaceSource).not.toContain("Local Contract Diagnostics");
     expect(editorWorkspaceSource).toContain("extensions={[json()]}");
-    expect(editorWorkspaceSource).toContain("does not save");
+    expect(editorWorkspaceSource).toContain("canonical circuit-netlist JSON");
   });
 });

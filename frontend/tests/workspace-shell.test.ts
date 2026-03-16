@@ -137,8 +137,7 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("Runtime Mode");
     expect(statusStripSource).toContain("Active Workspace");
     expect(statusStripSource).toContain("Active Dataset");
-    expect(statusStripSource).toContain("Tasks Queue");
-    expect(statusStripSource).toContain("Worker Summary");
+    expect(statusStripSource).toContain("Tasks & Runtime");
     expect(statusStripSource).toContain("resolveShellActiveDatasetSummary");
     expect(statusStripSource).toContain("datasetSummary.value");
     expect(statusStripSource).toContain("switchRuntimeMode(");
@@ -164,8 +163,7 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("focus-visible:ring-2");
     expect(statusStripSource).toContain('selectedSection === "workspace"');
     expect(statusStripSource).toContain('selectedSection === "dataset"');
-    expect(statusStripSource).toContain('selectedSection === "queue"');
-    expect(statusStripSource).toContain('selectedSection === "worker"');
+    expect(statusStripSource).toContain('selectedSection === "tasks"');
     expect(statusStripSource).not.toContain("Focused Section");
     expect(statusStripSource).not.toContain("toggleDeveloperMode");
     expect(statusStripSource).toContain("Open Account > Developer Mode for technical detail");
@@ -199,6 +197,27 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("Search Datasets");
     expect(statusStripSource).toContain("handleDatasetSelection(");
     expect(statusStripSource).toContain("syncRouteDataset(");
+    expect(statusStripSource).toContain("No active dataset");
+    expect(statusStripSource).not.toContain("Clear active dataset");
+  });
+
+  it("rebuilds runtime mode into selectable cards with inline target and refresh affordances", () => {
+    expect(statusStripSource).toContain("RuntimeModeCard");
+    expect(statusStripSource).toContain("Local Space");
+    expect(statusStripSource).toContain("Server Target (IP:Port or origin)");
+    expect(statusStripSource).toContain("Refresh rechecks the Local Space session envelope");
+    expect(statusStripSource).not.toContain("Active Mode");
+    expect(statusStripSource).not.toContain("Context Target");
+    expect(statusStripSource).not.toContain("Context Reset");
+  });
+
+  it("combines queue and worker runtime context into one shell surface", () => {
+    expect(statusStripSource).toContain('title="Tasks & Runtime"');
+    expect(statusStripSource).toContain('label="Pending"');
+    expect(statusStripSource).toContain('label="Running"');
+    expect(statusStripSource).toContain('label="Completed"');
+    expect(statusStripSource).toContain('label="Failed"');
+    expect(statusStripSource).not.toContain('title="Worker Summary"');
   });
 
   it("adopts explicit auth entry routes instead of disabled user-menu wording", () => {

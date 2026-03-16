@@ -72,7 +72,7 @@ export function summarizeEditorDefinitionActionState(input: Readonly<{
 
   const format = isBusy
     ? blocked("Format waits until the current save or route transition finishes.")
-    : allowed("Format rewrites the local draft only. It never saves implicitly.");
+    : allowed("Format rewrites the local draft as canonical circuit-netlist JSON. It never saves implicitly.");
 
   const discard =
     input.isDirty && !isBusy

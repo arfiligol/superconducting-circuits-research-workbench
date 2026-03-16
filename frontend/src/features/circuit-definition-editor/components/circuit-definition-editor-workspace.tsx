@@ -2,16 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  ArrowLeft,
-  Copy,
-  Globe,
-  LoaderCircle,
-  Save,
-  Shapes,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, Copy, Globe, LoaderCircle, Save, Shapes, Sparkles, Trash2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import CodeMirror from "@uiw/react-codemirror";
@@ -605,18 +596,6 @@ export function CircuitDefinitionEditorWorkspace() {
                 Clone
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                void handleFormat();
-              }}
-              disabled={!editorActionState.format.enabled}
-              title={editorActionState.format.reason}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Sparkles className="h-4 w-4" />
-              Format
-            </button>
             {form.formState.isDirty ? (
               <button
                 type="button"
@@ -696,8 +675,7 @@ export function CircuitDefinitionEditorWorkspace() {
                 ) : null}
               </h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Focus on the definition name and canonical netlist source. Format stays explicit,
-                and save remains the only mutation that refreshes persisted preview authority.
+                Focus on the definition name and canonical netlist source. Canonical JSON format stays explicit, and save remains the only mutation that refreshes persisted preview authority.
               </p>
             </div>
 
@@ -712,7 +690,21 @@ export function CircuitDefinitionEditorWorkspace() {
 
             <div className="mt-4 grid gap-4">
               <label className="grid gap-2 text-sm">
-                <span className="font-medium text-foreground">Name</span>
+                <span className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-foreground">Canonical Source Name</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleFormat();
+                    }}
+                    disabled={!editorActionState.format.enabled}
+                    title={editorActionState.format.reason}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Format JSON
+                  </button>
+                </span>
                 <input
                   type="text"
                   className="rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-foreground outline-none"
@@ -749,7 +741,7 @@ export function CircuitDefinitionEditorWorkspace() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  `Cmd/Ctrl + Shift + F` runs explicit format only. It does not save.
+                  `Cmd/Ctrl + Shift + F` rewrites the local draft into canonical circuit-netlist JSON. It does not save.
                 </p>
                 {form.formState.errors.source_text ? (
                   <span className="text-xs text-rose-700 dark:text-rose-300">

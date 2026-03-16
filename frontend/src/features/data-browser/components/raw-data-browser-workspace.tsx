@@ -1,7 +1,9 @@
 "use client";
 
-import { useDeferredValue } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { Search } from "lucide-react";
 
+import { TracePreviewPlot } from "@/features/data-browser/components/trace-preview-plot";
 import { useRawDataBrowserData } from "@/features/data-browser/hooks/use-raw-data-browser-data";
 import { AppSelectField } from "@/features/shared/components/app-select";
 import { SurfaceHeader, SurfacePanel, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
@@ -24,11 +26,64 @@ function formatCoverage(coverage: Record<string, number>) {
   return entries.map(([key, value]) => `${key}: ${value}`).join(" · ");
 }
 
+function SearchField({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: Readonly<{
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (nextValue: string) => void;
+}>) {
+  return (
+    <label className="block rounded-[1rem] border border-border bg-surface px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+      <span className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+        <Search className="h-3.5 w-3.5" />
+        {label}
+      </span>
+      <div className="flex items-center gap-3 rounded-[0.85rem] border border-border/80 bg-background px-3 py-2">
+        <Search className="h-4 w-4 text-muted-foreground" />
+        <input
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          placeholder={placeholder}
+        />
+      </div>
+    </label>
+  );
+}
+
 export function RawDataBrowserWorkspace() {
   const browser = useRawDataBrowserData();
   const deferredDesignSearch = useDeferredValue(browser.designSearch);
   const deferredTraceSearch = useDeferredValue(browser.filters.search);
+  const [previewMode, setPreviewMode] = useState<"plot" | "table">("plot");
   const selectedDesign = browser.designs.find((row) => row.design_id === browser.selectedDesignId) ?? null;
+  const previewSeries = useMemo(() => {
+    const points = browser.traceDetail?.preview_payload.points ?? [];
+    const x = points
+      .map((point) => point[0])
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const y = points
+      .map((point) => point[1])
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+    return {
+      x,
+      y,
+      isPlotReady: x.length > 0 && x.length === y.length,
+    };
+  }, [browser.traceDetail?.preview_payload.points]);
+  const xAxisLabel = browser.traceDetail?.axes[0]?.name ?? "Axis";
+  const xAxisUnit = browser.traceDetail?.axes[0]?.unit ?? "";
+  const yAxisLabel = browser.traceDetail
+    ? `${browser.traceDetail.trace_id}`
+    : "Value";
 
   return (
     <div className="space-y-8">
@@ -58,19 +113,12 @@ export function RawDataBrowserWorkspace() {
               Unable to load design scopes. {browser.designsError.message}
             </div>
           ) : null}
-          <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-            <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Search Designs
-            </span>
-            <input
-              value={browser.designSearch}
-              onChange={(event) => {
-                browser.setDesignSearch(event.target.value);
-              }}
-              className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              placeholder="Flux Scan"
-            />
-          </label>
+          <SearchField
+            label="Search Design"
+            placeholder="Search design name or id"
+            value={browser.designSearch}
+            onChange={browser.setDesignSearch}
+          />
           {browser.isDesignsLoading ? (
             <div className="mt-4 rounded-xl border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
               Loading designs for {deferredDesignSearch || "the active dataset"}...
@@ -187,22 +235,19 @@ export function RawDataBrowserWorkspace() {
               </div>
             ) : null}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3 xl:col-span-2">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Search
-                </span>
-                <input
+              <div className="xl:col-span-2">
+                <SearchField
+                  label="Search Trace Summaries"
+                  placeholder="Search parameter, provenance, or trace id"
                   value={browser.filters.search}
-                  onChange={(event) => {
+                  onChange={(value) => {
                     browser.setFilters((current) => ({
                       ...current,
-                      search: event.target.value,
+                      search: value,
                     }));
                   }}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="Y11"
                 />
-              </label>
+              </div>
               <FilterSelect
                 label="Family"
                 value={browser.filters.family}
@@ -294,7 +339,7 @@ export function RawDataBrowserWorkspace() {
 
           <SurfacePanel
             title="Single Trace Preview"
-            description="Only the selected trace triggers the detail path, including preview payload and provenance-bearing result handles."
+            description="Only the selected trace triggers the detail path. Switch between Plot and Table views without changing the underlying preview authority."
           >
             {browser.traceDetailError ? (
               <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
@@ -325,7 +370,7 @@ export function RawDataBrowserWorkspace() {
                   </div>
                   <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
                     <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Payload Ref
+                      Preview Source
                     </p>
                     <p className="mt-3 break-all text-sm font-medium text-foreground">
                       {browser.traceDetail.payload_ref?.store_key ?? "No payload ref"}
@@ -337,56 +382,81 @@ export function RawDataBrowserWorkspace() {
                 </div>
 
                 <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Preview Payload
-                  </p>
-                  <div className="mt-3 overflow-hidden rounded-lg border border-border/80">
-                    <table className="min-w-full divide-y divide-border text-sm">
-                      <thead className="bg-card">
-                        <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                          <th className="px-4 py-3">Axis</th>
-                          <th className="px-4 py-3">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border bg-surface">
-                        {(browser.traceDetail.preview_payload.points ?? []).map((point, index) => (
-                          <tr key={`${point[0]}-${index}`}>
-                            <td className="px-4 py-3 text-muted-foreground">{point[0]}</td>
-                            <td className="px-4 py-3 font-medium text-foreground">{point[1]}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Result Handles
-                  </p>
-                  {browser.traceDetail.result_handles.length > 0 ? (
-                    <div className="mt-3 space-y-3">
-                      {browser.traceDetail.result_handles.map((handle) => (
-                        <div key={handle.handle_id} className="rounded-lg border border-border/80 bg-card px-4 py-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-medium text-foreground">{handle.label}</span>
-                            <SurfaceTag>{handle.kind}</SurfaceTag>
-                          </div>
-                          <p className="mt-2 break-all text-sm text-muted-foreground">
-                            {handle.payload_locator ?? "No payload locator"}
-                          </p>
-                          <p className="mt-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                            provenance task: {handle.provenance_task_id ?? "n/a"} · source dataset:{" "}
-                            {handle.provenance.source_dataset_id ?? "n/a"}
-                          </p>
-                        </div>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        Preview
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Plot and table are two views over the same preview payload.
+                      </p>
+                    </div>
+                    <div className="inline-flex rounded-full border border-border bg-background p-1">
+                      {(["plot", "table"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            setPreviewMode(mode);
+                          }}
+                          className={cx(
+                            "min-h-9 rounded-full px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] transition",
+                            previewMode === mode
+                              ? "bg-primary/12 text-foreground shadow-[0_8px_20px_rgba(37,99,235,0.12)]"
+                              : "text-muted-foreground hover:bg-surface hover:text-foreground",
+                          )}
+                        >
+                          {mode === "plot" ? "Plot" : "Table"}
+                        </button>
                       ))}
                     </div>
-                  ) : (
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      No provenance-bearing result handles are attached to this trace preview.
+                  </div>
+
+                  <div className="mt-4">
+                    {previewMode === "plot" ? (
+                      previewSeries.isPlotReady ? (
+                        <TracePreviewPlot
+                          x={previewSeries.x}
+                          y={previewSeries.y}
+                          xLabel={xAxisUnit ? `${xAxisLabel} (${xAxisUnit})` : xAxisLabel}
+                          yLabel={yAxisLabel}
+                          title={browser.traceDetail.trace_id}
+                        />
+                      ) : (
+                        <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
+                          Plot view is unavailable because the preview payload does not expose a numeric x/y series.
+                        </div>
+                      )
+                    ) : (
+                      <div className="overflow-hidden rounded-lg border border-border/80">
+                        <table className="min-w-full divide-y divide-border text-sm">
+                          <thead className="bg-card">
+                            <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                              <th className="px-4 py-3">{xAxisLabel}</th>
+                              <th className="px-4 py-3">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border bg-surface">
+                            {(browser.traceDetail.preview_payload.points ?? []).map((point, index) => (
+                              <tr key={`${point[0]}-${index}`}>
+                                <td className="px-4 py-3 text-muted-foreground">{point[0]}</td>
+                                <td className="px-4 py-3 font-medium text-foreground">{point[1]}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Provenance
                     </p>
-                  )}
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Trace preview authority stays tied to the selected trace detail payload and its persisted payload ref.
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : (
