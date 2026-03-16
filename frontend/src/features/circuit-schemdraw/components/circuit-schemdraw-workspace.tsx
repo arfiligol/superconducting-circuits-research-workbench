@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useMemo, useTransition } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -17,6 +17,11 @@ import CodeMirror from "@uiw/react-codemirror";
 
 import { useCircuitSchemdrawData } from "@/features/circuit-schemdraw/hooks/use-circuit-schemdraw-data";
 import { parseSchemdrawDefinitionIdParam } from "@/features/circuit-schemdraw/lib/definition-id";
+import {
+  buildSchemdrawEditorDiagnostics,
+  createSchemdrawDiagnosticsExtension,
+  summarizeSchemdrawEditorNotice,
+} from "@/features/circuit-schemdraw/lib/editor-diagnostics";
 import type { SchemdrawFailureDetail } from "@/features/circuit-schemdraw/lib/render";
 import { resolveSchemdrawSelectionRecovery } from "@/features/circuit-schemdraw/lib/workflow";
 import { AppSelectField } from "@/features/shared/components/app-select";
@@ -81,6 +86,50 @@ function SummaryCard({
       <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
       <p className="mt-2 text-sm font-semibold text-foreground">{value}</p>
       {detail ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p> : null}
+    </div>
+  );
+}
+
+function EditorHintNotice({
+  tone,
+  title,
+  message,
+}: Readonly<{
+  tone: "default" | "warning" | "error";
+  title: string;
+  message: string;
+}>) {
+  return (
+    <div
+      className={cx(
+        "rounded-[0.9rem] border px-4 py-3 text-sm shadow-[0_8px_20px_rgba(15,23,42,0.08)]",
+        tone === "error"
+          ? resolveSurfaceInsetToneClass("error")
+          : tone === "warning"
+            ? resolveSurfaceInsetToneClass("warning")
+            : resolveSurfaceInsetToneClass("default"),
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cx(
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
+            tone === "error"
+              ? "border-rose-600/25 bg-rose-500/10 text-rose-900 dark:text-rose-200"
+              : tone === "warning"
+                ? "border-amber-500/25 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+                : "border-border bg-background text-foreground",
+          )}
+        >
+          <FileCode2 className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/84 dark:text-foreground/82">
+            {title}
+          </p>
+          <p className="mt-2 leading-6 text-foreground/82 dark:text-foreground/80">{message}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -209,6 +258,46 @@ export function CircuitSchemdrawWorkspace() {
     definitions,
   );
   const previewTone = renderTone(renderSurface.phase);
+  const { sourceDiagnostics, relationDiagnostics } = useMemo(
+    () => buildSchemdrawEditorDiagnostics(renderSurface.diagnostics),
+    [renderSurface.diagnostics],
+  );
+  const sourceEditorExtensions = useMemo(
+    () =>
+      createSchemdrawDiagnosticsExtension({
+        diagnostics: sourceDiagnostics,
+        developerModeEnabled,
+      }),
+    [developerModeEnabled, sourceDiagnostics],
+  );
+  const relationEditorExtensions = useMemo(
+    () =>
+      createSchemdrawDiagnosticsExtension({
+        diagnostics: relationDiagnostics,
+        developerModeEnabled,
+      }),
+    [developerModeEnabled, relationDiagnostics],
+  );
+  const sourceEditorNotice = useMemo(
+    () =>
+      summarizeSchemdrawEditorNotice({
+        diagnostics: sourceDiagnostics,
+        failureDetail: renderSurface.failureDetail,
+        target: "source",
+        developerModeEnabled,
+      }),
+    [developerModeEnabled, renderSurface.failureDetail, sourceDiagnostics],
+  );
+  const relationEditorNotice = useMemo(
+    () =>
+      summarizeSchemdrawEditorNotice({
+        diagnostics: relationDiagnostics,
+        failureDetail: renderSurface.failureDetail,
+        target: "relation",
+        developerModeEnabled,
+      }),
+    [developerModeEnabled, relationDiagnostics, renderSurface.failureDetail],
+  );
 
   function replaceDefinitionId(definitionId: number | null) {
     startTransition(() => {
@@ -375,12 +464,22 @@ export function CircuitSchemdrawWorkspace() {
               Reset Template
             </button>
           </div>
+          {relationEditorNotice ? (
+            <div className="mt-3">
+              <EditorHintNotice
+                tone={relationEditorNotice.tone}
+                title={relationEditorNotice.title}
+                message={relationEditorNotice.message}
+              />
+            </div>
+          ) : null}
           <div className="mt-3 overflow-hidden rounded-[0.8rem] border border-border bg-background">
             <CodeMirror
               value={draft.relationText}
               height="180px"
               theme="dark"
               onChange={updateRelationText}
+              extensions={[relationEditorExtensions]}
               className="text-sm leading-6"
             />
           </div>
@@ -415,12 +514,23 @@ export function CircuitSchemdrawWorkspace() {
             </button>
           </div>
 
+          {sourceEditorNotice ? (
+            <div className="mt-4">
+              <EditorHintNotice
+                tone={sourceEditorNotice.tone}
+                title={sourceEditorNotice.title}
+                message={sourceEditorNotice.message}
+              />
+            </div>
+          ) : null}
+
           <div className="mt-4 overflow-hidden rounded-[0.8rem] border border-border bg-background">
             <CodeMirror
               value={draft.sourceText}
               height="520px"
               theme="dark"
               onChange={updateSourceText}
+              extensions={[sourceEditorExtensions]}
               className="text-sm leading-6"
             />
           </div>

@@ -133,6 +133,10 @@ export function parseRelationConfigText(relationText: string) {
           buildClientDiagnostic(
             "schemdraw_relation_invalid",
             "Relation config must be a JSON object.",
+            {
+              line: 1,
+              column: 1,
+            },
           ),
         ],
       };
@@ -142,14 +146,13 @@ export function parseRelationConfigText(relationText: string) {
       value: parsed as Record<string, unknown>,
       diagnostics: [] as readonly SchemdrawDiagnostic[],
     };
-  } catch {
+  } catch (error) {
     return {
       value: null,
       diagnostics: [
-        buildClientDiagnostic(
-          "schemdraw_relation_invalid",
-          "Relation config must be valid JSON before render can proceed.",
-        ),
+        buildClientDiagnostic("schemdraw_relation_invalid", buildRelationParseMessage(error), {
+          ...resolveJsonParseLocation(relationText, error),
+        }),
       ],
     };
   }
@@ -209,9 +212,17 @@ export function buildRenderSurfaceFromResponse(
     };
   }
 
+  const primaryDiagnostic = response.diagnostics[0] ?? null;
+  const isRelationConfigBlocked =
+    response.status === "blocked" && primaryDiagnostic?.source === "relation_config";
+
   return {
     phase: response.status === "runtime_error" ? "runtime_error" : "syntax_error",
-    statusLabel: response.status === "runtime_error" ? "Runtime Error" : "Syntax Error",
+    statusLabel: isRelationConfigBlocked
+      ? "Relation Invalid"
+      : response.status === "runtime_error"
+        ? "Runtime Error"
+        : "Syntax Error",
     diagnostics: response.diagnostics,
     svg: previousSurface.svg,
     previewMetadata: previousSurface.previewMetadata,
@@ -296,14 +307,31 @@ export function shouldApplySchemdrawResponse(
   );
 }
 
-function buildClientDiagnostic(code: string, message: string): SchemdrawDiagnostic {
+function buildClientDiagnostic(
+  code: string,
+  message: string,
+  location?: Readonly<{
+    line?: number | null;
+    column?: number | null;
+  }>,
+): SchemdrawDiagnostic {
   return {
     severity: "error",
     code,
     message,
     source: "relation_config",
     blocking: true,
+    line: location?.line ?? null,
+    column: location?.column ?? null,
   };
+}
+
+function buildRelationParseMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Relation config must be valid JSON before render can proceed.";
 }
 
 function buildFailureDetailFromResponse(
@@ -311,21 +339,47 @@ function buildFailureDetailFromResponse(
 ): SchemdrawFailureDetail {
   const primaryDiagnostic = response.diagnostics[0] ?? null;
   const isRuntimeError = response.status === "runtime_error";
+  const isRelationConfigBlocked =
+    response.status === "blocked" && primaryDiagnostic?.source === "relation_config";
 
   return {
-    kind: isRuntimeError ? "runtime_error" : "syntax_error",
-    title: isRuntimeError ? "Backend render hit a runtime failure" : "Backend render found syntax issues",
-    userMessage: isRuntimeError
-      ? "The backend could not complete this render. Update the source or mapping and request a new preview."
-      : "The backend rejected the current source. Fix the source issues and request a new preview.",
+    kind: isRelationConfigBlocked
+      ? "relation_config"
+      : isRuntimeError
+        ? "runtime_error"
+        : "syntax_error",
+    title: isRelationConfigBlocked
+      ? "Backend render blocked the advanced mapping"
+      : isRuntimeError
+        ? "Backend render hit a runtime failure"
+        : "Backend render found syntax issues",
+    userMessage: isRelationConfigBlocked
+      ? "The backend rejected the advanced mapping. Fix the relation config and request a new preview."
+      : isRuntimeError
+        ? "The backend could not complete this render. Update the source or mapping and request a new preview."
+        : "The backend rejected the current source. Fix the source issues and request a new preview.",
     technicalMessage:
       primaryDiagnostic?.message ??
-      (isRuntimeError ? "Schemdraw runtime execution failed." : "Schemdraw source parsing failed."),
-    source: primaryDiagnostic?.source ?? (isRuntimeError ? "render_runtime" : "python_syntax"),
+      (isRelationConfigBlocked
+        ? "Schemdraw relation validation failed."
+        : isRuntimeError
+          ? "Schemdraw runtime execution failed."
+          : "Schemdraw source parsing failed."),
+    source:
+      primaryDiagnostic?.source ??
+      (isRelationConfigBlocked
+        ? "relation_config"
+        : isRuntimeError
+          ? "render_runtime"
+          : "python_syntax"),
     statusCode: null,
     errorCode:
       primaryDiagnostic?.code ??
-      (isRuntimeError ? "schemdraw_runtime_error" : "schemdraw_syntax_error"),
+      (isRelationConfigBlocked
+        ? "schemdraw_relation_invalid"
+        : isRuntimeError
+          ? "schemdraw_runtime_error"
+          : "schemdraw_syntax_error"),
     category: isRuntimeError ? "task_execution_failed" : "validation_error",
     retryable: false,
     debugRef: response.request_id,
@@ -498,5 +552,45 @@ function parseApiErrorLocation(details: unknown) {
   return {
     line,
     column,
+  };
+}
+
+function resolveJsonParseLocation(relationText: string, error: unknown) {
+  if (!(error instanceof Error)) {
+    return {
+      line: null,
+      column: null,
+    };
+  }
+
+  const lineColumnMatch = error.message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+  if (lineColumnMatch) {
+    return {
+      line: Number.parseInt(lineColumnMatch[1] ?? "0", 10) || null,
+      column: Number.parseInt(lineColumnMatch[2] ?? "0", 10) || null,
+    };
+  }
+
+  const positionMatch = error.message.match(/position\s+(\d+)/i);
+  if (!positionMatch) {
+    return {
+      line: 1,
+      column: 1,
+    };
+  }
+
+  const position = Number.parseInt(positionMatch[1] ?? "0", 10);
+  if (!Number.isFinite(position) || position < 0) {
+    return {
+      line: 1,
+      column: 1,
+    };
+  }
+
+  const clampedText = relationText.slice(0, position);
+  const lines = clampedText.split("\n");
+  return {
+    line: lines.length,
+    column: (lines.at(-1)?.length ?? 0) + 1,
   };
 }

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "../src/lib/api/client";
@@ -23,6 +24,11 @@ import {
   unwrapSchemdrawRenderEnvelope,
 } from "../src/features/circuit-schemdraw/lib/api";
 import {
+  buildSchemdrawEditorDiagnostics,
+  createSchemdrawDiagnosticsExtension,
+  summarizeSchemdrawEditorNotice,
+} from "../src/features/circuit-schemdraw/lib/editor-diagnostics";
+import {
   buildRenderSurfaceFromError,
   buildSchemdrawRenderRequest,
   buildRenderSurfaceFromResponse,
@@ -30,6 +36,7 @@ import {
   createRelationConfigTemplate,
   createSchemdrawSourceTemplate,
   markSchemdrawPreviewStale,
+  parseRelationConfigText,
   shouldApplySchemdrawResponse,
 } from "../src/features/circuit-schemdraw/lib/render";
 
@@ -348,6 +355,19 @@ describe("circuit schemdraw render helpers", () => {
     });
   });
 
+  it("derives relation-config line and column for local JSON parse failures", () => {
+    const relationParse = parseRelationConfigText('{\n  "title": "bad",\n  secondary_element: "C1"\n}');
+
+    expect(relationParse.value).toBeNull();
+    expect(relationParse.diagnostics).toEqual([
+      expect.objectContaining({
+        source: "relation_config",
+        line: 3,
+        blocking: true,
+      }),
+    ]);
+  });
+
   it("marks the preview stale and accepts latest-only render responses", () => {
     const staleSurface = markSchemdrawPreviewStale({
       ...createInitialRenderSurface(),
@@ -489,6 +509,85 @@ describe("circuit schemdraw render helpers", () => {
       },
     });
   });
+
+  it("splits diagnostics by editor target and summarizes editor notices", () => {
+    const editorDiagnostics = buildSchemdrawEditorDiagnostics([
+      {
+        severity: "error",
+        code: "schemdraw_syntax_error",
+        message: "Bad source",
+        source: "python_syntax",
+        blocking: true,
+        line: 12,
+        column: 4,
+      },
+      {
+        severity: "error",
+        code: "schemdraw_relation_invalid",
+        message: "Relation config must be valid JSON before render can proceed.",
+        source: "relation_config",
+        blocking: true,
+        line: 3,
+        column: 3,
+      },
+    ]);
+
+    expect(editorDiagnostics.sourceDiagnostics).toHaveLength(1);
+    expect(editorDiagnostics.relationDiagnostics).toHaveLength(1);
+    expect(
+      summarizeSchemdrawEditorNotice({
+        diagnostics: editorDiagnostics.sourceDiagnostics,
+        failureDetail: null,
+        target: "source",
+        developerModeEnabled: false,
+      }),
+    ).toEqual({
+      tone: "error",
+      title: "Source diagnostics",
+      message: "Highlighted lines in the editor block the next backend render.",
+    });
+    expect(createSchemdrawDiagnosticsExtension({
+      diagnostics: editorDiagnostics.sourceDiagnostics,
+      developerModeEnabled: true,
+    })).toBeDefined();
+  });
+
+  it("builds editor state without unsorted decoration crashes", () => {
+    const extension = createSchemdrawDiagnosticsExtension({
+      diagnostics: [
+        {
+          id: "python_syntax-line-4",
+          target: "source",
+          severity: "error",
+          code: "schemdraw_syntax_error",
+          message: "Python syntax error near the build_drawing function body.",
+          source: "python_syntax",
+          blocking: true,
+          line: 4,
+          column: 5,
+        },
+        {
+          id: "render_runtime-line-4",
+          target: "source",
+          severity: "warning",
+          code: "schemdraw_runtime_warning",
+          message: "Secondary warning on the same line.",
+          source: "render_runtime",
+          blocking: false,
+          line: 4,
+          column: 12,
+        },
+      ],
+      developerModeEnabled: true,
+    });
+
+    expect(() =>
+      EditorState.create({
+        doc: ["line 1", "line 2", "line 3", "def build_drawing(relation):", "return relation"].join("\n"),
+        extensions: [extension],
+      }),
+    ).not.toThrow();
+  });
 });
 
 describe("circuit schemdraw workspace source contracts", () => {
@@ -529,6 +628,11 @@ describe("circuit schemdraw workspace boundaries", () => {
     expect(workspaceSource).toContain("showDebugDisclosure");
     expect(workspaceSource).toContain("Transport failure");
     expect(workspaceSource).toContain("Debug detail");
+    expect(workspaceSource).toContain("EditorHintNotice");
+    expect(workspaceSource).toContain("sourceEditorExtensions");
+    expect(workspaceSource).toContain("relationEditorExtensions");
+    expect(workspaceSource).toContain("extensions={[sourceEditorExtensions]}");
+    expect(workspaceSource).toContain("extensions={[relationEditorExtensions]}");
     expect(workspaceSource).not.toContain("Tasks Queue");
   });
 });
