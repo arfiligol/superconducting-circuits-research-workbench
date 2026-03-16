@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import ast
-import html
+import builtins
 from collections.abc import Mapping
 from time import perf_counter
+from traceback import extract_tb
+from types import MappingProxyType
 from typing import Protocol
 from xml.etree import ElementTree
 
@@ -73,11 +75,36 @@ class SchemdrawRenderService:
                 render_time_ms=_elapsed_ms(started_at),
             )
 
-        svg = _render_structural_svg(
-            source_text=request.source_text,
-            relation_config=request.relation_config,
-            linked_schema=linked_schema,
-        )
+        try:
+            svg = _render_schemdraw_svg(
+                source_text=request.source_text,
+                relation_config=request.relation_config,
+                linked_schema=linked_schema,
+            )
+        except SchemdrawRuntimeExecutionError as exc:
+            return SchemdrawRenderResult(
+                request_id=request.request_id,
+                document_version=request.document_version,
+                status="runtime_error",
+                svg=None,
+                diagnostics=relation_diagnostics
+                + runtime_diagnostics
+                + (
+                    SchemdrawDiagnostic(
+                        severity="error",
+                        code="schemdraw_runtime_error",
+                        message=exc.message,
+                        source="render_runtime",
+                        blocking=True,
+                        line=exc.line,
+                        column=exc.column,
+                    ),
+                ),
+                cursor_position=_extract_cursor_position(request.relation_config),
+                probe_points=_extract_probe_points(request.relation_config),
+                render_time_ms=_elapsed_ms(started_at),
+                preview_metadata=None,
+            )
         preview_metadata = _extract_preview_metadata(
             svg,
             source_line_count=len(request.source_text.splitlines()),
@@ -148,20 +175,21 @@ def _validate_relation_config(
 ) -> tuple[SchemdrawDiagnostic, ...]:
     diagnostics: list[SchemdrawDiagnostic] = []
     labels = relation_config.get("labels")
-    if labels is not None:
-        if not isinstance(labels, Mapping) or not all(
-            isinstance(key, str) and isinstance(value, str)
-            for key, value in labels.items()
-        ):
-            diagnostics.append(
-                SchemdrawDiagnostic(
-                    severity="error",
-                    code="schemdraw_relation_invalid",
-                    message="relation_config.labels must be a mapping of string to string.",
-                    source="relation_config",
-                    blocking=True,
-                )
+    if labels is not None and (
+        not isinstance(labels, Mapping)
+        or not all(
+            isinstance(key, str) and isinstance(value, str) for key, value in labels.items()
+        )
+    ):
+        diagnostics.append(
+            SchemdrawDiagnostic(
+                severity="error",
+                code="schemdraw_relation_invalid",
+                message="relation_config.labels must be a mapping of string to string.",
+                source="relation_config",
+                blocking=True,
             )
+        )
     probe_points = relation_config.get("probe_points")
     if probe_points is not None and not isinstance(probe_points, list):
         diagnostics.append(
@@ -236,6 +264,18 @@ def _validate_render_entrypoint(
                 )
         if isinstance(node, ast.FunctionDef) and node.name == "build_drawing":
             build_drawing_found = True
+            if len(node.args.args) != 1:
+                diagnostics.append(
+                    SchemdrawDiagnostic(
+                        severity="error",
+                        code="schemdraw_runtime_error",
+                        message="build_drawing must accept exactly one relation argument.",
+                        source="render_runtime",
+                        blocking=True,
+                        line=node.lineno,
+                        column=node.col_offset,
+                    )
+                )
 
     if not build_drawing_found:
         diagnostics.append(
@@ -250,48 +290,42 @@ def _validate_render_entrypoint(
     return tuple(diagnostics)
 
 
-def _render_structural_svg(
+def _render_schemdraw_svg(
     *,
     source_text: str,
     relation_config: Mapping[str, object],
     linked_schema: CircuitDefinitionRecord | None,
 ) -> str:
-    tag = relation_config.get("tag")
-    labels = relation_config.get("labels")
-    label_lines: list[str] = []
-    if isinstance(labels, Mapping):
-        label_lines = [f"{key}: {value}" for key, value in labels.items()]
-    text_lines = [
-        "Schemdraw Structural Preview",
-        f"Source lines: {len(source_text.splitlines())}",
-        f"Relation tag: {tag if isinstance(tag, str) and len(tag) > 0 else 'n/a'}",
-    ]
-    if linked_schema is not None:
-        text_lines.append(f"Linked definition: {linked_schema.name}")
-        text_lines.append(f"Visibility: {linked_schema.visibility_scope}")
-    text_lines.extend(label_lines[:4])
-
-    width = 960
-    line_height = 32
-    height = 140 + (len(text_lines) * line_height)
-    text_y = 60
-    svg_lines = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
-        '<rect x="0" y="0" width="100%" height="100%" fill="#f7f4ea" />',
-        '<rect x="32" y="28" width="896" height="84" rx="18" fill="#1f3a2d" />',
-        '<text x="64" y="82" font-size="30" font-family="Georgia, serif" fill="#f9f4e8">Schemdraw Render</text>',
-        '<rect x="32" y="132" width="896" height="1" fill="#c9bda5" />',
-    ]
-    for line in text_lines:
-        svg_lines.append(
-            "<text "
-            f'x="64" y="{text_y + 120}" font-size="20" '
-            'font-family="Menlo, monospace" fill="#2b2a27">'
-            f"{html.escape(line)}</text>"
+    code = compile(source_text, filename="<schemdraw-preview>", mode="exec")
+    namespace: dict[str, object] = {
+        "__builtins__": _safe_builtins(),
+    }
+    exec(code, namespace)
+    build_drawing = namespace.get("build_drawing")
+    if not callable(build_drawing):
+        raise SchemdrawRuntimeExecutionError(
+            message="Schemdraw source must define build_drawing(relation).",
         )
-        text_y += line_height
-    svg_lines.append("</svg>")
-    return "".join(svg_lines)
+
+    relation = _freeze_relation_payload(relation_config, linked_schema)
+    try:
+        drawing = build_drawing(relation)
+    except Exception as exc:
+        raise _runtime_error_from_exception(exc) from exc
+
+    get_imagedata = getattr(drawing, "get_imagedata", None)
+    if not callable(get_imagedata):
+        raise SchemdrawRuntimeExecutionError(
+            message="build_drawing(relation) must return a schemdraw Drawing object.",
+        )
+
+    try:
+        svg_bytes = get_imagedata("svg")
+    except Exception as exc:
+        raise _runtime_error_from_exception(exc) from exc
+
+    svg = svg_bytes.decode("utf-8") if isinstance(svg_bytes, bytes) else str(svg_bytes)
+    return _normalize_svg_markup(svg)
 
 
 def _extract_preview_metadata(
@@ -301,8 +335,8 @@ def _extract_preview_metadata(
     linked_definition_id: int | None,
 ) -> SchemdrawPreviewMetadata:
     root = ElementTree.fromstring(svg)
-    width = int(float(root.attrib.get("width", "0")))
-    height = int(float(root.attrib.get("height", "0")))
+    width = _svg_dimension_to_int(root.attrib.get("width", "0"))
+    height = _svg_dimension_to_int(root.attrib.get("height", "0"))
     view_box = root.attrib.get("viewBox", "")
     return SchemdrawPreviewMetadata(
         width=width,
@@ -350,3 +384,115 @@ def _session_user_id(session: SessionState) -> str:
 
 def _elapsed_ms(started_at: float) -> float:
     return round((perf_counter() - started_at) * 1000, 2)
+
+
+class SchemdrawRuntimeExecutionError(Exception):
+    def __init__(
+        self,
+        *,
+        message: str,
+        line: int | None = None,
+        column: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.line = line
+        self.column = column
+
+
+def _safe_builtins() -> dict[str, object]:
+    allowed_names = {
+        "abs",
+        "bool",
+        "dict",
+        "enumerate",
+        "float",
+        "int",
+        "len",
+        "list",
+        "max",
+        "min",
+        "range",
+        "round",
+        "set",
+        "str",
+        "sum",
+        "tuple",
+        "zip",
+    }
+    safe = {name: getattr(builtins, name) for name in allowed_names}
+    safe["__import__"] = _restricted_import
+    return safe
+
+
+def _restricted_import(
+    name: str,
+    globals: object | None = None,
+    locals: object | None = None,
+    fromlist: tuple[str, ...] = (),
+    level: int = 0,
+) -> object:
+    if level != 0:
+        raise ImportError("Relative imports are not allowed in Schemdraw preview.")
+    if name not in {"schemdraw", "schemdraw.elements"}:
+        raise ImportError(f"Import '{name}' is not allowed in Schemdraw preview.")
+    return builtins.__import__(name, globals, locals, fromlist, level)
+
+
+def _freeze_relation_payload(
+    relation_config: Mapping[str, object],
+    linked_schema: CircuitDefinitionRecord | None,
+) -> Mapping[str, object]:
+    relation_payload = {
+        **relation_config,
+        "linked_schema": None
+        if linked_schema is None
+        else {
+            "definition_id": linked_schema.definition_id,
+            "workspace_id": linked_schema.workspace_id,
+            "name": linked_schema.name,
+            "visibility_scope": linked_schema.visibility_scope,
+            "source_hash": linked_schema.source_hash,
+        },
+    }
+    frozen = _freeze_value(relation_payload)
+    if not isinstance(frozen, Mapping):
+        raise ValueError("Frozen relation payload must remain a mapping.")
+    return frozen
+
+
+def _freeze_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return MappingProxyType({str(key): _freeze_value(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze_value(item) for item in value)
+    return value
+
+
+def _runtime_error_from_exception(exc: Exception) -> SchemdrawRuntimeExecutionError:
+    line = None
+    for frame in reversed(extract_tb(exc.__traceback__)):
+        if frame.filename == "<schemdraw-preview>":
+            line = frame.lineno
+            break
+    return SchemdrawRuntimeExecutionError(
+        message=str(exc) or "Schemdraw preview execution failed.",
+        line=line,
+    )
+
+
+def _normalize_svg_markup(svg: str) -> str:
+    start = svg.find("<svg")
+    if start < 0:
+        raise SchemdrawRuntimeExecutionError(
+            message="Schemdraw preview did not produce SVG output.",
+        )
+    return svg[start:].strip()
+
+
+def _svg_dimension_to_int(raw_value: str) -> int:
+    normalized = raw_value.strip().lower().removesuffix("px").removesuffix("pt")
+    try:
+        return round(float(normalized))
+    except ValueError:
+        return 0

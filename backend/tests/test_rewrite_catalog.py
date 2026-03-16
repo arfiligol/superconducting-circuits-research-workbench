@@ -401,7 +401,12 @@ def test_schemdraw_render_returns_svg_preview_and_diagnostics() -> None:
                 "import schemdraw\n"
                 "import schemdraw.elements as elm\n\n"
                 "def build_drawing(relation):\n"
-                "    return relation\n"
+                "    drawing = schemdraw.Drawing(show=False)\n"
+                "    tag = relation.get('tag', 'draft')\n"
+                "    linked = relation.get('linked_schema') or {}\n"
+                "    drawing += elm.Resistor().label(f\"R-{tag}\")\n"
+                "    drawing += elm.Capacitor().down().label(linked.get('name', 'unlinked'))\n"
+                "    return drawing\n"
             ),
             "relation_config": {
                 "tag": "draft",
@@ -425,9 +430,66 @@ def test_schemdraw_render_returns_svg_preview_and_diagnostics() -> None:
     assert payload["status"] == "rendered"
     assert payload["request_id"] == "req_sdraw_14"
     assert payload["svg"].startswith("<svg")
+    assert "Schemdraw Structural Preview" not in payload["svg"]
+    assert "R-draft" in payload["svg"]
+    assert "FloatingQubitWithXYLine" in payload["svg"]
     assert payload["cursor_position"] == {"x": 12.0, "y": 18.0}
     assert payload["probe_points"] == [{"name": "P1", "x": 14.0, "y": 18.0}]
     assert payload["preview_metadata"]["linked_definition_id"] == 18
+    assert payload["preview_metadata"]["width"] > 0
+    assert payload["preview_metadata"]["height"] > 0
+    assert payload["preview_metadata"]["view_box"]
+
+
+def test_schemdraw_render_reflects_source_and_relation_changes_in_svg() -> None:
+    source_template = (
+        "import schemdraw\n"
+        "import schemdraw.elements as elm\n\n"
+        "def build_drawing(relation):\n"
+        "    drawing = schemdraw.Drawing(show=False)\n"
+        "    drawing += elm.Resistor().label(relation.get('left_label', 'L'))\n"
+        "    drawing += elm.Line().right().length(1)\n"
+        "    drawing += elm.Capacitor().label(relation.get('right_label', 'R'))\n"
+        "    return drawing\n"
+    )
+
+    first = client.post(
+        "/schemdraw/render",
+        json={
+            "source_text": source_template,
+            "relation_config": {"left_label": "R-alpha", "right_label": "C-beta"},
+            "linked_schema": None,
+            "document_version": 31,
+            "request_id": "req_sdraw_31",
+            "render_mode": "debounced",
+        },
+    )
+    second = client.post(
+        "/schemdraw/render",
+        json={
+            "source_text": source_template.replace(
+                "Line().right().length(1)",
+                "Line().down().length(1.5)",
+            ),
+            "relation_config": {"left_label": "R-gamma", "right_label": "C-delta"},
+            "linked_schema": None,
+            "document_version": 32,
+            "request_id": "req_sdraw_32",
+            "render_mode": "manual",
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_svg = first.json()["data"]["svg"]
+    second_svg = second.json()["data"]["svg"]
+    assert first_svg is not None
+    assert second_svg is not None
+    assert "R-alpha" in first_svg
+    assert "C-beta" in first_svg
+    assert "R-gamma" in second_svg
+    assert "C-delta" in second_svg
+    assert first_svg != second_svg
 
 
 def test_schemdraw_render_returns_blocking_diagnostics_for_invalid_source() -> None:
@@ -449,6 +511,32 @@ def test_schemdraw_render_returns_blocking_diagnostics_for_invalid_source() -> N
     assert payload["svg"] is None
     assert payload["diagnostics"][0]["code"] == "schemdraw_syntax_error"
     assert payload["diagnostics"][0]["blocking"] is True
+
+
+def test_schemdraw_render_returns_runtime_diagnostic_when_entrypoint_fails() -> None:
+    response = client.post(
+        "/schemdraw/render",
+        json={
+            "source_text": (
+                "import schemdraw\n"
+                "import schemdraw.elements as elm\n\n"
+                "def build_drawing(relation):\n"
+                "    raise ValueError('boom from build_drawing')\n"
+            ),
+            "relation_config": {"tag": "draft"},
+            "linked_schema": None,
+            "document_version": 22,
+            "request_id": "req_sdraw_22",
+            "render_mode": "manual",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["status"] == "runtime_error"
+    assert payload["svg"] is None
+    assert payload["diagnostics"][0]["code"] == "schemdraw_runtime_error"
+    assert payload["diagnostics"][0]["line"] == 5
 
 
 def test_schemdraw_route_is_exposed_on_backend_canonical_path() -> None:
