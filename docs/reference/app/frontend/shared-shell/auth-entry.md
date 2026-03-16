@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend online-mode login、logout、anonymous / degraded session entry 與 auth-diagnostics density contract
-version: v0.3.0
-last_updated: 2026-03-16
+version: v0.4.0
+last_updated: 2026-03-17
 updated_by: codex
 ---
 
@@ -62,6 +62,7 @@ updated_by: codex
 |---|---|
 | `anonymous` | 顯示 sign-in / sign-up entry 與最少必要說明 |
 | `degraded` | 顯示簡短狀態、compact warning 與 recovery action |
+| `online_session_dropped` | 顯示「已連上 target，但舊 online session 不可沿用」的 warning，優先引導重新登入 |
 | `signed_out` | 顯示已登出確認與重新登入入口 |
 | `invite_pending_auth` | 優先引導登入，再保留 invite continuation |
 | `mode_switch_to_local` | 允許使用者改切 local mode，直接 bypass auth entry |
@@ -92,6 +93,7 @@ updated_by: codex
 | Entry condition | 只有 `Online Mode` 且 auth 尚未建立時，才進入 auth entry |
 | Local escape hatch | auth entry 應允許使用者改切 `Local Mode`，而不是把使用者永久困在登入頁 |
 | Online re-entry | auth entry 應允許使用者重新指定 `IP:Port` / target，或重試目前 target |
+| Switch-result relation | 若 runtime-mode mutation 回 `online_auth_required` 或 `online_session_dropped`，auth entry 應接手後續 sign-in flow |
 | Post-login handoff | online mode 登入成功後，回到 shell 並重建 online session context |
 | Post-switch handoff | 切回 local mode 後，直接建立 local session 並離開 auth entry |
 
@@ -101,6 +103,7 @@ updated_by: codex
 |---|---|
 | target connecting | 顯示明確的 connecting / validating spinner 與 concise status |
 | target rejected | 顯示 concise failure summary，並提供 `Retry`、`Edit Server Target`、`Switch to Local Mode` |
+| target summary | 以 target `label` / `origin` 的 summary object 呈現，不依賴 raw string target |
 | target detail | `IP:Port` / target label 可顯示為 secondary context，不應壓過 primary recovery action |
 | degraded transport | 可保留 compact debug ref 或 disclosure；`Developer Mode = On` 時可在出錯區塊直接顯示 raw technical detail |
 

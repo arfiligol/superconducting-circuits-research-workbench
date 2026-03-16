@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: 同一個 App 的 Local Mode / Online Mode、frontend/backend mode pairing 與 mode-switch isolation contract
-version: v0.1.0
-last_updated: 2026-03-16
+version: v0.2.0
+last_updated: 2026-03-17
 updated_by: codex
 ---
 
@@ -133,6 +133,16 @@ updated_by: codex
 | Failure handling | target 驗證失敗時，mode switch 應被拒絕，並保留目前 active mode，不可進入半切換狀態 |
 | Auth relation | target 驗證成功後才進 auth entry；target config 本身不等於 authenticated session |
 
+## Server Target Summary Shape
+
+| Field | Meaning |
+|---|---|
+| `origin` | canonical remote origin |
+| `label` | target display label |
+| `is_active` | 是否為目前 active online target |
+| `validation_status` | `validated`、`target_validation_failed`、`target_unreachable`、`target_incompatible`、`online_target_rejected` |
+| `last_checked_at` | 最近一次 validation timestamp；未驗證可為 `null` |
+
 ## Connection Failure UX Baseline
 
 | Situation | Required behavior |
@@ -147,15 +157,37 @@ updated_by: codex
     `Local Space` 解決的是 local mode 的 workspace shape。
     online `server target` 解決的是 client mode 要連哪一台 server；兩者都是 runtime-mode context，但不是同一種資源。
 
-## Mode Switch Outcomes
+## Runtime Mode Switch Result Vocabulary
 
-| Outcome | Meaning |
+!!! info "Do not collapse `outcome` and `auth_transition`"
+    live backend contract 會同時回傳 `outcome` 與 `auth_transition`。
+    `outcome` 描述 mode switch 本身建立了哪種 session shell，
+    `auth_transition` 則描述 auth continuity 在切換後落到哪種狀態。
+
+### `outcome`
+
+| Value | Meaning |
 |---|---|
-| `entered_local` | local session 建立成功，直接進 app shell |
-| `entered_online_auth_required` | online mode 需要 auth entry，使用者尚未登入 |
-| `online_target_rejected` | online target 驗證失敗，維持原 mode，不建立 online shell context |
-| `online_target_connecting` | 正在檢查 target reachability / health，等待驗證完成 |
-| `context_cleared` | 舊 mode context 已清空，等待新 mode session ready |
+| `entered_local` | local session 已建立，直接進入 local app shell |
+| `entered_online_auth_required` | online target 已就緒，但目前需要先進 auth entry 才能建立 authenticated online session |
+
+### `auth_transition`
+
+| Value | Meaning |
+|---|---|
+| `entered_local_bypass` | local mode 已建立 `local_bypass` session |
+| `online_auth_required` | online target 驗證成功，但目前沒有可沿用的 authenticated online session，必須先登入 |
+| `online_session_dropped` | online target 已建立，但舊的 online auth continuity 已失效，需重新登入 |
+
+### Target validation status
+
+| Value | Meaning |
+|---|---|
+| `validated` | target ready for online mode |
+| `target_validation_failed` | target responded, but failed required validation |
+| `target_unreachable` | target could not be reached |
+| `target_incompatible` | target reached, but version / contract compatibility failed |
+| `online_target_rejected` | target validation rejected the switch without a narrower status |
 
 ## Isolation Rules
 
@@ -192,7 +224,7 @@ updated_by: codex
 | Consumer | What it should do |
 |---|---|
 | Header | 顯示目前 runtime mode，並提供 mode-aware account / global context entry |
-| Auth Entry | 只在 `online` 需要 auth 或 target 驗證失敗時成為 primary entry；local mode 應可直接 bypass，且可從此切回 local 或改 target |
+| Auth Entry | 只在 `online` 需要 auth、收到 `online_auth_required` / `online_session_dropped`，或 target 驗證失敗時成為 primary entry；local mode 應可直接 bypass，且可從此切回 local 或改 target |
 | Session & Workspace | 提供 mode-aware session envelope 與 mode-switch mutation |
 | Authentication & Authorization | 只對 `online` 強制生效；local mode 走 bypass contract |
 | Task Management | local mode 顯示 local tasks；online mode 顯示 workspace-visible tasks |

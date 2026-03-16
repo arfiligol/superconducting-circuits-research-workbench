@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared header 的 shell identity、runtime mode entry、global context entry、account surface、developer mode 與 shell-side panel contract
-version: v0.7.0
-last_updated: 2026-03-16
+version: v0.8.0
+last_updated: 2026-03-17
 updated_by: codex
 ---
 
@@ -120,7 +120,8 @@ updated_by: codex
     | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context` runtime-mode section |
     | mode switch | 應支援切到 local 或 configured online target；切換後不得混用舊 mode 的 workspace / dataset / task state |
     | local outcome | 切到 local mode 時，直接進入 local session，不經 auth entry |
-    | online outcome | 切到 online mode 時，先驗證 active server target；驗證成功後重新進入 auth entry，不保留舊的 remote sign-in state |
+    | online outcome | 切到 online mode 時，先驗證 active server target；成功後應收到 `entered_online_auth_required` outcome，且 auth transition 為 `online_auth_required` 或 `online_session_dropped`，再重新進入 auth entry |
+    | target summary source | compact target summary 應來自 `connection.target` 的 summary object（`label` / `origin` / `validation_status`），不是由 frontend 自行拼字串 |
     | unsafe-context handling | 若切 mode 會清掉 dirty draft、attached task 或 queue context，必須先要求確認 |
 
 === "Active Workspace Trigger"
@@ -185,6 +186,7 @@ updated_by: codex
 | `local` | 顯示 local operator / `Local Space` summary、appearance、developer mode 與 `Connect to Online Mode` / 指定 target 入口；不顯示 remote sign out |
 | `online-authenticated` | 顯示 authenticated user summary、appearance、developer mode、target summary、`Sign out` 與 `Switch to Local Mode` |
 | `online-auth-required` | 顯示 target summary、appearance、developer mode、`Sign in`、重新指定 `IP:Port` / target 與 `Switch to Local Mode`；不冒充已有 authenticated account |
+| `online-session-dropped` | 顯示 target summary 與 compact warning，說明目前已連到 target 但舊 online session 不再可沿用；優先引導重新登入 |
 
 !!! tip "Local account is preference-first"
     `Local Mode` 下的 account surface 不是登入入口的縮小版。

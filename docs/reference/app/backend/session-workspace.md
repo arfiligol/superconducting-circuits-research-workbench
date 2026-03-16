@@ -10,8 +10,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Backend runtime mode、session、workspace membership、active workspace、active dataset、collaboration mutations 與 capability exposure surface
-version: v0.11.0
-last_updated: 2026-03-16
+version: v0.12.0
+last_updated: 2026-03-17
 updated_by: codex
 ---
 
@@ -41,6 +41,7 @@ updated_by: codex
 | --- | --- |
 | Runtime mode | app 目前以 `local` 或 `online` 運行 |
 | Auth state | 使用者目前是 `local_bypass`、`authenticated`、`anonymous` 還是 `degraded` session |
+| Connection target | 目前 active online target 的摘要，或 `null` |
 | User summary | Header user icon / menu 所需 display data |
 | Workspace identity | active workspace、membership role、default queue scope |
 | Workspace membership list | user 可切換的 workspaces 與 roles |
@@ -57,15 +58,20 @@ backend session surface 至少必須提供：
 | `auth.state` | `local_bypass`, `authenticated`, `anonymous`, `degraded` 等 session state |
 | `runtime_mode` | `local` 或 `online` |
 | `auth.mode` | auth transport or mode summary |
+| `session_id` | 目前 session identity；public online session 可為 `null` |
+| `connection.target` | nested target summary object，含 `origin`、`label`、`is_active`、`validation_status`、`last_checked_at`；local mode 為 `null` |
 | `user.id` | 目前使用者 identity |
 | `user.display_name` | Header user icon / menu 顯示名稱 |
 | `user.platform_role` | `admin` / `user` |
 | `workspace.memberships[]` | 使用者可進入的 workspace 列表與 role 摘要；local mode 可退化成單一 `Local Space` membership |
 | `workspace.id` | active workspace identity |
+| `workspace.slug` | workspace route / slug summary |
 | `workspace.name` | workspace display name |
 | `workspace.role` | `owner` / `member` / `viewer` |
 | `workspace.default_task_scope` | queue default visibility scope |
+| `workspace.allowed_actions` | workspace-scoped mutation availability summary |
 | `active_dataset.id` / `name` | global dataset context |
+| `active_dataset.visibility_scope` | `local`, `private`, `workspace` 之一 |
 | `capabilities` | capability flags summary |
 
 ## Runtime Mode Rules
@@ -102,7 +108,7 @@ backend session surface 至少必須提供：
 
 | Mutation | Responsibility |
 | --- | --- |
-| `switch_runtime_mode(mode, server_origin | null)` | 切換 `local` / `online`，建立對應 session envelope 或 auth-required outcome |
+| `switch_runtime_mode(runtime_mode, server_origin | null, label | null)` | 切換 `local` / `online`，建立對應 session envelope 或 auth-required outcome |
 | `list_server_targets()` | 列出 active target 與 remembered recent online targets |
 | `validate_server_target(server_origin)` | 驗證 target reachability / health / version compatibility |
 | `remember_server_target(server_origin, label | null)` | 儲存或更新 app-level online target config |
@@ -114,6 +120,21 @@ backend session surface 至少必須提供：
 | `leave_workspace(workspace_id)` | 使用者主動退出 membership，並重新繫結 session context |
 | `remove_workspace_member(workspace_id, member_user_id)` | 移除其他 membership |
 | `transfer_workspace_owner(workspace_id, new_owner_user_id)` | 轉移 owner 權限並回傳更新後 membership summary |
+
+## Live HTTP Routes
+
+| Route | Status | Responsibility |
+| --- | --- | --- |
+| `GET /session` | live | 回傳 runtime-mode-aware session envelope |
+| `PATCH /session/runtime-mode` | live | 切換 `local` / `online`，並回傳新 session envelope + switch result fields |
+| `GET /session/server-targets` | live | 列出 remembered online targets 與 active target origin |
+| `POST /session/server-targets` | live | 新增或更新 app-level online target config |
+| `POST /session/server-targets/validate` | live | 驗證 target reachability / health / compatibility |
+| `PATCH /session/active-workspace` | live | 切換 active workspace |
+| `PATCH /session/active-dataset` | live | 切換 active dataset |
+| `POST /session/login` | live | 建立 online authenticated session |
+| `POST /session/logout` | live | 清除 online authenticated session |
+| `POST /session/refresh` | live | 透過 refresh transport 重建 online authenticated session |
 
 ## Workspace Switch Response
 
@@ -128,16 +149,31 @@ backend session surface 至少必須提供：
 
 ## Runtime Mode Switch Response
 
+!!! info "Extends the session envelope"
+    `PATCH /session/runtime-mode` 的成功回應不是一個獨立小 payload。
+    它會回傳完整 session envelope，再額外附加 runtime-mode switch result fields。
+
 | Field | Meaning |
 | --- | --- |
 | `runtime_mode` | 新的 active mode |
-| `connection.target` | `local` 或 remote `origin` 摘要 |
-| `auth_transition` | `local_ready`, `online_auth_required`, `online_target_rejected` |
+| `connection.target` | nested target summary object 或 `null`；不再使用 plain string target |
+| `outcome` | backend switch outcome：目前 live values 為 `entered_local`、`entered_online_auth_required` |
+| `auth_transition` | auth continuity outcome：目前 live values 為 `entered_local_bypass`、`online_auth_required`、`online_session_dropped` |
 | `session_reset` | 是否已清除舊 mode shell context |
-| `workspace` | 新 mode 的 workspace summary，或 `null` |
-| `active_dataset` | 新 mode 的 dataset summary，或 `null` |
+| `workspace` | 使用標準 session workspace object；online public session 也保留 object shape，但 identity fields 為 `null` |
+| `active_dataset` | 使用標準 session active-dataset object，若尚未解析 dataset 則為 `null` |
 | `capabilities` | 由新 mode materialize 的 capability summary |
 | `detached_task_ids[]` | mode switch 時被解除附著的 task ids |
+
+## Server Target Summary Shape
+
+| Field | Meaning |
+| --- | --- |
+| `origin` | canonical remote origin，例如 `https://lab.example.com` |
+| `label` | target display label |
+| `is_active` | 是否為目前 active online target |
+| `validation_status` | `validated`、`target_validation_failed`、`target_unreachable`、`target_incompatible`、`online_target_rejected` |
+| `last_checked_at` | 最近一次 validation timestamp；若尚未驗證可為 `null` |
 
 ## Online Server Target Rules
 
@@ -148,6 +184,7 @@ backend session surface 至少必須提供：
 | Recent history allowed | 可保留 remembered recent targets，供 mode switcher 重用 |
 | Validation before switch | 切到 online mode 前，必須先完成 target validation |
 | Failure keeps current mode | 若 target 驗證失敗，保持原 active mode，不建立半完成 session |
+| Connection shape | session / runtime-mode response 中的 `connection.target` 一律使用 nested summary object 或 `null` |
 
 ## Active Dataset Activation Rules
 
@@ -167,6 +204,8 @@ backend session surface 至少必須提供：
 | `user` | 回傳 implicit local operator summary |
 | `workspace` | 回傳 `Local Space` |
 | `memberships[]` | 可省略，或回傳單一 `Local Space` membership |
+| `connection.target` | 回傳 `null`，而不是 `"local"` string |
+| `active_dataset.visibility_scope` | 若 local dataset 已綁定，必須是 `local` |
 | `capabilities` | 回傳 local mode capability summary，不由 frontend 猜測 |
 
 !!! info "Local mode still uses the same backend surface"
@@ -246,7 +285,7 @@ backend session surface 至少必須提供：
     Request:
     ```json
     {
-      "mode": "local",
+      "runtime_mode": "local",
       "server_origin": null
     }
     ```
@@ -256,24 +295,37 @@ backend session surface 至少必須提供：
     {
       "ok": true,
       "data": {
+        "session_id": "local-session",
         "runtime_mode": "local",
+        "outcome": "entered_local",
         "connection": {
-          "target": "local"
+          "target": null
         },
-        "auth_transition": "local_ready",
+        "auth": {
+          "state": "local_bypass",
+          "mode": "local_bypass",
+          "reason": null
+        },
+        "auth_transition": "entered_local_bypass",
         "session_reset": true,
         "workspace": {
-          "id": "local",
+          "id": "local-space",
+          "slug": "local-space",
           "name": "Local Space",
           "role": "owner"
         },
-        "active_dataset": null,
+        "active_dataset": {
+          "id": "local-dataset-001",
+          "name": "Local Dataset 001",
+          "visibility_scope": "local"
+        },
         "capabilities": {
+          "can_switch_runtime_mode": true,
           "can_switch_workspace": false,
           "can_switch_dataset": true,
           "can_submit_tasks": true
         },
-        "detached_task_ids": ["task_remote_44"]
+        "detached_task_ids": [44]
       }
     }
     ```
@@ -282,8 +334,9 @@ backend session surface 至少必須提供：
     Request:
     ```json
     {
-      "mode": "online",
-      "server_origin": "https://lab.example.com"
+      "runtime_mode": "online",
+      "server_origin": "https://lab.example.com",
+      "label": "Lab Server"
     }
     ```
 
@@ -292,16 +345,34 @@ backend session surface 至少必須提供：
     {
       "ok": true,
       "data": {
+        "session_id": null,
         "runtime_mode": "online",
+        "outcome": "entered_online_auth_required",
         "connection": {
-          "target": "https://lab.example.com"
+          "target": {
+            "origin": "https://lab.example.com",
+            "label": "Lab Server",
+            "is_active": true,
+            "validation_status": "validated",
+            "last_checked_at": "2026-03-17T09:10:00Z"
+          }
+        },
+        "auth": {
+          "state": "anonymous",
+          "mode": "jwt_refresh_cookie",
+          "reason": null
         },
         "auth_transition": "online_auth_required",
         "session_reset": true,
-        "workspace": null,
+        "workspace": {
+          "id": null,
+          "slug": null,
+          "name": null,
+          "role": null
+        },
         "active_dataset": null,
         "capabilities": {},
-        "detached_task_ids": ["task_local_12"]
+        "detached_task_ids": [12]
       }
     }
     ```
@@ -393,8 +464,12 @@ backend session surface 至少必須提供：
 | Code | Category | When it applies |
 | --- | --- | --- |
 | `auth_required` | `auth_required` | session 無效或未登入 |
-| `runtime_mode_switch_invalid` | `validation_error` | mode payload 不合法或 mode / target 組合不支援 |
-| `runtime_mode_target_unreachable` | `service_unavailable` | online server target 無法連線 |
+| `request_validation_failed` | `validation_error` | `runtime_mode`、`server_origin`、`label` 等 request payload 不合法 |
+| `target_validation_failed` | `conflict` | target 回應存在 validation failure，無法進入 online mode |
+| `target_unreachable` | `conflict` | online server target 無法連線 |
+| `target_incompatible` | `conflict` | target reachability 正常，但版本或 contract 不相容 |
+| `online_target_rejected` | `conflict` | target validation 被拒絕或無法歸類到更細的 failure code |
+| `auth_session_expired` | `auth_required` | 先前 online authenticated session 已失效，需重新登入 |
 | `workspace_membership_required` | `permission_denied` | 目標 workspace 不屬於目前 memberships |
 | `dataset_not_visible_in_workspace` | `permission_denied` | activate dataset 指向不可見 dataset |
 | `dataset_archived` | `conflict` | active dataset 已 archive |
@@ -415,12 +490,16 @@ backend session surface 至少必須提供：
 | `can_switch_workspace` | 顯示 workspace switcher |
 | `can_switch_runtime_mode` | 顯示 local / online mode switcher |
 | `can_switch_dataset` | 顯示 active dataset switcher |
+| `can_import_datasets` | 顯示 import / upload entry |
+| `can_export_datasets` | 顯示 export / download entry |
 | `can_invite_members` | 顯示 invite entry point |
 | `can_remove_members` | 顯示 member removal action |
 | `can_transfer_workspace_owner` | 顯示 owner transfer action |
 | `can_submit_tasks` | 決定 Simulation / Characterization 是否可送出 task |
+| `can_cancel_local_tasks` / `can_terminate_local_tasks` / `can_retry_local_tasks` | local mode queue row actions |
 | `can_manage_workspace_tasks` | 決定 Header queue 是否顯示 `Cancel` / `Terminate` / `Retry` |
 | `can_manage_definitions` | 決定 `Schemas` / `Schema Editor` 是否可建立、儲存、刪除 |
+| `can_publish_definitions` | 決定 online publish controls 是否可顯示 |
 | `can_manage_datasets` | 決定 `Dashboard` metadata editing 是否可寫入 |
 | `can_view_audit_logs` | 決定 governance surfaces 是否可顯示 audit entry points |
 
