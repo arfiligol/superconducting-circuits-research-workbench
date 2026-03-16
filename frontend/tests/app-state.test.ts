@@ -8,7 +8,7 @@ import {
   resolveSearchWithDatasetId,
   shouldAutoSyncRouteDataset,
 } from "../src/lib/app-state/active-dataset-state";
-import { resolveUrlSnapshot } from "../src/lib/app-state/url-state";
+import { resolveSearchFromParams, resolveUrlSnapshot } from "../src/lib/app-state/url-state";
 import {
   mapLoginResponse,
   mapLogoutResponse,
@@ -71,6 +71,14 @@ describe("active dataset state helpers", () => {
 });
 
 describe("url state snapshot helpers", () => {
+  it("derives the search string from Next-style URLSearchParams without patching history", () => {
+    expect(resolveSearchFromParams(new URLSearchParams("definitionId=24&taskId=31"))).toBe(
+      "?definitionId=24&taskId=31",
+    );
+    expect(resolveSearchFromParams(new URLSearchParams())).toBe("");
+    expect(resolveSearchFromParams(null)).toBe("");
+  });
+
   it("reuses the previous snapshot object when pathname and search are unchanged", () => {
     const snapshot = {
       pathname: "/circuit-simulation",

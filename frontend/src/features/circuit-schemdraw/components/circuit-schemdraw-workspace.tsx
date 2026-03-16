@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useTransition } from "react";
+import { json } from "@codemirror/lang-json";
+import { python } from "@codemirror/lang-python";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -31,6 +33,7 @@ import {
   resolveSurfaceInsetToneClass,
 } from "@/features/shared/components/surface-kit";
 import { useDeveloperMode } from "@/lib/app-state";
+import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
 function definitionSearchHref(
   pathname: string,
@@ -263,19 +266,25 @@ export function CircuitSchemdrawWorkspace() {
     [renderSurface.diagnostics],
   );
   const sourceEditorExtensions = useMemo(
-    () =>
+    () => [
+      python(),
+      vsCodeDarkEditorTheme,
       createSchemdrawDiagnosticsExtension({
         diagnostics: sourceDiagnostics,
         developerModeEnabled,
       }),
+    ],
     [developerModeEnabled, sourceDiagnostics],
   );
   const relationEditorExtensions = useMemo(
-    () =>
+    () => [
+      json(),
+      vsCodeDarkEditorTheme,
       createSchemdrawDiagnosticsExtension({
         diagnostics: relationDiagnostics,
         developerModeEnabled,
       }),
+    ],
     [developerModeEnabled, relationDiagnostics],
   );
   const sourceEditorNotice = useMemo(
@@ -479,7 +488,7 @@ export function CircuitSchemdrawWorkspace() {
               height="180px"
               theme="dark"
               onChange={updateRelationText}
-              extensions={[relationEditorExtensions]}
+              extensions={relationEditorExtensions}
               className="text-sm leading-6"
             />
           </div>
@@ -530,7 +539,7 @@ export function CircuitSchemdrawWorkspace() {
               height="520px"
               theme="dark"
               onChange={updateSourceText}
-              extensions={[sourceEditorExtensions]}
+              extensions={sourceEditorExtensions}
               className="text-sm leading-6"
             />
           </div>

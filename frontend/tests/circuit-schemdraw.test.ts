@@ -698,8 +698,11 @@ describe("circuit schemdraw workspace boundaries", () => {
     expect(workspaceSource).toContain("EditorHintNotice");
     expect(workspaceSource).toContain("sourceEditorExtensions");
     expect(workspaceSource).toContain("relationEditorExtensions");
-    expect(workspaceSource).toContain("extensions={[sourceEditorExtensions]}");
-    expect(workspaceSource).toContain("extensions={[relationEditorExtensions]}");
+    expect(workspaceSource).toContain("python()");
+    expect(workspaceSource).toContain("json()");
+    expect(workspaceSource).toContain("vsCodeDarkEditorTheme");
+    expect(workspaceSource).toContain("extensions={sourceEditorExtensions}");
+    expect(workspaceSource).toContain("extensions={relationEditorExtensions}");
     expect(workspaceSource).not.toContain("Tasks Queue");
   });
 });
