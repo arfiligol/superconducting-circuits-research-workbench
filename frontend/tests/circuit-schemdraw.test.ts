@@ -33,7 +33,9 @@ import {
   calculateFitTransform,
   deriveSvgViewport,
   panByStep,
+  panByWheelDelta,
   zoomAroundPoint,
+  zoomViewerWheel,
 } from "../src/features/circuit-schemdraw/lib/svg-viewer";
 import {
   buildRenderSurfaceFromError,
@@ -751,6 +753,17 @@ describe("circuit schemdraw svg viewer helpers", () => {
     expect(panByStep({ x: 0, y: 0 }, "up")).toEqual({ x: 0, y: -40 });
     expect(panByStep({ x: 0, y: 0 }, "down")).toEqual({ x: 0, y: 40 });
   });
+
+  it("maps wheel deltas into natural pan offsets", () => {
+    expect(panByWheelDelta({ x: 12, y: -8 }, 30, -45)).toEqual({ x: -18, y: 37 });
+  });
+
+  it("converts ctrl-wheel deltas into clamped zoom changes", () => {
+    expect(zoomViewerWheel(1, -120)).toBeGreaterThan(1);
+    expect(zoomViewerWheel(1, 120)).toBeLessThan(1);
+    expect(zoomViewerWheel(6, -1000)).toBe(6);
+    expect(zoomViewerWheel(0.35, 1000)).toBe(0.35);
+  });
 });
 
 describe("circuit schemdraw workspace source contracts", () => {
@@ -781,6 +794,8 @@ describe("circuit schemdraw workspace source contracts", () => {
     expect(schemdrawViewerSource).toContain("Fit to view");
     expect(schemdrawViewerSource).toContain("Reset view");
     expect(schemdrawViewerSource).toContain("Drag to pan");
+    expect(schemdrawViewerSource).toContain("Trackpad scroll pans, pinch zooms");
+    expect(schemdrawViewerSource).toContain("onWheel={handleWheel}");
     expect(schemdrawViewerSource).toContain("dangerouslySetInnerHTML");
   });
 });

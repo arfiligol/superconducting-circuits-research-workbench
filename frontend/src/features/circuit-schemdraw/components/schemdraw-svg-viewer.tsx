@@ -8,6 +8,7 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
 } from "react";
 import { Maximize2, Move, RefreshCcw, ZoomIn, ZoomOut } from "lucide-react";
 
@@ -16,7 +17,9 @@ import {
   calculateFitTransform,
   deriveSvgViewport,
   panByStep,
+  panByWheelDelta,
   zoomAroundPoint,
+  zoomViewerWheel,
   zoomViewerStep,
   type ViewerPanState,
 } from "@/features/circuit-schemdraw/lib/svg-viewer";
@@ -121,6 +124,24 @@ export function SchemdrawSvgViewer({
     setZoom(nextZoom);
   }
 
+  function applyZoomAtPoint(nextZoom: number, anchorX: number, anchorY: number) {
+    if (nextZoom === zoom) {
+      return;
+    }
+
+    setPan((currentPan) =>
+      zoomAroundPoint({
+        baseTransform: fitTransform,
+        currentZoom: zoom,
+        nextZoom,
+        currentPan,
+        anchorX,
+        anchorY,
+      }),
+    );
+    setZoom(nextZoom);
+  }
+
   function resetView() {
     setZoom(1);
     setPan({ x: 0, y: 0 });
@@ -213,6 +234,28 @@ export function SchemdrawSvgViewer({
     setDragState(null);
   }
 
+  function handleWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    const node = viewportRef.current;
+    if (!node) {
+      return;
+    }
+
+    if (event.ctrlKey) {
+      event.preventDefault();
+      const rect = node.getBoundingClientRect();
+      const nextZoom = zoomViewerWheel(zoom, event.deltaY);
+      applyZoomAtPoint(nextZoom, event.clientX - rect.left, event.clientY - rect.top);
+      return;
+    }
+
+    if (event.deltaX === 0 && event.deltaY === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    setPan((currentPan) => panByWheelDelta(currentPan, event.deltaX, event.deltaY));
+  }
+
   const effectiveScale = fitTransform.scale * zoom;
   const transformStyle = {
     transform: `translate(${fitTransform.translateX + pan.x}px, ${fitTransform.translateY + pan.y}px) scale(${effectiveScale})`,
@@ -228,7 +271,9 @@ export function SchemdrawSvgViewer({
           <p id={viewerLabelId} className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">
             Preview viewer
           </p>
-          <p className="mt-1 text-xs text-slate-600">Drag to pan. Use buttons or keyboard to inspect the SVG.</p>
+          <p className="mt-1 text-xs text-slate-600">
+            Drag to pan. Trackpad scroll pans, pinch zooms. Use buttons or keyboard to inspect the SVG.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -279,6 +324,7 @@ export function SchemdrawSvgViewer({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
+        onWheel={handleWheel}
         className={cx(
           "relative min-h-[520px] overflow-hidden bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.18),transparent_42%),linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
           dragState ? "cursor-grabbing" : "cursor-grab",
@@ -292,7 +338,7 @@ export function SchemdrawSvgViewer({
             </span>
           </span>
           <span className="rounded-full border border-slate-300/90 bg-white/92 px-3 py-1.5 text-[11px] text-slate-600 shadow-sm">
-            Shortcuts: +/- zoom, 0 reset, F fit, arrows pan
+            Trackpad: scroll pans, pinch zooms. Shortcuts: +/- zoom, 0 reset, F fit, arrows pan
           </span>
         </div>
 

@@ -128,6 +128,21 @@ export function panByStep(
   }
 }
 
+export function panByWheelDelta(
+  currentPan: ViewerPanState,
+  deltaX: number,
+  deltaY: number,
+): ViewerPanState {
+  return {
+    x: currentPan.x - deltaX,
+    y: currentPan.y - deltaY,
+  };
+}
+
+export function zoomViewerWheel(currentZoom: number, deltaY: number) {
+  return clampViewerZoom(currentZoom * Math.exp(deltaY * -0.0015));
+}
+
 function extractSvgAttributes(svgText: string) {
   const match = SVG_OPEN_TAG_PATTERN.exec(svgText);
   if (!match) {
