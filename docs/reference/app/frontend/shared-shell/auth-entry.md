@@ -12,19 +12,23 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend login、logout、anonymous / degraded session entry 與 auth-diagnostics density contract
-version: v0.2.0
+scope: Frontend online-mode login、logout、anonymous / degraded session entry 與 auth-diagnostics density contract
+version: v0.3.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
 
 # Auth Entry
 
-本頁定義 frontend 在未登入、已登出或 session degraded 時的正式 auth entry surface。
+本頁定義 frontend 在 `Online Mode` 下未登入、已登出或 session degraded 時的正式 auth entry surface。
 
 !!! info "Surface Boundary"
     本頁負責 login / logout / recovery entry 的產品呈現密度。
     workspace membership、invite lifecycle、capability flags 與 JWT transport authority 仍由 shared auth / backend session surfaces 擁有。
+
+!!! warning "Auth Entry Is Online-Mode Only"
+    `Local Mode` 不應被 auth entry 攔住。
+    使用者切到 local mode 時，應直接進入 app shell；只有 `Online Mode` 且需要 auth 時，auth entry 才成為 primary surface。
 
 !!! warning "Auth Entry Is Not A Diagnostics Dashboard"
     在 anonymous 或 degraded 狀態下，auth entry 的 primary UI 必須聚焦在使用者下一步要做的動作。
@@ -60,6 +64,7 @@ updated_by: codex
 | `degraded` | 顯示簡短狀態、compact warning 與 recovery action |
 | `signed_out` | 顯示已登出確認與重新登入入口 |
 | `invite_pending_auth` | 優先引導登入，再保留 invite continuation |
+| `mode_switch_to_local` | 允許使用者改切 local mode，直接 bypass auth entry |
 
 ## Diagnostics Placement
 
@@ -79,6 +84,15 @@ updated_by: codex
 | `Developer Mode = Off` | auth entry 只顯示 concise status、action 與 minimal recovery guidance；raw transport / exception detail 保留在 secondary disclosure 或 debug block |
 | `Developer Mode = On` | 允許 transport / technical detail 直接出現在發生錯誤的 auth surface，幫助辨識壞掉區塊；secondary debug block 仍可存在 |
 | Guardrail | `Developer Mode` 影響的是錯誤訊息密度，不是 debug surface 是否存在；auth entry 仍不得整頁退化成 diagnostics dashboard |
+
+## Mode Switching
+
+| Concern | Required behavior |
+|---|---|
+| Entry condition | 只有 `Online Mode` 且 auth 尚未建立時，才進入 auth entry |
+| Local escape hatch | auth entry 應允許使用者改切 `Local Mode`，而不是把使用者永久困在登入頁 |
+| Post-login handoff | online mode 登入成功後，回到 shell 並重建 online session context |
+| Post-switch handoff | 切回 local mode 後，直接建立 local session 並離開 auth entry |
 
 ## Layout Baseline
 
@@ -103,6 +117,7 @@ updated_by: codex
 |---|---|
 | auth state summary | [Backend / Session & Workspace](../../backend/session-workspace.md) |
 | invite continuation / degraded semantics | [App / Shared / Authentication & Authorization](../../shared/authentication-and-authorization.md) |
+| runtime mode boundary | [App / Shared / Runtime Modes](../../shared/runtime-modes.md) |
 | shell handoff after auth | [Header](header.md) |
 
 ## Related

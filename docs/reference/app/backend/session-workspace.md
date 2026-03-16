@@ -9,23 +9,27 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Backend session、workspace membership、active workspace、active dataset、collaboration mutations 與 capability exposure surface
-version: v0.10.0
-last_updated: 2026-03-14
+scope: Backend runtime mode、session、workspace membership、active workspace、active dataset、collaboration mutations 與 capability exposure surface
+version: v0.11.0
+last_updated: 2026-03-16
 updated_by: codex
 ---
 
 # Session & Workspace
 
-本頁定義 frontend shell、workspace pages 與 shared app model 共用的 session / workspace authority surface。
+本頁定義 frontend shell、workspace pages 與 shared app model 共用的 runtime-mode-aware session / workspace authority surface。
 
 !!! info "Surface Boundary"
-    本頁負責 authenticated session、workspace membership、active workspace、active dataset、workspace invitation / membership management、user summary、workspace role 與 capability exposure。
+    本頁負責 runtime mode、session、workspace membership、active workspace、active dataset、workspace invitation / membership management、user summary、workspace role 與 capability exposure。
     task lifecycle、definition preview、result artifact 與 audit query 不屬於本頁責任。
 
 !!! warning "Single Context Authority"
     app shell 顯示的 `Active Workspace`、`Active Dataset`、`Workspace Role`、`User Menu Summary`
     與 collaboration controls 必須來自同一份 backend session authority。
+
+!!! warning "Local And Online Must Not Share One Session Cache"
+    local mode 與 online mode 都走同一套 session surface，但不得共用同一份 active context。
+    mode switch 必須重新建立 session envelope，而不是沿用舊 mode 的 workspace / dataset / user state。
 
 !!! info "Authorization baseline"
     本頁所有 capability flags、membership mutation permission 與 collaboration control 都以 backend authorization engine 為準。
@@ -35,6 +39,7 @@ updated_by: codex
 
 | Surface | Meaning |
 | --- | --- |
+| Runtime mode | app 目前以 `local` 或 `online` 運行 |
 | Auth state | 使用者目前是 authenticated、anonymous 還是 degraded session |
 | User summary | Header user icon / menu 所需 display data |
 | Workspace identity | active workspace、membership role、default queue scope |
@@ -50,6 +55,7 @@ backend session surface 至少必須提供：
 | Field | Meaning |
 | --- | --- |
 | `auth.state` | `authenticated`, `anonymous`, `degraded` 等 session state |
+| `runtime_mode` | `local` 或 `online` |
 | `auth.mode` | auth transport or mode summary |
 | `user.id` | 目前使用者 identity |
 | `user.display_name` | Header user icon / menu 顯示名稱 |
@@ -61,6 +67,16 @@ backend session surface 至少必須提供：
 | `workspace.default_task_scope` | queue default visibility scope |
 | `active_dataset.id` / `name` | global dataset context |
 | `capabilities` | capability flags summary |
+
+## Runtime Mode Rules
+
+| Rule | Meaning |
+| --- | --- |
+| Same envelope family | local 與 online 應回傳相容的 session envelope shape |
+| Local mode returns implicit session | backend 直接提供 local user / local workspace / capability summary |
+| Online mode may require auth | 若尚未登入，session surface 回 `auth_required` 或 anonymous/degraded state |
+| Mode switch is session mutation | 不是單純 frontend config toggle |
+| Mode switch clears stale shell context | 舊 mode 的 dataset、queue、attached task refs 不得殘留 |
 
 ## Authorization Resolution Rules
 
@@ -85,6 +101,7 @@ backend session surface 至少必須提供：
 
 | Mutation | Responsibility |
 | --- | --- |
+| `switch_runtime_mode(mode, server_origin | null)` | 切換 `local` / `online`，建立對應 session envelope 或 auth-required outcome |
 | `switch_active_workspace(workspace_id)` | 變更 active workspace，回傳新 session envelope 與 rebind outcome |
 | `activate_dataset(dataset_id | null)` | 設定 active dataset，並驗證該 dataset 對目前 active workspace 可見 |
 | `create_workspace_invitation(workspace_id, email, role)` | 建立 pending invite 並觸發 outbound delivery |
@@ -105,6 +122,19 @@ backend session surface 至少必須提供：
 | `capabilities` | 新 workspace 下的 capability summary |
 | `memberships[]` | 供 Header 重新渲染 switcher |
 
+## Runtime Mode Switch Response
+
+| Field | Meaning |
+| --- | --- |
+| `runtime_mode` | 新的 active mode |
+| `connection.target` | `local` 或 remote `origin` 摘要 |
+| `auth_transition` | `local_ready`, `online_authenticated`, `online_auth_required` |
+| `session_reset` | 是否已清除舊 mode shell context |
+| `workspace` | 新 mode 的 workspace summary，或 `null` |
+| `active_dataset` | 新 mode 的 dataset summary，或 `null` |
+| `capabilities` | 由新 mode materialize 的 capability summary |
+| `detached_task_ids[]` | mode switch 時被解除附著的 task ids |
+
 ## Active Dataset Activation Rules
 
 | Rule | Meaning |
@@ -113,6 +143,21 @@ backend session surface 至少必須提供：
 | Explicit clear allowed | 允許把 active dataset 設為 `null` |
 | Session-wide propagation | mutation 成功後，所有 page consumers 看到同一 active dataset |
 | Rejection must explain why | 至少區分 `not_found`、`not_visible_in_workspace`、`archived` 等原因 |
+
+## Local Session Baseline
+
+| Field | Required behavior |
+| --- | --- |
+| `runtime_mode` | 必須是 `local` |
+| `auth.state` | 使用 `local_bypass` 或等價 local state |
+| `user` | 回傳 implicit local operator summary |
+| `workspace` | 回傳 implicit local workspace |
+| `memberships[]` | 可省略，或回傳單一 local workspace membership |
+| `capabilities` | 回傳 local mode capability summary，不由 frontend 猜測 |
+
+!!! info "Local mode still uses the same backend surface"
+    local mode 不代表跳過 backend session surface。
+    frontend 仍應透過同一份 authority 取得 user summary、workspace、dataset 與 capability flags。
 
 ## Invitation Surfaces
 
@@ -179,6 +224,70 @@ backend session surface 至少必須提供：
       },
       "meta": {
         "memberships_count": 3
+      }
+    }
+    ```
+
+!!! example "Switch runtime mode to local"
+    Request:
+    ```json
+    {
+      "mode": "local",
+      "server_origin": null
+    }
+    ```
+
+    Response:
+    ```json
+    {
+      "ok": true,
+      "data": {
+        "runtime_mode": "local",
+        "connection": {
+          "target": "local"
+        },
+        "auth_transition": "local_ready",
+        "session_reset": true,
+        "workspace": {
+          "id": "local",
+          "name": "Local Workspace",
+          "role": "owner"
+        },
+        "active_dataset": null,
+        "capabilities": {
+          "can_switch_workspace": false,
+          "can_switch_dataset": true,
+          "can_submit_tasks": true
+        },
+        "detached_task_ids": ["task_remote_44"]
+      }
+    }
+    ```
+
+!!! example "Switch runtime mode to online, auth required"
+    Request:
+    ```json
+    {
+      "mode": "online",
+      "server_origin": "https://lab.example.com"
+    }
+    ```
+
+    Response:
+    ```json
+    {
+      "ok": true,
+      "data": {
+        "runtime_mode": "online",
+        "connection": {
+          "target": "https://lab.example.com"
+        },
+        "auth_transition": "online_auth_required",
+        "session_reset": true,
+        "workspace": null,
+        "active_dataset": null,
+        "capabilities": {},
+        "detached_task_ids": ["task_local_12"]
       }
     }
     ```
@@ -270,6 +379,8 @@ backend session surface 至少必須提供：
 | Code | Category | When it applies |
 | --- | --- | --- |
 | `auth_required` | `auth_required` | session 無效或未登入 |
+| `runtime_mode_switch_invalid` | `validation_error` | mode payload 不合法或 mode / target 組合不支援 |
+| `runtime_mode_target_unreachable` | `service_unavailable` | online server target 無法連線 |
 | `workspace_membership_required` | `permission_denied` | 目標 workspace 不屬於目前 memberships |
 | `dataset_not_visible_in_workspace` | `permission_denied` | activate dataset 指向不可見 dataset |
 | `dataset_archived` | `conflict` | active dataset 已 archive |
@@ -288,6 +399,7 @@ backend session surface 至少必須提供：
 | Capability | Why frontend needs it |
 | --- | --- |
 | `can_switch_workspace` | 顯示 workspace switcher |
+| `can_switch_runtime_mode` | 顯示 local / online mode switcher |
 | `can_switch_dataset` | 顯示 active dataset switcher |
 | `can_invite_members` | 顯示 invite entry point |
 | `can_remove_members` | 顯示 member removal action |
@@ -303,6 +415,7 @@ backend session surface 至少必須提供：
 | Rule | Meaning |
 | --- | --- |
 | Dataset switch is global | active dataset 一旦切換，所有 page consumers 應看到同一版本 |
+| Mode switch is stronger than workspace switch | 切 mode 之後，workspace / dataset / queue / user summary 都必須以新 mode 重建 |
 | Role is workspace-scoped | shell 與 pages 看到的 action availability 必須依 workspace role 決定 |
 | Capability beats guessing | frontend page 不得自己推斷是否可 submit / manage / delete |
 | Session survives refresh | refresh 後必須能重建 user summary、workspace role 與 active dataset |
@@ -318,6 +431,7 @@ backend session surface 至少必須提供：
 
 ## Related
 
+- [Shared / Runtime Modes](../shared/runtime-modes.md)
 - [Shared / Identity & Workspace Model](../shared/identity-workspace-model.md)
 - [Shared / Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md)
 - [Shared / Authentication & Authorization](../shared/authentication-and-authorization.md)

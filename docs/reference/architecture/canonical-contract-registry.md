@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: 系統目前 published canonical contracts 的 owner、SoT 與主要消費者
-version: v0.8.0
-last_updated: 2026-03-14
+version: v0.9.0
+last_updated: 2026-03-16
 updated_by: codex
 ---
 
@@ -32,10 +32,11 @@ updated_by: codex
 
 | Contract | Canonical owner | Source of truth | Primary consumers | Compatibility rule |
 |---|---|---|---|---|
+| App Runtime Modes | app/shared + backend + frontend | [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md), [App / Frontend / Header](../app/frontend/shared-shell/header.md), [App / Frontend / Auth Entry](../app/frontend/shared-shell/auth-entry.md) | shell, auth entry, session management | local / online 必須是同一個 App 的兩種 mode，不可分叉成兩套產品 |
 | Circuit Definition / Netlist | `sc_core` | [Data Formats / Circuit Netlist](../data-formats/circuit-netlist.md) | backend, CLI, definition workflows, simulation workflows | additive-first；persisted definitions 需維持 read compatibility |
-| App Session / Workspace Context | app/shared + backend | [App / Shared / Identity & Workspace Model](../app/shared/identity-workspace-model.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md) | frontend shell, workspace pages | active dataset / workspace semantics 必須跨頁一致 |
-| App Resource Ownership / Visibility | app/shared + backend | [App / Shared / Resource Ownership & Visibility](../app/shared/resource-ownership-and-visibility.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md) | datasets, definitions, tasks, results, audit logging | 每筆 resource 只屬於一個 workspace |
-| App Authentication / Authorization Context | app/shared + backend | [App / Shared / Authentication & Authorization](../app/shared/authentication-and-authorization.md) | Header user menu, task queue controls, backend session surface, admin surfaces | role / capability flags 一旦 published 必須保持可解讀 |
+| App Session / Workspace Context | app/shared + backend | [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Shared / Identity & Workspace Model](../app/shared/identity-workspace-model.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md) | frontend shell, workspace pages | active dataset / workspace semantics 必須跨頁一致；mode switch 必須清掉舊 context |
+| App Resource Ownership / Visibility | app/shared + backend | [App / Shared / Resource Ownership & Visibility](../app/shared/resource-ownership-and-visibility.md), [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md) | datasets, definitions, tasks, results, audit logging | 每筆 resource 只屬於一個 workspace；local mode 以 implicit local workspace 保持相容 |
+| App Authentication / Authorization Context | app/shared + backend | [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Shared / Authentication & Authorization](../app/shared/authentication-and-authorization.md) | Header user menu, task queue controls, backend session surface, admin surfaces | auth / authz 只在 online mode 強制；capability shape 仍需保持可解讀 |
 | Dataset / Design / Trace Model | data-formats + backend | [Data Formats / Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [App / Backend / Datasets & Results](../app/backend/datasets-results.md) | dashboard, raw data browser, characterization, CLI datasets | `active_dataset` binds dataset；`design_id` is dataset-local |
 | Trace / Result / Provenance | data-formats + backend + `sc_core` | [Data Formats / Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [Data Formats / Analysis Result](../data-formats/analysis-result.md), [App / Backend / Datasets & Results](../app/backend/datasets-results.md) | raw data browser, characterization, worker, CLI results | persisted result / provenance contract 必須 version-aware |
 | App Task Submission / Status / Result | app/backend + app/shared + `sc_core` | [App / Backend / Tasks & Execution](../app/backend/tasks-execution.md), [App / Shared / Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | simulation, characterization, worker | `task_id` immutable；retry 預設新 task |

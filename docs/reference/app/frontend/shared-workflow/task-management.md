@@ -12,8 +12,8 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend shared header task queue、task attachment、worker summary、control actions 與 refresh recovery contract
-version: v0.8.0
+scope: Frontend runtime-mode-aware shared header task queue、task attachment、worker summary、control actions 與 refresh recovery contract
+version: v0.9.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -34,13 +34,16 @@ updated_by: codex
     Header queue 只顯示目前 active workspace 中可見的 tasks。
     切換 workspace 後，queue content、allowed actions 與 attached task validity 都必須重新計算。
 
+!!! info "Runtime Mode Boundary"
+    local mode 與 online mode 共用同一份 queue surface，但 queue rows、visibility 與 control permission 必須依目前 active mode 重算。
+
 ## Shared Objects
 
 | Object | Responsibility |
 |---|---|
 | Header Task Trigger | 在所有 app pages 上可直接打開右側 shell-side panel 的 queue section |
 | Shell-Side Panel | shared shell 的右側 management surface，承接 `Global Context` 與 `Account` 兩大 panel families |
-| Global Context Panel | 先以 summary cards 呈現 workspace、dataset、queue、worker 四個 sections，再顯示 selected section detail |
+| Global Context Panel | 先以 summary cards 呈現 runtime mode、workspace、dataset、queue、worker 五個 sections，再顯示 selected section detail |
 | Task Queue Section | `Global Context` 內的一個 selectable section；顯示最近可見的 tasks，支援 filter、attach、cancel、terminate、retry |
 | Worker Summary | Header 顯示 compact summary；drawer 顯示 lane-level detail |
 | Attached Task | 表示目前 page body 正在關注的單一 persisted task |
@@ -69,7 +72,7 @@ updated_by: codex
 | Concern | Baseline |
 |---|---|
 | Primary filters | `Workspace`, `Mine` |
-| Default filter | `Workspace`；若目前 session 無 workspace-level task visibility，退回 `Mine` |
+| Default filter | online mode 預設 `Workspace`；若目前 session 無 workspace-level task visibility，退回 `Mine`；local mode 可退化成 `Local` 或等價單一視角 |
 | Ordering | active tasks first，之後 `updated_at desc` |
 | Terminal retention in panel | 保留最近 terminal tasks，避免 queue 只剩 active rows |
 | Search | 以 `summary`、`task_id`、owner 顯示名做輕量搜尋 |
@@ -149,6 +152,7 @@ updated_by: codex
 | `Terminate` | 依 `can_terminate_workspace_tasks` 決定，不由 frontend 猜測 |
 | `Retry` | 依 ownership 與 backend 回傳 `allowed_actions` 決定 |
 | Filter visibility | `Workspace` / `Mine` 的可用性由 session capability summary 決定 |
+| Local mode baseline | local mode 不要求 multi-user permission matrix，但仍應由 backend capability summary materialize 可用 actions |
 
 ## Interaction Rules
 
@@ -186,6 +190,13 @@ updated_by: codex
     3. 若目前 attached task 不再可見，前端必須解除附著並提示原因
     4. 之後再依新 workspace 重新選擇 dataset / task
 
+=== "Runtime Mode Switch"
+
+    1. Header 切換 `Local Mode` 或 `Online Mode`
+    2. queue rows 與 worker summary 改抓新 mode 的 authority
+    3. 舊 mode 的 attached task 一律重新驗證；若不可見，必須解除附著
+    4. 不得把 local queue rows 與 online workspace queue 混合顯示
+
 === "Active Dataset Switch"
 
     1. Header 切換 active dataset
@@ -218,6 +229,7 @@ updated_by: codex
 
 | Concern | Authority |
 |---|---|
+| local / online queue boundary | [App / Shared / Runtime Modes](../../shared/runtime-modes.md), [Backend / Session & Workspace](../../backend/session-workspace.md) |
 | task submission / detail / latest / control actions | [Backend / Tasks & Execution](../../backend/tasks-execution.md) |
 | result attachment / persisted result availability | [Backend / Tasks & Execution](../../backend/tasks-execution.md), [Backend / Datasets & Results](../../backend/datasets-results.md) |
 | workspace-scoped resource visibility | [App / Shared / Resource Ownership & Visibility](../../shared/resource-ownership-and-visibility.md) |

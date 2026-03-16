@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: 目前 App / CLI / Core / Data Formats 的 cross-layer 對齊矩陣
-version: v0.7.0
-last_updated: 2026-03-14
+version: v0.8.0
+last_updated: 2026-03-16
 updated_by: codex
 ---
 
@@ -33,9 +33,10 @@ updated_by: codex
 
 | Concern | Frontend or CLI surface | App / Core / Data Formats authority | Current state | Note |
 |---|---|---|---|---|
-| App shell context | [Header](../app/frontend/shared-shell/header.md), [Sidebar](../app/frontend/shared-shell/sidebar.md) | [Session & Workspace](../app/backend/session-workspace.md), [Authentication & Authorization](../app/shared/authentication-and-authorization.md) | `partial` | active workspace、dataset 與 user menu 已定義；實作 adoption 仍待收斂 |
+| App runtime modes | [Header](../app/frontend/shared-shell/header.md), [Auth Entry](../app/frontend/shared-shell/auth-entry.md) | [Runtime Modes](../app/shared/runtime-modes.md), [Session & Workspace](../app/backend/session-workspace.md), [Authentication & Authorization](../app/shared/authentication-and-authorization.md) | `defined` | same-app local / online model 已定義； implementation adoption 仍待跟上 |
+| App shell context | [Header](../app/frontend/shared-shell/header.md), [Sidebar](../app/frontend/shared-shell/sidebar.md) | [Runtime Modes](../app/shared/runtime-modes.md), [Session & Workspace](../app/backend/session-workspace.md), [Authentication & Authorization](../app/shared/authentication-and-authorization.md) | `partial` | active workspace、dataset、mode switch 與 user menu 已定義；實作 adoption 仍待收斂 |
 | Workspace-scoped resource model | Header, workspace pages, task management | [Resource Ownership & Visibility](../app/shared/resource-ownership-and-visibility.md), [Identity & Workspace Model](../app/shared/identity-workspace-model.md), [Session & Workspace](../app/backend/session-workspace.md) | `partial` | multi-workspace membership + single active workspace 已定義；dataset/design adoption 剛收斂到 dataset-first |
-| Multi-user auth | Header, Task Management | [Authentication & Authorization](../app/shared/authentication-and-authorization.md), [Identity & Workspace Model](../app/shared/identity-workspace-model.md), [Session & Workspace](../app/backend/session-workspace.md) | `partial` | role / capability / invitation lifecycle 已定義； transport adoption 仍待實作 |
+| Multi-user auth | Header, Auth Entry, Task Management | [Runtime Modes](../app/shared/runtime-modes.md), [Authentication & Authorization](../app/shared/authentication-and-authorization.md), [Identity & Workspace Model](../app/shared/identity-workspace-model.md), [Session & Workspace](../app/backend/session-workspace.md) | `partial` | online-only auth / capability / invitation lifecycle 已定義； transport adoption 仍待實作 |
 | Shared task management | [Task Management](../app/frontend/shared-workflow/task-management.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | `partial` | queue / control / runtime state machine 已定義； implementation 仍待 adoption |
 | Simulation workflow | [Circuit Simulation](../app/frontend/research-workflow/circuit-simulation.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Circuit Definitions](../app/backend/circuit-definitions.md) | `partial` | queue 與 attach 已收斂； simulation-specific runtime/result depth 仍待細化 |
 | Characterization workflow | [Characterization](../app/frontend/research-workflow/characterization.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Characterization Results](../app/backend/characterization-results.md) | `partial` | run history 與 shared queue distinction 已定義 |

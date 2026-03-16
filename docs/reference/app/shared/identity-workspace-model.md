@@ -10,15 +10,15 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: user / session / workspace / role / active workspace / active dataset / task visibility 與 active-context switching 的 app 共享模型
-version: v0.3.0
-last_updated: 2026-03-14
+scope: runtime mode、user / session / workspace / role / active workspace / active dataset / task visibility 與 active-context switching 的 app 共享模型
+version: v0.4.0
+last_updated: 2026-03-16
 updated_by: codex
 ---
 
 # Identity & Workspace Model
 
-本文件定義 App shared model 中的最小 identity 與 workspace 語意。
+本文件定義 App shared model 中的最小 runtime mode、identity 與 workspace 語意。
 
 !!! info "App-level ownership"
     這份文件回答的是 App collaboration model。
@@ -28,12 +28,20 @@ updated_by: codex
     `Session` 是 active workspace、active dataset、user summary 與 capability exposure 的 canonical owner。
     frontend local state 可以 cache UI state，但不得重新定義身份與權限 truth。
 
+## Runtime Mode Terms
+
+| Term | Minimal meaning |
+|---|---|
+| `Runtime Mode` | 同一個 App 目前以 `local` 或 `online` 方式運行 |
+| `Local Session` | local mode 下由 backend 直接提供的 implicit single-user session |
+| `Online Session` | online mode 下由 auth / membership 建立的 session |
+
 ## Core Terms
 
 | Term | Minimal meaning |
 |---|---|
 | `User` | 一個可被識別、可被授權的操作者 |
-| `Session` | 綁定 `user`、`active workspace`、`active dataset` 與 `capabilities` 的有效上下文 |
+| `Session` | 綁定 `runtime mode`、`user`、`active workspace`、`active dataset` 與 `capabilities` 的有效上下文 |
 | `Workspace` | task visibility、dataset context、resource ownership 與 collaboration 的共享邊界 |
 | `Workspace Role` | `owner`、`member`、`viewer` 等 workspace-scoped role |
 | `Active Workspace` | session 目前正在操作的單一 workspace |
@@ -47,10 +55,19 @@ updated_by: codex
 
     | Rule | Meaning |
     |---|---|
-    | User may join multiple workspaces | membership 可以是多個 |
+    | One runtime mode per session | 同一時間 session 只屬於一個 active mode |
     | One active workspace per session | 同一時間 session 只綁定一個 active workspace |
     | Session owns dataset context | active dataset 不是 page-local state |
     | Session exposes capability summary | pages 不應自行推斷 permission |
+    | Mode switch invalidates old session | local / online 不能共用同一份 session cache |
+
+=== "Mode-specific workspace model"
+
+    | Rule | Meaning |
+    |---|---|
+    | Local mode uses one implicit workspace | 維持 shell-compatible context，但不進入 multi-membership collaboration model |
+    | Online mode may join multiple workspaces | membership 可以是多個，但仍只有一個 active workspace |
+    | Same shell shape across modes | Header 仍看得到 workspace / dataset context，但 authority semantics 依 mode 改變 |
 
 === "Workspace"
 
@@ -65,19 +82,21 @@ updated_by: codex
 
 | Context | Owner | Priority |
 |---|---|---|
+| `Runtime Mode` | app session | 最高 |
 | `Active Workspace` | session | 最高 |
 | `Active Dataset` | session | 次高 |
 | selected `Design Scope` | page + backend browse/read model | 受前兩者約束 |
 | `Attached Task` | page + persisted task state | 受前兩者約束 |
 | page-local filters / selections | page-local UI state | 最低 |
 
-!!! warning "Active Workspace Rebinds Everything Below It"
-    一旦 `Active Workspace` 切換，`Active Dataset`、queue visibility、attached task validity 與 capability summary 都必須重新驗證。
+!!! warning "Runtime Mode Rebinds Everything Below It"
+    一旦 `Runtime Mode` 切換，`Active Workspace`、`Active Dataset`、queue visibility、attached task validity 與 capability summary 都必須重新驗證。
 
 ## Relationship Model
 
 ```mermaid
 flowchart LR
+    Mode["Runtime Mode"] --> Session["Session"]
     User["User"] --> Session["Session"]
     User --> Memberships["Workspace Memberships"]
     Session --> Workspace["Active Workspace"]
@@ -88,6 +107,16 @@ flowchart LR
     Workspace --> ResourceScope["Resource Ownership"]
     Capabilities --> Shell["Header / User Menu / Queue Controls"]
 ```
+
+## Mode Switch Sequence
+
+| Step | Required behavior |
+|---|---|
+| 1. User picks mode | 從 app-level mode switcher 選 `local` 或 `online` |
+| 2. Frontend checks unsafe local state | dirty draft、attached task 或 destructive context 先要求確認 |
+| 3. Old session is invalidated | 舊 mode 的 user summary、workspace、dataset、queue cache 失效 |
+| 4. Backend establishes new mode session | local mode 建立 implicit local session；online mode 建立或要求 auth session |
+| 5. Shell context is rebuilt | Header、queue、page context 改用新 mode 的 session envelope |
 
 ## Workspace Switch Sequence
 
@@ -122,6 +151,7 @@ workspace switch 之後，session 應按以下順序決定新的 `Active Dataset
 
 | Outcome | Meaning |
 |---|---|
+| `mode_switched` | session 已切到另一種 runtime mode |
 | `preserved` | 原本 active dataset 在新 context 中仍有效 |
 | `rebound` | 系統依 resolution order 指到另一筆 dataset |
 | `cleared` | 無可用 dataset，等待手動選取 |
@@ -129,6 +159,7 @@ workspace switch 之後，session 應按以下順序決定新的 `Active Dataset
 
 ## Related
 
+* [Runtime Modes](runtime-modes.md)
 * [Resource Ownership & Visibility](resource-ownership-and-visibility.md)
 * [Authentication & Authorization](authentication-and-authorization.md)
 * [Backend / Session & Workspace](../backend/session-workspace.md)

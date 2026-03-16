@@ -13,7 +13,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
-version: v0.17.0
+version: v0.18.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
@@ -40,15 +40,15 @@ updated_by: codex
 
     | Page | Core focus | Authority pair |
     |---|---|---|
-    | [Header](shared-shell/header.md) | single-line shell identity、summary-first global context panel、lightweight account surface、developer mode、right-side shell panel | [App / Shared / Identity & Workspace Model](../shared/identity-workspace-model.md), [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md) |
+    | [Header](shared-shell/header.md) | single-line shell identity、runtime mode switch、summary-first global context panel、lightweight account surface、developer mode、right-side shell panel | [App / Shared / Runtime Modes](../shared/runtime-modes.md), [App / Shared / Identity & Workspace Model](../shared/identity-workspace-model.md), [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md) |
     | [Sidebar](shared-shell/sidebar.md) | navigation-only sidebar、strict group labels、responsive shell behavior | [Backend / Session & Workspace](../backend/session-workspace.md) |
-    | [Auth Entry](shared-shell/auth-entry.md) | login / logout / recovery entry、concise auth status、secondary diagnostics disclosure、developer-mode-aware debug detail | [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [Backend / Session & Workspace](../backend/session-workspace.md) |
+    | [Auth Entry](shared-shell/auth-entry.md) | online-mode login / logout / recovery entry、concise auth status、secondary diagnostics disclosure、developer-mode-aware debug detail | [App / Shared / Runtime Modes](../shared/runtime-modes.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [Backend / Session & Workspace](../backend/session-workspace.md) |
 
 === "Shared Workflow"
 
     | Page | Core focus | Authority pair |
     |---|---|---|
-    | [Task Management](shared-workflow/task-management.md) | `Global Context` queue section、attach、cancel、terminate、retry、refresh recovery | [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Audit Logging](../shared/audit-logging.md) |
+    | [Task Management](shared-workflow/task-management.md) | runtime-mode-aware `Global Context` queue section、attach、cancel、terminate、retry、refresh recovery | [App / Shared / Runtime Modes](../shared/runtime-modes.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Audit Logging](../shared/audit-logging.md) |
 
 === "Workspace"
 
@@ -76,6 +76,7 @@ updated_by: codex
 
 | Question | Frontend surface | Authority |
 |---|---|---|
+| 哪裡定義同一個 App 的 local / online mode 與 mode switch？ | [Header](shared-shell/header.md), [Auth Entry](shared-shell/auth-entry.md) | [Runtime Modes](../shared/runtime-modes.md), [Session & Workspace](../backend/session-workspace.md) |
 | 哪裡切換 active workspace、active dataset、打開 task queue、看 worker 狀態、開 user menu？ | [Header](shared-shell/header.md) | [Identity & Workspace Model](../shared/identity-workspace-model.md), [Session & Workspace](../backend/session-workspace.md), [Tasks & Execution](../backend/tasks-execution.md), [Authentication & Authorization](../shared/authentication-and-authorization.md), [Task Runtime & Processors](../shared/task-runtime-and-processors.md) |
 | 哪裡定義登入 / 登出 / 恢復入口的產品密度，而不是診斷頁？ | [Auth Entry](shared-shell/auth-entry.md) | [Authentication & Authorization](../shared/authentication-and-authorization.md), [Session & Workspace](../backend/session-workspace.md) |
 | 哪裡看 shared task queue 與管理 actions？ | [Task Management](shared-workflow/task-management.md) | [Tasks & Execution](../backend/tasks-execution.md), [Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [Authentication & Authorization](../shared/authentication-and-authorization.md), [Task Runtime & Processors](../shared/task-runtime-and-processors.md), [Audit Logging](../shared/audit-logging.md) |

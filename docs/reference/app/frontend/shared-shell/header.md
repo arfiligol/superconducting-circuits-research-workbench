@@ -12,18 +12,18 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend shared header 的 shell identity、global context entry、account surface、developer mode 與 shell-side panel contract
-version: v0.6.0
+scope: Frontend shared header 的 shell identity、runtime mode entry、global context entry、account surface、developer mode 與 shell-side panel contract
+version: v0.7.0
 last_updated: 2026-03-16
 updated_by: codex
 ---
 
 # Header
 
-本頁定義 frontend shared header 的正式契約。它是 app shell 的 single-line identity、global context entry 與 account-preference entry surface。
+本頁定義 frontend shared header 的正式契約。它是 app shell 的 single-line identity、runtime-mode-aware global context entry 與 account-preference entry surface。
 
 !!! info "Surface Boundary"
-    Header 負責唯一可見的 shell identity、`Active Workspace`、`Active Dataset`、`Tasks Queue`、worker status summary、account surface 與 app-level preferences。
+    Header 負責唯一可見的 shell identity、`Runtime Mode`、`Active Workspace`、`Active Dataset`、`Tasks Queue`、worker status summary、account surface 與 app-level preferences。
     page-local title、workspace management page、membership management、form、table filter、result table 與 editor internals 不屬於 Header。
 
 !!! warning "Single Visible Shell Identity"
@@ -31,7 +31,7 @@ updated_by: codex
     它必須維持單行，且不得再出現 `Research Workbench`、secondary shell subtitle 或額外 brand helper text。
 
 !!! warning "Global Context Lives In Header"
-    `Active Workspace`、`Active Dataset` 與 `Tasks Queue` 是 shared shell 的 global context。
+    `Runtime Mode`、`Active Workspace`、`Active Dataset` 與 `Tasks Queue` 是 shared shell 的 global context。
     使用者必須能在 Header 直接點擊、展開與操作它們，而不是各頁各自重造入口。
 
 !!! tip "Compact Trigger, Heavy Management Elsewhere"
@@ -47,7 +47,7 @@ updated_by: codex
 | Slot | Responsibility |
 |---|---|
 | Left Cluster | Sidebar toggle、single-line shell identity |
-| Global Context Cluster | `Active Workspace`、`Active Dataset`、`Tasks Queue` 與 worker summary 的 compact summary cards / chips |
+| Global Context Cluster | `Runtime Mode`、`Active Workspace`、`Active Dataset`、`Tasks Queue` 與 worker summary 的 compact summary cards / chips |
 | Right Cluster | user menu / account trigger |
 
 ## Shell Identity Contract
@@ -88,8 +88,8 @@ updated_by: codex
 | Concern | Required behavior |
 |---|---|
 | Role | shared shell 的大型 management surface，承接 workspace、dataset、queue 與 worker detail |
-| Top row | 先顯示 4 張 summary cards：`Active Workspace`、`Active Dataset`、`Tasks Queue`、`Worker Summary` |
-| Card role | 4 張 cards 是 section switchers，不只是 summary badges |
+| Top row | 先顯示 5 張 summary cards：`Runtime Mode`、`Active Workspace`、`Active Dataset`、`Tasks Queue`、`Worker Summary` |
+| Card role | 5 張 cards 是 section switchers，不只是 summary badges |
 | Detail model | cards 下方只顯示目前 selected section 的 detailed content，不得把所有 section 一次整疊鋪開 |
 | Non-selected sections | 非 selected section 只保留卡片摘要，不顯示完整 detail body |
 | Selected affordance | selected / unselected 狀態必須明確可辨；建議以 card style 差異與小型 indicator dot 處理 |
@@ -97,19 +97,31 @@ updated_by: codex
 
 !!! tip "Selected-section detail only"
     `Global Context` 的核心是「summary cards 切 section，detail 區只顯示一個 active section」。
-    不要把 workspace、dataset、queue、worker 四段內容整包常駐展開。
+    不要把 runtime mode、workspace、dataset、queue、worker 五段內容整包常駐展開。
 
 ## Global Context Order
 
 | Order | Control | Why it comes first |
 |---|---|---|
-| 1 | `Active Workspace` | 決定 dataset list、queue visibility 與 capability context |
-| 2 | `Active Dataset` | 決定 workflow pages 的預設 dataset scope |
-| 3 | `Tasks Queue` | 顯示目前 workspace 中的 shared task activity |
-| 4 | worker status summary | 是 queue 與 runtime 的摘要，不高於 queue 本身 |
-| 5 | user menu | identity、settings、appearance 與 sign out |
+| 1 | `Runtime Mode` | 決定是否連到 local backend 或 remote server，也決定 auth 是否必要 |
+| 2 | `Active Workspace` | 決定 dataset list、queue visibility 與 capability context |
+| 3 | `Active Dataset` | 決定 workflow pages 的預設 dataset scope |
+| 4 | `Tasks Queue` | 顯示目前 workspace / mode 中的 task activity |
+| 5 | worker status summary | 是 queue 與 runtime 的摘要，不高於 queue 本身 |
+| 6 | user menu | identity、settings、appearance 與 sign out |
 
 ## Global Controls
+
+=== "Runtime Mode Trigger"
+
+    | Element | Required behavior |
+    |---|---|
+    | mode chip / button | 顯示目前為 `Local Mode` 或 `Online Mode`，並可附帶 compact target summary |
+    | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context` runtime-mode section |
+    | mode switch | 應支援切到 local 或 configured online target；切換後不得混用舊 mode 的 workspace / dataset / task state |
+    | local outcome | 切到 local mode 時，直接進入 local session，不經 auth entry |
+    | online outcome | 切到 online mode 時，若尚未登入，導向 auth entry；若已有有效 session，可直接回 shell |
+    | unsafe-context handling | 若切 mode 會清掉 dirty draft、attached task 或 queue context，必須先要求確認 |
 
 === "Active Workspace Trigger"
 
@@ -117,6 +129,7 @@ updated_by: codex
     |---|---|
     | workspace chip / button | 直接顯示目前 active workspace 名稱與 role 摘要 |
     | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context`，聚焦 workspace section，只列出目前 user memberships |
+    | mode applicability | local mode 下可退化成單一 implicit local workspace summary，不必強制顯示多 membership switcher |
     | propagation | 切換後必須同步更新 active dataset、queue visibility、role / capabilities |
     | unsafe-context handling | 若切換造成 attached task 或 active dataset 不再可見，Header 必須觸發清理或重選流程 |
     | dirty-state handling | 若目前頁存在 dirty draft，Header 先顯示 confirm，再送出 switch mutation |
@@ -137,6 +150,7 @@ updated_by: codex
     | queue button / badge | 顯示目前可見 active tasks 數量 |
     | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context` queue section |
     | queue section | 展示 queue rows、worker summary、filter (`Workspace` / `Mine`)；非 selected sections 只留在 cards 摘要 |
+    | mode behavior | local mode 顯示 local runtime tasks；online mode 顯示 workspace-visible shared tasks |
     | worker summary | 在 drawer 內可看到各 lane 的 `healthy / busy / degraded / draining / offline` 摘要；header 只保留 compact summary |
     | row action entry | 每列至少支援 `Attach`，並依權限顯示 `Cancel` / `Terminate` / `Retry` |
     | default ordering | active tasks 優先，之後按 `updated_at desc` 顯示最近 terminal tasks |
@@ -158,6 +172,7 @@ updated_by: codex
 |---|---|
 | Role | lightweight personal / app-preference surface，不是 shell-wide state-management surface |
 | Allowed content | account summary、sign-in state、appearance、developer mode、sign in / sign out |
+| Mode relation | account 可顯示目前 mode 的 account-side summary，但不擁有 runtime-mode switch 本身的 authority |
 | Excluded content | workspace state、session diagnostics、membership management、queue detail、heavy collaboration controls |
 | Header density | account panel header 應保持簡潔，可使用 `Account`、`Appearance` 或等價輕量標題 |
 | Branding rule | account panel 不得再次重複 `SUPERCONDUCTING CIRCUITS` 或其他 shell identity |
@@ -203,6 +218,7 @@ updated_by: codex
 | Rule | Meaning |
 |---|---|
 | Context follows authority | workspace / dataset 來自 session surface；definition 來自 definition surface；task 來自 persisted task surface |
+| Runtime mode is the outer shell boundary | `Runtime Mode` 先決定 local / online authority，再往下決定 workspace、dataset 與 queue context |
 | Workspace is top-level shell context | `Active Workspace` 優先於 `Active Dataset`，因為 dataset list、queue 與 capabilities 都依賴它 |
 | Queue is globally reachable | 不論目前在哪一頁，都能從 Header 打開 `Tasks Queue` |
 | Worker summary is runtime-driven | Header 顯示的 worker status 必須來自 runtime summary，不可由 UI 推測 |
@@ -220,6 +236,7 @@ updated_by: codex
 | Concern | Authority |
 |---|---|
 | active workspace / dataset / user summary | [Backend / Session & Workspace](../../backend/session-workspace.md) |
+| runtime mode / mode switch outcome | [App / Shared / Runtime Modes](../../shared/runtime-modes.md), [Backend / Session & Workspace](../../backend/session-workspace.md) |
 | attached task summary / queue rows | [Backend / Tasks & Execution](../../backend/tasks-execution.md) |
 | permission & user menu capability | [App / Shared / Authentication & Authorization](../../shared/authentication-and-authorization.md) |
 | workspace ownership / visibility | [App / Shared / Resource Ownership & Visibility](../../shared/resource-ownership-and-visibility.md) |
@@ -229,3 +246,4 @@ updated_by: codex
 
 - [Sidebar](sidebar.md)
 - [Task Management](../shared-workflow/task-management.md)
+- [Runtime Modes](../../shared/runtime-modes.md)

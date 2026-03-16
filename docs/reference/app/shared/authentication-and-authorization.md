@@ -11,21 +11,36 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: multi-user session、workspace membership、invitation accept flow、active workspace、capability exposure 與 task-management permission contract
-version: v0.4.0
-last_updated: 2026-03-14
+scope: online-mode auth / authz、workspace membership、invitation accept flow、capability exposure 與 local-mode bypass contract
+version: v0.5.0
+last_updated: 2026-03-16
 updated_by: codex
 ---
 
 # Authentication & Authorization
 
-本頁定義 multi-user app 的 identity、workspace membership、capabilities 與 task-management permission 契約。
+本頁定義 App 在 `Online Mode` 下的 auth / authz 契約，以及 `Local Mode` 下的 auth bypass baseline。
 
 !!! info "App-shared surface"
     Header 的 user menu、active workspace switch、active dataset switch、task queue actions，以及 backend session surface 都依賴本契約。
 
-!!! warning "Shared Task Queue Needs Auth First"
-    只要 task queue 是多人共用 surface，就必須先定義 visibility 與 action permission。
+!!! warning "Online Shared Queue Needs Auth First"
+    只要 task queue 在 `Online Mode` 是多人共用 surface，就必須先定義 visibility 與 action permission。
+
+!!! warning "Auth Is Online-Mode Only"
+    `Authentication / Authorization` 是 `Online Mode` 的正式 requirement。
+    `Local Mode` 不應被登入流程、workspace invitation 或 multi-user permission matrix 阻擋。
+
+## Mode Applicability
+
+| Mode | Auth / authz behavior |
+|---|---|
+| `local` | 不要求 sign in；不啟用 multi-user membership / invitation / role gate；backend 回傳 local session 與 local capability summary |
+| `online` | 啟用 JWT auth、workspace membership、capability flags、queue permission 與 collaboration controls |
+
+!!! tip "Same session shape, different mode semantics"
+    frontend 應盡量消費同一種 session envelope。
+    `local` 與 `online` 的差別主要是 permission authority 與 collaboration semantics，不是做兩套完全不同的 shell contract。
 
 !!! tip "Chosen baseline"
     正式 baseline 採 JWT-based auth transport，但 `workspace role`、`capabilities` 與 `active workspace` 不以 JWT 自行宣稱。
@@ -36,6 +51,7 @@ updated_by: codex
 | Object | Required meaning |
 |---|---|
 | Authenticated Session | 綁定 `user`、`active workspace`、capabilities 與 active dataset 的有效作業階段 |
+| Local Bypass Session | 不需登入的 local session，仍提供 `user`、`active workspace`、`capabilities` 與 active dataset |
 | Workspace Membership | 使用者在特定 workspace 內的角色與可見性邊界 |
 | Active Workspace | 當前 session 正在操作的單一 workspace |
 | Capability Flags | page 與 shared app surfaces 可直接消費的 permission summary |
@@ -51,6 +67,10 @@ updated_by: codex
 | Browser storage | HttpOnly + Secure cookie |
 | Session authority | active workspace、active dataset、capabilities 由 backend session row 擁有 |
 | Logout | 撤銷 refresh token family，並使對應 session 失效 |
+
+!!! info "Local mode bypass"
+    `Local Mode` 不使用 JWT transport。
+    backend 應直接建立 local session，並回傳與 online mode 相容的 session envelope shape。
 
 !!! warning "JWT Is Not Permission Authority"
     JWT 用來證明 `user identity` 與 `session continuity`。
@@ -95,6 +115,16 @@ updated_by: codex
     `private` / `workspace` visibility、resource owner 與 active workspace rebinding 仍需要 backend service 先整理成穩定的 authorization context。
     正式 baseline 不是把所有規則都硬塞進 policy expression，而是 `service-owned resource resolution + Casbin decision engine`。
 
+## Local-Mode Bypass Rules
+
+| Concern | Required behavior |
+|---|---|
+| Session establishment | backend 直接提供 implicit local user / local workspace session |
+| Capability summary | 仍由 backend materialize，不由 frontend 自行假設 |
+| Queue permission | local task controls 依 local capability summary 決定，但不走 multi-user role matrix |
+| Invitation / membership | 不適用 |
+| Auth entry | 不應成為 local mode 的 primary entry surface |
+
 ## Capability Families
 
 | Capability family | Representative flags |
@@ -112,6 +142,10 @@ updated_by: codex
 | Workspace roles | `owner`, `member`, `viewer` |
 
 ## Workspace Invitation Lifecycle
+
+!!! info "Online mode only"
+    invitation、join、leave、remove member 與 owner transfer 只屬於 `Online Mode`。
+    `Local Mode` 不應暴露這些 collaboration controls。
 
 !!! info "Primary invitation mechanism"
     目前正式採 `email invitation`。
@@ -239,6 +273,7 @@ updated_by: codex
 
 ## Related
 
+* [Runtime Modes](runtime-modes.md)
 * [Identity & Workspace Model](identity-workspace-model.md)
 * [Resource Ownership & Visibility](resource-ownership-and-visibility.md)
 * [Outbound Email Delivery](outbound-email-delivery.md)
