@@ -82,10 +82,29 @@ export function unwrapSchemdrawRenderEnvelope(response: SchemdrawRenderEnvelope)
 }
 
 export async function renderSchemdrawPreview(request: SchemdrawRenderRequest) {
-  const response = await apiRequest<SchemdrawRenderEnvelope>(schemdrawRenderEndpoint, {
-    method: "POST",
-    body: request,
-  });
+  const response = await apiRequest<SchemdrawRenderEnvelope | SchemdrawRenderResponse>(
+    schemdrawRenderEndpoint,
+    {
+      method: "POST",
+      body: request,
+    },
+  );
+
+  if (isSchemdrawRenderResponse(response)) {
+    return response;
+  }
 
   return unwrapSchemdrawRenderEnvelope(response);
+}
+
+function isSchemdrawRenderResponse(
+  payload: SchemdrawRenderEnvelope | SchemdrawRenderResponse,
+): payload is SchemdrawRenderResponse {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    "request_id" in payload &&
+    "document_version" in payload &&
+    "status" in payload
+  );
 }

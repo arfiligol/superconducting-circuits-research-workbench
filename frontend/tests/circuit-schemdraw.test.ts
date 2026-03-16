@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { EditorState } from "@codemirror/state";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../src/lib/api/client";
 import {
@@ -20,6 +20,7 @@ import {
   summarizeSchemdrawCatalog,
 } from "../src/features/circuit-schemdraw/lib/workflow";
 import {
+  renderSchemdrawPreview,
   schemdrawRenderEndpoint,
   unwrapSchemdrawRenderEnvelope,
 } from "../src/features/circuit-schemdraw/lib/api";
@@ -49,6 +50,11 @@ const schemdrawWorkspaceSource = readFileSync(
   ),
   "utf8",
 );
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("circuit schemdraw routing helpers", () => {
   const definitions = [
@@ -315,6 +321,42 @@ describe("circuit schemdraw render helpers", () => {
     ).toThrowError(ApiError);
   });
 
+  it("accepts success responses after apiRequest unwraps the success envelope", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          data: {
+            request_id: "req-live-1",
+            document_version: 3,
+            status: "rendered",
+            svg: "<svg />",
+            diagnostics: [],
+          },
+        }),
+      })),
+    );
+
+    await expect(
+      renderSchemdrawPreview({
+        source_text: "import schemdraw",
+        relation_config: {},
+        linked_schema: null,
+        document_version: 3,
+        request_id: "req-live-1",
+        render_mode: "manual",
+      }),
+    ).resolves.toMatchObject({
+      request_id: "req-live-1",
+      document_version: 3,
+      status: "rendered",
+      svg: "<svg />",
+    });
+  });
+
   it("builds render requests from editor drafts and linked schema context", () => {
     const request = buildSchemdrawRenderRequest({
       activeDefinition: {
@@ -324,6 +366,8 @@ describe("circuit schemdraw render helpers", () => {
         element_count: 12,
         validation_status: "ok",
         preview_artifact_count: 2,
+        workspace_id: "ws_lab_a",
+        source_hash: "sha256:definition18",
         source_text: "{}",
         normalized_output: "{}",
         validation_notices: [],
@@ -350,8 +394,31 @@ describe("circuit schemdraw render helpers", () => {
       render_mode: "manual",
       linked_schema: {
         definition_id: 18,
+        workspace_id: "ws_lab_a",
         name: "FloatingQubitWithXYLine",
+        source_hash: "sha256:definition18",
       },
+    });
+  });
+
+  it("keeps unlinked render requests valid when no active definition is attached", () => {
+    const request = buildSchemdrawRenderRequest({
+      activeDefinition: undefined,
+      draft: {
+        sourceText: createSchemdrawSourceTemplate(null),
+        relationText: createRelationConfigTemplate(undefined),
+        documentVersion: 2,
+      },
+      renderMode: "debounced",
+      requestId: "req-unlinked",
+    });
+
+    expect(request.diagnostics).toEqual([]);
+    expect(request.request).toMatchObject({
+      request_id: "req-unlinked",
+      document_version: 2,
+      render_mode: "debounced",
+      linked_schema: null,
     });
   });
 

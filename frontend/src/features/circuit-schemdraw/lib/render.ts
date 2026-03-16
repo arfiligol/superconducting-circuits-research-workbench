@@ -175,7 +175,9 @@ export function buildSchemdrawRenderRequest({
   const linkedSchema: SchemdrawLinkedSchemaSnapshot | null = activeDefinition
     ? {
         definition_id: activeDefinition.definition_id,
+        workspace_id: activeDefinition.workspace_id ?? null,
         name: activeDefinition.name,
+        source_hash: activeDefinition.source_hash ?? null,
       }
     : null;
 
