@@ -41,6 +41,7 @@ import {
 import {
   buildNormalizedOutputPreview,
   partitionValidationNotices,
+  resolvePrioritizedValidationLane,
   resolvePersistedPreviewState,
 } from "../src/features/circuit-definition-editor/lib/preview";
 
@@ -598,6 +599,61 @@ describe("circuit definition preview helpers", () => {
     });
 
     expect(
+      resolvePrioritizedValidationLane({
+        selectedDefinitionId: 18,
+        isDirty: false,
+        groups: {
+          blocking: [
+            {
+              severity: "error",
+              level: "warning",
+              code: "definition_source_invalid",
+              message: "Topology row is invalid.",
+              source: "backend_validator",
+              blocking: true,
+            },
+          ],
+          warnings: [],
+          checks: [],
+        },
+      }),
+    ).toEqual({
+      kind: "blocking",
+      title: "Persisted Errors",
+      tone: "error",
+      notices: [
+        {
+          severity: "error",
+          level: "warning",
+          code: "definition_source_invalid",
+          message: "Topology row is invalid.",
+          source: "backend_validator",
+          blocking: true,
+        },
+      ],
+      detail:
+        "Blocking backend notices are preventing this persisted schema from being treated as valid.",
+    });
+
+    expect(
+      resolvePrioritizedValidationLane({
+        selectedDefinitionId: "new",
+        isDirty: false,
+        groups: {
+          blocking: [],
+          warnings: [],
+          checks: [],
+        },
+      }),
+    ).toEqual({
+      kind: "empty",
+      title: "Persisted Notices",
+      tone: "default",
+      notices: [],
+      detail: "Save the draft to generate persisted backend validation notices.",
+    });
+
+    expect(
       buildNormalizedOutputPreview(
         '{\n  "circuit": "fluxonium_reference_a",\n  "family": "fluxonium",\n  "elements": 12,\n  "schemdraw_ready": true\n}',
       ),
@@ -660,15 +716,25 @@ describe("circuit definition workspace boundaries", () => {
   it("keeps the editor route responsible for source editing, serializer binding, and persisted preview", () => {
     expect(editorPageSource).toContain("CircuitDefinitionEditorWorkspace");
     expect(editorPageSource).not.toContain("CircuitDefinitionCatalogWorkspace");
+    expect(editorWorkspaceSource).toContain("Active Schema");
+    expect(editorWorkspaceSource).toContain("Canonical Source");
+    expect(editorWorkspaceSource).toContain("Validation & Preview");
+    expect(editorWorkspaceSource).toContain("Circuit Netlist Quick Reference");
+    expect(editorWorkspaceSource).toContain("Back to Schemas");
     expect(editorWorkspaceSource).toContain("Format");
     expect(editorWorkspaceSource).toContain("Save");
     expect(editorWorkspaceSource).toContain("Discard");
     expect(editorWorkspaceSource).toContain("Publish");
     expect(editorWorkspaceSource).toContain("Clone");
-    expect(editorWorkspaceSource).toContain("Serializer Boundary");
-    expect(editorWorkspaceSource).toContain("Action Authority");
+    expect(editorWorkspaceSource).toContain("Persisted Notices");
+    expect(editorWorkspaceSource).toContain("Normalized Output");
+    expect(editorWorkspaceSource).toContain("Expanded");
     expect(editorWorkspaceSource).toContain("ConfirmActionDialog");
     expect(editorWorkspaceSource).not.toContain("window.confirm");
+    expect(editorWorkspaceSource).not.toContain("Catalog Rail");
+    expect(editorWorkspaceSource).not.toContain("Open another schema without leaving the editor workflow.");
+    expect(editorWorkspaceSource).not.toContain("Local Contract Diagnostics");
+    expect(editorWorkspaceSource).toContain("extensions={[json()]}");
     expect(editorWorkspaceSource).toContain("does not save");
   });
 });

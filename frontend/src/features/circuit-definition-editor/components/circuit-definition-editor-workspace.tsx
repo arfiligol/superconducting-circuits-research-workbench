@@ -3,11 +3,8 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  AlertTriangle,
   ArrowLeft,
-  BadgeCheck,
   Copy,
-  FileCode2,
   Globe,
   LoaderCircle,
   Save,
@@ -18,13 +15,11 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import CodeMirror from "@uiw/react-codemirror";
-import { yaml } from "@codemirror/lang-yaml";
+import { json } from "@codemirror/lang-json";
 import { z } from "zod";
 
 import { useCircuitDefinitionEditorData } from "@/features/circuit-definition-editor/hooks/use-circuit-definition-editor-data";
-import {
-  summarizeEditorDefinitionActionState,
-} from "@/features/circuit-definition-editor/lib/actions";
+import { summarizeEditorDefinitionActionState } from "@/features/circuit-definition-editor/lib/actions";
 import {
   parseDefinitionIdParam,
   resolveSelectedDefinitionId,
@@ -42,10 +37,9 @@ import {
   buildCircuitDefinitionPersistedPreviewSurface,
   isCircuitDefinitionMutationPending,
 } from "@/features/circuit-definition-editor/lib/editor-state";
-import { ConfirmActionDialog } from "@/lib/confirm-action-dialog";
-import { cx, resolveSurfaceInsetToneClass } from "@/features/shared/components/surface-kit";
-
 import type { CircuitDefinitionDetail } from "@/features/circuit-definition-editor/lib/contracts";
+import { cx, resolveSurfaceInsetToneClass } from "@/features/shared/components/surface-kit";
+import { ConfirmActionDialog } from "@/lib/confirm-action-dialog";
 
 const quickReferenceRows = [
   ["Port", "P*", "-", '["P1", "1", "0", 1]'],
@@ -102,26 +96,72 @@ type PendingEditorIntent =
       definition: Pick<CircuitDefinitionDetail, "definition_id" | "name">;
       discardDraft: boolean;
     }>
-  | Readonly<{
-      kind: "switch-definition";
-      nextDefinitionId: string;
-    }>
   | null;
+
+function SummaryCard({
+  label,
+  value,
+  detail,
+}: Readonly<{
+  label: string;
+  value: string;
+  detail?: string;
+}>) {
+  return (
+    <div className="rounded-[0.85rem] border border-border bg-surface px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-foreground">{value}</p>
+      {detail ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p> : null}
+    </div>
+  );
+}
+
+function InlineNotice({
+  tone,
+  title,
+  message,
+  items,
+}: Readonly<{
+  tone: "default" | "success" | "warning" | "error";
+  title: string;
+  message: string;
+  items?: readonly string[];
+}>) {
+  const toneClass =
+    tone === "error"
+      ? resolveSurfaceInsetToneClass("error")
+      : tone === "warning"
+        ? resolveSurfaceInsetToneClass("warning")
+        : tone === "success"
+          ? resolveSurfaceInsetToneClass("success")
+          : "border-border bg-surface text-foreground";
+
+  return (
+    <div className={cx("rounded-[0.85rem] border px-4 py-3 text-sm", toneClass)}>
+      <p className="font-medium">{title}</p>
+      <p className="mt-1 leading-6">{message}</p>
+      {items && items.length > 0 ? (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-5">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
 export function CircuitDefinitionEditorWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isNavigating, startTransition] = useTransition();
-  const [catalogQuery, setCatalogQuery] = useState("");
-  const [pendingIntent, setPendingIntent] = useState<PendingEditorIntent>(null);
 
   const selectedDefinitionId = parseDefinitionIdParam(searchParams.get("definitionId"));
+  const [pendingIntent, setPendingIntent] = useState<PendingEditorIntent>(null);
   const {
     definitions,
-    definitionsTotalCount,
     definitionsError,
-    isDefinitionsLoading,
     activeDefinition,
     activeDefinitionError,
     mutationStatus,
@@ -129,7 +169,6 @@ export function CircuitDefinitionEditorWorkspace() {
     publishDefinition,
     cloneDefinition,
     removeDefinition,
-    clearMutationStatus,
   } = useCircuitDefinitionEditorData(selectedDefinitionId);
 
   const form = useForm<DefinitionFormValues>({
@@ -167,6 +206,25 @@ export function CircuitDefinitionEditorWorkspace() {
     }
   }, [activeDefinition, form, selectedDefinitionId]);
 
+  async function handleFormat() {
+    const formatted = formatCircuitNetlistSource(form.getValues("source_text"), {
+      canonicalName: form.getValues("name"),
+    });
+    form.setValue("source_text", formatted.formattedSource, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    if (formatted.diagnostics.length > 0) {
+      form.setError("source_text", {
+        type: "validate",
+        message: formatted.diagnostics[0]?.message,
+      });
+    } else {
+      form.clearErrors("source_text");
+    }
+  }
+
   useEffect(() => {
     function handleFormatShortcut(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "f") {
@@ -191,19 +249,6 @@ export function CircuitDefinitionEditorWorkspace() {
       }),
     [definitionName, sourceText],
   );
-  const isMutationPending = isCircuitDefinitionMutationPending(mutationStatus.state);
-  const isIdentityTransitionLocked = isMutationPending || isNavigating;
-  const filteredDefinitions = (definitions ?? []).filter((definition) => {
-    const normalizedQuery = catalogQuery.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return true;
-    }
-
-    return (
-      definition.name.toLowerCase().includes(normalizedQuery) ||
-      String(definition.definition_id).includes(normalizedQuery)
-    );
-  });
   const persistedPreviewSurface = useMemo(
     () =>
       buildCircuitDefinitionPersistedPreviewSurface({
@@ -214,6 +259,7 @@ export function CircuitDefinitionEditorWorkspace() {
       }),
     [activeDefinition, form.formState.isDirty, mutationStatus.state, selectedDefinitionId],
   );
+  const isMutationPending = isCircuitDefinitionMutationPending(mutationStatus.state);
   const editorActionState = summarizeEditorDefinitionActionState({
     selectedDefinitionId,
     activeDefinition,
@@ -224,7 +270,66 @@ export function CircuitDefinitionEditorWorkspace() {
   });
 
   const activeDefinitionLabel =
-    selectedDefinitionId === "new" ? "New Circuit Definition" : activeDefinition?.name ?? "Loading";
+    selectedDefinitionId === "new" ? "New Circuit Definition" : activeDefinition?.name ?? "Loading schema";
+  const persistedStateToneClass =
+    persistedPreviewSurface.persistedPreviewState.tone === "warning"
+      ? resolveSurfaceInsetToneClass("warning")
+      : persistedPreviewSurface.persistedPreviewState.tone === "accent"
+        ? "border-primary/20 bg-primary/8 text-foreground"
+        : "border-border bg-surface text-muted-foreground";
+  const prioritizedNoticeToneClass =
+    persistedPreviewSurface.prioritizedNoticeLane.tone === "error"
+      ? resolveSurfaceInsetToneClass("error")
+      : persistedPreviewSurface.prioritizedNoticeLane.tone === "warning"
+        ? resolveSurfaceInsetToneClass("warning")
+        : persistedPreviewSurface.prioritizedNoticeLane.tone === "success"
+          ? resolveSurfaceInsetToneClass("success")
+          : "border-border bg-background text-muted-foreground";
+
+  const sourceNotice = useMemo(() => {
+    if (draftSurface.blockingLocalDiagnostics.length > 0) {
+      return {
+        tone: "error" as const,
+        title: "Local authoring errors",
+        message: "Fix the blocking source issues before the next save can succeed.",
+        items: draftSurface.blockingLocalDiagnostics.map(
+          (diagnostic) => `${diagnostic.path}: ${diagnostic.message}`,
+        ),
+      };
+    }
+
+    if (draftSurface.serializerBoundary.willRewriteSourceName) {
+      return {
+        tone: "warning" as const,
+        title: "Serializer boundary notice",
+        message: draftSurface.serializerBoundary.detail,
+        items:
+          draftSurface.localDiagnostics.length > 0
+            ? draftSurface.localDiagnostics.map(
+                (diagnostic) => `${diagnostic.path}: ${diagnostic.message}`,
+              )
+            : undefined,
+      };
+    }
+
+    if (draftSurface.localDiagnostics.length > 0) {
+      return {
+        tone: "warning" as const,
+        title: "Local authoring notice",
+        message: "The source is parseable, but local warnings still deserve review before save.",
+        items: draftSurface.localDiagnostics.map(
+          (diagnostic) => `${diagnostic.path}: ${diagnostic.message}`,
+        ),
+      };
+    }
+
+    return {
+      tone: "success" as const,
+      title: "Authoring ready",
+      message: "Local source currently matches the canonical circuit-netlist contract.",
+      items: undefined,
+    };
+  }, [draftSurface]);
 
   async function onSubmit(values: DefinitionFormValues) {
     const nextDraft = buildCircuitDefinitionDraft({
@@ -235,7 +340,9 @@ export function CircuitDefinitionEditorWorkspace() {
     if (!nextDraft.draft) {
       form.setError("source_text", {
         type: "validate",
-        message: nextDraft.diagnostics[0]?.message ?? "Source does not match the circuit-netlist contract.",
+        message:
+          nextDraft.diagnostics[0]?.message ??
+          "Source does not match the circuit-netlist contract.",
       });
       return;
     }
@@ -256,13 +363,6 @@ export function CircuitDefinitionEditorWorkspace() {
       return;
     }
 
-    if (pendingIntent.kind === "switch-definition") {
-      clearMutationStatus();
-      replaceDefinitionId(pendingIntent.nextDefinitionId);
-      setPendingIntent(null);
-      return;
-    }
-
     await removeDefinition(pendingIntent.definition.definition_id);
     const remainingDefinitions = (definitions ?? []).filter(
       (definition) => definition.definition_id !== pendingIntent.definition.definition_id,
@@ -272,42 +372,6 @@ export function CircuitDefinitionEditorWorkspace() {
       : "new";
     setPendingIntent(null);
     replaceDefinitionId(fallbackSelection);
-  }
-
-  async function handleFormat() {
-    const formatted = formatCircuitNetlistSource(form.getValues("source_text"), {
-      canonicalName: form.getValues("name"),
-    });
-    form.setValue("source_text", formatted.formattedSource, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-    if (formatted.diagnostics.length > 0) {
-      form.setError("source_text", {
-        type: "validate",
-        message: formatted.diagnostics[0]?.message,
-      });
-    } else {
-      form.clearErrors("source_text");
-    }
-  }
-
-  function handleReplaceDefinitionIdRequest(nextId: string) {
-    if (nextId === String(selectedDefinitionId)) {
-      return;
-    }
-
-    if (form.formState.isDirty) {
-      setPendingIntent({
-        kind: "switch-definition",
-        nextDefinitionId: nextId,
-      });
-      return;
-    }
-
-    clearMutationStatus();
-    replaceDefinitionId(nextId);
   }
 
   function discardChanges() {
@@ -373,15 +437,15 @@ export function CircuitDefinitionEditorWorkspace() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-[2.05rem] font-semibold tracking-tight text-foreground">
             Schema Editor
           </h1>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">
-            Author canonical circuit-netlist source, format it explicitly, and compare local draft
-            diagnostics against the last persisted backend preview.
+            Author one active circuit definition at a time, then compare the draft against the
+            last persisted backend validation output.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -445,752 +509,413 @@ export function CircuitDefinitionEditorWorkspace() {
         </div>
       ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.72fr)_minmax(0,1.28fr)]">
-        <div className="space-y-4">
-          <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-            <div className="flex items-center justify-between gap-3 border-b border-border/80 pb-4">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Catalog Rail
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Open another schema without leaving the editor workflow.
-                </p>
-              </div>
-              <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                {definitionsTotalCount} total
+      <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+        <div className="flex flex-col gap-4 border-b border-border/80 pb-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Active Schema
+            </h2>
+            <p className="mt-2 text-lg font-semibold text-foreground">{activeDefinitionLabel}</p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border bg-surface px-3 py-1">
+                {selectedDefinitionId === "new"
+                  ? "Draft only"
+                  : `Definition #${activeDefinition?.definition_id ?? "--"}`}
               </span>
+              {activeDefinition ? (
+                <>
+                  <span className="rounded-full border border-border bg-surface px-3 py-1">
+                    {activeDefinition.visibility_scope}
+                  </span>
+                  <span className="rounded-full border border-border bg-surface px-3 py-1">
+                    {activeDefinition.lifecycle_state}
+                  </span>
+                </>
+              ) : null}
+              <span className="rounded-full border border-border bg-surface px-3 py-1">
+                {persistedPreviewSurface.persistedPreviewState.label}
+              </span>
+              {typeof activeDefinition?.lineage_parent_id === "number" ? (
+                <span className="rounded-full border border-border bg-surface px-3 py-1">
+                  Cloned from #{activeDefinition.lineage_parent_id}
+                </span>
+              ) : null}
             </div>
+          </div>
 
-            <label className="mt-4 block rounded-[0.9rem] border border-border bg-surface px-4 py-3">
-              <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Search
-              </span>
-              <input
-                value={catalogQuery}
-                onChange={(event) => {
-                  setCatalogQuery(event.target.value);
-                }}
-                placeholder="Find by name or id"
-                className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-
-            {isDefinitionsLoading && !definitions ? (
-              <div className="mt-4 rounded-[0.9rem] border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-                Loading schema rail...
-              </div>
-            ) : null}
-
-            <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {typeof selectedDefinitionId === "number" ? (
               <button
                 type="button"
                 onClick={() => {
-                  handleReplaceDefinitionIdRequest("new");
+                  requestDelete({
+                    definition_id: selectedDefinitionId,
+                    name: activeDefinition?.name ?? activeDefinitionLabel,
+                  });
                 }}
-                disabled={isIdentityTransitionLocked}
+                disabled={isMutationPending || !editorActionState.delete.enabled}
                 title={
-                  isIdentityTransitionLocked
-                    ? "Wait for the current route transition or mutation to finish."
-                    : "Create a new draft in the single editor workspace."
+                  isMutationPending
+                    ? "Wait for the current definition mutation to finish."
+                    : editorActionState.delete.reason
                 }
-                className={cx(
-                  "w-full rounded-[0.9rem] border px-4 py-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60",
-                  selectedDefinitionId === "new"
-                    ? "border-primary/40 bg-primary/10"
-                    : "border-border bg-surface hover:border-primary/30 hover:bg-primary/5",
-                )}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-rose-500/30 px-3 py-2 text-sm text-rose-700 transition hover:bg-rose-500/10 dark:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <p className="text-sm font-semibold text-foreground">New Schema Draft</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Start a new circuit-netlist document from the canonical template.
-                </p>
+                <Trash2 className="h-4 w-4" />
+                Delete
               </button>
-
-              {filteredDefinitions.map((definition) => (
-                <button
-                  key={definition.definition_id}
-                  type="button"
-                  onClick={() => {
-                    handleReplaceDefinitionIdRequest(String(definition.definition_id));
-                  }}
-                  disabled={isIdentityTransitionLocked}
-                  title={
-                    isIdentityTransitionLocked
-                      ? "Wait for the current route transition or mutation to finish."
-                      : "Rebind the editor to this persisted definition."
-                  }
-                  className={cx(
-                    "w-full rounded-[0.9rem] border px-4 py-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60",
-                    definition.definition_id === selectedDefinitionId
-                      ? "border-primary/40 bg-primary/10"
-                      : "border-border bg-surface hover:border-primary/30 hover:bg-primary/5",
-                  )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {definition.name}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Definition #{definition.definition_id}
-                        </p>
-                      </div>
-                      <span
-                        className={cx(
-                          "rounded-full border px-2.5 py-1 text-[11px]",
-                          definition.visibility_scope === "workspace"
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
-                            : "border-border bg-background text-muted-foreground",
-                        )}
-                      >
-                        {definition.visibility_scope}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                      <span className="rounded-full border border-border px-3 py-1">
-                        Owner {definition.owner_display_name}
-                      </span>
-                      <span className="rounded-full border border-border px-3 py-1">
-                        {definition.allowed_actions?.clone ? "Clone allowed" : "Clone blocked"}
-                      </span>
-                    </div>
-                  </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-            <div className="border-b border-border/80 pb-4">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Circuit Netlist Quick Reference
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Use the canonical contract while editing; the source editor and saved payload are
-                expected to match this structure.
-              </p>
-            </div>
-
-            <div className="mt-4 overflow-x-auto rounded-[0.9rem] border border-border">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-surface text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Component</th>
-                    <th className="px-4 py-3">Prefix</th>
-                    <th className="px-4 py-3">Units</th>
-                    <th className="px-4 py-3">Topology Example</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quickReferenceRows.map((row) => (
-                    <tr key={row[0]} className="border-t border-border bg-background">
-                      <td className="px-4 py-3 text-foreground">{row[0]}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{row[1]}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{row[2]}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {row[3]}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 space-y-2 rounded-[0.9rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-              {authoringRules.map((rule) => (
-                <p key={rule}>{rule}</p>
-              ))}
-            </div>
-          </section>
+            ) : null}
+            {typeof selectedDefinitionId === "number" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void handlePublish();
+                }}
+                disabled={isMutationPending || !editorActionState.publish.enabled}
+                title={
+                  isMutationPending
+                    ? "Wait for the current definition mutation to finish."
+                    : editorActionState.publish.reason
+                }
+                className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Globe className="h-4 w-4" />
+                Publish
+              </button>
+            ) : null}
+            {typeof selectedDefinitionId === "number" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void handleClone();
+                }}
+                disabled={isMutationPending || !editorActionState.clone.enabled}
+                title={
+                  isMutationPending
+                    ? "Wait for the current definition mutation to finish."
+                    : editorActionState.clone.reason
+                }
+                className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Copy className="h-4 w-4" />
+                Clone
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                void handleFormat();
+              }}
+              disabled={!editorActionState.format.enabled}
+              title={editorActionState.format.reason}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Sparkles className="h-4 w-4" />
+              Format
+            </button>
+            {form.formState.isDirty ? (
+              <button
+                type="button"
+                onClick={discardChanges}
+                disabled={!editorActionState.discard.enabled}
+                title={editorActionState.discard.reason}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Discard
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                void form.handleSubmit(onSubmit)();
+              }}
+              disabled={!editorActionState.save.enabled}
+              title={editorActionState.save.reason}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {form.formState.isSubmitting ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Save
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="mt-4 rounded-[0.85rem] border px-4 py-3 text-sm">
+          <div className={cx("rounded-[0.8rem] border px-4 py-3", persistedStateToneClass)}>
+            {persistedPreviewSurface.persistedPreviewState.detail}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <SummaryCard
+            label="Components"
+            value={String(draftSurface.localSummary.componentCount)}
+          />
+          <SummaryCard
+            label="Topology Rows"
+            value={String(draftSurface.localSummary.topologyCount)}
+          />
+          <SummaryCard
+            label="Parameters"
+            value={String(draftSurface.localSummary.parameterCount)}
+          />
+          <SummaryCard
+            label="Persisted Notices"
+            value={String(persistedPreviewSurface.validationSummary?.notice_count ?? 0)}
+            detail={
+              persistedPreviewSurface.validationSummary
+                ? `Status: ${persistedPreviewSurface.validationSummary.status}`
+                : "Pending save"
+            }
+          />
+        </div>
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.16fr)_minmax(340px,0.84fr)]">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void form.handleSubmit(onSubmit)();
+          }}
+        >
           <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-            <div className="flex flex-col gap-4 border-b border-border/80 pb-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Active Schema
-                </h2>
-                <p className="mt-2 text-lg font-semibold text-foreground">{activeDefinitionLabel}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <span className="rounded-full bg-primary/10 px-3 py-1 text-primary">
-                    {selectedDefinitionId === "new"
-                      ? "Draft"
-                      : `Definition #${activeDefinition?.definition_id ?? "--"}`}
-                  </span>
-                  {activeDefinition ? (
-                    <>
-                      <span className="rounded-full bg-surface px-3 py-1">
-                        {activeDefinition.visibility_scope}
-                      </span>
-                      <span className="rounded-full bg-surface px-3 py-1">
-                        {activeDefinition.lifecycle_state}
-                      </span>
-                    </>
-                  ) : null}
-                  <span className="rounded-full bg-surface px-3 py-1">
-                    {draftSurface.localSummary.componentCount} components
-                  </span>
-                  <span className="rounded-full bg-surface px-3 py-1">
-                    {draftSurface.localSummary.topologyCount} topology rows
-                  </span>
-                  <span className="rounded-full bg-surface px-3 py-1">
-                    {draftSurface.localSummary.parameterCount} parameters
-                  </span>
-                  {typeof activeDefinition?.lineage_parent_id === "number" ? (
-                    <span className="rounded-full bg-surface px-3 py-1">
-                      Cloned from #{activeDefinition.lineage_parent_id}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {typeof selectedDefinitionId === "number" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      requestDelete({
-                        definition_id: selectedDefinitionId,
-                        name: activeDefinition?.name ?? activeDefinitionLabel,
-                      });
-                    }}
-                    disabled={isMutationPending || !editorActionState.delete.enabled}
-                    title={
-                      isMutationPending
-                        ? "Wait for the current definition mutation to finish."
-                        : editorActionState.delete.reason
-                    }
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-rose-500/30 px-3 py-2 text-sm text-rose-700 transition hover:bg-rose-500/10 dark:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </button>
-                ) : null}
-                {typeof selectedDefinitionId === "number" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handlePublish();
-                    }}
-                    disabled={isMutationPending || !editorActionState.publish.enabled}
-                    title={
-                      isMutationPending
-                        ? "Wait for the current definition mutation to finish."
-                        : editorActionState.publish.reason
-                    }
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Globe className="h-4 w-4" />
-                    Publish
-                  </button>
-                ) : null}
-                {typeof selectedDefinitionId === "number" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleClone();
-                    }}
-                    disabled={isMutationPending || !editorActionState.clone.enabled}
-                    title={
-                      isMutationPending
-                        ? "Wait for the current definition mutation to finish."
-                        : editorActionState.clone.reason
-                    }
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Copy className="h-4 w-4" />
-                    Clone
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleFormat();
-                  }}
-                  disabled={!editorActionState.format.enabled}
-                  title={editorActionState.format.reason}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Format
-                </button>
+            <div className="border-b border-border/80 pb-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Canonical Source
                 {form.formState.isDirty ? (
-                  <button
-                    type="button"
-                    onClick={discardChanges}
-                    disabled={!editorActionState.discard.enabled}
-                    title={editorActionState.discard.reason}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Discard
-                  </button>
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-amber-700 dark:text-amber-200">
+                    Unsaved changes
+                  </span>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    void form.handleSubmit(onSubmit)();
-                  }}
-                  disabled={!editorActionState.save.enabled}
-                  title={editorActionState.save.reason}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {form.formState.isSubmitting ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Save
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-[0.8rem] border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">Action Authority</p>
-              <p className="mt-1">
-                Save: {editorActionState.save.reason}
-              </p>
-              <p className="mt-1">
-                Publish: {editorActionState.publish.reason}
-              </p>
-              <p className="mt-1">
-                Clone: {editorActionState.clone.reason}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Focus on the definition name and canonical netlist source. Format stays explicit,
+                and save remains the only mutation that refreshes persisted preview authority.
               </p>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
-              <div className="rounded-[0.8rem] border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Local Contract
+            <div className="mt-4">
+              <InlineNotice
+                tone={sourceNotice.tone}
+                title={sourceNotice.title}
+                message={sourceNotice.message}
+                items={sourceNotice.items}
+              />
+            </div>
+
+            <div className="mt-4 grid gap-4">
+              <label className="grid gap-2 text-sm">
+                <span className="font-medium text-foreground">Name</span>
+                <input
+                  type="text"
+                  className="rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-foreground outline-none"
+                  {...form.register("name")}
+                />
+                {form.formState.errors.name ? (
+                  <span className="text-xs text-rose-700 dark:text-rose-300">
+                    {form.formState.errors.name.message}
+                  </span>
+                ) : null}
+              </label>
+
+              <div className="grid gap-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-foreground">Source Text</span>
+                  <span className="rounded-full border border-border bg-surface px-3 py-1 text-[11px] text-muted-foreground">
+                    JSON syntax highlight
+                  </span>
+                </div>
+                <div className="overflow-hidden rounded-[0.85rem] border border-border bg-background">
+                  <Controller
+                    name="source_text"
+                    control={form.control}
+                    render={({ field }) => (
+                      <CodeMirror
+                        value={field.value}
+                        height="560px"
+                        theme="dark"
+                        extensions={[json()]}
+                        onChange={(value) => field.onChange(value)}
+                        className="text-sm leading-6"
+                      />
+                    )}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  `Cmd/Ctrl + Shift + F` runs explicit format only. It does not save.
                 </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {draftSurface.blockingLocalDiagnostics.length > 0 ? "Needs fixes" : "Aligned"}
-                </p>
-              </div>
-              <div className="rounded-[0.8rem] border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Local Diagnostics
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {draftSurface.localDiagnostics.length}
-                </p>
-              </div>
-              <div className="rounded-[0.8rem] border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Persisted Notices
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {persistedPreviewSurface.validationSummary?.notice_count ?? 0}
-                </p>
-              </div>
-              <div className="rounded-[0.8rem] border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Preview Artifacts
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {activeDefinition?.preview_artifact_count ??
-                    persistedPreviewSurface.previewArtifacts.length}
-                </p>
+                {form.formState.errors.source_text ? (
+                  <span className="text-xs text-rose-700 dark:text-rose-300">
+                    {form.formState.errors.source_text.message}
+                  </span>
+                ) : null}
               </div>
             </div>
           </section>
+        </form>
 
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void form.handleSubmit(onSubmit)();
-            }}
-          >
-            <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-              <div className="border-b border-border/80 pb-4">
-                <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Canonical Source
-                  {form.formState.isDirty ? (
-                    <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-amber-500">
-                      Unsaved Changes
-                    </span>
-                  ) : null}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  The editor accepts JSON or Python-literal netlist source, but `Format` and `Save`
-                  always normalize outgoing payloads to the canonical circuit-netlist shape.
-                </p>
-              </div>
+        <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+          <div className="border-b border-border/80 pb-4">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Validation & Preview
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Persisted backend notices stay signal-first. The canonical source already lives in the
+              editor, so this card only focuses on validation state and normalized output.
+            </p>
+          </div>
 
-              <div className="mt-4 grid gap-4">
-                <label className="grid gap-2 text-sm">
-                  <span className="font-medium text-foreground">Name</span>
-                  <input
-                    type="text"
-                    className="rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-foreground outline-none"
-                    {...form.register("name")}
-                  />
-                  {form.formState.errors.name ? (
-                    <span className="text-xs text-rose-700 dark:text-rose-300">
-                      {form.formState.errors.name.message}
-                    </span>
-                  ) : null}
-                </label>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <SummaryCard
+              label="Validation Status"
+              value={
+                persistedPreviewSurface.validationSummary
+                  ? persistedPreviewSurface.validationSummary.status === "invalid"
+                    ? "Invalid"
+                    : persistedPreviewSurface.validationSummary.status === "warning"
+                      ? "Warnings"
+                      : "Checks"
+                  : "Pending Save"
+              }
+            />
+            <SummaryCard
+              label="Notice Count"
+              value={String(persistedPreviewSurface.validationSummary?.notice_count ?? 0)}
+            />
+            <SummaryCard
+              label="Preview Artifacts"
+              value={String(persistedPreviewSurface.previewArtifacts.length)}
+            />
+          </div>
 
-                <div className="grid gap-2 text-sm">
-                  <span className="font-medium text-foreground">Source Text</span>
-                  <div className="overflow-hidden rounded-[0.8rem] border border-border bg-background">
-                    <Controller
-                      name="source_text"
-                      control={form.control}
-                      render={({ field }) => (
-                        <CodeMirror
-                          value={field.value}
-                          height="420px"
-                          theme="dark"
-                          extensions={[yaml()]}
-                          onChange={(value) => field.onChange(value)}
-                          className="text-sm leading-6"
-                        />
-                      )}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    `Cmd/Ctrl + Shift + F` runs explicit format only. It does not save.
+          <div className="mt-4 rounded-[0.85rem] border px-4 py-4 text-sm">
+            <div className={cx("rounded-[0.8rem] border px-4 py-3", prioritizedNoticeToneClass)}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">{persistedPreviewSurface.prioritizedNoticeLane.title}</p>
+                  <p className="mt-1 leading-6">
+                    {persistedPreviewSurface.prioritizedNoticeLane.detail}
                   </p>
-                  {form.formState.errors.source_text ? (
-                    <span className="text-xs text-rose-700 dark:text-rose-300">
-                      {form.formState.errors.source_text.message}
-                    </span>
-                  ) : null}
                 </div>
+                <span className="rounded-full border border-current/20 bg-background/60 px-3 py-1 text-[11px] uppercase tracking-[0.14em]">
+                  {persistedPreviewSurface.prioritizedNoticeLane.kind}
+                </span>
               </div>
 
-              <div className="mt-4 rounded-[0.8rem] border border-border bg-surface px-4 py-4 text-sm">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Serializer Boundary
-                </p>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-[0.8rem] border border-border bg-background px-4 py-3">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Definition Identity
-                    </p>
-                    <p className="mt-2 font-medium text-foreground">
-                      {draftSurface.serializerBoundary.definitionName}
-                    </p>
-                  </div>
-                  <div className="rounded-[0.8rem] border border-border bg-background px-4 py-3">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Source Document Name
-                    </p>
-                    <p className="mt-2 font-medium text-foreground">
-                      {draftSurface.serializerBoundary.sourceDocumentName ?? "Unavailable"}
-                    </p>
-                  </div>
-                  <div className="rounded-[0.8rem] border border-border bg-background px-4 py-3">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Persisted Source Hash
-                    </p>
-                    <p className="mt-2 font-medium text-foreground">
-                      {activeDefinition?.source_hash ?? "Draft only"}
-                    </p>
-                  </div>
+              {persistedPreviewSurface.prioritizedNoticeLane.notices.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {persistedPreviewSurface.prioritizedNoticeLane.notices.map((notice) => (
+                    <div
+                      key={`${notice.code}-${notice.message}`}
+                      className="rounded-[0.8rem] border border-current/15 bg-background/70 px-4 py-3"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em]">
+                        {notice.code} · {notice.source}
+                      </p>
+                      <p className="mt-2 text-sm leading-6">{notice.message}</p>
+                    </div>
+                  ))}
                 </div>
-                <p
-                  className={cx(
-                    "mt-3",
-                    draftSurface.serializerBoundary.willRewriteSourceName
-                      ? "text-amber-700 dark:text-amber-300"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {draftSurface.serializerBoundary.detail}
-                </p>
-              </div>
-            </section>
-          </form>
+              ) : null}
+            </div>
+          </div>
 
-          <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-            <div className="flex items-start justify-between gap-3 border-b border-border/80 pb-4">
+          <div className="mt-4 rounded-[0.85rem] border border-border bg-surface px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Local Contract Diagnostics
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  These checks guard the outgoing payload before save; persisted backend notices stay
-                  separate below.
+                <h3 className="text-sm font-semibold text-foreground">Normalized Output</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Backend-derived canonical preview, kept expanded for authoring inspection.
                 </p>
               </div>
-              <div className="rounded-full bg-surface px-3 py-1 text-xs text-muted-foreground">
-                {draftSurface.localDiagnostics.length} items
-              </div>
+              <span className="rounded-full border border-border bg-background px-3 py-1 text-[11px] text-muted-foreground">
+                Expanded
+              </span>
             </div>
 
-            {draftSurface.localDiagnostics.length > 0 ? (
-              <div className="mt-4 space-y-3">
-                {draftSurface.localDiagnostics.map((diagnostic) => (
+            {persistedPreviewSurface.normalizedPreview.fields.length > 0 ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {persistedPreviewSurface.normalizedPreview.fields.map((field) => (
                   <div
-                    key={`${diagnostic.path}-${diagnostic.message}`}
-                    className={cx(
-                      "rounded-[0.8rem] border px-4 py-3 text-sm",
-                      diagnostic.severity === "error"
-                        ? resolveSurfaceInsetToneClass("error")
-                        : resolveSurfaceInsetToneClass("warning"),
-                    )}
+                    key={field.key}
+                    className="rounded-[0.8rem] border border-border bg-background px-4 py-3"
                   >
-                    <p className="font-medium">{diagnostic.path}</p>
-                    <p className="mt-1">{diagnostic.message}</p>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      {field.label}
+                    </p>
+                    <p className="mt-2 break-words text-sm font-medium text-foreground">
+                      {field.value}
+                    </p>
                   </div>
                 ))}
               </div>
-            ) : (
-              <div
-                className={cx(
-                  "mt-4 rounded-[0.8rem] border px-4 py-3 text-sm",
-                  resolveSurfaceInsetToneClass("success"),
-                )}
-              >
-                Local source currently matches the canonical circuit-netlist contract.
-              </div>
-            )}
-          </section>
+            ) : null}
 
-          <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-            <div className="flex items-start justify-between gap-3 border-b border-border/80 pb-4">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Validation & Preview
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Persisted backend validation, normalized output, and preview artifacts remain
-                  bound to the last successful save.
-                </p>
-              </div>
-              <div
-                className={cx(
-                  "rounded-full px-3 py-1 text-xs font-medium",
-                  persistedPreviewSurface.persistedPreviewState.tone === "warning"
-                    ? "bg-amber-500/12 text-amber-800 dark:text-amber-200"
-                    : persistedPreviewSurface.persistedPreviewState.tone === "accent"
-                      ? "bg-primary/10 text-primary"
-                      : "bg-surface text-muted-foreground",
-                )}
-              >
-                <FileCode2 className="mr-1 inline-block h-4 w-4" />
-                {persistedPreviewSurface.persistedPreviewState.label}
-              </div>
+            <div className="mt-4 rounded-[0.8rem] border border-border bg-background px-4 py-4">
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6 text-muted-foreground">
+                {persistedPreviewSurface.normalizedPreview.formattedOutput}
+              </pre>
             </div>
 
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <SummaryCard
+                label="Output Lines"
+                value={String(persistedPreviewSurface.normalizedPreview.lineCount)}
+              />
+              <SummaryCard
+                label="Structured Fields"
+                value={String(persistedPreviewSurface.normalizedPreview.fieldCount)}
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+        <div className="border-b border-border/80 pb-4">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Circuit Netlist Quick Reference
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Keep the canonical component, unit, and topology rules nearby while authoring.
+          </p>
+        </div>
+
+        <div className="mt-4 overflow-x-auto rounded-[0.9rem] border border-border">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-surface text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3">Component</th>
+                <th className="px-4 py-3">Prefix</th>
+                <th className="px-4 py-3">Units</th>
+                <th className="px-4 py-3">Topology Example</th>
+              </tr>
+            </thead>
+            <tbody>
+              {quickReferenceRows.map((row) => (
+                <tr key={row[0]} className="border-t border-border bg-background">
+                  <td className="px-4 py-3 text-foreground">{row[0]}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{row[1]}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{row[2]}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{row[3]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {authoringRules.map((rule) => (
             <div
-              className={cx(
-                "mt-4 rounded-[0.8rem] border px-4 py-3 text-sm",
-                persistedPreviewSurface.persistedPreviewState.tone === "warning"
-                  ? resolveSurfaceInsetToneClass("warning")
-                  : persistedPreviewSurface.persistedPreviewState.tone === "accent"
-                    ? "border-primary/20 bg-primary/8 text-foreground"
-                    : "border-border bg-surface text-muted-foreground",
-              )}
+              key={rule}
+              className="rounded-[0.85rem] border border-border bg-surface px-4 py-3 text-sm text-muted-foreground"
             >
-              {persistedPreviewSurface.persistedPreviewState.detail}
+              {rule}
             </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
-              <div className="rounded-[0.8rem] border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Validation Status
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {persistedPreviewSurface.validationSummary
-                    ? persistedPreviewSurface.validationSummary.status === "invalid"
-                      ? "Invalid"
-                      : persistedPreviewSurface.validationSummary.status === "warning"
-                      ? "Warnings Present"
-                      : "Ready"
-                    : "Pending Save"}
-                </p>
-              </div>
-              <div className="rounded-[0.8rem] border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Notice Count
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {persistedPreviewSurface.validationSummary?.notice_count ?? 0}
-                </p>
-              </div>
-              <div className="rounded-[0.8rem] border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Warning Count
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {persistedPreviewSurface.validationSummary?.warning_count ?? 0}
-                </p>
-              </div>
-              <div className="rounded-[0.8rem] border border-border bg-surface px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Preview Fields
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {persistedPreviewSurface.normalizedPreview.fieldCount}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-              <section className="rounded-[0.8rem] border border-border bg-surface px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Persisted Notices</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Last successful save only.
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-background px-3 py-1 text-xs text-muted-foreground">
-                    {persistedPreviewSurface.validationSummary?.status === "invalid"
-                      ? "Blocking"
-                      : persistedPreviewSurface.validationSummary?.status === "warning"
-                        ? "Needs review"
-                        : "Ready"}
-                  </div>
-                </div>
-
-                {persistedPreviewSurface.validationNotices.length === 0 ? (
-                  <div className="mt-4 rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                    {selectedDefinitionId === "new"
-                      ? "Save the draft to generate persisted backend validation notices."
-                      : form.formState.isDirty
-                        ? "Save the current draft to refresh the persisted validation report."
-                      : "No validation notices were returned for this definition."}
-                  </div>
-                ) : (
-                  <div className="mt-4 space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-rose-700 dark:text-rose-300">
-                        <AlertTriangle className="h-4 w-4" />
-                        Blocking
-                      </div>
-                      {persistedPreviewSurface.validationGroups.blocking.length === 0 ? (
-                        <div className="rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                          No blocking persisted notices were recorded.
-                        </div>
-                      ) : (
-                        persistedPreviewSurface.validationGroups.blocking.map((notice) => (
-                          <div
-                            key={`blocking-${notice.code}-${notice.message}`}
-                            className={cx(
-                              "rounded-[0.8rem] border px-4 py-3 text-sm",
-                              resolveSurfaceInsetToneClass("error"),
-                            )}
-                          >
-                            <p className="font-medium">
-                              {notice.code} · {notice.source}
-                            </p>
-                            <p className="mt-1">{notice.message}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
-                        <AlertTriangle className="h-4 w-4" />
-                        Warnings
-                      </div>
-                      {persistedPreviewSurface.validationGroups.warnings.length === 0 ? (
-                        <div
-                          className={cx(
-                            "rounded-[0.8rem] border px-4 py-3 text-sm",
-                            resolveSurfaceInsetToneClass("success"),
-                          )}
-                        >
-                          No persisted warnings were recorded.
-                        </div>
-                      ) : (
-                        persistedPreviewSurface.validationGroups.warnings.map((notice) => (
-                          <div
-                            key={`warning-${notice.code}-${notice.message}`}
-                            className={cx(
-                              "rounded-[0.8rem] border px-4 py-3 text-sm",
-                              resolveSurfaceInsetToneClass("warning"),
-                            )}
-                          >
-                            <p className="font-medium">
-                              {notice.code} · {notice.source}
-                            </p>
-                            <p className="mt-1">{notice.message}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
-                        <BadgeCheck className="h-4 w-4" />
-                        Checks
-                      </div>
-                      {persistedPreviewSurface.validationGroups.checks.length === 0 ? (
-                        <div className="rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                          No passing notices were recorded yet.
-                        </div>
-                      ) : (
-                        persistedPreviewSurface.validationGroups.checks.map((notice) => (
-                          <div
-                            key={`check-${notice.code}-${notice.message}`}
-                            className={cx(
-                              "rounded-[0.8rem] border px-4 py-3 text-sm",
-                              resolveSurfaceInsetToneClass("success"),
-                            )}
-                          >
-                            <p className="font-medium">
-                              {notice.code} · {notice.source}
-                            </p>
-                            <p className="mt-1">{notice.message}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              <section className="rounded-[0.8rem] border border-border bg-surface px-4 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Normalized Output</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Canonical backend-derived preview.
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-background px-3 py-1 text-xs text-muted-foreground">
-                    {persistedPreviewSurface.normalizedPreview.isStructured ? "Structured" : "Raw"}
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  {persistedPreviewSurface.normalizedPreview.fields.map((field) => (
-                    <div
-                      key={field.key}
-                      className="rounded-[0.8rem] border border-border bg-background px-4 py-3"
-                    >
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        {field.label}
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-foreground">{field.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 rounded-[0.8rem] border border-border bg-background px-4 py-4">
-                  <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6 text-muted-foreground">
-                    {persistedPreviewSurface.normalizedPreview.formattedOutput}
-                  </pre>
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                    Preview artifacts: {persistedPreviewSurface.previewArtifacts.length}
-                  </div>
-                  <div className="rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                    Output lines: {persistedPreviewSurface.normalizedPreview.lineCount}
-                  </div>
-                </div>
-              </section>
-            </div>
-          </section>
+          ))}
         </div>
       </section>
 

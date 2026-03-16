@@ -8,6 +8,7 @@ import {
 import {
   buildNormalizedOutputPreview,
   partitionValidationNotices,
+  resolvePrioritizedValidationLane,
   resolvePersistedPreviewState,
 } from "@/features/circuit-definition-editor/lib/preview";
 
@@ -36,6 +37,7 @@ export type CircuitDefinitionPersistedPreviewSurface = Readonly<{
   persistedPreviewState: ReturnType<typeof resolvePersistedPreviewState>;
   normalizedPreview: ReturnType<typeof buildNormalizedOutputPreview>;
   validationGroups: ReturnType<typeof partitionValidationNotices>;
+  prioritizedNoticeLane: ReturnType<typeof resolvePrioritizedValidationLane>;
   normalizedOutput: string;
   validationNotices: CircuitDefinitionPersistedPreview["validation_notices"];
   validationSummary: CircuitDefinitionPersistedPreview["validation_summary"] | null;
@@ -87,6 +89,7 @@ export function buildCircuitDefinitionPersistedPreviewSurface(input: Readonly<{
   const validationNotices = input.activeDefinition?.validation_notices ?? [];
   const validationSummary = input.activeDefinition?.validation_summary ?? null;
   const previewArtifacts = input.activeDefinition?.preview_artifacts ?? [];
+  const validationGroups = partitionValidationNotices(validationNotices);
 
   return {
     persistedPreviewState: resolvePersistedPreviewState({
@@ -96,7 +99,12 @@ export function buildCircuitDefinitionPersistedPreviewSurface(input: Readonly<{
       activeDefinition: input.activeDefinition,
     }),
     normalizedPreview: buildNormalizedOutputPreview(normalizedOutput),
-    validationGroups: partitionValidationNotices(validationNotices),
+    validationGroups,
+    prioritizedNoticeLane: resolvePrioritizedValidationLane({
+      selectedDefinitionId: input.selectedDefinitionId,
+      isDirty: input.isDirty,
+      groups: validationGroups,
+    }),
     normalizedOutput,
     validationNotices,
     validationSummary,

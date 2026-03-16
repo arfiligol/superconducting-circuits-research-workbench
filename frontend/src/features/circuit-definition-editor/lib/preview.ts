@@ -15,6 +15,14 @@ export type ValidationNoticeGroups = Readonly<{
   checks: readonly DefinitionValidationNotice[];
 }>;
 
+export type PrioritizedValidationLane = Readonly<{
+  kind: "blocking" | "warning" | "checks" | "empty";
+  title: string;
+  tone: "error" | "warning" | "success" | "default";
+  notices: readonly DefinitionValidationNotice[];
+  detail: string;
+}>;
+
 export type NormalizedOutputField = Readonly<{
   key: string;
   label: string;
@@ -100,6 +108,70 @@ export function partitionValidationNotices(
         (!notice.severity || notice.severity === "info") &&
         (notice.level === undefined || notice.level === "ok"),
     ),
+  };
+}
+
+export function resolvePrioritizedValidationLane(input: Readonly<{
+  selectedDefinitionId: number | "new" | null;
+  isDirty: boolean;
+  groups: ValidationNoticeGroups;
+}>): PrioritizedValidationLane {
+  if (input.groups.blocking.length > 0) {
+    return {
+      kind: "blocking",
+      title: "Persisted Errors",
+      tone: "error",
+      notices: input.groups.blocking,
+      detail: "Blocking backend notices are preventing this persisted schema from being treated as valid.",
+    };
+  }
+
+  if (input.groups.warnings.length > 0) {
+    return {
+      kind: "warning",
+      title: "Persisted Warnings",
+      tone: "warning",
+      notices: input.groups.warnings,
+      detail: "No blocking errors were returned, but backend warnings still need review.",
+    };
+  }
+
+  if (input.groups.checks.length > 0) {
+    return {
+      kind: "checks",
+      title: "Persisted Checks",
+      tone: "success",
+      notices: input.groups.checks,
+      detail: "Persisted backend checks are currently clean.",
+    };
+  }
+
+  if (input.selectedDefinitionId === "new") {
+    return {
+      kind: "empty",
+      title: "Persisted Notices",
+      tone: "default",
+      notices: [],
+      detail: "Save the draft to generate persisted backend validation notices.",
+    };
+  }
+
+  if (input.isDirty) {
+    return {
+      kind: "empty",
+      title: "Persisted Notices",
+      tone: "default",
+      notices: [],
+      detail: "Save the current draft to refresh the persisted validation report.",
+    };
+  }
+
+  return {
+    kind: "empty",
+    title: "Persisted Notices",
+    tone: "default",
+    notices: [],
+    detail: "No persisted validation notices were returned for this definition.",
   };
 }
 
