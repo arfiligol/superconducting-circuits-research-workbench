@@ -4,7 +4,10 @@ from typing import Any, cast
 
 from sqlmodel import Session, select
 
-from core.shared.persistence.models import DerivedParameter, resolve_scope_ids_for_write
+from core.shared.persistence.models import (
+    DerivedParameter,
+    resolve_scope_ids_for_compatibility_write,
+)
 
 
 class DerivedParameterRepository:
@@ -25,7 +28,7 @@ class DerivedParameterRepository:
 
     def add(self, param: DerivedParameter) -> DerivedParameter:
         """Add a new derived parameter."""
-        resolve_scope_ids_for_write(param, allow_legacy_design_fallback=True)
+        resolve_scope_ids_for_compatibility_write(param)
         self._session.add(param)
         return param
 

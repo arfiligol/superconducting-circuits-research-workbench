@@ -104,20 +104,27 @@ def require_explicit_scope_ids(record: object) -> PersistedScopeIds:
 
 def resolve_scope_ids_for_write(
     record: object,
-    *,
-    allow_legacy_design_fallback: bool = False,
 ) -> PersistedScopeIds:
-    """Normalize one write-boundary scope payload under the configured compatibility policy."""
+    """Normalize one canonical write-boundary scope payload without compatibility fallback."""
     return _resolve_scope_ids(
         record,
-        allow_legacy_design_fallback=allow_legacy_design_fallback,
+        allow_legacy_design_fallback=False,
+        mutate_record=True,
+    )
+
+
+def resolve_scope_ids_for_compatibility_write(record: object) -> PersistedScopeIds:
+    """Apply the temporary write-time compatibility bridge for missing design scope."""
+    return _resolve_scope_ids(
+        record,
+        allow_legacy_design_fallback=True,
         mutate_record=True,
     )
 
 
 def ensure_scope_ids(record: object) -> PersistedScopeIds:
-    """Apply the temporary write-time compatibility shim for missing design scope."""
-    return resolve_scope_ids_for_write(record, allow_legacy_design_fallback=True)
+    """Legacy alias for the explicit compatibility write bridge."""
+    return resolve_scope_ids_for_compatibility_write(record)
 
 
 class DeviceType(str, Enum):

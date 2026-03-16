@@ -11,6 +11,7 @@ from core.shared.persistence.models import (
     TraceRecord,
     ensure_scope_ids,
     require_explicit_scope_ids,
+    resolve_scope_ids_for_compatibility_write,
     resolve_scope_ids_for_write,
 )
 
@@ -106,8 +107,15 @@ def test_design_scoped_records_apply_explicit_legacy_scope_shim_when_design_id_m
     assert scope_ids.design_id == 21
     assert scope_ids.used_legacy_design_fallback is True
 
+    explicit_compat_scope_ids = resolve_scope_ids_for_compatibility_write(trace)
+    assert explicit_compat_scope_ids == PersistedScopeIds(
+        dataset_id=21,
+        design_id=21,
+        used_legacy_design_fallback=False,
+    )
 
-def test_resolve_scope_ids_for_write_marks_canonical_and_legacy_paths_explicitly() -> None:
+
+def test_scope_write_helpers_keep_strict_and_compatibility_paths_distinct() -> None:
     canonical_trace = TraceRecord(
         dataset_id=31,
         design_id=41,
@@ -129,10 +137,7 @@ def test_resolve_scope_ids_for_write_marks_canonical_and_legacy_paths_explicitly
     )
 
     canonical_scope_ids = resolve_scope_ids_for_write(canonical_trace)
-    legacy_scope_ids = resolve_scope_ids_for_write(
-        legacy_trace,
-        allow_legacy_design_fallback=True,
-    )
+    legacy_scope_ids = resolve_scope_ids_for_compatibility_write(legacy_trace)
 
     assert canonical_scope_ids == PersistedScopeIds(
         dataset_id=31,
@@ -144,6 +149,22 @@ def test_resolve_scope_ids_for_write_marks_canonical_and_legacy_paths_explicitly
         design_id=32,
         used_legacy_design_fallback=True,
     )
+
+    strict_legacy_trace = TraceRecord(
+        dataset_id=33,
+        data_type="y_parameters",
+        parameter="Y31",
+        representation="real",
+        axes=[],
+        values=[],
+        store_ref={},
+    )
+    try:
+        resolve_scope_ids_for_write(strict_legacy_trace)
+    except ValueError as exc:
+        assert str(exc) == "Explicit design_id is required for canonical persistence writes."
+    else:
+        raise AssertionError("Expected strict write helper to reject compatibility fallback.")
 
 
 def test_require_explicit_scope_ids_does_not_mutate_missing_design_scope() -> None:

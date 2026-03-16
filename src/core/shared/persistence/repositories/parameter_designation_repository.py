@@ -4,7 +4,10 @@ from typing import Any, cast
 
 from sqlmodel import Session, select
 
-from core.shared.persistence.models import ParameterDesignation, resolve_scope_ids_for_write
+from core.shared.persistence.models import (
+    ParameterDesignation,
+    resolve_scope_ids_for_compatibility_write,
+)
 
 
 class ParameterDesignationRepository:
@@ -78,7 +81,7 @@ class ParameterDesignationRepository:
 
     def add(self, designation: ParameterDesignation) -> ParameterDesignation:
         """Add one designation."""
-        resolve_scope_ids_for_write(designation, allow_legacy_design_fallback=True)
+        resolve_scope_ids_for_compatibility_write(designation)
         self._session.add(designation)
         return designation
 

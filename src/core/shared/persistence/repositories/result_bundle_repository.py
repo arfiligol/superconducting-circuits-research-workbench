@@ -19,7 +19,7 @@ from core.shared.persistence.models import (
     TraceBatchTraceLink,
     TraceRecord,
     require_explicit_scope_ids,
-    resolve_scope_ids_for_write,
+    resolve_scope_ids_for_compatibility_write,
     utc_now,
 )
 from core.shared.persistence.repositories.analysis_run_repository import AnalysisRunRepository
@@ -141,7 +141,7 @@ class TraceBatchRepository:
 
     def add(self, batch: TraceBatchRecord) -> TraceBatchRecord:
         """Add a new trace batch."""
-        resolve_scope_ids_for_write(batch, allow_legacy_design_fallback=True)
+        resolve_scope_ids_for_compatibility_write(batch)
         self._session.add(batch)
         return batch
 

@@ -1,6 +1,10 @@
 import pytest
 from datetime import UTC, datetime, timedelta
 
+from sc_core.execution import (
+    canonicalize_execution_timestamp,
+    canonicalize_task_history_event_metadata,
+)
 from sc_core.tasking import (
     REDACTED_RUNTIME_METADATA_VALUE,
     LaneName,
@@ -118,3 +122,16 @@ def test_lane_scoped_processor_summary_contract_is_redaction_safe() -> None:
     assert heartbeats[1].to_payload(recorded_at=now, offline_after_seconds=90)[
         "runtime_metadata"
     ] == {"host": REDACTED_RUNTIME_METADATA_VALUE}
+
+
+def test_execution_canonical_helpers_are_importable_for_adopters() -> None:
+    assert canonicalize_execution_timestamp("2026-03-16T12:00:00Z") == "2026-03-16T12:00:00+00:00"
+    assert canonicalize_task_history_event_metadata(
+        "task_cancel_requested",
+        {"task_status": "cancelling"},
+    ) == {
+        "task_status": "cancelling",
+        "control_action": "cancel",
+        "requested_state": "cancellation_requested",
+        "control_phase": "acknowledged",
+    }

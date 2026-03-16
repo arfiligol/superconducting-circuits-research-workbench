@@ -12,7 +12,7 @@ from core.shared.persistence.models import (
     DesignRecord,
     TraceBatchTraceLink,
     TraceRecord,
-    resolve_scope_ids_for_write,
+    resolve_scope_ids_for_compatibility_write,
 )
 from core.shared.persistence.repositories.query_objects import TraceIndexPageQuery
 
@@ -414,7 +414,7 @@ class TraceRepository:
 
     def add(self, trace: TraceRecord) -> TraceRecord:
         """Add a new trace."""
-        resolve_scope_ids_for_write(trace, allow_legacy_design_fallback=True)
+        resolve_scope_ids_for_compatibility_write(trace)
         self._session.add(trace)
         return trace
 
