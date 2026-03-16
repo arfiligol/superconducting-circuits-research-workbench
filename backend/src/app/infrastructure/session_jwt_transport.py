@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 VerificationStatus = Literal["valid", "expired", "invalid"]
@@ -33,7 +33,7 @@ class SessionJwtTransport:
         self._token_lifetime_seconds = token_lifetime_seconds
 
     def issue_token(self, session_id: str) -> str:
-        issued_at = datetime.now(timezone.utc)
+        issued_at = datetime.now(UTC)
         expires_at = issued_at + timedelta(seconds=self._token_lifetime_seconds)
         header = {"alg": "HS256", "typ": "JWT"}
         payload = {
@@ -68,7 +68,7 @@ class SessionJwtTransport:
         if not isinstance(session_id, str) or not isinstance(expires_at, int):
             return VerifiedSessionToken(status="invalid")
 
-        if datetime.now(timezone.utc).timestamp() >= expires_at:
+        if datetime.now(UTC).timestamp() >= expires_at:
             return VerifiedSessionToken(status="expired", session_id=session_id)
 
         return VerifiedSessionToken(status="valid", session_id=session_id)
