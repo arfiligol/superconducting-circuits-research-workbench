@@ -9,6 +9,10 @@ from fastapi.responses import JSONResponse
 from src.app.domain.session import (
     ActiveDatasetContext,
     AppSession,
+    RuntimeModeSwitchResult,
+    ServerTargetListView,
+    ServerTargetSummary,
+    ServerTargetValidationResult,
     WorkspaceMembership,
     WorkspaceSwitchResult,
 )
@@ -50,6 +54,91 @@ def get_session(
     return _success_response(
         data=_serialize_session(session),
         meta={"generated_at": _generated_at(), "memberships_count": len(session.memberships)},
+    )
+
+
+@router.patch("/runtime-mode")
+def switch_runtime_mode(
+    request: Request,
+    payload: Annotated[object, Body(...)],
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> JSONResponse:
+    try:
+        runtime_mode, server_origin, label = _parse_runtime_mode_payload(payload)
+        result = session_service.switch_runtime_mode(
+            session_token=_session_token_from_request(request),
+            runtime_mode=runtime_mode,
+            server_origin=server_origin,
+            label=label,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    response = _success_response(
+        data=_serialize_runtime_mode_switch_result(result),
+        meta={
+            "generated_at": _generated_at(),
+            "memberships_count": len(result.session.memberships),
+        },
+    )
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    response.delete_cookie(REFRESH_COOKIE_NAME, path="/")
+    return response
+
+
+@router.get("/server-targets")
+def list_server_targets(
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> JSONResponse:
+    view = session_service.list_server_targets()
+    return _success_response(
+        data=_serialize_server_target_list_view(view),
+        meta={"generated_at": _generated_at(), "total_count": len(view.targets)},
+    )
+
+
+@router.post("/server-targets")
+def remember_server_target(
+    payload: Annotated[object, Body(...)],
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> JSONResponse:
+    try:
+        server_origin, label = _parse_server_target_payload(payload)
+        target = session_service.remember_server_target(
+            server_origin=server_origin,
+            label=label,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={"target": _serialize_server_target(target)},
+        status_code=201,
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/server-targets/validate")
+def validate_server_target(
+    payload: Annotated[object, Body(...)],
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> JSONResponse:
+    try:
+        server_origin, label = _parse_server_target_payload(payload)
+        result = session_service.validate_server_target(
+            server_origin=server_origin,
+            label=label,
+        )
+        if result.status != "validated":
+            raise service_error(
+                409,
+                code=result.status,
+                category="conflict",
+                message=result.message,
+            )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=_serialize_server_target_validation_result(result),
+        meta={"generated_at": _generated_at()},
     )
 
 
@@ -504,6 +593,52 @@ def _optional_string(value: object, *, field_name: str) -> str | None:
     return value.strip()
 
 
+def _required_string(mapping: dict[str, object], field_name: str) -> str:
+    value = mapping.get(field_name)
+    if not isinstance(value, str) or len(value.strip()) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be a non-empty string.",
+        )
+    return value.strip()
+
+
+def _parse_runtime_mode_payload(payload: object) -> tuple[str, str | None, str | None]:
+    body = _as_mapping(payload)
+    runtime_mode = _required_string(body, "runtime_mode")
+    if runtime_mode not in {"local", "online"}:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="runtime_mode must be 'local' or 'online'.",
+        )
+    server_origin = _optional_string(body.get("server_origin"), field_name="server_origin")
+    label = _optional_string(body.get("label"), field_name="label")
+    return runtime_mode, server_origin, label
+
+
+def _parse_server_target_payload(payload: object) -> tuple[str, str | None]:
+    body = _as_mapping(payload)
+    return _required_string(body, "server_origin"), _optional_string(
+        body.get("label"),
+        field_name="label",
+    )
+
+
+def _serialize_runtime_mode_switch_result(
+    result: RuntimeModeSwitchResult,
+) -> dict[str, object]:
+    payload = _serialize_session(result.session)
+    payload["outcome"] = result.outcome
+    payload["auth_transition"] = result.auth_transition
+    payload["session_reset"] = result.session_reset
+    payload["detached_task_ids"] = list(result.detached_task_ids)
+    return payload
+
+
 def _serialize_workspace_switch_result(result: WorkspaceSwitchResult) -> dict[str, object]:
     payload = _serialize_session(result.session)
     payload["active_dataset_resolution"] = result.active_dataset_resolution
@@ -514,10 +649,14 @@ def _serialize_workspace_switch_result(result: WorkspaceSwitchResult) -> dict[st
 def _serialize_session(session: AppSession) -> dict[str, object]:
     return {
         "session_id": session.session_id,
+        "runtime_mode": session.runtime_mode,
         "auth": {
             "state": session.auth.state,
             "mode": session.auth.mode,
             "reason": session.auth.reason,
+        },
+        "connection": {
+            "target": _serialize_server_target(session.connection.target),
         },
         "user": (
             {
@@ -551,13 +690,19 @@ def _serialize_session(session: AppSession) -> dict[str, object]:
         },
         "active_dataset": _serialize_active_dataset(session.active_dataset),
         "capabilities": {
+            "can_switch_runtime_mode": session.capabilities.can_switch_runtime_mode,
             "can_switch_workspace": session.capabilities.can_switch_workspace,
             "can_switch_dataset": session.capabilities.can_switch_dataset,
+            "can_import_datasets": session.capabilities.can_import_datasets,
+            "can_export_datasets": session.capabilities.can_export_datasets,
             "can_invite_members": session.capabilities.can_invite_members,
             "can_remove_members": session.capabilities.can_remove_members,
             "can_transfer_workspace_owner": session.capabilities.can_transfer_workspace_owner,
             "can_leave_workspace": session.capabilities.can_leave_workspace,
             "can_submit_tasks": session.capabilities.can_submit_tasks,
+            "can_cancel_local_tasks": session.capabilities.can_cancel_local_tasks,
+            "can_terminate_local_tasks": session.capabilities.can_terminate_local_tasks,
+            "can_retry_local_tasks": session.capabilities.can_retry_local_tasks,
             "can_manage_workspace_tasks": session.capabilities.can_manage_workspace_tasks,
             "can_cancel_own_tasks": session.capabilities.can_cancel_own_tasks,
             "can_cancel_workspace_tasks": session.capabilities.can_cancel_workspace_tasks,
@@ -565,9 +710,43 @@ def _serialize_session(session: AppSession) -> dict[str, object]:
             "can_retry_own_tasks": session.capabilities.can_retry_own_tasks,
             "can_retry_workspace_tasks": session.capabilities.can_retry_workspace_tasks,
             "can_manage_definitions": session.capabilities.can_manage_definitions,
+            "can_publish_definitions": session.capabilities.can_publish_definitions,
             "can_manage_datasets": session.capabilities.can_manage_datasets,
             "can_view_audit_logs": session.capabilities.can_view_audit_logs,
         },
+    }
+
+
+def _serialize_server_target_list_view(
+    view: ServerTargetListView,
+) -> dict[str, object]:
+    return {
+        "targets": [_serialize_server_target(item) for item in view.targets],
+        "active_target_origin": view.active_target_origin,
+    }
+
+
+def _serialize_server_target_validation_result(
+    result: ServerTargetValidationResult,
+) -> dict[str, object]:
+    return {
+        "target": _serialize_server_target(result.target),
+        "status": result.status,
+        "message": result.message,
+    }
+
+
+def _serialize_server_target(
+    target: ServerTargetSummary | None,
+) -> dict[str, object] | None:
+    if target is None:
+        return None
+    return {
+        "origin": target.origin,
+        "label": target.label,
+        "is_active": target.is_active,
+        "validation_status": target.validation_status,
+        "last_checked_at": target.last_checked_at,
     }
 
 

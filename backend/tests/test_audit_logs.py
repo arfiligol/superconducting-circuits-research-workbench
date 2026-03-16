@@ -4,7 +4,7 @@ from sqlalchemy import inspect
 from src.app.domain.audit import AuditRecord
 from src.app.infrastructure.audit_store import create_audit_engine
 from src.app.infrastructure.persistence.database import create_metadata_engine
-from src.app.infrastructure.runtime import get_task_audit_repository
+from src.app.infrastructure.runtime import get_task_audit_repository, reset_runtime_state
 from src.app.main import app
 from src.app.settings import get_settings
 
@@ -26,10 +26,16 @@ _AUDIT_DEFINITION_SOURCE = """{
 
 @pytest.fixture(autouse=True)
 def clear_session_cookies() -> None:
+    reset_runtime_state()
     client.cookies.clear()
 
 
 def _login() -> None:
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
     response = client.post(
         "/session/login",
         json={
@@ -38,6 +44,11 @@ def _login() -> None:
         },
     )
     assert response.status_code == 200
+
+
+@pytest.fixture(autouse=True)
+def enter_online_owner_session() -> None:
+    _login()
 
 
 def test_audit_list_returns_workspace_scoped_rows_and_meta() -> None:
@@ -49,10 +60,12 @@ def test_audit_list_returns_workspace_scoped_rows_and_meta() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert [row["action_kind"] for row in payload["data"]["rows"]] == [
+    action_kinds = [row["action_kind"] for row in payload["data"]["rows"]]
+    assert action_kinds[:2] == [
         "task.cancel_requested",
         "task.submitted",
     ]
+    assert "auth.login_succeeded" in action_kinds
     assert payload["data"]["rows"][0]["workspace_id"] == "ws-device-lab"
     assert payload["data"]["rows"][0]["actor_summary"] == {
         "user_id": "researcher-01",

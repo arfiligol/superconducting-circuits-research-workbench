@@ -455,11 +455,11 @@ def _parse_lane_filter(value: str | None) -> TaskLane | None:
 
 
 def _parse_scope(value: str) -> TaskVisibilityScope:
-    if value not in {"workspace", "owned"}:
+    if value not in {"local", "workspace", "owned"}:
         raise service_error(
             400,
             code="request_validation_failed",
             category="validation_error",
-            message="scope must be workspace or owned.",
+            message="scope must be local, workspace or owned.",
         )
     return value

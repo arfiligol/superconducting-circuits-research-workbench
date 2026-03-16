@@ -227,12 +227,12 @@ def _parse_definition_create_payload(payload: object) -> CircuitDefinitionDraft:
     name = _required_string(body, "name")
     source_text = _required_string(body, "source_text")
     visibility_scope = body.get("visibility_scope", "private")
-    if visibility_scope not in {"private", "workspace"}:
+    if visibility_scope not in {"local", "private", "workspace"}:
         raise service_error(
             400,
             code="definition_source_invalid",
             category="validation_error",
-            message="visibility_scope must be 'private' or 'workspace'.",
+            message="visibility_scope must be 'local', 'private' or 'workspace'.",
         )
     return CircuitDefinitionDraft(
         name=name,

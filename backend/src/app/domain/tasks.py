@@ -47,7 +47,7 @@ TaskStatus = Literal[
 ]
 TaskControlState = Literal["none", "cancellation_requested", "termination_requested"]
 TaskQueueBackend = Literal["in_memory_scaffold"]
-TaskVisibilityScope = Literal["workspace", "owned"]
+TaskVisibilityScope = Literal["local", "workspace", "owned"]
 TaskResultAvailability = Literal["pending", "ready", "none"]
 TaskEventType = Literal[
     "task_submitted",
@@ -357,8 +357,12 @@ def build_task_retry_event(
         message="A retry task was created from the current task snapshot.",
         metadata={
             "task_status": source_task.status,
-            "dispatch_status": source_task.dispatch.status if source_task.dispatch is not None else None,
-            "dispatch_key": source_task.dispatch.dispatch_key if source_task.dispatch is not None else None,
+            "dispatch_status": (
+                source_task.dispatch.status if source_task.dispatch is not None else None
+            ),
+            "dispatch_key": (
+                source_task.dispatch.dispatch_key if source_task.dispatch is not None else None
+            ),
             "replacement_task_id": replacement_task_id,
             "actor_user_id": actor_user_id,
             "audit_action": "task.retried",

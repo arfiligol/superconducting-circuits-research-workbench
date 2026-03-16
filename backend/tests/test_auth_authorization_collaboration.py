@@ -14,6 +14,11 @@ def _login(
     email: str = "rewrite.local@example.com",
     password: str = "rewrite-local-password",
 ) -> dict[str, object]:
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
     response = client.post(
         "/session/login",
         json={"email": email, "password": password},
@@ -240,6 +245,11 @@ def test_workspace_invitation_read_model_exposes_inviter_and_allowed_actions() -
 
 
 def test_auth_and_collaboration_actions_are_visible_via_audit_query() -> None:
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
     failed_login = client.post(
         "/session/login",
         json={"email": "rewrite.local@example.com", "password": "wrong-password"},
@@ -277,6 +287,10 @@ def test_request_scoped_session_binding_overrides_global_session_fallback() -> N
     collaborator_client = TestClient(app)
     owner_client = TestClient(app)
     try:
+        collaborator_client.patch(
+            "/session/runtime-mode",
+            json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+        )
         collaborator_login = collaborator_client.post(
             "/session/login",
             json={
@@ -286,6 +300,10 @@ def test_request_scoped_session_binding_overrides_global_session_fallback() -> N
         )
         assert collaborator_login.status_code == 200
 
+        owner_client.patch(
+            "/session/runtime-mode",
+            json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+        )
         owner_login = owner_client.post(
             "/session/login",
             json={

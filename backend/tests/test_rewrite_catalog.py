@@ -22,11 +22,35 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def reset_catalog_state() -> None:
     reset_runtime_state()
+    client.cookies.clear()
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
+    login_response = client.post(
+        "/session/login",
+        json={
+            "email": "rewrite.local@example.com",
+            "password": "rewrite-local-password",
+        },
+    )
+    assert login_response.status_code == 200
 
 
 @pytest.fixture
 def app_state_repository() -> InMemoryRewriteAppStateRepository:
-    return InMemoryRewriteAppStateRepository()
+    repository = InMemoryRewriteAppStateRepository()
+    repository.switch_runtime_mode(
+        runtime_mode="online",
+        server_target_origin="http://127.0.0.1:8000",
+    )
+    created = repository.create_authenticated_session(
+        email="rewrite.local@example.com",
+        password="rewrite-local-password",
+    )
+    assert created is not None
+    return repository
 
 
 @pytest.fixture

@@ -142,6 +142,7 @@ def get_session_service() -> SessionService:
         token_transport=get_session_token_transport(),
         authorization_service=get_authorization_service(),
         audit_repository=get_task_audit_repository(),
+        task_repository=get_rewrite_task_repository(),
     )
 
 

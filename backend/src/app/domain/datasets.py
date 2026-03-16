@@ -4,7 +4,7 @@ from typing import Literal
 from src.app.domain.storage import ResultHandleRef, TracePayloadRef
 
 DatasetStatus = Literal["Ready", "Queued", "Review"]
-DatasetVisibilityScope = Literal["private", "workspace"]
+DatasetVisibilityScope = Literal["local", "private", "workspace"]
 DatasetLifecycleState = Literal["active", "archived", "deleted"]
 DatasetProfileField = Literal["device_type", "capabilities", "source"]
 CompareReadiness = Literal["ready", "inspect_only", "blocked"]

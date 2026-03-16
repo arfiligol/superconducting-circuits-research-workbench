@@ -130,7 +130,7 @@ class TaskService:
             if self._is_visible(
                 task,
                 session,
-                scope="workspace",
+                scope="local" if session.runtime_mode == "local" else "workspace",
             )
         ]
         return TaskQueueView(
@@ -252,7 +252,11 @@ class TaskService:
                 owner_display_name=owner_display_name,
                 workspace_id=session.workspace_id,
                 workspace_slug=session.workspace_slug,
-                visibility_scope="workspace",
+                visibility_scope=(
+                    "local"
+                    if session.runtime_mode == "local"
+                    else ("workspace" if session.default_task_scope == "workspace" else "owned")
+                ),
                 dataset_id=resolved_dataset_id,
                 definition_id=draft.definition_id,
                 summary=draft.summary or _default_task_summary(draft.kind, resolved_dataset_id),
@@ -588,6 +592,8 @@ class TaskService:
     ) -> bool:
         if not self._authorization_service.is_visible_task(task, session):
             return False
+        if session.runtime_mode == "local":
+            return task.visibility_scope == "local"
         if scope == "owned":
             return task.owner_user_id == _session_user_id(session)
         return True

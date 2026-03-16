@@ -17,6 +17,8 @@ def install_request_session_middleware(
     @app.middleware("http")
     async def request_session_context_middleware(request: Request, call_next):
         session_repository = session_repository_factory()
+        if session_repository.get_runtime_mode() != "online":
+            return await call_next(request)
         session_token = request.cookies.get(SESSION_COOKIE_NAME)
         if session_token is None or len(session_token.strip()) == 0:
             return await call_next(request)

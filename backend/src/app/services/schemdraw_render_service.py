@@ -157,10 +157,24 @@ class SchemdrawRenderService:
                 category="not_found",
                 message=f"Definition {linked_schema.definition_id} was not found.",
             )
-        if definition.workspace_id != session.workspace_id or (
+        if definition.workspace_id != session.workspace_id:
+            raise service_error(
+                403,
+                code="schemdraw_linked_schema_not_visible",
+                category="permission_denied",
+                message="The linked schema is not visible in the active workspace.",
+            )
+        if (
             definition.visibility_scope == "private"
             and definition.owner_user_id != _session_user_id(session)
         ):
+            raise service_error(
+                403,
+                code="schemdraw_linked_schema_not_visible",
+                category="permission_denied",
+                message="The linked schema is not visible in the active workspace.",
+            )
+        if session.runtime_mode == "local" and definition.visibility_scope != "local":
             raise service_error(
                 403,
                 code="schemdraw_linked_schema_not_visible",

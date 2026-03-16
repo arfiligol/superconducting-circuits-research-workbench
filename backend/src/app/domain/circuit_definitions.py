@@ -3,7 +3,7 @@ from typing import Literal
 
 CircuitDefinitionSortBy = Literal["created_at", "updated_at", "name"]
 SortOrder = Literal["asc", "desc"]
-VisibilityScope = Literal["private", "workspace"]
+VisibilityScope = Literal["local", "private", "workspace"]
 LifecycleState = Literal["active", "archived", "deleted"]
 ValidationSeverity = Literal["error", "warning", "info"]
 ValidationStatus = Literal["valid", "warning", "invalid"]
@@ -123,4 +123,3 @@ class CircuitDefinitionCatalogPage:
     next_cursor: str | None
     prev_cursor: str | None
     has_more: bool
-

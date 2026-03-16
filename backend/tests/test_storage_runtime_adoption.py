@@ -36,6 +36,29 @@ from src.app.services.service_errors import ServiceError
 from src.app.settings import get_settings
 
 
+def _enter_online_owner_session() -> None:
+    repository = get_rewrite_app_state_repository()
+    repository.switch_runtime_mode(
+        runtime_mode="online",
+        server_target_origin="http://127.0.0.1:8000",
+    )
+    session = repository.create_authenticated_session(
+        email="rewrite.local@example.com",
+        password="rewrite-local-password",
+    )
+    assert session is not None
+
+
+def _reset_runtime_state_online() -> None:
+    reset_runtime_state()
+    _enter_online_owner_session()
+
+
+@pytest.fixture(autouse=True)
+def enter_online_runtime() -> None:
+    _reset_runtime_state_online()
+
+
 def test_runtime_task_submission_persists_pending_result_metadata() -> None:
     service = get_task_service()
 
@@ -75,7 +98,7 @@ def test_task_service_submit_preserves_explicit_dataset_dispatch_source_across_r
     assert task.dispatch is not None
     assert task.dispatch.submission_source == "explicit_dataset"
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(task.task_id)
 
@@ -141,7 +164,7 @@ def test_runtime_reset_prefers_persisted_result_handle_over_seed_defaults() -> N
     )
     storage_repository.save_result_handle(updated_result_handle)
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(303)
 
@@ -169,7 +192,7 @@ def test_runtime_reset_prefers_persisted_task_snapshot_over_scaffold_defaults() 
     )
     task_snapshot_repository.save_task_snapshot(updated_task)
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(302)
 
@@ -243,7 +266,7 @@ def test_task_service_lifecycle_update_persists_running_state_across_reset() -> 
         "task_running",
     ]
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(submitted_task.task_id)
 
@@ -377,7 +400,7 @@ def test_execution_runtime_persists_start_heartbeat_and_completion_across_reset(
         "task_completed",
     ]
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(submitted_task.task_id)
 
@@ -432,7 +455,7 @@ def test_execution_runtime_reconcile_marks_running_task_failed_with_safe_metadat
     assert reconciled_task.events[-1].metadata["error_code"] == "stale_task_timeout"
     assert "message" not in reconciled_task.events[-1].metadata
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_history = get_task_service().get_task_history(
         submitted_task.task_id,
@@ -474,7 +497,7 @@ def test_service_read_reconciles_stale_dispatch_snapshot_to_task_lifecycle() -> 
         )
         session.commit()
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(submitted_task.task_id)
 
@@ -493,7 +516,7 @@ def test_task_service_event_history_redacts_sensitive_metadata_fields() -> None:
         event_row = (
             session.query(RewriteTaskEventRecord)
             .filter(RewriteTaskEventRecord.task_id == 303)
-            .filter(RewriteTaskEventRecord.event_key == "task_completed:2026-03-11 19:18:00")
+            .filter(RewriteTaskEventRecord.event_type == "task_completed")
             .one()
         )
         event_row.metadata_json = {
@@ -504,7 +527,7 @@ def test_task_service_event_history_redacts_sensitive_metadata_fields() -> None:
         }
         session.commit()
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     events = get_task_service().list_task_events(
         303,
@@ -598,7 +621,7 @@ def test_task_service_lifecycle_update_persists_completed_result_refs_across_res
         f"task-result:{submitted_task.task_id}:primary"
     ]
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(submitted_task.task_id)
 
@@ -661,7 +684,7 @@ def test_runtime_reset_keeps_submitted_task_row_and_storage_refs() -> None:
         )
     )
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(submitted_task.task_id)
 
@@ -674,7 +697,8 @@ def test_runtime_reset_keeps_submitted_task_row_and_storage_refs() -> None:
     assert get_rewrite_task_repository().get_task(submitted_task.task_id) is not None
 
 
-def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_cancelled_state() -> None:
+def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_cancelled_state(
+) -> None:
     service = get_task_service()
     runtime = get_task_execution_runtime()
 
@@ -685,7 +709,7 @@ def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_c
 
     cancelling_task = runtime.consume_control_request(
         301,
-        recorded_at=datetime(2026, 3, 12, 12, 20, 0),
+        recorded_at=datetime(2026, 3, 17, 9, 20, 0),
         worker_pid=5511,
     )
 
@@ -726,11 +750,11 @@ def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_c
     with pytest.raises(ServiceError) as exc_info:
         runtime.finalize_terminated(
             301,
-            recorded_at=datetime(2026, 3, 12, 12, 24, 0),
+            recorded_at=datetime(2026, 3, 17, 9, 24, 0),
         )
     assert exc_info.value.code == "task_execution_transition_invalid"
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(301)
     assert reloaded_task.status == "cancelled"
@@ -755,7 +779,7 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
 
     acknowledged_task = runtime.consume_control_request(
         301,
-        recorded_at=datetime(2026, 3, 12, 12, 30, 0),
+        recorded_at=datetime(2026, 3, 17, 9, 30, 0),
         worker_pid=6611,
     )
 
@@ -775,7 +799,7 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
 
     terminated_task = runtime.finalize_terminated(
         301,
-        recorded_at=datetime(2026, 3, 12, 12, 33, 0),
+        recorded_at=datetime(2026, 3, 17, 9, 33, 0),
     )
 
     assert terminated_task.status == "terminated"
@@ -793,7 +817,7 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
         "task.terminate_requested",
     }
 
-    reset_runtime_state()
+    _reset_runtime_state_online()
 
     reloaded_task = get_task_service().get_task(301)
     assert reloaded_task.status == "terminated"

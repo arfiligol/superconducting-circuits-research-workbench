@@ -25,7 +25,7 @@ def test_sqlite_task_snapshot_repository_round_trips_task_rows(tmp_path: Path) -
         create_metadata_session_factory(str(database_path))
     )
 
-    seeded_task = build_seed_tasks()[2]
+    seeded_task = next(task for task in build_seed_tasks() if task.task_id == 303)
 
     assert repository.has_tasks() is False
     persisted_seed = repository.save_task_snapshot(seeded_task)

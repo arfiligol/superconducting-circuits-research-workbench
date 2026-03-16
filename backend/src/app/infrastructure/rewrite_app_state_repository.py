@@ -7,6 +7,7 @@ from typing import Protocol
 from sc_core.execution import TaskResultHandle
 
 from src.app.domain.session import (
+    ServerTargetSummary,
     SessionState,
     SessionUser,
     WorkspaceAllowedActions,
@@ -90,6 +91,14 @@ class _PendingInvitationAcceptanceRecord:
     created_at: str
 
 
+@dataclass(frozen=True)
+class _ServerTargetRecord:
+    origin: str
+    label: str
+    validation_status: str
+    last_checked_at: str | None
+
+
 class StorageMetadataRepository(Protocol):
     def get_storage_record(self, record_id: str) -> MetadataRecordRef | None: ...
 
@@ -141,13 +150,24 @@ class InMemoryRewriteAppStateRepository:
         self._task_snapshot_repository = task_snapshot_repository
         self._session_state = _seed_session_state()
         self._default_dataset_ids = {
+            "local-space": "local-dataset-001",
             "ws-device-lab": "fluxonium-2025-031",
             "ws-modeling": "transmon-coupler-014",
         }
         self._last_active_dataset_ids = {
+            "local-space": "local-dataset-001",
             "ws-device-lab": "fluxonium-2025-031",
             "ws-modeling": "transmon-coupler-014",
         }
+        self._server_targets: dict[str, _ServerTargetRecord] = {
+            "http://127.0.0.1:8000": _ServerTargetRecord(
+                origin="http://127.0.0.1:8000",
+                label="Default Rewrite Server",
+                validation_status="validated",
+                last_checked_at="2026-03-17T09:00:00Z",
+            ),
+        }
+        self._active_server_target_origin: str | None = None
         self._auth_accounts = _seed_auth_accounts()
         self._users_by_id = {
             account.prototype.user.user_id: email
@@ -176,7 +196,97 @@ class InMemoryRewriteAppStateRepository:
         return self._session_state
 
     def build_public_request_session_state(self, auth_state: str) -> SessionState:
-        return _build_public_request_session_state(auth_state)
+        target = self._server_targets.get(self._active_server_target_origin or "")
+        return _build_online_public_session_state(
+            auth_state=auth_state,
+            server_target_origin=self._active_server_target_origin,
+            server_target_label=target.label if target is not None else None,
+        )
+
+    def get_runtime_mode(self) -> str:
+        return self._session_state.runtime_mode
+
+    def list_server_targets(self) -> tuple[ServerTargetSummary, ...]:
+        return tuple(
+            _to_server_target_summary(
+                record,
+                is_active=record.origin == self._active_server_target_origin,
+            )
+            for record in sorted(self._server_targets.values(), key=lambda item: item.origin)
+        )
+
+    def remember_server_target(self, origin: str, label: str | None = None) -> ServerTargetSummary:
+        record = _ServerTargetRecord(
+            origin=origin,
+            label=label or _default_server_target_label(origin),
+            validation_status=self._server_targets.get(origin, None).validation_status
+            if origin in self._server_targets
+            else "validated",
+            last_checked_at=_now_iso(),
+        )
+        self._server_targets[origin] = record
+        return _to_server_target_summary(
+            record,
+            is_active=record.origin == self._active_server_target_origin,
+        )
+
+    def set_server_target_validation_status(
+        self,
+        *,
+        origin: str,
+        label: str | None,
+        validation_status: str,
+    ) -> ServerTargetSummary:
+        record = _ServerTargetRecord(
+            origin=origin,
+            label=label or _default_server_target_label(origin),
+            validation_status=validation_status,
+            last_checked_at=_now_iso(),
+        )
+        self._server_targets[origin] = record
+        return _to_server_target_summary(
+            record,
+            is_active=record.origin == self._active_server_target_origin,
+        )
+
+    def switch_runtime_mode(
+        self,
+        *,
+        runtime_mode: str,
+        server_target_origin: str | None = None,
+    ) -> SessionState:
+        if runtime_mode == "local":
+            self.revoke_all_authenticated_sessions()
+            self._active_server_target_origin = None
+            self._session_state = _seed_session_state()
+            return self._session_state
+
+        active_target_origin = server_target_origin or self._active_server_target_origin
+        if active_target_origin is None:
+            self._session_state = _build_online_public_session_state(
+                auth_state="anonymous",
+                server_target_origin=None,
+                server_target_label=None,
+            )
+            return self._session_state
+
+        target_record = self._server_targets.get(active_target_origin)
+        self.revoke_all_authenticated_sessions()
+        self._active_server_target_origin = active_target_origin
+        self._session_state = _build_online_public_session_state(
+            auth_state="anonymous",
+            server_target_origin=active_target_origin,
+            server_target_label=(
+                target_record.label
+                if target_record is not None
+                else _default_server_target_label(active_target_origin)
+            ),
+        )
+        return self._session_state
+
+    def revoke_all_authenticated_sessions(self) -> None:
+        for session_id in list(self._authenticated_sessions):
+            self.invalidate_authenticated_session(session_id)
 
     def bind_request_session_state(self, session_state: SessionState) -> Token[SessionState | None]:
         return _REQUEST_SESSION_STATE.set(session_state)
@@ -200,8 +310,15 @@ class InMemoryRewriteAppStateRepository:
         session_state = replace(
             account.prototype,
             session_id=session_id,
+            runtime_mode="online",
             auth_state="authenticated",
             auth_mode="jwt_refresh_cookie",
+            server_target_origin=self._active_server_target_origin,
+            server_target_label=(
+                self._server_targets[self._active_server_target_origin].label
+                if self._active_server_target_origin in self._server_targets
+                else None
+            ),
         )
         self._authenticated_sessions[session_id] = session_state
         self._session_last_active_dataset_ids[session_id] = dict(self._last_active_dataset_ids)
@@ -699,8 +816,11 @@ class InMemoryRewriteAppStateRepository:
             updated_state = replace(
                 prototype,
                 session_id=session_id,
+                runtime_mode="online",
                 auth_state=session_state.auth_state,
                 auth_mode=session_state.auth_mode,
+                server_target_origin=session_state.server_target_origin,
+                server_target_label=session_state.server_target_label,
                 active_dataset_id=_resolve_rebound_dataset_id(
                     current_workspace_id=session_state.workspace_id,
                     current_dataset_id=session_state.active_dataset_id,
@@ -972,63 +1092,46 @@ class InMemoryRewriteAppStateRepository:
 def _seed_session_state() -> SessionState:
     memberships = (
         WorkspaceMembership(
-            workspace_id="ws-device-lab",
-            slug="device-lab",
-            display_name="Device Lab Workspace",
+            workspace_id="local-space",
+            slug="local-space",
+            display_name="Local Space",
             role="owner",
-            default_task_scope="workspace",
+            default_task_scope="local",
             is_active=True,
             allowed_actions=WorkspaceAllowedActions(
-                switch_to=True,
+                switch_to=False,
                 activate_dataset=True,
-                invite_members=True,
-                remove_members=True,
-                transfer_owner=True,
+                invite_members=False,
+                remove_members=False,
+                transfer_owner=False,
                 leave_workspace=False,
-                view_audit_logs=True,
+                view_audit_logs=False,
                 manage_definitions=True,
                 manage_datasets=True,
                 manage_tasks=True,
             ),
         ),
-        WorkspaceMembership(
-            workspace_id="ws-modeling",
-            slug="modeling",
-            display_name="Modeling Workspace",
-            role="member",
-            default_task_scope="owned",
-            is_active=False,
-            allowed_actions=WorkspaceAllowedActions(
-                switch_to=True,
-                activate_dataset=True,
-                invite_members=False,
-                remove_members=False,
-                transfer_owner=False,
-                leave_workspace=True,
-                view_audit_logs=False,
-                manage_definitions=False,
-                manage_datasets=False,
-                manage_tasks=False,
-            ),
-        ),
     )
     return SessionState(
-        session_id="rewrite-local-session",
-        auth_state="authenticated",
-        auth_mode="local_stub",
+        session_id="local-session",
+        runtime_mode="local",
+        auth_state="local_bypass",
+        auth_mode="local_bypass",
         user=SessionUser(
-            user_id="researcher-01",
-            display_name="Rewrite Local User",
-            email="rewrite.local@example.com",
+            user_id="local-operator",
+            display_name="Local Operator",
+            email=None,
             platform_role="user",
         ),
-        workspace_id="ws-device-lab",
-        workspace_slug="device-lab",
-        workspace_display_name="Device Lab Workspace",
+        server_target_origin=None,
+        server_target_label=None,
+        workspace_id="local-space",
+        workspace_slug="local-space",
+        workspace_display_name="Local Space",
         workspace_role="owner",
-        default_task_scope="workspace",
+        default_task_scope="local",
         memberships=memberships,
-        active_dataset_id="fluxonium-2025-031",
+        active_dataset_id="local-dataset-001",
     )
 
 
@@ -1099,6 +1202,7 @@ def _seed_auth_accounts() -> dict[str, _AccountSeed]:
     )
     collaborator_state = SessionState(
         session_id="rewrite-collaborator-session",
+        runtime_mode="online",
         auth_state="authenticated",
         auth_mode="jwt_refresh_cookie",
         user=SessionUser(
@@ -1107,6 +1211,8 @@ def _seed_auth_accounts() -> dict[str, _AccountSeed]:
             email="collaborator.local@example.com",
             platform_role="user",
         ),
+        server_target_origin="http://127.0.0.1:8000",
+        server_target_label="Default Rewrite Server",
         workspace_id="ws-modeling",
         workspace_slug="modeling",
         workspace_display_name="Modeling Workspace",
@@ -1117,6 +1223,7 @@ def _seed_auth_accounts() -> dict[str, _AccountSeed]:
     )
     admin_state = SessionState(
         session_id="rewrite-admin-session",
+        runtime_mode="online",
         auth_state="authenticated",
         auth_mode="jwt_refresh_cookie",
         user=SessionUser(
@@ -1125,6 +1232,8 @@ def _seed_auth_accounts() -> dict[str, _AccountSeed]:
             email="admin.local@example.com",
             platform_role="admin",
         ),
+        server_target_origin="http://127.0.0.1:8000",
+        server_target_label="Default Rewrite Server",
         workspace_id="ws-device-lab",
         workspace_slug="device-lab",
         workspace_display_name="Device Lab Workspace",
@@ -1136,7 +1245,68 @@ def _seed_auth_accounts() -> dict[str, _AccountSeed]:
     return {
         "rewrite.local@example.com": _AccountSeed(
             password="rewrite-local-password",
-            prototype=replace(_seed_session_state(), auth_mode="jwt_refresh_cookie"),
+            prototype=SessionState(
+                session_id="rewrite-user-session",
+                runtime_mode="online",
+                auth_state="authenticated",
+                auth_mode="jwt_refresh_cookie",
+                user=SessionUser(
+                    user_id="researcher-01",
+                    display_name="Rewrite Local User",
+                    email="rewrite.local@example.com",
+                    platform_role="user",
+                ),
+                server_target_origin="http://127.0.0.1:8000",
+                server_target_label="Default Rewrite Server",
+                workspace_id="ws-device-lab",
+                workspace_slug="device-lab",
+                workspace_display_name="Device Lab Workspace",
+                workspace_role="owner",
+                default_task_scope="workspace",
+                memberships=(
+                    WorkspaceMembership(
+                        workspace_id="ws-device-lab",
+                        slug="device-lab",
+                        display_name="Device Lab Workspace",
+                        role="owner",
+                        default_task_scope="workspace",
+                        is_active=True,
+                        allowed_actions=WorkspaceAllowedActions(
+                            switch_to=True,
+                            activate_dataset=True,
+                            invite_members=True,
+                            remove_members=True,
+                            transfer_owner=True,
+                            leave_workspace=False,
+                            view_audit_logs=True,
+                            manage_definitions=True,
+                            manage_datasets=True,
+                            manage_tasks=True,
+                        ),
+                    ),
+                    WorkspaceMembership(
+                        workspace_id="ws-modeling",
+                        slug="modeling",
+                        display_name="Modeling Workspace",
+                        role="member",
+                        default_task_scope="owned",
+                        is_active=False,
+                        allowed_actions=WorkspaceAllowedActions(
+                            switch_to=True,
+                            activate_dataset=True,
+                            invite_members=False,
+                            remove_members=False,
+                            transfer_owner=False,
+                            leave_workspace=True,
+                            view_audit_logs=False,
+                            manage_definitions=False,
+                            manage_datasets=False,
+                            manage_tasks=False,
+                        ),
+                    ),
+                ),
+                active_dataset_id="fluxonium-2025-031",
+            ),
         ),
         "collaborator.local@example.com": _AccountSeed(
             password="collaborator-local-password",
@@ -1227,9 +1397,12 @@ def _to_user_summary(user: SessionUser) -> CollaborationUserSummary:
 def _build_public_request_session_state(auth_state: str) -> SessionState:
     return SessionState(
         session_id=f"request-{auth_state}",
+        runtime_mode="online",
         auth_state=auth_state,  # type: ignore[arg-type]
         auth_mode="jwt_refresh_cookie",
         user=None,
+        server_target_origin="http://127.0.0.1:8000",
+        server_target_label="Default Rewrite Server",
         workspace_id="",
         workspace_slug="",
         workspace_display_name="",
@@ -1238,6 +1411,48 @@ def _build_public_request_session_state(auth_state: str) -> SessionState:
         memberships=(),
         active_dataset_id=None,
     )
+
+
+def _build_online_public_session_state(
+    *,
+    auth_state: str,
+    server_target_origin: str | None,
+    server_target_label: str | None,
+) -> SessionState:
+    return SessionState(
+        session_id="online-public-session",
+        runtime_mode="online",
+        auth_state=auth_state,  # type: ignore[arg-type]
+        auth_mode="jwt_refresh_cookie",
+        user=None,
+        server_target_origin=server_target_origin,
+        server_target_label=server_target_label,
+        workspace_id="",
+        workspace_slug="",
+        workspace_display_name="",
+        workspace_role="viewer",
+        default_task_scope="owned",
+        memberships=(),
+        active_dataset_id=None,
+    )
+
+
+def _to_server_target_summary(
+    record: _ServerTargetRecord,
+    *,
+    is_active: bool,
+) -> ServerTargetSummary:
+    return ServerTargetSummary(
+        origin=record.origin,
+        label=record.label,
+        is_active=is_active,
+        validation_status=record.validation_status,  # type: ignore[arg-type]
+        last_checked_at=record.last_checked_at,
+    )
+
+
+def _default_server_target_label(origin: str) -> str:
+    return origin.removeprefix("http://").removeprefix("https://")
 
 
 def _workspace_role_sort_key(role: str) -> int:
@@ -1336,6 +1551,33 @@ def _resolve_rebound_dataset_id(
 
 def build_seed_tasks() -> tuple[TaskDetail, ...]:
     return (
+        TaskDetail(
+            task_id=300,
+            kind="simulation",
+            lane="simulation",
+            execution_mode="run",
+            status="running",
+            submitted_at="2026-03-17 08:45:00",
+            owner_user_id="local-operator",
+            owner_display_name="Local Operator",
+            workspace_id="local-space",
+            workspace_slug="local-space",
+            visibility_scope="local",
+            dataset_id="local-dataset-001",
+            definition_id=3,
+            summary="Local Space preview simulation is running.",
+            queue_backend="in_memory_scaffold",
+            worker_task_name="simulation_run_task",
+            request_ready=True,
+            submitted_from_active_dataset=True,
+            progress=TaskProgress(
+                phase="running",
+                percent_complete=42,
+                summary="simulation_run_task started in the local simulation lane.",
+                updated_at="2026-03-17 08:50:00",
+            ),
+            result_refs=_empty_result_refs(),
+        ),
         TaskDetail(
             task_id=301,
             kind="simulation",

@@ -28,12 +28,42 @@ class AuthorizationService:
         self._adapter = adapter
 
     def build_session_capabilities(self, state: SessionState) -> SessionCapabilities:
+        if state.runtime_mode == "local":
+            return SessionCapabilities(
+                can_switch_runtime_mode=True,
+                can_switch_workspace=False,
+                can_switch_dataset=True,
+                can_import_datasets=True,
+                can_export_datasets=True,
+                can_invite_members=False,
+                can_remove_members=False,
+                can_transfer_workspace_owner=False,
+                can_leave_workspace=False,
+                can_submit_tasks=True,
+                can_cancel_local_tasks=True,
+                can_terminate_local_tasks=True,
+                can_retry_local_tasks=True,
+                can_manage_workspace_tasks=False,
+                can_cancel_own_tasks=False,
+                can_cancel_workspace_tasks=False,
+                can_terminate_workspace_tasks=False,
+                can_retry_own_tasks=False,
+                can_retry_workspace_tasks=False,
+                can_manage_definitions=True,
+                can_publish_definitions=False,
+                can_manage_datasets=True,
+                can_view_audit_logs=False,
+            )
+
         workspace_actions = self.build_workspace_allowed_actions(
             state, self._active_membership(state)
         )
         return SessionCapabilities(
+            can_switch_runtime_mode=True,
             can_switch_workspace=len(state.memberships) > 1,
             can_switch_dataset=workspace_actions.activate_dataset,
+            can_import_datasets=True,
+            can_export_datasets=True,
             can_invite_members=workspace_actions.invite_members,
             can_remove_members=workspace_actions.remove_members,
             can_transfer_workspace_owner=workspace_actions.transfer_owner,
@@ -43,6 +73,9 @@ class AuthorizationService:
                 "submit_task",
                 resource=self._resource("task", workspace_id=state.workspace_id),
             ),
+            can_cancel_local_tasks=False,
+            can_terminate_local_tasks=False,
+            can_retry_local_tasks=False,
             can_manage_workspace_tasks=self.is_allowed(
                 state,
                 "cancel_workspace_task",
@@ -86,6 +119,11 @@ class AuthorizationService:
                 "manage_definition",
                 resource=self._resource("definition", workspace_id=state.workspace_id),
             ),
+            can_publish_definitions=self.is_allowed(
+                state,
+                "manage_definition",
+                resource=self._resource("definition", workspace_id=state.workspace_id),
+            ),
             can_manage_datasets=self.is_allowed(
                 state,
                 "manage_dataset",
@@ -103,6 +141,20 @@ class AuthorizationService:
         state: SessionState,
         membership: WorkspaceMembership | None,
     ) -> WorkspaceAllowedActions:
+        if state.runtime_mode == "local":
+            return WorkspaceAllowedActions(
+                switch_to=False,
+                activate_dataset=True,
+                invite_members=False,
+                remove_members=False,
+                transfer_owner=False,
+                leave_workspace=False,
+                view_audit_logs=False,
+                manage_definitions=True,
+                manage_datasets=True,
+                manage_tasks=True,
+            )
+
         workspace_id = membership.workspace_id if membership is not None else state.workspace_id
         return WorkspaceAllowedActions(
             switch_to=membership is not None,
@@ -168,6 +220,15 @@ class AuthorizationService:
         dataset: DatasetDetail,
         state: SessionState,
     ) -> DatasetAllowedActions:
+        if state.runtime_mode == "local":
+            can_manage = self.is_visible_dataset(dataset, state)
+            return DatasetAllowedActions(
+                select=can_manage,
+                update_profile=can_manage,
+                publish=False,
+                archive=can_manage,
+            )
+
         resource = AuthorizationResourceEnvelope(
             resource_kind="dataset",
             workspace_id=dataset.workspace_id,
@@ -179,7 +240,7 @@ class AuthorizationService:
         return DatasetAllowedActions(
             select=self.is_allowed(state, "switch_dataset", resource=resource),
             update_profile=can_manage,
-            publish=can_manage,
+            publish=can_manage and dataset.visibility_scope != "workspace",
             archive=can_manage,
         )
 
@@ -188,6 +249,15 @@ class AuthorizationService:
         definition: CircuitDefinitionRecord,
         state: SessionState,
     ) -> DefinitionAllowedActions:
+        if state.runtime_mode == "local":
+            can_manage = self.is_visible_definition(definition, state)
+            return DefinitionAllowedActions(
+                update=can_manage and definition.lifecycle_state == "active",
+                delete=can_manage and definition.lifecycle_state != "deleted",
+                publish=False,
+                clone=can_manage,
+            )
+
         resource = AuthorizationResourceEnvelope(
             resource_kind="definition",
             workspace_id=definition.workspace_id,
@@ -199,7 +269,9 @@ class AuthorizationService:
         return DefinitionAllowedActions(
             update=can_manage and definition.lifecycle_state == "active",
             delete=can_manage and definition.lifecycle_state != "deleted",
-            publish=can_manage and definition.lifecycle_state == "active",
+            publish=can_manage
+            and definition.lifecycle_state == "active"
+            and definition.visibility_scope != "workspace",
             clone=True,
         )
 
@@ -208,6 +280,16 @@ class AuthorizationService:
         task: TaskDetail,
         state: SessionState,
     ) -> TaskAllowedActions:
+        if state.runtime_mode == "local":
+            visible = self.is_visible_task(task, state)
+            return TaskAllowedActions(
+                attach=visible,
+                cancel=visible,
+                terminate=visible,
+                retry=visible,
+                rejection_reason=None,
+            )
+
         task_resource = AuthorizationResourceEnvelope(
             resource_kind="task",
             workspace_id=task.workspace_id,
@@ -254,10 +336,11 @@ class AuthorizationService:
         if not self.is_allowed(state, action, resource=resource):
             logger.warning(
                 (
-                    "Authorization denied action=%s workspace_id=%s "
+                    "Authorization denied action=%s runtime_mode=%s workspace_id=%s "
                     "resource_kind=%s resource_workspace_id=%s user_id=%s"
                 ),
                 action,
+                state.runtime_mode,
                 state.workspace_id,
                 resource.resource_kind,
                 resource.workspace_id,
@@ -277,6 +360,8 @@ class AuthorizationService:
         *,
         resource: AuthorizationResourceEnvelope,
     ) -> bool:
+        if state.runtime_mode == "local":
+            return self._is_allowed_local(action, resource)
         return self._adapter.decide(
             subject=self._subject(state),
             action=action,
@@ -284,11 +369,16 @@ class AuthorizationService:
         ).allowed
 
     def is_visible_dataset(self, dataset: DatasetDetail, state: SessionState) -> bool:
-        if dataset.workspace_id != state.workspace_id:
-            return False
         if dataset.lifecycle_state != "active":
             return False
-        if dataset.visibility_scope == "workspace" and dataset.workspace_id == state.workspace_id:
+        if state.runtime_mode == "local":
+            return (
+                dataset.visibility_scope == "local"
+                and dataset.workspace_id == state.workspace_id
+            )
+        if dataset.workspace_id != state.workspace_id:
+            return False
+        if dataset.visibility_scope == "workspace":
             return True
         if state.user is not None and state.user.platform_role == "admin":
             return True
@@ -297,20 +387,24 @@ class AuthorizationService:
     def is_visible_definition(
         self, definition: CircuitDefinitionRecord, state: SessionState
     ) -> bool:
-        if definition.workspace_id != state.workspace_id:
-            return False
         if definition.lifecycle_state == "deleted":
             return False
-        if (
-            definition.visibility_scope == "workspace"
-            and definition.workspace_id == state.workspace_id
-        ):
+        if state.runtime_mode == "local":
+            return (
+                definition.visibility_scope == "local"
+                and definition.workspace_id == state.workspace_id
+            )
+        if definition.workspace_id != state.workspace_id:
+            return False
+        if definition.visibility_scope == "workspace":
             return True
         if state.user is not None and state.user.platform_role == "admin":
             return True
         return definition.owner_user_id == state.user.user_id if state.user is not None else False
 
     def is_visible_task(self, task: TaskDetail, state: SessionState) -> bool:
+        if state.runtime_mode == "local":
+            return task.workspace_id == state.workspace_id and task.visibility_scope == "local"
         if state.user is None:
             return False
         if task.workspace_id != state.workspace_id:
@@ -318,6 +412,38 @@ class AuthorizationService:
         if task.visibility_scope == "workspace":
             return True
         return task.owner_user_id == state.user.user_id
+
+    def _is_allowed_local(
+        self,
+        action: AuthorizationAction,
+        resource: AuthorizationResourceEnvelope,
+    ) -> bool:
+        if resource.workspace_id not in {None, "local-space"}:
+            return False
+        if action in {
+            "switch_runtime_mode",
+            "switch_dataset",
+            "submit_task",
+            "cancel_own_task",
+            "terminate_workspace_task",
+            "retry_own_task",
+            "manage_definition",
+            "manage_dataset",
+        }:
+            return True
+        if action in {
+            "switch_workspace",
+            "invite_member",
+            "revoke_invite",
+            "leave_workspace",
+            "remove_member",
+            "transfer_workspace_owner",
+            "cancel_workspace_task",
+            "retry_workspace_task",
+            "view_audit_log",
+        }:
+            return False
+        return False
 
     def _subject(self, state: SessionState) -> AuthorizationSubject:
         return AuthorizationSubject(

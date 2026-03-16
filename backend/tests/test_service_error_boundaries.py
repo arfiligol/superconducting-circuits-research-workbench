@@ -12,6 +12,18 @@ from src.app.services.session_service import SessionService
 from src.app.services.task_service import TaskService
 
 
+def _enter_online_owner_session(repository: InMemoryRewriteAppStateRepository) -> None:
+    repository.switch_runtime_mode(
+        runtime_mode="online",
+        server_target_origin="http://127.0.0.1:8000",
+    )
+    session = repository.create_authenticated_session(
+        email="rewrite.local@example.com",
+        password="rewrite-local-password",
+    )
+    assert session is not None
+
+
 def test_dataset_service_raises_framework_agnostic_error_for_missing_dataset() -> None:
     app_state_repository = InMemoryRewriteAppStateRepository()
     service = DatasetService(
@@ -32,6 +44,7 @@ def test_dataset_service_raises_framework_agnostic_error_for_missing_characteriz
     None
 ):
     app_state_repository = InMemoryRewriteAppStateRepository()
+    _enter_online_owner_session(app_state_repository)
     service = DatasetService(
         repository=InMemoryRewriteCatalogRepository(),
         session_repository=app_state_repository,
@@ -52,6 +65,7 @@ def test_dataset_service_raises_framework_agnostic_error_for_missing_characteriz
 
 def test_dataset_service_raises_conflict_for_characterization_tagging_collision() -> None:
     app_state_repository = InMemoryRewriteAppStateRepository()
+    _enter_online_owner_session(app_state_repository)
     service = DatasetService(
         repository=InMemoryRewriteCatalogRepository(),
         session_repository=app_state_repository,
@@ -77,6 +91,10 @@ def test_dataset_service_raises_conflict_for_characterization_tagging_collision(
 
 def test_session_service_raises_framework_agnostic_error_for_missing_active_dataset() -> None:
     repository = InMemoryRewriteAppStateRepository()
+    repository.switch_runtime_mode(
+        runtime_mode="online",
+        server_target_origin="http://127.0.0.1:8000",
+    )
     token_transport = SessionJwtTransport(secret="test-session-secret-2026")
     service = SessionService(
         repository=repository,

@@ -4,7 +4,6 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
-
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
 
@@ -14,6 +13,20 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def reset_app_state() -> None:
     reset_runtime_state()
+    client.cookies.clear()
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
+    login_response = client.post(
+        "/session/login",
+        json={
+            "email": "rewrite.local@example.com",
+            "password": "rewrite-local-password",
+        },
+    )
+    assert login_response.status_code == 200
 
 
 def test_get_characterization_result_exposes_identify_surface_fields() -> None:

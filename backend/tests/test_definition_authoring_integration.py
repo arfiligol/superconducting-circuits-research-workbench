@@ -1,8 +1,28 @@
+import pytest
 from fastapi.testclient import TestClient
-
+from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def reset_app_state() -> None:
+    reset_runtime_state()
+    client.cookies.clear()
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
+    login_response = client.post(
+        "/session/login",
+        json={
+            "email": "rewrite.local@example.com",
+            "password": "rewrite-local-password",
+        },
+    )
+    assert login_response.status_code == 200
 
 
 def _sample_definition_source(circuit_name: str) -> str:
@@ -105,7 +125,9 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     assert updated_detail["validation_summary"]["status"] in {"valid", "warning", "invalid"}
     assert updated_detail["preview_artifacts"] == created_detail["preview_artifacts"]
 
-    refreshed_catalog_response = client.get("/circuit-definitions?sort_by=created_at&sort_order=desc")
+    refreshed_catalog_response = client.get(
+        "/circuit-definitions?sort_by=created_at&sort_order=desc"
+    )
     assert refreshed_catalog_response.status_code == 200
     refreshed_catalog_payload = refreshed_catalog_response.json()
     assert refreshed_catalog_payload["ok"] is True

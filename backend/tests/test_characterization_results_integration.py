@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
 
@@ -15,6 +14,11 @@ def clear_session_cookies() -> None:
 
 
 def _login() -> None:
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
     response = client.post(
         "/session/login",
         json={
@@ -28,6 +32,7 @@ def _login() -> None:
 @pytest.fixture(autouse=True)
 def reset_app_state() -> None:
     reset_runtime_state()
+    _login()
 
 
 def test_list_characterization_results_returns_summary_rows_and_filter_echo() -> None:
@@ -141,7 +146,10 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
 
 def test_characterization_result_routes_reject_invisible_dataset() -> None:
     _login()
-    switch_response = client.patch("/session/active-workspace", json={"workspace_id": "ws-modeling"})
+    switch_response = client.patch(
+        "/session/active-workspace",
+        json={"workspace_id": "ws-modeling"},
+    )
     assert switch_response.status_code == 200
 
     response = client.get(

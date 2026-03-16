@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
 
@@ -15,6 +14,11 @@ def clear_session_cookies() -> None:
 
 
 def _login() -> None:
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
     response = client.post(
         "/session/login",
         json={
@@ -28,6 +32,7 @@ def _login() -> None:
 @pytest.fixture(autouse=True)
 def reset_app_state() -> None:
     reset_runtime_state()
+    _login()
 
 
 def test_characterization_analysis_registry_returns_summary_rows_and_trace_filter_echo() -> None:
@@ -73,7 +78,10 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
                 "matched_trace_count": 1,
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["sideband"],
-                "summary": "One compatible sideband trace is visible, but comparison coverage remains thin.",
+                "summary": (
+                    "One compatible sideband trace is visible, but comparison coverage "
+                    "remains thin."
+                ),
             },
         },
         {
@@ -85,7 +93,10 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
                 "matched_trace_count": 0,
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["base", "sideband"],
-                "summary": "No compatible trace bundle currently satisfies the identification prerequisites.",
+                "summary": (
+                    "No compatible trace bundle currently satisfies the identification "
+                    "prerequisites."
+                ),
             },
         },
     ]
@@ -170,7 +181,10 @@ def test_characterization_run_history_supports_analysis_filter_and_cursor_meta()
 
 def test_characterization_registry_rejects_invisible_dataset() -> None:
     _login()
-    switch_response = client.patch("/session/active-workspace", json={"workspace_id": "ws-modeling"})
+    switch_response = client.patch(
+        "/session/active-workspace",
+        json={"workspace_id": "ws-modeling"},
+    )
     assert switch_response.status_code == 200
 
     response = client.get(

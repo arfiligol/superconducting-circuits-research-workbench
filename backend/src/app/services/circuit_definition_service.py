@@ -134,12 +134,19 @@ class CircuitDefinitionService:
 
     def create_circuit_definition(self, draft: CircuitDefinitionDraft) -> CircuitDefinitionDetail:
         session = self._session_repository.get_session_state()
+        resolved_draft = draft
+        if session.runtime_mode == "local":
+            resolved_draft = CircuitDefinitionDraft(
+                name=draft.name,
+                source_text=draft.source_text,
+                visibility_scope="local",
+            )
         try:
             record = self._repository.create_circuit_definition(
                 workspace_id=session.workspace_id,
                 owner_user_id=_session_user_id(session),
                 owner_display_name=_session_user_name(session),
-                draft=draft,
+                draft=resolved_draft,
             )
         except ValueError as exc:
             raise service_error(
@@ -219,6 +226,13 @@ class CircuitDefinitionService:
 
     def publish_circuit_definition(self, definition_id: int) -> CircuitDefinitionDetail:
         session = self._session_repository.get_session_state()
+        if session.runtime_mode == "local":
+            raise service_error(
+                409,
+                code="definition_publish_online_only",
+                category="conflict",
+                message="Publish to workspace is only available in online mode.",
+            )
         current = self._repository.get_circuit_definition(definition_id)
         if current is None:
             raise service_error(
@@ -283,7 +297,7 @@ class CircuitDefinitionService:
             workspace_id=session.workspace_id,
             owner_user_id=_session_user_id(session),
             owner_display_name=_session_user_name(session),
-            draft=draft,
+            draft=CircuitDefinitionCloneDraft(name=draft.name),
         )
         if record is None:
             raise service_error(

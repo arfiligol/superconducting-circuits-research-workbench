@@ -23,6 +23,15 @@ def reset_app_state() -> None:
 
 
 def _login() -> dict[str, object]:
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={
+            "runtime_mode": "online",
+            "server_origin": "http://127.0.0.1:8000",
+            "label": "Default Rewrite Server",
+        },
+    )
+    assert switch_response.status_code == 200
     response = client.post(
         "/session/login",
         json={
@@ -36,50 +45,67 @@ def _login() -> dict[str, object]:
     return payload["data"]
 
 
-def test_get_session_returns_anonymous_baseline_without_cookie() -> None:
+def test_get_session_returns_local_space_baseline_without_cookie() -> None:
     response = client.get("/session")
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
     session = payload["data"]
-    assert session["session_id"] is None
+    assert session["session_id"] == "local-session"
+    assert session["runtime_mode"] == "local"
     assert session["auth"] == {
-        "state": "anonymous",
-        "mode": "jwt_refresh_cookie",
+        "state": "local_bypass",
+        "mode": "local_bypass",
         "reason": None,
     }
-    assert session["user"] is None
-    assert session["workspace"]["id"] is None
-    assert session["workspace"]["role"] is None
-    assert session["workspace"]["default_task_scope"] is None
-    assert session["workspace"]["memberships"] == []
-    assert session["active_dataset"] is None
+    assert session["connection"]["target"] is None
+    assert session["user"] == {
+        "id": "local-operator",
+        "display_name": "Local Operator",
+        "email": None,
+        "platform_role": "user",
+    }
+    assert session["workspace"]["id"] == "local-space"
+    assert session["workspace"]["name"] == "Local Space"
+    assert session["workspace"]["role"] == "owner"
+    assert session["workspace"]["default_task_scope"] == "local"
+    assert len(session["workspace"]["memberships"]) == 1
+    assert session["active_dataset"]["id"] == "local-dataset-001"
+    assert session["active_dataset"]["visibility_scope"] == "local"
     assert session["capabilities"] == {
+        "can_switch_runtime_mode": True,
         "can_switch_workspace": False,
-        "can_switch_dataset": False,
+        "can_switch_dataset": True,
+        "can_import_datasets": True,
+        "can_export_datasets": True,
         "can_invite_members": False,
         "can_remove_members": False,
         "can_transfer_workspace_owner": False,
         "can_leave_workspace": False,
-        "can_submit_tasks": False,
+        "can_submit_tasks": True,
+        "can_cancel_local_tasks": True,
+        "can_terminate_local_tasks": True,
+        "can_retry_local_tasks": True,
         "can_manage_workspace_tasks": False,
         "can_cancel_own_tasks": False,
         "can_cancel_workspace_tasks": False,
         "can_terminate_workspace_tasks": False,
         "can_retry_own_tasks": False,
         "can_retry_workspace_tasks": False,
-        "can_manage_definitions": False,
-        "can_manage_datasets": False,
+        "can_manage_definitions": True,
+        "can_publish_definitions": False,
+        "can_manage_datasets": True,
         "can_view_audit_logs": False,
     }
-    assert "memberships" not in session
-    assert payload["meta"]["memberships_count"] == 0
+    assert payload["meta"]["memberships_count"] == 1
 
 
 def test_login_returns_canonical_authenticated_workspace_surface() -> None:
     session = _login()
 
+    assert session["runtime_mode"] == "online"
+    assert session["connection"]["target"]["origin"] == "http://127.0.0.1:8000"
     assert session["auth"] == {
         "state": "authenticated",
         "mode": "jwt_refresh_cookie",
@@ -98,13 +124,19 @@ def test_login_returns_canonical_authenticated_workspace_surface() -> None:
     assert session["workspace"]["memberships"][0]["is_active"] is True
     assert session["active_dataset"]["id"] == "fluxonium-2025-031"
     assert session["capabilities"] == {
+        "can_switch_runtime_mode": True,
         "can_switch_workspace": True,
         "can_switch_dataset": True,
+        "can_import_datasets": True,
+        "can_export_datasets": True,
         "can_invite_members": True,
         "can_remove_members": True,
         "can_transfer_workspace_owner": True,
         "can_leave_workspace": False,
         "can_submit_tasks": True,
+        "can_cancel_local_tasks": False,
+        "can_terminate_local_tasks": False,
+        "can_retry_local_tasks": False,
         "can_manage_workspace_tasks": True,
         "can_cancel_own_tasks": True,
         "can_cancel_workspace_tasks": True,
@@ -112,6 +144,7 @@ def test_login_returns_canonical_authenticated_workspace_surface() -> None:
         "can_retry_own_tasks": True,
         "can_retry_workspace_tasks": True,
         "can_manage_definitions": True,
+        "can_publish_definitions": True,
         "can_manage_datasets": True,
         "can_view_audit_logs": True,
     }
@@ -122,6 +155,11 @@ def test_login_returns_canonical_authenticated_workspace_surface() -> None:
 
 
 def test_login_rejects_invalid_credentials() -> None:
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
     response = client.post(
         "/session/login",
         json={
@@ -133,7 +171,9 @@ def test_login_rejects_invalid_credentials() -> None:
     assert response.status_code == 401
     assert response.json()["ok"] is False
     assert response.json()["error"]["code"] == "auth_invalid_credentials"
-    assert client.get("/session").json()["data"]["auth"]["state"] == "anonymous"
+    session = client.get("/session").json()["data"]
+    assert session["runtime_mode"] == "online"
+    assert session["auth"]["state"] == "anonymous"
 
 
 def test_logout_clears_session_continuity() -> None:
@@ -144,6 +184,7 @@ def test_logout_clears_session_continuity() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
+    assert payload["data"]["runtime_mode"] == "online"
     assert payload["data"]["auth"] == {
         "state": "anonymous",
         "mode": "jwt_refresh_cookie",
@@ -163,7 +204,7 @@ def test_patch_session_active_workspace_rebinds_dataset_and_capabilities() -> No
     assert payload["data"]["workspace"]["id"] == "ws-modeling"
     assert payload["data"]["active_dataset_resolution"] == "rebound"
     assert payload["data"]["active_dataset"]["id"] == "transmon-coupler-014"
-    assert payload["data"]["detached_task_ids"] == []
+    assert payload["data"]["detached_task_ids"] == [301, 302, 303]
     assert payload["data"]["capabilities"]["can_invite_members"] is False
     assert payload["data"]["workspace"]["memberships"][1]["is_active"] is True
 
@@ -190,6 +231,11 @@ def test_patch_session_active_dataset_can_clear_context() -> None:
 
 
 def test_session_mutations_require_authenticated_session() -> None:
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
     response = client.patch("/session/active-dataset", json={"dataset_id": None})
 
     assert response.status_code == 401
@@ -207,13 +253,14 @@ def test_get_session_returns_degraded_when_continuity_cannot_be_restored() -> No
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
+    assert payload["data"]["runtime_mode"] == "local"
     assert payload["data"]["auth"] == {
-        "state": "degraded",
-        "mode": "jwt_refresh_cookie",
-        "reason": "session_expired",
+        "state": "local_bypass",
+        "mode": "local_bypass",
+        "reason": None,
     }
-    assert payload["data"]["workspace"]["memberships"] == []
-    assert payload["data"]["capabilities"]["can_submit_tasks"] is False
+    assert payload["data"]["workspace"]["id"] == "local-space"
+    assert payload["data"]["capabilities"]["can_submit_tasks"] is True
 
 
 def test_session_mutations_reject_degraded_continuity() -> None:
@@ -222,10 +269,10 @@ def test_session_mutations_reject_degraded_continuity() -> None:
 
     response = client.patch("/session/active-dataset", json={"dataset_id": None})
 
-    assert response.status_code == 401
-    assert response.json()["ok"] is False
-    assert response.json()["error"]["code"] == "auth_session_expired"
-    assert response.json()["error"]["category"] == "auth_required"
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["runtime_mode"] == "local"
+    assert payload["active_dataset"] is None
 
 
 def test_get_session_requires_context_rebind_when_active_dataset_is_archived() -> None:
@@ -280,6 +327,64 @@ def test_session_rebind_after_member_removal_does_not_keep_old_workspace_dataset
     assert payload["active_dataset"]["workspace_id"] == "ws-modeling"
 
 
+def test_runtime_mode_switch_rejects_unreachable_online_target() -> None:
+    response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://offline.invalid:8000"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "target_unreachable"
+    follow_up = client.get("/session").json()["data"]
+    assert follow_up["runtime_mode"] == "local"
+    assert follow_up["auth"]["state"] == "local_bypass"
+
+
+def test_runtime_mode_switch_resets_remote_auth_and_rebuilds_online_context() -> None:
+    _login()
+
+    switched_local = client.patch("/session/runtime-mode", json={"runtime_mode": "local"})
+    assert switched_local.status_code == 200
+    local_payload = switched_local.json()["data"]
+    assert local_payload["runtime_mode"] == "local"
+    assert local_payload["auth_transition"] == "entered_local_bypass"
+
+    switched_online = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switched_online.status_code == 200
+    online_payload = switched_online.json()["data"]
+    assert online_payload["runtime_mode"] == "online"
+    assert online_payload["auth"]["state"] == "anonymous"
+    assert online_payload["auth_transition"] == "online_auth_required"
+    assert online_payload["session_reset"] is True
+    assert online_payload["detached_task_ids"] == [300]
+
+    follow_up = client.get("/session").json()["data"]
+    assert follow_up["runtime_mode"] == "online"
+    assert follow_up["auth"]["state"] == "anonymous"
+
+
+def test_local_catalog_and_definitions_use_local_visibility_scope() -> None:
+    datasets = client.get("/datasets").json()["data"]["rows"]
+    definitions = client.get("/circuit-definitions").json()["data"]["rows"]
+
+    assert datasets[0]["dataset_id"] == "local-dataset-001"
+    assert datasets[0]["visibility_scope"] == "local"
+    assert datasets[0]["allowed_actions"]["publish"] is False
+    assert definitions[0]["definition_id"] == 3
+    assert definitions[0]["visibility_scope"] == "local"
+    assert definitions[0]["allowed_actions"]["publish"] is False
+
+
+def test_publish_definition_is_unavailable_in_local_mode() -> None:
+    response = client.post("/circuit-definitions/3/publish")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "definition_publish_online_only"
+
+
 def test_leave_workspace_rebinds_active_dataset_to_remaining_workspace_context() -> None:
     _login()
     invitation_response = client.post(
@@ -292,6 +397,11 @@ def test_leave_workspace_rebinds_active_dataset_to_remaining_workspace_context()
     )
     invite_token = invitation_response.json()["data"]["invitation"]["invite_token"]
     client.post("/session/logout")
+    switch_response = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+    )
+    assert switch_response.status_code == 200
     client.post(
         "/session/login",
         json={
@@ -338,16 +448,16 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert [row["task_id"] for row in payload["data"]["rows"]] == [301, 302, 303]
+    assert [row["task_id"] for row in payload["data"]["rows"]] == [300]
     assert payload["data"]["rows"][0] == {
-        "task_id": 301,
-        "summary": "Fluxonium parameter sweep is running.",
+        "task_id": 300,
+        "summary": "Local Space preview simulation is running.",
         "status": "running",
         "lane": "simulation",
         "task_kind": "simulation",
-        "owner_display_name": "Rewrite Local User",
-        "visibility_scope": "workspace",
-        "updated_at": "2026-03-12 09:22:00",
+        "owner_display_name": "Local Operator",
+        "visibility_scope": "local",
+        "updated_at": "2026-03-17 08:50:00",
         "result_availability": "pending",
         "allowed_actions": {
             "attach": True,
@@ -386,6 +496,7 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
 
 
 def test_list_tasks_supports_filters_and_hides_non_visible_rows() -> None:
+    _login()
     response = client.get(
         "/tasks?status=completed&lane=simulation&scope=owned&dataset_id=fluxonium-2025-031&limit=1"
     )
@@ -400,6 +511,7 @@ def test_list_tasks_supports_filters_and_hides_non_visible_rows() -> None:
 
 
 def test_get_task_returns_attach_ready_detail_with_result_handoff() -> None:
+    _login()
     response = client.get("/tasks/303")
 
     assert response.status_code == 200
@@ -438,6 +550,7 @@ def test_get_task_returns_attach_ready_detail_with_result_handoff() -> None:
 
 
 def test_get_task_returns_not_found_for_hidden_task() -> None:
+    _login()
     response = client.get("/tasks/304")
 
     assert response.status_code == 404
@@ -446,6 +559,7 @@ def test_get_task_returns_not_found_for_hidden_task() -> None:
 
 
 def test_get_task_events_returns_persisted_event_history_readmodel() -> None:
+    _login()
     response = client.get("/tasks/303/events?order=desc&limit=2")
 
     assert response.status_code == 200
@@ -469,7 +583,8 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     task = payload["data"]["task"]
     assert payload["data"]["operation"] == "submitted"
     assert task["task_id"] == 306
-    assert task["dataset_id"] == "fluxonium-2025-031"
+    assert task["dataset_id"] == "local-dataset-001"
+    assert task["visibility_scope"] == "local"
     assert task["dispatch"]["status"] == "accepted"
     assert task["result_handoff"] == {
         "availability": "pending",
@@ -494,7 +609,7 @@ def test_submitted_task_survives_runtime_reset_in_routes() -> None:
     reset_runtime_state()
 
     queue_response = client.get("/tasks")
-    assert [row["task_id"] for row in queue_response.json()["data"]["rows"]][:2] == [306, 301]
+    assert [row["task_id"] for row in queue_response.json()["data"]["rows"]][:2] == [300, 306]
 
     detail_response = client.get("/tasks/306")
     assert detail_response.status_code == 200
@@ -507,6 +622,7 @@ def test_submitted_task_survives_runtime_reset_in_routes() -> None:
 
 
 def test_cancel_task_persists_control_state_and_emits_audit() -> None:
+    _login()
     response = client.post("/tasks/301/cancel")
 
     assert response.status_code == 200
@@ -533,6 +649,7 @@ def test_cancel_task_persists_control_state_and_emits_audit() -> None:
     assert [record.action_kind for record in records] == ["task.cancel_requested"]
 
     reset_runtime_state()
+    _login()
 
     reloaded = client.get("/tasks/301").json()["data"]
     assert reloaded["status"] == "cancellation_requested"
@@ -541,6 +658,7 @@ def test_cancel_task_persists_control_state_and_emits_audit() -> None:
 
 
 def test_terminate_task_persists_control_state_and_blocks_repeat_cancel() -> None:
+    _login()
     response = client.post("/tasks/301/terminate")
 
     assert response.status_code == 200
@@ -555,6 +673,7 @@ def test_terminate_task_persists_control_state_and_blocks_repeat_cancel() -> Non
 
 
 def test_retry_creates_new_task_with_lineage_and_audit() -> None:
+    _login()
     response = client.post("/tasks/303/retry")
 
     assert response.status_code == 201
@@ -582,6 +701,7 @@ def test_retry_creates_new_task_with_lineage_and_audit() -> None:
 
 
 def test_retry_denies_non_terminal_task() -> None:
+    _login()
     response = client.post("/tasks/301/retry")
 
     assert response.status_code == 409
@@ -620,6 +740,7 @@ def test_runtime_updates_flow_through_detail_events_and_result_handoff() -> None
 
 
 def test_failed_task_reports_result_handoff_none_after_lifecycle_update() -> None:
+    _login()
     get_task_service().update_task_lifecycle(
         TaskLifecycleUpdate(
             task_id=302,

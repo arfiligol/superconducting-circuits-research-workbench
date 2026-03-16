@@ -326,7 +326,7 @@ class InMemoryRewriteCatalogRepository:
         cloned_definition = _build_circuit_definition_record(
             definition_id=self._next_definition_id,
             workspace_id=workspace_id,
-            visibility_scope="private",
+            visibility_scope="local" if workspace_id == "local-space" else "private",
             owner_user_id=owner_user_id,
             owner_display_name=owner_display_name,
             name=draft.name or f"{source_definition.name} Copy",
@@ -473,6 +473,27 @@ def _timestamp_for_definition(definition_id: int) -> str:
 def _seed_datasets() -> tuple[DatasetDetail, ...]:
     return (
         DatasetDetail(
+            dataset_id="local-dataset-001",
+            name="Local Space Flux Sandbox",
+            family="Fluxonium",
+            owner="Local Space",
+            owner_user_id="local-operator",
+            workspace_id="local-space",
+            visibility_scope="local",
+            lifecycle_state="active",
+            updated_at="2026-03-17T08:30:00Z",
+            device_type="Fluxonium",
+            capabilities=("characterization", "simulation_review", "local_runtime"),
+            source="manual",
+            status="Ready",
+            allowed_actions=DatasetAllowedActions(
+                select=True,
+                update_profile=True,
+                publish=False,
+                archive=True,
+            ),
+        ),
+        DatasetDetail(
             dataset_id="fluxonium-2025-031",
             name="Fluxonium sweep 031",
             family="Fluxonium",
@@ -540,6 +561,15 @@ def _seed_datasets() -> tuple[DatasetDetail, ...]:
 
 def _seed_tagged_core_metrics() -> dict[str, tuple[TaggedCoreMetricSummary, ...]]:
     return {
+        "local-dataset-001": (
+            TaggedCoreMetricSummary(
+                metric_id="metric-local-f01",
+                label="Local Transition",
+                source_parameter="Im(Y11)",
+                designated_metric="f01",
+                tagged_at="2026-03-17T08:40:00Z",
+            ),
+        ),
         "fluxonium-2025-031": (
             TaggedCoreMetricSummary(
                 metric_id="metric-fluxonium-f01",
@@ -571,6 +601,17 @@ def _seed_tagged_core_metrics() -> dict[str, tuple[TaggedCoreMetricSummary, ...]
 
 def _seed_designs() -> dict[str, tuple[DesignBrowseRow, ...]]:
     return {
+        "local-dataset-001": (
+            DesignBrowseRow(
+                design_id="design_local_flux_playground",
+                dataset_id="local-dataset-001",
+                name="Local Flux Playground",
+                source_coverage={"local_runtime": 1},
+                compare_readiness="ready",
+                trace_count=1,
+                updated_at="2026-03-17T08:35:00Z",
+            ),
+        ),
         "fluxonium-2025-031": (
             DesignBrowseRow(
                 design_id="design_flux_scan_a",
@@ -618,6 +659,23 @@ def _seed_designs() -> dict[str, tuple[DesignBrowseRow, ...]]:
 
 def _seed_trace_summaries() -> dict[tuple[str, str], tuple[TraceMetadataSummary, ...]]:
     return {
+        (
+            "local-dataset-001",
+            "design_local_flux_playground",
+        ): (
+            TraceMetadataSummary(
+                trace_id="trace_local_flux_preview",
+                dataset_id="local-dataset-001",
+                design_id="design_local_flux_playground",
+                family="y_matrix",
+                parameter="Y11",
+                representation="imaginary",
+                trace_mode_group="base",
+                source_kind="circuit_simulation",
+                stage_kind="raw",
+                provenance_summary="Local Runtime · Raw · preview batch",
+            ),
+        ),
         (
             "fluxonium-2025-031",
             "design_flux_scan_a",
@@ -727,6 +785,31 @@ def _seed_trace_summaries() -> dict[tuple[str, str], tuple[TraceMetadataSummary,
 
 def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
     return {
+        (
+            "local-dataset-001",
+            "design_local_flux_playground",
+            "trace_local_flux_preview",
+        ): TraceDetail(
+            trace_id="trace_local_flux_preview",
+            dataset_id="local-dataset-001",
+            design_id="design_local_flux_playground",
+            axes=(TraceAxis(name="frequency", unit="GHz", length=51),),
+            preview_payload={
+                "kind": "sampled_series",
+                "points": [[4.8, 0.11], [5.0, 0.13], [5.2, 0.1]],
+            },
+            payload_ref=build_trace_payload_ref(
+                payload_role="dataset_primary",
+                store_key="datasets/local-dataset-001/designs/design_local_flux_playground/preview.zarr",
+                store_uri="trace_store/local/local-dataset-001/design_local_flux_playground/preview.zarr",
+                group_path="/traces/trace_local_flux_preview",
+                array_path="values",
+                dtype="float64",
+                shape=(51,),
+                chunk_shape=(51,),
+            ),
+            result_handles=(),
+        ),
         (
             "fluxonium-2025-031",
             "design_flux_scan_a",
@@ -1690,7 +1773,33 @@ def _seed_circuit_definitions() -> tuple[CircuitDefinitionRecord, ...]:
         ("C2", "2", "0", "C2")
     ]
 }"""
+    local_resonator_source = """{
+    "name": "LocalSpaceResonator",
+    "components": [
+        {"name": "R1", "default": 50.0, "unit": "Ohm"},
+        {"name": "C1", "default": 120.0, "unit": "fF"},
+        {"name": "L1", "default": 900.0, "unit": "pH"}
+    ],
+    "topology": [
+        ("P1", "1", "0", 1),
+        ("R1", "1", "0", "R1"),
+        ("C1", "1", "2", "C1"),
+        ("L1", "2", "0", "L1")
+    ]
+}"""
     return (
+        _build_circuit_definition_record(
+            definition_id=3,
+            workspace_id="local-space",
+            visibility_scope="local",
+            owner_user_id="local-operator",
+            owner_display_name="Local Operator",
+            name="LocalSpaceResonator",
+            created_at="2026-03-17T08:15:00Z",
+            updated_at="2026-03-17T08:15:00Z",
+            concurrency_token="etag_3_1",
+            source_text=local_resonator_source,
+        ),
         _build_circuit_definition_record(
             definition_id=18,
             workspace_id="ws-device-lab",

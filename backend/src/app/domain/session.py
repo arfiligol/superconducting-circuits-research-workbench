@@ -3,8 +3,9 @@ from typing import Literal
 
 from src.app.domain.datasets import DatasetLifecycleState, DatasetStatus, DatasetVisibilityScope
 
-AuthState = Literal["authenticated", "anonymous", "degraded"]
-AuthMode = Literal["jwt_refresh_cookie", "local_stub"]
+RuntimeMode = Literal["local", "online"]
+AuthState = Literal["authenticated", "anonymous", "degraded", "local_bypass"]
+AuthMode = Literal["jwt_refresh_cookie", "local_bypass"]
 AuthReason = Literal[
     "session_expired",
     "session_invalid",
@@ -13,8 +14,24 @@ AuthReason = Literal[
 ]
 PlatformRole = Literal["admin", "user"]
 WorkspaceRole = Literal["owner", "member", "viewer"]
-TaskScope = Literal["workspace", "owned"]
+TaskScope = Literal["local", "workspace", "owned"]
 DatasetResolution = Literal["preserved", "rebound", "cleared"]
+RuntimeAuthTransition = Literal[
+    "entered_local_bypass",
+    "online_auth_required",
+    "online_session_dropped",
+]
+RuntimeSwitchOutcome = Literal[
+    "entered_local",
+    "entered_online_auth_required",
+]
+ServerTargetValidationStatus = Literal[
+    "validated",
+    "target_validation_failed",
+    "target_unreachable",
+    "target_incompatible",
+    "online_target_rejected",
+]
 
 
 @dataclass(frozen=True)
@@ -52,13 +69,19 @@ class WorkspaceMembership:
 
 @dataclass(frozen=True)
 class SessionCapabilities:
+    can_switch_runtime_mode: bool
     can_switch_workspace: bool
     can_switch_dataset: bool
+    can_import_datasets: bool
+    can_export_datasets: bool
     can_invite_members: bool
     can_remove_members: bool
     can_transfer_workspace_owner: bool
     can_leave_workspace: bool
     can_submit_tasks: bool
+    can_cancel_local_tasks: bool
+    can_terminate_local_tasks: bool
+    can_retry_local_tasks: bool
     can_manage_workspace_tasks: bool
     can_cancel_own_tasks: bool
     can_cancel_workspace_tasks: bool
@@ -66,6 +89,7 @@ class SessionCapabilities:
     can_retry_own_tasks: bool
     can_retry_workspace_tasks: bool
     can_manage_definitions: bool
+    can_publish_definitions: bool
     can_manage_datasets: bool
     can_view_audit_logs: bool
 
@@ -80,9 +104,12 @@ class SessionAuth:
 @dataclass(frozen=True)
 class SessionState:
     session_id: str
+    runtime_mode: RuntimeMode
     auth_state: AuthState
     auth_mode: AuthMode
     user: SessionUser | None
+    server_target_origin: str | None
+    server_target_label: str | None
     workspace_id: str
     workspace_slug: str
     workspace_display_name: str
@@ -116,14 +143,39 @@ class WorkspaceContext:
 
 
 @dataclass(frozen=True)
+class ServerTargetSummary:
+    origin: str
+    label: str
+    is_active: bool
+    validation_status: ServerTargetValidationStatus
+    last_checked_at: str | None
+
+
+@dataclass(frozen=True)
+class SessionConnectionContext:
+    target: ServerTargetSummary | None
+
+
+@dataclass(frozen=True)
 class AppSession:
     session_id: str | None
+    runtime_mode: RuntimeMode
     auth: SessionAuth
     user: SessionUser | None
     memberships: tuple[WorkspaceMembership, ...]
     workspace: WorkspaceContext
     active_dataset: ActiveDatasetContext | None
     capabilities: SessionCapabilities
+    connection: SessionConnectionContext
+
+
+@dataclass(frozen=True)
+class RuntimeModeSwitchResult:
+    session: AppSession
+    outcome: RuntimeSwitchOutcome
+    auth_transition: RuntimeAuthTransition
+    session_reset: bool
+    detached_task_ids: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -145,3 +197,16 @@ class SessionRefreshResult:
     session: AppSession
     access_token: str
     refresh_token: str
+
+
+@dataclass(frozen=True)
+class ServerTargetValidationResult:
+    target: ServerTargetSummary
+    status: ServerTargetValidationStatus
+    message: str
+
+
+@dataclass(frozen=True)
+class ServerTargetListView:
+    targets: tuple[ServerTargetSummary, ...]
+    active_target_origin: str | None

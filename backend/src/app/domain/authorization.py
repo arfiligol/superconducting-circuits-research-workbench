@@ -7,6 +7,7 @@ from src.app.domain.session import PlatformRole, WorkspaceRole
 AuthorizationAction = Literal[
     "switch_workspace",
     "switch_dataset",
+    "switch_runtime_mode",
     "invite_member",
     "revoke_invite",
     "leave_workspace",
