@@ -795,7 +795,9 @@ describe("circuit schemdraw workspace source contracts", () => {
     expect(schemdrawViewerSource).toContain("Reset view");
     expect(schemdrawViewerSource).toContain("Drag to pan");
     expect(schemdrawViewerSource).toContain("Trackpad scroll pans, pinch zooms");
-    expect(schemdrawViewerSource).toContain("onWheel={handleWheel}");
+    expect(schemdrawViewerSource).toContain('addEventListener("wheel", handleNativeWheel, { passive: false })');
+    expect(schemdrawViewerSource).toContain("overscroll-contain touch-none");
+    expect(schemdrawViewerSource).toContain("event.stopPropagation()");
     expect(schemdrawViewerSource).toContain("dangerouslySetInnerHTML");
   });
 });

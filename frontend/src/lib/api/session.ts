@@ -126,11 +126,7 @@ type WorkspaceSwitchResponseShape = SessionResponseShape &
 type RuntimeModeSwitchResponseShape = Readonly<{
   runtime_mode: RuntimeMode;
   connection?: SessionConnectionResponseShape;
-  auth_transition:
-    | "local_ready"
-    | "online_auth_required"
-    | "online_target_rejected"
-    | "context_cleared";
+  auth_transition: RuntimeAuthTransition;
   session_reset: boolean;
   workspace:
     | Readonly<{
@@ -320,11 +316,7 @@ export type RuntimeModeSwitchInput = Readonly<{
 export type RuntimeModeSwitchResult = Readonly<{
   runtimeMode: RuntimeMode;
   connection: SessionConnectionSummary;
-  authTransition:
-    | "local_ready"
-    | "online_auth_required"
-    | "online_target_rejected"
-    | "context_cleared";
+  authTransition: RuntimeAuthTransition;
   sessionReset: boolean;
   workspaceName: string | null;
   workspaceRole: SessionRole | null;
@@ -396,6 +388,10 @@ export type SessionLoginCredentials = Readonly<{
 
 export type SessionLoginResult = SessionSnapshot;
 export type SessionLogoutResult = SessionSnapshot;
+export type RuntimeAuthTransition =
+  | "entered_local_bypass"
+  | "online_auth_required"
+  | "online_session_dropped";
 
 export const appSessionKey = "/api/backend/session";
 export const workspaceInvitationsKey = `${appSessionKey}/workspace-invitations`;

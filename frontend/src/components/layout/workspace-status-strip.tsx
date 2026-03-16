@@ -40,7 +40,7 @@ import { ShellNotice } from "@/components/layout/shell-notice";
 import { cx } from "@/features/shared/components/surface-kit";
 import { datasetCatalogKey, listDatasetCatalog } from "@/lib/api/datasets";
 import { useActiveDataset, useActiveTask, useAppSession, useDeveloperMode, useTaskQueue } from "@/lib/app-state";
-import type { RuntimeMode } from "@/lib/api/session";
+import type { RuntimeAuthTransition, RuntimeMode } from "@/lib/api/session";
 
 type WorkspaceStatusStripProps = Readonly<{
   open: boolean;
@@ -248,7 +248,7 @@ function isRetryableError(error: Error | undefined): boolean {
 
 function buildRuntimeModeNotice(input: Readonly<{
   runtimeMode: RuntimeMode;
-  authTransition: "local_ready" | "online_auth_required" | "online_target_rejected" | "context_cleared";
+  authTransition: RuntimeAuthTransition;
   targetLabel: string;
   detachedTaskIds: readonly string[];
 }>) {
@@ -257,7 +257,7 @@ function buildRuntimeModeNotice(input: Readonly<{
       ? ` ${input.detachedTaskIds.length} attached task reference${input.detachedTaskIds.length === 1 ? "" : "s"} reset.`
       : "";
 
-  if (input.runtimeMode === "local") {
+  if (input.authTransition === "entered_local_bypass") {
     return {
       tone: "success" as const,
       message: `Switched to Local Mode. Local Space is now the active shell context.${detachedSuffix}`,
@@ -271,10 +271,10 @@ function buildRuntimeModeNotice(input: Readonly<{
     };
   }
 
-  if (input.authTransition === "online_target_rejected") {
+  if (input.authTransition === "online_session_dropped") {
     return {
       tone: "warning" as const,
-      message: `The server target ${input.targetLabel} could not be validated. The current runtime mode was kept.`,
+      message: `Connected to ${input.targetLabel}, but the previous online session was dropped. Sign in again to rebuild workspace context.${detachedSuffix}`,
     };
   }
 

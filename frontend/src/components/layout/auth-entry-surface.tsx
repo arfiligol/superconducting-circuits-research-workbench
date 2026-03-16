@@ -164,13 +164,24 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
         mode: "online",
         serverOrigin: targetInput.trim() || null,
       });
-      if (outcome.result.authTransition === "online_auth_required") {
+      if (
+        outcome.result.authTransition === "online_auth_required" ||
+        outcome.result.authTransition === "online_session_dropped"
+      ) {
         setMutationNotice({
-          tone: "info",
-          title: "Online target ready",
-          description: `Connected to ${((outcome.result.connection.label ??
-            outcome.result.connection.origin ??
-            targetInput.trim()) || "the selected target")}. Sign in to establish a fresh online session.`,
+          tone: outcome.result.authTransition === "online_session_dropped" ? "warning" : "info",
+          title:
+            outcome.result.authTransition === "online_session_dropped"
+              ? "Online session reset"
+              : "Online target ready",
+          description:
+            outcome.result.authTransition === "online_session_dropped"
+              ? `Connected to ${((outcome.result.connection.label ??
+                  outcome.result.connection.origin ??
+                  targetInput.trim()) || "the selected target")}, but the previous online session was dropped. Sign in again to rebuild workspace context.`
+              : `Connected to ${((outcome.result.connection.label ??
+                  outcome.result.connection.origin ??
+                  targetInput.trim()) || "the selected target")}. Sign in to establish a fresh online session.`,
         });
         return;
       }

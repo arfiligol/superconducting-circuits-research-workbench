@@ -913,6 +913,62 @@ describe("session contract mapping", () => {
     });
   });
 
+  it("accepts the live backend runtime transition enums without frontend-only fallbacks", () => {
+    expect(
+      mapRuntimeModeSwitchResponse({
+        runtime_mode: "local",
+        connection: {
+          target: "local",
+        },
+        auth_transition: "entered_local_bypass",
+        session_reset: true,
+        workspace: {
+          id: null,
+          name: null,
+          role: null,
+        },
+        active_dataset: {
+          id: null,
+          name: null,
+        },
+        capabilities: {
+          can_switch_runtime_mode: true,
+        },
+        detached_task_ids: [],
+      }).authTransition,
+    ).toBe("entered_local_bypass");
+
+    expect(
+      mapRuntimeModeSwitchResponse({
+        runtime_mode: "online",
+        connection: {
+          target: {
+            origin: "http://127.0.0.1:8000",
+            label: "Lab Cluster",
+            is_active: true,
+            validation_status: "validated",
+            last_checked_at: "2026-03-17T09:12:00Z",
+          },
+        },
+        auth_transition: "online_session_dropped",
+        session_reset: true,
+        workspace: {
+          id: null,
+          name: null,
+          role: null,
+        },
+        active_dataset: {
+          id: null,
+          name: null,
+        },
+        capabilities: {
+          can_switch_runtime_mode: true,
+        },
+        detached_task_ids: ["task_17"],
+      }).authTransition,
+    ).toBe("online_session_dropped");
+  });
+
   it("uses PATCH and runtime_mode for runtime-mode mutation requests", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

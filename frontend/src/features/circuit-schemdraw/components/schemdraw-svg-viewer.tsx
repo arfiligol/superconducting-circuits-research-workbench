@@ -8,7 +8,6 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
 } from "react";
 import { Maximize2, Move, RefreshCcw, ZoomIn, ZoomOut } from "lucide-react";
 
@@ -234,7 +233,7 @@ export function SchemdrawSvgViewer({
     setDragState(null);
   }
 
-  function handleWheel(event: ReactWheelEvent<HTMLDivElement>) {
+  function handleWheelGesture(event: Pick<WheelEvent, "ctrlKey" | "deltaX" | "deltaY" | "clientX" | "clientY" | "preventDefault" | "stopPropagation">) {
     const node = viewportRef.current;
     if (!node) {
       return;
@@ -242,6 +241,7 @@ export function SchemdrawSvgViewer({
 
     if (event.ctrlKey) {
       event.preventDefault();
+      event.stopPropagation();
       const rect = node.getBoundingClientRect();
       const nextZoom = zoomViewerWheel(zoom, event.deltaY);
       applyZoomAtPoint(nextZoom, event.clientX - rect.left, event.clientY - rect.top);
@@ -253,8 +253,25 @@ export function SchemdrawSvgViewer({
     }
 
     event.preventDefault();
+    event.stopPropagation();
     setPan((currentPan) => panByWheelDelta(currentPan, event.deltaX, event.deltaY));
   }
+
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (!node) {
+      return;
+    }
+
+    function handleNativeWheel(event: WheelEvent) {
+      handleWheelGesture(event);
+    }
+
+    node.addEventListener("wheel", handleNativeWheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", handleNativeWheel);
+    };
+  }, [fitTransform, zoom]);
 
   const effectiveScale = fitTransform.scale * zoom;
   const transformStyle = {
@@ -324,9 +341,8 @@ export function SchemdrawSvgViewer({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
-        onWheel={handleWheel}
         className={cx(
-          "relative min-h-[520px] overflow-hidden bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.18),transparent_42%),linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          "relative min-h-[520px] overflow-hidden overscroll-contain touch-none bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.18),transparent_42%),linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
           dragState ? "cursor-grabbing" : "cursor-grab",
         )}
       >

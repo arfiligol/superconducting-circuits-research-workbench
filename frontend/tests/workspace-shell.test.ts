@@ -144,6 +144,16 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("switchRuntimeMode(");
   });
 
+  it("adopts the live backend runtime transition enums in shell notices and auth entry flows", () => {
+    expect(statusStripSource).toContain("entered_local_bypass");
+    expect(statusStripSource).toContain("online_auth_required");
+    expect(statusStripSource).toContain("online_session_dropped");
+    expect(statusStripSource).not.toContain("local_ready");
+    expect(statusStripSource).not.toContain("online_target_rejected");
+    expect(statusStripSource).not.toContain("context_cleared");
+    expect(authEntrySource).toContain("online_session_dropped");
+  });
+
   it("turns the global context cards into an obvious section switcher", () => {
     expect(statusStripSource).toContain("type ContextSectionId");
     expect(statusStripSource).toContain("ContextSectionCard");
