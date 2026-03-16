@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -12,6 +15,7 @@ import { resolveSearchFromParams, resolveUrlSnapshot } from "../src/lib/app-stat
 import {
   mapLoginResponse,
   mapLogoutResponse,
+  mapRuntimeModeSwitchResponse,
   mapSessionResponse,
   mapWorkspaceSwitchResponse,
   normalizeSessionAuthMode,
@@ -22,6 +26,19 @@ import {
   resolveTaskQueueRefreshInterval,
   summarizeTaskQueue,
 } from "../src/lib/app-state/task-queue-store";
+
+const appSessionSource = readFileSync(
+  fileURLToPath(new URL("../src/lib/app-state/app-session.tsx", import.meta.url)),
+  "utf8",
+);
+const taskQueueSource = readFileSync(
+  fileURLToPath(new URL("../src/lib/app-state/task-queue.tsx", import.meta.url)),
+  "utf8",
+);
+const activeTaskSource = readFileSync(
+  fileURLToPath(new URL("../src/lib/app-state/active-task.tsx", import.meta.url)),
+  "utf8",
+);
 
 describe("active dataset state helpers", () => {
   it("parses dataset ids from URL search params", () => {
@@ -193,10 +210,16 @@ describe("session contract mapping", () => {
       }),
     ).toEqual({
       sessionId: "session-dev-001",
+      runtimeMode: "online",
+      connection: {
+        target: null,
+        label: null,
+      },
       authState: "authenticated",
       authMode: "local_stub",
       authReason: null,
       capabilities: {
+        canSwitchRuntimeMode: false,
         canSwitchWorkspace: false,
         canSwitchDataset: true,
         canInviteMembers: true,
@@ -564,10 +587,16 @@ describe("session contract mapping", () => {
     ).toEqual({
       session: {
         sessionId: "session-dev-001",
+        runtimeMode: "online",
+        connection: {
+          target: null,
+          label: null,
+        },
         authState: "authenticated",
         authMode: "local_stub",
         authReason: null,
         capabilities: {
+          canSwitchRuntimeMode: false,
           canSwitchWorkspace: true,
           canSwitchDataset: true,
           canInviteMembers: false,
@@ -673,6 +702,69 @@ describe("session contract mapping", () => {
       },
       activeDatasetResolution: "rebound",
       detachedTaskIds: ["task_402"],
+    });
+  });
+
+  it("maps runtime-mode switch responses through the shared backend mutation contract", () => {
+    expect(
+      mapRuntimeModeSwitchResponse({
+        runtime_mode: "online",
+        connection: {
+          target: "http://127.0.0.1:8000",
+          label: "Local server",
+        },
+        auth_transition: "online_auth_required",
+        session_reset: true,
+        workspace: {
+          id: null,
+          name: null,
+          role: null,
+        },
+        active_dataset: {
+          id: null,
+          name: null,
+        },
+        capabilities: {
+          can_switch_runtime_mode: true,
+          can_switch_workspace: false,
+          can_switch_dataset: false,
+          can_manage_definitions: false,
+          can_manage_datasets: false,
+          can_submit_tasks: false,
+        },
+        detached_task_ids: ["task_404"],
+      }),
+    ).toEqual({
+      runtimeMode: "online",
+      connection: {
+        target: "http://127.0.0.1:8000",
+        label: "Local server",
+      },
+      authTransition: "online_auth_required",
+      sessionReset: true,
+      workspaceName: null,
+      workspaceRole: null,
+      activeDatasetName: null,
+      capabilities: {
+        canSwitchRuntimeMode: true,
+        canSwitchWorkspace: false,
+        canSwitchDataset: false,
+        canInviteMembers: false,
+        canRemoveMembers: false,
+        canTransferWorkspaceOwner: false,
+        canLeaveWorkspace: false,
+        canSubmitTasks: false,
+        canManageWorkspaceTasks: false,
+        canCancelOwnTasks: false,
+        canCancelWorkspaceTasks: false,
+        canTerminateWorkspaceTasks: false,
+        canRetryOwnTasks: false,
+        canRetryWorkspaceTasks: false,
+        canManageDefinitions: false,
+        canManageDatasets: false,
+        canViewAuditLogs: false,
+      },
+      detachedTaskIds: ["task_404"],
     });
   });
 });
@@ -840,5 +932,20 @@ describe("task queue store", () => {
     expect(resolveTaskQueueRefreshInterval(settledTasks)).toBe(0);
     expect(resolveLatestTask(activeTasks)?.taskId).toBe(21);
     expect(resolveLatestTask(settledTasks)?.taskId).toBe(22);
+  });
+});
+
+describe("runtime-mode app-state source contracts", () => {
+  it("routes runtime-mode switching through the shared backend session owner", () => {
+    expect(appSessionSource).toContain("switchRuntimeMode as switchRuntimeModeApi");
+    expect(appSessionSource).toContain("const result = await switchRuntimeModeApi({");
+    expect(appSessionSource).toContain("const nextSession = await getSession()");
+  });
+
+  it("isolates queue and attached-task authority by runtime-mode context keys", () => {
+    expect(taskQueueSource).toContain("const contextKey = `${session?.runtimeMode ?? \"online\"}");
+    expect(taskQueueSource).toContain("[tasksListKey, contextKey]");
+    expect(activeTaskSource).toContain("[taskDetailKey(resolvedTaskId), contextKey]");
+    expect(activeTaskSource).toContain("routeTaskStillVisible");
   });
 });

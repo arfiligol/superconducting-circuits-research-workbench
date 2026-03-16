@@ -7,7 +7,10 @@ import { useMemo, useRef, useState } from "react";
 import { WorkspaceAccountPanel } from "@/components/layout/workspace-account-panel";
 import { WorkspaceStatusStrip } from "@/components/layout/workspace-status-strip";
 import {
+  resolveRuntimeModeLabel,
   resolveShellAuthSummary,
+  resolveShellConnectionTargetLabel,
+  resolveSessionWorkspaceLabel,
   resolveShellUserInitials,
 } from "@/components/layout/workspace-shell-contract";
 import { cx } from "@/features/shared/components/surface-kit";
@@ -27,10 +30,18 @@ export function WorkspaceHeader() {
   });
   const initials = resolveShellUserInitials(authSummary.triggerName);
   const accountTriggerStatus = useMemo(() => {
+    if (session?.runtimeMode === "local" || authSummary.state === "local_bypass") {
+      return {
+        label: session?.user?.displayName ?? "Local operator",
+        detail: resolveSessionWorkspaceLabel(session),
+        tone: "info" as const,
+      };
+    }
+
     if (authSummary.state === "authenticated") {
       return {
         label: session?.user?.displayName ?? authSummary.triggerName,
-        detail: session?.workspace.displayName ?? "Workspace pending",
+        detail: resolveShellConnectionTargetLabel(session),
         tone: "success" as const,
       };
     }
@@ -45,14 +56,14 @@ export function WorkspaceHeader() {
 
     if (authSummary.state === "anonymous") {
       return {
-        label: "Anonymous session",
+        label: resolveRuntimeModeLabel(session?.runtimeMode),
         detail: "Sign in",
         tone: "warning" as const,
       };
     }
 
     return {
-      label: "Session warning",
+      label: "Connection warning",
       detail: "Recover",
       tone: "error" as const,
     };

@@ -1,8 +1,19 @@
+"use client";
+
 import { apiRequest } from "@/lib/api/client";
 
-export type SessionAuthState = "authenticated" | "anonymous" | "degraded";
-type SessionAuthModeResponseShape = "local_stub" | "development_stub" | "jwt_cookie";
-export type SessionAuthMode = "local_stub" | "jwt_cookie";
+export type RuntimeMode = "local" | "online";
+export type SessionAuthState = "local_bypass" | "authenticated" | "anonymous" | "degraded";
+type SessionAuthModeResponseShape =
+  | "local_stub"
+  | "development_stub"
+  | "local_bypass"
+  | "jwt_cookie"
+  | "jwt_refresh_cookie";
+export type SessionAuthMode = "local_stub" | "local_bypass" | "jwt_cookie" | "jwt_refresh_cookie";
+export type SessionDefaultTaskScope = "local" | "workspace" | "owned";
+export type SessionVisibilityScope = "local" | "private" | "workspace";
+export type SessionRole = "owner" | "member" | "viewer";
 
 type AllowedActionsResponseShape = Readonly<{
   switch_to: boolean;
@@ -19,19 +30,46 @@ type AllowedActionsResponseShape = Readonly<{
 
 type MembershipResponseShape = Readonly<{
   id: string;
-  slug: string;
-  name: string;
-  role: "owner" | "member" | "viewer";
-  default_task_scope: "workspace" | "owned";
+  slug: string | null;
+  name: string | null;
+  role: SessionRole | null;
+  default_task_scope: SessionDefaultTaskScope | null;
   is_active: boolean;
   allowed_actions: AllowedActionsResponseShape;
 }>;
 
+type SessionCapabilitiesResponseShape = Readonly<{
+  can_switch_runtime_mode?: boolean;
+  can_switch_workspace: boolean;
+  can_switch_dataset: boolean;
+  can_invite_members: boolean;
+  can_remove_members: boolean;
+  can_transfer_workspace_owner: boolean;
+  can_leave_workspace: boolean;
+  can_submit_tasks: boolean;
+  can_manage_workspace_tasks: boolean;
+  can_cancel_own_tasks: boolean;
+  can_cancel_workspace_tasks: boolean;
+  can_terminate_workspace_tasks: boolean;
+  can_retry_own_tasks: boolean;
+  can_retry_workspace_tasks: boolean;
+  can_manage_definitions: boolean;
+  can_manage_datasets: boolean;
+  can_view_audit_logs: boolean;
+}>;
+
+type SessionConnectionResponseShape = Readonly<{
+  target?: string | null;
+  label?: string | null;
+}> | null;
+
 type SessionResponseShape = Readonly<{
-  session_id: string;
+  session_id: string | null;
+  runtime_mode?: RuntimeMode | null;
+  connection?: SessionConnectionResponseShape;
   auth: Readonly<{
     state: SessionAuthState;
-    mode: SessionAuthModeResponseShape;
+    mode?: SessionAuthModeResponseShape | null;
     reason?: string | null;
   }>;
   user:
@@ -43,11 +81,11 @@ type SessionResponseShape = Readonly<{
       }>
     | null;
   workspace: Readonly<{
-    id: string;
-    slug: string;
-    name: string;
-    role: "owner" | "member" | "viewer";
-    default_task_scope: "workspace" | "owned";
+    id: string | null;
+    slug: string | null;
+    name: string | null;
+    role: SessionRole | null;
+    default_task_scope: SessionDefaultTaskScope | null;
     allowed_actions: AllowedActionsResponseShape;
     memberships?: ReadonlyArray<MembershipResponseShape>;
   }>;
@@ -58,31 +96,14 @@ type SessionResponseShape = Readonly<{
         name: string;
         family: string;
         status: "Ready" | "Queued" | "Review";
-        owner_user_id: string;
-        owner_display_name: string;
-        workspace_id: string;
-        visibility_scope: "private" | "workspace";
+        owner_user_id: string | null;
+        owner_display_name: string | null;
+        workspace_id: string | null;
+        visibility_scope: SessionVisibilityScope;
         lifecycle_state: "active" | "archived" | "deleted";
       }>
     | null;
-  capabilities: Readonly<{
-    can_switch_workspace: boolean;
-    can_switch_dataset: boolean;
-    can_invite_members: boolean;
-    can_remove_members: boolean;
-    can_transfer_workspace_owner: boolean;
-    can_leave_workspace: boolean;
-    can_submit_tasks: boolean;
-    can_manage_workspace_tasks: boolean;
-    can_cancel_own_tasks: boolean;
-    can_cancel_workspace_tasks: boolean;
-    can_terminate_workspace_tasks: boolean;
-    can_retry_own_tasks: boolean;
-    can_retry_workspace_tasks: boolean;
-    can_manage_definitions: boolean;
-    can_manage_datasets: boolean;
-    can_view_audit_logs: boolean;
-  }>;
+  capabilities: SessionCapabilitiesResponseShape;
 }>;
 
 type WorkspaceSwitchResponseShape = SessionResponseShape &
@@ -90,6 +111,32 @@ type WorkspaceSwitchResponseShape = SessionResponseShape &
     active_dataset_resolution: "preserved" | "rebound" | "cleared";
     detached_task_ids: readonly string[];
   }>;
+
+type RuntimeModeSwitchResponseShape = Readonly<{
+  runtime_mode: RuntimeMode;
+  connection?: SessionConnectionResponseShape;
+  auth_transition:
+    | "local_ready"
+    | "online_auth_required"
+    | "online_target_rejected"
+    | "context_cleared";
+  session_reset: boolean;
+  workspace:
+    | Readonly<{
+        id: string | null;
+        name: string | null;
+        role: SessionRole | null;
+      }>
+    | null;
+  active_dataset:
+    | Readonly<{
+        id: string | null;
+        name: string | null;
+      }>
+    | null;
+  capabilities?: Partial<SessionCapabilitiesResponseShape>;
+  detached_task_ids: readonly string[];
+}>;
 
 type WorkspaceInvitationResponseShape = Readonly<{
   invite_id: string;
@@ -154,6 +201,7 @@ export type SessionAllowedActions = Readonly<{
 }>;
 
 export type SessionCapabilities = Readonly<{
+  canSwitchRuntimeMode: boolean;
   canSwitchWorkspace: boolean;
   canSwitchDataset: boolean;
   canInviteMembers: boolean;
@@ -174,16 +222,23 @@ export type SessionCapabilities = Readonly<{
 
 export type SessionMembership = Readonly<{
   workspaceId: string;
-  slug: string;
-  displayName: string;
-  role: "owner" | "member" | "viewer";
-  defaultTaskScope: "workspace" | "owned";
+  slug: string | null;
+  displayName: string | null;
+  role: SessionRole | null;
+  defaultTaskScope: SessionDefaultTaskScope | null;
   isActive: boolean;
   allowedActions: SessionAllowedActions;
 }>;
 
+export type SessionConnectionSummary = Readonly<{
+  target: string | null;
+  label: string | null;
+}>;
+
 export type SessionSnapshot = Readonly<{
-  sessionId: string;
+  sessionId: string | null;
+  runtimeMode: RuntimeMode;
+  connection: SessionConnectionSummary;
   authState: SessionAuthState;
   authMode: SessionAuthMode;
   authReason: string | null;
@@ -204,11 +259,11 @@ export type SessionSnapshot = Readonly<{
       }>
     | null;
   workspace: Readonly<{
-    workspaceId: string;
-    slug: string;
-    displayName: string;
-    role: "owner" | "member" | "viewer";
-    defaultTaskScope: "workspace" | "owned";
+    workspaceId: string | null;
+    slug: string | null;
+    displayName: string | null;
+    role: SessionRole | null;
+    defaultTaskScope: SessionDefaultTaskScope | null;
     allowedActions: SessionAllowedActions;
   }>;
   memberships: ReadonlyArray<SessionMembership>;
@@ -218,10 +273,10 @@ export type SessionSnapshot = Readonly<{
         name: string;
         family: string;
         status: "Ready" | "Queued" | "Review";
-        ownerUserId: string;
-        owner: string;
-        workspaceId: string;
-        visibilityScope: "private" | "workspace";
+        ownerUserId: string | null;
+        owner: string | null;
+        workspaceId: string | null;
+        visibilityScope: SessionVisibilityScope;
         lifecycleState: "active" | "archived" | "deleted";
       }>
     | null;
@@ -230,6 +285,27 @@ export type SessionSnapshot = Readonly<{
 export type WorkspaceSwitchResult = Readonly<{
   session: SessionSnapshot;
   activeDatasetResolution: "preserved" | "rebound" | "cleared";
+  detachedTaskIds: readonly string[];
+}>;
+
+export type RuntimeModeSwitchInput = Readonly<{
+  mode: RuntimeMode;
+  serverOrigin?: string | null;
+}>;
+
+export type RuntimeModeSwitchResult = Readonly<{
+  runtimeMode: RuntimeMode;
+  connection: SessionConnectionSummary;
+  authTransition:
+    | "local_ready"
+    | "online_auth_required"
+    | "online_target_rejected"
+    | "context_cleared";
+  sessionReset: boolean;
+  workspaceName: string | null;
+  workspaceRole: SessionRole | null;
+  activeDatasetName: string | null;
+  capabilities: Partial<SessionCapabilities>;
   detachedTaskIds: readonly string[];
 }>;
 
@@ -304,8 +380,46 @@ export const workspaceMembershipsKey = `${appSessionKey}/workspace-memberships`;
 const authLoginPath = `${appSessionKey}/login`;
 const authLogoutPath = `${appSessionKey}/logout`;
 const authRefreshPath = `${appSessionKey}/refresh`;
+const runtimeModePath = `${appSessionKey}/runtime-mode`;
 
-function mapAllowedActions(payload: AllowedActionsResponseShape): SessionAllowedActions {
+const defaultAllowedActions: SessionAllowedActions = {
+  switchTo: false,
+  activateDataset: false,
+  inviteMembers: false,
+  removeMembers: false,
+  transferOwner: false,
+  leaveWorkspace: false,
+  viewAuditLogs: false,
+  manageDefinitions: false,
+  manageDatasets: false,
+  manageTasks: false,
+};
+
+const defaultCapabilities: SessionCapabilities = {
+  canSwitchRuntimeMode: false,
+  canSwitchWorkspace: false,
+  canSwitchDataset: false,
+  canInviteMembers: false,
+  canRemoveMembers: false,
+  canTransferWorkspaceOwner: false,
+  canLeaveWorkspace: false,
+  canSubmitTasks: false,
+  canManageWorkspaceTasks: false,
+  canCancelOwnTasks: false,
+  canCancelWorkspaceTasks: false,
+  canTerminateWorkspaceTasks: false,
+  canRetryOwnTasks: false,
+  canRetryWorkspaceTasks: false,
+  canManageDefinitions: false,
+  canManageDatasets: false,
+  canViewAuditLogs: false,
+};
+
+function mapAllowedActions(payload?: AllowedActionsResponseShape | null): SessionAllowedActions {
+  if (!payload) {
+    return defaultAllowedActions;
+  }
+
   return {
     switchTo: payload.switch_to,
     activateDataset: payload.activate_dataset,
@@ -320,6 +434,30 @@ function mapAllowedActions(payload: AllowedActionsResponseShape): SessionAllowed
   };
 }
 
+function mapCapabilities(
+  payload?: Partial<SessionCapabilitiesResponseShape> | null,
+): SessionCapabilities {
+  return {
+    canSwitchRuntimeMode: payload?.can_switch_runtime_mode ?? false,
+    canSwitchWorkspace: payload?.can_switch_workspace ?? false,
+    canSwitchDataset: payload?.can_switch_dataset ?? false,
+    canInviteMembers: payload?.can_invite_members ?? false,
+    canRemoveMembers: payload?.can_remove_members ?? false,
+    canTransferWorkspaceOwner: payload?.can_transfer_workspace_owner ?? false,
+    canLeaveWorkspace: payload?.can_leave_workspace ?? false,
+    canSubmitTasks: payload?.can_submit_tasks ?? false,
+    canManageWorkspaceTasks: payload?.can_manage_workspace_tasks ?? false,
+    canCancelOwnTasks: payload?.can_cancel_own_tasks ?? false,
+    canCancelWorkspaceTasks: payload?.can_cancel_workspace_tasks ?? false,
+    canTerminateWorkspaceTasks: payload?.can_terminate_workspace_tasks ?? false,
+    canRetryOwnTasks: payload?.can_retry_own_tasks ?? false,
+    canRetryWorkspaceTasks: payload?.can_retry_workspace_tasks ?? false,
+    canManageDefinitions: payload?.can_manage_definitions ?? false,
+    canManageDatasets: payload?.can_manage_datasets ?? false,
+    canViewAuditLogs: payload?.can_view_audit_logs ?? false,
+  };
+}
+
 function mapMembership(payload: MembershipResponseShape): SessionMembership {
   return {
     workspaceId: payload.id,
@@ -329,6 +467,13 @@ function mapMembership(payload: MembershipResponseShape): SessionMembership {
     defaultTaskScope: payload.default_task_scope,
     isActive: payload.is_active,
     allowedActions: mapAllowedActions(payload.allowed_actions),
+  };
+}
+
+function mapConnection(payload?: SessionConnectionResponseShape): SessionConnectionSummary {
+  return {
+    target: payload?.target ?? null,
+    label: payload?.label ?? null,
   };
 }
 
@@ -361,33 +506,48 @@ function mapWorkspaceMembershipList(
   };
 }
 
-export function normalizeSessionAuthMode(mode: SessionAuthModeResponseShape): SessionAuthMode {
-  return mode === "development_stub" ? "local_stub" : mode;
+function resolveRuntimeMode(payload: SessionResponseShape): RuntimeMode {
+  if (payload.runtime_mode) {
+    return payload.runtime_mode;
+  }
+
+  if (payload.auth.state === "local_bypass") {
+    return "local";
+  }
+
+  if (payload.connection?.target === "local") {
+    return "local";
+  }
+
+  if (payload.workspace.name === "Local Space") {
+    return "local";
+  }
+
+  return "online";
+}
+
+export function normalizeSessionAuthMode(
+  mode: SessionAuthModeResponseShape | null | undefined,
+): SessionAuthMode {
+  if (mode === "development_stub" || mode === "local_stub") {
+    return "local_stub";
+  }
+
+  if (mode === "jwt_cookie" || mode === "jwt_refresh_cookie") {
+    return mode;
+  }
+
+  return "local_bypass";
 }
 
 export function mapSessionResponse(payload: SessionResponseShape): SessionSnapshot {
-  const capabilities: SessionCapabilities = {
-    canSwitchWorkspace: payload.capabilities.can_switch_workspace,
-    canSwitchDataset: payload.capabilities.can_switch_dataset,
-    canInviteMembers: payload.capabilities.can_invite_members,
-    canRemoveMembers: payload.capabilities.can_remove_members,
-    canTransferWorkspaceOwner: payload.capabilities.can_transfer_workspace_owner,
-    canLeaveWorkspace: payload.capabilities.can_leave_workspace,
-    canSubmitTasks: payload.capabilities.can_submit_tasks,
-    canManageWorkspaceTasks: payload.capabilities.can_manage_workspace_tasks,
-    canCancelOwnTasks: payload.capabilities.can_cancel_own_tasks,
-    canCancelWorkspaceTasks: payload.capabilities.can_cancel_workspace_tasks,
-    canTerminateWorkspaceTasks: payload.capabilities.can_terminate_workspace_tasks,
-    canRetryOwnTasks: payload.capabilities.can_retry_own_tasks,
-    canRetryWorkspaceTasks: payload.capabilities.can_retry_workspace_tasks,
-    canManageDefinitions: payload.capabilities.can_manage_definitions,
-    canManageDatasets: payload.capabilities.can_manage_datasets,
-    canViewAuditLogs: payload.capabilities.can_view_audit_logs,
-  };
+  const capabilities = mapCapabilities(payload.capabilities);
   const memberships = payload.workspace.memberships ?? payload.memberships ?? [];
 
   return {
-    sessionId: payload.session_id,
+    sessionId: payload.session_id ?? null,
+    runtimeMode: resolveRuntimeMode(payload),
+    connection: mapConnection(payload.connection),
     authState: payload.auth.state,
     authMode: normalizeSessionAuthMode(payload.auth.mode),
     authReason: payload.auth.reason ?? null,
@@ -438,6 +598,22 @@ export function mapWorkspaceSwitchResponse(
   return {
     session: mapSessionResponse(payload),
     activeDatasetResolution: payload.active_dataset_resolution,
+    detachedTaskIds: [...payload.detached_task_ids],
+  };
+}
+
+export function mapRuntimeModeSwitchResponse(
+  payload: RuntimeModeSwitchResponseShape,
+): RuntimeModeSwitchResult {
+  return {
+    runtimeMode: payload.runtime_mode,
+    connection: mapConnection(payload.connection),
+    authTransition: payload.auth_transition,
+    sessionReset: payload.session_reset,
+    workspaceName: payload.workspace?.name ?? null,
+    workspaceRole: payload.workspace?.role ?? null,
+    activeDatasetName: payload.active_dataset?.name ?? null,
+    capabilities: mapCapabilities(payload.capabilities ?? null),
     detachedTaskIds: [...payload.detached_task_ids],
   };
 }
@@ -535,6 +711,18 @@ export async function patchActiveDataset(datasetId: string | null) {
   });
 
   return mapSessionResponse(response);
+}
+
+export async function switchRuntimeMode(input: RuntimeModeSwitchInput) {
+  const response = await apiRequest<RuntimeModeSwitchResponseShape>(runtimeModePath, {
+    method: "POST",
+    body: {
+      mode: input.mode,
+      server_origin: input.serverOrigin ?? null,
+    },
+  });
+
+  return mapRuntimeModeSwitchResponse(response);
 }
 
 export async function listWorkspaceInvitations(workspaceId?: string | null) {

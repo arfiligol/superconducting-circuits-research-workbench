@@ -353,6 +353,75 @@ describe("circuit definition action helpers", () => {
     });
   });
 
+  it("keeps publish online-only for local definitions even when other actions remain available", () => {
+    expect(
+      summarizeCatalogDefinitionActionState({
+        ...persistedDefinition,
+        visibility_scope: "local",
+        allowed_actions: {
+          update: true,
+          delete: true,
+          publish: true,
+          clone: true,
+        },
+      }),
+    ).toMatchObject({
+      publish: {
+        enabled: false,
+        reason:
+          "Publish stays online-only. Local definitions must move through an explicit upload or import flow.",
+      },
+      clone: {
+        enabled: true,
+      },
+    });
+
+    expect(
+      summarizeEditorDefinitionActionState({
+        selectedDefinitionId: 18,
+        activeDefinition: {
+          ...persistedDefinition,
+          visibility_scope: "local",
+        },
+        isDirty: false,
+        isMutationPending: false,
+        isNavigating: false,
+        hasBlockingLocalDiagnostics: false,
+        canManageDefinitions: true,
+        runtimeMode: "local",
+      }),
+    ).toMatchObject({
+      publish: {
+        enabled: false,
+        reason:
+          "Publish stays online-only. Local definitions must move through an explicit upload or import flow.",
+      },
+    });
+  });
+
+  it("keeps draft persistence gated by backend definition capability instead of local-mode assumptions", () => {
+    expect(
+      summarizeEditorDefinitionActionState({
+        selectedDefinitionId: "new",
+        activeDefinition: undefined,
+        isDirty: true,
+        isMutationPending: false,
+        isNavigating: false,
+        hasBlockingLocalDiagnostics: false,
+        canManageDefinitions: false,
+        runtimeMode: "local",
+      }),
+    ).toMatchObject({
+      save: {
+        enabled: false,
+        reason: "Persisting this draft is blocked by backend definition authority.",
+      },
+      format: {
+        enabled: true,
+      },
+    });
+  });
+
   it("keeps save/publish/clone/delete states distinct from format and draft state", () => {
     expect(
       summarizeEditorDefinitionActionState({
@@ -362,6 +431,8 @@ describe("circuit definition action helpers", () => {
         isMutationPending: false,
         isNavigating: false,
         hasBlockingLocalDiagnostics: false,
+        canManageDefinitions: true,
+        runtimeMode: "online",
       }),
     ).toMatchObject({
       format: {
@@ -391,6 +462,8 @@ describe("circuit definition action helpers", () => {
         isMutationPending: false,
         isNavigating: false,
         hasBlockingLocalDiagnostics: false,
+        canManageDefinitions: true,
+        runtimeMode: "online",
       }),
     ).toMatchObject({
       save: {

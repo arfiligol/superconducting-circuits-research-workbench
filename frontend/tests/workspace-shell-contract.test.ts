@@ -13,6 +13,26 @@ import {
   resolveWorkspaceSwitchNotice,
 } from "../src/components/layout/workspace-shell-contract";
 
+const collaborativeCapabilities = {
+  canSwitchRuntimeMode: true,
+  canSwitchWorkspace: true,
+  canSwitchDataset: true,
+  canInviteMembers: false,
+  canRemoveMembers: false,
+  canTransferWorkspaceOwner: false,
+  canLeaveWorkspace: false,
+  canSubmitTasks: true,
+  canManageWorkspaceTasks: false,
+  canCancelOwnTasks: true,
+  canCancelWorkspaceTasks: false,
+  canTerminateWorkspaceTasks: false,
+  canRetryOwnTasks: true,
+  canRetryWorkspaceTasks: false,
+  canManageDefinitions: true,
+  canManageDatasets: true,
+  canViewAuditLogs: false,
+} as const;
+
 describe("workspace shell contract helpers", () => {
   it("derives stable user initials for the header user menu", () => {
     expect(resolveShellUserInitials("Device Lab")).toBe("DL");
@@ -76,27 +96,15 @@ describe("workspace shell contract helpers", () => {
       resolveShellAuthSummary({
         session: {
           sessionId: "session-dev-001",
+          runtimeMode: "online",
+          connection: {
+            target: "https://lab.example.com",
+            label: "Lab Cluster",
+          },
           authState: "authenticated",
           authMode: "local_stub",
           authReason: null,
-          capabilities: {
-            canSwitchWorkspace: true,
-            canSwitchDataset: true,
-            canInviteMembers: false,
-            canRemoveMembers: false,
-            canTransferWorkspaceOwner: false,
-            canLeaveWorkspace: false,
-            canSubmitTasks: true,
-            canManageWorkspaceTasks: false,
-            canCancelOwnTasks: true,
-            canCancelWorkspaceTasks: false,
-            canTerminateWorkspaceTasks: false,
-            canRetryOwnTasks: true,
-            canRetryWorkspaceTasks: false,
-            canManageDefinitions: true,
-            canManageDatasets: true,
-            canViewAuditLogs: false,
-          },
+          capabilities: collaborativeCapabilities,
           canSubmitTasks: true,
           canManageDatasets: true,
           canManageDefinitions: true,
@@ -149,7 +157,60 @@ describe("workspace shell contract helpers", () => {
       }),
     ).toMatchObject({
       state: "degraded",
-      badgeLabel: "Degraded",
+      badgeLabel: "Connection warning",
+      primaryActionHref: "/login",
+    });
+
+    expect(
+      resolveShellAuthSummary({
+        session: {
+          sessionId: null,
+          runtimeMode: "local",
+          connection: {
+            target: "local",
+            label: "Local backend",
+          },
+          authState: "local_bypass",
+          authMode: "local_bypass",
+          authReason: null,
+          capabilities: collaborativeCapabilities,
+          canSubmitTasks: true,
+          canManageDatasets: true,
+          canManageDefinitions: true,
+          canInviteMembers: false,
+          canRemoveMembers: false,
+          canTransferWorkspaceOwner: false,
+          canLeaveWorkspace: false,
+          user: null,
+          workspace: {
+            workspaceId: null,
+            slug: null,
+            displayName: null,
+            role: null,
+            defaultTaskScope: "local",
+            allowedActions: {
+              switchTo: false,
+              activateDataset: true,
+              inviteMembers: false,
+              removeMembers: false,
+              transferOwner: false,
+              leaveWorkspace: false,
+              viewAuditLogs: false,
+              manageDefinitions: true,
+              manageDatasets: true,
+              manageTasks: true,
+            },
+          },
+          memberships: [],
+          activeDataset: null,
+        },
+        status: "ready",
+        error: undefined,
+      }),
+    ).toMatchObject({
+      state: "local_bypass",
+      badgeLabel: "Local Mode",
+      triggerDetail: "Local Space · No sign-in required",
       primaryActionHref: "/login",
     });
   });
@@ -169,6 +230,7 @@ describe("workspace shell contract helpers", () => {
           owner: "Device Lab",
           family: "Fluxonium",
           status: "Ready",
+          visibilityScope: "workspace",
           source: "session",
         },
         {
@@ -289,27 +351,15 @@ describe("workspace shell contract helpers", () => {
       resolveWorkspaceSwitchNotice({
         session: {
           sessionId: "session-dev-001",
+          runtimeMode: "online",
+          connection: {
+            target: "https://lab.example.com",
+            label: "Lab Cluster",
+          },
           authState: "authenticated",
           authMode: "local_stub",
           authReason: null,
-          capabilities: {
-            canSwitchWorkspace: true,
-            canSwitchDataset: true,
-            canInviteMembers: false,
-            canRemoveMembers: false,
-            canTransferWorkspaceOwner: false,
-            canLeaveWorkspace: false,
-            canSubmitTasks: true,
-            canManageWorkspaceTasks: false,
-            canCancelOwnTasks: true,
-            canCancelWorkspaceTasks: false,
-            canTerminateWorkspaceTasks: false,
-            canRetryOwnTasks: true,
-            canRetryWorkspaceTasks: false,
-            canManageDefinitions: true,
-            canManageDatasets: true,
-            canViewAuditLogs: false,
-          },
+          capabilities: collaborativeCapabilities,
           canSubmitTasks: true,
           canManageDatasets: true,
           canManageDefinitions: true,

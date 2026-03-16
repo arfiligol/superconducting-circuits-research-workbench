@@ -1,4 +1,4 @@
-export type DatasetVisibilityScope = "private" | "workspace";
+export type DatasetVisibilityScope = "local" | "private" | "workspace";
 export type DatasetLifecycleState = "active" | "archived" | "deleted";
 export type DatasetStatus = "Ready" | "Queued" | "Review";
 export type CompareReadiness = "ready" | "inspect_only" | "blocked";

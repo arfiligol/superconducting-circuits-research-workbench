@@ -7,7 +7,7 @@ export type CircuitDefinitionAllowedActions = Readonly<{
   clone: boolean;
 }>;
 
-export type CircuitDefinitionVisibilityScope = "private" | "workspace";
+export type CircuitDefinitionVisibilityScope = "local" | "private" | "workspace";
 export type CircuitDefinitionLifecycleState = "active" | "archived" | "deleted";
 export type CircuitDefinitionValidationStatus = "valid" | "warning" | "invalid" | "ok";
 export type CircuitDefinitionCompatibilityValidationStatus =

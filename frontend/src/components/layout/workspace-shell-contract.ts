@@ -1,8 +1,10 @@
 "use client";
 
 import type {
+  RuntimeMode,
   SessionAuthMode,
   SessionSnapshot,
+  SessionVisibilityScope,
   WorkspaceSwitchResult,
 } from "@/lib/api/session";
 import type { DatasetCatalogRow } from "@/features/data-browser/lib/contracts";
@@ -15,7 +17,12 @@ import type {
 import type { AppSessionStatus } from "@/lib/app-state/app-session";
 import { ApiError } from "@/lib/api/client";
 
-export type ShellAuthViewState = "loading" | "authenticated" | "anonymous" | "degraded";
+export type ShellAuthViewState =
+  | "loading"
+  | "local_bypass"
+  | "authenticated"
+  | "anonymous"
+  | "degraded";
 
 type ShellAuthSummaryInput = Readonly<{
   session: SessionSnapshot | undefined;
@@ -50,17 +57,61 @@ export function resolveShellAuthViewState({
     return "degraded";
   }
 
+  if (session?.authState === "local_bypass") {
+    return "local_bypass";
+  }
+
   return session?.authState ?? "anonymous";
 }
 
 export function resolveShellAuthModeLabel(mode: SessionAuthMode | undefined) {
   switch (mode) {
+    case "jwt_refresh_cookie":
+      return "JWT refresh cookie";
     case "jwt_cookie":
       return "JWT cookie";
+    case "local_bypass":
+      return "Local bypass";
     case "local_stub":
     default:
       return "Local stub";
   }
+}
+
+export function resolveRuntimeModeLabel(mode: RuntimeMode | undefined) {
+  return mode === "local" ? "Local Mode" : "Online Mode";
+}
+
+export function resolveSessionWorkspaceLabel(
+  input:
+    | SessionSnapshot
+    | Readonly<{
+        runtimeMode: RuntimeMode;
+        workspace: SessionSnapshot["workspace"] | undefined;
+      }>
+    | undefined,
+) {
+  if (input?.runtimeMode === "local") {
+    return "Local Space";
+  }
+
+  return input?.workspace?.displayName ?? "Workspace pending";
+}
+
+export function resolveShellConnectionTargetLabel(session: SessionSnapshot | undefined) {
+  if (!session || session.runtimeMode === "local") {
+    return "Local backend";
+  }
+
+  return session.connection.label ?? session.connection.target ?? "Server target pending";
+}
+
+export function resolveVisibilityScopeLabel(scope: SessionVisibilityScope | null | undefined) {
+  if (!scope) {
+    return "private";
+  }
+
+  return scope;
 }
 
 export function resolveShellAuthSummary(input: ShellAuthSummaryInput) {
@@ -81,16 +132,32 @@ export function resolveShellAuthSummary(input: ShellAuthSummaryInput) {
     } as const;
   }
 
+  if (state === "local_bypass") {
+    return {
+      state,
+      tone: "info",
+      badgeLabel: "Local Mode",
+      triggerName: input.session?.user?.displayName ?? "Local operator",
+      triggerDetail: `${resolveSessionWorkspaceLabel(input.session)} · No sign-in required`,
+      menuTitle: "Local Mode",
+      menuDescription:
+        "This shell is running in Local Mode. Local Space stays available without remote authentication.",
+      primaryActionHref: "/login",
+      primaryActionLabel: "Connect online",
+    } as const;
+  }
+
   if (state === "authenticated") {
     const displayName = input.session?.user?.displayName ?? "Authenticated User";
-    const workspaceName = input.session?.workspace.displayName ?? "Workspace pending";
+    const workspaceName = resolveSessionWorkspaceLabel(input.session);
+    const targetLabel = resolveShellConnectionTargetLabel(input.session);
 
     return {
       state,
       tone: "success",
       badgeLabel: "Authenticated",
       triggerName: displayName,
-      triggerDetail: `${workspaceName} · ${resolveShellAuthModeLabel(input.session?.authMode)}`,
+      triggerDetail: `${workspaceName} · ${targetLabel}`,
       menuTitle: "Authenticated session",
       menuDescription: input.session?.user?.email
         ? `${displayName} is signed in as ${input.session.user.email}.`
@@ -104,24 +171,24 @@ export function resolveShellAuthSummary(input: ShellAuthSummaryInput) {
     return {
       state,
       tone: "warning",
-      badgeLabel: "Anonymous",
-      triggerName: "Anonymous session",
-      triggerDetail: "No authenticated user is attached to the shell session",
-      menuTitle: "Anonymous session",
+      badgeLabel: "Auth required",
+      triggerName: "Online mode",
+      triggerDetail: "Sign in is required for the current server target",
+      menuTitle: "Online authentication required",
       menuDescription:
-        "This shell is running without an authenticated user. Use the login entry to establish a session before trusting workspace actions.",
+        "This shell is currently targeting online authority without an authenticated session.",
       primaryActionHref: "/login",
-      primaryActionLabel: "Log in",
+      primaryActionLabel: "Sign in",
     } as const;
   }
 
   return {
     state,
     tone: "error",
-    badgeLabel: "Degraded",
-    triggerName: "Session degraded",
+    badgeLabel: "Connection warning",
+    triggerName: "Online connection",
     triggerDetail: errorDetail ?? "The shell could not resolve a healthy session.",
-    menuTitle: "Degraded session",
+    menuTitle: "Online mode unavailable",
     menuDescription:
       errorDetail ??
       "The shell could not confirm the current session. Retry session resolution before trusting auth or workspace context.",
@@ -161,6 +228,7 @@ export function resolveShellTaskLabel(task: Pick<TaskSummary, "kind" | "executio
 
 export function resolveShellWorkerSummary(
   workspace: SessionSnapshot["workspace"] | undefined,
+  runtimeMode: RuntimeMode = "online",
   hasRuntimeSummary = false,
 ) {
   if (hasRuntimeSummary && workspace) {
@@ -174,11 +242,14 @@ export function resolveShellWorkerSummary(
 
   return {
     label: "Worker Summary",
-    value: "Awaiting Authority",
+    value: runtimeMode === "local" ? "Local processors" : "Awaiting Authority",
     detail: workspace
-      ? `${workspace.displayName} has no runtime summary surface yet.`
+      ? `${resolveSessionWorkspaceLabel({
+          runtimeMode,
+          workspace,
+        })} has no runtime summary surface yet.`
       : "Runtime summary is unavailable until the session resolves.",
-    tone: "warning",
+    tone: runtimeMode === "local" ? "info" : "warning",
   } as const;
 }
 
@@ -237,7 +308,9 @@ export function resolveShellWorkspaceMemberships(
 
   return [...switchableMemberships].sort((left, right) => {
     if (left.isActive === right.isActive) {
-      return left.displayName.localeCompare(right.displayName);
+      return (left.displayName ?? left.workspaceId).localeCompare(
+        right.displayName ?? right.workspaceId,
+      );
     }
     return left.isActive ? -1 : 1;
   });

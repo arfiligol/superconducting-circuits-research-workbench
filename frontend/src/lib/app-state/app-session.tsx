@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import useSWR from "swr";
 
 import {
@@ -9,6 +9,10 @@ import {
   loginWithPassword,
   logoutCurrentSession,
   refreshCurrentSession,
+  switchRuntimeMode as switchRuntimeModeApi,
+  type RuntimeMode,
+  type RuntimeModeSwitchInput,
+  type RuntimeModeSwitchResult,
   type SessionAuthState,
   type SessionLoginCredentials,
   patchActiveWorkspace,
@@ -17,6 +21,11 @@ import {
 } from "@/lib/api/session";
 
 export type AppSessionStatus = "loading" | "ready" | "error" | "refreshing";
+
+export type RuntimeModeSwitchOutcome = Readonly<{
+  result: RuntimeModeSwitchResult;
+  session: SessionSnapshot | undefined;
+}>;
 
 type AppSessionContextValue = Readonly<{
   session: SessionSnapshot | undefined;
@@ -27,14 +36,21 @@ type AppSessionContextValue = Readonly<{
   isSessionRefreshing: boolean;
   hasResolvedSession: boolean;
   authState: SessionAuthState;
+  runtimeMode: RuntimeMode;
   isAuthenticated: boolean;
   isAnonymousSession: boolean;
   isDegradedSession: boolean;
+  isLocalBypassSession: boolean;
+  isLocalMode: boolean;
+  isOnlineMode: boolean;
+  serverTargetDraft: string;
+  setServerTargetDraft: (nextTarget: string) => void;
   refreshSession: () => Promise<SessionSnapshot | undefined>;
   replaceSession: (nextSession: SessionSnapshot) => Promise<SessionSnapshot | undefined>;
   login: (credentials: SessionLoginCredentials) => Promise<SessionSnapshot | undefined>;
   logout: () => Promise<SessionSnapshot | undefined>;
   switchWorkspace: (workspaceId: string) => Promise<WorkspaceSwitchResult>;
+  switchRuntimeMode: (input: RuntimeModeSwitchInput) => Promise<RuntimeModeSwitchOutcome>;
 }>;
 
 const AppSessionContext = createContext<AppSessionContextValue | null>(null);
@@ -43,8 +59,19 @@ type AppSessionProviderProps = Readonly<{
   children: React.ReactNode;
 }>;
 
+const SERVER_TARGET_STORAGE_KEY = "sc-runtime-server-target";
+
+function resolveStoredServerTarget() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem(SERVER_TARGET_STORAGE_KEY) ?? "";
+}
+
 export function AppSessionProvider({ children }: AppSessionProviderProps) {
   const sessionQuery = useSWR(appSessionKey, getSession);
+  const [serverTargetDraft, setServerTargetDraftState] = useState("");
   const status: AppSessionStatus =
     sessionQuery.isLoading && !sessionQuery.data
       ? "loading"
@@ -55,6 +82,35 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
           : "ready";
   const authState: SessionAuthState =
     sessionQuery.data?.authState ?? (sessionQuery.error ? "degraded" : "anonymous");
+  const runtimeMode = sessionQuery.data?.runtimeMode ?? "online";
+
+  useEffect(() => {
+    setServerTargetDraftState(resolveStoredServerTarget());
+  }, []);
+
+  useEffect(() => {
+    const target = sessionQuery.data?.connection.target;
+    if (runtimeMode !== "online" || !target || target === "local") {
+      return;
+    }
+
+    setServerTargetDraftState(target);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(SERVER_TARGET_STORAGE_KEY, target);
+    }
+  }, [runtimeMode, sessionQuery.data?.connection.target]);
+
+  function setServerTargetDraft(nextTarget: string) {
+    setServerTargetDraftState(nextTarget);
+    if (typeof window !== "undefined") {
+      const normalized = nextTarget.trim();
+      if (normalized.length > 0) {
+        window.localStorage.setItem(SERVER_TARGET_STORAGE_KEY, normalized);
+      } else {
+        window.localStorage.removeItem(SERVER_TARGET_STORAGE_KEY);
+      }
+    }
+  }
 
   return (
     <AppSessionContext.Provider
@@ -67,9 +123,15 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
         isSessionRefreshing: status === "refreshing",
         hasResolvedSession: !!sessionQuery.data || !!sessionQuery.error,
         authState,
+        runtimeMode,
         isAuthenticated: authState === "authenticated",
         isAnonymousSession: authState === "anonymous",
         isDegradedSession: authState === "degraded",
+        isLocalBypassSession: authState === "local_bypass",
+        isLocalMode: runtimeMode === "local",
+        isOnlineMode: runtimeMode === "online",
+        serverTargetDraft,
+        setServerTargetDraft,
         async refreshSession() {
           const nextSession = await refreshCurrentSession();
           return sessionQuery.mutate(nextSession, { revalidate: false });
@@ -89,6 +151,25 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
           const result = await patchActiveWorkspace(workspaceId);
           await sessionQuery.mutate(result.session, { revalidate: false });
           return result;
+        },
+        async switchRuntimeMode(input) {
+          const normalizedTarget =
+            input.mode === "online"
+              ? (input.serverOrigin ?? serverTargetDraft).trim() || null
+              : null;
+          const result = await switchRuntimeModeApi({
+            mode: input.mode,
+            serverOrigin: normalizedTarget,
+          });
+          if (input.mode === "online" && normalizedTarget) {
+            setServerTargetDraft(normalizedTarget);
+          }
+          const nextSession = await getSession();
+          const session = await sessionQuery.mutate(nextSession, { revalidate: false });
+          return {
+            result,
+            session,
+          };
         },
       }}
     >

@@ -11,10 +11,12 @@ import {
   type TaskQueueItem,
 } from "@/lib/app-state/task-queue-store";
 import { listTasks, tasksListKey } from "@/lib/api/tasks";
+import { useAppSession } from "@/lib/app-state/app-session";
 
 export type TaskQueueStatus = "loading" | "ready" | "error" | "refreshing";
 
 type TaskQueueContextValue = Readonly<{
+  contextKey: string;
   tasks: readonly TaskQueueItem[];
   activeTasks: readonly TaskQueueItem[];
   summary: ReturnType<typeof summarizeTaskQueue>;
@@ -35,7 +37,10 @@ type TaskQueueProviderProps = Readonly<{
 }>;
 
 export function TaskQueueProvider({ children }: TaskQueueProviderProps) {
-  const tasksQuery = useSWR(tasksListKey, listTasks, {
+  const { session, status: sessionStatus } = useAppSession();
+  const contextKey = `${session?.runtimeMode ?? "online"}:${session?.workspace.workspaceId ?? "none"}`;
+  const swrKey = sessionStatus === "loading" ? null : [tasksListKey, contextKey];
+  const tasksQuery = useSWR(swrKey, () => listTasks(), {
     refreshInterval(currentData) {
       return resolveTaskQueueRefreshInterval(currentData ?? []);
     },
@@ -55,6 +60,7 @@ export function TaskQueueProvider({ children }: TaskQueueProviderProps) {
   return (
     <TaskQueueContext.Provider
       value={{
+        contextKey,
         tasks,
         activeTasks,
         summary: summarizeTaskQueue(tasks),

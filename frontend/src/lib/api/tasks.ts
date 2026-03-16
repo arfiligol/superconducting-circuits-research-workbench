@@ -93,7 +93,7 @@ export type TaskSummary = Readonly<{
   ownerDisplayName: string;
   workspaceId: string;
   workspaceSlug: string;
-  visibilityScope: "workspace" | "owned";
+  visibilityScope: "local" | "private" | "workspace" | "owned";
   datasetId: string | null;
   definitionId: number | null;
   summary: string;

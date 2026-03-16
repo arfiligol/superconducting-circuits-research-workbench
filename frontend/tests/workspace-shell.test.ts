@@ -134,13 +134,14 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("ShellSidePanel");
     expect(statusStripSource).toContain('title="Global Context"');
     expect(statusStripSource).toContain('variant="context"');
+    expect(statusStripSource).toContain("Runtime Mode");
     expect(statusStripSource).toContain("Active Workspace");
     expect(statusStripSource).toContain("Active Dataset");
     expect(statusStripSource).toContain("Tasks Queue");
     expect(statusStripSource).toContain("Worker Summary");
     expect(statusStripSource).toContain("resolveShellActiveDatasetSummary");
     expect(statusStripSource).toContain("datasetSummary.value");
-    expect(statusStripSource).toContain("Global context");
+    expect(statusStripSource).toContain("switchRuntimeMode(");
   });
 
   it("turns the global context cards into an obvious section switcher", () => {
@@ -191,7 +192,10 @@ describe("workspace shell source contracts", () => {
   });
 
   it("adopts explicit auth entry routes instead of disabled user-menu wording", () => {
-    expect(accountPanelSource).toContain("authSummary.primaryActionHref");
+    expect(accountPanelSource).toContain('href="/login"');
+    expect(accountPanelSource).toContain('href="/logout"');
+    expect(accountPanelSource).toContain("Connect to Online Mode");
+    expect(accountPanelSource).toContain("Switch to Local Mode");
     expect(headerSource).toContain("WorkspaceAccountPanel");
     expect(accountPanelSource).not.toContain("Close menu");
     expect(accountPanelSource).not.toContain("CLOSE MENU");
@@ -200,6 +204,12 @@ describe("workspace shell source contracts", () => {
     expect(authEntrySource).toContain("useForm<LoginFormValues>");
     expect(authEntrySource).toContain("await login(values)");
     expect(authEntrySource).toContain("await logout()");
+    expect(authEntrySource).toContain("switchRuntimeMode({");
+    expect(authEntrySource).toContain("serverTargetDraft");
+    expect(authEntrySource).toContain("Auth Entry no longer blocks Local Mode");
+    expect(authEntrySource).toContain("Retry target");
+    expect(authEntrySource).toContain("Edit target");
+    expect(authEntrySource).toContain("Switch to Local Mode");
     expect(authEntrySource).not.toContain("Auth State");
     expect(authEntrySource).not.toContain("Session Mode");
   });

@@ -40,6 +40,7 @@ import {
 import type { CircuitDefinitionDetail } from "@/features/circuit-definition-editor/lib/contracts";
 import { cx, resolveSurfaceInsetToneClass } from "@/features/shared/components/surface-kit";
 import { ConfirmActionDialog } from "@/lib/confirm-action-dialog";
+import { useAppSession } from "@/lib/app-state";
 
 const quickReferenceRows = [
   ["Port", "P*", "-", '["P1", "1", "0", 1]'],
@@ -156,6 +157,7 @@ export function CircuitDefinitionEditorWorkspace() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isNavigating, startTransition] = useTransition();
+  const { session } = useAppSession();
 
   const selectedDefinitionId = parseDefinitionIdParam(searchParams.get("definitionId"));
   const [pendingIntent, setPendingIntent] = useState<PendingEditorIntent>(null);
@@ -267,6 +269,8 @@ export function CircuitDefinitionEditorWorkspace() {
     isMutationPending,
     isNavigating,
     hasBlockingLocalDiagnostics: draftSurface.blockingLocalDiagnostics.length > 0,
+    canManageDefinitions: session?.capabilities.canManageDefinitions ?? false,
+    runtimeMode: session?.runtimeMode ?? "online",
   });
 
   const activeDefinitionLabel =
@@ -565,7 +569,7 @@ export function CircuitDefinitionEditorWorkspace() {
                 Delete
               </button>
             ) : null}
-            {typeof selectedDefinitionId === "number" ? (
+            {typeof selectedDefinitionId === "number" && session?.runtimeMode !== "local" ? (
               <button
                 type="button"
                 onClick={() => {

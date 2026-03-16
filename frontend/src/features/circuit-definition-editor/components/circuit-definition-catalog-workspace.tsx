@@ -34,7 +34,11 @@ type PendingCatalogAction =
     }>
   | null;
 
-function visibilityTone(scope: "private" | "workspace" | undefined) {
+function visibilityTone(scope: "local" | "private" | "workspace" | undefined) {
+  if (scope === "local") {
+    return "border-primary/30 bg-primary/10 text-foreground";
+  }
+
   return scope === "workspace"
     ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
     : "border-border bg-surface text-muted-foreground";
@@ -220,14 +224,18 @@ export function CircuitDefinitionCatalogWorkspace() {
                         <span
                           className={cx(
                             "rounded-full border px-3 py-1",
-                            definition.allowed_actions?.publish
-                              ? "border-emerald-500/30 text-emerald-950 dark:text-emerald-100"
-                              : "border-border text-muted-foreground",
+                            definition.visibility_scope === "local"
+                              ? "border-primary/30 text-foreground"
+                              : definition.allowed_actions?.publish
+                                ? "border-emerald-500/30 text-emerald-950 dark:text-emerald-100"
+                                : "border-border text-muted-foreground",
                           )}
                         >
-                          {definition.allowed_actions?.publish
-                            ? "Publish allowed"
-                            : "Publish blocked"}
+                          {definition.visibility_scope === "local"
+                            ? "Local only"
+                            : definition.allowed_actions?.publish
+                              ? "Publish allowed"
+                              : "Publish blocked"}
                         </span>
                         <span
                           className={cx(
@@ -274,22 +282,24 @@ export function CircuitDefinitionCatalogWorkspace() {
                         <Copy className="h-4 w-4" />
                         Clone
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handlePublish(definition.definition_id);
-                        }}
-                        disabled={isMutationPending || !actionState.publish.enabled}
-                        title={
-                          isMutationPending
-                            ? "Wait for the current catalog mutation to finish."
-                            : actionState.publish.reason
-                        }
-                        className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Globe className="h-4 w-4" />
-                        Publish
-                      </button>
+                      {session?.runtimeMode === "local" ? null : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handlePublish(definition.definition_id);
+                          }}
+                          disabled={isMutationPending || !actionState.publish.enabled}
+                          title={
+                            isMutationPending
+                              ? "Wait for the current catalog mutation to finish."
+                              : actionState.publish.reason
+                          }
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Globe className="h-4 w-4" />
+                          Publish
+                        </button>
+                      )}
                       <button
                         type="button"
                         aria-label={`Delete ${definition.name}`}

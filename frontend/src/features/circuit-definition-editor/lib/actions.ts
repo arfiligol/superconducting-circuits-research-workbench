@@ -47,7 +47,9 @@ export function summarizeCatalogDefinitionActionState(
     clone: allowedActions?.clone
       ? allowed("Clone is allowed by the persisted definition authority.")
       : blocked("Clone is blocked by backend definition authority."),
-    publish: allowedActions?.publish
+    publish: definition.visibility_scope === "local"
+      ? blocked("Publish stays online-only. Local definitions must move through an explicit upload or import flow.")
+      : allowedActions?.publish
       ? allowed("Publish is allowed for this persisted definition.")
       : blocked("Publish is blocked by backend definition authority."),
     delete: allowedActions?.delete
@@ -63,6 +65,8 @@ export function summarizeEditorDefinitionActionState(input: Readonly<{
   isMutationPending: boolean;
   isNavigating: boolean;
   hasBlockingLocalDiagnostics: boolean;
+  canManageDefinitions: boolean;
+  runtimeMode: "local" | "online";
 }>): CircuitDefinitionEditorActionState {
   const isBusy = input.isMutationPending || input.isNavigating;
 
@@ -81,6 +85,8 @@ export function summarizeEditorDefinitionActionState(input: Readonly<{
       save:
         isBusy
           ? blocked("Save waits until the current save or route transition finishes.")
+          : !input.canManageDefinitions
+            ? blocked("Persisting this draft is blocked by backend definition authority.")
           : input.hasBlockingLocalDiagnostics
             ? blocked("Fix blocking local diagnostics before creating a persisted definition.")
             : input.isDirty
@@ -114,6 +120,8 @@ export function summarizeEditorDefinitionActionState(input: Readonly<{
   const publish =
     isBusy
       ? blocked("Publish waits until the current mutation or route transition finishes.")
+      : input.runtimeMode === "local" || input.activeDefinition.visibility_scope === "local"
+        ? blocked("Publish stays online-only. Local definitions must move through an explicit upload or import flow.")
       : input.isDirty
         ? blocked("Save or discard local edits before publishing the persisted definition.")
         : allowedActions.publish

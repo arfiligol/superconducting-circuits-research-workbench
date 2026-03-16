@@ -29,13 +29,18 @@ type ActiveTaskProviderProps = Readonly<{
 
 export function ActiveTaskProvider({ children }: ActiveTaskProviderProps) {
   const urlState = useUrlState();
-  const { latestTask, hasResolvedTaskQueue } = useTaskQueue();
+  const { tasks, latestTask, hasResolvedTaskQueue, contextKey } = useTaskQueue();
 
   const routeTaskId = parseTaskIdFromSearch(urlState.search);
+  const routeTaskStillVisible =
+    routeTaskId === null ? false : tasks.some((task) => task.taskId === routeTaskId);
   const queueTaskId = latestTask?.taskId ?? null;
-  const resolvedTaskId = resolveActiveTaskId(routeTaskId, queueTaskId);
+  const resolvedTaskId = resolveActiveTaskId(
+    routeTaskId !== null && (routeTaskStillVisible || !hasResolvedTaskQueue) ? routeTaskId : null,
+    queueTaskId,
+  );
 
-  const detailKey = resolvedTaskId ? taskDetailKey(resolvedTaskId) : null;
+  const detailKey = resolvedTaskId ? [taskDetailKey(resolvedTaskId), contextKey] : null;
   const detailQuery = useSWR(detailKey, () =>
     resolvedTaskId ? getTask(resolvedTaskId) : Promise.resolve(undefined),
     {

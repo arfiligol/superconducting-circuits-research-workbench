@@ -1,7 +1,7 @@
 export type TaskQueueScope = "simulation" | "characterization";
 export type TaskQueueStatus = "queued" | "running" | "completed" | "failed";
 export type TaskQueueExecutionMode = "run" | "smoke";
-export type TaskQueueVisibilityScope = "workspace" | "owned";
+export type TaskQueueVisibilityScope = "local" | "private" | "workspace" | "owned";
 
 export type TaskQueueItem = Readonly<{
   taskId: number;

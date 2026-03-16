@@ -7,7 +7,7 @@ import {
   datasetProfileKey,
   getDatasetProfile,
 } from "@/lib/api/datasets";
-import { patchActiveDataset } from "@/lib/api/session";
+import { patchActiveDataset, type SessionVisibilityScope } from "@/lib/api/session";
 import {
   canRetryRouteDatasetSync,
   parseDatasetIdFromSearch,
@@ -29,6 +29,7 @@ export type ActiveDatasetSnapshot = Readonly<{
   owner: string | null;
   family: string | null;
   status: "Ready" | "Queued" | "Review" | null;
+  visibilityScope: SessionVisibilityScope | null;
   source: Exclude<ActiveDatasetSource, "none">;
 }>;
 
@@ -73,7 +74,9 @@ export function ActiveDatasetProvider({ children }: ActiveDatasetProviderProps) 
     targetDatasetId: null,
     status: "idle",
   });
-  const previousWorkspaceIdRef = useRef<string | null>(session?.workspace.workspaceId ?? null);
+  const previousContextKeyRef = useRef(
+    `${session?.runtimeMode ?? "online"}:${session?.workspace.workspaceId ?? "none"}`,
+  );
   const routeDatasetId = parseDatasetIdFromSearch(urlState.search);
   const sessionDatasetId = session?.activeDataset?.datasetId ?? null;
   const resolvedDatasetId = resolveActiveDatasetId(routeDatasetId, sessionDatasetId);
@@ -179,20 +182,19 @@ export function ActiveDatasetProvider({ children }: ActiveDatasetProviderProps) 
   }, [routeDatasetId, sessionDatasetId]);
 
   useEffect(() => {
-    const currentWorkspaceId = session?.workspace.workspaceId ?? null;
-    const previousWorkspaceId = previousWorkspaceIdRef.current;
+    const currentContextKey = `${session?.runtimeMode ?? "online"}:${session?.workspace.workspaceId ?? "none"}`;
+    const previousContextKey = previousContextKeyRef.current;
 
     if (
-      previousWorkspaceId &&
-      currentWorkspaceId &&
-      previousWorkspaceId !== currentWorkspaceId &&
+      previousContextKey &&
+      previousContextKey !== currentContextKey &&
       routeDatasetId !== sessionDatasetId
     ) {
       syncRouteDatasetSelection(sessionDatasetId);
     }
 
-    previousWorkspaceIdRef.current = currentWorkspaceId;
-  }, [routeDatasetId, sessionDatasetId, session?.workspace.workspaceId]);
+    previousContextKeyRef.current = currentContextKey;
+  }, [routeDatasetId, session?.runtimeMode, sessionDatasetId, session?.workspace.workspaceId]);
 
   useEffect(() => {
     if (
@@ -226,6 +228,10 @@ export function ActiveDatasetProvider({ children }: ActiveDatasetProviderProps) 
             session?.activeDataset?.datasetId === resolvedDatasetId
               ? session.activeDataset.status
               : (detailQuery.data?.status ?? null),
+          visibilityScope:
+            session?.activeDataset?.datasetId === resolvedDatasetId
+              ? session.activeDataset.visibilityScope
+              : (detailQuery.data?.visibility_scope ?? null),
           source,
         }
       : null;
