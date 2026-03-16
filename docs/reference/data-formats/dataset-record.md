@@ -59,7 +59,7 @@ DatasetRecord
 | --- | --- | --- |
 | `owner_user_id` | required | owner / creator identity |
 | `workspace_id` | required | 唯一 workspace boundary |
-| `visibility_scope` | required | `private` or `workspace` |
+| `visibility_scope` | required | `local`, `private` or `workspace` |
 | `lifecycle_state` | required | `active`, `archived`, `deleted` |
 | `created_at` | required | 建立時間 |
 | `updated_at` | required | 最後更新時間 |
@@ -78,7 +78,7 @@ DatasetRecord
 | `name` | string | required | dataset display name |
 | `owner_user_id` | string | required | owner identity |
 | `workspace_id` | string | required | owning workspace |
-| `visibility_scope` | enum | required | `private` / `workspace` |
+| `visibility_scope` | enum | required | `local` / `private` / `workspace` |
 | `lifecycle_state` | enum | required | `active` / `archived` / `deleted` |
 | `dataset_meta` | JSON | optional | dataset-level metadata / tags / summary |
 | `profile_payload` | JSON | optional | device type、capabilities、profile source |
@@ -192,7 +192,7 @@ DatasetRecord
 | `design_id` | string or int | required | parent design scope |
 | `owner_user_id` | string | required | execution owner |
 | `workspace_id` | string | required | owning workspace |
-| `visibility_scope` | enum | required | inherited `private` / `workspace` |
+| `visibility_scope` | enum | required | inherited `local` / `private` / `workspace` |
 | `lifecycle_state` | enum | required | `active`, `archived`, `deleted` |
 | `source_kind` | string | required | `circuit_simulation`, `layout_simulation`, `measurement` |
 | `stage_kind` | string | required | `import`, `raw`, `preprocess`, `postprocess`, `analysis` |
@@ -231,7 +231,7 @@ batch 與 trace 的 membership 關聯。
 | `design_id` | string or int | required | parent design scope |
 | `owner_user_id` | string | required | run owner |
 | `workspace_id` | string | required | owning workspace |
-| `visibility_scope` | enum | required | inherited `private` / `workspace` |
+| `visibility_scope` | enum | required | inherited `local` / `private` / `workspace` |
 | `lifecycle_state` | enum | required | `active`, `archived`, `deleted` |
 | `analysis_id` | string | required | `admittance_extraction` 等 |
 | `input_trace_ids` | JSON | required | selected trace ids |

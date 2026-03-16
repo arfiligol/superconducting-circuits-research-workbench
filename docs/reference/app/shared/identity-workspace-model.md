@@ -42,7 +42,7 @@ updated_by: codex
 |---|---|
 | `User` | 一個可被識別、可被授權的操作者 |
 | `Session` | 綁定 `runtime mode`、`user`、`active workspace`、`active dataset` 與 `capabilities` 的有效上下文 |
-| `Workspace` | task visibility、dataset context、resource ownership 與 collaboration 的共享邊界 |
+| `Workspace` | task visibility、dataset context、resource ownership 與 collaboration 的共享邊界；local mode 固定為 `Local Space` |
 | `Workspace Role` | `owner`、`member`、`viewer` 等 workspace-scoped role |
 | `Active Workspace` | session 目前正在操作的單一 workspace |
 | `Active Dataset` | 目前 workflow 預設作用的 dataset context |
@@ -65,7 +65,7 @@ updated_by: codex
 
     | Rule | Meaning |
     |---|---|
-    | Local mode uses one implicit workspace | 維持 shell-compatible context，但不進入 multi-membership collaboration model |
+    | Local mode uses one implicit workspace | 使用固定的 `Local Space`，維持 shell-compatible context，但不進入 multi-membership collaboration model |
     | Online mode may join multiple workspaces | membership 可以是多個，但仍只有一個 active workspace |
     | Same shell shape across modes | Header 仍看得到 workspace / dataset context，但 authority semantics 依 mode 改變 |
 
@@ -115,7 +115,7 @@ flowchart LR
 | 1. User picks mode | 從 app-level mode switcher 選 `local` 或 `online` |
 | 2. Frontend checks unsafe local state | dirty draft、attached task 或 destructive context 先要求確認 |
 | 3. Old session is invalidated | 舊 mode 的 user summary、workspace、dataset、queue cache 失效 |
-| 4. Backend establishes new mode session | local mode 建立 implicit local session；online mode 建立或要求 auth session |
+| 4. Backend establishes new mode session | local mode 建立 `Local Space` session；online mode 建立或要求新的 auth session，不保留先前 remote login |
 | 5. Shell context is rebuilt | Header、queue、page context 改用新 mode 的 session envelope |
 
 ## Workspace Switch Sequence

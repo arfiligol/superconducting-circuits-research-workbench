@@ -91,8 +91,18 @@ updated_by: codex
 |---|---|
 | Entry condition | 只有 `Online Mode` 且 auth 尚未建立時，才進入 auth entry |
 | Local escape hatch | auth entry 應允許使用者改切 `Local Mode`，而不是把使用者永久困在登入頁 |
+| Online re-entry | auth entry 應允許使用者重新指定 `IP:Port` / target，或重試目前 target |
 | Post-login handoff | online mode 登入成功後，回到 shell 並重建 online session context |
 | Post-switch handoff | 切回 local mode 後，直接建立 local session 並離開 auth entry |
+
+## Connection Failure Presentation
+
+| Situation | Required behavior |
+|---|---|
+| target connecting | 顯示明確的 connecting / validating spinner 與 concise status |
+| target rejected | 顯示 concise failure summary，並提供 `Retry`、`Edit Server Target`、`Switch to Local Mode` |
+| target detail | `IP:Port` / target label 可顯示為 secondary context，不應壓過 primary recovery action |
+| degraded transport | 可保留 compact debug ref 或 disclosure；`Developer Mode = On` 時可在出錯區塊直接顯示 raw technical detail |
 
 ## Layout Baseline
 

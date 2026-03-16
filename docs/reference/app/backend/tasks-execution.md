@@ -48,7 +48,7 @@ task submit response 至少必須提供：
 | `task_kind` | simulation / characterization / processing 等 |
 | `lane` | workflow lane |
 | `status` | 初始 lifecycle status |
-| `visibility_scope` | `workspace` / `private` |
+| `visibility_scope` | `local` / `workspace` / `private` |
 | `owner_user_id` | task owner |
 | `dataset_id` / `definition_id` / design context | 與 page context 相關的 binding |
 
@@ -106,7 +106,7 @@ Header queue rows 至少必須能讀到：
 | `summary` | 人類可讀的 task label |
 | `status` | queue row 狀態 |
 | `lane` / `task_kind` | workflow lane summary |
-| `owner_display_name` | 多使用者 queue 辨識 |
+| `owner_display_name` | 多使用者 queue 辨識；local mode 可固定為 `Local` 或等價 local operator label |
 | `visibility_scope` | queue filter 與共享語意 |
 | `updated_at` | 排序與最近活動 |
 | `result_availability` | terminal 後是否有 persisted result |
@@ -114,9 +114,16 @@ Header queue rows 至少必須能讀到：
 
 ## Queue Query Contract
 
+### Mode-specific queue semantics
+
+| Mode | Required read model |
+|---|---|
+| `local` | queue rows 只來自 `Local Space`；不做 workspace role 過濾；`visibility_scope` 固定為 `local`；`owner_display_name` 可固定為 `Local` |
+| `online` | queue rows 來自 active workspace；依 role / visibility / allowed actions materialize row actions |
+
 | Input | Baseline |
 |---|---|
-    | `scope_filter` | `workspace`, `mine` |
+| `scope_filter` | local mode 固定 `local`；online mode 為 `workspace`, `mine` |
 | `status_filter` | `active`, `recent`, `all` |
 | `lane_filter` | optional |
 | `search_query` | optional，對 `summary`、owner display name、`task_id` 生效 |
@@ -174,7 +181,8 @@ Header queue rows 至少必須能讀到：
 | Queue consistency | active task status 與 worker summary 不得互相矛盾 |
 | Lane visibility | queue 至少能辨識 task 所屬 lane |
 | Control permissions | `allowed_actions` 必須依 [Authentication & Authorization](../shared/authentication-and-authorization.md) 計算 |
-| Workspace boundary | queue query 不得跨出 active workspace，除非明確是 admin-scoped governance surface |
+| Workspace boundary | online mode 的 queue query 不得跨出 active workspace，除非明確是 admin-scoped governance surface |
+| Local boundary | local mode 的 queue query 只看 `Local Space`，不支援 `mine` / workspace membership 語意 |
 
 ## Delivery Rules
 
@@ -270,6 +278,52 @@ Header queue rows 至少必須能讀到：
         "filter_echo": {
           "scope_filter": "workspace",
           "status_filter": "active"
+        }
+      }
+    }
+    ```
+
+!!! example "Queue query in local mode"
+    Response:
+    ```json
+    {
+      "ok": true,
+      "data": {
+        "rows": [
+          {
+            "task_id": "task_local_021",
+            "summary": "Characterization · Local Space",
+            "status": "running",
+            "lane": "characterization",
+            "task_kind": "characterization",
+            "owner_display_name": "Local",
+            "visibility_scope": "local",
+            "updated_at": "2026-03-16T09:20:00Z",
+            "result_availability": "pending",
+            "allowed_actions": {
+              "attach": true,
+              "cancel": true,
+              "terminate": true,
+              "retry": false
+            }
+          }
+        ],
+        "worker_summary": [
+          {
+            "lane": "characterization",
+            "healthy_processors": 1,
+            "busy_processors": 1,
+            "degraded_processors": 0,
+            "draining_processors": 0,
+            "offline_processors": 0
+          }
+        ],
+        "meta": {
+          "generated_at": "2026-03-16T09:20:01Z",
+          "filter_echo": {
+            "scope_filter": "local",
+            "status_filter": "active"
+          }
         }
       }
     }

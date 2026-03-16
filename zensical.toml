@@ -115,6 +115,7 @@ nav = [
       { "Shared" = [
         { "Overview" = "reference/app/shared/index.md" },
         { "Runtime Modes" = "reference/app/shared/runtime-modes.md" },
+        { "Mode Feature Matrix" = "reference/app/shared/mode-feature-matrix.md" },
         { "Identity & Workspace Model" = "reference/app/shared/identity-workspace-model.md" },
         { "Resource Ownership & Visibility" = "reference/app/shared/resource-ownership-and-visibility.md" },
         { "Authentication & Authorization" = "reference/app/shared/authentication-and-authorization.md" },

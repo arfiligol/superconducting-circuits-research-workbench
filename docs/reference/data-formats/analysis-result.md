@@ -47,7 +47,7 @@ title: Analysis Result
 | `design_id` | required | parent design scope |
 | `workspace_id` | required | owning workspace |
 | `owner_user_id` | required | owner identity |
-| `visibility_scope` | required | inherited `private` / `workspace` |
+| `visibility_scope` | required | inherited `local` / `private` / `workspace` |
 | `lifecycle_state` | required | `active`, `archived`, `deleted` |
 | `analysis_id` | required | registry analysis id |
 | `status` | required | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |

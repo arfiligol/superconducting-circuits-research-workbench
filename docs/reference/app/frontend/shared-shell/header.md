@@ -120,7 +120,7 @@ updated_by: codex
     | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context` runtime-mode section |
     | mode switch | 應支援切到 local 或 configured online target；切換後不得混用舊 mode 的 workspace / dataset / task state |
     | local outcome | 切到 local mode 時，直接進入 local session，不經 auth entry |
-    | online outcome | 切到 online mode 時，若尚未登入，導向 auth entry；若已有有效 session，可直接回 shell |
+    | online outcome | 切到 online mode 時，先驗證 active server target；驗證成功後重新進入 auth entry，不保留舊的 remote sign-in state |
     | unsafe-context handling | 若切 mode 會清掉 dirty draft、attached task 或 queue context，必須先要求確認 |
 
 === "Active Workspace Trigger"
@@ -129,7 +129,7 @@ updated_by: codex
     |---|---|
     | workspace chip / button | 直接顯示目前 active workspace 名稱與 role 摘要 |
     | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context`，聚焦 workspace section，只列出目前 user memberships |
-    | mode applicability | local mode 下可退化成單一 implicit local workspace summary，不必強制顯示多 membership switcher |
+    | mode applicability | local mode 下可退化成單一 `Local Space` summary，不必強制顯示多 membership switcher |
     | propagation | 切換後必須同步更新 active dataset、queue visibility、role / capabilities |
     | unsafe-context handling | 若切換造成 attached task 或 active dataset 不再可見，Header 必須觸發清理或重選流程 |
     | dirty-state handling | 若目前頁存在 dirty draft，Header 先顯示 confirm，再送出 switch mutation |
@@ -162,7 +162,7 @@ updated_by: codex
     | user icon trigger | 關閉狀態只顯示 compact identity / avatar / initials 與必要的 compact warning indicator |
     | closed-state density | 關閉狀態不得攤開完整錯誤文案、session diagnostics 或 recovery instructions |
     | open behavior | 可直接打開右側 shell-side panel 的 `Account` section，不得打開第二套獨立 overlay 模型 |
-    | menu sections | 至少包含 `Profile Summary`、`Appearance`、`Developer Mode`、`Sign out` |
+    | menu sections | 至少包含 mode-aware `Account Summary`、`Appearance`、`Developer Mode` 與對應的 auth / mode actions |
     | opened-state detail | 完整 degraded / warning / recovery detail 只在打開後顯示 |
     | appearance control | `Light / Dark / System` 由 User Menu 擁有，不由 Sidebar 擁有 |
 
@@ -171,12 +171,24 @@ updated_by: codex
 | Concern | Required behavior |
 |---|---|
 | Role | lightweight personal / app-preference surface，不是 shell-wide state-management surface |
-| Allowed content | account summary、sign-in state、appearance、developer mode、sign in / sign out |
-| Mode relation | account 可顯示目前 mode 的 account-side summary，但不擁有 runtime-mode switch 本身的 authority |
+| Allowed content | account summary、appearance、developer mode、mode-aware auth actions 與 runtime-mode entry |
+| Mode relation | account 可顯示目前 mode 的 account-side summary，並提供 mode switch entry；真正的切換 authority 仍是 shared runtime-mode mutation |
 | Excluded content | workspace state、session diagnostics、membership management、queue detail、heavy collaboration controls |
 | Header density | account panel header 應保持簡潔，可使用 `Account`、`Appearance` 或等價輕量標題 |
 | Branding rule | account panel 不得再次重複 `SUPERCONDUCTING CIRCUITS` 或其他 shell identity |
 | Diagnostics rule | 若需要顯示 degraded / error / debug detail，必須在 opened panel 內以 disclosure 或 secondary block 呈現 |
+
+## Account Surface By Mode
+
+| Mode | Required account behavior |
+|---|---|
+| `local` | 顯示 local operator / `Local Space` summary、appearance、developer mode 與 `Connect to Online Mode` / 指定 target 入口；不顯示 remote sign out |
+| `online-authenticated` | 顯示 authenticated user summary、appearance、developer mode、target summary、`Sign out` 與 `Switch to Local Mode` |
+| `online-auth-required` | 顯示 target summary、appearance、developer mode、`Sign in`、重新指定 `IP:Port` / target 與 `Switch to Local Mode`；不冒充已有 authenticated account |
+
+!!! tip "Local account is preference-first"
+    `Local Mode` 下的 account surface 不是登入入口的縮小版。
+    它應該先回答「目前在 Local Space、這是本地操作員、這裡可以切外觀或開 Developer Mode」，需要連線時再提供切到 online 的入口。
 
 ## Developer Mode Preference
 

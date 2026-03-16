@@ -37,6 +37,7 @@ updated_by: codex
 | Page | Core focus |
 |---|---|
 | [Runtime Modes](runtime-modes.md) | 同一個 App 的 `Local Mode` / `Online Mode`、mode switch 與 isolation rules |
+| [Mode Feature Matrix](mode-feature-matrix.md) | 各 shared surfaces / workflows 在 `Local Mode` 與 `Online Mode` 下的 support matrix |
 | [Identity & Workspace Model](identity-workspace-model.md) | user、session、active workspace、active dataset 的最小模型 |
 | [Resource Ownership & Visibility](resource-ownership-and-visibility.md) | dataset / schema / task / result 的 workspace ownership 與 sharing rules |
 | [Authentication & Authorization](authentication-and-authorization.md) | workspace membership、capabilities、queue permissions |

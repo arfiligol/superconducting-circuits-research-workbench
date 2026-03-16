@@ -120,6 +120,15 @@ stateDiagram-v2
 | Cancel and terminate are auditable | 兩者都必須進 audit trail |
 | Terminal states stay immutable | `completed` / `failed` / `cancelled` / `terminated` 不可被覆寫成其他 terminal state |
 
+## Runtime Continuity By Mode
+
+| Situation | Required behavior |
+|---|---|
+| switch from online to local | remote tasks 繼續在 server runtime 執行；app 只解除 online queue / attached-task context |
+| switch from local to online | local tasks 不搬移到 server；online queue 重新從 server authority 載入 |
+| app close in local mode | local processors 一起停止時，local tasks 應終止 |
+| app close in online mode | remote tasks 由 server runtime 繼續管理；重開 app 後再透過 queue recovery 重新觀察 |
+
 ## Related
 
 * [Authentication & Authorization](authentication-and-authorization.md)

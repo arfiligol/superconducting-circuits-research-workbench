@@ -58,7 +58,7 @@ updated_by: team
 
     | Field | Meaning |
     |---|---|
-    | `workspace_id` | 由 active session context 決定，不由 frontend 任意跨 workspace 指定 |
+    | `workspace_id` | 由 active session context 決定；local mode 固定為 `Local Space`，不由 frontend 任意跨 workspace 指定 |
     | `search_query` | optional |
     | `sort_by` / `sort_order` | optional |
     | `limit` | optional |
@@ -83,7 +83,7 @@ updated_by: team
     | Field | Meaning |
     |---|---|
     | `definition_id` | persisted identity |
-    | `workspace_id` / `visibility_scope` | shared visibility boundary |
+    | `workspace_id` / `visibility_scope` | shared visibility boundary；local mode 可固定為 `Local Space` / `local` |
     | `allowed_actions` | `update`, `delete`, `publish`, `clone` 等 |
     | `updated_at` | concurrency / freshness summary |
 
@@ -99,7 +99,7 @@ updated_by: team
 
     | Mutation | Required fields |
     |---|---|
-    | `create` | `name`, `source_text`, optional `visibility_scope` |
+    | `create` | `name`, `source_text`, optional `visibility_scope`；local mode 預設 `local` |
     | `update` | `definition_id`, `source_text`, optional `name`, optional concurrency token |
     | `delete` | `definition_id` |
     | `publish_to_workspace` | `definition_id` |
@@ -110,9 +110,9 @@ updated_by: team
 | Rule | Meaning |
 |---|---|
 | One workspace per definition | persisted definition 只屬於一個 workspace |
-| Default create scope | 新建 definition 預設在 current active workspace 且 `private` |
+| Default create scope | local mode 預設在 `Local Space` 且 `local`；online mode 預設在 current active workspace 且 `private` |
 | Visibility filtering | catalog / detail 僅回傳對目前 session 可見的 definitions |
-| Publish is explicit | `private -> workspace` 只能由明確 mutation 觸發 |
+| Publish is explicit | 只在 online mode 有 `private -> workspace`；local mode 不做 publish / share |
 
 !!! warning "Catalog is Summary-only"
     definition catalog **不得**把完整 definition payload 當成列表回應的一部分。

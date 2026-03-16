@@ -35,7 +35,7 @@ updated_by: codex
 
 | Mode | Auth / authz behavior |
 |---|---|
-| `local` | 不要求 sign in；不啟用 multi-user membership / invitation / role gate；backend 回傳 local session 與 local capability summary |
+| `local` | 不要求 sign in；不啟用 multi-user membership / invitation / role gate；backend 回傳 local session、`Local Space` 與 local capability summary |
 | `online` | 啟用 JWT auth、workspace membership、capability flags、queue permission 與 collaboration controls |
 
 !!! tip "Same session shape, different mode semantics"
@@ -51,7 +51,7 @@ updated_by: codex
 | Object | Required meaning |
 |---|---|
 | Authenticated Session | 綁定 `user`、`active workspace`、capabilities 與 active dataset 的有效作業階段 |
-| Local Bypass Session | 不需登入的 local session，仍提供 `user`、`active workspace`、`capabilities` 與 active dataset |
+| Local Bypass Session | 不需登入的 local session，仍提供 `user`、`Local Space`、`capabilities` 與 active dataset |
 | Workspace Membership | 使用者在特定 workspace 內的角色與可見性邊界 |
 | Active Workspace | 當前 session 正在操作的單一 workspace |
 | Capability Flags | page 與 shared app surfaces 可直接消費的 permission summary |
@@ -112,18 +112,36 @@ updated_by: codex
 | Backend emits materialized permissions | session surface、queue rows、resource detail 應回傳已算好的 `allowed_actions` |
 
 ??? info "Why not pure Casbin-only logic"
-    `private` / `workspace` visibility、resource owner 與 active workspace rebinding 仍需要 backend service 先整理成穩定的 authorization context。
+    `local` / `private` / `workspace` visibility、resource owner 與 active workspace rebinding 仍需要 backend service 先整理成穩定的 authorization context。
     正式 baseline 不是把所有規則都硬塞進 policy expression，而是 `service-owned resource resolution + Casbin decision engine`。
 
 ## Local-Mode Bypass Rules
 
 | Concern | Required behavior |
 |---|---|
-| Session establishment | backend 直接提供 implicit local user / local workspace session |
+| Session establishment | backend 直接提供 implicit local user / `Local Space` session |
 | Capability summary | 仍由 backend materialize，不由 frontend 自行假設 |
 | Queue permission | local task controls 依 local capability summary 決定，但不走 multi-user role matrix |
+| Resource scope | local mode persisted resources 使用 `local` scope，不分 `private` / `workspace` |
 | Invitation / membership | 不適用 |
 | Auth entry | 不應成為 local mode 的 primary entry surface |
+
+## Local Capability Baseline
+
+| Capability family | Required local baseline |
+|---|---|
+| Runtime mode | `can_switch_runtime_mode = true` |
+| Workspace context | `can_switch_workspace = false`；固定使用 `Local Space` |
+| Dataset context | `can_switch_dataset = true` |
+| Data movement | `can_import_datasets = true`、`can_export_datasets = true` |
+| Task management | `can_submit_tasks = true`、`can_cancel_local_tasks = true`、`can_terminate_local_tasks = true`、`can_retry_local_tasks = true` |
+| Resource editing | schemas / results / analyses 等本地功能可照各 surface 正常啟用，不因 auth bypass 被關閉 |
+| Collaboration | `can_invite_members = false`、`can_remove_members = false`、`can_transfer_workspace_owner = false` |
+| Governance | `can_view_audit_logs = false`、`can_manage_platform_settings = false` |
+
+!!! warning "Local mode still needs explicit capability materialization"
+    `Local Mode` 不是讓 frontend 自己把所有 action 都當成可用。
+    backend 仍必須回傳明確 capability flags，避免 online-only actions 被誤露出。
 
 ## Capability Families
 

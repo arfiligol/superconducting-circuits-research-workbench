@@ -45,7 +45,7 @@ dataset catalog 至少必須支援：
 | --- | --- |
 | `dataset_id` | dataset identity |
 | `name` | display name |
-| `visibility_scope` | `private` or `workspace` |
+| `visibility_scope` | `local`, `private` or `workspace` |
 | `lifecycle_state` | `active`, `archived`, `deleted` |
 | `device_type` | dataset profile summary |
 | `updated_at` | freshness summary |
@@ -53,7 +53,7 @@ dataset catalog 至少必須支援：
 
 ### Catalog rules
 
-1. catalog 只能列出對 active workspace 可見的 datasets。
+1. local mode 的 catalog 只列出 `Local Space` datasets；online mode 的 catalog 只能列出對 active workspace 可見的 datasets。
 2. `active_dataset` 切換必須使用此 catalog 的 stable identity。
 3. catalog row 只提供 summary-safe 欄位，不得內含 trace payload。
 

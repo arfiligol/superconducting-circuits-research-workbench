@@ -40,7 +40,7 @@ updated_by: codex
 | Surface | Meaning |
 | --- | --- |
 | Runtime mode | app 目前以 `local` 或 `online` 運行 |
-| Auth state | 使用者目前是 authenticated、anonymous 還是 degraded session |
+| Auth state | 使用者目前是 `local_bypass`、`authenticated`、`anonymous` 還是 `degraded` session |
 | User summary | Header user icon / menu 所需 display data |
 | Workspace identity | active workspace、membership role、default queue scope |
 | Workspace membership list | user 可切換的 workspaces 與 roles |
@@ -54,13 +54,13 @@ backend session surface 至少必須提供：
 
 | Field | Meaning |
 | --- | --- |
-| `auth.state` | `authenticated`, `anonymous`, `degraded` 等 session state |
+| `auth.state` | `local_bypass`, `authenticated`, `anonymous`, `degraded` 等 session state |
 | `runtime_mode` | `local` 或 `online` |
 | `auth.mode` | auth transport or mode summary |
 | `user.id` | 目前使用者 identity |
 | `user.display_name` | Header user icon / menu 顯示名稱 |
 | `user.platform_role` | `admin` / `user` |
-| `workspace.memberships[]` | 使用者可進入的 workspace 列表與 role 摘要 |
+| `workspace.memberships[]` | 使用者可進入的 workspace 列表與 role 摘要；local mode 可退化成單一 `Local Space` membership |
 | `workspace.id` | active workspace identity |
 | `workspace.name` | workspace display name |
 | `workspace.role` | `owner` / `member` / `viewer` |
@@ -73,10 +73,11 @@ backend session surface 至少必須提供：
 | Rule | Meaning |
 | --- | --- |
 | Same envelope family | local 與 online 應回傳相容的 session envelope shape |
-| Local mode returns implicit session | backend 直接提供 local user / local workspace / capability summary |
+| Local mode returns implicit session | backend 直接提供 local user / `Local Space` / capability summary |
 | Online mode may require auth | 若尚未登入，session surface 回 `auth_required` 或 anonymous/degraded state |
 | Mode switch is session mutation | 不是單純 frontend config toggle |
 | Mode switch clears stale shell context | 舊 mode 的 dataset、queue、attached task refs 不得殘留 |
+| Mode switch drops remote auth continuity | 從 online 切到 local 再切回 online，不保留舊的 remote authenticated session |
 
 ## Authorization Resolution Rules
 
@@ -102,6 +103,9 @@ backend session surface 至少必須提供：
 | Mutation | Responsibility |
 | --- | --- |
 | `switch_runtime_mode(mode, server_origin | null)` | 切換 `local` / `online`，建立對應 session envelope 或 auth-required outcome |
+| `list_server_targets()` | 列出 active target 與 remembered recent online targets |
+| `validate_server_target(server_origin)` | 驗證 target reachability / health / version compatibility |
+| `remember_server_target(server_origin, label | null)` | 儲存或更新 app-level online target config |
 | `switch_active_workspace(workspace_id)` | 變更 active workspace，回傳新 session envelope 與 rebind outcome |
 | `activate_dataset(dataset_id | null)` | 設定 active dataset，並驗證該 dataset 對目前 active workspace 可見 |
 | `create_workspace_invitation(workspace_id, email, role)` | 建立 pending invite 並觸發 outbound delivery |
@@ -128,12 +132,22 @@ backend session surface 至少必須提供：
 | --- | --- |
 | `runtime_mode` | 新的 active mode |
 | `connection.target` | `local` 或 remote `origin` 摘要 |
-| `auth_transition` | `local_ready`, `online_authenticated`, `online_auth_required` |
+| `auth_transition` | `local_ready`, `online_auth_required`, `online_target_rejected` |
 | `session_reset` | 是否已清除舊 mode shell context |
 | `workspace` | 新 mode 的 workspace summary，或 `null` |
 | `active_dataset` | 新 mode 的 dataset summary，或 `null` |
 | `capabilities` | 由新 mode materialize 的 capability summary |
 | `detached_task_ids[]` | mode switch 時被解除附著的 task ids |
+
+## Online Server Target Rules
+
+| Rule | Meaning |
+| --- | --- |
+| App-level owner | server target config 不屬於 workspace、dataset 或 account preference |
+| One active target | 同一時間只有一個 active online target |
+| Recent history allowed | 可保留 remembered recent targets，供 mode switcher 重用 |
+| Validation before switch | 切到 online mode 前，必須先完成 target validation |
+| Failure keeps current mode | 若 target 驗證失敗，保持原 active mode，不建立半完成 session |
 
 ## Active Dataset Activation Rules
 
@@ -151,8 +165,8 @@ backend session surface 至少必須提供：
 | `runtime_mode` | 必須是 `local` |
 | `auth.state` | 使用 `local_bypass` 或等價 local state |
 | `user` | 回傳 implicit local operator summary |
-| `workspace` | 回傳 implicit local workspace |
-| `memberships[]` | 可省略，或回傳單一 local workspace membership |
+| `workspace` | 回傳 `Local Space` |
+| `memberships[]` | 可省略，或回傳單一 `Local Space` membership |
 | `capabilities` | 回傳 local mode capability summary，不由 frontend 猜測 |
 
 !!! info "Local mode still uses the same backend surface"
@@ -250,7 +264,7 @@ backend session surface 至少必須提供：
         "session_reset": true,
         "workspace": {
           "id": "local",
-          "name": "Local Workspace",
+          "name": "Local Space",
           "role": "owner"
         },
         "active_dataset": null,

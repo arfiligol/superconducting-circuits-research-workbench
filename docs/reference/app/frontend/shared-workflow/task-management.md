@@ -59,7 +59,7 @@ updated_by: codex
 | `status` | lifecycle status summary |
 | `summary` | 人類可讀的 task 摘要 |
 | `owner_display_name` | 多使用者 queue 中辨識 task owner |
-| `visibility_scope` | `workspace` / `private` 等共享可見性語意 |
+| `visibility_scope` | `local`、`workspace` / `private` 等共享可見性語意 |
 | `dataset_id` / `definition_id` / design context | 提供與目前頁面 context 的關聯 |
 | `updated_at` | 幫助排序最近活動 |
 | `Attach` action | 明確將 page body 切到指定 persisted task |
@@ -80,7 +80,7 @@ updated_by: codex
 
 !!! tip "`Mine` is a filter, not a visibility scope"
     queue 的 `Mine` 來自 owner-based filter。
-    persisted `visibility_scope` 仍只有 `private` 與 `workspace`。
+    `Local Mode` 的 persisted `visibility_scope` 為 `local`；`Online Mode` 才使用 `private` 與 `workspace`。
 
 !!! tip "Drawer, not inline strip"
     `Tasks Queue` 是 shared shell management surface，應集中在右側 `Shell-Side Panel`。
