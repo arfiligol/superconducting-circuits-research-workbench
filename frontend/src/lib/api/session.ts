@@ -58,8 +58,19 @@ type SessionCapabilitiesResponseShape = Readonly<{
   can_view_audit_logs: boolean;
 }>;
 
+type SessionConnectionTargetResponseShape =
+  | "local"
+  | Readonly<{
+      origin: string;
+      label?: string | null;
+      is_active?: boolean | null;
+      validation_status?: string | null;
+      last_checked_at?: string | null;
+    }>
+  | null;
+
 type SessionConnectionResponseShape = Readonly<{
-  target?: string | null;
+  target?: SessionConnectionTargetResponseShape;
   label?: string | null;
 }> | null;
 
@@ -230,9 +241,22 @@ export type SessionMembership = Readonly<{
   allowedActions: SessionAllowedActions;
 }>;
 
-export type SessionConnectionSummary = Readonly<{
-  target: string | null;
+export type SessionConnectionTargetSummary = Readonly<{
+  kind: "local" | "remote";
+  origin: string;
   label: string | null;
+  isActive: boolean | null;
+  validationStatus: string | null;
+  lastCheckedAt: string | null;
+}>;
+
+export type SessionConnectionSummary = Readonly<{
+  target: SessionConnectionTargetSummary | null;
+  origin: string | null;
+  label: string | null;
+  isActive: boolean | null;
+  validationStatus: string | null;
+  lastCheckedAt: string | null;
 }>;
 
 export type SessionSnapshot = Readonly<{
@@ -470,10 +494,44 @@ function mapMembership(payload: MembershipResponseShape): SessionMembership {
   };
 }
 
-function mapConnection(payload?: SessionConnectionResponseShape): SessionConnectionSummary {
+function mapConnectionTarget(
+  payload: SessionConnectionTargetResponseShape | undefined,
+  fallbackLabel?: string | null,
+): SessionConnectionTargetSummary | null {
+  if (!payload) {
+    return null;
+  }
+
+  if (payload === "local") {
+    return {
+      kind: "local",
+      origin: "local",
+      label: fallbackLabel ?? "Local backend",
+      isActive: true,
+      validationStatus: null,
+      lastCheckedAt: null,
+    };
+  }
+
   return {
-    target: payload?.target ?? null,
-    label: payload?.label ?? null,
+    kind: "remote",
+    origin: payload.origin,
+    label: payload.label ?? fallbackLabel ?? null,
+    isActive: payload.is_active ?? null,
+    validationStatus: payload.validation_status ?? null,
+    lastCheckedAt: payload.last_checked_at ?? null,
+  };
+}
+
+function mapConnection(payload?: SessionConnectionResponseShape): SessionConnectionSummary {
+  const target = mapConnectionTarget(payload?.target, payload?.label ?? null);
+  return {
+    target,
+    origin: target?.origin ?? null,
+    label: target?.label ?? payload?.label ?? null,
+    isActive: target?.isActive ?? null,
+    validationStatus: target?.validationStatus ?? null,
+    lastCheckedAt: target?.lastCheckedAt ?? null,
   };
 }
 
@@ -515,7 +573,12 @@ function resolveRuntimeMode(payload: SessionResponseShape): RuntimeMode {
     return "local";
   }
 
-  if (payload.connection?.target === "local") {
+  if (
+    payload.connection?.target === "local" ||
+    (typeof payload.connection?.target === "object" &&
+      payload.connection?.target !== null &&
+      payload.connection.target.origin === "local")
+  ) {
     return "local";
   }
 
@@ -538,6 +601,18 @@ export function normalizeSessionAuthMode(
   }
 
   return "local_bypass";
+}
+
+export function resolveSessionConnectionTargetOrigin(
+  connection: SessionConnectionSummary | undefined,
+) {
+  return connection?.origin ?? null;
+}
+
+export function resolveSessionConnectionTargetLabel(
+  connection: SessionConnectionSummary | undefined,
+) {
+  return connection?.label ?? connection?.origin ?? null;
 }
 
 export function mapSessionResponse(payload: SessionResponseShape): SessionSnapshot {
@@ -715,9 +790,9 @@ export async function patchActiveDataset(datasetId: string | null) {
 
 export async function switchRuntimeMode(input: RuntimeModeSwitchInput) {
   const response = await apiRequest<RuntimeModeSwitchResponseShape>(runtimeModePath, {
-    method: "POST",
+    method: "PATCH",
     body: {
-      mode: input.mode,
+      runtime_mode: input.mode,
       server_origin: input.serverOrigin ?? null,
     },
   });

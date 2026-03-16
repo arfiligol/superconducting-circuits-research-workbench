@@ -7,6 +7,7 @@ import type {
   SessionVisibilityScope,
   WorkspaceSwitchResult,
 } from "@/lib/api/session";
+import { resolveSessionConnectionTargetLabel as resolveConnectionTargetLabel } from "@/lib/api/session";
 import type { DatasetCatalogRow } from "@/features/data-browser/lib/contracts";
 import type { TaskSummary } from "@/lib/api/tasks";
 import type {
@@ -103,7 +104,7 @@ export function resolveShellConnectionTargetLabel(session: SessionSnapshot | und
     return "Local backend";
   }
 
-  return session.connection.label ?? session.connection.target ?? "Server target pending";
+  return resolveConnectionTargetLabel(session.connection) ?? "Server target pending";
 }
 
 export function resolveVisibilityScopeLabel(scope: SessionVisibilityScope | null | undefined) {

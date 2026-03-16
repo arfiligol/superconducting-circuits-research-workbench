@@ -9,6 +9,7 @@ import {
   loginWithPassword,
   logoutCurrentSession,
   refreshCurrentSession,
+  resolveSessionConnectionTargetOrigin,
   switchRuntimeMode as switchRuntimeModeApi,
   type RuntimeMode,
   type RuntimeModeSwitchInput,
@@ -89,16 +90,16 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
   }, []);
 
   useEffect(() => {
-    const target = sessionQuery.data?.connection.target;
-    if (runtimeMode !== "online" || !target || target === "local") {
+    const targetOrigin = resolveSessionConnectionTargetOrigin(sessionQuery.data?.connection);
+    if (runtimeMode !== "online" || !targetOrigin || targetOrigin === "local") {
       return;
     }
 
-    setServerTargetDraftState(target);
+    setServerTargetDraftState(targetOrigin);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(SERVER_TARGET_STORAGE_KEY, target);
+      window.localStorage.setItem(SERVER_TARGET_STORAGE_KEY, targetOrigin);
     }
-  }, [runtimeMode, sessionQuery.data?.connection.target]);
+  }, [runtimeMode, sessionQuery.data?.connection]);
 
   function setServerTargetDraft(nextTarget: string) {
     setServerTargetDraftState(nextTarget);

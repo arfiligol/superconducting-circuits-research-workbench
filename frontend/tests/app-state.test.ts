@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   canRetryRouteDatasetSync,
@@ -17,6 +17,9 @@ import {
   mapLogoutResponse,
   mapRuntimeModeSwitchResponse,
   mapSessionResponse,
+  resolveSessionConnectionTargetLabel,
+  resolveSessionConnectionTargetOrigin,
+  switchRuntimeMode,
   mapWorkspaceSwitchResponse,
   normalizeSessionAuthMode,
 } from "../src/lib/api/session";
@@ -39,6 +42,11 @@ const activeTaskSource = readFileSync(
   fileURLToPath(new URL("../src/lib/app-state/active-task.tsx", import.meta.url)),
   "utf8",
 );
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("active dataset state helpers", () => {
   it("parses dataset ids from URL search params", () => {
@@ -127,6 +135,16 @@ describe("session contract mapping", () => {
     expect(
       mapSessionResponse({
         session_id: "session-dev-001",
+        runtime_mode: "online",
+        connection: {
+          target: {
+            origin: "https://lab.example.com",
+            label: "Lab Cluster",
+            is_active: true,
+            validation_status: "ok",
+            last_checked_at: "2026-03-17T00:00:00Z",
+          },
+        },
         auth: {
           state: "authenticated",
           mode: "local_stub",
@@ -212,8 +230,19 @@ describe("session contract mapping", () => {
       sessionId: "session-dev-001",
       runtimeMode: "online",
       connection: {
-        target: null,
-        label: null,
+        target: {
+          kind: "remote",
+          origin: "https://lab.example.com",
+          label: "Lab Cluster",
+          isActive: true,
+          validationStatus: "ok",
+          lastCheckedAt: "2026-03-17T00:00:00Z",
+        },
+        origin: "https://lab.example.com",
+        label: "Lab Cluster",
+        isActive: true,
+        validationStatus: "ok",
+        lastCheckedAt: "2026-03-17T00:00:00Z",
       },
       authState: "authenticated",
       authMode: "local_stub",
@@ -361,6 +390,85 @@ describe("session contract mapping", () => {
     });
   });
 
+  it("maps nested server target summaries into frontend-friendly connection details", () => {
+    const session = mapSessionResponse({
+      session_id: "session-dev-009",
+      runtime_mode: "online",
+      connection: {
+        target: {
+          origin: "https://lab.example.com",
+          label: "Lab Cluster",
+          is_active: true,
+          validation_status: "ok",
+          last_checked_at: "2026-03-17T08:00:00Z",
+        },
+      },
+      auth: {
+        state: "anonymous",
+        mode: "jwt_cookie",
+      },
+      user: null,
+      workspace: {
+        id: null,
+        slug: null,
+        name: null,
+        role: null,
+        default_task_scope: "workspace",
+        allowed_actions: {
+          switch_to: false,
+          activate_dataset: false,
+          invite_members: false,
+          remove_members: false,
+          transfer_owner: false,
+          leave_workspace: false,
+          view_audit_logs: false,
+          manage_definitions: false,
+          manage_datasets: false,
+          manage_tasks: false,
+        },
+        memberships: [],
+      },
+      active_dataset: null,
+      capabilities: {
+        can_switch_runtime_mode: true,
+        can_switch_workspace: false,
+        can_switch_dataset: false,
+        can_invite_members: false,
+        can_remove_members: false,
+        can_transfer_workspace_owner: false,
+        can_leave_workspace: false,
+        can_submit_tasks: false,
+        can_manage_workspace_tasks: false,
+        can_cancel_own_tasks: false,
+        can_cancel_workspace_tasks: false,
+        can_terminate_workspace_tasks: false,
+        can_retry_own_tasks: false,
+        can_retry_workspace_tasks: false,
+        can_manage_definitions: false,
+        can_manage_datasets: false,
+        can_view_audit_logs: false,
+      },
+    });
+
+    expect(session.connection).toEqual({
+      target: {
+        kind: "remote",
+        origin: "https://lab.example.com",
+        label: "Lab Cluster",
+        isActive: true,
+        validationStatus: "ok",
+        lastCheckedAt: "2026-03-17T08:00:00Z",
+      },
+      origin: "https://lab.example.com",
+      label: "Lab Cluster",
+      isActive: true,
+      validationStatus: "ok",
+      lastCheckedAt: "2026-03-17T08:00:00Z",
+    });
+    expect(resolveSessionConnectionTargetOrigin(session.connection)).toBe("https://lab.example.com");
+    expect(resolveSessionConnectionTargetLabel(session.connection)).toBe("Lab Cluster");
+  });
+
   it("normalizes legacy development stub auth modes and canonical auth mutation payloads", () => {
     expect(normalizeSessionAuthMode("development_stub")).toBe("local_stub");
     expect(
@@ -481,6 +589,16 @@ describe("session contract mapping", () => {
     expect(
       mapWorkspaceSwitchResponse({
         session_id: "session-dev-001",
+        runtime_mode: "online",
+        connection: {
+          target: {
+            origin: "https://lab.example.com",
+            label: "Lab Cluster",
+            is_active: true,
+            validation_status: "ok",
+            last_checked_at: "2026-03-17T08:15:00Z",
+          },
+        },
         auth: {
           state: "authenticated",
           mode: "local_stub",
@@ -589,8 +707,19 @@ describe("session contract mapping", () => {
         sessionId: "session-dev-001",
         runtimeMode: "online",
         connection: {
-          target: null,
-          label: null,
+          target: {
+            kind: "remote",
+            origin: "https://lab.example.com",
+            label: "Lab Cluster",
+            isActive: true,
+            validationStatus: "ok",
+            lastCheckedAt: "2026-03-17T08:15:00Z",
+          },
+          origin: "https://lab.example.com",
+          label: "Lab Cluster",
+          isActive: true,
+          validationStatus: "ok",
+          lastCheckedAt: "2026-03-17T08:15:00Z",
         },
         authState: "authenticated",
         authMode: "local_stub",
@@ -710,8 +839,13 @@ describe("session contract mapping", () => {
       mapRuntimeModeSwitchResponse({
         runtime_mode: "online",
         connection: {
-          target: "http://127.0.0.1:8000",
-          label: "Local server",
+          target: {
+            origin: "http://127.0.0.1:8000",
+            label: "Local server",
+            is_active: true,
+            validation_status: "ok",
+            last_checked_at: "2026-03-17T09:00:00Z",
+          },
         },
         auth_transition: "online_auth_required",
         session_reset: true,
@@ -737,8 +871,19 @@ describe("session contract mapping", () => {
     ).toEqual({
       runtimeMode: "online",
       connection: {
-        target: "http://127.0.0.1:8000",
+        target: {
+          kind: "remote",
+          origin: "http://127.0.0.1:8000",
+          label: "Local server",
+          isActive: true,
+          validationStatus: "ok",
+          lastCheckedAt: "2026-03-17T09:00:00Z",
+        },
+        origin: "http://127.0.0.1:8000",
         label: "Local server",
+        isActive: true,
+        validationStatus: "ok",
+        lastCheckedAt: "2026-03-17T09:00:00Z",
       },
       authTransition: "online_auth_required",
       sessionReset: true,
@@ -766,6 +911,54 @@ describe("session contract mapping", () => {
       },
       detachedTaskIds: ["task_404"],
     });
+  });
+
+  it("uses PATCH and runtime_mode for runtime-mode mutation requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        data: {
+          runtime_mode: "online",
+          connection: {
+            target: {
+              origin: "http://127.0.0.1:8000",
+              label: "Local server",
+              is_active: true,
+              validation_status: "ok",
+              last_checked_at: "2026-03-17T09:10:00Z",
+            },
+          },
+          auth_transition: "online_auth_required",
+          session_reset: true,
+          workspace: null,
+          active_dataset: null,
+          capabilities: {
+            can_switch_runtime_mode: true,
+          },
+          detached_task_ids: [],
+        },
+      }),
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await switchRuntimeMode({
+      mode: "online",
+      serverOrigin: "http://127.0.0.1:8000",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/backend/session/runtime-mode",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          runtime_mode: "online",
+          server_origin: "http://127.0.0.1:8000",
+        }),
+      }),
+    );
   });
 });
 
@@ -940,6 +1133,7 @@ describe("runtime-mode app-state source contracts", () => {
     expect(appSessionSource).toContain("switchRuntimeMode as switchRuntimeModeApi");
     expect(appSessionSource).toContain("const result = await switchRuntimeModeApi({");
     expect(appSessionSource).toContain("const nextSession = await getSession()");
+    expect(appSessionSource).toContain("resolveSessionConnectionTargetOrigin(sessionQuery.data?.connection)");
   });
 
   it("isolates queue and attached-task authority by runtime-mode context keys", () => {

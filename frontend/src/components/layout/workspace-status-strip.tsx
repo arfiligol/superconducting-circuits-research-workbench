@@ -420,7 +420,7 @@ export function WorkspaceStatusStrip({
   const modeTargetValue =
     runtimeMode === "local"
       ? "Local backend"
-      : ((session?.connection.label ?? session?.connection.target ?? runtimeTargetInput.trim()) ||
+      : ((session?.connection.label ?? session?.connection.origin ?? runtimeTargetInput.trim()) ||
           "Server target pending");
   const runtimeStatusCopy =
     runtimeMode === "local"
@@ -512,7 +512,7 @@ export function WorkspaceStatusStrip({
           authTransition: outcome.result.authTransition,
           targetLabel:
             outcome.result.connection.label ??
-            outcome.result.connection.target ??
+            outcome.result.connection.origin ??
             (nextMode === "local" ? "local" : runtimeTargetInput.trim() || "the server target"),
           detachedTaskIds: outcome.result.detachedTaskIds,
         }),

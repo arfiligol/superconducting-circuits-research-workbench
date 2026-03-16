@@ -151,7 +151,7 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
   const currentTargetLabel =
     runtimeMode === "local"
       ? "Local backend"
-      : ((session?.connection.label ?? session?.connection.target ?? targetInput.trim()) ||
+      : ((session?.connection.label ?? session?.connection.origin ?? targetInput.trim()) ||
           "Server target pending");
 
   async function handleConnectOnline() {
@@ -169,7 +169,7 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
           tone: "info",
           title: "Online target ready",
           description: `Connected to ${((outcome.result.connection.label ??
-            outcome.result.connection.target ??
+            outcome.result.connection.origin ??
             targetInput.trim()) || "the selected target")}. Sign in to establish a fresh online session.`,
         });
         return;
