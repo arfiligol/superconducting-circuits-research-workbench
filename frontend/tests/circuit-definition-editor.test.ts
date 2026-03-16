@@ -671,6 +671,21 @@ describe("circuit definition preview helpers", () => {
       ],
     });
 
+    expect(
+      buildNormalizedOutputPreview(
+        '{\n  "source": "{\\"name\\": \\"Duplicated\\"}",\n  "expanded": {"components": 4},\n  "preview_artifacts": 2\n}',
+      ),
+    ).toEqual({
+      formattedOutput: '{\n  "expanded": {\n    "components": 4\n  },\n  "preview_artifacts": 2\n}',
+      lineCount: 6,
+      fieldCount: 2,
+      isStructured: true,
+      fields: [
+        { key: "expanded", label: "Expanded", value: '{"components":4}' },
+        { key: "preview_artifacts", label: "Preview Artifacts", value: "2" },
+      ],
+    });
+
     expect(isCircuitDefinitionMutationPending("publishing")).toBe(true);
     expect(isCircuitDefinitionMutationPending("success")).toBe(false);
   });
@@ -711,6 +726,8 @@ describe("circuit definition workspace boundaries", () => {
     expect(catalogWorkspaceSource).not.toContain("window.confirm");
     expect(catalogWorkspaceSource).not.toContain("CodeMirror");
     expect(catalogWorkspaceSource).not.toContain("Validation & Preview");
+    expect(catalogWorkspaceSource).not.toContain("disabled={isMutationPending || !canCreateDefinition}");
+    expect(catalogWorkspaceSource).toContain('openEditor("new")');
   });
 
   it("keeps the editor route responsible for source editing, serializer binding, and persisted preview", () => {

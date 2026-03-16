@@ -58,7 +58,6 @@ export function CircuitDefinitionCatalogWorkspace() {
     mutationStatus,
   } = useCircuitDefinitionEditorData(null);
   const isMutationPending = isCircuitDefinitionMutationPending(mutationStatus.state);
-  const canCreateDefinition = session?.capabilities.canManageDefinitions ?? false;
 
   const visibleDefinitions = useMemo(
     () => filterCircuitDefinitionCatalog(definitions, searchQuery, sortMode),
@@ -104,11 +103,11 @@ export function CircuitDefinitionCatalogWorkspace() {
           onClick={() => {
             openEditor("new");
           }}
-          disabled={isMutationPending || !canCreateDefinition}
+          disabled={isMutationPending}
           title={
-            canCreateDefinition
-              ? "Create a new workspace-scoped schema draft."
-              : "This session cannot create circuit definitions in the active workspace."
+            session?.capabilities.canManageDefinitions
+              ? "Create a new schema draft and continue authoring in the editor."
+              : "Open a local schema draft. Persist actions stay gated until this session can create definitions."
           }
           className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
         >

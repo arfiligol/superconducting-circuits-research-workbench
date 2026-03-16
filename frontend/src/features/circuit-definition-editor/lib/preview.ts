@@ -187,15 +187,17 @@ export function buildNormalizedOutputPreview(
       throw new Error("normalized output is not a JSON object");
     }
 
-    const fields = Object.entries(parsed).map(([key, value]) => ({
+    const visiblePreviewObject = omitPreviewOnlyKeys(parsed);
+    const fields = Object.entries(visiblePreviewObject).map(([key, value]) => ({
       key,
       label: humanizePreviewKey(key),
       value: formatPreviewValue(value),
     }));
+    const sanitizedOutput = JSON.stringify(visiblePreviewObject, null, 2);
 
     return {
-      formattedOutput: JSON.stringify(parsed, null, 2),
-      lineCount,
+      formattedOutput: sanitizedOutput,
+      lineCount: sanitizedOutput.split(/\r?\n/).length,
       fieldCount: fields.length,
       fields,
       isStructured: true,
@@ -233,4 +235,12 @@ function humanizePreviewKey(key: string): string {
     .filter(Boolean)
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
+}
+
+function omitPreviewOnlyKeys(
+  parsed: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(parsed).filter(([key]) => key !== "source"),
+  );
 }
