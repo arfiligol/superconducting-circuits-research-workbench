@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import datetime
 
 import pytest
@@ -22,8 +23,8 @@ def reset_app_state() -> None:
     client.cookies.clear()
 
 
-def _login() -> dict[str, object]:
-    switch_response = client.patch(
+def _login(test_client: TestClient = client) -> dict[str, object]:
+    switch_response = test_client.patch(
         "/session/runtime-mode",
         json={
             "runtime_mode": "online",
@@ -32,7 +33,7 @@ def _login() -> dict[str, object]:
         },
     )
     assert switch_response.status_code == 200
-    response = client.post(
+    response = test_client.post(
         "/session/login",
         json={
             "email": "rewrite.local@example.com",
@@ -43,6 +44,18 @@ def _login() -> dict[str, object]:
     payload = response.json()
     assert payload["ok"] is True
     return payload["data"]
+
+
+@contextmanager
+def _bind_client_app_context(test_client: TestClient):
+    app_context_id = test_client.cookies.get("sc_app_context")
+    assert app_context_id is not None
+    repository = get_rewrite_app_state_repository()
+    binding = repository.bind_request_app_context_id(app_context_id)
+    try:
+        yield
+    finally:
+        repository.reset_request_app_context_id(binding)
 
 
 def test_get_session_returns_local_space_baseline_without_cookie() -> None:
@@ -364,6 +377,59 @@ def test_runtime_mode_switch_resets_remote_auth_and_rebuilds_online_context() ->
     follow_up = client.get("/session").json()["data"]
     assert follow_up["runtime_mode"] == "online"
     assert follow_up["auth"]["state"] == "anonymous"
+
+
+def test_runtime_mode_switch_is_isolated_per_client_context() -> None:
+    with TestClient(app) as client_a, TestClient(app) as client_b:
+        _login(client_a)
+        _login(client_b)
+
+        switch_local = client_a.patch("/session/runtime-mode", json={"runtime_mode": "local"})
+
+        assert switch_local.status_code == 200
+        session_a = client_a.get("/session").json()["data"]
+        session_b = client_b.get("/session").json()["data"]
+        assert session_a["runtime_mode"] == "local"
+        assert session_a["workspace"]["name"] == "Local Space"
+        assert session_b["runtime_mode"] == "online"
+        assert session_b["auth"]["state"] == "authenticated"
+        assert session_b["workspace"]["id"] == "ws-device-lab"
+
+
+def test_runtime_mode_switch_only_resets_caller_authenticated_session() -> None:
+    with TestClient(app) as client_a, TestClient(app) as client_b:
+        _login(client_a)
+        _login(client_b)
+
+        switched_local = client_a.patch("/session/runtime-mode", json={"runtime_mode": "local"})
+        assert switched_local.status_code == 200
+        switched_online = client_a.patch(
+            "/session/runtime-mode",
+            json={"runtime_mode": "online", "server_origin": "http://127.0.0.1:8000"},
+        )
+
+        assert switched_online.status_code == 200
+        session_a = client_a.get("/session").json()["data"]
+        assert session_a["runtime_mode"] == "online"
+        assert session_a["auth"]["state"] == "anonymous"
+
+        dataset_switch = client_b.patch("/session/active-dataset", json={"dataset_id": None})
+        assert dataset_switch.status_code == 200
+        assert dataset_switch.json()["data"]["auth"]["state"] == "authenticated"
+        assert client_b.get("/session").json()["data"]["auth"]["state"] == "authenticated"
+
+
+def test_queue_visibility_remains_mode_aware_per_client_context() -> None:
+    with TestClient(app) as local_client, TestClient(app) as online_client:
+        _login(online_client)
+
+        local_rows = local_client.get("/tasks").json()["data"]["rows"]
+        online_rows = online_client.get("/tasks").json()["data"]["rows"]
+
+        assert [row["task_id"] for row in local_rows] == [300]
+        assert all(row["visibility_scope"] == "local" for row in local_rows)
+        assert [row["task_id"] for row in online_rows] == [301, 302, 303]
+        assert all(row["visibility_scope"] != "local" for row in online_rows)
 
 
 def test_local_catalog_and_definitions_use_local_visibility_scope() -> None:
@@ -741,16 +807,17 @@ def test_runtime_updates_flow_through_detail_events_and_result_handoff() -> None
 
 def test_failed_task_reports_result_handoff_none_after_lifecycle_update() -> None:
     _login()
-    get_task_service().update_task_lifecycle(
-        TaskLifecycleUpdate(
-            task_id=302,
-            status="failed",
-            progress_percent_complete=100,
-            progress_summary="Persisted failure summary.",
-            progress_updated_at="2026-03-12 11:05:00",
-            summary="Persisted task snapshot override",
+    with _bind_client_app_context(client):
+        get_task_service().update_task_lifecycle(
+            TaskLifecycleUpdate(
+                task_id=302,
+                status="failed",
+                progress_percent_complete=100,
+                progress_summary="Persisted failure summary.",
+                progress_updated_at="2026-03-12 11:05:00",
+                summary="Persisted task snapshot override",
+            )
         )
-    )
 
     payload = client.get("/tasks/302").json()["data"]
     assert payload["status"] == "failed"

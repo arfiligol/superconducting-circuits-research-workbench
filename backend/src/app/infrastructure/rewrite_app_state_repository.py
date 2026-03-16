@@ -45,8 +45,13 @@ from src.app.infrastructure.storage_reference_factory import (
 )
 
 DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS = 60 * 60 * 24 * 14
+_DEFAULT_APP_CONTEXT_ID = "app-context:default"
 _REQUEST_SESSION_STATE: ContextVar[SessionState | None] = ContextVar(
     "rewrite_request_session_state",
+    default=None,
+)
+_REQUEST_APP_CONTEXT_ID: ContextVar[str | None] = ContextVar(
+    "rewrite_request_app_context_id",
     default=None,
 )
 
@@ -148,7 +153,9 @@ class InMemoryRewriteAppStateRepository:
     ) -> None:
         self._storage_metadata_repository = storage_metadata_repository
         self._task_snapshot_repository = task_snapshot_repository
-        self._session_state = _seed_session_state()
+        self._app_context_states: dict[str, SessionState] = {
+            _DEFAULT_APP_CONTEXT_ID: _seed_session_state()
+        }
         self._default_dataset_ids = {
             "local-space": "local-dataset-001",
             "ws-device-lab": "fluxonium-2025-031",
@@ -167,7 +174,6 @@ class InMemoryRewriteAppStateRepository:
                 last_checked_at="2026-03-17T09:00:00Z",
             ),
         }
-        self._active_server_target_origin: str | None = None
         self._auth_accounts = _seed_auth_accounts()
         self._users_by_id = {
             account.prototype.user.user_id: email
@@ -193,24 +199,25 @@ class InMemoryRewriteAppStateRepository:
         request_state = _REQUEST_SESSION_STATE.get()
         if request_state is not None:
             return request_state
-        return self._session_state
+        return self._current_app_context_state()
 
     def build_public_request_session_state(self, auth_state: str) -> SessionState:
-        target = self._server_targets.get(self._active_server_target_origin or "")
+        current_state = self._current_app_context_state()
         return _build_online_public_session_state(
             auth_state=auth_state,
-            server_target_origin=self._active_server_target_origin,
-            server_target_label=target.label if target is not None else None,
+            server_target_origin=current_state.server_target_origin,
+            server_target_label=current_state.server_target_label,
         )
 
     def get_runtime_mode(self) -> str:
-        return self._session_state.runtime_mode
+        return self.get_session_state().runtime_mode
 
     def list_server_targets(self) -> tuple[ServerTargetSummary, ...]:
+        active_target_origin = self._current_app_context_state().server_target_origin
         return tuple(
             _to_server_target_summary(
                 record,
-                is_active=record.origin == self._active_server_target_origin,
+                is_active=record.origin == active_target_origin,
             )
             for record in sorted(self._server_targets.values(), key=lambda item: item.origin)
         )
@@ -227,7 +234,7 @@ class InMemoryRewriteAppStateRepository:
         self._server_targets[origin] = record
         return _to_server_target_summary(
             record,
-            is_active=record.origin == self._active_server_target_origin,
+            is_active=record.origin == self._current_app_context_state().server_target_origin,
         )
 
     def set_server_target_validation_status(
@@ -246,7 +253,7 @@ class InMemoryRewriteAppStateRepository:
         self._server_targets[origin] = record
         return _to_server_target_summary(
             record,
-            is_active=record.origin == self._active_server_target_origin,
+            is_active=record.origin == self._current_app_context_state().server_target_origin,
         )
 
     def switch_runtime_mode(
@@ -255,25 +262,24 @@ class InMemoryRewriteAppStateRepository:
         runtime_mode: str,
         server_target_origin: str | None = None,
     ) -> SessionState:
+        current_state = self._current_app_context_state()
         if runtime_mode == "local":
-            self.revoke_all_authenticated_sessions()
-            self._active_server_target_origin = None
-            self._session_state = _seed_session_state()
-            return self._session_state
+            updated_state = _seed_session_state()
+            self._set_current_app_context_state(updated_state)
+            return updated_state
 
-        active_target_origin = server_target_origin or self._active_server_target_origin
+        active_target_origin = server_target_origin or current_state.server_target_origin
         if active_target_origin is None:
-            self._session_state = _build_online_public_session_state(
+            updated_state = _build_online_public_session_state(
                 auth_state="anonymous",
                 server_target_origin=None,
                 server_target_label=None,
             )
-            return self._session_state
+            self._set_current_app_context_state(updated_state)
+            return updated_state
 
         target_record = self._server_targets.get(active_target_origin)
-        self.revoke_all_authenticated_sessions()
-        self._active_server_target_origin = active_target_origin
-        self._session_state = _build_online_public_session_state(
+        updated_state = _build_online_public_session_state(
             auth_state="anonymous",
             server_target_origin=active_target_origin,
             server_target_label=(
@@ -282,17 +288,31 @@ class InMemoryRewriteAppStateRepository:
                 else _default_server_target_label(active_target_origin)
             ),
         )
-        return self._session_state
+        self._set_current_app_context_state(updated_state)
+        return updated_state
 
-    def revoke_all_authenticated_sessions(self) -> None:
-        for session_id in list(self._authenticated_sessions):
-            self.invalidate_authenticated_session(session_id)
+    def ensure_app_context(self, app_context_id: str | None) -> str:
+        if app_context_id is None or len(app_context_id.strip()) == 0:
+            app_context_id = f"app-context:{token_urlsafe(16)}"
+        if app_context_id not in self._app_context_states:
+            self._app_context_states[app_context_id] = _seed_session_state()
+        return app_context_id
+
+    def get_app_context_state(self, app_context_id: str) -> SessionState:
+        ensured_app_context_id = self.ensure_app_context(app_context_id)
+        return self._app_context_states[ensured_app_context_id]
 
     def bind_request_session_state(self, session_state: SessionState) -> Token[SessionState | None]:
         return _REQUEST_SESSION_STATE.set(session_state)
 
     def reset_request_session_state(self, token: Token[SessionState | None]) -> None:
         _REQUEST_SESSION_STATE.reset(token)
+
+    def bind_request_app_context_id(self, app_context_id: str) -> Token[str | None]:
+        return _REQUEST_APP_CONTEXT_ID.set(app_context_id)
+
+    def reset_request_app_context_id(self, token: Token[str | None]) -> None:
+        _REQUEST_APP_CONTEXT_ID.reset(token)
 
     def create_authenticated_session(
         self,
@@ -307,22 +327,19 @@ class InMemoryRewriteAppStateRepository:
 
         session_id = f"rewrite-auth-session-{self._next_transport_session_id}"
         self._next_transport_session_id += 1
+        current_state = self._current_app_context_state()
         session_state = replace(
             account.prototype,
             session_id=session_id,
             runtime_mode="online",
             auth_state="authenticated",
             auth_mode="jwt_refresh_cookie",
-            server_target_origin=self._active_server_target_origin,
-            server_target_label=(
-                self._server_targets[self._active_server_target_origin].label
-                if self._active_server_target_origin in self._server_targets
-                else None
-            ),
+            server_target_origin=current_state.server_target_origin,
+            server_target_label=current_state.server_target_label,
         )
         self._authenticated_sessions[session_id] = session_state
         self._session_last_active_dataset_ids[session_id] = dict(self._last_active_dataset_ids)
-        self._session_state = session_state
+        self._set_current_app_context_state(session_state)
         return session_state
 
     def get_authenticated_session_state(self, session_id: str) -> SessionState | None:
@@ -332,6 +349,15 @@ class InMemoryRewriteAppStateRepository:
         removed = self._authenticated_sessions.pop(session_id, None)
         self.revoke_refresh_family_for_session(session_id)
         self._session_last_active_dataset_ids.pop(session_id, None)
+        if removed is not None:
+            self._replace_app_contexts_for_session(
+                session_id,
+                _build_online_public_session_state(
+                    auth_state="anonymous",
+                    server_target_origin=removed.server_target_origin,
+                    server_target_label=removed.server_target_label,
+                ),
+            )
         return removed is not None
 
     def issue_refresh_token(self, session_id: str) -> str | None:
@@ -685,7 +711,7 @@ class InMemoryRewriteAppStateRepository:
             active_dataset_id=None,
         )
         self._authenticated_sessions[session_id] = updated_state
-        self._session_state = updated_state
+        self._replace_app_contexts_for_session(session_id, updated_state)
         return updated_state
 
     def set_authenticated_active_dataset_id(
@@ -699,7 +725,7 @@ class InMemoryRewriteAppStateRepository:
 
         updated_state = replace(session_state, active_dataset_id=dataset_id)
         self._authenticated_sessions[session_id] = updated_state
-        self._session_state = updated_state
+        self._replace_app_contexts_for_session(session_id, updated_state)
         session_dataset_state = self._session_last_active_dataset_ids.setdefault(
             session_id,
             dict(self._last_active_dataset_ids),
@@ -727,15 +753,16 @@ class InMemoryRewriteAppStateRepository:
         return self._session_last_active_dataset_ids.get(session_id, {}).get(workspace_id)
 
     def set_active_workspace_id(self, workspace_id: str) -> SessionState:
-        current_workspace_id = self._session_state.workspace_id
-        if self._session_state.active_dataset_id is not None:
+        current_state = self._current_app_context_state()
+        current_workspace_id = current_state.workspace_id
+        if current_state.active_dataset_id is not None:
             self._last_active_dataset_ids[current_workspace_id] = (
-                self._session_state.active_dataset_id
+                current_state.active_dataset_id
             )
 
-        membership = _membership_for_workspace(self._session_state.memberships, workspace_id)
+        membership = _membership_for_workspace(current_state.memberships, workspace_id)
         if membership is None:
-            return self._session_state
+            return current_state
 
         memberships = tuple(
             WorkspaceMembership(
@@ -747,10 +774,10 @@ class InMemoryRewriteAppStateRepository:
                 is_active=item.workspace_id == workspace_id,
                 allowed_actions=item.allowed_actions,
             )
-            for item in self._session_state.memberships
+            for item in current_state.memberships
         )
-        self._session_state = replace(
-            self._session_state,
+        updated_state = replace(
+            current_state,
             workspace_id=membership.workspace_id,
             workspace_slug=membership.slug,
             workspace_display_name=membership.display_name,
@@ -759,15 +786,18 @@ class InMemoryRewriteAppStateRepository:
             memberships=memberships,
             active_dataset_id=None,
         )
-        return self._session_state
+        self._set_current_app_context_state(updated_state)
+        return updated_state
 
     def set_active_dataset_id(self, dataset_id: str | None) -> SessionState:
-        self._session_state = replace(self._session_state, active_dataset_id=dataset_id)
+        current_state = self._current_app_context_state()
+        updated_state = replace(current_state, active_dataset_id=dataset_id)
+        self._set_current_app_context_state(updated_state)
         if dataset_id is None:
-            self._last_active_dataset_ids.pop(self._session_state.workspace_id, None)
+            self._last_active_dataset_ids.pop(updated_state.workspace_id, None)
         else:
-            self._last_active_dataset_ids[self._session_state.workspace_id] = dataset_id
-        return self._session_state
+            self._last_active_dataset_ids[updated_state.workspace_id] = dataset_id
+        return updated_state
 
     def get_last_active_dataset_id(self, workspace_id: str) -> str | None:
         return self._last_active_dataset_ids.get(workspace_id)
@@ -776,8 +806,9 @@ class InMemoryRewriteAppStateRepository:
         return self._default_dataset_ids.get(workspace_id)
 
     def override_session_state(self, **changes: object) -> SessionState:
-        self._session_state = replace(self._session_state, **changes)
-        return self._session_state
+        updated_state = replace(self._current_app_context_state(), **changes)
+        self._set_current_app_context_state(updated_state)
+        return updated_state
 
     def _revoke_family_tokens(self, family_id: str) -> None:
         for token in self._refresh_family_index.get(family_id, set()):
@@ -845,7 +876,21 @@ class InMemoryRewriteAppStateRepository:
                 else "owned",
             )
             self._authenticated_sessions[session_id] = updated_state
-            self._session_state = updated_state
+            self._replace_app_contexts_for_session(session_id, updated_state)
+
+    def _current_app_context_id(self) -> str:
+        return _REQUEST_APP_CONTEXT_ID.get() or _DEFAULT_APP_CONTEXT_ID
+
+    def _current_app_context_state(self) -> SessionState:
+        return self._app_context_states[self._current_app_context_id()]
+
+    def _set_current_app_context_state(self, state: SessionState) -> None:
+        self._app_context_states[self._current_app_context_id()] = state
+
+    def _replace_app_contexts_for_session(self, session_id: str, state: SessionState) -> None:
+        for app_context_id, app_state in list(self._app_context_states.items()):
+            if app_state.session_id == session_id:
+                self._app_context_states[app_context_id] = state
 
     def list_tasks(self) -> list[TaskDetail]:
         if self._task_snapshot_repository is not None:
@@ -1391,25 +1436,6 @@ def _to_user_summary(user: SessionUser) -> CollaborationUserSummary:
         display_name=user.display_name,
         email=user.email,
         platform_role=user.platform_role,
-    )
-
-
-def _build_public_request_session_state(auth_state: str) -> SessionState:
-    return SessionState(
-        session_id=f"request-{auth_state}",
-        runtime_mode="online",
-        auth_state=auth_state,  # type: ignore[arg-type]
-        auth_mode="jwt_refresh_cookie",
-        user=None,
-        server_target_origin="http://127.0.0.1:8000",
-        server_target_label="Default Rewrite Server",
-        workspace_id="",
-        workspace_slug="",
-        workspace_display_name="",
-        workspace_role="viewer",
-        default_task_scope="owned",
-        memberships=(),
-        active_dataset_id=None,
     )
 
 

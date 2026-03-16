@@ -60,8 +60,6 @@ class SessionRepository(Protocol):
 
     def invalidate_authenticated_session(self, session_id: str) -> bool: ...
 
-    def revoke_all_authenticated_sessions(self) -> None: ...
-
     def issue_refresh_token(self, session_id: str) -> str | None: ...
 
     def rotate_refresh_token(
@@ -253,6 +251,7 @@ class SessionService:
         label: str | None = None,
     ) -> RuntimeModeSwitchResult:
         previous_state = self._current_visibility_state(session_token)
+        self._invalidate_caller_continuity(session_token)
 
         if runtime_mode == "local":
             next_state = self._repository.switch_runtime_mode(runtime_mode="local")
@@ -325,6 +324,9 @@ class SessionService:
         )
 
     def require_authenticated_session_state(self, session_token: str | None) -> SessionState:
+        state, auth_state, _auth_reason = self._resolve_online_session_context(session_token)
+        if auth_state == "authenticated" and state is not None:
+            return state
         if self._repository.get_runtime_mode() != "online":
             raise service_error(
                 401,
@@ -332,7 +334,6 @@ class SessionService:
                 category="auth_required",
                 message="The current request requires an authenticated online session.",
             )
-        state, auth_state, _auth_reason = self._resolve_online_session_context(session_token)
         if auth_state == "anonymous":
             raise service_error(
                 401,
@@ -907,6 +908,14 @@ class SessionService:
             return state
         current_state = self._repository.get_session_state()
         return current_state if current_state.runtime_mode == "online" else None
+
+    def _invalidate_caller_continuity(self, session_token: str | None) -> None:
+        if session_token is None or self._repository.get_runtime_mode() != "online":
+            return
+        verified = self._token_transport.verify_token(session_token)
+        if verified.status != "valid" or verified.session_id is None:
+            return
+        self._repository.invalidate_authenticated_session(verified.session_id)
 
     def _detached_task_ids(
         self,

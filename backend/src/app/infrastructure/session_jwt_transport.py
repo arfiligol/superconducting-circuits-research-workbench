@@ -12,6 +12,7 @@ VerificationStatus = Literal["valid", "expired", "invalid"]
 
 SESSION_COOKIE_NAME = "sc_session_access"
 REFRESH_COOKIE_NAME = "sc_session_refresh"
+APP_CONTEXT_COOKIE_NAME = "sc_app_context"
 DEFAULT_SESSION_TOKEN_LIFETIME_SECONDS = 900
 
 
