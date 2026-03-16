@@ -19,6 +19,10 @@ const authEntrySource = readFileSync(
   fileURLToPath(new URL("../src/components/layout/auth-entry-surface.tsx", import.meta.url)),
   "utf8",
 );
+const themeToggleSource = readFileSync(
+  fileURLToPath(new URL("../src/components/layout/theme-toggle.tsx", import.meta.url)),
+  "utf8",
+);
 const sharedSelectSource = readFileSync(
   fileURLToPath(new URL("../src/features/shared/components/app-select.tsx", import.meta.url)),
   "utf8",
@@ -144,12 +148,16 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("ContextSectionCard");
     expect(statusStripSource).toContain("selectedSection");
     expect(statusStripSource).toContain("aria-pressed={selected}");
+    expect(statusStripSource).toContain("cursor-pointer rounded-[1rem]");
+    expect(statusStripSource).toContain("hover:-translate-y-0.5");
+    expect(statusStripSource).toContain("focus-visible:ring-2");
     expect(statusStripSource).toContain('selectedSection === "workspace"');
     expect(statusStripSource).toContain('selectedSection === "dataset"');
     expect(statusStripSource).toContain('selectedSection === "queue"');
     expect(statusStripSource).toContain('selectedSection === "worker"');
     expect(statusStripSource).toContain("Focused Section");
-    expect(statusStripSource).not.toContain('title="Active Workspace"\n            description="Session-backed workspace switching."\n            actions=');
+    expect(statusStripSource).not.toContain("toggleDeveloperMode");
+    expect(statusStripSource).toContain("Open Account > Developer Mode for technical detail");
   });
 
   it("uses a single active shell-panel model so triggers can switch without overlay dead-zones", () => {
@@ -170,8 +178,9 @@ describe("workspace shell source contracts", () => {
   it("splits context and account into different shell surface models", () => {
     expect(statusStripSource).toContain('variant="context"');
     expect(accountPanelSource).toContain('variant="account"');
-    expect(accountPanelSource).toContain('className="max-w-[440px]"');
+    expect(accountPanelSource).toContain('className="max-w-[448px]"');
     expect(accountPanelSource).toContain("eyebrow={null}");
+    expect(shellSidePanelSource).toContain("rounded-l-[1.6rem]");
   });
 
   it("keeps workspace and dataset switchers inside the shared shell", () => {
@@ -213,8 +222,16 @@ describe("workspace shell source contracts", () => {
     expect(developerModeSource).toContain("useDeveloperMode");
     expect(accountPanelSource).toContain("Debug details");
     expect(accountPanelSource).toContain("developerModeEnabled ? (");
-    expect(statusStripSource).toContain("Open Developer Mode for technical detail");
-    expect(statusStripSource).toContain("toggleDeveloperMode");
+    expect(statusStripSource).toContain("Open Account > Developer Mode for technical detail");
+    expect(statusStripSource).not.toContain("Developer Mode On");
+    expect(statusStripSource).not.toContain("Developer Mode Off");
+  });
+
+  it("gives the theme toggle a clear interactive affordance", () => {
+    expect(themeToggleSource).toContain("cursor-pointer");
+    expect(themeToggleSource).toContain("focus-visible:ring-2");
+    expect(themeToggleSource).toContain("aria-pressed");
+    expect(themeToggleSource).toContain("hover:border-primary/35 hover:bg-primary/10");
   });
 
   it("removes low-contrast auth-adjacent rose notices from the shared shell", () => {

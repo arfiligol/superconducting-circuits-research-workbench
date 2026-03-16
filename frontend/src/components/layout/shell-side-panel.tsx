@@ -106,7 +106,7 @@ export function ShellSidePanel({
           "fixed z-[61] flex flex-col overflow-hidden border border-border bg-card shadow-[0_28px_90px_rgba(15,23,42,0.22)]",
           isContextSurface
             ? "inset-x-4 top-[calc(74px+1rem)] bottom-4 mx-auto w-auto max-w-[min(1040px,calc(100vw-2rem))] rounded-[1.4rem] sm:inset-x-6 sm:bottom-6"
-            : "right-0 h-[calc(100dvh-74px)] w-full border-l border-border shadow-[-24px_0_70px_rgba(15,23,42,0.24)] top-[74px] max-w-[440px]",
+            : "right-0 top-[74px] h-[calc(100dvh-74px)] w-full max-w-[440px] rounded-l-[1.6rem] border-l border-border/85 bg-card/98 shadow-[-24px_0_70px_rgba(15,23,42,0.24)] backdrop-blur",
           className,
         )}
         aria-modal="true"

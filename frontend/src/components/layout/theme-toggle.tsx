@@ -35,8 +35,9 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
     <button
       type="button"
       onClick={cycleTheme}
+      aria-pressed={effectiveTheme !== "system"}
       className={[
-        "inline-flex h-10 w-10 items-center justify-center rounded-full text-primary transition hover:bg-surface-elevated hover:text-primary-foreground",
+        "inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border/85 bg-card text-primary shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition hover:border-primary/35 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card aria-pressed:border-primary/40 aria-pressed:bg-primary/12",
         className,
       ]
         .filter(Boolean)

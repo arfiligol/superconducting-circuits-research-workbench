@@ -118,7 +118,7 @@ function CompactContextCard({
   icon: ComponentType<{ className?: string }>;
 }>) {
   return (
-    <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
+    <div className="rounded-[1rem] border border-border/90 bg-background px-4 py-3 shadow-[0_8px_22px_rgba(15,23,42,0.06)]">
       <div className="flex items-start gap-3">
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
           <Icon className="h-4 w-4" />
@@ -128,7 +128,7 @@ function CompactContextCard({
             {label}
           </p>
           <p className="mt-1 truncate text-sm font-semibold text-foreground">{value}</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+          <p className="mt-1 text-xs leading-5 text-foreground/74 dark:text-foreground/74">{detail}</p>
         </div>
       </div>
     </div>
@@ -160,15 +160,15 @@ function ContextSectionCard({
       }}
       aria-pressed={selected}
       className={cx(
-        "relative rounded-[1rem] border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+        "relative cursor-pointer rounded-[1rem] border px-4 py-3 text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card active:translate-y-0",
         selected
-          ? "border-primary/40 bg-primary/10 shadow-[0_14px_32px_rgba(37,99,235,0.12)]"
-          : "border-border bg-background hover:border-primary/20 hover:bg-surface-elevated",
+          ? "border-primary/45 bg-primary/12 shadow-[0_16px_34px_rgba(37,99,235,0.16)]"
+          : "border-border/90 bg-background shadow-[0_10px_24px_rgba(15,23,42,0.06)] hover:border-primary/25 hover:bg-surface-elevated hover:shadow-[0_16px_32px_rgba(15,23,42,0.1)]",
       )}
     >
       <span
         className={cx(
-          "absolute left-3 top-3 h-2.5 w-2.5 rounded-full border border-background/80",
+          "absolute left-3 top-3 h-2.5 w-2.5 rounded-full border border-background/80 transition",
           selected ? "bg-primary shadow-[0_0_0_3px_rgba(37,99,235,0.16)]" : "bg-border",
         )}
       />
@@ -186,7 +186,7 @@ function ContextSectionCard({
             {label}
           </p>
           <p className="mt-1 truncate text-sm font-semibold text-foreground">{value}</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+          <p className="mt-1 text-xs leading-5 text-foreground/74 dark:text-foreground/74">{detail}</p>
         </div>
       </div>
     </button>
@@ -246,7 +246,7 @@ export function WorkspaceStatusStrip({
     clearActiveDataset,
     syncRouteDataset,
   } = useActiveDataset();
-  const { enabled: developerModeEnabled, toggle: toggleDeveloperMode } = useDeveloperMode();
+  const { enabled: developerModeEnabled } = useDeveloperMode();
   const {
     tasks,
     activeTasks,
@@ -444,7 +444,7 @@ export function WorkspaceStatusStrip({
               {developerModeEnabled
                 ? (describeShellError(contextWarning) ??
                   "The shell could not fully resolve the current global context.")
-                : "Some shared context data is unavailable. Open Developer Mode for technical detail."}
+                : "Some shared context data is unavailable. Open Account > Developer Mode for technical detail."}
             </ShellNotice>
           )}
 
@@ -487,25 +487,13 @@ export function WorkspaceStatusStrip({
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-border/80 bg-surface px-4 py-3">
+          <div className="rounded-[1rem] border border-border/80 bg-surface px-4 py-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Focused Section
               </p>
               <p className="mt-1 text-sm font-medium text-foreground">{selectedSectionTitle}</p>
             </div>
-            <button
-              type="button"
-              onClick={toggleDeveloperMode}
-              className={cx(
-                "inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] transition",
-                developerModeEnabled
-                  ? "border-primary/35 bg-primary/10 text-foreground"
-                  : "border-border bg-background text-muted-foreground hover:border-primary/25 hover:bg-surface-elevated hover:text-foreground",
-              )}
-            >
-              {developerModeEnabled ? "Developer Mode On" : "Developer Mode Off"}
-            </button>
           </div>
 
           {selectedSection === "workspace" ? (

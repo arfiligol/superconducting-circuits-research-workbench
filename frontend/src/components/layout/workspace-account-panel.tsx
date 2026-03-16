@@ -31,10 +31,10 @@ function PreferenceRow({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-[0.95rem] border border-border bg-background px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-[1.1rem] border border-border/90 bg-background px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+        <p className="mt-1 text-xs leading-5 text-foreground/72 dark:text-foreground/74">{detail}</p>
       </div>
       {children}
     </div>
@@ -86,7 +86,7 @@ export function WorkspaceAccountPanel({
       subtitle="Account, preferences, and app-level debug visibility."
       eyebrow={null}
       variant="account"
-      className="max-w-[440px]"
+      className="max-w-[448px]"
       interactionBoundaryRef={interactionBoundaryRef}
     >
       <div className="space-y-5">
@@ -94,7 +94,7 @@ export function WorkspaceAccountPanel({
           {summaryMessage}
         </ShellNotice>
 
-        <section className="rounded-[1rem] border border-border bg-surface px-4 py-4">
+        <section className="rounded-[1.2rem] border border-border/90 bg-surface px-4 py-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -109,31 +109,31 @@ export function WorkspaceAccountPanel({
             </div>
             <span
               className={cx(
-                "rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.16em]",
+                "rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
                 authSummary.tone === "success"
-                  ? "bg-emerald-500/12 text-emerald-800 dark:text-emerald-200"
+                  ? "border-emerald-500/30 bg-emerald-500/16 text-emerald-950 dark:text-emerald-200"
                   : authSummary.tone === "warning"
-                    ? "bg-amber-500/12 text-amber-800 dark:text-amber-200"
+                    ? "border-amber-500/30 bg-amber-500/16 text-amber-950 dark:text-amber-200"
                     : authSummary.tone === "error"
-                      ? "bg-rose-500/12 text-rose-800 dark:text-rose-200"
-                      : "bg-primary/10 text-primary",
+                      ? "border-rose-600/30 bg-rose-500/16 text-rose-950 dark:text-rose-200"
+                      : "border-primary/25 bg-primary/12 text-foreground",
               )}
             >
               {authSummary.badgeLabel}
             </span>
           </div>
 
-          <p className="mt-4 text-sm leading-6 text-muted-foreground">
+          <p className="mt-4 text-sm leading-6 text-foreground/74 dark:text-foreground/76">
             Workspace switching, datasets, queue visibility, and worker context stay in the global context surface.
           </p>
         </section>
 
-        <section className="rounded-[1rem] border border-border bg-surface px-4 py-4">
+        <section className="rounded-[1.2rem] border border-border/90 bg-surface px-4 py-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
           <div className="mb-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Preferences
             </p>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-2 text-sm text-foreground/72 dark:text-foreground/74">
               App-level controls stay lightweight here.
             </p>
           </div>
@@ -159,10 +159,10 @@ export function WorkspaceAccountPanel({
                 onClick={toggleDeveloperMode}
                 aria-pressed={developerModeEnabled}
                 className={cx(
-                  "inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] transition",
+                  "inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                   developerModeEnabled
-                    ? "border-primary/35 bg-primary/10 text-foreground"
-                    : "border-border bg-background text-muted-foreground hover:border-primary/25 hover:bg-surface-elevated hover:text-foreground",
+                    ? "border-primary/40 bg-primary/12 text-foreground shadow-[0_8px_22px_rgba(37,99,235,0.14)]"
+                    : "border-border bg-background text-foreground/76 hover:border-primary/25 hover:bg-surface-elevated hover:text-foreground",
                 )}
               >
                 <Wrench className="h-3.5 w-3.5" />
@@ -173,11 +173,11 @@ export function WorkspaceAccountPanel({
         </section>
 
         {developerModeEnabled ? (
-          <details className="rounded-[1rem] border border-border bg-surface px-4 py-4">
-            <summary className="cursor-pointer list-none text-sm font-semibold text-foreground">
+          <details className="rounded-[1.2rem] border border-border/90 bg-surface px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-foreground marker:hidden">
               Debug details
             </summary>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-2 text-sm text-foreground/72 dark:text-foreground/74">
               App-level technical detail is visible only while Developer Mode is enabled.
             </p>
 
