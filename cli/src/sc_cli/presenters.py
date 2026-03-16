@@ -329,12 +329,16 @@ def render_dataset_bundle_export_receipt(
     return "\n".join(
         [
             "operation: exported",
+            "interchange_scope: local_app_bundle",
+            "lineage_preserved: true",
             f"bundle_file: {receipt.bundle_file}",
             f"bundle_id: {receipt.bundle.metadata.bundle_id}",
             f"bundle_family: {receipt.bundle.metadata.bundle_family}",
             f"bundle_version: {receipt.bundle.metadata.bundle_version}",
             f"source_dataset_id: {receipt.bundle.dataset.dataset_id}",
             f"source_dataset_name: {receipt.bundle.dataset.name}",
+            f"design_scope_count: {len(receipt.bundle.dataset.design_scopes)}",
+            f"trace_manifest_count: {len(receipt.bundle.dataset.trace_manifest)}",
             (
                 "lineage_source_dataset_id: "
                 f"{_render_nullable(None if lineage is None else lineage.source_dataset_id)}"
@@ -358,10 +362,14 @@ def render_dataset_bundle_import_receipt(
     return "\n".join(
         [
             "operation: imported",
+            "interchange_scope: local_app_bundle",
+            "lineage_preserved: true",
             f"bundle_file: {receipt.bundle_file}",
             f"bundle_id: {receipt.bundle.metadata.bundle_id}",
             f"imported_dataset_id: {receipt.imported_dataset.dataset_id}",
             f"imported_dataset_name: {receipt.imported_dataset.name}",
+            f"imported_design_scope_count: {len(receipt.imported_dataset.design_scopes)}",
+            f"imported_trace_manifest_count: {len(receipt.imported_dataset.trace_manifest)}",
             (
                 "source_dataset_id: "
                 f"{_render_nullable(None if lineage is None else lineage.source_dataset_id)}"
@@ -642,12 +650,16 @@ def render_result_bundle_export_receipt(
     return "\n".join(
         [
             "operation: exported",
+            "interchange_scope: local_app_bundle",
+            "lineage_preserved: true",
             f"bundle_file: {receipt.bundle_file}",
             f"bundle_id: {bundle.metadata.bundle_id}",
             f"bundle_family: {bundle.metadata.bundle_family}",
             f"bundle_version: {bundle.metadata.bundle_version}",
             f"source_task_id: {bundle.task.task_id}",
             f"source_dataset_id: {bundle.task.dataset_id or '-'}",
+            f"trace_batch_id: {bundle.result_refs.trace_batch_id or '-'}",
+            f"result_handle_count: {len(bundle.result_refs.result_handles)}",
             (
                 "lineage_source_task_id: "
                 f"{_render_nullable(None if lineage is None else lineage.source_task_id)}"
@@ -669,10 +681,14 @@ def render_result_bundle_import_receipt(
         return _render_json_model(receipt)
     lines = [
         "operation: imported",
+        "interchange_scope: local_app_bundle",
+        "lineage_preserved: true",
         f"bundle_file: {receipt.bundle_file}",
         f"bundle_id: {receipt.bundle.metadata.bundle_id}",
         f"imported_task_id: {receipt.imported_task.task_id}",
         f"imported_task_status: {receipt.imported_task.status}",
+        f"imported_trace_batch_id: {receipt.imported_task.result_refs.trace_batch_id or '-'}",
+        f"imported_result_handle_count: {len(receipt.imported_task.result_refs.result_handles)}",
     ]
     lines.extend(_render_lineage_lines(receipt.imported_task))
     return "\n".join(lines)

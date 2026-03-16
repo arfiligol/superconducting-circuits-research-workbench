@@ -1,4 +1,4 @@
-"""Simulation-lane operator commands."""
+"""Compatibility wrapper for simulation-lane local runs."""
 
 from typing import Annotated
 
@@ -20,7 +20,10 @@ from sc_cli.task_operator import (
     wait_for_task_or_exit,
 )
 
-app = typer.Typer(help="Operate on simulation-lane tasks.", no_args_is_help=True)
+app = typer.Typer(
+    help="Compatibility wrapper for simulation-lane local runs.",
+    no_args_is_help=True,
+)
 
 
 @app.command("submit")
@@ -42,7 +45,7 @@ def submit_command(
     ] = None,
     output: OutputOption = OutputMode.TEXT,
 ) -> None:
-    """Submit a simulation task through the generic local task contract."""
+    """Submit a simulation-lane task through the generic local run contract."""
     try:
         task = submit_task(
             kind="simulation",

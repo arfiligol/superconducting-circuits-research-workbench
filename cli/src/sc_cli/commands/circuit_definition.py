@@ -41,7 +41,10 @@ from sc_cli.runtime import (
     update_circuit_definition,
 )
 
-app = typer.Typer(help="Canonical circuit-definition helpers.", no_args_is_help=True)
+app = typer.Typer(
+    help="Compatibility helpers for local circuit-definition catalog exchange.",
+    no_args_is_help=True,
+)
 
 
 class CircuitDefinitionSortOption(str, Enum):

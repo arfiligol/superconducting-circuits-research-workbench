@@ -178,9 +178,46 @@ def test_root_help_keeps_analysis_first_copy() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
-    assert "Standalone-first CLI for local datasets, runs, results" in result.stdout
+    assert "Standalone-first CLI for local datasets, analysis runs, results" in result.stdout
     assert "characterization" in result.stdout
-    assert "analysis-first operator workflows" in result.stdout
+    assert "analysis-first workflows across tasks" in result.stdout
+
+
+def test_root_app_rejects_depublished_simulation_group() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["simulation", "--help"])
+
+    assert result.exit_code == 2
+    assert "No such command 'simulation'." in result.output
+
+
+def test_group_help_copy_stays_analysis_first() -> None:
+    runner = CliRunner()
+
+    datasets_help = runner.invoke(app, ["datasets", "--help"])
+    tasks_help = runner.invoke(app, ["tasks", "--help"])
+    results_help = runner.invoke(app, ["results", "--help"])
+    characterization_help = runner.invoke(app, ["characterization", "--help"])
+
+    assert datasets_help.exit_code == 0
+    assert tasks_help.exit_code == 0
+    assert results_help.exit_code == 0
+    assert characterization_help.exit_code == 0
+    assert "lineage-preserving bundles" in datasets_help.stdout
+    assert "analysis" in tasks_help.stdout
+    assert "run registry" in tasks_help.stdout
+    assert "result bundles" in results_help.stdout
+    assert "analysis-lane workflows over local datasets" in characterization_help.stdout
+
+
+def test_simulation_compatibility_help_is_not_primary_surface_copy() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(simulation.app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "Compatibility wrapper for simulation-lane local runs." in result.stdout
 
 def test_preview_artifacts_command_lists_sc_core_exports() -> None:
     runner = CliRunner()
@@ -795,6 +832,23 @@ def test_datasets_export_bundle_command_supports_json_output(tmp_path: Path) -> 
     assert bundle_file.exists()
 
 
+def test_datasets_export_bundle_text_receipt_mentions_lineage(
+    tmp_path: Path,
+) -> None:
+    runner = CliRunner()
+    bundle_file = tmp_path / "dataset.bundle.json"
+
+    result = runner.invoke(
+        app,
+        ["datasets", "export-bundle", "fluxonium-2025-031", str(bundle_file)],
+    )
+
+    assert result.exit_code == 0
+    assert "interchange_scope: local_app_bundle" in result.stdout
+    assert "lineage_preserved: true" in result.stdout
+    assert "trace_manifest_count: 1" in result.stdout
+
+
 def test_datasets_import_bundle_command_preserves_lineage(tmp_path: Path) -> None:
     runner = CliRunner()
     bundle_file = tmp_path / "dataset.bundle.json"
@@ -1220,6 +1274,24 @@ def test_results_export_bundle_command_writes_lineage_preserving_bundle(tmp_path
     assert bundle_payload["task"]["task_id"] == task_id
     assert bundle_payload["result_refs"]["lineage"]["source_task_id"] == task_id
     assert bundle_payload["result_refs"]["lineage"]["source_dataset_id"] == "fluxonium-2025-031"
+
+
+def test_results_export_bundle_text_receipt_mentions_lineage(
+    tmp_path: Path,
+) -> None:
+    runner = CliRunner()
+    task_id = _completed_simulation_task_id()
+    bundle_file = tmp_path / "result-bundle.json"
+
+    result = runner.invoke(
+        app,
+        ["results", "export-bundle", str(task_id), str(bundle_file)],
+    )
+
+    assert result.exit_code == 0
+    assert "interchange_scope: local_app_bundle" in result.stdout
+    assert "lineage_preserved: true" in result.stdout
+    assert "result_handle_count: 2" in result.stdout
 
 
 def test_results_import_bundle_command_round_trips_bundle_into_local_registry(

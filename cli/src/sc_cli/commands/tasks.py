@@ -20,7 +20,10 @@ from sc_cli.task_operator import (
     wait_for_task_or_exit,
 )
 
-app = typer.Typer(help="Standalone local task helpers.", no_args_is_help=True)
+app = typer.Typer(
+    help="Browse and operate the standalone local analysis run registry.",
+    no_args_is_help=True,
+)
 
 
 class TaskLaneOption(str, Enum):

@@ -25,7 +25,10 @@ from sc_cli.presenters import (
 from sc_cli.runtime import export_task_result_bundle, get_task, import_task_result_bundle
 from sc_cli.task_operator import get_task_or_exit
 
-app = typer.Typer(help="Inspect persisted task result references.", no_args_is_help=True)
+app = typer.Typer(
+    help="Inspect local result references and exchange result bundles.",
+    no_args_is_help=True,
+)
 
 
 @app.command("show")
@@ -78,7 +81,7 @@ def export_bundle_command(
     ],
     output: OutputOption = OutputMode.TEXT,
 ) -> None:
-    """Export one local result bundle for interchange with app/archive consumers."""
+    """Export one local result bundle for lineage-preserving app/archive interchange."""
     try:
         bundle = export_task_result_bundle(task_id)
     except CliContractError as error:
@@ -114,7 +117,7 @@ def import_bundle_command(
     ],
     output: OutputOption = OutputMode.TEXT,
 ) -> None:
-    """Import one result bundle into the local run registry."""
+    """Import one result bundle into the local run registry with lineage preserved."""
     try:
         bundle = LocalResultBundle.model_validate_json(bundle_file.read_text(encoding="utf-8"))
     except OSError as error:

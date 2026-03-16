@@ -12,7 +12,10 @@ from sc_cli.presenters import render_task_event_history, render_task_latest_even
 from sc_cli.runtime import get_task
 from sc_cli.task_operator import get_task_or_exit, select_task_events
 
-app = typer.Typer(help="Inspect persisted task event history.", no_args_is_help=True)
+app = typer.Typer(
+    help="Inspect standalone local run event history.",
+    no_args_is_help=True,
+)
 
 
 class TaskEventTypeOption(str, Enum):

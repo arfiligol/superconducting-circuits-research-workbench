@@ -20,7 +20,10 @@ from sc_cli.task_operator import (
     wait_for_task_or_exit,
 )
 
-app = typer.Typer(help="Operate on characterization-lane tasks.", no_args_is_help=True)
+app = typer.Typer(
+    help="Run characterization and analysis-lane workflows over local datasets.",
+    no_args_is_help=True,
+)
 
 
 @app.command("submit")
@@ -41,7 +44,7 @@ def submit_command(
     ] = None,
     output: OutputOption = OutputMode.TEXT,
 ) -> None:
-    """Submit a characterization task through the generic local task contract."""
+    """Submit a characterization task through the generic local analysis run contract."""
     try:
         task = submit_task(
             kind="characterization",

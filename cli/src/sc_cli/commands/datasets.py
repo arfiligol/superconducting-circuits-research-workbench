@@ -33,7 +33,10 @@ from sc_cli.runtime import (
     update_dataset_metadata,
 )
 
-app = typer.Typer(help="Standalone local dataset helpers.", no_args_is_help=True)
+app = typer.Typer(
+    help="Browse local datasets and exchange lineage-preserving bundles.",
+    no_args_is_help=True,
+)
 
 
 class DatasetStatusOption(str, Enum):
@@ -154,7 +157,7 @@ def export_bundle_command(
     ],
     output: OutputOption = OutputMode.TEXT,
 ) -> None:
-    """Export one local dataset bundle for app/archive interchange."""
+    """Export one local dataset bundle for lineage-preserving app/archive interchange."""
     try:
         bundle = export_dataset_bundle(dataset_id)
     except CliContractError as error:
@@ -190,7 +193,7 @@ def import_bundle_command(
     ],
     output: OutputOption = OutputMode.TEXT,
 ) -> None:
-    """Import one dataset bundle into the local dataset catalog."""
+    """Import one dataset bundle into the local dataset catalog with lineage preserved."""
     try:
         bundle = LocalDatasetBundle.model_validate_json(bundle_file.read_text(encoding="utf-8"))
     except OSError as error:

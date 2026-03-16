@@ -20,7 +20,10 @@ from sc_cli.task_operator import (
     wait_for_task_or_exit,
 )
 
-app = typer.Typer(help="Run connected research-operations task workflows.", no_args_is_help=True)
+app = typer.Typer(
+    help="Run connected analysis-first workflows across tasks, events, and results.",
+    no_args_is_help=True,
+)
 
 
 class TaskLaneOption(str, Enum):

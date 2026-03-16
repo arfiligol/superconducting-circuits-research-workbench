@@ -16,7 +16,10 @@ from sc_cli.presenters import (
 )
 from sc_cli.runtime import get_session, set_active_dataset
 
-app = typer.Typer(help="Standalone local session helpers.", no_args_is_help=True)
+app = typer.Typer(
+    help="Inspect standalone local session context and active dataset fallback.",
+    no_args_is_help=True,
+)
 
 
 @app.command("show")
