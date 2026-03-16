@@ -35,7 +35,7 @@ from src.app.services.service_errors import ServiceError, service_error
 
 router = APIRouter(tags=["definition-authoring"])
 definitions_router = APIRouter(prefix="/circuit-definitions", tags=["circuit-definitions"])
-schemdraw_router = APIRouter(prefix="/api/backend/schemdraw", tags=["schemdraw"])
+schemdraw_router = APIRouter(prefix="/schemdraw", tags=["schemdraw"])
 
 
 @definitions_router.get("")

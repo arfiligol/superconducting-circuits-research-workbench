@@ -1,6 +1,5 @@
 import pytest
 from fastapi.testclient import TestClient
-
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
     CharacterizationResultBrowseQuery,
@@ -396,7 +395,7 @@ def test_create_circuit_definition_rejects_blank_name() -> None:
 
 def test_schemdraw_render_returns_svg_preview_and_diagnostics() -> None:
     response = client.post(
-        "/api/backend/schemdraw/render",
+        "/schemdraw/render",
         json={
             "source_text": (
                 "import schemdraw\n"
@@ -433,7 +432,7 @@ def test_schemdraw_render_returns_svg_preview_and_diagnostics() -> None:
 
 def test_schemdraw_render_returns_blocking_diagnostics_for_invalid_source() -> None:
     response = client.post(
-        "/api/backend/schemdraw/render",
+        "/schemdraw/render",
         json={
             "source_text": "def build_drawing(relation):\n    return (\n",
             "relation_config": {"tag": "draft"},
@@ -450,6 +449,13 @@ def test_schemdraw_render_returns_blocking_diagnostics_for_invalid_source() -> N
     assert payload["svg"] is None
     assert payload["diagnostics"][0]["code"] == "schemdraw_syntax_error"
     assert payload["diagnostics"][0]["blocking"] is True
+
+
+def test_schemdraw_route_is_exposed_on_backend_canonical_path() -> None:
+    route_paths = {route.path for route in app.router.routes}
+
+    assert "/schemdraw/render" in route_paths
+    assert "/api/backend/schemdraw/render" not in route_paths
 
 
 def _valid_circuit_source(name: str) -> str:
