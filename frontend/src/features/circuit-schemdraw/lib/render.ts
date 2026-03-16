@@ -22,6 +22,28 @@ export type SchemdrawRenderPhase =
   | "runtime_error"
   | "request_error";
 
+export type SchemdrawFailureKind =
+  | "relation_config"
+  | "transport"
+  | "backend_error"
+  | "syntax_error"
+  | "runtime_error";
+
+export type SchemdrawFailureDetail = Readonly<{
+  kind: SchemdrawFailureKind;
+  title: string;
+  userMessage: string;
+  technicalMessage: string | null;
+  source: SchemdrawDiagnostic["source"] | null;
+  statusCode: number | null;
+  errorCode: string | null;
+  category: string | null;
+  retryable: boolean | null;
+  debugRef: string | null;
+  line: number | null;
+  column: number | null;
+}>;
+
 export type SchemdrawRenderSurface = Readonly<{
   phase: SchemdrawRenderPhase;
   statusLabel: string;
@@ -31,6 +53,7 @@ export type SchemdrawRenderSurface = Readonly<{
   requestId: string | null;
   appliedDocumentVersion: number | null;
   isStale: boolean;
+  failureDetail: SchemdrawFailureDetail | null;
 }>;
 
 type BuildRequestInput = Readonly<{
@@ -182,6 +205,7 @@ export function buildRenderSurfaceFromResponse(
       requestId: response.request_id,
       appliedDocumentVersion: response.document_version,
       isStale: false,
+      failureDetail: null,
     };
   }
 
@@ -194,6 +218,7 @@ export function buildRenderSurfaceFromResponse(
     requestId: response.request_id,
     appliedDocumentVersion: previousSurface.appliedDocumentVersion,
     isStale: true,
+    failureDetail: buildFailureDetailFromResponse(response),
   };
 }
 
@@ -212,6 +237,7 @@ export function buildRenderSurfaceFromError(
     requestId: previousSurface.requestId,
     appliedDocumentVersion: previousSurface.appliedDocumentVersion,
     isStale: true,
+    failureDetail: buildFailureDetailFromError(error),
   };
 }
 
@@ -234,6 +260,28 @@ export function createInitialRenderSurface(): SchemdrawRenderSurface {
     requestId: null,
     appliedDocumentVersion: null,
     isStale: false,
+    failureDetail: null,
+  };
+}
+
+export function buildRelationConfigFailureDetail(
+  diagnostics: readonly SchemdrawDiagnostic[],
+): SchemdrawFailureDetail {
+  const primaryDiagnostic = diagnostics[0] ?? null;
+
+  return {
+    kind: "relation_config",
+    title: "Advanced mapping is invalid",
+    userMessage: "Fix the advanced relation mapping before requesting a backend render.",
+    technicalMessage: primaryDiagnostic?.message ?? "Relation config validation failed.",
+    source: primaryDiagnostic?.source ?? "relation_config",
+    statusCode: null,
+    errorCode: primaryDiagnostic?.code ?? "schemdraw_relation_invalid",
+    category: "validation_error",
+    retryable: false,
+    debugRef: null,
+    line: primaryDiagnostic?.line ?? null,
+    column: primaryDiagnostic?.column ?? null,
   };
 }
 
@@ -258,6 +306,34 @@ function buildClientDiagnostic(code: string, message: string): SchemdrawDiagnost
   };
 }
 
+function buildFailureDetailFromResponse(
+  response: SchemdrawRenderResponse,
+): SchemdrawFailureDetail {
+  const primaryDiagnostic = response.diagnostics[0] ?? null;
+  const isRuntimeError = response.status === "runtime_error";
+
+  return {
+    kind: isRuntimeError ? "runtime_error" : "syntax_error",
+    title: isRuntimeError ? "Backend render hit a runtime failure" : "Backend render found syntax issues",
+    userMessage: isRuntimeError
+      ? "The backend could not complete this render. Update the source or mapping and request a new preview."
+      : "The backend rejected the current source. Fix the source issues and request a new preview.",
+    technicalMessage:
+      primaryDiagnostic?.message ??
+      (isRuntimeError ? "Schemdraw runtime execution failed." : "Schemdraw source parsing failed."),
+    source: primaryDiagnostic?.source ?? (isRuntimeError ? "render_runtime" : "python_syntax"),
+    statusCode: null,
+    errorCode:
+      primaryDiagnostic?.code ??
+      (isRuntimeError ? "schemdraw_runtime_error" : "schemdraw_syntax_error"),
+    category: isRuntimeError ? "task_execution_failed" : "validation_error",
+    retryable: false,
+    debugRef: response.request_id,
+    line: primaryDiagnostic?.line ?? null,
+    column: primaryDiagnostic?.column ?? null,
+  };
+}
+
 function buildDiagnosticFromError(error: Error): SchemdrawDiagnostic {
   if (error instanceof ApiError) {
     const details = parseApiErrorLocation(error.details);
@@ -279,6 +355,87 @@ function buildDiagnosticFromError(error: Error): SchemdrawDiagnostic {
     message: error.message,
     source: "request",
     blocking: true,
+  };
+}
+
+function buildFailureDetailFromError(error: Error): SchemdrawFailureDetail {
+  if (!(error instanceof ApiError)) {
+    return {
+      kind: "transport",
+      title: "Render request could not reach the backend",
+      userMessage: "The preview request did not complete. Try again when the render service is available.",
+      technicalMessage: error.message,
+      source: "request",
+      statusCode: null,
+      errorCode: null,
+      category: null,
+      retryable: null,
+      debugRef: null,
+      line: null,
+      column: null,
+    };
+  }
+
+  const location = parseApiErrorLocation(error.details);
+  if (error.errorCode === "schemdraw_syntax_error" || error.errorCode === "schemdraw_runtime_error") {
+    const isRuntimeError = error.errorCode === "schemdraw_runtime_error";
+    return {
+      kind: isRuntimeError ? "runtime_error" : "syntax_error",
+      title: isRuntimeError ? "Backend render hit a runtime failure" : "Backend render found syntax issues",
+      userMessage: isRuntimeError
+        ? "The backend could not complete this render. Update the source or mapping and request a new preview."
+        : "The backend rejected the current source. Fix the source issues and request a new preview.",
+      technicalMessage: error.message,
+      source: isRuntimeError ? "render_runtime" : "python_syntax",
+      statusCode: error.status,
+      errorCode: error.errorCode,
+      category: error.category,
+      retryable: error.retryable,
+      debugRef: error.debugRef,
+      line: location?.line ?? null,
+      column: location?.column ?? null,
+    };
+  }
+
+  if (error.status >= 400) {
+    return {
+      kind: "transport",
+      title:
+        error.status === 404
+          ? "Render endpoint is unavailable"
+          : "Render request could not reach the backend",
+      userMessage:
+        error.status === 404
+          ? "The preview service is unavailable right now. Check backend availability and try again."
+          : "The preview request did not complete. Try again when the render service is available.",
+      technicalMessage: error.message,
+      source: "request",
+      statusCode: error.status,
+      errorCode: error.errorCode,
+      category: error.category,
+      retryable: error.retryable,
+      debugRef: error.debugRef,
+      line: location?.line ?? null,
+      column: location?.column ?? null,
+    };
+  }
+
+  return {
+    kind: "backend_error",
+    title: "Backend rejected the render request",
+    userMessage:
+      error.errorCode === "schemdraw_linked_schema_not_visible"
+        ? "The linked schema is not visible to the current session."
+        : "The backend rejected this render request before producing a preview.",
+    technicalMessage: error.message,
+    source: resolveDiagnosticSourceFromErrorCode(error.errorCode),
+    statusCode: error.status,
+    errorCode: error.errorCode,
+    category: error.category,
+    retryable: error.retryable,
+    debugRef: error.debugRef,
+    line: location?.line ?? null,
+    column: location?.column ?? null,
   };
 }
 

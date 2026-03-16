@@ -17,9 +17,15 @@ import CodeMirror from "@uiw/react-codemirror";
 
 import { useCircuitSchemdrawData } from "@/features/circuit-schemdraw/hooks/use-circuit-schemdraw-data";
 import { parseSchemdrawDefinitionIdParam } from "@/features/circuit-schemdraw/lib/definition-id";
+import type { SchemdrawFailureDetail } from "@/features/circuit-schemdraw/lib/render";
 import { resolveSchemdrawSelectionRecovery } from "@/features/circuit-schemdraw/lib/workflow";
 import { AppSelectField } from "@/features/shared/components/app-select";
-import { cx, resolveSurfaceInsetToneClass } from "@/features/shared/components/surface-kit";
+import {
+  SurfaceTag,
+  cx,
+  resolveSurfaceInsetToneClass,
+} from "@/features/shared/components/surface-kit";
+import { useDeveloperMode } from "@/lib/app-state";
 
 function definitionSearchHref(
   pathname: string,
@@ -42,31 +48,23 @@ function renderTone(phase: string) {
     return "success" as const;
   }
 
-  if (phase === "syntax_error" || phase === "runtime_error" || phase === "request_error") {
+  if (phase === "validating") {
+    return "primary" as const;
+  }
+
+  if (phase === "stale") {
     return "warning" as const;
   }
 
-  if (phase === "validating") {
-    return "primary" as const;
+  if (phase === "syntax_error" || phase === "runtime_error" || phase === "request_error") {
+    return "error" as const;
   }
 
   return "default" as const;
 }
 
-function statusPillClass(tone: "default" | "primary" | "success" | "warning") {
-  if (tone === "success") {
-    return "bg-emerald-500/12 text-emerald-800 dark:text-emerald-200";
-  }
-
-  if (tone === "warning") {
-    return "bg-amber-500/12 text-amber-800 dark:text-amber-200";
-  }
-
-  if (tone === "primary") {
-    return "bg-primary/10 text-primary";
-  }
-
-  return "bg-surface text-muted-foreground";
+function failureTone(detail: SchemdrawFailureDetail) {
+  return detail.kind === "relation_config" ? ("warning" as const) : ("error" as const);
 }
 
 function SummaryCard({
@@ -83,6 +81,98 @@ function SummaryCard({
       <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
       <p className="mt-2 text-sm font-semibold text-foreground">{value}</p>
       {detail ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p> : null}
+    </div>
+  );
+}
+
+function FailureDetailCard({
+  detail,
+  showDebugDisclosure,
+  staleSvgVisible,
+}: Readonly<{
+  detail: SchemdrawFailureDetail;
+  showDebugDisclosure: boolean;
+  staleSvgVisible: boolean;
+}>) {
+  const metadataRows = [
+    detail.errorCode ? { label: "Error Code", value: detail.errorCode } : null,
+    detail.category ? { label: "Category", value: detail.category } : null,
+    detail.statusCode ? { label: "Status", value: String(detail.statusCode) } : null,
+    detail.source ? { label: "Source", value: detail.source } : null,
+    detail.debugRef ? { label: "Debug Ref", value: detail.debugRef } : null,
+    detail.line || detail.column
+      ? {
+          label: "Location",
+          value: [detail.line ? `line ${detail.line}` : null, detail.column ? `column ${detail.column}` : null]
+            .filter(Boolean)
+            .join(" · "),
+        }
+      : null,
+    detail.retryable !== null
+      ? { label: "Retryable", value: detail.retryable ? "Yes" : "No" }
+      : null,
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+
+  return (
+    <div
+      className={cx(
+        "rounded-[0.95rem] border px-4 py-4 text-sm shadow-[0_10px_24px_rgba(15,23,42,0.08)]",
+        resolveSurfaceInsetToneClass(failureTone(detail)),
+      )}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em]">{detail.title}</p>
+          <p className="mt-2 leading-6">{detail.userMessage}</p>
+        </div>
+        <SurfaceTag tone={failureTone(detail)}>
+          {detail.kind === "transport"
+            ? "Transport failure"
+            : detail.kind === "backend_error"
+              ? "Backend envelope error"
+              : detail.kind === "relation_config"
+                ? "Relation config blocked"
+                : detail.kind === "runtime_error"
+                  ? "Runtime diagnostic"
+                  : "Syntax diagnostic"}
+        </SurfaceTag>
+      </div>
+
+      <p className="mt-3 text-xs leading-5 text-foreground/78 dark:text-foreground/76">
+        {staleSvgVisible
+          ? "The last successful SVG stays visible until a newer valid backend response replaces it."
+          : "No SVG preview is available until the render path succeeds."}
+      </p>
+
+      {showDebugDisclosure ? (
+        <details className="mt-4 rounded-[0.85rem] border border-current/15 bg-background/70 px-4 py-3">
+          <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.16em] text-foreground marker:hidden">
+            Debug detail
+          </summary>
+          {detail.technicalMessage ? (
+            <p className="mt-3 rounded-[0.8rem] border border-border/80 bg-background px-3 py-3 font-mono text-xs leading-5 text-foreground/86 dark:text-foreground/82">
+              {detail.technicalMessage}
+            </p>
+          ) : null}
+          {metadataRows.length > 0 ? (
+            <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+              {metadataRows.map((row) => (
+                <div
+                  key={row.label}
+                  className="rounded-[0.8rem] border border-border/80 bg-background px-3 py-3"
+                >
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    {row.label}
+                  </dt>
+                  <dd className="mt-1 break-words text-sm font-medium text-foreground">
+                    {row.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -112,6 +202,7 @@ export function CircuitSchemdrawWorkspace() {
     resetDraft,
     renderNow,
   } = useCircuitSchemdrawData(rawDefinitionId);
+  const { enabled: developerModeEnabled } = useDeveloperMode();
   const selectionRecovery = resolveSchemdrawSelectionRecovery(
     requestedDefinitionId,
     resolvedDefinitionId,
@@ -179,9 +270,7 @@ export function CircuitSchemdrawWorkspace() {
               Attach one persisted schema as reference context for the current render request.
             </p>
           </div>
-          <span className={cx("rounded-full px-3 py-1 text-xs font-medium", statusPillClass(previewTone))}>
-            {renderSurface.statusLabel}
-          </span>
+          <SurfaceTag tone={previewTone}>{renderSurface.statusLabel}</SurfaceTag>
         </div>
 
         <div className="mt-4 space-y-3">
@@ -207,7 +296,7 @@ export function CircuitSchemdrawWorkspace() {
               )}
             >
               <p className="font-medium text-foreground">{selectionRecovery.title}</p>
-              <p className="mt-1 text-muted-foreground">{selectionRecovery.message}</p>
+              <p className="mt-1 text-foreground/78 dark:text-foreground/76">{selectionRecovery.message}</p>
             </div>
           ) : null}
         </div>
@@ -348,18 +437,12 @@ export function CircuitSchemdrawWorkspace() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[11px]">
-              <span className={cx("rounded-full px-3 py-1 font-medium", statusPillClass(previewTone))}>
-                {renderSurface.statusLabel}
-              </span>
+              <SurfaceTag tone={previewTone}>{renderSurface.statusLabel}</SurfaceTag>
               {renderSurface.isStale ? (
-                <span className="rounded-full bg-amber-500/12 px-3 py-1 text-amber-800 dark:text-amber-200">
-                  Stale preview
-                </span>
+                <SurfaceTag tone="warning">Stale preview</SurfaceTag>
               ) : null}
               {renderSurface.requestId ? (
-                <span className="rounded-full bg-surface px-3 py-1 text-muted-foreground">
-                  {renderSurface.requestId}
-                </span>
+                <SurfaceTag tone="default">{renderSurface.requestId}</SurfaceTag>
               ) : null}
             </div>
           </div>
@@ -379,6 +462,16 @@ export function CircuitSchemdrawWorkspace() {
             />
           </div>
 
+          {renderSurface.failureDetail ? (
+            <div className="mt-4">
+              <FailureDetailCard
+                detail={renderSurface.failureDetail}
+                showDebugDisclosure={false}
+                staleSvgVisible={renderSurface.svg !== null}
+              />
+            </div>
+          ) : null}
+
           {renderSurface.svg ? (
             <div className="mt-4 flex min-h-[520px] items-start justify-center overflow-auto rounded-[0.8rem] border border-border bg-white p-5 text-slate-900">
               <div
@@ -388,7 +481,9 @@ export function CircuitSchemdrawWorkspace() {
             </div>
           ) : (
             <div className="mt-4 flex min-h-[520px] items-center justify-center rounded-[0.8rem] border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-              No rendered SVG yet. Update the source and request a backend render.
+              {renderSurface.failureDetail
+                ? "No rendered SVG is available. Resolve the render failure and request a new preview."
+                : "No rendered SVG yet. Update the source and request a backend render."}
             </div>
           )}
 
@@ -397,15 +492,25 @@ export function CircuitSchemdrawWorkspace() {
               {renderSurface.phase === "rendered" ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-300" />
               ) : (
-                <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                <AlertTriangle
+                  className={cx(
+                    "h-4 w-4",
+                    renderSurface.failureDetail ? "text-rose-700 dark:text-rose-300" : "text-amber-700 dark:text-amber-300",
+                  )}
+                />
               )}
               <span>
                 {renderSurface.phase === "rendered"
                   ? "Latest backend response is applied."
-                  : "Preview is waiting for a successful latest response."}
+                  : renderSurface.failureDetail
+                    ? "Preview is waiting for a valid backend response after the latest failure."
+                    : "Preview is waiting for a successful latest response."}
               </span>
             </div>
             <p className="mt-3">Current document version: {draft.documentVersion}.</p>
+            {renderSurface.appliedDocumentVersion ? (
+              <p className="mt-2">Last applied version: {renderSurface.appliedDocumentVersion}.</p>
+            ) : null}
             {renderSurface.previewMetadata?.view_box ? (
               <p className="mt-2 font-mono text-xs">{renderSurface.previewMetadata.view_box}</p>
             ) : null}
@@ -423,6 +528,16 @@ export function CircuitSchemdrawWorkspace() {
           </p>
         </div>
 
+        {renderSurface.failureDetail ? (
+          <div className="mt-4">
+            <FailureDetailCard
+              detail={renderSurface.failureDetail}
+              showDebugDisclosure={developerModeEnabled}
+              staleSvgVisible={renderSurface.svg !== null}
+            />
+          </div>
+        ) : null}
+
         {renderSurface.diagnostics.length > 0 ? (
           <div className="mt-4 space-y-3">
             {renderSurface.diagnostics.map((diagnostic, index) => (
@@ -437,14 +552,24 @@ export function CircuitSchemdrawWorkspace() {
                       : "border-border bg-surface text-muted-foreground",
                 )}
               >
-                <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.16em]">
-                  <span>{diagnostic.code}</span>
-                  <span>{diagnostic.source}</span>
-                  {diagnostic.blocking ? <span>blocking</span> : <span>non-blocking</span>}
-                  {diagnostic.line ? <span>line {diagnostic.line}</span> : null}
-                  {diagnostic.column ? <span>column {diagnostic.column}</span> : null}
-                </div>
-                <p className="mt-2">{diagnostic.message}</p>
+                {developerModeEnabled ? (
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.16em]">
+                    <SurfaceTag tone={diagnostic.severity === "error" ? "error" : diagnostic.severity === "warning" ? "warning" : "primary"}>
+                      {diagnostic.code}
+                    </SurfaceTag>
+                    <SurfaceTag tone="default">{diagnostic.source}</SurfaceTag>
+                    <SurfaceTag tone="default">
+                      {diagnostic.blocking ? "blocking" : "non-blocking"}
+                    </SurfaceTag>
+                    {diagnostic.line ? <SurfaceTag tone="default">line {diagnostic.line}</SurfaceTag> : null}
+                    {diagnostic.column ? <SurfaceTag tone="default">column {diagnostic.column}</SurfaceTag> : null}
+                  </div>
+                ) : (
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/76 dark:text-foreground/76">
+                    {diagnostic.blocking ? "Blocking diagnostic" : "Diagnostic"}
+                  </p>
+                )}
+                <p className="mt-2 text-foreground/86 dark:text-foreground/84">{diagnostic.message}</p>
               </div>
             ))}
           </div>

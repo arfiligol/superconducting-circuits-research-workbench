@@ -415,6 +415,11 @@ describe("circuit schemdraw render helpers", () => {
       svg: "<svg>old</svg>",
       isStale: true,
       appliedDocumentVersion: 5,
+      failureDetail: {
+        kind: "syntax_error",
+        errorCode: "schemdraw_syntax_error",
+        debugRef: "req-8",
+      },
     });
   });
 
@@ -442,6 +447,12 @@ describe("circuit schemdraw render helpers", () => {
       phase: "syntax_error",
       statusLabel: "Syntax Error",
       svg: "<svg>old</svg>",
+      failureDetail: {
+        kind: "syntax_error",
+        statusCode: 200,
+        errorCode: "schemdraw_syntax_error",
+        debugRef: "req-14",
+      },
       diagnostics: [
         {
           code: "schemdraw_syntax_error",
@@ -451,6 +462,31 @@ describe("circuit schemdraw render helpers", () => {
           blocking: true,
         },
       ],
+    });
+  });
+
+  it("classifies transport failures so developer mode can surface request-level detail", () => {
+    expect(
+      buildRenderSurfaceFromError(
+        new ApiError("Not Found", 404, {
+          errorCode: null,
+          category: null,
+          retryable: false,
+        }),
+        {
+          ...createInitialRenderSurface(),
+          svg: "<svg>old</svg>",
+          requestId: "req-18",
+          appliedDocumentVersion: 18,
+        },
+      ),
+    ).toMatchObject({
+      phase: "request_error",
+      failureDetail: {
+        kind: "transport",
+        statusCode: 404,
+        title: "Render endpoint is unavailable",
+      },
     });
   });
 });
@@ -490,6 +526,9 @@ describe("circuit schemdraw workspace boundaries", () => {
     expect(workspaceSource).toContain("No linked schema");
     expect(workspaceSource).toContain("request/response authoring assist surface");
     expect(workspaceSource).toContain("Stale preview");
+    expect(workspaceSource).toContain("showDebugDisclosure");
+    expect(workspaceSource).toContain("Transport failure");
+    expect(workspaceSource).toContain("Debug detail");
     expect(workspaceSource).not.toContain("Tasks Queue");
   });
 });

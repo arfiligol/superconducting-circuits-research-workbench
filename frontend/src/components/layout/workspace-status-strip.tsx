@@ -387,15 +387,6 @@ export function WorkspaceStatusStrip({
     }
   }
 
-  const selectedSectionTitle =
-    selectedSection === "workspace"
-      ? "Active Workspace"
-      : selectedSection === "dataset"
-        ? "Active Dataset"
-        : selectedSection === "queue"
-          ? "Tasks Queue"
-          : "Worker Summary";
-
   return (
     <>
       <button
@@ -485,15 +476,6 @@ export function WorkspaceStatusStrip({
               value={workerSummary.value}
               detail={workerSummary.detail}
             />
-          </div>
-
-          <div className="rounded-[1rem] border border-border/80 bg-surface px-4 py-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Focused Section
-              </p>
-              <p className="mt-1 text-sm font-medium text-foreground">{selectedSectionTitle}</p>
-            </div>
           </div>
 
           {selectedSection === "workspace" ? (

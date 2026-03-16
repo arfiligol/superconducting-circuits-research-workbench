@@ -25,6 +25,7 @@ type SurfaceTagProps = Readonly<{
 }>;
 
 export type SurfaceInsetTone = "default" | "primary" | "success" | "warning" | "error";
+export type SurfaceTagTone = SurfaceInsetTone;
 
 export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -33,16 +34,32 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 export function resolveSurfaceInsetToneClass(tone: SurfaceInsetTone) {
   switch (tone) {
     case "success":
-      return "border-emerald-500/30 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/35 dark:text-emerald-200";
+      return "border-emerald-500/40 bg-emerald-50/95 text-emerald-950 dark:border-emerald-500/45 dark:bg-emerald-950/45 dark:text-emerald-100";
     case "warning":
-      return "border-amber-500/35 bg-amber-50 text-amber-950 dark:bg-amber-950/35 dark:text-amber-200";
+      return "border-amber-500/45 bg-amber-50/95 text-amber-950 dark:border-amber-400/45 dark:bg-amber-950/45 dark:text-amber-100";
     case "error":
-      return "border-rose-600/35 bg-rose-50 text-rose-950 dark:bg-rose-950/35 dark:text-rose-200";
+      return "border-rose-600/45 bg-rose-50/95 text-rose-950 dark:border-rose-500/45 dark:bg-rose-950/45 dark:text-rose-100";
     case "primary":
       return "border-primary/30 bg-primary/10 text-foreground";
     case "default":
     default:
-      return "border-border bg-surface text-muted-foreground";
+      return "border-border bg-surface text-foreground/78 dark:text-foreground/76";
+  }
+}
+
+export function resolveSurfaceTagToneClass(tone: SurfaceTagTone) {
+  switch (tone) {
+    case "primary":
+      return "border-primary/30 bg-primary/12 text-foreground";
+    case "success":
+      return "border-emerald-500/35 bg-emerald-50/90 text-emerald-950 dark:border-emerald-500/45 dark:bg-emerald-950/45 dark:text-emerald-100";
+    case "warning":
+      return "border-amber-500/40 bg-amber-50/90 text-amber-950 dark:border-amber-400/45 dark:bg-amber-950/45 dark:text-amber-100";
+    case "error":
+      return "border-rose-600/40 bg-rose-50/90 text-rose-950 dark:border-rose-500/45 dark:bg-rose-950/45 dark:text-rose-100";
+    case "default":
+    default:
+      return "border-border bg-muted/70 text-foreground/76 dark:text-foreground/76";
   }
 }
 
@@ -110,11 +127,7 @@ export function SurfaceTag({ children, tone = "default" }: SurfaceTagProps) {
     <span
       className={cx(
         "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
-        tone === "primary" && "border-primary/25 bg-primary/10 text-foreground",
-        tone === "success" && "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-200",
-        tone === "warning" && "border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-200",
-        tone === "error" && "border-rose-600/25 bg-rose-500/10 text-rose-950 dark:text-rose-200",
-        tone === "default" && "border-border bg-muted/50 text-muted-foreground",
+        resolveSurfaceTagToneClass(tone),
       )}
     >
       {children}

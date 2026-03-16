@@ -155,7 +155,7 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain('selectedSection === "dataset"');
     expect(statusStripSource).toContain('selectedSection === "queue"');
     expect(statusStripSource).toContain('selectedSection === "worker"');
-    expect(statusStripSource).toContain("Focused Section");
+    expect(statusStripSource).not.toContain("Focused Section");
     expect(statusStripSource).not.toContain("toggleDeveloperMode");
     expect(statusStripSource).toContain("Open Account > Developer Mode for technical detail");
   });
@@ -265,5 +265,11 @@ describe("workspace shell source contracts", () => {
       expect(source).not.toContain("text-rose-100");
       expect(source).not.toContain("text-amber-100");
     }
+  });
+
+  it("keeps global context detail focused on the selected section without a redundant summary card", () => {
+    expect(statusStripSource).toContain("ContextSectionCard");
+    expect(statusStripSource).not.toContain("selectedSectionTitle");
+    expect(statusStripSource).not.toContain("Focused Section");
   });
 });

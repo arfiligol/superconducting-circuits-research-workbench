@@ -12,6 +12,7 @@ import {
 import { resolveSchemdrawDefinitionId } from "@/features/circuit-schemdraw/lib/definition-id";
 import { renderSchemdrawPreview } from "@/features/circuit-schemdraw/lib/api";
 import {
+  buildRelationConfigFailureDetail,
   buildRenderSurfaceFromError,
   buildRenderSurfaceFromResponse,
   buildSchemdrawRenderRequest,
@@ -115,6 +116,7 @@ export function useCircuitSchemdrawData(selectedDefinitionId: number | null) {
         statusLabel: "Relation Invalid",
         diagnostics: request.diagnostics,
         isStale: currentSurface.svg !== null,
+        failureDetail: buildRelationConfigFailureDetail(request.diagnostics),
       }));
       return;
     }
@@ -126,6 +128,7 @@ export function useCircuitSchemdrawData(selectedDefinitionId: number | null) {
       statusLabel: renderMode === "manual" ? "Manual Render" : "Validating",
       diagnostics: [],
       isStale: currentSurface.svg !== null,
+      failureDetail: null,
     }));
 
     try {
