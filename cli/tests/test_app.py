@@ -264,7 +264,7 @@ def test_circuit_definition_inspect_command_supports_definition_id() -> None:
     assert result.exit_code == 0
     assert "source_definition_id: 18" in result.stdout
     assert "definition_name: FloatingQubitWithXYLine" in result.stdout
-    assert "validation_status: warning" in result.stdout
+    assert "inspection_status: valid" in result.stdout
 
 
 def test_circuit_definition_list_command_reads_rewrite_state() -> None:
@@ -334,7 +334,7 @@ def test_circuit_definition_create_command_persists_local_source(tmp_path: Path)
     assert result.exit_code == 0
     assert "source_definition_id: 19" in result.stdout
     assert "definition_name: FluxoniumCliCreate" in result.stdout
-    assert "validation_status: warning" in result.stdout
+    assert "inspection_status: valid" in result.stdout
 
 
 def test_circuit_definition_create_command_supports_json_output(tmp_path: Path) -> None:
@@ -361,7 +361,7 @@ def test_circuit_definition_create_command_supports_json_output(tmp_path: Path) 
     assert result.exit_code == 0
     assert '"definition_id": 19' in result.stdout
     assert '"name": "TransmonCliCreate"' in result.stdout
-    assert '"validation_status": "warning"' in result.stdout
+    assert '"inspection_status": "valid"' in result.stdout
 
 
 def test_circuit_definition_create_command_uses_structured_validation_error(
@@ -412,7 +412,7 @@ def test_circuit_definition_update_command_updates_existing_definition(tmp_path:
     assert result.exit_code == 0
     assert "source_definition_id: 18" in result.stdout
     assert "definition_name: FloatingQubitCliUpdate" in result.stdout
-    assert "validation_status: warning" in result.stdout
+    assert "inspection_status: valid" in result.stdout
 
 
 def test_circuit_definition_update_command_supports_json_output(tmp_path: Path) -> None:
@@ -440,7 +440,7 @@ def test_circuit_definition_update_command_supports_json_output(tmp_path: Path) 
     assert result.exit_code == 0
     assert '"definition_id": 12' in result.stdout
     assert '"name": "ReadoutChainCliUpdate"' in result.stdout
-    assert '"validation_status": "warning"' in result.stdout
+    assert '"inspection_status": "valid"' in result.stdout
 
 
 def test_circuit_definition_delete_command_deletes_definition() -> None:
@@ -498,7 +498,7 @@ def test_circuit_definition_export_bundle_command_writes_lineage_preserving_bund
     assert bundle_payload["metadata"]["bundle_family"] == "definition_bundle"
     assert bundle_payload["definition"]["definition_id"] == 18
     assert bundle_payload["definition"]["source_text"].startswith("name:")
-    assert bundle_payload["definition"]["validation_summary"]["status"] == "warning"
+    assert bundle_payload["definition"]["inspection_summary"]["status"] == "valid"
     assert bundle_payload["definition"]["preview_artifact_count"] == 3
 
 

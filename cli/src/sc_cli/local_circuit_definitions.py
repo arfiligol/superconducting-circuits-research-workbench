@@ -13,7 +13,8 @@ from sc_core import inspect_circuit_definition_source
 from sc_cli.local_errors import CliContractError, build_contract_error
 from sc_cli.local_store import definition_catalog_path, read_json, write_model
 
-LocalValidationLevel = Literal["ok", "warning", "invalid"]
+LocalInspectionStatus = Literal["valid", "invalid"]
+LocalValidationLevel = Literal["ok", "warning"]
 LocalCircuitDefinitionSortBy = Literal["created_at", "name", "element_count"]
 LocalSortOrder = Literal["asc", "desc"]
 
@@ -23,11 +24,13 @@ class LocalValidationNotice(BaseModel):
     message: str
 
 
-class LocalValidationSummary(BaseModel):
-    status: LocalValidationLevel
+class LocalInspectionSummary(BaseModel):
+    status: LocalInspectionStatus
     notice_count: int
     warning_count: int
-    invalid_count: int
+    diagnostic_count: int
+    error_count: int
+    info_count: int
 
 
 class LocalDefinitionLineage(BaseModel):
@@ -43,7 +46,7 @@ class LocalCircuitDefinitionSummary(BaseModel):
     name: str
     created_at: str
     element_count: int
-    validation_status: LocalValidationLevel
+    inspection_status: LocalInspectionStatus
     preview_artifact_count: int
 
 
@@ -51,7 +54,7 @@ class LocalCircuitDefinitionDetail(LocalCircuitDefinitionSummary):
     source_text: str
     normalized_output: str
     validation_notices: list[LocalValidationNotice]
-    validation_summary: LocalValidationSummary
+    inspection_summary: LocalInspectionSummary
     preview_artifacts: list[str]
     lineage: LocalDefinitionLineage | None = None
 
@@ -61,12 +64,12 @@ class LocalCircuitDefinitionInspection(BaseModel):
     circuit_name: str
     family: str
     element_count: int
-    validation_status: LocalValidationLevel
+    inspection_status: LocalInspectionStatus
     preview_artifact_count: int
     preview_artifacts: list[str]
     normalized_output: str
     validation_notices: list[LocalValidationNotice]
-    validation_summary: LocalValidationSummary
+    inspection_summary: LocalInspectionSummary
 
 
 class LocalDefinitionBundleMetadata(BaseModel):
@@ -104,6 +107,19 @@ class _PersistedDefinitionCatalog(BaseModel):
     definitions: list[LocalCircuitDefinitionDetail]
 
 
+@dataclass(frozen=True)
+class _NormalizedInspectionPayload:
+    inspection_status: LocalInspectionStatus
+    validation_notices: list[LocalValidationNotice]
+    inspection_summary: LocalInspectionSummary
+
+
+def _normalize_notice_level(level: str) -> LocalValidationLevel:
+    if level == "ok":
+        return "ok"
+    return "warning"
+
+
 def _contract_error(
     *,
     code: str,
@@ -121,14 +137,6 @@ def _contract_error(
     )
 
 
-def normalize_validation_level(level: str) -> LocalValidationLevel:
-    if level == "ok":
-        return "ok"
-    if level == "warning":
-        return "warning"
-    return "invalid"
-
-
 def build_local_validation_notices(
     notices: Iterable[object],
 ) -> list[LocalValidationNotice]:
@@ -137,32 +145,102 @@ def build_local_validation_notices(
         notice_obj = cast(Any, notice)
         local_notices.append(
             LocalValidationNotice(
-                level=normalize_validation_level(str(notice_obj.level)),
+                level=_normalize_notice_level(str(notice_obj.level)),
                 message=str(notice_obj.message),
             )
         )
     return local_notices
 
 
-def derive_validation_status(
-    notices: Iterable[LocalValidationNotice],
-) -> LocalValidationLevel:
-    levels = {notice.level for notice in notices}
-    if "invalid" in levels:
+def _normalize_inspection_status(value: str | None) -> LocalInspectionStatus | None:
+    if value == "valid":
+        return "valid"
+    if value == "invalid":
         return "invalid"
-    if "warning" in levels:
-        return "warning"
-    return "ok"
+    if value == "ok":
+        return "valid"
+    if value in {"warning", "error"}:
+        return "invalid"
+    return None
 
 
-def build_validation_summary(
+def _derive_inspection_status(
+    *,
+    payload_summary: object | None,
+    payload_status: object | None,
+    raw_notices: Iterable[object],
+) -> LocalInspectionStatus:
+    summary_obj = cast(Any, payload_summary)
+    summary_status = _normalize_inspection_status(
+        None if summary_obj is None else str(getattr(summary_obj, "status", None))
+    )
+    if summary_status is not None:
+        return summary_status
+    payload_status_value = _normalize_inspection_status(
+        None if payload_status is None else str(payload_status)
+    )
+    if payload_status_value is not None:
+        return payload_status_value
+    for notice in raw_notices:
+        if str(cast(Any, notice).level) == "invalid":
+            return "invalid"
+    return "valid"
+
+
+def build_local_inspection_summary(
+    *,
+    inspection_status: LocalInspectionStatus,
     notices: list[LocalValidationNotice],
-) -> LocalValidationSummary:
-    return LocalValidationSummary(
-        status=derive_validation_status(notices),
+    payload_summary: object | None,
+) -> LocalInspectionSummary:
+    summary_obj = cast(Any, payload_summary)
+    warning_count = sum(1 for notice in notices if notice.level == "warning")
+    if summary_obj is None:
+        error_count = 1 if inspection_status == "invalid" else 0
+        return LocalInspectionSummary(
+            status=inspection_status,
+            notice_count=len(notices),
+            warning_count=warning_count,
+            diagnostic_count=warning_count + error_count,
+            error_count=error_count,
+            info_count=0,
+        )
+    diagnostic_count = int(getattr(summary_obj, "diagnostic_count", warning_count))
+    error_count = int(
+        getattr(summary_obj, "error_count", 1 if inspection_status == "invalid" else 0)
+    )
+    return LocalInspectionSummary(
+        status=inspection_status,
         notice_count=len(notices),
-        warning_count=sum(1 for notice in notices if notice.level == "warning"),
-        invalid_count=sum(1 for notice in notices if notice.level == "invalid"),
+        warning_count=int(getattr(summary_obj, "warning_count", warning_count)),
+        diagnostic_count=diagnostic_count,
+        error_count=error_count,
+        info_count=int(getattr(summary_obj, "info_count", 0)),
+    )
+
+
+def _normalize_inspection_payload(payload: object) -> _NormalizedInspectionPayload:
+    payload_obj = cast(Any, payload)
+    raw_notices = tuple(getattr(payload_obj, "validation_notices", ()))
+    validation_notices = build_local_validation_notices(raw_notices)
+    payload_summary = getattr(payload_obj, "inspection_summary", None)
+    if payload_summary is None:
+        payload_summary = getattr(payload_obj, "summary", None)
+    inspection_status = _derive_inspection_status(
+        payload_summary=payload_summary,
+        payload_status=getattr(payload_obj, "inspection_status", None)
+        if hasattr(payload_obj, "inspection_status")
+        else getattr(payload_obj, "validation_status", None),
+        raw_notices=raw_notices,
+    )
+    return _NormalizedInspectionPayload(
+        inspection_status=inspection_status,
+        validation_notices=validation_notices,
+        inspection_summary=build_local_inspection_summary(
+            inspection_status=inspection_status,
+            notices=validation_notices,
+            payload_summary=payload_summary,
+        ),
     )
 
 
@@ -178,12 +256,13 @@ def build_local_circuit_definition_summary(
     payload: object,
 ) -> LocalCircuitDefinitionSummary:
     payload_obj = cast(Any, payload)
+    normalized_inspection = _normalize_inspection_payload(payload)
     return LocalCircuitDefinitionSummary(
         definition_id=int(payload_obj.definition_id),
         name=str(payload_obj.name),
         created_at=str(payload_obj.created_at),
         element_count=int(payload_obj.element_count),
-        validation_status=normalize_validation_level(str(payload_obj.validation_status)),
+        inspection_status=normalized_inspection.inspection_status,
         preview_artifact_count=int(payload_obj.preview_artifact_count),
     )
 
@@ -192,8 +271,7 @@ def build_local_circuit_definition_detail(
     payload: object,
 ) -> LocalCircuitDefinitionDetail:
     payload_obj = cast(Any, payload)
-    validation_notices = build_local_validation_notices(payload_obj.validation_notices)
-    validation_summary = build_validation_summary(validation_notices)
+    normalized_inspection = _normalize_inspection_payload(payload)
     summary = build_local_circuit_definition_summary(payload)
     lineage = _normalize_lineage_payload(getattr(payload_obj, "lineage", None))
     return LocalCircuitDefinitionDetail(
@@ -201,12 +279,12 @@ def build_local_circuit_definition_detail(
         name=summary.name,
         created_at=summary.created_at,
         element_count=summary.element_count,
-        validation_status=validation_summary.status,
+        inspection_status=summary.inspection_status,
         preview_artifact_count=summary.preview_artifact_count,
         source_text=str(payload_obj.source_text),
         normalized_output=str(payload_obj.normalized_output),
-        validation_notices=validation_notices,
-        validation_summary=validation_summary,
+        validation_notices=normalized_inspection.validation_notices,
+        inspection_summary=normalized_inspection.inspection_summary,
         preview_artifacts=[str(artifact) for artifact in payload_obj.preview_artifacts],
         lineage=lineage,
     )
@@ -219,20 +297,19 @@ def build_local_circuit_definition_inspection(
     preview_artifacts: Iterable[str],
 ) -> LocalCircuitDefinitionInspection:
     inspection_obj = cast(Any, inspection)
-    validation_notices = build_local_validation_notices(inspection_obj.validation_notices)
-    validation_summary = build_validation_summary(validation_notices)
+    normalized_inspection = _normalize_inspection_payload(inspection)
     preview_artifact_list = [str(artifact) for artifact in preview_artifacts]
     return LocalCircuitDefinitionInspection(
         source_file=source_file,
         circuit_name=str(inspection_obj.circuit_name),
         family=str(inspection_obj.family),
         element_count=int(inspection_obj.element_count),
-        validation_status=validation_summary.status,
+        inspection_status=normalized_inspection.inspection_status,
         preview_artifact_count=len(preview_artifact_list),
         preview_artifacts=preview_artifact_list,
         normalized_output=str(inspection_obj.normalized_output),
-        validation_notices=validation_notices,
-        validation_summary=validation_summary,
+        validation_notices=normalized_inspection.validation_notices,
+        inspection_summary=normalized_inspection.inspection_summary,
     )
 
 
@@ -297,9 +374,8 @@ def _build_detail_from_source(
         name=name,
         created_at=created_at,
         element_count=int(inspection.element_count),
-        validation_status=derive_validation_status(
-            build_local_validation_notices(inspection.validation_notices)
-        ),
+        inspection_status=str(inspection.summary.status),
+        inspection_summary=inspection.summary,
         preview_artifact_count=len(_preview_artifacts_from_inspection(inspection)),
         source_text=validated_source_text,
         normalized_output=str(inspection.normalized_output),

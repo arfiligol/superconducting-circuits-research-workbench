@@ -13,25 +13,27 @@ from sc_cli.local_circuit_definitions import (
     build_definition_bundle,
     build_local_circuit_definition_detail,
     build_local_circuit_definition_summary,
-    build_validation_summary,
+    build_local_inspection_summary,
     create_local_circuit_definition,
     import_definition_bundle,
     reset_local_circuit_definition_state,
 )
 
 
-def test_build_validation_summary_preserves_invalid_status() -> None:
-    summary = build_validation_summary(
-        [
+def test_build_local_inspection_summary_preserves_invalid_status() -> None:
+    summary = build_local_inspection_summary(
+        inspection_status="invalid",
+        notices=[
             LocalValidationNotice(level="warning", message="Port mapping needs migration."),
-            LocalValidationNotice(level="invalid", message="Topology contains unknown node."),
-        ]
+        ],
+        payload_summary=None,
     )
 
     assert summary.status == "invalid"
-    assert summary.notice_count == 2
+    assert summary.notice_count == 1
     assert summary.warning_count == 1
-    assert summary.invalid_count == 1
+    assert summary.error_count == 1
+    assert summary.diagnostic_count == 2
 
 
 def test_local_contract_source_does_not_import_backend_dtos() -> None:
@@ -48,13 +50,20 @@ def test_local_detail_adapter_derives_invalid_status_without_backend_dto_types()
             name="BrokenDefinition",
             created_at="2026-03-15 10:30:00",
             element_count=4,
-            validation_status="warning",
+            inspection_status="invalid",
+            summary=SimpleNamespace(
+                status="invalid",
+                warning_count=1,
+                diagnostic_count=2,
+                error_count=1,
+                info_count=0,
+            ),
             preview_artifact_count=3,
             source_text="name: BrokenDefinition",
             normalized_output="{}",
             validation_notices=[
                 SimpleNamespace(level="warning", message="Port mapping needs migration."),
-                SimpleNamespace(level="invalid", message="Undefined coupling component."),
+                SimpleNamespace(level="warning", message="Undefined coupling component."),
             ],
             preview_artifacts=[
                 "definition.normalized.json",
@@ -64,10 +73,10 @@ def test_local_detail_adapter_derives_invalid_status_without_backend_dto_types()
         )
     )
 
-    assert detail.validation_status == "invalid"
-    assert detail.validation_summary.status == "invalid"
-    assert detail.validation_summary.invalid_count == 1
-    assert detail.validation_notices[1].level == "invalid"
+    assert detail.inspection_status == "invalid"
+    assert detail.inspection_summary.status == "invalid"
+    assert detail.inspection_summary.error_count == 1
+    assert detail.validation_notices[1].level == "warning"
 
 
 def test_local_summary_adapter_preserves_invalid_catalog_status_without_backend_dto_types() -> None:
@@ -77,13 +86,13 @@ def test_local_summary_adapter_preserves_invalid_catalog_status_without_backend_
             name="BrokenSummaryDefinition",
             created_at="2026-03-15 10:30:00",
             element_count=5,
-            validation_status="invalid",
+            inspection_status="invalid",
             preview_artifact_count=3,
         )
     )
 
     assert summary.definition_id == 18
-    assert summary.validation_status == "invalid"
+    assert summary.inspection_status == "invalid"
 
 
 def test_circuit_definition_inspect_source_file_preserves_invalid_status(
@@ -101,8 +110,15 @@ def test_circuit_definition_inspect_source_file_preserves_invalid_status(
             family="fluxonium",
             element_count=2,
             normalized_output="{}",
+            summary=SimpleNamespace(
+                status="invalid",
+                warning_count=1,
+                diagnostic_count=2,
+                error_count=1,
+                info_count=0,
+            ),
             validation_notices=(
-                SimpleNamespace(level="invalid", message="Topology contains unknown node."),
+                SimpleNamespace(level="warning", message="Topology contains unknown node."),
             ),
         ),
     )
@@ -115,12 +131,12 @@ def test_circuit_definition_inspect_source_file_preserves_invalid_status(
     )
 
     assert text_result.exit_code == 0
-    assert "validation_status: invalid" in text_result.stdout
-    assert "- [invalid] Topology contains unknown node." in text_result.stdout
+    assert "inspection_status: invalid" in text_result.stdout
+    assert "- [warning] Topology contains unknown node." in text_result.stdout
 
     assert json_result.exit_code == 0
-    assert '"validation_status": "invalid"' in json_result.stdout
-    assert '"invalid_count": 1' in json_result.stdout
+    assert '"inspection_status": "invalid"' in json_result.stdout
+    assert '"error_count": 1' in json_result.stdout
 
 
 def test_circuit_definition_inspect_definition_id_derives_invalid_status_from_notices(
@@ -134,13 +150,20 @@ def test_circuit_definition_inspect_definition_id_derives_invalid_status_from_no
             name="BrokenDefinition",
             created_at="2026-03-15 10:30:00",
             element_count=4,
-            validation_status="warning",
+            inspection_status="invalid",
+            summary=SimpleNamespace(
+                status="invalid",
+                warning_count=1,
+                diagnostic_count=2,
+                error_count=1,
+                info_count=0,
+            ),
             preview_artifact_count=3,
             source_text="name: BrokenDefinition",
             normalized_output="{}",
             validation_notices=[
                 SimpleNamespace(level="warning", message="Port mapping needs migration."),
-                SimpleNamespace(level="invalid", message="Undefined coupling component."),
+                SimpleNamespace(level="warning", message="Undefined coupling component."),
             ],
             preview_artifacts=[
                 "definition.normalized.json",
@@ -158,12 +181,12 @@ def test_circuit_definition_inspect_definition_id_derives_invalid_status_from_no
     )
 
     assert text_result.exit_code == 0
-    assert "validation_status: invalid" in text_result.stdout
+    assert "inspection_status: invalid" in text_result.stdout
     assert "status: invalid" in text_result.stdout
-    assert "- [invalid] Undefined coupling component." in text_result.stdout
+    assert "- [warning] Undefined coupling component." in text_result.stdout
 
     assert json_result.exit_code == 0
-    assert '"validation_status": "invalid"' in json_result.stdout
+    assert '"inspection_status": "invalid"' in json_result.stdout
     assert '"status": "invalid"' in json_result.stdout
 
 
@@ -182,12 +205,19 @@ def test_circuit_definition_create_uses_local_detail_contract(
             name="CreatedDefinition",
             created_at="2026-03-15 10:30:00",
             element_count=2,
-            validation_status="warning",
+            inspection_status="invalid",
+            summary=SimpleNamespace(
+                status="invalid",
+                warning_count=1,
+                diagnostic_count=2,
+                error_count=1,
+                info_count=0,
+            ),
             preview_artifact_count=3,
             source_text="name: CreatedDefinition",
             normalized_output="{}",
             validation_notices=[
-                SimpleNamespace(level="invalid", message="Missing component binding.")
+                SimpleNamespace(level="warning", message="Missing component binding.")
             ],
             preview_artifacts=[
                 "definition.normalized.json",
@@ -213,8 +243,8 @@ def test_circuit_definition_create_uses_local_detail_contract(
 
     assert result.exit_code == 0
     assert '"definition_id": 21' in result.stdout
-    assert '"validation_status": "invalid"' in result.stdout
-    assert '"invalid_count": 1' in result.stdout
+    assert '"inspection_status": "invalid"' in result.stdout
+    assert '"error_count": 1' in result.stdout
 
 
 def test_circuit_definition_update_uses_local_detail_contract(
@@ -232,12 +262,19 @@ def test_circuit_definition_update_uses_local_detail_contract(
             name="UpdatedDefinition",
             created_at="2026-03-15 10:30:00",
             element_count=2,
-            validation_status="warning",
+            inspection_status="invalid",
+            summary=SimpleNamespace(
+                status="invalid",
+                warning_count=1,
+                diagnostic_count=2,
+                error_count=1,
+                info_count=0,
+            ),
             preview_artifact_count=3,
             source_text="name: UpdatedDefinition",
             normalized_output="{}",
             validation_notices=[
-                SimpleNamespace(level="invalid", message="Port index is out of range.")
+                SimpleNamespace(level="warning", message="Port index is out of range.")
             ],
             preview_artifacts=[
                 "definition.normalized.json",
@@ -264,8 +301,8 @@ def test_circuit_definition_update_uses_local_detail_contract(
 
     assert result.exit_code == 0
     assert '"definition_id": 21' in result.stdout
-    assert '"validation_status": "invalid"' in result.stdout
-    assert '"invalid_count": 1' in result.stdout
+    assert '"inspection_status": "invalid"' in result.stdout
+    assert '"error_count": 1' in result.stdout
 
 
 def test_circuit_definition_list_uses_local_summary_contract(
@@ -280,7 +317,7 @@ def test_circuit_definition_list_uses_local_summary_contract(
                 name="BrokenSummaryDefinition",
                 created_at="2026-03-15 10:30:00",
                 element_count=5,
-                validation_status="invalid",
+                inspection_status="invalid",
                 preview_artifact_count=3,
             )
         ],
@@ -291,10 +328,10 @@ def test_circuit_definition_list_uses_local_summary_contract(
     json_result = runner.invoke(app, ["circuit-definition", "list", "--output", "json"])
 
     assert text_result.exit_code == 0
-    assert "validation=invalid" in text_result.stdout
+    assert "inspection=invalid" in text_result.stdout
 
     assert json_result.exit_code == 0
-    assert '"validation_status": "invalid"' in json_result.stdout
+    assert '"inspection_status": "invalid"' in json_result.stdout
 
 
 def test_definition_bundle_round_trip_preserves_lineage() -> None:

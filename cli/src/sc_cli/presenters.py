@@ -54,18 +54,20 @@ def render_circuit_definition_inspection(
         f"circuit_name: {inspection.circuit_name}",
         f"family: {inspection.family}",
         f"element_count: {inspection.element_count}",
-        f"validation_status: {inspection.validation_status}",
+        f"inspection_status: {inspection.inspection_status}",
         f"preview_artifact_count: {inspection.preview_artifact_count}",
         "preview_artifacts:",
     ]
     lines.extend(f"- {artifact}" for artifact in inspection.preview_artifacts)
     lines.extend(
         [
-            "validation_summary:",
-            f"status: {inspection.validation_summary.status}",
-            f"notice_count: {inspection.validation_summary.notice_count}",
-            f"warning_count: {inspection.validation_summary.warning_count}",
-            f"invalid_count: {inspection.validation_summary.invalid_count}",
+            "inspection_summary:",
+            f"status: {inspection.inspection_summary.status}",
+            f"notice_count: {inspection.inspection_summary.notice_count}",
+            f"warning_count: {inspection.inspection_summary.warning_count}",
+            f"diagnostic_count: {inspection.inspection_summary.diagnostic_count}",
+            f"error_count: {inspection.inspection_summary.error_count}",
+            f"info_count: {inspection.inspection_summary.info_count}",
         ]
     )
     lines.extend(
@@ -94,7 +96,7 @@ def render_circuit_definition_summaries(
                 definition.name,
                 f"created_at={definition.created_at}",
                 f"elements={definition.element_count}",
-                f"validation={definition.validation_status}",
+                f"inspection={definition.inspection_status}",
                 f"preview_artifacts={definition.preview_artifact_count}",
             ),
         )
@@ -706,7 +708,7 @@ def render_circuit_definition_detail(
         f"definition_name: {definition.name}",
         f"created_at: {definition.created_at}",
         f"element_count: {definition.element_count}",
-        f"validation_status: {definition.validation_status}",
+        f"inspection_status: {definition.inspection_status}",
         f"preview_artifact_count: {definition.preview_artifact_count}",
         "preview_artifacts:",
     ]
@@ -723,11 +725,13 @@ def render_circuit_definition_detail(
     lines.extend(f"- [{notice.level}] {notice.message}" for notice in definition.validation_notices)
     lines.extend(
         [
-            "validation_summary:",
-            f"status: {definition.validation_summary.status}",
-            f"notice_count: {definition.validation_summary.notice_count}",
-            f"warning_count: {definition.validation_summary.warning_count}",
-            f"invalid_count: {definition.validation_summary.invalid_count}",
+            "inspection_summary:",
+            f"status: {definition.inspection_summary.status}",
+            f"notice_count: {definition.inspection_summary.notice_count}",
+            f"warning_count: {definition.inspection_summary.warning_count}",
+            f"diagnostic_count: {definition.inspection_summary.diagnostic_count}",
+            f"error_count: {definition.inspection_summary.error_count}",
+            f"info_count: {definition.inspection_summary.info_count}",
         ]
     )
     if definition.lineage is None:
