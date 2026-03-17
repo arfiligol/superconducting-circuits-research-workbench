@@ -734,6 +734,80 @@ function formatSavedSetupTimestamp(isoTimestamp: string) {
   });
 }
 
+function normalizeSchemaUnitLookupKey(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function buildSchemaUnitLookup(sourceText: string | null | undefined) {
+  const lookup = new Map<string, string>();
+  if (!sourceText) {
+    return lookup;
+  }
+
+  try {
+    const parsed = JSON.parse(sourceText) as {
+      components?: readonly { name?: string; unit?: string }[];
+      parameters?: readonly { name?: string; unit?: string }[];
+    };
+
+    const register = (entries: readonly { name?: string; unit?: string }[] | undefined) => {
+      entries?.forEach((entry) => {
+        const normalizedName =
+          typeof entry.name === "string" ? normalizeSchemaUnitLookupKey(entry.name) : "";
+        const normalizedUnit = typeof entry.unit === "string" ? entry.unit.trim() : "";
+        if (normalizedName && normalizedUnit) {
+          lookup.set(normalizedName, normalizedUnit);
+        }
+      });
+    };
+
+    register(parsed.components);
+    register(parsed.parameters);
+  } catch {
+    return lookup;
+  }
+
+  return lookup;
+}
+
+function resolveSchemaBackedSweepUnit(
+  parameter: string,
+  fallbackUnit: string | null | undefined,
+  schemaUnitLookup: ReadonlyMap<string, string>,
+) {
+  const normalizedParameter = normalizeSchemaUnitLookupKey(parameter);
+  if (!normalizedParameter) {
+    return fallbackUnit?.trim() || null;
+  }
+
+  const directMatch = schemaUnitLookup.get(normalizedParameter);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const tailMatch = schemaUnitLookup.get(
+    normalizeSchemaUnitLookupKey(parameter.split(".").at(-1) ?? parameter),
+  );
+  if (tailMatch) {
+    return tailMatch;
+  }
+
+  return fallbackUnit?.trim() || null;
+}
+
+function buildResolvedSimulationSetupFormValues(
+  values: Readonly<SimulationSetupFormValues>,
+  schemaUnitLookup: ReadonlyMap<string, string>,
+): SimulationSetupFormValues {
+  return cloneSimulationSetupFormValues({
+    ...values,
+    simulationParameterSweepAxes: values.simulationParameterSweepAxes.map((axis) => ({
+      ...axis,
+      unit: resolveSchemaBackedSweepUnit(axis.parameter, axis.unit, schemaUnitLookup) ?? "",
+    })),
+  });
+}
+
 export function SimulationWorkbenchShell() {
   const router = useRouter();
   const pathname = usePathname();
@@ -903,6 +977,10 @@ export function SimulationWorkbenchShell() {
   );
   const activeSavedSetup =
     visibleSavedSetups.find((setup) => setup.id === selectedSavedSetupId) ?? null;
+  const schemaUnitLookup = useMemo(
+    () => buildSchemaUnitLookup(activeDefinition?.source_text ?? null),
+    [activeDefinition?.source_text],
+  );
   const simulationSetupBlockedReason =
     resolvedDefinitionId === null
       ? "Select a definition before submitting a simulation run."
@@ -1198,7 +1276,12 @@ export function SimulationWorkbenchShell() {
     let simulationSetup = null;
     let postProcessingSetup = null;
     try {
-      simulationSetup = kind === "simulation" ? buildSimulationSetupDraft(values) : null;
+      simulationSetup =
+        kind === "simulation"
+          ? buildSimulationSetupDraft(
+              buildResolvedSimulationSetupFormValues(values, schemaUnitLookup),
+            )
+          : null;
       postProcessingSetup =
         kind === "post_processing" ? buildPostProcessingSetupDraft(values) : null;
     } catch (error) {
@@ -1451,10 +1534,7 @@ export function SimulationWorkbenchShell() {
           description="Author the runnable simulation setup in six focused sections. Persisted sections submit with the task; unsupported sections stay as local draft notes."
           status={simulationSetupState}
           actions={
-            <>
-              <SurfaceTag tone={activeSavedSetup ? "success" : "default"}>
-                {activeSavedSetup ? `Saved · ${activeSavedSetup.name}` : "Unsaved draft"}
-              </SurfaceTag>
+            <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
               <button
                 type="button"
                 onClick={() => {
@@ -1475,43 +1555,39 @@ export function SimulationWorkbenchShell() {
                 <Save className="h-3.5 w-3.5" />
                 Save
               </button>
-            </>
+            </div>
           }
         >
-          <StageNotice
-            tone={simulationSetupState.tone}
-            title={`Simulation Setup · ${simulationSetupState.label}`}
-            message={simulationSetupState.message}
-          />
+          {simulationSetupState.label !== "Not started" ? (
+            <StageNotice
+              tone={simulationSetupState.tone}
+              title={`Simulation Setup · ${simulationSetupState.label}`}
+              message={simulationSetupState.message}
+            />
+          ) : null}
 
-          <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <SurfaceTag tone={activeDatasetState.activeDataset ? "success" : "warning"}>
-                Dataset · {activeDatasetState.activeDataset?.name ?? "Attach in Global Context"}
-              </SurfaceTag>
-              <SurfaceTag tone={resolvedDefinitionId !== null ? "success" : "warning"}>
-                Definition · {selectedDefinitionDisplay?.name ?? "Selection required"}
-              </SurfaceTag>
-              <SurfaceTag tone={session?.canSubmitTasks ? "primary" : "warning"}>
-                {session?.canSubmitTasks ? "Persisted task submit available" : "Persisted task submit blocked"}
-              </SurfaceTag>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Signal sweep, parameter sweeps, HB solving, and sources submit as persisted
-              simulation setup. PTC and Advanced hbsolve Options stay browser-local until the
-              backend contract exposes those fields.
-            </p>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+            {activeSavedSetup ? (
+              <SurfaceTag tone="success">Saved · {activeSavedSetup.name}</SurfaceTag>
+            ) : (
+              <SurfaceTag tone="default">Unsaved draft</SurfaceTag>
+            )}
+            {activeDatasetState.activeDataset ? (
+              <SurfaceTag tone="success">Dataset · {activeDatasetState.activeDataset.name}</SurfaceTag>
+            ) : null}
+            {selectedDefinitionDisplay ? (
+              <SurfaceTag tone="success">Definition · {selectedDefinitionDisplay.name}</SurfaceTag>
+            ) : null}
+            <span className="text-xs leading-5 text-muted-foreground">
               Saved setups stay in this browser and are scoped to the selected definition.
-            </p>
+            </span>
             {latestSimulationTaskDetail?.simulationSetup ? (
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Persisted simulation setup was rehydrated from task #
-                {latestSimulationTaskDetail.taskId}. Local-only draft sections were left unchanged.
-              </p>
+              <span className="text-xs leading-5 text-muted-foreground">
+                Rehydrated from task #{latestSimulationTaskDetail.taskId}.
+              </span>
             ) : null}
             {savedSetupFeedback ? (
-              <p className="mt-2 text-xs leading-5 text-foreground/80">{savedSetupFeedback}</p>
+              <span className="text-xs leading-5 text-foreground/80">{savedSetupFeedback}</span>
             ) : null}
           </div>
 
@@ -1562,34 +1638,12 @@ export function SimulationWorkbenchShell() {
             title="Parameter Sweep Setup"
             description="Add one or more sweep axes. Range mode expands start, stop, and points into the persisted values array."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
-            actions={
-              parameterSweepEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    parameterSweepFieldArray.append(createDefaultSimulationParameterSweepAxis());
-                    clearTaskMutationStatus();
-                  }}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Axis
-                </button>
-              ) : null
-            }
           >
-            <div className="grid gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
-              <div>
-                <p className="text-sm font-medium text-foreground">Sweep authoring</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Turn this on when the simulation needs one or more parameter axes beyond the main
-                  frequency sweep.
-                </p>
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3">
               <SetupSlideToggle
                 checked={parameterSweepEnabled}
                 label="Enable parameter sweeps"
-                description="Use a slide toggle to reveal or hide the parameter-sweep authoring surface."
+                description="Reveal the axis list only when this run needs parameter sweeps."
                 onCheckedChange={(nextChecked) => {
                   form.setValue("simulationParameterSweepEnabled", nextChecked, {
                     shouldDirty: true,
@@ -1599,6 +1653,18 @@ export function SimulationWorkbenchShell() {
                   }
                 }}
               />
+              <button
+                type="button"
+                onClick={() => {
+                  parameterSweepFieldArray.append(createDefaultSimulationParameterSweepAxis());
+                  clearTaskMutationStatus();
+                }}
+                disabled={!parameterSweepEnabled}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Axis
+              </button>
             </div>
 
             {parameterSweepEnabled ? (
@@ -1606,6 +1672,12 @@ export function SimulationWorkbenchShell() {
                 {parameterSweepFieldArray.fields.map((field, index) => {
                   const axisErrors = form.formState.errors.simulationParameterSweepAxes?.[index];
                   const axisMode = form.watch(`simulationParameterSweepAxes.${index}.mode`);
+                  const axisParameter = form.watch(`simulationParameterSweepAxes.${index}.parameter`);
+                  const axisDerivedUnit = resolveSchemaBackedSweepUnit(
+                    axisParameter,
+                    form.getValues(`simulationParameterSweepAxes.${index}.unit`),
+                    schemaUnitLookup,
+                  );
 
                   return (
                     <div
@@ -1615,9 +1687,11 @@ export function SimulationWorkbenchShell() {
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-foreground">Axis {index + 1}</p>
-                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                            Persisted as a parameter sweep values array on the simulation task.
-                          </p>
+                          {axisDerivedUnit ? (
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Schema unit · {axisDerivedUnit}
+                            </p>
+                          ) : null}
                         </div>
                         <button
                           type="button"
@@ -1631,10 +1705,9 @@ export function SimulationWorkbenchShell() {
                         </button>
                       </div>
 
-                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-6">
                         <SetupInputField
                           label="Target / Parameter"
-                          detail="Parameter path or target name for this sweep axis."
                           error={axisErrors?.parameter?.message}
                         >
                           <SetupTextInput
@@ -1642,6 +1715,15 @@ export function SimulationWorkbenchShell() {
                             placeholder="L_q"
                           />
                         </SetupInputField>
+                        <SummaryCard
+                          label="Unit"
+                          value={axisDerivedUnit ?? "Schema unit unavailable"}
+                          detail={
+                            axisDerivedUnit
+                              ? "Read from circuit schema."
+                              : "Schema-derived unit is unavailable for this parameter."
+                          }
+                        />
                         <SetupInputField label="Axis Mode">
                           <SetupSelect
                             {...form.register(`simulationParameterSweepAxes.${index}.mode`)}
@@ -1650,68 +1732,59 @@ export function SimulationWorkbenchShell() {
                             <option value="explicit">Explicit values</option>
                           </SetupSelect>
                         </SetupInputField>
-                        <SetupInputField
-                          label="Unit"
-                          detail="Optional engineering unit for this sweep axis."
-                          error={axisErrors?.unit?.message}
-                        >
-                          <SetupTextInput
-                            {...form.register(`simulationParameterSweepAxes.${index}.unit`)}
-                            placeholder="nH"
-                          />
-                        </SetupInputField>
-                        <SetupInputField
-                          label="Start"
-                          detail="Range builder start value."
-                          error={axisErrors?.start?.message}
-                        >
-                          <SetupNumberInput
-                            {...form.register(`simulationParameterSweepAxes.${index}.start`, {
-                              valueAsNumber: true,
-                            })}
-                            step="any"
-                          />
-                        </SetupInputField>
-                        <SetupInputField
-                          label="Stop"
-                          detail="Range builder stop value."
-                          error={axisErrors?.stop?.message}
-                        >
-                          <SetupNumberInput
-                            {...form.register(`simulationParameterSweepAxes.${index}.stop`, {
-                              valueAsNumber: true,
-                            })}
-                            step="any"
-                          />
-                        </SetupInputField>
-                        <SetupInputField
-                          label="Points"
-                          detail="Range builder sample count."
-                          error={axisErrors?.pointCount?.message}
-                        >
-                          <SetupNumberInput
-                            {...form.register(`simulationParameterSweepAxes.${index}.pointCount`, {
-                              valueAsNumber: true,
-                            })}
-                            min={1}
-                          />
-                        </SetupInputField>
+                        {axisMode === "explicit" ? (
+                          <div className="xl:col-span-3">
+                            <SetupInputField
+                              label="Explicit Values"
+                              detail="Comma-separated values submitted directly to the persisted sweep array."
+                              error={axisErrors?.explicitValues?.message}
+                            >
+                              <SetupTextInput
+                                {...form.register(
+                                  `simulationParameterSweepAxes.${index}.explicitValues`,
+                                )}
+                                placeholder="1.0, 1.1, 1.2"
+                              />
+                            </SetupInputField>
+                          </div>
+                        ) : (
+                          <>
+                            <SetupInputField
+                              label="Start"
+                              error={axisErrors?.start?.message}
+                            >
+                              <SetupNumberInput
+                                {...form.register(`simulationParameterSweepAxes.${index}.start`, {
+                                  valueAsNumber: true,
+                                })}
+                                step="any"
+                              />
+                            </SetupInputField>
+                            <SetupInputField
+                              label="Stop"
+                              error={axisErrors?.stop?.message}
+                            >
+                              <SetupNumberInput
+                                {...form.register(`simulationParameterSweepAxes.${index}.stop`, {
+                                  valueAsNumber: true,
+                                })}
+                                step="any"
+                              />
+                            </SetupInputField>
+                            <SetupInputField
+                              label="Points"
+                              error={axisErrors?.pointCount?.message}
+                            >
+                              <SetupNumberInput
+                                {...form.register(`simulationParameterSweepAxes.${index}.pointCount`, {
+                                  valueAsNumber: true,
+                                })}
+                                min={1}
+                              />
+                            </SetupInputField>
+                          </>
+                        )}
                       </div>
-
-                      <SetupInputField
-                        label="Explicit Values"
-                        detail={
-                          axisMode === "explicit"
-                            ? "Comma-separated values submitted directly to the persisted values array."
-                            : "Optional override. Range builder stays authoritative while Axis Mode is set to Range builder."
-                        }
-                        error={axisErrors?.explicitValues?.message}
-                      >
-                        <SetupTextInput
-                          {...form.register(`simulationParameterSweepAxes.${index}.explicitValues`)}
-                          placeholder="1.0, 1.1, 1.2"
-                        />
-                      </SetupInputField>
                     </div>
                   );
                 })}
@@ -1725,83 +1798,30 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="HB Solving"
-            description="Keep the solver family, convergence settings, and harmonic balance controls together as one solver authoring surface."
+            description="Keep the two main JosephsonCircuits harmonic controls visible here and move denser solver tuning into Advanced hbsolve Options."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
           >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2">
               <SetupInputField
-                label="Solver Family"
-                error={form.formState.errors.simulationSolverFamily?.message}
-              >
-                <SetupTextInput
-                  {...form.register("simulationSolverFamily")}
-                  placeholder="harmonic_balance"
-                />
-              </SetupInputField>
-              <SetupInputField
-                label="Max Iterations"
-                error={form.formState.errors.simulationMaxIterations?.message}
+                label="Nmodulation Harmonics"
+                error={form.formState.errors.simulationHarmonicCount?.message}
               >
                 <SetupNumberInput
-                  {...form.register("simulationMaxIterations", { valueAsNumber: true })}
+                  {...form.register("simulationHarmonicCount", { valueAsNumber: true })}
                   min={1}
+                  disabled={!harmonicBalanceEnabled}
                 />
               </SetupInputField>
               <SetupInputField
-                label="Convergence Tolerance"
-                error={form.formState.errors.simulationConvergenceTolerance?.message}
+                label="Npump Harmonics"
+                error={form.formState.errors.simulationOversampleFactor?.message}
               >
                 <SetupNumberInput
-                  {...form.register("simulationConvergenceTolerance", {
-                    valueAsNumber: true,
-                  })}
-                  step="any"
+                  {...form.register("simulationOversampleFactor", { valueAsNumber: true })}
+                  min={1}
+                  disabled={!harmonicBalanceEnabled}
                 />
               </SetupInputField>
-            </div>
-
-            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Harmonic balance</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Enable harmonic balance specific controls for this simulation request.
-                  </p>
-                </div>
-                <SetupSlideToggle
-                  checked={harmonicBalanceEnabled}
-                  label="Enable harmonic balance"
-                  description="Turns harmonic-count and oversample controls into active persisted solver fields."
-                  onCheckedChange={(nextChecked) => {
-                    form.setValue("simulationHarmonicBalanceEnabled", nextChecked, {
-                      shouldDirty: true,
-                    });
-                  }}
-                />
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <SetupInputField
-                  label="Harmonic Count"
-                  error={form.formState.errors.simulationHarmonicCount?.message}
-                >
-                  <SetupNumberInput
-                    {...form.register("simulationHarmonicCount", { valueAsNumber: true })}
-                    min={1}
-                    disabled={!harmonicBalanceEnabled}
-                  />
-                </SetupInputField>
-                <SetupInputField
-                  label="Oversample Factor"
-                  error={form.formState.errors.simulationOversampleFactor?.message}
-                >
-                  <SetupNumberInput
-                    {...form.register("simulationOversampleFactor", { valueAsNumber: true })}
-                    min={1}
-                    disabled={!harmonicBalanceEnabled}
-                  />
-                </SetupInputField>
-              </div>
             </div>
           </SetupSection>
 
@@ -1851,7 +1871,7 @@ export function SimulationWorkbenchShell() {
                         </button>
                       </div>
 
-                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-6">
                         <SetupInputField
                           label="Source Id"
                           error={sourceErrors?.sourceId?.message}
@@ -1886,7 +1906,6 @@ export function SimulationWorkbenchShell() {
                         </SetupInputField>
                         <SetupInputField
                           label="Frequency (GHz)"
-                          detail="Optional per-source frequency override."
                           error={sourceErrors?.frequencyGhz?.message}
                         >
                           <SetupTextInput
@@ -1896,7 +1915,6 @@ export function SimulationWorkbenchShell() {
                         </SetupInputField>
                         <SetupInputField
                           label="Phase (deg)"
-                          detail="Optional per-source phase override."
                           error={sourceErrors?.phaseDeg?.message}
                         >
                           <SetupTextInput
@@ -1996,8 +2014,13 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="Advanced hbsolve Options"
-            description="Keep advanced hbsolve draft settings out of the main flow until they are needed."
-            status={<LocalDraftBadge />}
+            description="Keep denser solver controls and experimental hbsolve notes collapsed until they are needed."
+            status={
+              <>
+                <SurfaceTag tone="primary">Persisted on task</SurfaceTag>
+                <LocalDraftBadge />
+              </>
+            }
             actions={
               <button
                 type="button"
@@ -2016,57 +2039,103 @@ export function SimulationWorkbenchShell() {
               </button>
             }
           >
-            <div className="rounded-[0.95rem] border border-dashed border-amber-400/50 bg-amber-50/70 px-4 py-4 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-              Advanced hbsolve options are local draft only. They can guide authoring now, but the
-              backend does not persist or rehydrate them yet.
-            </div>
-
             {isAdvancedHbsolveExpanded ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <SetupInputField label="Damping Strategy">
-                  <SetupTextInput
-                    {...form.register("simulationAdvancedDampingStrategy")}
-                    placeholder="adaptive"
+              <div className="space-y-4">
+                <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                  <SetupInputField
+                    label="Solver Family"
+                    error={form.formState.errors.simulationSolverFamily?.message}
+                  >
+                    <SetupTextInput
+                      {...form.register("simulationSolverFamily")}
+                      placeholder="harmonic_balance"
+                    />
+                  </SetupInputField>
+                  <SetupInputField
+                    label="Max Iterations"
+                    error={form.formState.errors.simulationMaxIterations?.message}
+                  >
+                    <SetupNumberInput
+                      {...form.register("simulationMaxIterations", { valueAsNumber: true })}
+                      min={1}
+                    />
+                  </SetupInputField>
+                  <SetupInputField
+                    label="Convergence Tolerance"
+                    error={form.formState.errors.simulationConvergenceTolerance?.message}
+                  >
+                    <SetupNumberInput
+                      {...form.register("simulationConvergenceTolerance", {
+                        valueAsNumber: true,
+                      })}
+                      step="any"
+                    />
+                  </SetupInputField>
+                  <SetupSlideToggle
+                    checked={harmonicBalanceEnabled}
+                    label="Enable harmonic balance"
+                    description="Persist whether hbsolve harmonic-balance mode is active for this run."
+                    onCheckedChange={(nextChecked) => {
+                      form.setValue("simulationHarmonicBalanceEnabled", nextChecked, {
+                        shouldDirty: true,
+                      });
+                    }}
                   />
-                </SetupInputField>
-                <SetupSlideToggle
-                  checked={form.watch("simulationAdvancedLineSearchEnabled")}
-                  label="Enable line search"
-                  description="Local-only toggle for advanced hbsolve experimentation notes."
-                  onCheckedChange={(nextChecked) => {
-                    form.setValue("simulationAdvancedLineSearchEnabled", nextChecked, {
-                      shouldDirty: true,
-                    });
-                  }}
-                />
-                <SetupInputField label="Residual Clamp">
-                  <SetupTextInput
-                    {...form.register("simulationAdvancedResidualClamp")}
-                    placeholder="1e-6"
+                </div>
+
+                <div className="rounded-[0.95rem] border border-dashed border-amber-400/50 bg-amber-50/70 px-4 py-4 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+                  Damping strategy, line search, residual clamp, relaxation, and freeform notes
+                  are still local draft only. They help authoring now, but they are not persisted
+                  on the task yet.
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <SetupInputField label="Damping Strategy">
+                    <SetupTextInput
+                      {...form.register("simulationAdvancedDampingStrategy")}
+                      placeholder="adaptive"
+                    />
+                  </SetupInputField>
+                  <SetupSlideToggle
+                    checked={form.watch("simulationAdvancedLineSearchEnabled")}
+                    label="Enable line search"
+                    description="Local-only toggle for advanced hbsolve experimentation notes."
+                    onCheckedChange={(nextChecked) => {
+                      form.setValue("simulationAdvancedLineSearchEnabled", nextChecked, {
+                        shouldDirty: true,
+                      });
+                    }}
                   />
-                </SetupInputField>
-                <SetupInputField label="Newton Relaxation">
-                  <SetupTextInput
-                    {...form.register("simulationAdvancedNewtonRelaxation")}
-                    placeholder="0.85"
-                  />
-                </SetupInputField>
-                <SetupInputField
-                  label="Advanced Notes"
-                  detail="Keep any extra hbsolve options or reminders in local draft form."
-                >
-                  <textarea
-                    {...form.register("simulationAdvancedNotes")}
-                    rows={4}
-                    placeholder="Optional advanced hbsolve notes."
-                    className="w-full resize-none rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
-                  />
-                </SetupInputField>
+                  <SetupInputField label="Residual Clamp">
+                    <SetupTextInput
+                      {...form.register("simulationAdvancedResidualClamp")}
+                      placeholder="1e-6"
+                    />
+                  </SetupInputField>
+                  <SetupInputField label="Newton Relaxation">
+                    <SetupTextInput
+                      {...form.register("simulationAdvancedNewtonRelaxation")}
+                      placeholder="0.85"
+                    />
+                  </SetupInputField>
+                  <SetupInputField
+                    label="Advanced Notes"
+                    detail="Keep any extra hbsolve options or reminders in local draft form."
+                  >
+                    <textarea
+                      {...form.register("simulationAdvancedNotes")}
+                      rows={4}
+                      placeholder="Optional advanced hbsolve notes."
+                      className="w-full resize-none rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+                    />
+                  </SetupInputField>
+                </div>
               </div>
             ) : (
               <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                Advanced hbsolve options stay collapsed until you need them. Expanding this section
-                will not change persisted task payloads.
+                Advanced hbsolve options stay collapsed until you need them. Solver family,
+                convergence, and harmonic-balance enable live here, while the extra draft fields
+                still remain browser-local.
               </div>
             )}
           </SetupSection>

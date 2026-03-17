@@ -871,7 +871,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
     expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
     expect(simulationWorkbenchSource).toContain("Operation Config JSON");
-    expect(simulationWorkbenchSource).toContain("Persisted simulation setup was rehydrated");
+    expect(simulationWorkbenchSource).toContain("Rehydrated from task #");
     expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
     expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
     expect(simulationWorkbenchSource).not.toContain('title="Workflow boundary"');
