@@ -913,9 +913,12 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Sources");
     expect(simulationWorkbenchSource).toContain("PTC");
     expect(simulationWorkbenchSource).toContain("Advanced hbsolve Options");
+    expect(simulationWorkbenchSource).toContain("const FREQUENCY_WHEEL_STEP_GHZ = 0.001");
+    expect(simulationWorkbenchSource).toContain("step={String(FREQUENCY_WHEEL_STEP_GHZ)}");
+    expect(simulationWorkbenchSource).toContain("Schema unit ·");
     expect(simulationWorkbenchSource).toContain("Add Axis");
     expect(simulationWorkbenchSource).toContain("Add Source");
-    expect(simulationWorkbenchSource).toContain("Local draft only");
+    expect(simulationWorkbenchSource).toContain("Browser-local only");
     expect(simulationWorkbenchSource).toContain("Source Current Ip (A)");
     expect(simulationWorkbenchSource).toContain("Source Mode");
     expect(simulationWorkbenchSource).toContain("Pump Source");
@@ -936,6 +939,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Operation Config JSON");
     expect(simulationWorkbenchSource).toContain("Rehydrated from task #");
     expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
+    expect(simulationWorkbenchSource).not.toContain('detail="Read-only expanded netlist."');
     expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
     expect(simulationWorkbenchSource).not.toContain('title="Workflow boundary"');
     expect(simulationWorkbenchSource).not.toContain("Open Schemas");
@@ -950,6 +954,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Task Event History");
     expect(simulationWorkbenchSource).not.toContain("Persisted Result Surface");
     expect(simulationWorkbenchSource).not.toContain("Definition Binding");
+    expect(simulationWorkbenchSource).not.toContain("Submit Authority");
+    expect(simulationWorkbenchSource).not.toContain("Downstream Contract");
+    expect(simulationWorkbenchSource).not.toContain("Dataset not attached");
     expect(simulationWorkbenchSource).not.toContain("Sweep Parameter (optional)");
     expect(simulationWorkbenchSource).not.toContain("Phase (deg)");
     expect(simulationWorkbenchSource).toContain("deriveSimulationSweepTargetOptions");

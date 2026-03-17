@@ -1,26 +1,33 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Database, LoaderCircle, Upload } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import useSWR from "swr";
-import { z } from "zod";
+import {
+  CheckCircle2,
+  Database,
+  FileSpreadsheet,
+  LoaderCircle,
+  Upload,
+  X,
+} from "lucide-react";
 
 import {
   datasetProfileKey,
   getDatasetProfile,
   ingestRawData,
 } from "@/lib/api/datasets";
-import { useActiveDataset, useAppSession } from "@/lib/app-state";
+import { useActiveDataset } from "@/lib/app-state";
 import {
   SurfaceHeader,
   SurfacePanel,
-  SurfaceStat,
   SurfaceTag,
   cx,
 } from "@/features/shared/components/surface-kit";
+import {
+  buildUploadFirstIngestionDraft,
+  validateUploadFirstCsv,
+  type UploadValidationResult,
+} from "@/features/data-browser/lib/upload-first-ingestion";
 
 type IngestionScope = "measurement" | "layout_simulation";
 
@@ -29,62 +36,19 @@ const ingestionScopes: ReadonlyArray<
     id: IngestionScope;
     title: string;
     description: string;
-    payloadSummary: string;
   }>
 > = [
   {
     id: "measurement",
     title: "Measurement",
-    description:
-      "Bring lab-acquired traces into the active dataset as dataset-local design data.",
-    payloadSummary:
-      "Best for instrument exports and measured sweeps before browsing or comparison.",
+    description: "Import measured traces from a CSV file into the active dataset.",
   },
   {
     id: "layout_simulation",
     title: "Layout Simulation",
-    description:
-      "Bring EM or field-solver traces into the active dataset for downstream simulation comparison.",
-    payloadSummary:
-      "Best for layout solver exports that should become visible in Raw Data Browser.",
+    description: "Import EM or layout-solver traces from a CSV file into the active dataset.",
   },
 ] as const;
-
-const ingestionSchema = z.object({
-  design_name: z.string().trim().min(1, "Design name is required."),
-  design_id: z.string().trim().optional(),
-  provenance_label: z.string().trim().min(1, "Provenance label is required."),
-  trace_id: z.string().trim().optional(),
-  family: z.enum(["s_matrix", "y_matrix", "z_matrix"]),
-  parameter: z.string().trim().min(1, "Parameter is required."),
-  representation: z.string().trim().min(1, "Representation is required."),
-  trace_mode_group: z.enum(["base", "sideband", "all"]),
-  stage_kind: z.enum(["raw", "preprocess", "postprocess"]),
-  provenance_summary: z.string().trim().min(1, "Trace provenance summary is required."),
-  axis_name: z.string().trim().min(1, "Axis name is required."),
-  axis_unit: z.string().trim().min(1, "Axis unit is required."),
-  axis_length: z.number().int().min(1, "Axis length must be a positive integer."),
-  preview_payload_json: z.string().trim().min(1, "Preview payload JSON is required."),
-});
-
-type IngestionValues = z.infer<typeof ingestionSchema>;
-
-const defaultValues: IngestionValues = {
-  design_name: "",
-  design_id: "",
-  provenance_label: "",
-  trace_id: "",
-  family: "y_matrix",
-  parameter: "Y11",
-  representation: "imaginary",
-  trace_mode_group: "base",
-  stage_kind: "raw",
-  provenance_summary: "",
-  axis_name: "frequency",
-  axis_unit: "GHz",
-  axis_length: 401,
-  preview_payload_json: '{ "kind": "sampled_series", "points": [[1.0, 0.0], [1.1, 0.015]] }',
-};
 
 type SubmitState = Readonly<{
   tone: "success" | "warning";
@@ -99,92 +63,173 @@ type IngestionResultState = Readonly<{
   traceCount: number;
 }> | null;
 
+type FileDraft = Readonly<{
+  name: string;
+  text: string;
+}>;
+
+type ValidationState = Readonly<{
+  tone: "success" | "warning";
+  message: string;
+}> | null;
+
 export function DataIngestionWorkspace() {
   const [selectedScope, setSelectedScope] = useState<IngestionScope>("measurement");
+  const [designName, setDesignName] = useState("");
+  const [provenanceLabel, setProvenanceLabel] = useState("");
+  const [selectedFile, setSelectedFile] = useState<FileDraft | null>(null);
+  const [validation, setValidation] = useState<UploadValidationResult | null>(null);
+  const [validationState, setValidationState] = useState<ValidationState>(null);
   const [submitState, setSubmitState] = useState<SubmitState>(null);
   const [submitResult, setSubmitResult] = useState<IngestionResultState>(null);
-  const { runtimeMode } = useAppSession();
+  const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const activeDatasetState = useActiveDataset();
   const activeDataset = activeDatasetState.activeDataset;
   const activeDatasetId = activeDataset?.datasetId ?? null;
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastSuggestedLabelsRef = useRef({
+    designName: "",
+    provenanceLabel: "",
+  });
   const profileQuery = useSWR(
     activeDatasetId ? datasetProfileKey(activeDatasetId) : null,
     () => (activeDatasetId ? getDatasetProfile(activeDatasetId) : Promise.resolve(undefined)),
   );
-  const form = useForm<IngestionValues>({
-    resolver: zodResolver(ingestionSchema),
-    defaultValues,
-  });
 
   const selectedScopeSummary = useMemo(
     () => ingestionScopes.find((scope) => scope.id === selectedScope) ?? ingestionScopes[0],
     [selectedScope],
   );
   const canIngest = Boolean(profileQuery.data?.allowed_actions.ingest_raw_data);
-  const submitBlockedReason = !activeDataset
-    ? "Attach a dataset first so ingestion has a target container."
-    : profileQuery.isLoading
-      ? "Checking dataset ingestion authority..."
-      : !canIngest
-        ? "The current backend authority does not allow ingestion for this dataset."
-        : null;
 
-  async function handleSubmit(values: IngestionValues) {
-    if (!activeDataset) {
-      setSubmitState({
-        tone: "warning",
-        message: "Attach a dataset before submitting ingestion.",
-      });
+  useEffect(() => {
+    if (!selectedFile) {
+      setValidation(null);
+      setValidationState(null);
+      lastSuggestedLabelsRef.current = {
+        designName: "",
+        provenanceLabel: "",
+      };
       return;
     }
 
-    let previewPayload: Record<string, unknown>;
-    try {
-      const parsed = JSON.parse(values.preview_payload_json);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("Preview payload must be a JSON object.");
-      }
-      previewPayload = parsed as Record<string, unknown>;
-    } catch {
-      setSubmitState({
-        tone: "warning",
-        message: "Preview payload must be valid JSON object text.",
-      });
-      return;
-    }
-
+    setIsParsingFile(true);
     setSubmitState(null);
     setSubmitResult(null);
 
     try {
-      const result = await ingestRawData(activeDataset.datasetId, {
+      const nextValidation = validateUploadFirstCsv({
         kind: selectedScope,
-        design_name: values.design_name.trim(),
-        design_id: values.design_id?.trim() || undefined,
-        provenance_label: values.provenance_label.trim(),
-        traces: [
-          {
-            trace_id: values.trace_id?.trim() || undefined,
-            family: values.family,
-            parameter: values.parameter.trim(),
-            representation: values.representation.trim(),
-            trace_mode_group: values.trace_mode_group,
-            stage_kind: values.stage_kind,
-            provenance_summary: values.provenance_summary.trim(),
-            axes: [
-              {
-                name: values.axis_name.trim(),
-                unit: values.axis_unit.trim(),
-                length: values.axis_length,
-              },
-            ],
-            preview_payload: previewPayload,
-          },
-        ],
+        fileName: selectedFile.name,
+        fileText: selectedFile.text,
       });
+      setValidation(nextValidation);
+      setValidationState({
+        tone: "success",
+        message:
+          "CSV contract looks valid. The frontend prepared a dataset-ingestion payload from the uploaded file.",
+      });
+
+      const previousSuggestions = lastSuggestedLabelsRef.current;
+      setDesignName((current) =>
+        !current || current === previousSuggestions.designName
+          ? nextValidation.designNameSuggestion
+          : current,
+      );
+      setProvenanceLabel((current) =>
+        !current || current === previousSuggestions.provenanceLabel
+          ? nextValidation.provenanceLabelSuggestion
+          : current,
+      );
+      lastSuggestedLabelsRef.current = {
+        designName: nextValidation.designNameSuggestion,
+        provenanceLabel: nextValidation.provenanceLabelSuggestion,
+      };
+    } catch (error) {
+      setValidation(null);
+      setValidationState({
+        tone: "warning",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to validate the uploaded CSV against the intake contract.",
+      });
+    } finally {
+      setIsParsingFile(false);
+    }
+  }, [selectedFile, selectedScope]);
+
+  const submitBlockedReason = !activeDataset
+    ? "Attach an active dataset in the shell before importing raw data."
+    : profileQuery.isLoading
+      ? "Checking dataset ingestion authority..."
+      : !canIngest
+        ? "The current dataset authority does not allow raw-data ingestion."
+        : !selectedFile
+          ? "Choose a CSV file to validate and preprocess."
+          : !validation
+            ? "Resolve the CSV validation issue before importing."
+            : designName.trim().length === 0
+              ? "Design name is required."
+              : provenanceLabel.trim().length === 0
+                ? "Provenance label is required."
+                : null;
+
+  async function handleFileSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setIsParsingFile(true);
+    setSubmitState(null);
+    setSubmitResult(null);
+
+    try {
+      const text = await file.text();
+      setSelectedFile({
+        name: file.name,
+        text,
+      });
+    } catch (error) {
+      setValidation(null);
+      setValidationState({
+        tone: "warning",
+        message: error instanceof Error ? error.message : "Unable to read the selected CSV file.",
+      });
+      setIsParsingFile(false);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function handleSubmit() {
+    if (!activeDataset || !validation || submitBlockedReason) {
+      setSubmitState({
+        tone: "warning",
+        message: submitBlockedReason ?? "Upload and validate a CSV file before importing.",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitState(null);
+    setSubmitResult(null);
+
+    try {
+      const result = await ingestRawData(
+        activeDataset.datasetId,
+        buildUploadFirstIngestionDraft({
+          kind: selectedScope,
+          designName,
+          provenanceLabel,
+          validation,
+        }),
+      );
       setSubmitState({
         tone: "success",
-        message: `Ingestion succeeded: ${result.traces.length} trace(s) materialized for design ${result.design.name}.`,
+        message: `Imported ${result.traces.length} trace(s) into design ${result.design.name}.`,
       });
       setSubmitResult({
         datasetId: result.dataset.dataset_id,
@@ -198,6 +243,8 @@ export function DataIngestionWorkspace() {
         tone: "warning",
         message: error instanceof Error ? error.message : "Unable to submit ingestion.",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -206,42 +253,15 @@ export function DataIngestionWorkspace() {
       <SurfaceHeader
         eyebrow="Raw-Data Intake"
         title="Data Ingestion"
-        description="Submit measurement or layout-simulation intake into the active dataset. This page owns ingestion submission only."
-        actions={
-          <>
-            <SurfaceTag tone="primary">{selectedScopeSummary.title}</SurfaceTag>
-            <SurfaceTag>{activeDataset?.name ?? "No active dataset"}</SurfaceTag>
-          </>
-        }
+        description="Upload a CSV file, validate the intake contract, preprocess it into the current backend ingestion payload, and import it into the active dataset."
+        actions={<SurfaceTag tone="primary">{selectedScopeSummary.title}</SurfaceTag>}
       />
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <SurfaceStat
-          label="Runtime Mode"
-          value={runtimeMode === "local" ? "Local Mode" : "Online Mode"}
-          tone="primary"
-        />
-        <SurfaceStat label="Target Dataset" value={activeDataset?.name ?? "None selected"} />
-        <SurfaceStat
-          label="Submit Authority"
-          value={
-            !activeDataset
-              ? "Dataset required"
-              : profileQuery.isLoading
-                ? "Checking"
-                : canIngest
-                  ? "Allowed"
-                  : "Blocked"
-          }
-          tone={canIngest ? "primary" : "default"}
-        />
-      </div>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
-        <SurfacePanel
-          title="Ingestion Scope"
-          description="Choose the source family, then submit one concrete ingestion payload bound to the active dataset."
-        >
+      <SurfacePanel
+        title="Upload-first intake"
+        description="Choose the intake type, confirm the target dataset, upload a CSV file, and review the validation result before import."
+      >
+        <div className="space-y-5">
           <div className="grid gap-4 md:grid-cols-2">
             {ingestionScopes.map((scope) => {
               const isSelected = scope.id === selectedScope;
@@ -257,12 +277,12 @@ export function DataIngestionWorkspace() {
                     "w-full cursor-pointer rounded-[1rem] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                     isSelected
                       ? "border-primary/40 bg-primary/10 shadow-[0_16px_34px_rgba(37,99,235,0.16)]"
-                      : "border-border bg-surface hover:-translate-y-0.5 hover:border-primary/30 hover:bg-surface-elevated hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]",
+                      : "border-border bg-background hover:-translate-y-0.5 hover:border-primary/30 hover:bg-surface-elevated hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-semibold text-foreground">{scope.title}</h3>
+                      <p className="text-base font-semibold text-foreground">{scope.title}</p>
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">
                         {scope.description}
                       </p>
@@ -276,309 +296,263 @@ export function DataIngestionWorkspace() {
             })}
           </div>
 
-          <div className="mt-4 rounded-[1rem] border border-border bg-surface px-4 py-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Selected intake path
-            </p>
-            <p className="mt-2 text-sm font-medium text-foreground">{selectedScopeSummary.title}</p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {selectedScopeSummary.payloadSummary}
-            </p>
+          <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Database className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Target Dataset
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {activeDataset?.name ?? "No active dataset selected"}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {activeDataset
+                    ? `${activeDataset.datasetId} · ${activeDataset.visibilityScope} · ${activeDataset.status}`
+                    : "Attach a dataset in the header before importing raw data."}
+                </p>
+              </div>
+            </div>
           </div>
 
-          <form className="mt-4 space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Design Name
-                </span>
-                <input
-                  {...form.register("design_name")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="Flux Scan A"
-                />
-              </label>
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Design Id (optional)
-                </span>
-                <input
-                  {...form.register("design_id")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="design_flux_scan_a"
-                />
-              </label>
-            </div>
-
-            <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Ingestion Provenance Label
-              </span>
-              <input
-                {...form.register("provenance_label")}
-                disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                placeholder="Measurement import · Lab-4 · March run"
-              />
-            </label>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Family
-                </span>
-                <select
-                  {...form.register("family")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
+          <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  CSV File
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {selectedFile?.name ?? "Choose CSV file"}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Accepted contract: one frequency column plus one or more series columns named like
+                  <span className="font-medium text-foreground"> Y11_imaginary</span> or
+                  <span className="font-medium text-foreground"> S21_magnitude</span>.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                  }}
+                  className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
                 >
-                  <option value="s_matrix">s_matrix</option>
-                  <option value="y_matrix">y_matrix</option>
-                  <option value="z_matrix">z_matrix</option>
-                </select>
-              </label>
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Trace Mode Group
-                </span>
-                <select
-                  {...form.register("trace_mode_group")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                >
-                  <option value="base">base</option>
-                  <option value="sideband">sideband</option>
-                  <option value="all">all</option>
-                </select>
-              </label>
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Stage Kind
-                </span>
-                <select
-                  {...form.register("stage_kind")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                >
-                  <option value="raw">raw</option>
-                  <option value="preprocess">preprocess</option>
-                  <option value="postprocess">postprocess</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Parameter
-                </span>
-                <input
-                  {...form.register("parameter")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="Y11"
-                />
-              </label>
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Representation
-                </span>
-                <input
-                  {...form.register("representation")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="imaginary"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Axis Name
-                </span>
-                <input
-                  {...form.register("axis_name")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="frequency"
-                />
-              </label>
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Axis Unit
-                </span>
-                <input
-                  {...form.register("axis_unit")}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="GHz"
-                />
-              </label>
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Axis Length
-                </span>
-                <input
-                  {...form.register("axis_length", { valueAsNumber: true })}
-                  type="number"
-                  min={1}
-                  disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </label>
-            </div>
-
-            <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Trace Provenance Summary
-              </span>
+                  {isParsingFile ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  Choose CSV file
+                </button>
+                {selectedFile ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setValidation(null);
+                      setValidationState(null);
+                      setSubmitState(null);
+                      setSubmitResult(null);
+                      lastSuggestedLabelsRef.current = {
+                        designName: "",
+                        provenanceLabel: "",
+                      };
+                    }}
+                    className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                  >
+                    <X className="h-4 w-4" />
+                    Clear file
+                  </button>
+                ) : null}
+              </div>
               <input
-                {...form.register("provenance_summary")}
-                disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                placeholder="Measurement · Raw · batch #4"
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="sr-only"
+                onChange={handleFileSelection}
               />
-            </label>
+            </div>
+          </div>
 
-            <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Trace Id (optional)
+          <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <FileSpreadsheet className="h-5 w-5" />
               </span>
-              <input
-                {...form.register("trace_id")}
-                disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                placeholder="trace_flux_a_measurement"
-              />
-            </label>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-foreground">Validation & Preprocess</p>
+                  {validation ? <SurfaceTag tone="primary">Ready to import</SurfaceTag> : null}
+                </div>
+                {validationState ? (
+                  <div
+                    className={cx(
+                      "mt-3 rounded-[0.95rem] border px-4 py-3 text-sm",
+                      validationState.tone === "success"
+                        ? "border-emerald-500/35 bg-emerald-500/10 text-foreground"
+                        : "border-amber-500/35 bg-amber-500/10 text-foreground",
+                    )}
+                  >
+                    {validationState.message}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Upload a CSV file to validate it against the fixed intake contract.
+                  </p>
+                )}
 
-            <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Preview Payload JSON
-              </span>
-              <textarea
-                {...form.register("preview_payload_json")}
-                rows={4}
-                disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-                className="mt-2 w-full resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
+                {validation ? (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Sweep Axis
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-foreground">
+                          {validation.axisName} ({validation.axisUnit})
+                        </p>
+                      </div>
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Points
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-foreground">
+                          {validation.pointCount}
+                        </p>
+                      </div>
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Preview Series
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-foreground">
+                          {validation.traces.length}
+                        </p>
+                      </div>
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Intake Type
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-foreground">
+                          {selectedScopeSummary.title}
+                        </p>
+                      </div>
+                    </div>
 
-            <button
-              type="submit"
-              disabled={Boolean(submitBlockedReason) || form.formState.isSubmitting}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {form.formState.isSubmitting ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              Submit {selectedScopeSummary.title} Ingestion
-            </button>
-          </form>
-        </SurfacePanel>
+                    <div className="space-y-3">
+                      {validation.traces.map((trace) => (
+                        <div
+                          key={`${trace.parameter}-${trace.representation}-${trace.headerLabel}`}
+                          className="rounded-[0.95rem] border border-border bg-surface px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-foreground">
+                              {trace.parameter} · {trace.representation}
+                            </p>
+                            <SurfaceTag>{trace.family}</SurfaceTag>
+                          </div>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            Column {trace.headerLabel} · {trace.pointCount} points prepared for preview
+                            and import.
+                          </p>
+                        </div>
+                      ))}
+                    </div>
 
-        <div className="space-y-5">
-          <SurfacePanel
-            title="Ingestion Target"
-            description="The active dataset is the target authority for this ingestion request."
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="block rounded-xl border border-border bg-surface px-4 py-3">
+                        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                          Design Name
+                        </span>
+                        <input
+                          value={designName}
+                          onChange={(event) => {
+                            setDesignName(event.target.value);
+                          }}
+                          disabled={isSubmitting}
+                          className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                          placeholder="Flux Scan A"
+                        />
+                      </label>
+                      <label className="block rounded-xl border border-border bg-surface px-4 py-3">
+                        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                          Provenance Label
+                        </span>
+                        <input
+                          value={provenanceLabel}
+                          onChange={(event) => {
+                            setProvenanceLabel(event.target.value);
+                          }}
+                          disabled={isSubmitting}
+                          className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                          placeholder="Measurement import · Flux Scan A"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {submitBlockedReason ? (
+            <div className="rounded-[1rem] border border-amber-500/35 bg-amber-50 px-4 py-4 text-sm text-amber-950 dark:bg-amber-950/35 dark:text-amber-200">
+              {submitBlockedReason}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => {
+              void handleSubmit();
+            }}
+            disabled={Boolean(submitBlockedReason) || isSubmitting}
+            className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <div className="rounded-[1rem] border border-border bg-surface px-4 py-4">
+            {isSubmitting ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Import {selectedScopeSummary.title} CSV
+          </button>
+
+          {submitState ? (
+            <div
+              className={cx(
+                "rounded-[1rem] border px-4 py-4 text-sm",
+                submitState.tone === "success"
+                  ? "border-emerald-500/35 bg-emerald-500/10 text-foreground"
+                  : "border-amber-500/35 bg-amber-500/10 text-foreground",
+              )}
+            >
+              {submitState.message}
+            </div>
+          ) : null}
+
+          {submitResult ? (
+            <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
               <div className="flex items-start gap-3">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Database className="h-5 w-5" />
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">
-                    {activeDataset?.name ?? "No active dataset selected"}
+                    Imported {submitResult.traceCount} trace(s) into {submitResult.designName}.
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {activeDataset
-                      ? `${activeDataset.datasetId} · ${activeDataset.visibilityScope} · ${activeDataset.status}`
-                      : "Attach a dataset first so ingestion has a target container."}
-                  </p>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    Dataset source authority: {activeDatasetState.source === "none" ? "No selection" : activeDatasetState.source}
+                    Dataset {submitResult.datasetName} ({submitResult.datasetId}) now includes design{" "}
+                    {submitResult.designId}. Review it from Raw Data when you are ready.
                   </p>
                 </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  href="/dataset"
-                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                >
-                  <ArrowRight className="h-4 w-4" />
-                  Open Dataset
-                </Link>
-                <Link
-                  href="/raw-data"
-                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                >
-                  <ArrowRight className="h-4 w-4" />
-                  Open Raw Data
-                </Link>
               </div>
             </div>
-          </SurfacePanel>
-
-          <SurfacePanel
-            title="Submit Outcome"
-            description="Submission success and handoff are driven by backend response; no optimistic upload completion is faked."
-          >
-            {submitBlockedReason ? (
-              <div className="rounded-[1rem] border border-amber-500/35 bg-amber-50 px-4 py-4 text-sm text-amber-950 dark:bg-amber-950/35 dark:text-amber-200">
-                {submitBlockedReason}
-              </div>
-            ) : null}
-
-            {submitState ? (
-              <div
-                className={cx(
-                  "mt-3 rounded-[1rem] border px-4 py-4 text-sm",
-                  submitState.tone === "success"
-                    ? "border-emerald-500/35 bg-emerald-500/10 text-foreground"
-                    : "border-amber-500/35 bg-amber-500/10 text-foreground",
-                )}
-              >
-                {submitState.message}
-              </div>
-            ) : null}
-
-            {submitResult ? (
-              <div className="mt-3 rounded-[1rem] border border-border bg-surface px-4 py-4 text-sm">
-                <p className="font-semibold text-foreground">
-                  {submitResult.traceCount} trace(s) are now attached to {submitResult.designName}.
-                </p>
-                <p className="mt-2 text-muted-foreground">
-                  Dataset {submitResult.datasetName} ({submitResult.datasetId}) · Design{" "}
-                  {submitResult.designId}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Link
-                    href={`/dataset?datasetId=${encodeURIComponent(submitResult.datasetId)}`}
-                    className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                    Handoff to Dataset
-                  </Link>
-                  <Link
-                    href={`/raw-data?datasetId=${encodeURIComponent(submitResult.datasetId)}`}
-                    className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                    Handoff to Raw Data Browser
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-          </SurfacePanel>
+          ) : null}
         </div>
-      </section>
+      </SurfacePanel>
     </div>
   );
 }

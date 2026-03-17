@@ -113,6 +113,11 @@ describe("workspace shell source contracts", () => {
     expect(headerSource).toContain("truncate whitespace-nowrap");
     expect(headerSource).toContain("identity.pageTitle");
     expect(headerSource).toContain("identity.sectionLabel");
+    expect(headerSource).toContain('label="Runtime Mode"');
+    expect(headerSource).toContain('label="Active Dataset"');
+    expect(headerSource).toContain('requestOpenGlobalContext("runtime")');
+    expect(headerSource).toContain('requestOpenGlobalContext("dataset")');
+    expect(headerSource).toContain("resolveShellActiveDatasetSummary");
     expect(headerSource).not.toContain("identity.summary");
     expect(headerSource).not.toContain("WORKSPACE SURFACE");
   });

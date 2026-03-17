@@ -7,6 +7,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceAccountPanel } from "@/components/layout/workspace-account-panel";
 import { WorkspaceStatusStrip } from "@/components/layout/workspace-status-strip";
 import {
+  requestOpenGlobalContext,
+  resolveShellActiveDatasetSummary,
   resolveRuntimeModeLabel,
   resolveShellAuthSummary,
   resolveShellConnectionTargetLabel,
@@ -15,14 +17,40 @@ import {
   subscribeToGlobalContextRequests,
 } from "@/components/layout/workspace-shell-contract";
 import { cx } from "@/features/shared/components/surface-kit";
-import { useAppSession } from "@/lib/app-state";
+import { useActiveDataset, useAppSession } from "@/lib/app-state";
 import { resolveWorkspacePageIdentity } from "@/lib/navigation";
+
+function ShellContextTrigger({
+  label,
+  value,
+  onClick,
+}: Readonly<{
+  label: string;
+  value: string;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="hidden min-h-11 cursor-pointer flex-col items-start justify-center rounded-[1rem] border border-border bg-background px-3.5 py-2 text-left transition hover:border-primary/25 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-header lg:flex"
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </span>
+      <span className="mt-1 max-w-[160px] truncate text-sm font-medium text-foreground">
+        {value}
+      </span>
+    </button>
+  );
+}
 
 export function WorkspaceHeader() {
   const pathname = usePathname();
   const [activePanel, setActivePanel] = useState<"account" | "context" | null>(null);
   const shellControlsRef = useRef<HTMLDivElement | null>(null);
   const { session, sessionError, status } = useAppSession();
+  const activeDatasetState = useActiveDataset();
   const identity = resolveWorkspacePageIdentity(pathname);
   const authSummary = resolveShellAuthSummary({
     session,
@@ -69,6 +97,13 @@ export function WorkspaceHeader() {
       tone: "error" as const,
     };
   }, [authSummary, session]);
+  const runtimeModeLabel = resolveRuntimeModeLabel(session?.runtimeMode);
+  const datasetSummary = resolveShellActiveDatasetSummary(activeDatasetState.activeDataset, {
+    status: activeDatasetState.status,
+    source: activeDatasetState.source,
+    errorDetail: activeDatasetState.activeDatasetError?.message ?? null,
+    isUpdating: activeDatasetState.isUpdatingActiveDataset,
+  });
 
   useEffect(() => {
     return subscribeToGlobalContextRequests(() => {
@@ -95,6 +130,29 @@ export function WorkspaceHeader() {
         </div>
 
         <div ref={shellControlsRef} className="flex shrink-0 items-center gap-2">
+          <ShellContextTrigger
+            label="Runtime Mode"
+            value={runtimeModeLabel}
+            onClick={() => {
+              requestOpenGlobalContext("runtime");
+            }}
+          />
+          <ShellContextTrigger
+            label="Active Dataset"
+            value={datasetSummary.value}
+            onClick={() => {
+              requestOpenGlobalContext("dataset");
+            }}
+          />
+
+          <WorkspaceStatusStrip
+            open={activePanel === "context"}
+            onOpenChange={(nextOpen) => {
+              setActivePanel(nextOpen ? "context" : null);
+            }}
+            interactionBoundaryRef={shellControlsRef}
+          />
+
           <button
             type="button"
             onClick={() => {
@@ -134,14 +192,6 @@ export function WorkspaceHeader() {
               </span>
             </span>
           </button>
-
-          <WorkspaceStatusStrip
-            open={activePanel === "context"}
-            onOpenChange={(nextOpen) => {
-              setActivePanel(nextOpen ? "context" : null);
-            }}
-            interactionBoundaryRef={shellControlsRef}
-          />
         </div>
       </div>
 

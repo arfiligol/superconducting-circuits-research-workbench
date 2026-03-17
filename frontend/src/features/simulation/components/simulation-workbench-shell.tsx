@@ -120,6 +120,8 @@ type WorkflowStageState = Readonly<{
   message: string;
 }>;
 
+const FREQUENCY_WHEEL_STEP_GHZ = 0.001;
+
 const simulationStageFieldNames = [
   "simulationNote",
   "simulationStartGhz",
@@ -391,7 +393,7 @@ function ReadOnlyCodeSurface({
   height,
 }: Readonly<{
   label: string;
-  detail: string;
+  detail?: string;
   value: string;
   height: string;
 }>) {
@@ -407,7 +409,7 @@ function ReadOnlyCodeSurface({
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {label}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+          {detail ? <p className="mt-1 text-xs text-muted-foreground">{detail}</p> : null}
         </div>
         <FileCode2 className="h-4 w-4 text-muted-foreground" />
       </div>
@@ -487,7 +489,7 @@ function SetupSection({
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
             {status}
           </div>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>
@@ -522,20 +524,27 @@ function SetupInputField({
 function CompactField({
   label,
   detail,
+  headerAside,
   children,
   error,
   className,
 }: Readonly<{
   label: string;
   detail?: string;
+  headerAside?: React.ReactNode;
   children: React.ReactNode;
   error?: string;
   className?: string;
 }>) {
   return (
     <label className={cx("block min-w-0", className)}>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
+      <span className="flex items-start justify-between gap-3">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          {label}
+        </span>
+        {headerAside ? (
+          <span className="text-[11px] text-muted-foreground">{headerAside}</span>
+        ) : null}
       </span>
       {detail ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{detail}</span> : null}
       <div className="mt-2">{children}</div>
@@ -691,7 +700,7 @@ function SetupSelect(props: Readonly<React.SelectHTMLAttributes<HTMLSelectElemen
 }
 
 function LocalDraftBadge() {
-  return <SurfaceTag tone="warning">Local draft only</SurfaceTag>;
+  return <SurfaceTag>Browser-local only</SurfaceTag>;
 }
 
 function SetupSlideToggle({
@@ -699,12 +708,14 @@ function SetupSlideToggle({
   onCheckedChange,
   label,
   description,
+  className,
   disabled = false,
 }: Readonly<{
   checked: boolean;
   onCheckedChange: (nextChecked: boolean) => void;
   label: string;
   description?: string;
+  className?: string;
   disabled?: boolean;
 }>) {
   return (
@@ -723,6 +734,7 @@ function SetupSlideToggle({
         checked
           ? "border-primary/35 bg-primary/10"
           : "border-border bg-background hover:border-primary/25 hover:bg-primary/5",
+        className,
       )}
     >
       <span className={cx("min-w-0", !disabled && "cursor-pointer")}>
@@ -1464,20 +1476,6 @@ export function SimulationWorkbenchShell() {
         }
       />
 
-      <div className="flex flex-wrap gap-2">
-        <SurfaceTag tone="primary">
-          {selectedDefinitionDisplay?.name ?? "Definition pending"}
-        </SurfaceTag>
-        <SurfaceTag tone={activeDatasetState.activeDataset ? "success" : "warning"}>
-          {activeDatasetState.activeDataset?.name ?? "Dataset not attached"}
-        </SurfaceTag>
-        {resolvedTaskId !== null ? (
-          <SurfaceTag tone={taskConnectionState.isAttached ? "success" : "warning"}>
-            Task #{resolvedTaskId}
-          </SurfaceTag>
-        ) : null}
-      </div>
-
       {definitionsError ? (
         <StageNotice
           tone="error"
@@ -1577,7 +1575,7 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={1}
           title="Definition / Netlist Context"
-          description="Confirm the selected definition and review the expanded netlist before launching a new run."
+          description="Select the definition and inspect the expanded netlist before launching a run."
           status={{
             label: activeDefinition ? "Ready" : isDefinitionsLoading ? "Loading" : "Blocked",
             tone: activeDefinition ? "success" : isDefinitionsLoading ? "primary" : "warning",
@@ -1625,7 +1623,6 @@ export function SimulationWorkbenchShell() {
 
             <ReadOnlyCodeSurface
               label="Expanded Netlist"
-              detail="Scrollable read-only expanded netlist for simulation context."
               value={formattedExpandedNetlist}
               height="320px"
             />
@@ -1642,7 +1639,7 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={2}
           title="Simulation Setup"
-          description="Author the runnable simulation setup in six focused sections. Persisted sections submit with the task; unsupported sections stay as local draft notes."
+          description="Configure the runnable simulation setup in six focused sections."
           status={simulationSetupState}
           actions={
             <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
@@ -1698,7 +1695,7 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="Signal Frequency Sweep Range"
-            description="Set the main frequency sweep window that defines the simulation sampling range."
+            description="Set the main sweep window for this run."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
           >
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
@@ -1709,8 +1706,8 @@ export function SimulationWorkbenchShell() {
                 >
                   <SetupNumberInput
                     {...form.register("simulationStartGhz", { valueAsNumber: true })}
-                    step="any"
-                    min={0.000001}
+                    step={String(FREQUENCY_WHEEL_STEP_GHZ)}
+                    min={String(FREQUENCY_WHEEL_STEP_GHZ)}
                   />
                 </CompactField>
                 <CompactField
@@ -1719,13 +1716,12 @@ export function SimulationWorkbenchShell() {
                 >
                   <SetupNumberInput
                     {...form.register("simulationStopGhz", { valueAsNumber: true })}
-                    step="any"
-                    min={0.000001}
+                    step={String(FREQUENCY_WHEEL_STEP_GHZ)}
+                    min={String(FREQUENCY_WHEEL_STEP_GHZ)}
                   />
                 </CompactField>
                 <CompactField
                   label="Points"
-                  detail="Number of sample points across the sweep."
                   error={form.formState.errors.simulationPointCount?.message}
                 >
                   <SetupNumberInput
@@ -1745,7 +1741,7 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="Parameter Sweep Setup"
-            description="Choose sweep targets from the circuit definition or source controls, then add one or more axis cards only when this run needs them."
+            description="Choose sweep targets from the schema or source controls, then add only the axes needed for this run."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
           >
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3">
@@ -1753,10 +1749,11 @@ export function SimulationWorkbenchShell() {
                 <SetupSlideToggle
                   checked={parameterSweepEnabled}
                   label="Enable parameter sweeps"
+                  className="min-h-[52px]"
                   description={
-                    sweepTargetOptions.length > 0
-                      ? "Sweep targets come from schema parameters and JosephsonCircuits source controls."
-                      : "No schema parameters or source controls are available for sweeping on this definition."
+                    sweepTargetOptions.length === 0
+                      ? "No schema parameters or source controls are available for sweeping on this definition."
+                      : undefined
                   }
                   disabled={sweepTargetOptions.length === 0}
                   onCheckedChange={(nextChecked) => {
@@ -1822,13 +1819,8 @@ export function SimulationWorkbenchShell() {
                       className="rounded-[0.95rem] border border-border bg-background px-4 py-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-sm font-semibold text-foreground">Axis {index + 1}</p>
-                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                            {axisDerivedUnit
-                              ? `Schema unit · ${axisDerivedUnit}`
-                              : "Schema unit unavailable"}
-                          </p>
                         </div>
                         <button
                           type="button"
@@ -1842,118 +1834,135 @@ export function SimulationWorkbenchShell() {
                         </button>
                       </div>
 
-                      <div className="mt-4 rounded-[0.9rem] border border-border/60 bg-surface/40 px-4 py-4">
-                        <div
-                          className={cx(
-                            "grid gap-4",
-                            axisMode === "explicit"
-                              ? "xl:grid-cols-[minmax(260px,1.3fr)_190px_minmax(300px,1.2fr)]"
-                              : "xl:grid-cols-[minmax(260px,1.3fr)_190px_minmax(0,1.4fr)]",
-                          )}
+                      <div
+                        className={cx(
+                          "mt-4 grid gap-4",
+                          axisMode === "explicit"
+                            ? "xl:grid-cols-[minmax(260px,1.25fr)_190px_minmax(300px,1.2fr)]"
+                            : "xl:grid-cols-[minmax(260px,1.25fr)_190px_minmax(0,1.4fr)]",
+                        )}
+                      >
+                        <CompactField
+                          label="Target / Parameter"
+                          error={axisErrors?.parameter?.message}
+                          headerAside={
+                            axisDerivedUnit
+                              ? `Schema unit · ${axisDerivedUnit}`
+                              : "Schema unit unavailable"
+                          }
                         >
-                          <CompactField
-                            label="Target / Parameter"
-                            error={axisErrors?.parameter?.message}
-                            detail={
-                              axisDerivedUnit
-                                ? `Schema unit · ${axisDerivedUnit}`
-                                : "Schema unit unavailable"
-                            }
+                          <SetupSelect
+                            value={axisParameter}
+                            disabled={sweepTargetOptions.length === 0}
+                            onChange={(event) => {
+                              const nextOption =
+                                sweepTargetOptionsByValue.get(event.target.value) ?? null;
+                              form.setValue(
+                                `simulationParameterSweepAxes.${index}.parameter`,
+                                event.target.value,
+                                { shouldDirty: true },
+                              );
+                              form.setValue(
+                                `simulationParameterSweepAxes.${index}.unit`,
+                                nextOption?.unit ?? "",
+                                { shouldDirty: false },
+                              );
+                            }}
                           >
-                            <SetupSelect
-                              value={axisParameter}
-                              onChange={(event) => {
-                                const nextOption =
-                                  sweepTargetOptionsByValue.get(event.target.value) ?? null;
-                                form.setValue(
-                                  `simulationParameterSweepAxes.${index}.parameter`,
-                                  event.target.value,
-                                  { shouldDirty: true },
-                                );
-                                form.setValue(
-                                  `simulationParameterSweepAxes.${index}.unit`,
-                                  nextOption?.unit ?? "",
-                                  { shouldDirty: false },
-                                );
-                              }}
-                            >
-                              {sweepTargetOptions.some((option) => option.source === "schema") ? (
-                                <optgroup label="Circuit schema">
-                                  {sweepTargetOptions
-                                    .filter((option) => option.source === "schema")
-                                    .map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                </optgroup>
-                              ) : null}
-                              {sweepTargetOptions.some((option) => option.source === "source") ? (
-                                <optgroup label="Simulation sources">
-                                  {sweepTargetOptions
-                                    .filter((option) => option.source === "source")
-                                    .map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                </optgroup>
-                              ) : null}
-                            </SetupSelect>
+                            {sweepTargetOptions.some((option) => option.source === "schema") ? (
+                              <optgroup label="Circuit schema">
+                                {sweepTargetOptions
+                                  .filter((option) => option.source === "schema")
+                                  .map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            ) : null}
+                            {sweepTargetOptions.some((option) => option.source === "source") ? (
+                              <optgroup label="Simulation sources">
+                                {sweepTargetOptions
+                                  .filter((option) => option.source === "source")
+                                  .map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            ) : null}
+                          </SetupSelect>
+                        </CompactField>
+                        <CompactField label="Axis Mode">
+                          <SetupSelect
+                            {...form.register(`simulationParameterSweepAxes.${index}.mode`)}
+                          >
+                            <option value="range">Range builder</option>
+                            <option value="explicit">Explicit values</option>
+                          </SetupSelect>
+                        </CompactField>
+                        {axisMode === "explicit" ? (
+                          <CompactField
+                            label="Explicit Values"
+                            detail="Comma-separated values submitted directly to the persisted sweep array."
+                            error={axisErrors?.explicitValues?.message}
+                          >
+                            <SetupTextInput
+                              {...form.register(
+                                `simulationParameterSweepAxes.${index}.explicitValues`,
+                              )}
+                              placeholder="1.0, 1.1, 1.2"
+                            />
                           </CompactField>
-                          <CompactField label="Axis Mode">
-                            <SetupSelect
-                              {...form.register(`simulationParameterSweepAxes.${index}.mode`)}
-                            >
-                              <option value="range">Range builder</option>
-                              <option value="explicit">Explicit values</option>
-                            </SetupSelect>
-                          </CompactField>
-                          {axisMode === "explicit" ? (
-                            <CompactField
-                              label="Explicit Values"
-                              detail="Comma-separated values submitted directly to the persisted sweep array."
-                              error={axisErrors?.explicitValues?.message}
-                            >
-                              <SetupTextInput
-                                {...form.register(
-                                  `simulationParameterSweepAxes.${index}.explicitValues`,
-                                )}
-                                placeholder="1.0, 1.1, 1.2"
+                        ) : (
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <CompactField label="Start" error={axisErrors?.start?.message}>
+                              <SetupNumberInput
+                                {...form.register(`simulationParameterSweepAxes.${index}.start`, {
+                                  valueAsNumber: true,
+                                })}
+                                step={
+                                  axisDerivedUnit === "GHz"
+                                    ? String(FREQUENCY_WHEEL_STEP_GHZ)
+                                    : "any"
+                                }
+                                min={
+                                  axisDerivedUnit === "GHz"
+                                    ? String(FREQUENCY_WHEEL_STEP_GHZ)
+                                    : undefined
+                                }
                               />
                             </CompactField>
-                          ) : (
-                            <div className="grid gap-4 md:grid-cols-3">
-                              <CompactField label="Start" error={axisErrors?.start?.message}>
-                                <SetupNumberInput
-                                  {...form.register(`simulationParameterSweepAxes.${index}.start`, {
+                            <CompactField label="Stop" error={axisErrors?.stop?.message}>
+                              <SetupNumberInput
+                                {...form.register(`simulationParameterSweepAxes.${index}.stop`, {
+                                  valueAsNumber: true,
+                                })}
+                                step={
+                                  axisDerivedUnit === "GHz"
+                                    ? String(FREQUENCY_WHEEL_STEP_GHZ)
+                                    : "any"
+                                }
+                                min={
+                                  axisDerivedUnit === "GHz"
+                                    ? String(FREQUENCY_WHEEL_STEP_GHZ)
+                                    : undefined
+                                }
+                              />
+                            </CompactField>
+                            <CompactField label="Points" error={axisErrors?.pointCount?.message}>
+                              <SetupNumberInput
+                                {...form.register(
+                                  `simulationParameterSweepAxes.${index}.pointCount`,
+                                  {
                                     valueAsNumber: true,
-                                  })}
-                                  step="any"
-                                />
-                              </CompactField>
-                              <CompactField label="Stop" error={axisErrors?.stop?.message}>
-                                <SetupNumberInput
-                                  {...form.register(`simulationParameterSweepAxes.${index}.stop`, {
-                                    valueAsNumber: true,
-                                  })}
-                                  step="any"
-                                />
-                              </CompactField>
-                              <CompactField label="Points" error={axisErrors?.pointCount?.message}>
-                                <SetupNumberInput
-                                  {...form.register(
-                                    `simulationParameterSweepAxes.${index}.pointCount`,
-                                    {
-                                      valueAsNumber: true,
-                                    },
-                                  )}
-                                  min={1}
-                                />
-                              </CompactField>
-                            </div>
-                          )}
-                        </div>
+                                  },
+                                )}
+                                min={1}
+                              />
+                            </CompactField>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1968,7 +1977,7 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="HB Solving"
-            description="Keep JosephsonCircuits harmonic controls here."
+            description="JosephsonCircuits harmonic controls only."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
           >
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
@@ -1999,7 +2008,7 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="Sources"
-            description="JosephsonCircuits sources here are pump sources: Pump Freq, Source Port, Source Current Ip, and Source Mode."
+            description="Pump-source inputs for JosephsonCircuits runs."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
             actions={
               <button
@@ -2037,9 +2046,6 @@ export function SimulationWorkbenchShell() {
                           <p className="text-sm font-semibold text-foreground">
                             Pump Source {index + 1}
                           </p>
-                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                            Port, current, and pump frequency submit with the simulation task.
-                          </p>
                         </div>
                         <button
                           type="button"
@@ -2053,55 +2059,49 @@ export function SimulationWorkbenchShell() {
                         </button>
                       </div>
 
-                      <div className="mt-4 rounded-[0.9rem] border border-border/60 bg-surface/40 px-4 py-4">
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                          <CompactField label="Pump Freq (GHz)" error={sourceErrors?.pumpFreqGhz?.message}>
-                            <SetupNumberInput
-                              {...form.register(`simulationSources.${index}.pumpFreqGhz`, {
-                                valueAsNumber: true,
-                              })}
-                              min={0.000001}
-                              step="any"
-                            />
-                          </CompactField>
-                          <CompactField label="Source Port" error={sourceErrors?.port?.message}>
-                            {ptcPortOptions.length > 0 ? (
-                              <SetupSelect {...form.register(`simulationSources.${index}.port`)}>
-                                {ptcPortOptions.map((port) => (
-                                  <option key={port.value} value={port.value}>
-                                    {port.label}
-                                  </option>
-                                ))}
-                              </SetupSelect>
-                            ) : (
-                              <SetupTextInput
-                                {...form.register(`simulationSources.${index}.port`)}
-                                placeholder="port_1"
-                              />
-                            )}
-                          </CompactField>
-                          <CompactField
-                            label="Source Current Ip (A)"
-                            error={sourceErrors?.currentAmp?.message}
-                          >
-                            <SetupNumberInput
-                              {...form.register(`simulationSources.${index}.currentAmp`, {
-                                valueAsNumber: true,
-                              })}
-                              step="any"
-                            />
-                          </CompactField>
-                          <CompactField
-                            label="Source Mode"
-                            detail="JosephsonCircuits mode tuple, for example 1 or 1, 0."
-                            error={sourceErrors?.sourceMode?.message}
-                          >
+                      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <CompactField label="Pump Freq (GHz)" error={sourceErrors?.pumpFreqGhz?.message}>
+                          <SetupNumberInput
+                            {...form.register(`simulationSources.${index}.pumpFreqGhz`, {
+                              valueAsNumber: true,
+                            })}
+                            min={String(FREQUENCY_WHEEL_STEP_GHZ)}
+                            step={String(FREQUENCY_WHEEL_STEP_GHZ)}
+                          />
+                        </CompactField>
+                        <CompactField label="Source Port" error={sourceErrors?.port?.message}>
+                          {ptcPortOptions.length > 0 ? (
+                            <SetupSelect {...form.register(`simulationSources.${index}.port`)}>
+                              {ptcPortOptions.map((port) => (
+                                <option key={port.value} value={port.value}>
+                                  {port.label}
+                                </option>
+                              ))}
+                            </SetupSelect>
+                          ) : (
                             <SetupTextInput
-                              {...form.register(`simulationSources.${index}.sourceMode`)}
-                              placeholder="1"
+                              {...form.register(`simulationSources.${index}.port`)}
+                              placeholder="port_1"
                             />
-                          </CompactField>
-                        </div>
+                          )}
+                        </CompactField>
+                        <CompactField
+                          label="Source Current Ip (A)"
+                          error={sourceErrors?.currentAmp?.message}
+                        >
+                          <SetupNumberInput
+                            {...form.register(`simulationSources.${index}.currentAmp`, {
+                              valueAsNumber: true,
+                            })}
+                            step="any"
+                          />
+                        </CompactField>
+                        <CompactField label="Source Mode" error={sourceErrors?.sourceMode?.message}>
+                          <SetupTextInput
+                            {...form.register(`simulationSources.${index}.sourceMode`)}
+                            placeholder="1"
+                          />
+                        </CompactField>
                       </div>
                     </div>
                   );
@@ -2117,7 +2117,7 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="PTC"
-            description="Choose which schema-defined ports should use the local PTC draft."
+            description="Choose the schema-defined ports for the browser-local PTC draft."
             status={<LocalDraftBadge />}
             actions={
               <button
@@ -2137,6 +2137,11 @@ export function SimulationWorkbenchShell() {
             }
           >
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <p className="text-xs leading-5 text-muted-foreground">
+                Browser-local only. PTC selections are not submitted with the task and do not
+                rehydrate from persisted runs.
+              </p>
+
               <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_220px]">
                 <SetupSlideToggle
                   checked={ptcEnabled}
@@ -2209,7 +2214,7 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="Advanced hbsolve Options"
-            description="Dense hbsolve tuning lives here."
+            description="Advanced hbsolve tuning stays collapsed until needed."
             status={
               <>
                 <SurfaceTag tone="primary">Persisted on task</SurfaceTag>
@@ -2291,7 +2296,6 @@ export function SimulationWorkbenchShell() {
                     <SetupSlideToggle
                       checked={form.watch("simulationAdvancedLineSearchEnabled")}
                       label="Enable line search"
-                      description="Local-only toggle for advanced hbsolve experimentation notes."
                       onCheckedChange={(nextChecked) => {
                         form.setValue("simulationAdvancedLineSearchEnabled", nextChecked, {
                           shouldDirty: true,
@@ -2312,7 +2316,6 @@ export function SimulationWorkbenchShell() {
                     </CompactField>
                     <CompactField
                       label="Advanced Notes"
-                      detail="Keep any extra hbsolve options or reminders in local draft form."
                       className="md:col-span-2 xl:col-span-3"
                     >
                       <textarea
@@ -2502,31 +2505,19 @@ export function SimulationWorkbenchShell() {
             message={postProcessingSetupState.message}
           />
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <SummaryCard
-              label="Upstream Simulation"
-              value={
-                latestSimulationStageTask
-                  ? `Task #${latestSimulationStageTask.taskId}`
-                  : "Simulation required"
-              }
-              detail={
-                simulationResultReady
-                  ? "A persisted simulation result is available for downstream work."
-                  : "Post-processing stays blocked until simulation publishes a persisted result."
-              }
-            />
-            <SummaryCard
-              label="Downstream Contract"
-              value="Structured"
-              detail="Post-processing setup persists output view, selection, operations, and upstream task linkage."
-            />
-            <SummaryCard
-              label="Submit Authority"
-              value={session?.canSubmitTasks ? "Available" : "Blocked"}
-              detail="Post-processing still respects the same backend task authority as simulation."
-            />
-          </div>
+          <SummaryCard
+            label="Upstream Simulation"
+            value={
+              latestSimulationStageTask
+                ? `Task #${latestSimulationStageTask.taskId}`
+                : "Simulation required"
+            }
+            detail={
+              simulationResultReady
+                ? "A persisted simulation result is available for downstream work."
+                : "Post-processing stays blocked until simulation publishes a persisted result."
+            }
+          />
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">

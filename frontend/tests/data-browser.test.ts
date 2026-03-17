@@ -13,6 +13,10 @@ import {
 } from "../src/features/data-browser/lib/api";
 import { resolveTracePreviewSemantics } from "../src/features/data-browser/lib/trace-preview";
 import { resolveSelectedDesignId, resolveSelectedTraceId } from "../src/features/data-browser/lib/selection";
+import {
+  buildUploadFirstIngestionDraft,
+  validateUploadFirstCsv,
+} from "../src/features/data-browser/lib/upload-first-ingestion";
 
 const dashboardWorkspaceSource = readFileSync(
   fileURLToPath(
@@ -156,6 +160,9 @@ describe("page-boundary source contracts", () => {
     expect(datasetWorkspaceSource).toContain("Create Dataset");
     expect(datasetWorkspaceSource).toContain("Archive Dataset");
     expect(datasetWorkspaceSource).toContain("Delete Dataset");
+    expect(datasetWorkspaceSource).toContain("cross-page navigation stays in the shell");
+    expect(datasetWorkspaceSource).not.toContain("Open Raw Data");
+    expect(datasetWorkspaceSource).not.toContain("Open Data Ingestion");
     expect(datasetWorkspaceSource).toContain("activeDatasetState.activeDatasetError");
     expect(datasetWorkspaceSource).toContain("Unable to switch the active dataset.");
     expect(datasetWorkspaceSource).not.toContain("not exposed through the current frontend-visible backend contract");
@@ -164,12 +171,19 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).not.toContain("Dataset Profile");
   });
 
-  it("submits dedicated measurement and layout ingestion without fake upload success", () => {
+  it("rebuilds data ingestion as an upload-first surface instead of exposing backend DTO fields", () => {
     expect(dataIngestionWorkspaceSource).toContain("Measurement");
     expect(dataIngestionWorkspaceSource).toContain("Layout Simulation");
-    expect(dataIngestionWorkspaceSource).toContain("Submit {selectedScopeSummary.title} Ingestion");
-    expect(dataIngestionWorkspaceSource).toContain("Preview Payload JSON");
-    expect(dataIngestionWorkspaceSource).toContain("Handoff to Raw Data Browser");
+    expect(dataIngestionWorkspaceSource).toContain("Upload-first intake");
+    expect(dataIngestionWorkspaceSource).toContain("Choose CSV file");
+    expect(dataIngestionWorkspaceSource).toContain("Validation & Preprocess");
+    expect(dataIngestionWorkspaceSource).toContain("buildUploadFirstIngestionDraft(");
+    expect(dataIngestionWorkspaceSource).toContain("validateUploadFirstCsv(");
+    expect(dataIngestionWorkspaceSource).toContain("Import {selectedScopeSummary.title} CSV");
+    expect(dataIngestionWorkspaceSource).not.toContain("Preview Payload JSON");
+    expect(dataIngestionWorkspaceSource).not.toContain("Trace Mode Group");
+    expect(dataIngestionWorkspaceSource).not.toContain("Axis Unit");
+    expect(dataIngestionWorkspaceSource).not.toContain("preview_payload_json");
     expect(dataIngestionWorkspaceSource).not.toContain("Upload complete");
   });
 
@@ -214,6 +228,78 @@ describe("page-boundary source contracts", () => {
     expect(rawDataHookSource).toContain("setSelectedDesignId(null);");
     expect(rawDataHookSource).toContain("setSelectedTraceId(null);");
     expect(rawDataHookSource).toContain("}, [activeDatasetId]);");
+  });
+});
+
+describe("upload-first ingestion helpers", () => {
+  it("validates a frequency-column CSV and derives a backend ingestion draft", () => {
+    const validation = validateUploadFirstCsv({
+      kind: "measurement",
+      fileName: "flux_scan_a.csv",
+      fileText: `frequency_ghz,Y11_imaginary,S21_magnitude
+4.000,0.11,0.91
+4.001,0.12,0.92
+4.002,0.13,0.93`,
+    });
+
+    expect(validation.designNameSuggestion).toBe("Flux Scan A");
+    expect(validation.provenanceLabelSuggestion).toBe("Measurement import · Flux Scan A");
+    expect(validation.axisName).toBe("frequency");
+    expect(validation.axisUnit).toBe("GHz");
+    expect(validation.pointCount).toBe(3);
+    expect(validation.traces).toMatchObject([
+      {
+        family: "y_matrix",
+        parameter: "Y11",
+        representation: "imaginary",
+        pointCount: 3,
+      },
+      {
+        family: "s_matrix",
+        parameter: "S21",
+        representation: "magnitude",
+        pointCount: 3,
+      },
+    ]);
+
+    expect(
+      buildUploadFirstIngestionDraft({
+        kind: "measurement",
+        designName: "Flux Scan A",
+        provenanceLabel: "Measurement import · Flux Scan A",
+        validation,
+      }),
+    ).toMatchObject({
+      kind: "measurement",
+      design_name: "Flux Scan A",
+      provenance_label: "Measurement import · Flux Scan A",
+      traces: [
+        {
+          family: "y_matrix",
+          parameter: "Y11",
+          representation: "imaginary",
+          axes: [{ name: "frequency", unit: "GHz", length: 3 }],
+        },
+        {
+          family: "s_matrix",
+          parameter: "S21",
+          representation: "magnitude",
+          axes: [{ name: "frequency", unit: "GHz", length: 3 }],
+        },
+      ],
+    });
+  });
+
+  it("rejects unsupported complex series columns", () => {
+    expect(() =>
+      validateUploadFirstCsv({
+        kind: "layout_simulation",
+        fileName: "layout_probe.csv",
+        fileText: `frequency_ghz,Y11_complex
+4.000,0.11
+4.001,0.12`,
+      }),
+    ).toThrow("scalar series columns only");
   });
 });
 

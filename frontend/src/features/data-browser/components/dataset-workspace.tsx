@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Archive, ArrowRight, LoaderCircle, Plus, Save, Search, Trash2, Upload } from "lucide-react";
+import { Archive, LoaderCircle, Plus, Save, Search, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -240,24 +239,14 @@ export function DatasetWorkspace() {
       <SurfaceHeader
         eyebrow="Dataset Workspace"
         title="Dataset"
-        description="Browse visible datasets, switch the active session dataset, and manage dataset profile metadata without overloading the dashboard."
-        actions={
-          <>
-            <SurfaceTag tone="primary">
-              {activeDatasetState.activeDataset?.name ?? "No active dataset"}
-            </SurfaceTag>
-            <SurfaceTag>
-              {activeDatasetState.activeDataset?.visibilityScope ?? "visibility pending"}
-            </SurfaceTag>
-          </>
-        }
+        description="Browse visible datasets, switch the active session dataset, and manage dataset profile metadata without pushing shell context or cross-page navigation back into the page body."
       />
 
       <div className="grid gap-4 xl:grid-cols-4">
         <SurfaceStat label="Visible Datasets" value={String(catalogRows.length)} />
         <SurfaceStat
-          label="Active Dataset"
-          value={activeDatasetState.activeDataset?.name ?? "None selected"}
+          label="Writable Profiles"
+          value={profile?.allowed_actions.update_profile ? "Current dataset" : "Authority-gated"}
           tone="primary"
         />
         <SurfaceStat
@@ -281,25 +270,7 @@ export function DatasetWorkspace() {
       <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.86fr)_minmax(0,1.14fr)]">
         <SurfacePanel
           title="Visible Datasets"
-          description="This is the primary dataset browse and active-selection surface. Dashboard now stays summary-first."
-          actions={
-            <>
-              <Link
-                href="/raw-data"
-                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-              >
-                <ArrowRight className="h-4 w-4" />
-                Open Raw Data
-              </Link>
-              <Link
-                href="/data-ingestion"
-                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-              >
-                <Upload className="h-4 w-4" />
-                Open Data Ingestion
-              </Link>
-            </>
-          }
+          description="This page owns dataset browse and active selection. Dashboard stays summary-first, and cross-page navigation stays in the shell."
         >
           {catalogError ? (
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
