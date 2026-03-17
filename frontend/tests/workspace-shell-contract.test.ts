@@ -8,7 +8,6 @@ import {
   resolveShellTaskHref,
   resolveShellTaskLabel,
   resolveShellUserInitials,
-  resolveShellWorkerSummary,
   resolveShellWorkspaceMemberships,
   resolveWorkspaceSwitchNotice,
 } from "../src/components/layout/workspace-shell-contract";
@@ -49,7 +48,7 @@ describe("workspace shell contract helpers", () => {
     );
   });
 
-  it("formats task labels for queue entries and keeps worker slot authority explicit", () => {
+  it("formats task labels for queue entries", () => {
     expect(
       resolveShellTaskLabel({
         kind: "simulation",
@@ -62,33 +61,6 @@ describe("workspace shell contract helpers", () => {
         executionMode: "smoke",
       }),
     ).toBe("Post-processing · Smoke");
-
-    expect(
-      resolveShellWorkerSummary({
-        workspaceId: "ws-lab-a",
-        slug: "lab-a",
-        displayName: "Lab A",
-        role: "owner",
-        defaultTaskScope: "workspace",
-        allowedActions: {
-          switchTo: true,
-          activateDataset: true,
-          inviteMembers: true,
-          removeMembers: true,
-          transferOwner: true,
-          leaveWorkspace: false,
-          viewAuditLogs: false,
-          manageDefinitions: true,
-          manageDatasets: true,
-          manageTasks: true,
-        },
-      }),
-    ).toEqual({
-      label: "Worker Summary",
-      value: "Awaiting Authority",
-      detail: "Lab A has no runtime summary surface yet.",
-      tone: "warning",
-    });
   });
 
   it("derives auth-aware shell summaries from the shared session surface", () => {

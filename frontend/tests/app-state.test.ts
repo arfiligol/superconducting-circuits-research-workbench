@@ -23,7 +23,7 @@ import {
   mapWorkspaceSwitchResponse,
   normalizeSessionAuthMode,
 } from "../src/lib/api/session";
-import { mapTaskSummaryResponse } from "../src/lib/api/tasks";
+import { mapTaskQueueResponse, mapTaskSummaryResponse, mapWorkerLaneSummaryResponse } from "../src/lib/api/tasks";
 import {
   resolveLatestTask,
   resolveTaskQueueRefreshInterval,
@@ -1019,46 +1019,157 @@ describe("session contract mapping", () => {
 });
 
 describe("task queue store", () => {
-  it("maps backend task summaries into the frontend task queue shape", () => {
+  it("maps backend task queue rows into the frontend queue shape", () => {
     expect(
       mapTaskSummaryResponse({
         task_id: 14,
-        kind: "simulation",
+        task_kind: "simulation",
         lane: "simulation",
-        execution_mode: "run",
         status: "running",
-        submitted_at: "2026-03-12 01:30:00",
-        owner_user_id: "user-dev-01",
         owner_display_name: "Device Lab",
-        workspace_id: "workspace-lab",
-        workspace_slug: "device-lab",
         visibility_scope: "workspace",
-        dataset_id: "fluxonium-2025-031",
-        definition_id: 18,
+        updated_at: "2026-03-12 01:30:00",
+        result_availability: "ready",
+        control_state: "none",
         summary: "Fluxonium sweep queued from workspace",
+        allowed_actions: {
+          attach: true,
+          cancel: false,
+          retry: true,
+          terminate: false,
+          rejection_reason: "Only owners can cancel this task.",
+        },
       }),
     ).toEqual({
       taskId: 14,
       kind: "simulation",
       lane: "simulation",
-      executionMode: "run",
+      executionMode: null,
       status: "running",
-      submittedAt: "2026-03-12 01:30:00",
-      ownerUserId: "user-dev-01",
+      submittedAt: null,
+      updatedAt: "2026-03-12 01:30:00",
+      ownerUserId: null,
       ownerDisplayName: "Device Lab",
-      workspaceId: "workspace-lab",
-      workspaceSlug: "device-lab",
+      workspaceId: null,
+      workspaceSlug: null,
       visibilityScope: "workspace",
-      datasetId: "fluxonium-2025-031",
-      definitionId: 18,
+      datasetId: null,
+      definitionId: null,
       summary: "Fluxonium sweep queued from workspace",
+      resultAvailability: "ready",
+      controlState: "none",
       allowedActions: {
-        attach: false,
+        attach: true,
         cancel: false,
-        retry: false,
+        retry: true,
         terminate: false,
+        rejectionReason: "Only owners can cancel this task.",
       },
-      hasActionAuthority: false,
+      hasActionAuthority: true,
+    });
+  });
+
+  it("maps backend worker summary rows and queue envelopes", () => {
+    expect(
+      mapWorkerLaneSummaryResponse({
+        lane: "simulation",
+        healthy_processors: 1,
+        busy_processors: 2,
+        degraded_processors: 3,
+        draining_processors: 4,
+        offline_processors: 5,
+      }),
+    ).toEqual({
+      lane: "simulation",
+      healthyProcessors: 1,
+      busyProcessors: 2,
+      degradedProcessors: 3,
+      drainingProcessors: 4,
+      offlineProcessors: 5,
+    });
+
+    expect(
+      mapTaskQueueResponse(
+        {
+          rows: [
+            {
+              task_id: 31,
+              task_kind: "characterization",
+              lane: "characterization",
+              status: "queued",
+              owner_display_name: "Local",
+              visibility_scope: "local",
+              updated_at: "2026-03-17T12:00:00Z",
+              result_availability: "pending",
+              control_state: "none",
+              summary: "Queued characterization",
+              allowed_actions: {
+                attach: true,
+                cancel: true,
+                terminate: false,
+                retry: false,
+                rejection_reason: null,
+              },
+            },
+          ],
+          worker_summary: [
+            {
+              lane: "characterization",
+              healthy_processors: 1,
+              busy_processors: 0,
+              degraded_processors: 0,
+              draining_processors: 0,
+              offline_processors: 0,
+            },
+          ],
+        },
+        {
+          generated_at: "2026-03-17T12:00:00Z",
+          total_count: 1,
+        },
+      ),
+    ).toEqual({
+      rows: [
+        {
+          taskId: 31,
+          kind: "characterization",
+          lane: "characterization",
+          executionMode: null,
+          status: "queued",
+          submittedAt: null,
+          updatedAt: "2026-03-17T12:00:00Z",
+          ownerUserId: null,
+          ownerDisplayName: "Local",
+          workspaceId: null,
+          workspaceSlug: null,
+          visibilityScope: "local",
+          datasetId: null,
+          definitionId: null,
+          summary: "Queued characterization",
+          resultAvailability: "pending",
+          controlState: "none",
+          hasActionAuthority: true,
+          allowedActions: {
+            attach: true,
+            cancel: true,
+            terminate: false,
+            retry: false,
+            rejectionReason: null,
+          },
+        },
+      ],
+      workerSummary: [
+        {
+          lane: "characterization",
+          healthyProcessors: 1,
+          busyProcessors: 0,
+          degradedProcessors: 0,
+          drainingProcessors: 0,
+          offlineProcessors: 0,
+        },
+      ],
+      generatedAt: "2026-03-17T12:00:00Z",
+      totalCount: 1,
     });
   });
 
@@ -1066,76 +1177,109 @@ describe("task queue store", () => {
     const tasks = [
       mapTaskSummaryResponse({
         task_id: 11,
-        kind: "simulation",
+        task_kind: "simulation",
         lane: "simulation",
-        execution_mode: "run",
         status: "queued",
-        submitted_at: "2026-03-12 01:20:00",
-        owner_user_id: "user-dev-01",
         owner_display_name: "Device Lab",
-        workspace_id: "workspace-lab",
-        workspace_slug: "device-lab",
         visibility_scope: "workspace",
-        dataset_id: "fluxonium-2025-031",
-        definition_id: 18,
+        updated_at: "2026-03-12 01:20:00",
+        result_availability: "pending",
+        control_state: "none",
         summary: "Queued simulation",
+        allowed_actions: {
+          attach: true,
+          cancel: true,
+          retry: false,
+          terminate: false,
+          rejection_reason: null,
+        },
       }),
       mapTaskSummaryResponse({
         task_id: 12,
-        kind: "characterization",
+        task_kind: "characterization",
         lane: "characterization",
-        execution_mode: "run",
         status: "running",
-        submitted_at: "2026-03-12 01:21:00",
-        owner_user_id: "user-dev-01",
         owner_display_name: "Device Lab",
-        workspace_id: "workspace-lab",
-        workspace_slug: "device-lab",
         visibility_scope: "workspace",
-        dataset_id: "fluxonium-2025-031",
-        definition_id: 18,
+        updated_at: "2026-03-12 01:21:00",
+        result_availability: "pending",
+        control_state: "none",
         summary: "Running characterization",
+        allowed_actions: {
+          attach: true,
+          cancel: false,
+          retry: false,
+          terminate: false,
+          rejection_reason: null,
+        },
       }),
       mapTaskSummaryResponse({
         task_id: 13,
-        kind: "post_processing",
+        task_kind: "post_processing",
         lane: "characterization",
-        execution_mode: "smoke",
         status: "failed",
-        submitted_at: "2026-03-12 01:22:00",
-        owner_user_id: "user-dev-01",
         owner_display_name: "Device Lab",
-        workspace_id: "workspace-lab",
-        workspace_slug: "device-lab",
         visibility_scope: "owned",
-        dataset_id: "fluxonium-2025-031",
-        definition_id: null,
+        updated_at: "2026-03-12 01:22:00",
+        result_availability: "none",
+        control_state: "none",
         summary: "Failed post-processing",
+        allowed_actions: {
+          attach: true,
+          cancel: false,
+          retry: true,
+          terminate: false,
+          rejection_reason: null,
+        },
       }),
       mapTaskSummaryResponse({
         task_id: 14,
-        kind: "simulation",
+        task_kind: "simulation",
         lane: "simulation",
-        execution_mode: "run",
         status: "completed",
-        submitted_at: "2026-03-12 01:23:00",
-        owner_user_id: "user-dev-01",
         owner_display_name: "Device Lab",
-        workspace_id: "workspace-lab",
-        workspace_slug: "device-lab",
         visibility_scope: "workspace",
-        dataset_id: "fluxonium-2025-031",
-        definition_id: 18,
+        updated_at: "2026-03-12 01:23:00",
+        result_availability: "ready",
+        control_state: "none",
         summary: "Completed simulation",
+        allowed_actions: {
+          attach: true,
+          cancel: false,
+          retry: true,
+          terminate: false,
+          rejection_reason: null,
+        },
+      }),
+      mapTaskSummaryResponse({
+        task_id: 15,
+        task_kind: "simulation",
+        lane: "simulation",
+        status: "cancelled",
+        owner_display_name: "Device Lab",
+        visibility_scope: "workspace",
+        updated_at: "2026-03-12 01:24:00",
+        result_availability: "none",
+        control_state: "cancellation_requested",
+        summary: "Cancelled simulation",
+        allowed_actions: {
+          attach: true,
+          cancel: false,
+          retry: true,
+          terminate: false,
+          rejection_reason: null,
+        },
       }),
     ];
 
     expect(summarizeTaskQueue(tasks)).toEqual({
-      total: 4,
-      queuedCount: 1,
+      total: 5,
+      pendingCount: 1,
       runningCount: 1,
       failedCount: 1,
       completedCount: 1,
+      cancelledCount: 1,
+      terminatedCount: 0,
     });
   });
 
@@ -1143,37 +1287,43 @@ describe("task queue store", () => {
     const activeTasks = [
       mapTaskSummaryResponse({
         task_id: 21,
-        kind: "simulation",
+        task_kind: "simulation",
         lane: "simulation",
-        execution_mode: "run",
         status: "running",
-        submitted_at: "2026-03-12 01:40:00",
-        owner_user_id: "user-dev-01",
         owner_display_name: "Device Lab",
-        workspace_id: "workspace-lab",
-        workspace_slug: "device-lab",
         visibility_scope: "workspace",
-        dataset_id: "fluxonium-2025-031",
-        definition_id: 18,
+        updated_at: "2026-03-12 01:40:00",
+        result_availability: "pending",
+        control_state: "none",
         summary: "Running simulation",
+        allowed_actions: {
+          attach: true,
+          cancel: true,
+          retry: false,
+          terminate: false,
+          rejection_reason: null,
+        },
       }),
     ];
     const settledTasks = [
       mapTaskSummaryResponse({
         task_id: 22,
-        kind: "simulation",
+        task_kind: "simulation",
         lane: "simulation",
-        execution_mode: "run",
         status: "completed",
-        submitted_at: "2026-03-12 01:41:00",
-        owner_user_id: "user-dev-01",
         owner_display_name: "Device Lab",
-        workspace_id: "workspace-lab",
-        workspace_slug: "device-lab",
         visibility_scope: "workspace",
-        dataset_id: "fluxonium-2025-031",
-        definition_id: 18,
+        updated_at: "2026-03-12 01:41:00",
+        result_availability: "ready",
+        control_state: "none",
         summary: "Completed simulation",
+        allowed_actions: {
+          attach: true,
+          cancel: false,
+          retry: true,
+          terminate: false,
+          rejection_reason: null,
+        },
       }),
     ];
 
@@ -1195,6 +1345,7 @@ describe("runtime-mode app-state source contracts", () => {
   it("isolates queue and attached-task authority by runtime-mode context keys", () => {
     expect(taskQueueSource).toContain("const contextKey = `${session?.runtimeMode ?? \"online\"}");
     expect(taskQueueSource).toContain("[tasksListKey, contextKey]");
+    expect(taskQueueSource).toContain("const workerSummary = taskQueue?.workerSummary ?? []");
     expect(activeTaskSource).toContain("[taskDetailKey(resolvedTaskId), contextKey]");
     expect(activeTaskSource).toContain("routeTaskStillVisible");
   });

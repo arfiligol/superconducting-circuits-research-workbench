@@ -377,7 +377,7 @@ function resolveActionReason(
     return "Allowed by the backend task contract.";
   }
 
-  return "Blocked by backend allowed_actions for the current session.";
+  return task.allowedActions.rejectionReason ?? "Blocked by backend allowed_actions for the current session.";
 }
 
 export function summarizeTaskActionGates(

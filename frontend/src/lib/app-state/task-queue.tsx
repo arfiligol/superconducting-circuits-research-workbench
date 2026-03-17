@@ -10,7 +10,7 @@ import {
   isTaskQueueTaskActive,
   type TaskQueueItem,
 } from "@/lib/app-state/task-queue-store";
-import { listTasks, tasksListKey } from "@/lib/api/tasks";
+import { listTasks, tasksListKey, type TaskQueueReadModel, type WorkerLaneSummary } from "@/lib/api/tasks";
 import { useAppSession } from "@/lib/app-state/app-session";
 
 export type TaskQueueStatus = "loading" | "ready" | "error" | "refreshing";
@@ -19,6 +19,7 @@ type TaskQueueContextValue = Readonly<{
   contextKey: string;
   tasks: readonly TaskQueueItem[];
   activeTasks: readonly TaskQueueItem[];
+  workerSummary: readonly WorkerLaneSummary[];
   summary: ReturnType<typeof summarizeTaskQueue>;
   latestTask: TaskQueueItem | undefined;
   status: TaskQueueStatus;
@@ -27,7 +28,7 @@ type TaskQueueContextValue = Readonly<{
   hasResolvedTaskQueue: boolean;
   taskQueueError: Error | undefined;
   refreshIntervalMs: number;
-  refreshTaskQueue: () => Promise<readonly TaskQueueItem[] | undefined>;
+  refreshTaskQueue: () => Promise<TaskQueueReadModel | undefined>;
 }>;
 
 const TaskQueueContext = createContext<TaskQueueContextValue | null>(null);
@@ -42,10 +43,12 @@ export function TaskQueueProvider({ children }: TaskQueueProviderProps) {
   const swrKey = sessionStatus === "loading" ? null : [tasksListKey, contextKey];
   const tasksQuery = useSWR(swrKey, () => listTasks(), {
     refreshInterval(currentData) {
-      return resolveTaskQueueRefreshInterval(currentData ?? []);
+      return resolveTaskQueueRefreshInterval(currentData?.rows ?? []);
     },
   });
-  const tasks = tasksQuery.data ?? [];
+  const taskQueue = tasksQuery.data;
+  const tasks = taskQueue?.rows ?? [];
+  const workerSummary = taskQueue?.workerSummary ?? [];
   const activeTasks = tasks.filter(isTaskQueueTaskActive);
   const status: TaskQueueStatus =
     tasksQuery.isLoading && tasks.length === 0
@@ -63,6 +66,7 @@ export function TaskQueueProvider({ children }: TaskQueueProviderProps) {
         contextKey,
         tasks,
         activeTasks,
+        workerSummary,
         summary: summarizeTaskQueue(tasks),
         latestTask: resolveLatestTask(tasks),
         status,

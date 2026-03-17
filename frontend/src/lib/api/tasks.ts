@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api/client";
+import { apiRequest, apiRequestEnvelope } from "@/lib/api/client";
 
 import { components } from "./generated/schema";
 
@@ -9,7 +9,55 @@ type TaskAllowedActionsResponse = Readonly<{
   cancel: boolean;
   terminate: boolean;
   retry: boolean;
+  rejection_reason?: string | null;
 }>;
+type LiveTaskQueueRowResponseShape = Readonly<{
+  task_id: number;
+  summary: string;
+  status: TaskExecutionStatus;
+  lane: TaskLane;
+  task_kind: TaskKind;
+  owner_display_name: string;
+  visibility_scope: TaskVisibilityScope;
+  updated_at: string;
+  result_availability: TaskResultAvailability;
+  allowed_actions: TaskAllowedActionsResponse;
+  control_state: TaskControlState;
+}>;
+type WorkerLaneSummaryResponseShape = Readonly<{
+  lane: string;
+  healthy_processors: number;
+  busy_processors: number;
+  degraded_processors: number;
+  draining_processors: number;
+  offline_processors: number;
+}>;
+type TaskQueueResponseShape = Readonly<{
+  rows: readonly LiveTaskQueueRowResponseShape[];
+  worker_summary: readonly WorkerLaneSummaryResponseShape[];
+}>;
+type TaskQueueMetaResponseShape = Readonly<{
+  generated_at?: string;
+  total_count?: number;
+}>;
+
+export type TaskKind = "simulation" | "post_processing" | "characterization";
+export type TaskLane = "simulation" | "characterization";
+export type TaskExecutionMode = "run" | "smoke";
+export type TaskExecutionStatus =
+  | "queued"
+  | "dispatching"
+  | "running"
+  | "cancellation_requested"
+  | "cancelling"
+  | "cancelled"
+  | "termination_requested"
+  | "terminated"
+  | "completed"
+  | "failed";
+export type TaskVisibilityScope = "local" | "private" | "workspace" | "owned";
+export type TaskResultAvailability = "pending" | "ready" | "none";
+export type TaskControlState = "none" | "cancellation_requested" | "termination_requested";
 
 export type TaskMetadataRecordRef = Readonly<{
   backend: "sqlite_metadata";
@@ -80,23 +128,27 @@ export type TaskAllowedActions = Readonly<{
   cancel: boolean;
   terminate: boolean;
   retry: boolean;
+  rejectionReason?: string | null;
 }>;
 
 export type TaskSummary = Readonly<{
   taskId: number;
-  kind: "simulation" | "post_processing" | "characterization";
-  lane: "simulation" | "characterization";
-  executionMode: "run" | "smoke";
-  status: "queued" | "running" | "completed" | "failed";
-  submittedAt: string;
-  ownerUserId: string;
+  kind: TaskKind;
+  lane: TaskLane;
+  executionMode: TaskExecutionMode | null;
+  status: TaskExecutionStatus;
+  submittedAt: string | null;
+  updatedAt?: string | null;
+  ownerUserId: string | null;
   ownerDisplayName: string;
-  workspaceId: string;
-  workspaceSlug: string;
-  visibilityScope: "local" | "private" | "workspace" | "owned";
+  workspaceId: string | null;
+  workspaceSlug: string | null;
+  visibilityScope: TaskVisibilityScope;
   datasetId: string | null;
   definitionId: number | null;
   summary: string;
+  resultAvailability?: TaskResultAvailability | null;
+  controlState?: TaskControlState | null;
   hasActionAuthority: boolean;
   allowedActions: TaskAllowedActions;
 }>;
@@ -142,6 +194,20 @@ export type TaskSummaryLike = Omit<TaskSummary, "hasActionAuthority" | "allowedA
       Pick<TaskSummary, "hasActionAuthority" | "allowedActions">
     >
   >;
+export type WorkerLaneSummary = Readonly<{
+  lane: string;
+  healthyProcessors: number;
+  busyProcessors: number;
+  degradedProcessors: number;
+  drainingProcessors: number;
+  offlineProcessors: number;
+}>;
+export type TaskQueueReadModel = Readonly<{
+  rows: readonly TaskSummary[];
+  workerSummary: readonly WorkerLaneSummary[];
+  generatedAt: string | null;
+  totalCount: number | null;
+}>;
 
 export const tasksListKey = "/api/backend/tasks";
 
@@ -150,6 +216,7 @@ const emptyTaskAllowedActions: TaskAllowedActions = {
   cancel: false,
   terminate: false,
   retry: false,
+  rejectionReason: null,
 };
 
 export function taskDetailKey(taskId: number) {
@@ -260,40 +327,77 @@ function mapTaskAllowedActions(
       cancel: payload.cancel,
       terminate: payload.terminate,
       retry: payload.retry,
+      rejectionReason: payload.rejection_reason ?? null,
     },
   };
 }
 
-export function mapTaskSummaryResponse(payload: TaskSummaryResponseShape): TaskSummary {
+function resolveTaskKind(
+  payload: TaskSummaryResponseShape | TaskDetailResponseShape | LiveTaskQueueRowResponseShape,
+): TaskKind {
+  if ("kind" in payload) {
+    return payload.kind;
+  }
+
+  return payload.task_kind;
+}
+
+function resolveTaskAllowedActionsPayload(
+  payload: TaskSummaryResponseShape | TaskDetailResponseShape | LiveTaskQueueRowResponseShape,
+) {
+  return ("allowed_actions" in payload ? payload.allowed_actions : undefined) as
+    | TaskAllowedActionsResponse
+    | undefined;
+}
+
+export function mapTaskSummaryResponse(
+  payload: TaskSummaryResponseShape | TaskDetailResponseShape | LiveTaskQueueRowResponseShape,
+): TaskSummary {
   const actionState = mapTaskAllowedActions(
-    (payload as TaskSummaryResponseShape & { allowed_actions?: TaskAllowedActionsResponse })
-      .allowed_actions,
+    resolveTaskAllowedActionsPayload(payload),
   );
 
   return {
     taskId: payload.task_id,
-    kind: payload.kind,
+    kind: resolveTaskKind(payload),
     lane: payload.lane,
-    executionMode: payload.execution_mode,
+    executionMode: "execution_mode" in payload ? payload.execution_mode : null,
     status: payload.status,
-    submittedAt: payload.submitted_at,
-    ownerUserId: payload.owner_user_id,
+    submittedAt: "submitted_at" in payload ? payload.submitted_at : null,
+    updatedAt: "updated_at" in payload ? payload.updated_at : null,
+    ownerUserId: "owner_user_id" in payload ? payload.owner_user_id : null,
     ownerDisplayName: payload.owner_display_name,
-    workspaceId: payload.workspace_id,
-    workspaceSlug: payload.workspace_slug,
+    workspaceId: "workspace_id" in payload ? payload.workspace_id : null,
+    workspaceSlug: "workspace_slug" in payload ? payload.workspace_slug : null,
     visibilityScope: payload.visibility_scope,
-    datasetId: payload.dataset_id,
-    definitionId: payload.definition_id,
+    datasetId: "dataset_id" in payload ? payload.dataset_id : null,
+    definitionId: "definition_id" in payload ? payload.definition_id : null,
     summary: payload.summary,
+    resultAvailability:
+      "result_availability" in payload ? payload.result_availability : null,
+    controlState: "control_state" in payload ? payload.control_state : null,
     hasActionAuthority: actionState.hasActionAuthority,
     allowedActions: actionState.allowedActions,
   };
 }
 
 export function normalizeTaskSummary(task: TaskSummaryLike): TaskSummary {
-  const actionState = mapTaskAllowedActions(
-    task.hasActionAuthority && task.allowedActions ? task.allowedActions : undefined,
-  );
+  const actionState =
+    task.hasActionAuthority && task.allowedActions
+      ? {
+          hasActionAuthority: true,
+          allowedActions: {
+            attach: task.allowedActions.attach,
+            cancel: task.allowedActions.cancel,
+            terminate: task.allowedActions.terminate,
+            retry: task.allowedActions.retry,
+            rejectionReason: task.allowedActions.rejectionReason ?? null,
+          },
+        }
+      : {
+          hasActionAuthority: false,
+          allowedActions: emptyTaskAllowedActions,
+        };
 
   return {
     ...task,
@@ -302,9 +406,46 @@ export function normalizeTaskSummary(task: TaskSummaryLike): TaskSummary {
   };
 }
 
+export function mapWorkerLaneSummaryResponse(
+  payload: WorkerLaneSummaryResponseShape,
+): WorkerLaneSummary {
+  return {
+    lane: payload.lane,
+    healthyProcessors: payload.healthy_processors,
+    busyProcessors: payload.busy_processors,
+    degradedProcessors: payload.degraded_processors,
+    drainingProcessors: payload.draining_processors,
+    offlineProcessors: payload.offline_processors,
+  };
+}
+
+export function mapTaskQueueResponse(
+  payload: TaskQueueResponseShape,
+  meta?: TaskQueueMetaResponseShape,
+): TaskQueueReadModel {
+  return {
+    rows: payload.rows.map(mapTaskSummaryResponse),
+    workerSummary: payload.worker_summary.map(mapWorkerLaneSummaryResponse),
+    generatedAt: meta?.generated_at ?? null,
+    totalCount: meta?.total_count ?? null,
+  };
+}
+
 export async function listTasks() {
-  const response = await apiRequest<TaskSummaryResponseShape[]>(tasksListKey);
-  return response.map(mapTaskSummaryResponse);
+  const response = await apiRequestEnvelope<TaskQueueResponseShape | TaskSummaryResponseShape[]>(
+    tasksListKey,
+  );
+
+  if (Array.isArray(response.data)) {
+    return {
+      rows: response.data.map(mapTaskSummaryResponse),
+      workerSummary: [],
+      generatedAt: null,
+      totalCount: response.data.length,
+    } satisfies TaskQueueReadModel;
+  }
+
+  return mapTaskQueueResponse(response.data, response.meta as TaskQueueMetaResponseShape | undefined);
 }
 
 export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDetail {

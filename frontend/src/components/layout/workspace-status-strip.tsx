@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useMemo,
   useState,
   type ComponentType,
   type ReactNode,
@@ -32,13 +31,13 @@ import {
   resolveShellConnectionTargetLabel,
   resolveShellTaskHref,
   resolveShellTaskLabel,
-  resolveShellWorkerSummary,
   resolveShellWorkspaceMemberships,
   resolveWorkspaceSwitchNotice,
 } from "@/components/layout/workspace-shell-contract";
 import { ShellNotice } from "@/components/layout/shell-notice";
 import { cx } from "@/features/shared/components/surface-kit";
 import { datasetCatalogKey, listDatasetCatalog } from "@/lib/api/datasets";
+import type { TaskExecutionStatus, WorkerLaneSummary } from "@/lib/api/tasks";
 import { useActiveDataset, useActiveTask, useAppSession, useDeveloperMode, useTaskQueue } from "@/lib/app-state";
 import type { RuntimeAuthTransition, RuntimeMode } from "@/lib/api/session";
 
@@ -254,19 +253,63 @@ function buildContextResetSearch(
   return nextSearch.length > 0 ? `${pathname}?${nextSearch}` : pathname;
 }
 
-function formatTaskStatusLabel(
-  status: "queued" | "running" | "completed" | "failed",
-) {
+function formatTaskStatusLabel(status: TaskExecutionStatus) {
   switch (status) {
     case "queued":
+    case "dispatching":
       return "Pending";
     case "running":
+    case "cancellation_requested":
+    case "cancelling":
+    case "termination_requested":
       return "Running";
     case "completed":
       return "Completed";
+    case "cancelled":
+      return "Cancelled";
+    case "terminated":
+      return "Terminated";
     case "failed":
       return "Failed";
   }
+}
+
+function formatWorkerLaneLabel(lane: string) {
+  return lane
+    .split("_")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function summarizeWorkerRuntime(workerSummary: readonly WorkerLaneSummary[]) {
+  if (workerSummary.length === 0) {
+    return {
+      value: "Runtime summary pending",
+      detail: "Backend authority has not reported any worker lanes yet.",
+    } as const;
+  }
+
+  const totals = workerSummary.reduce(
+    (summary, lane) => ({
+      healthy: summary.healthy + lane.healthyProcessors,
+      busy: summary.busy + lane.busyProcessors,
+      degraded: summary.degraded + lane.degradedProcessors,
+      draining: summary.draining + lane.drainingProcessors,
+      offline: summary.offline + lane.offlineProcessors,
+    }),
+    {
+      healthy: 0,
+      busy: 0,
+      degraded: 0,
+      draining: 0,
+      offline: 0,
+    },
+  );
+
+  return {
+    value: `${workerSummary.length} lane${workerSummary.length === 1 ? "" : "s"} reported`,
+    detail: `${totals.healthy} healthy · ${totals.busy} busy · ${totals.degraded} degraded · ${totals.draining} draining · ${totals.offline} offline`,
+  } as const;
 }
 
 function isRetryableError(error: Error | undefined): boolean {
@@ -368,6 +411,7 @@ export function WorkspaceStatusStrip({
   const {
     tasks,
     activeTasks,
+    workerSummary,
     latestTask,
     summary,
     taskQueueError,
@@ -401,7 +445,7 @@ export function WorkspaceStatusStrip({
   const queueRows = (activeTasks.length > 0 ? activeTasks : tasks).slice(0, 6);
   const canSwitchDataset = session?.capabilities.canSwitchDataset ?? false;
   const canSwitchRuntimeMode = session?.capabilities.canSwitchRuntimeMode ?? true;
-  const workerSummary = resolveShellWorkerSummary(workspace, runtimeMode);
+  const workerRuntimeSummary = summarizeWorkerRuntime(workerSummary);
   const datasetSummary = resolveShellActiveDatasetSummary(activeDataset, {
     status: activeDatasetStatus,
     source,
@@ -432,8 +476,8 @@ export function WorkspaceStatusStrip({
   const queueValue =
     isTaskQueueLoading && summary.total === 0
       ? "Loading tasks..."
-      : summary.runningCount > 0 || summary.queuedCount > 0
-        ? `${summary.runningCount} Running · ${summary.queuedCount} Pending`
+      : summary.runningCount > 0 || summary.pendingCount > 0
+        ? `${summary.runningCount} Running · ${summary.pendingCount} Pending`
         : summary.total > 0
           ? `${summary.completedCount} Completed · ${summary.failedCount} Failed`
           : "No active tasks";
@@ -642,7 +686,7 @@ export function WorkspaceStatusStrip({
               icon={Workflow}
               label="Tasks & Runtime"
               value={queueValue}
-              detail={`${queueDetail} · ${workerSummary.value}`}
+              detail={`${queueDetail} · ${workerRuntimeSummary.value}`}
             />
           </div>
 
@@ -1095,24 +1139,30 @@ export function WorkspaceStatusStrip({
                   />
                   <CompactContextCard
                     icon={ServerCog}
-                    label={workerSummary.label}
-                    value={workerSummary.value}
-                    detail={workerSummary.detail}
+                    label="Worker Runtime"
+                    value={workerRuntimeSummary.value}
+                    detail={
+                      taskQueueError
+                        ? developerModeEnabled
+                          ? (describeShellError(taskQueueError) ?? taskQueueError.message)
+                          : "Runtime summary is unavailable right now."
+                        : workerRuntimeSummary.detail
+                    }
                   />
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-4">
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                   <CompactContextCard
                     icon={Workflow}
                     label="Pending"
-                    value={String(summary.queuedCount)}
-                    detail="Tasks waiting to start."
+                    value={String(summary.pendingCount)}
+                    detail="Queued or dispatching tasks."
                   />
                   <CompactContextCard
                     icon={Workflow}
                     label="Running"
                     value={String(summary.runningCount)}
-                    detail="Tasks currently executing."
+                    detail="Running or draining tasks."
                   />
                   <CompactContextCard
                     icon={Workflow}
@@ -1126,6 +1176,94 @@ export function WorkspaceStatusStrip({
                     value={String(summary.failedCount)}
                     detail="Tasks that need review or retry."
                   />
+                  <CompactContextCard
+                    icon={AlertTriangle}
+                    label="Cancelled"
+                    value={String(summary.cancelledCount)}
+                    detail="Tasks stopped through graceful cancellation."
+                  />
+                  <CompactContextCard
+                    icon={AlertTriangle}
+                    label="Terminated"
+                    value={String(summary.terminatedCount)}
+                    detail="Tasks force-stopped by runtime control."
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Worker lanes
+                  </p>
+                  {workerSummary.length > 0 ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {workerSummary.map((laneSummary) => (
+                        <div
+                          key={laneSummary.lane}
+                          className="rounded-[0.9rem] border border-border bg-background px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.06)]"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">
+                                {formatWorkerLaneLabel(laneSummary.lane)}
+                              </p>
+                              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                                Lane runtime summary
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                              {laneSummary.healthyProcessors > 0 ? "Healthy" : "Needs attention"}
+                            </span>
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Healthy
+                              </p>
+                              <p className="mt-1 font-semibold text-foreground">
+                                {laneSummary.healthyProcessors}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Busy
+                              </p>
+                              <p className="mt-1 font-semibold text-foreground">
+                                {laneSummary.busyProcessors}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Degraded
+                              </p>
+                              <p className="mt-1 font-semibold text-foreground">
+                                {laneSummary.degradedProcessors}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Draining
+                              </p>
+                              <p className="mt-1 font-semibold text-foreground">
+                                {laneSummary.drainingProcessors}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                Offline
+                              </p>
+                              <p className="mt-1 font-semibold text-foreground">
+                                {laneSummary.offlineProcessors}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-[0.9rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                      Backend authority has not reported any lane runtime rows yet.
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-3">

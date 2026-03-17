@@ -224,34 +224,7 @@ export function resolveShellTaskLabel(task: Pick<TaskSummary, "kind" | "executio
         ? "Characterization"
         : "Simulation";
 
-  return `${kindLabel} · ${task.executionMode === "smoke" ? "Smoke" : "Run"}`;
-}
-
-export function resolveShellWorkerSummary(
-  workspace: SessionSnapshot["workspace"] | undefined,
-  runtimeMode: RuntimeMode = "online",
-  hasRuntimeSummary = false,
-) {
-  if (hasRuntimeSummary && workspace) {
-    return {
-      label: "Runtime Summary",
-      value: "Connected",
-      detail: `${workspace.displayName} runtime summary is available.`,
-      tone: "success",
-    } as const;
-  }
-
-  return {
-    label: "Worker Summary",
-    value: runtimeMode === "local" ? "Local processors" : "Awaiting Authority",
-    detail: workspace
-      ? `${resolveSessionWorkspaceLabel({
-          runtimeMode,
-          workspace,
-        })} has no runtime summary surface yet.`
-      : "Runtime summary is unavailable until the session resolves.",
-    tone: runtimeMode === "local" ? "info" : "warning",
-  } as const;
+  return `${kindLabel} · ${task.executionMode === "smoke" ? "Smoke" : task.executionMode === "run" ? "Run" : "Task"}`;
 }
 
 export function resolveShellActiveDatasetSummary(

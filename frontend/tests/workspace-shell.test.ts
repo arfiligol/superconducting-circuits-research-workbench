@@ -213,10 +213,21 @@ describe("workspace shell source contracts", () => {
 
   it("combines queue and worker runtime context into one shell surface", () => {
     expect(statusStripSource).toContain('title="Tasks & Runtime"');
+    expect(statusStripSource).toContain("workerSummary,");
+    expect(statusStripSource).toContain("summarizeWorkerRuntime(workerSummary)");
+    expect(statusStripSource).toContain("Worker lanes");
     expect(statusStripSource).toContain('label="Pending"');
     expect(statusStripSource).toContain('label="Running"');
     expect(statusStripSource).toContain('label="Completed"');
     expect(statusStripSource).toContain('label="Failed"');
+    expect(statusStripSource).toContain('label="Cancelled"');
+    expect(statusStripSource).toContain('label="Terminated"');
+    expect(statusStripSource).toContain("laneSummary.healthyProcessors");
+    expect(statusStripSource).toContain("laneSummary.busyProcessors");
+    expect(statusStripSource).toContain("laneSummary.degradedProcessors");
+    expect(statusStripSource).toContain("laneSummary.drainingProcessors");
+    expect(statusStripSource).toContain("laneSummary.offlineProcessors");
+    expect(statusStripSource).not.toContain("resolveShellWorkerSummary(");
     expect(statusStripSource).not.toContain('title="Worker Summary"');
   });
 

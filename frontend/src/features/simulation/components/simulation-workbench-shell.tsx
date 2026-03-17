@@ -45,6 +45,7 @@ import {
   TaskResultPanel,
 } from "@/features/shared/components/task-workflow-panels";
 import { ApiError } from "@/lib/api/client";
+import type { TaskExecutionStatus } from "@/lib/api/tasks";
 import { summarizeTaskEventHistory } from "@/lib/task-event-history";
 import { summarizeResearchWorkflowSurface } from "@/lib/research-workflow-surface";
 import {
@@ -132,16 +133,22 @@ function describeApiError(error: Error | undefined) {
   return error.message;
 }
 
-function taskStatusTone(status: "queued" | "running" | "completed" | "failed") {
+function taskStatusTone(status: TaskExecutionStatus) {
   if (status === "completed") {
     return "success" as const;
   }
 
-  if (status === "running") {
+  if (
+    status === "running" ||
+    status === "dispatching" ||
+    status === "cancellation_requested" ||
+    status === "cancelling" ||
+    status === "termination_requested"
+  ) {
     return "primary" as const;
   }
 
-  if (status === "failed") {
+  if (status === "failed" || status === "cancelled" || status === "terminated") {
     return "warning" as const;
   }
 
