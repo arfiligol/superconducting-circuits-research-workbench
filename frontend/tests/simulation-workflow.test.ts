@@ -864,8 +864,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Manage");
     expect(simulationWorkbenchSource).toContain("Save");
     expect(simulationWorkbenchSource).toContain('role="switch"');
-    expect(simulationWorkbenchSource).toContain("preventNestedWheelScroll");
-    expect(simulationWorkbenchSource).toContain("onWheel={(event) => {");
+    expect(simulationWorkbenchSource).toContain('addEventListener("wheel"');
+    expect(simulationWorkbenchSource).toContain("resolveWheelStep");
+    expect(simulationWorkbenchSource).toContain("commitWheelValue");
     expect(simulationWorkbenchSource).not.toContain('type="checkbox"');
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");

@@ -529,13 +529,100 @@ function SetupTextInput(props: Readonly<React.InputHTMLAttributes<HTMLInputEleme
   );
 }
 
-function preventNestedWheelScroll(event: React.WheelEvent<HTMLInputElement>) {
-  event.preventDefault();
-  event.stopPropagation();
+function countDecimalPlaces(rawValue: string) {
+  if (!rawValue) {
+    return 0;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  if (!normalized) {
+    return 0;
+  }
+
+  const exponentIndex = normalized.indexOf("e");
+  if (exponentIndex >= 0) {
+    const mantissa = normalized.slice(0, exponentIndex);
+    const exponent = Number(normalized.slice(exponentIndex + 1));
+    const mantissaPlaces = mantissa.split(".")[1]?.length ?? 0;
+    if (!Number.isFinite(exponent)) {
+      return mantissaPlaces;
+    }
+    return Math.max(0, mantissaPlaces - exponent);
+  }
+
+  return normalized.split(".")[1]?.length ?? 0;
+}
+
+function resolveWheelStep(input: HTMLInputElement) {
+  const stepAttribute = input.getAttribute("step");
+  if (stepAttribute && stepAttribute !== "any") {
+    const parsedStep = Number(stepAttribute);
+    if (Number.isFinite(parsedStep) && parsedStep > 0) {
+      return parsedStep;
+    }
+  }
+
+  const precision = countDecimalPlaces(input.value);
+  return precision > 0 ? 10 ** -precision : 1;
+}
+
+function clampWheelValue(input: HTMLInputElement, nextValue: number) {
+  const min = Number(input.min);
+  const max = Number(input.max);
+
+  if (Number.isFinite(min)) {
+    nextValue = Math.max(nextValue, min);
+  }
+  if (Number.isFinite(max)) {
+    nextValue = Math.min(nextValue, max);
+  }
+
+  return nextValue;
+}
+
+function commitWheelValue(
+  input: HTMLInputElement,
+  nextValue: number,
+  precision: number,
+  onChange?: React.ChangeEventHandler<HTMLInputElement>,
+) {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  const serializedValue = precision > 0 ? nextValue.toFixed(precision) : String(nextValue);
+
+  if (valueSetter) {
+    valueSetter.call(input, serializedValue);
+  } else {
+    input.value = serializedValue;
+  }
+
+  if (onChange) {
+    onChange({
+      target: input,
+      currentTarget: input,
+      type: "change",
+      bubbles: true,
+      cancelable: false,
+      defaultPrevented: false,
+      eventPhase: Event.AT_TARGET,
+      isTrusted: false,
+      nativeEvent: new Event("change", { bubbles: true }),
+      preventDefault() {},
+      isDefaultPrevented: () => false,
+      stopPropagation() {},
+      isPropagationStopped: () => false,
+      persist() {},
+      timeStamp: Date.now(),
+    } as React.ChangeEvent<HTMLInputElement>);
+    return;
+  }
+
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const lastWheelAdjustmentAtRef = useRef<number>(0);
 
   useEffect(() => {
     const input = inputRef.current;
@@ -553,11 +640,37 @@ function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputEle
 
       event.preventDefault();
       event.stopPropagation();
+
+      if (event.timeStamp - lastWheelAdjustmentAtRef.current < 80) {
+        return;
+      }
+      lastWheelAdjustmentAtRef.current = event.timeStamp;
+
+      if (input.disabled || input.readOnly) {
+        return;
+      }
+
+      const currentValue = input.value === "" ? 0 : Number(input.value);
+      if (!Number.isFinite(currentValue)) {
+        return;
+      }
+
+      const step = resolveWheelStep(input);
+      const direction = event.deltaY < 0 ? 1 : -1;
+      const precision = Math.max(countDecimalPlaces(input.value), countDecimalPlaces(String(step)));
+      const nextValue = clampWheelValue(input, currentValue + direction * step);
+
+      if (nextValue === currentValue) {
+        return;
+      }
+
+      commitWheelValue(input, nextValue, precision, props.onChange);
     };
 
-    input.addEventListener("wheel", handleWheel, { passive: false });
+    const listenerOptions = { passive: false, capture: true } as const;
+    input.addEventListener("wheel", handleWheel, listenerOptions);
     return () => {
-      input.removeEventListener("wheel", handleWheel);
+      input.removeEventListener("wheel", handleWheel, listenerOptions);
     };
   }, []);
 
@@ -566,12 +679,6 @@ function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputEle
       {...props}
       ref={inputRef}
       type="number"
-      onWheel={(event) => {
-        props.onWheel?.(event);
-        if (!event.defaultPrevented) {
-          preventNestedWheelScroll(event);
-        }
-      }}
       className={cx(
         "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15 disabled:opacity-60",
         props.className,
