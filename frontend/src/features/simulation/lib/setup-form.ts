@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { parseCircuitNetlistSource } from "@/features/circuit-definition-editor/lib/netlist";
 import type { SimulationSetup, SimulationSetupDraft } from "@/lib/api/tasks";
 
 export const simulationParameterSweepAxisModeSchema = z.enum(["range", "explicit"]);
@@ -106,6 +107,17 @@ export const simulationSetupFormSchema = z
 export type SimulationSetupFormValues = z.infer<typeof simulationSetupFormSchema>;
 export type SimulationParameterSweepAxisForm = SimulationSetupFormValues["simulationParameterSweepAxes"][number];
 export type SimulationSourceForm = SimulationSetupFormValues["simulationSources"][number];
+export type SimulationSweepTargetOption = Readonly<{
+  value: string;
+  label: string;
+  unit: string | null;
+  source: "schema" | "source";
+}>;
+export type SimulationPtcPortOption = Readonly<{
+  value: string;
+  label: string;
+  sourceElement: string;
+}>;
 
 export function cloneSimulationSetupFormValues(
   values: Readonly<SimulationSetupFormValues>,
@@ -151,15 +163,17 @@ export function cloneSimulationSetupFormValues(
   };
 }
 
-export function createDefaultSimulationParameterSweepAxis(): SimulationParameterSweepAxisForm {
+export function createDefaultSimulationParameterSweepAxis(
+  input?: Readonly<{ parameter?: string; unit?: string | null }>,
+): SimulationParameterSweepAxisForm {
   return {
-    parameter: "",
+    parameter: input?.parameter?.trim() ?? "",
     mode: "range",
     start: 0,
     stop: 1,
     pointCount: 5,
     explicitValues: "",
-    unit: "",
+    unit: input?.unit?.trim() ?? "",
   };
 }
 
@@ -227,6 +241,115 @@ export function parseCommaSeparatedNumericValues(value: string) {
     }
     return parsed;
   });
+}
+
+function buildSourceSweepTargetLabel(
+  source: Readonly<SimulationSourceForm>,
+  sourceIndex: number,
+  fieldLabel: string,
+  unit: string | null,
+) {
+  const sourceName = source.sourceId.trim() || `Source ${sourceIndex + 1}`;
+  return unit
+    ? `${sourceName} · ${fieldLabel} (${unit})`
+    : `${sourceName} · ${fieldLabel}`;
+}
+
+export function deriveSimulationSweepTargetOptions(
+  definitionSourceText: string | null | undefined,
+  sources: readonly SimulationSourceForm[],
+): readonly SimulationSweepTargetOption[] {
+  const options: SimulationSweepTargetOption[] = [];
+  const seen = new Set<string>();
+  const parsed = definitionSourceText
+    ? parseCircuitNetlistSource(definitionSourceText).document
+    : null;
+
+  const parameterMap = new Map(
+    (parsed?.parameters ?? []).map((parameter) => [parameter.name, parameter] as const),
+  );
+  const schemaSweepTargets = new Set(
+    parsed?.components.flatMap((component) =>
+      component.value_ref?.trim() ? [component.value_ref.trim()] : [],
+    ) ?? [],
+  );
+
+  for (const parameterName of schemaSweepTargets) {
+    const parameter = parameterMap.get(parameterName);
+    if (!parameter || seen.has(parameter.name)) {
+      continue;
+    }
+    seen.add(parameter.name);
+    options.push({
+      value: parameter.name,
+      label: `${parameter.name} (${parameter.unit})`,
+      unit: parameter.unit,
+      source: "schema",
+    });
+  }
+
+  sources.forEach((source, sourceIndex) => {
+    const optionSpecs = [
+      {
+        value: `sources[${sourceIndex + 1}].amplitude`,
+        label: buildSourceSweepTargetLabel(source, sourceIndex, "Current amplitude", "A"),
+        unit: "A",
+      },
+      {
+        value: `sources[${sourceIndex + 1}].frequency_ghz`,
+        label: buildSourceSweepTargetLabel(source, sourceIndex, "Frequency", "GHz"),
+        unit: "GHz",
+      },
+      {
+        value: `sources[${sourceIndex + 1}].phase_deg`,
+        label: buildSourceSweepTargetLabel(source, sourceIndex, "Phase", "deg"),
+        unit: "deg",
+      },
+    ] as const;
+
+    optionSpecs.forEach((spec) => {
+      if (seen.has(spec.value)) {
+        return;
+      }
+      seen.add(spec.value);
+      options.push({
+        value: spec.value,
+        label: spec.label,
+        unit: spec.unit,
+        source: "source",
+      });
+    });
+  });
+
+  return options;
+}
+
+export function deriveSimulationPtcPortOptions(
+  definitionSourceText: string | null | undefined,
+): readonly SimulationPtcPortOption[] {
+  const parsed = definitionSourceText
+    ? parseCircuitNetlistSource(definitionSourceText).document
+    : null;
+  if (!parsed) {
+    return [];
+  }
+
+  const options = new Map<number, SimulationPtcPortOption>();
+  parsed.topology.forEach(([elementName, , , componentRef]) => {
+    if (!elementName.toUpperCase().startsWith("P") || typeof componentRef !== "number") {
+      return;
+    }
+
+    options.set(componentRef, {
+      value: `port_${componentRef}`,
+      label: `Port ${componentRef}`,
+      sourceElement: elementName,
+    });
+  });
+
+  return [...options.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, option]) => option);
 }
 
 function buildLinearSweepValues(start: number, stop: number, pointCount: number) {

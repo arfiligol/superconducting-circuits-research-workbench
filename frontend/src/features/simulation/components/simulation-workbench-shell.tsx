@@ -35,6 +35,8 @@ import {
   createDefaultSimulationParameterSweepAxis,
   createDefaultSimulationSource,
   defaultSimulationSetupFormValues,
+  deriveSimulationPtcPortOptions,
+  deriveSimulationSweepTargetOptions,
   parseCommaSeparatedStringValues,
   simulationSetupFormSchema,
   type SimulationSetupFormValues,
@@ -832,80 +834,6 @@ function formatSavedSetupTimestamp(isoTimestamp: string) {
   });
 }
 
-function normalizeSchemaUnitLookupKey(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function buildSchemaUnitLookup(sourceText: string | null | undefined) {
-  const lookup = new Map<string, string>();
-  if (!sourceText) {
-    return lookup;
-  }
-
-  try {
-    const parsed = JSON.parse(sourceText) as {
-      components?: readonly { name?: string; unit?: string }[];
-      parameters?: readonly { name?: string; unit?: string }[];
-    };
-
-    const register = (entries: readonly { name?: string; unit?: string }[] | undefined) => {
-      entries?.forEach((entry) => {
-        const normalizedName =
-          typeof entry.name === "string" ? normalizeSchemaUnitLookupKey(entry.name) : "";
-        const normalizedUnit = typeof entry.unit === "string" ? entry.unit.trim() : "";
-        if (normalizedName && normalizedUnit) {
-          lookup.set(normalizedName, normalizedUnit);
-        }
-      });
-    };
-
-    register(parsed.components);
-    register(parsed.parameters);
-  } catch {
-    return lookup;
-  }
-
-  return lookup;
-}
-
-function resolveSchemaBackedSweepUnit(
-  parameter: string,
-  fallbackUnit: string | null | undefined,
-  schemaUnitLookup: ReadonlyMap<string, string>,
-) {
-  const normalizedParameter = normalizeSchemaUnitLookupKey(parameter);
-  if (!normalizedParameter) {
-    return fallbackUnit?.trim() || null;
-  }
-
-  const directMatch = schemaUnitLookup.get(normalizedParameter);
-  if (directMatch) {
-    return directMatch;
-  }
-
-  const tailMatch = schemaUnitLookup.get(
-    normalizeSchemaUnitLookupKey(parameter.split(".").at(-1) ?? parameter),
-  );
-  if (tailMatch) {
-    return tailMatch;
-  }
-
-  return fallbackUnit?.trim() || null;
-}
-
-function buildResolvedSimulationSetupFormValues(
-  values: Readonly<SimulationSetupFormValues>,
-  schemaUnitLookup: ReadonlyMap<string, string>,
-): SimulationSetupFormValues {
-  return cloneSimulationSetupFormValues({
-    ...values,
-    simulationParameterSweepAxes: values.simulationParameterSweepAxes.map((axis) => ({
-      ...axis,
-      unit: resolveSchemaBackedSweepUnit(axis.parameter, axis.unit, schemaUnitLookup) ?? "",
-    })),
-  });
-}
-
 export function SimulationWorkbenchShell() {
   const router = useRouter();
   const pathname = usePathname();
@@ -941,7 +869,8 @@ export function SimulationWorkbenchShell() {
   const parameterSweepEnabled = form.watch("simulationParameterSweepEnabled");
   const harmonicBalanceEnabled = form.watch("simulationHarmonicBalanceEnabled");
   const ptcEnabled = form.watch("simulationPtcEnabled");
-  const ptcMode = form.watch("simulationPtcMode");
+  const watchedSimulationSources = form.watch("simulationSources");
+  const selectedPtcPortsValue = form.watch("simulationPtcCompensatePorts");
 
   const requestedDefinitionId = searchParams.get("definitionId");
   const requestedTaskId = parseTaskIdParam(searchParams.get("taskId"));
@@ -1053,14 +982,6 @@ export function SimulationWorkbenchShell() {
       return normalizedOutput;
     }
   }, [activeDefinition]);
-  const simulationRequestPreview = buildSimulationRequestSummary({
-    kind: "simulation",
-    definitionId: resolvedDefinitionId,
-    definitionName: selectedDefinitionDisplay?.name ?? null,
-    datasetId: activeDatasetState.activeDataset?.datasetId ?? null,
-    datasetName: activeDatasetState.activeDataset?.name ?? null,
-    note: form.watch("simulationNote"),
-  });
   const postProcessingRequestPreview = buildSimulationRequestSummary({
     kind: "post_processing",
     definitionId: resolvedDefinitionId,
@@ -1075,9 +996,25 @@ export function SimulationWorkbenchShell() {
   );
   const activeSavedSetup =
     visibleSavedSetups.find((setup) => setup.id === selectedSavedSetupId) ?? null;
-  const schemaUnitLookup = useMemo(
-    () => buildSchemaUnitLookup(activeDefinition?.source_text ?? null),
+  const sweepTargetOptions = useMemo(
+    () =>
+      deriveSimulationSweepTargetOptions(
+        activeDefinition?.source_text ?? null,
+        watchedSimulationSources,
+      ),
+    [activeDefinition?.source_text, watchedSimulationSources],
+  );
+  const sweepTargetOptionsByValue = useMemo(
+    () => new Map(sweepTargetOptions.map((option) => [option.value, option] as const)),
+    [sweepTargetOptions],
+  );
+  const ptcPortOptions = useMemo(
+    () => deriveSimulationPtcPortOptions(activeDefinition?.source_text ?? null),
     [activeDefinition?.source_text],
+  );
+  const selectedPtcPorts = useMemo(
+    () => new Set(parseCommaSeparatedStringValues(selectedPtcPortsValue)),
+    [selectedPtcPortsValue],
   );
   const simulationSetupBlockedReason =
     resolvedDefinitionId === null
@@ -1130,6 +1067,61 @@ export function SimulationWorkbenchShell() {
   const explicitUpstreamSimulationTaskId = resolvePostProcessingUpstreamTaskId(
     latestPostProcessingTaskDetail,
   );
+
+  useEffect(() => {
+    if (sweepTargetOptions.length === 0) {
+      if (parameterSweepEnabled) {
+        form.setValue("simulationParameterSweepEnabled", false, { shouldDirty: true });
+      }
+      return;
+    }
+
+    const currentAxes = form.getValues("simulationParameterSweepAxes");
+    currentAxes.forEach((axis, index) => {
+      const matchedOption =
+        sweepTargetOptionsByValue.get(axis.parameter) ?? sweepTargetOptions[0] ?? null;
+      if (!matchedOption) {
+        return;
+      }
+
+      if (axis.parameter !== matchedOption.value) {
+        form.setValue(`simulationParameterSweepAxes.${index}.parameter`, matchedOption.value, {
+          shouldDirty: false,
+        });
+      }
+      if (axis.unit !== (matchedOption.unit ?? "")) {
+        form.setValue(`simulationParameterSweepAxes.${index}.unit`, matchedOption.unit ?? "", {
+          shouldDirty: false,
+        });
+      }
+    });
+  }, [
+    form,
+    parameterSweepEnabled,
+    sweepTargetOptions,
+    sweepTargetOptionsByValue,
+  ]);
+
+  useEffect(() => {
+    if (ptcPortOptions.length === 0) {
+      if (ptcEnabled) {
+        form.setValue("simulationPtcEnabled", false, { shouldDirty: true });
+      }
+      if (selectedPtcPortsValue) {
+        form.setValue("simulationPtcCompensatePorts", "", { shouldDirty: false });
+      }
+      return;
+    }
+
+    const allowedPorts = new Set(ptcPortOptions.map((option) => option.value));
+    const filteredPorts = parseCommaSeparatedStringValues(selectedPtcPortsValue).filter((port) =>
+      allowedPorts.has(port),
+    );
+    const normalizedSelection = filteredPorts.join(", ");
+    if (normalizedSelection !== selectedPtcPortsValue) {
+      form.setValue("simulationPtcCompensatePorts", normalizedSelection, { shouldDirty: false });
+    }
+  }, [form, ptcEnabled, ptcPortOptions, selectedPtcPortsValue]);
 
   useEffect(() => {
     if (
@@ -1376,9 +1368,7 @@ export function SimulationWorkbenchShell() {
     try {
       simulationSetup =
         kind === "simulation"
-          ? buildSimulationSetupDraft(
-              buildResolvedSimulationSetupFormValues(values, schemaUnitLookup),
-            )
+          ? buildSimulationSetupDraft(values)
           : null;
       postProcessingSetup =
         kind === "post_processing" ? buildPostProcessingSetupDraft(values) : null;
@@ -1734,48 +1724,82 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="Parameter Sweep Setup"
-            description="Add one or more sweep axes. Range mode expands start, stop, and points into the persisted values array."
+            description="Choose sweep targets from the circuit definition or source controls, then add one or more axis cards only when this run needs them."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
           >
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3">
-              <SetupSlideToggle
-                checked={parameterSweepEnabled}
-                label="Enable parameter sweeps"
-                description="Reveal the axis list only when this run needs parameter sweeps."
-                onCheckedChange={(nextChecked) => {
-                  form.setValue("simulationParameterSweepEnabled", nextChecked, {
-                    shouldDirty: true,
-                  });
-                  if (nextChecked && parameterSweepFieldArray.fields.length === 0) {
-                    parameterSweepFieldArray.append(createDefaultSimulationParameterSweepAxis());
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  parameterSweepFieldArray.append(createDefaultSimulationParameterSweepAxis());
-                  clearTaskMutationStatus();
-                }}
-                disabled={!parameterSweepEnabled}
-                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add Axis
-              </button>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">Enable parameter sweeps</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Sweep targets are derived from schema parameters and simulation sources.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const fallbackOption = sweepTargetOptions[0];
+                    parameterSweepFieldArray.append(
+                      createDefaultSimulationParameterSweepAxis({
+                        parameter: fallbackOption?.value ?? "",
+                        unit: fallbackOption?.unit ?? "",
+                      }),
+                    );
+                    clearTaskMutationStatus();
+                  }}
+                  disabled={!parameterSweepEnabled || sweepTargetOptions.length === 0}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Axis
+                </button>
+                <div className="min-w-[220px]">
+                  <SetupSlideToggle
+                    checked={parameterSweepEnabled}
+                    label="Enable parameter sweeps"
+                    description={
+                      sweepTargetOptions.length > 0
+                        ? "Turn this on to reveal the sweep axis list."
+                        : "No schema or source sweep targets are available for this definition."
+                    }
+                    disabled={sweepTargetOptions.length === 0}
+                    onCheckedChange={(nextChecked) => {
+                      form.setValue("simulationParameterSweepEnabled", nextChecked, {
+                        shouldDirty: true,
+                      });
+                      if (
+                        nextChecked &&
+                        parameterSweepFieldArray.fields.length === 0 &&
+                        sweepTargetOptions.length > 0
+                      ) {
+                        const fallbackOption = sweepTargetOptions[0];
+                        parameterSweepFieldArray.append(
+                          createDefaultSimulationParameterSweepAxis({
+                            parameter: fallbackOption?.value ?? "",
+                            unit: fallbackOption?.unit ?? "",
+                          }),
+                        );
+                      }
+                    }}
+                  />
+                </div>
+              </div>
             </div>
 
-            {parameterSweepEnabled ? (
+            {sweepTargetOptions.length === 0 ? (
+              <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                No sweep targets are currently available from the circuit schema or simulation
+                sources, so parameter sweeps stay disabled.
+              </div>
+            ) : parameterSweepEnabled ? (
               <div className="space-y-3">
                 {parameterSweepFieldArray.fields.map((field, index) => {
                   const axisErrors = form.formState.errors.simulationParameterSweepAxes?.[index];
                   const axisMode = form.watch(`simulationParameterSweepAxes.${index}.mode`);
                   const axisParameter = form.watch(`simulationParameterSweepAxes.${index}.parameter`);
-                  const axisDerivedUnit = resolveSchemaBackedSweepUnit(
-                    axisParameter,
-                    form.getValues(`simulationParameterSweepAxes.${index}.unit`),
-                    schemaUnitLookup,
-                  );
+                  const axisOption =
+                    sweepTargetOptionsByValue.get(axisParameter) ?? sweepTargetOptions[0] ?? null;
+                  const axisDerivedUnit = axisOption?.unit ?? null;
 
                   return (
                     <div
@@ -1808,18 +1832,54 @@ export function SimulationWorkbenchShell() {
                           label="Target / Parameter"
                           error={axisErrors?.parameter?.message}
                         >
-                          <SetupTextInput
-                            {...form.register(`simulationParameterSweepAxes.${index}.parameter`)}
-                            placeholder="L_q"
-                          />
+                          <SetupSelect
+                            value={axisParameter}
+                            onChange={(event) => {
+                              const nextOption =
+                                sweepTargetOptionsByValue.get(event.target.value) ?? null;
+                              form.setValue(
+                                `simulationParameterSweepAxes.${index}.parameter`,
+                                event.target.value,
+                                { shouldDirty: true },
+                              );
+                              form.setValue(
+                                `simulationParameterSweepAxes.${index}.unit`,
+                                nextOption?.unit ?? "",
+                                { shouldDirty: false },
+                              );
+                            }}
+                          >
+                            {sweepTargetOptions.some((option) => option.source === "schema") ? (
+                              <optgroup label="Circuit schema">
+                                {sweepTargetOptions
+                                  .filter((option) => option.source === "schema")
+                                  .map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            ) : null}
+                            {sweepTargetOptions.some((option) => option.source === "source") ? (
+                              <optgroup label="Simulation sources">
+                                {sweepTargetOptions
+                                  .filter((option) => option.source === "source")
+                                  .map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            ) : null}
+                          </SetupSelect>
                         </SetupInputField>
                         <SummaryCard
                           label="Unit"
                           value={axisDerivedUnit ?? "Schema unit unavailable"}
                           detail={
                             axisDerivedUnit
-                              ? "Read from circuit schema."
-                              : "Schema-derived unit is unavailable for this parameter."
+                              ? "Read from the selected target."
+                              : "No unit metadata is available for the selected target."
                           }
                         />
                         <SetupInputField label="Axis Mode">
@@ -2035,7 +2095,7 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="PTC"
-            description="Capture port tuning compensation intent without pretending the backend already persists it."
+            description="Capture local port-tuning intent with schema-derived port selection, without pretending the backend already persists it."
             status={<LocalDraftBadge />}
             actions={
               <button
@@ -2054,16 +2114,16 @@ export function SimulationWorkbenchShell() {
               </button>
             }
           >
-            <div className="rounded-[0.95rem] border border-dashed border-amber-400/50 bg-amber-50/70 px-4 py-4 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-              These fields stay local to the browser for now. They are visible during authoring but
-              are not included in persisted simulation task submission or task rehydration.
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_240px]">
               <SetupSlideToggle
                 checked={ptcEnabled}
                 label="Enable PTC draft"
-                description="Use this to track a local tuning draft without sending it to the backend."
+                description={
+                  ptcPortOptions.length > 0
+                    ? "Track local PTC intent with schema-derived port selection."
+                    : "No schema ports are available for PTC on this definition."
+                }
+                disabled={ptcPortOptions.length === 0}
                 onCheckedChange={(nextChecked) => {
                   form.setValue("simulationPtcEnabled", nextChecked, {
                     shouldDirty: true,
@@ -2076,38 +2136,53 @@ export function SimulationWorkbenchShell() {
                   <option value="manual">Manual review</option>
                 </SetupSelect>
               </SetupInputField>
-              <SetupInputField
-                label="Compensate Ports"
-                detail="Comma-separated port ids or targets to include in this local PTC draft."
-              >
-                <SetupTextInput
-                  {...form.register("simulationPtcCompensatePorts")}
-                  disabled={!ptcEnabled}
-                  placeholder="port_1, port_2"
-                />
-              </SetupInputField>
             </div>
 
-            <SetupInputField
-              label="Manual Affordance"
-              detail={
-                ptcMode === "manual"
-                  ? "Record manual offsets, notes, or next-step instructions for this local draft."
-                  : "Keep a short local note even when using auto compensate mode."
-              }
-            >
-              <textarea
-                {...form.register("simulationPtcManualNotes")}
-                rows={4}
-                disabled={!ptcEnabled}
-                placeholder={
-                  ptcMode === "manual"
-                    ? "Describe manual port compensation steps."
-                    : "Optional local note for the PTC draft."
-                }
-                className="w-full resize-none rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
-              />
-            </SetupInputField>
+            {ptcPortOptions.length > 0 ? (
+              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  {ptcPortOptions.map((port) => {
+                    const isSelected = selectedPtcPorts.has(port.value);
+                    return (
+                      <button
+                        key={port.value}
+                        type="button"
+                        disabled={!ptcEnabled}
+                        onClick={() => {
+                          const nextSelection = new Set(selectedPtcPorts);
+                          if (nextSelection.has(port.value)) {
+                            nextSelection.delete(port.value);
+                          } else {
+                            nextSelection.add(port.value);
+                          }
+                          form.setValue(
+                            "simulationPtcCompensatePorts",
+                            [...nextSelection].join(", "),
+                            { shouldDirty: true },
+                          );
+                        }}
+                        className={cx(
+                          "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60",
+                          isSelected
+                            ? "border-primary/35 bg-primary text-primary-foreground"
+                            : "border-border bg-surface text-foreground hover:border-primary/35 hover:bg-primary/10",
+                        )}
+                      >
+                        {port.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                  Choose the ports that should use the local PTC draft. Default is no selected
+                  ports.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                This definition does not expose any schema ports for PTC selection.
+              </div>
+            )}
           </SetupSection>
 
           <SetupSection
@@ -2261,33 +2336,21 @@ export function SimulationWorkbenchShell() {
             </p>
           ) : null}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Submission Preview
-              </p>
-              <p className="mt-2 text-foreground">{simulationRequestPreview}</p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                The first four sections submit with the simulation task. PTC and Advanced hbsolve
-                Options remain local-only until backend persistence support lands.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void handleSubmit("simulation");
-              }}
-              disabled={taskMutationStatus.state === "submitting" || simulationSetupBlockedReason !== null}
-              className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {taskMutationStatus.state === "submitting" ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-              Run Simulation
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void handleSubmit("simulation");
+            }}
+            disabled={taskMutationStatus.state === "submitting" || simulationSetupBlockedReason !== null}
+            className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {taskMutationStatus.state === "submitting" ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            Run Simulation
+          </button>
 
           {latestSimulationStageTask ? (
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">

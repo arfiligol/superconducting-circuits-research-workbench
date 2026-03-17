@@ -8,6 +8,8 @@ import {
   buildSimulationSetupFormValuesFromPersistedSetup,
   cloneSimulationSetupFormValues,
   defaultSimulationSetupFormValues,
+  deriveSimulationPtcPortOptions,
+  deriveSimulationSweepTargetOptions,
 } from "../src/features/simulation/lib/setup-form";
 import {
   createSavedSimulationSetupRecord,
@@ -842,6 +844,66 @@ describe("simulation workflow source contract", () => {
     expect(rehydrated.simulationAdvancedNotes).toBe("local-only advanced draft");
   });
 
+  it("derives schema-backed sweep targets and ptc ports from the selected definition", () => {
+    const definitionSource = `{
+      "name": "SweepableSeriesLC",
+      "parameters": [
+        {"name": "Lj", "default": 1000.0, "unit": "pH"},
+        {"name": "Cj", "default": 1000.0, "unit": "fF"}
+      ],
+      "components": [
+        {"name": "R1", "default": 50.0, "unit": "Ohm"},
+        {"name": "Lj1", "value_ref": "Lj", "unit": "pH"},
+        {"name": "C2", "value_ref": "Cj", "unit": "fF"}
+      ],
+      "topology": [
+        ("P1", "1", "0", 1),
+        ("P2", "2", "0", 2),
+        ("Lj1", "2", "0", "Lj1"),
+        ("C2", "2", "0", "C2")
+      ]
+    }`;
+
+    expect(
+      deriveSimulationSweepTargetOptions(definitionSource, [
+        {
+          sourceId: "src_drive_1",
+          kind: "pump",
+          target: "port_1",
+          amplitude: 1,
+          frequencyGhz: "5.0",
+          phaseDeg: "0",
+        },
+      ]),
+    ).toEqual([
+      { value: "Lj", label: "Lj (pH)", unit: "pH", source: "schema" },
+      { value: "Cj", label: "Cj (fF)", unit: "fF", source: "schema" },
+      {
+        value: "sources[1].amplitude",
+        label: "src_drive_1 · Current amplitude (A)",
+        unit: "A",
+        source: "source",
+      },
+      {
+        value: "sources[1].frequency_ghz",
+        label: "src_drive_1 · Frequency (GHz)",
+        unit: "GHz",
+        source: "source",
+      },
+      {
+        value: "sources[1].phase_deg",
+        label: "src_drive_1 · Phase (deg)",
+        unit: "deg",
+        source: "source",
+      },
+    ]);
+
+    expect(deriveSimulationPtcPortOptions(definitionSource)).toEqual([
+      { value: "port_1", label: "Port 1", sourceElement: "P1" },
+      { value: "port_2", label: "Port 2", sourceElement: "P2" },
+    ]);
+  });
+
   it("keeps the page organized around the five-stage workflow instead of task dashboards", () => {
     expect(simulationWorkbenchSource).toContain("Definition / Netlist Context");
     expect(simulationWorkbenchSource).toContain("Simulation Setup");
@@ -889,6 +951,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Persisted Result Surface");
     expect(simulationWorkbenchSource).not.toContain("Definition Binding");
     expect(simulationWorkbenchSource).not.toContain("Sweep Parameter (optional)");
+    expect(simulationWorkbenchSource).toContain("deriveSimulationSweepTargetOptions");
+    expect(simulationWorkbenchSource).toContain("deriveSimulationPtcPortOptions");
+    expect(simulationWorkbenchSource).toContain("No sweep targets are currently available");
   });
 
   it("binds stage authority to the current definition and dataset context", () => {
