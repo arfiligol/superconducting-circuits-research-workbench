@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { EditorState } from "@codemirror/state";
 import { json } from "@codemirror/lang-json";
@@ -535,9 +535,36 @@ function preventNestedWheelScroll(event: React.WheelEvent<HTMLInputElement>) {
 }
 
 function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) {
+      return undefined;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      const isTargetInput = event.target instanceof Node && input.contains(event.target);
+      const isActiveInput = document.activeElement === input;
+      const isHoveredInput = input.matches(":hover");
+      if (!isTargetInput && !isActiveInput && !isHoveredInput) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    input.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      input.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
   return (
     <input
       {...props}
+      ref={inputRef}
       type="number"
       onWheel={(event) => {
         props.onWheel?.(event);
