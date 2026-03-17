@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 
 import { TracePreviewPlot } from "@/features/data-browser/components/trace-preview-plot";
 import { useRawDataBrowserData } from "@/features/data-browser/hooks/use-raw-data-browser-data";
+import { resolveTracePreviewSemantics } from "@/features/data-browser/lib/trace-preview";
 import { AppSelectField } from "@/features/shared/components/app-select";
 import { SurfaceHeader, SurfacePanel, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
 
@@ -64,6 +65,8 @@ export function RawDataBrowserWorkspace() {
   const deferredTraceSearch = useDeferredValue(browser.filters.search);
   const [previewMode, setPreviewMode] = useState<"plot" | "table">("plot");
   const selectedDesign = browser.designs.find((row) => row.design_id === browser.selectedDesignId) ?? null;
+  const selectedTraceSummary =
+    browser.traces.find((row) => row.trace_id === browser.selectedTraceId) ?? null;
   const previewSeries = useMemo(() => {
     const points = browser.traceDetail?.preview_payload.points ?? [];
     const x = points
@@ -79,11 +82,15 @@ export function RawDataBrowserWorkspace() {
       isPlotReady: x.length > 0 && x.length === y.length,
     };
   }, [browser.traceDetail?.preview_payload.points]);
-  const xAxisLabel = browser.traceDetail?.axes[0]?.name ?? "Axis";
-  const xAxisUnit = browser.traceDetail?.axes[0]?.unit ?? "";
-  const yAxisLabel = browser.traceDetail
-    ? `${browser.traceDetail.trace_id}`
-    : "Value";
+  const previewSemantics = useMemo(
+    () =>
+      resolveTracePreviewSemantics({
+        axes: browser.traceDetail?.axes ?? [],
+        traceSummary: selectedTraceSummary,
+        fallbackSeriesLabel: browser.traceDetail?.trace_id ?? null,
+      }),
+    [browser.traceDetail?.axes, browser.traceDetail?.trace_id, selectedTraceSummary],
+  );
 
   return (
     <div className="space-y-8">
@@ -352,21 +359,56 @@ export function RawDataBrowserWorkspace() {
               </div>
             ) : browser.traceDetail ? (
               <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 lg:grid-cols-3">
                   <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
                     <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Axes
+                      X Axis
                     </p>
-                    <ul className="mt-3 space-y-2 text-sm">
-                      {browser.traceDetail.axes.map((axis) => (
-                        <li key={axis.name} className="flex items-center justify-between gap-4">
-                          <span className="text-muted-foreground">{axis.name}</span>
-                          <span className="font-medium text-foreground">
-                            {axis.length} {axis.unit}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mt-3 space-y-3 text-sm">
+                      <div className="flex items-start justify-between gap-4">
+                        <span className="text-muted-foreground">Axis</span>
+                        <span className="text-right font-medium text-foreground">
+                          {previewSemantics.xAxisName}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between gap-4">
+                        <span className="text-muted-foreground">Unit</span>
+                        <span className="text-right font-medium text-foreground">
+                          {previewSemantics.xAxisUnitLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between gap-4">
+                        <span className="text-muted-foreground">Point Count</span>
+                        <span className="text-right font-medium text-foreground">
+                          {previewSemantics.xAxisPointCountLabel}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      Preview Series
+                    </p>
+                    <div className="mt-3 space-y-3 text-sm">
+                      <div className="flex items-start justify-between gap-4">
+                        <span className="text-muted-foreground">Y Axis</span>
+                        <span className="text-right font-medium text-foreground">
+                          {previewSemantics.previewSeriesLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between gap-4">
+                        <span className="text-muted-foreground">Series Family</span>
+                        <span className="text-right font-medium text-foreground">
+                          {previewSemantics.previewSeriesDetail}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between gap-4">
+                        <span className="text-muted-foreground">Y Unit</span>
+                        <span className="text-right font-medium text-foreground">
+                          {previewSemantics.previewSeriesUnitLabel}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
                     <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
@@ -391,7 +433,11 @@ export function RawDataBrowserWorkspace() {
                         Plot and table are two views over the same preview payload.
                       </p>
                     </div>
-                    <div className="inline-flex rounded-full border border-border bg-background p-1">
+                    <div
+                      className="inline-flex rounded-[0.95rem] border border-border/80 bg-background/90 p-1 shadow-[0_8px_24px_rgba(15,23,42,0.06)]"
+                      role="group"
+                      aria-label="Single trace preview view"
+                    >
                       {(["plot", "table"] as const).map((mode) => (
                         <button
                           key={mode}
@@ -399,10 +445,11 @@ export function RawDataBrowserWorkspace() {
                           onClick={() => {
                             setPreviewMode(mode);
                           }}
+                          aria-pressed={previewMode === mode}
                           className={cx(
-                            "min-h-9 rounded-full px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] transition",
+                            "min-h-9 rounded-[0.75rem] px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
                             previewMode === mode
-                              ? "bg-primary/12 text-foreground shadow-[0_8px_20px_rgba(37,99,235,0.12)]"
+                              ? "bg-primary/12 text-foreground shadow-[0_8px_20px_rgba(37,99,235,0.14)]"
                               : "text-muted-foreground hover:bg-surface hover:text-foreground",
                           )}
                         >
@@ -413,13 +460,35 @@ export function RawDataBrowserWorkspace() {
                   </div>
 
                   <div className="mt-4">
+                    <div className="mb-4 rounded-[0.95rem] border border-border/80 bg-background px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">X Axis</span>
+                          <span className="ml-2 font-medium text-foreground">
+                            {previewSemantics.xAxisTitle}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Points</span>
+                          <span className="ml-2 font-medium text-foreground">
+                            {previewSemantics.xAxisPointCountLabel}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Y Axis</span>
+                          <span className="ml-2 font-medium text-foreground">
+                            {previewSemantics.yAxisTitle}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                     {previewMode === "plot" ? (
                       previewSeries.isPlotReady ? (
                         <TracePreviewPlot
                           x={previewSeries.x}
                           y={previewSeries.y}
-                          xLabel={xAxisUnit ? `${xAxisLabel} (${xAxisUnit})` : xAxisLabel}
-                          yLabel={yAxisLabel}
+                          xLabel={previewSemantics.xAxisTitle}
+                          yLabel={previewSemantics.yAxisTitle}
                           title={browser.traceDetail.trace_id}
                         />
                       ) : (
@@ -432,8 +501,8 @@ export function RawDataBrowserWorkspace() {
                         <table className="min-w-full divide-y divide-border text-sm">
                           <thead className="bg-card">
                             <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                              <th className="px-4 py-3">{xAxisLabel}</th>
-                              <th className="px-4 py-3">Value</th>
+                              <th className="px-4 py-3">{previewSemantics.tableXAxisLabel}</th>
+                              <th className="px-4 py-3">{previewSemantics.tableYAxisLabel}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border bg-surface">

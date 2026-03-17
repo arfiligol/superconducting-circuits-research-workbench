@@ -11,6 +11,7 @@ import {
   traceDetailKey,
   traceListKey,
 } from "../src/features/data-browser/lib/api";
+import { resolveTracePreviewSemantics } from "../src/features/data-browser/lib/trace-preview";
 import { resolveSelectedDesignId, resolveSelectedTraceId } from "../src/features/data-browser/lib/selection";
 
 const dashboardWorkspaceSource = readFileSync(
@@ -157,9 +158,20 @@ describe("page-boundary source contracts", () => {
   it("rebuilds single trace preview as plot and table views over one payload", () => {
     expect(rawDataWorkspaceSource).toContain("TracePreviewPlot");
     expect(rawDataWorkspaceSource).toContain("previewMode");
+    expect(rawDataWorkspaceSource).toContain('aria-label="Single trace preview view"');
     expect(rawDataWorkspaceSource).toContain('mode === "plot" ? "Plot" : "Table"');
     expect(rawDataWorkspaceSource).toContain("same preview payload");
     expect(rawDataWorkspaceSource).not.toContain("Result Handles");
+  });
+
+  it("makes axis semantics explicit instead of mixing point count with units", () => {
+    expect(rawDataWorkspaceSource).toContain("X Axis");
+    expect(rawDataWorkspaceSource).toContain("Preview Series");
+    expect(rawDataWorkspaceSource).toContain("Point Count");
+    expect(rawDataWorkspaceSource).toContain("previewSemantics.xAxisPointCountLabel");
+    expect(rawDataWorkspaceSource).toContain("previewSemantics.tableYAxisLabel");
+    expect(rawDataWorkspaceSource).not.toContain("{axis.length} {axis.unit}");
+    expect(rawDataWorkspaceSource).not.toContain(">Value<");
   });
 
   it("keeps dashboard and raw-data hooks bound to the shared active dataset", () => {
@@ -183,5 +195,70 @@ describe("legacy data-browser route", () => {
 
     expect(redirect).toHaveBeenCalledWith("/raw-data");
     vi.doUnmock("next/navigation");
+  });
+});
+
+describe("trace preview semantics helpers", () => {
+  it("separates axis unit metadata from point count and derives explicit plot labels", () => {
+    expect(
+      resolveTracePreviewSemantics({
+        axes: [
+          {
+            name: "frequency",
+            unit: "GHz",
+            length: 51,
+          },
+        ],
+        traceSummary: {
+          trace_id: "trace_flux_a_measurement",
+          dataset_id: "fluxonium-2025-031",
+          design_id: "design_flux_scan_a",
+          family: "y_matrix",
+          parameter: "Y11",
+          representation: "imaginary",
+          trace_mode_group: "base",
+          source_kind: "measurement",
+          stage_kind: "postprocess",
+          provenance_summary: "Measurement · Post-Processed · batch #4",
+        },
+      }),
+    ).toEqual({
+      xAxisName: "Frequency",
+      xAxisUnit: "GHz",
+      xAxisUnitLabel: "GHz",
+      xAxisTitle: "Frequency (GHz)",
+      xAxisPointCount: 51,
+      xAxisPointCountLabel: "51 points",
+      previewSeriesLabel: "Y11 · Imaginary",
+      previewSeriesDetail: "Y Matrix",
+      previewSeriesUnitLabel: "Unit unavailable",
+      yAxisTitle: "Y11 · Imaginary",
+      tableXAxisLabel: "Frequency (GHz)",
+      tableYAxisLabel: "Y11 · Imaginary",
+    });
+  });
+
+  it("keeps unit text honest when preview metadata does not provide one", () => {
+    expect(
+      resolveTracePreviewSemantics({
+        axes: [
+          {
+            name: "flux_bias",
+            unit: "",
+            length: 4001,
+          },
+        ],
+        traceSummary: null,
+        fallbackSeriesLabel: "trace_flux_a_measurement",
+      }),
+    ).toMatchObject({
+      xAxisName: "Flux Bias",
+      xAxisUnit: null,
+      xAxisUnitLabel: "Unit unavailable",
+      xAxisTitle: "Flux Bias",
+      xAxisPointCountLabel: "4001 points",
+      previewSeriesLabel: "Trace Flux A Measurement",
+      previewSeriesUnitLabel: "Unit unavailable",
+    });
   });
 });
