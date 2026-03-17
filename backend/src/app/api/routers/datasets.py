@@ -12,9 +12,13 @@ from src.app.domain.datasets import (
     CharacterizationResultBrowseQuery,
     CharacterizationRunHistoryQuery,
     CharacterizationTaggingRequest,
+    DatasetCreateDraft,
     DatasetDetail,
     DatasetProfileUpdate,
     DesignBrowseQuery,
+    RawDataIngestionDraft,
+    RawDataTraceDraft,
+    TraceAxis,
     TraceBrowseQuery,
 )
 from src.app.infrastructure.request_debug import current_debug_ref
@@ -46,6 +50,31 @@ def list_dataset_catalog(
     return _success_response(data={"rows": page_rows}, meta=meta)
 
 
+@router.post("")
+def create_dataset(
+    payload: Annotated[object, Body(...)],
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        draft = _parse_dataset_create_payload(payload)
+        result = dataset_service.create_dataset(draft)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "created",
+            "dataset": _serialize_dataset_profile(result.dataset),
+            "catalog_row": _serialize_catalog_row(result.catalog_row),
+            "catalog_rows": [
+                _serialize_catalog_row(row)
+                for row in dataset_service.list_dataset_catalog()
+            ],
+        },
+        status_code=201,
+        meta={"generated_at": _generated_at()},
+    )
+
+
 @router.get("/{dataset_id}/profile")
 def get_dataset_profile(
     dataset_id: str,
@@ -74,6 +103,74 @@ def update_dataset_profile(
             "dataset": _serialize_dataset_profile(result.dataset),
             "updated_fields": list(result.updated_fields),
         }
+    )
+
+
+@router.post("/{dataset_id}/archive")
+def archive_dataset(
+    dataset_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        result = dataset_service.archive_dataset(dataset_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "archived",
+            "dataset": _serialize_dataset_profile(result.dataset),
+            "catalog_row": _serialize_catalog_row(result.catalog_row),
+            "catalog_rows": [
+                _serialize_catalog_row(row)
+                for row in dataset_service.list_dataset_catalog()
+            ],
+        },
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.delete("/{dataset_id}")
+def delete_dataset(
+    dataset_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        result = dataset_service.delete_dataset(dataset_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "deleted",
+            "dataset": _serialize_dataset_profile(result.dataset),
+            "catalog_row": _serialize_catalog_row(result.catalog_row),
+            "catalog_rows": [
+                _serialize_catalog_row(row)
+                for row in dataset_service.list_dataset_catalog()
+            ],
+        },
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/{dataset_id}/ingestions")
+def ingest_raw_data(
+    dataset_id: str,
+    payload: Annotated[object, Body(...)],
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        draft = _parse_raw_data_ingestion_payload(payload)
+        result = dataset_service.ingest_raw_data(dataset_id, draft)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "materialized",
+            "dataset": _serialize_dataset_profile(result.dataset),
+            "design": asdict(result.design),
+            "traces": [asdict(trace) for trace in result.traces],
+        },
+        meta={"generated_at": _generated_at()},
     )
 
 
@@ -402,6 +499,20 @@ def _serialize_dataset_profile(detail: DatasetDetail) -> dict[str, object]:
     }
 
 
+def _serialize_catalog_row(row: object) -> dict[str, object]:
+    return asdict(row)
+
+
+def _parse_dataset_create_payload(payload: object) -> DatasetCreateDraft:
+    body = _as_mapping(payload)
+    return DatasetCreateDraft(
+        name=_require_text(body.get("name"), field="name"),
+        family=_require_text(body.get("family"), field="family"),
+        device_type=_require_text(body.get("device_type"), field="device_type"),
+        source=_require_text(body.get("source"), field="source"),
+    )
+
+
 def _parse_dataset_profile_payload(payload: object) -> DatasetProfileUpdate:
     body = _as_mapping(payload)
     device_type = _require_text(body.get("device_type"), field="device_type")
@@ -446,6 +557,90 @@ def _parse_characterization_tagging_payload(payload: object) -> Characterization
     )
 
 
+def _parse_raw_data_ingestion_payload(payload: object) -> RawDataIngestionDraft:
+    body = _as_mapping(payload)
+    kind = _require_text(body.get("kind"), field="kind")
+    if kind not in {"measurement", "layout_simulation"}:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="kind must be measurement or layout_simulation.",
+        )
+    raw_traces = body.get("traces")
+    if not isinstance(raw_traces, list) or len(raw_traces) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="traces must be a non-empty array.",
+        )
+    return RawDataIngestionDraft(
+        kind=kind,
+        design_name=_require_text(body.get("design_name"), field="design_name"),
+        design_id=_optional_text(body.get("design_id"), field="design_id"),
+        provenance_label=_require_text(body.get("provenance_label"), field="provenance_label"),
+        traces=tuple(_parse_raw_trace_payload(item) for item in raw_traces),
+    )
+
+
+def _parse_raw_trace_payload(payload: object) -> RawDataTraceDraft:
+    body = _as_mapping(payload)
+    raw_axes = body.get("axes")
+    if not isinstance(raw_axes, list) or len(raw_axes) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="traces[].axes must be a non-empty array.",
+        )
+    preview_payload = body.get("preview_payload")
+    if not isinstance(preview_payload, dict):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="traces[].preview_payload must be an object.",
+        )
+    return RawDataTraceDraft(
+        trace_id=_optional_text(body.get("trace_id"), field="traces[].trace_id"),
+        family=_require_family(body.get("family"), field="traces[].family"),
+        parameter=_require_text(body.get("parameter"), field="traces[].parameter"),
+        representation=_require_text(
+            body.get("representation"),
+            field="traces[].representation",
+        ),
+        trace_mode_group=_require_trace_mode_group(
+            body.get("trace_mode_group"),
+            field="traces[].trace_mode_group",
+        ),
+        stage_kind=_require_trace_stage_kind(body.get("stage_kind"), field="traces[].stage_kind"),
+        provenance_summary=_require_text(
+            body.get("provenance_summary"),
+            field="traces[].provenance_summary",
+        ),
+        axes=tuple(_parse_trace_axis(axis) for axis in raw_axes),
+        preview_payload=preview_payload,
+    )
+
+
+def _parse_trace_axis(payload: object) -> TraceAxis:
+    body = _as_mapping(payload)
+    length = body.get("length")
+    if not isinstance(length, int) or length <= 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="axes[].length must be a positive integer.",
+        )
+    return TraceAxis(
+        name=_require_text(body.get("name"), field="axes[].name"),
+        unit=_require_text(body.get("unit"), field="axes[].unit"),
+        length=length,
+    )
+
+
 def _normalize_trace_ids(values: list[str] | None) -> tuple[str, ...]:
     if values is None:
         return ()
@@ -472,6 +667,12 @@ def _require_text(value: object, *, field: str) -> str:
             message=f"{field} must be a non-empty string.",
         )
     return value.strip()
+
+
+def _optional_text(value: object, *, field: str) -> str | None:
+    if value is None:
+        return None
+    return _require_text(value, field=field)
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -522,6 +723,38 @@ def _normalize_trace_mode_group(value: str | None) -> str | None:
             category="validation_error",
             message="trace_mode_group must be one of base, sideband, or all.",
         )
+    return normalized
+
+
+def _normalize_trace_stage_kind(value: str | None) -> str | None:
+    normalized = _normalize_optional_text(value)
+    if normalized is None:
+        return None
+    if normalized not in {"raw", "preprocess", "postprocess"}:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="stage_kind must be one of raw, preprocess, or postprocess.",
+        )
+    return normalized
+
+
+def _require_family(value: object, *, field: str) -> str:
+    normalized = _normalize_family(_require_text(value, field=field))
+    assert normalized is not None
+    return normalized
+
+
+def _require_trace_mode_group(value: object, *, field: str) -> str:
+    normalized = _normalize_trace_mode_group(_require_text(value, field=field))
+    assert normalized is not None
+    return normalized
+
+
+def _require_trace_stage_kind(value: object, *, field: str) -> str:
+    normalized = _normalize_trace_stage_kind(_require_text(value, field=field))
+    assert normalized is not None
     return normalized
 
 

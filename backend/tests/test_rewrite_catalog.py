@@ -122,6 +122,133 @@ def test_dataset_service_reads_and_updates_dashboard_profile_surface(
     assert result.dataset.allowed_actions.update_profile is True
 
 
+def test_dataset_routes_create_archive_and_delete_lifecycle_contract() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Fluxonium Intake 2026",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+
+    assert created.status_code == 201
+    payload = created.json()["data"]
+    dataset = payload["dataset"]
+    dataset_id = dataset["dataset_id"]
+    assert payload["operation"] == "created"
+    assert dataset["lifecycle_state"] == "active"
+    assert dataset["visibility_scope"] == "private"
+    assert dataset["allowed_actions"]["delete"] is True
+    assert any(row["dataset_id"] == dataset_id for row in payload["catalog_rows"])
+
+    archived = client.post(f"/datasets/{dataset_id}/archive")
+    assert archived.status_code == 200
+    assert archived.json()["data"]["dataset"]["lifecycle_state"] == "archived"
+
+    deleted = client.delete(f"/datasets/{dataset_id}")
+    assert deleted.status_code == 200
+    assert deleted.json()["data"]["dataset"]["lifecycle_state"] == "deleted"
+    assert all(
+        row["dataset_id"] != dataset_id for row in deleted.json()["data"]["catalog_rows"]
+    )
+
+
+def test_dataset_ingestion_materializes_design_and_trace_browse_surfaces() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Fluxonium Ingestion Demo",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    ).json()["data"]["dataset"]
+    dataset_id = created["dataset_id"]
+
+    measurement_ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": "Flux Scan B",
+            "provenance_label": "Lab capture #12",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "s11",
+                    "representation": "complex",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Measurement batch #12",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 401}],
+                    "preview_payload": {"kind": "sampled_series", "points": 401},
+                }
+            ],
+        },
+    )
+    assert measurement_ingestion.status_code == 200
+    design_id = measurement_ingestion.json()["data"]["design"]["design_id"]
+
+    layout_ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "layout_simulation",
+            "design_name": "Flux Scan B",
+            "design_id": design_id,
+            "provenance_label": "EM sweep #5",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "s11_layout",
+                    "representation": "complex",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Layout simulation batch #5",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 401}],
+                    "preview_payload": {"kind": "sampled_series", "points": 401},
+                }
+            ],
+        },
+    )
+    assert layout_ingestion.status_code == 200
+    assert layout_ingestion.json()["data"]["design"]["compare_readiness"] == "ready"
+
+    catalog_rows = client.get("/datasets").json()["data"]["rows"]
+    assert any(row["dataset_id"] == dataset_id for row in catalog_rows)
+
+    designs = client.get(f"/datasets/{dataset_id}/designs").json()["data"]["rows"]
+    assert designs == [
+        {
+            "design_id": design_id,
+            "dataset_id": dataset_id,
+            "name": "Flux Scan B",
+            "source_coverage": {
+                "measurement": 1,
+                "layout_simulation": 1,
+                "circuit_simulation": 0,
+            },
+            "compare_readiness": "ready",
+            "trace_count": 2,
+            "updated_at": "2026-03-17T10:20:00Z",
+        }
+    ]
+
+    traces = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()["data"]["rows"]
+    assert [trace["source_kind"] for trace in traces] == [
+        "layout_simulation",
+        "measurement",
+    ]
+
+    trace_detail = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/traces/{traces[0]['trace_id']}"
+    ).json()["data"]
+    assert trace_detail["payload_ref"]["store_key"].startswith(
+        f"trace_store/datasets/{dataset_id}/designs/{design_id}/"
+    )
+    assert trace_detail["preview_payload"]["kind"] == "sampled_series"
+
+
 def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contract(
     dataset_service: DatasetService,
 ) -> None:

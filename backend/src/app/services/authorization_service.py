@@ -227,6 +227,8 @@ class AuthorizationService:
                 update_profile=can_manage,
                 publish=False,
                 archive=can_manage,
+                delete=can_manage,
+                ingest_raw_data=can_manage,
             )
 
         resource = AuthorizationResourceEnvelope(
@@ -242,6 +244,8 @@ class AuthorizationService:
             update_profile=can_manage,
             publish=can_manage and dataset.visibility_scope != "workspace",
             archive=can_manage,
+            delete=can_manage,
+            ingest_raw_data=can_manage,
         )
 
     def build_definition_allowed_actions(

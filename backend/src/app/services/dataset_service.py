@@ -16,12 +16,16 @@ from src.app.domain.datasets import (
     CharacterizationTaggingResult,
     DatasetAllowedActions,
     DatasetCatalogRow,
+    DatasetCreateDraft,
     DatasetDetail,
+    DatasetLifecycleMutationResult,
     DatasetProfileField,
     DatasetProfileUpdate,
     DatasetProfileUpdateResult,
     DesignBrowseQuery,
     DesignBrowseRow,
+    RawDataIngestionDraft,
+    RawDataIngestionResult,
     TaggedCoreMetricSummary,
     TraceBrowseQuery,
     TraceDetail,
@@ -41,11 +45,33 @@ class DatasetRepository(Protocol):
 
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None: ...
 
+    def create_dataset(
+        self,
+        *,
+        workspace_id: str,
+        visibility_scope: str,
+        owner_user_id: str,
+        owner_display_name: str,
+        draft: DatasetCreateDraft,
+    ) -> DatasetDetail: ...
+
     def update_dataset_profile(
         self,
         dataset_id: str,
         update: DatasetProfileUpdate,
     ) -> DatasetDetail | None: ...
+
+    def set_dataset_lifecycle_state(
+        self,
+        dataset_id: str,
+        lifecycle_state: str,
+    ) -> DatasetDetail | None: ...
+
+    def ingest_raw_data(
+        self,
+        dataset_id: str,
+        draft: RawDataIngestionDraft,
+    ) -> RawDataIngestionResult | None: ...
 
     def list_tagged_core_metrics(
         self,
@@ -144,6 +170,42 @@ class DatasetService:
             for dataset in self._visible_datasets(state)
         ]
 
+    def create_dataset(self, draft: DatasetCreateDraft) -> DatasetLifecycleMutationResult:
+        state = self._session_repository.get_session_state()
+        if not self._can_manage_datasets(state):
+            raise service_error(
+                403,
+                code="dataset_create_denied",
+                category="permission_denied",
+                message="The active session cannot create datasets in the current context.",
+            )
+        visibility_scope = "local" if state.runtime_mode == "local" else "private"
+        owner_user_id = state.user.user_id if state.user is not None else "local-operator"
+        owner_display_name = (
+            state.user.display_name if state.user is not None else "Local Operator"
+        )
+        created = self._repository.create_dataset(
+            workspace_id=state.workspace_id,
+            visibility_scope=visibility_scope,
+            owner_user_id=owner_user_id,
+            owner_display_name=owner_display_name,
+            draft=draft,
+        )
+        dataset = self._with_allowed_actions(created, state)
+        self._append_audit_record(
+            state=state,
+            action_kind="dataset.created",
+            dataset=dataset,
+            payload={
+                "dataset_id": dataset.dataset_id,
+                "visibility_scope": dataset.visibility_scope,
+            },
+        )
+        return DatasetLifecycleMutationResult(
+            dataset=dataset,
+            catalog_row=self._catalog_row(dataset, state),
+        )
+
     def get_dataset_profile(self, dataset_id: str) -> DatasetDetail:
         return self._require_visible_dataset(dataset_id)
 
@@ -200,6 +262,108 @@ class DatasetService:
         return DatasetProfileUpdateResult(
             dataset=updated,
             updated_fields=updated_fields,
+        )
+
+    def archive_dataset(self, dataset_id: str) -> DatasetLifecycleMutationResult:
+        dataset = self._require_visible_dataset(dataset_id)
+        state = self._session_repository.get_session_state()
+        allowed_actions = self._allowed_actions(dataset, state)
+        if not allowed_actions.archive:
+            raise service_error(
+                403,
+                code="dataset_archive_denied",
+                category="permission_denied",
+                message="The active session cannot archive this dataset.",
+            )
+        updated = self._repository.set_dataset_lifecycle_state(dataset_id, "archived")
+        if updated is None:
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {dataset_id} was not found.",
+            )
+        dataset = self._with_allowed_actions(updated, state)
+        self._append_audit_record(
+            state=state,
+            action_kind="dataset.archived",
+            dataset=dataset,
+            payload={"dataset_id": dataset_id},
+        )
+        return DatasetLifecycleMutationResult(
+            dataset=dataset,
+            catalog_row=self._catalog_row(dataset, state),
+        )
+
+    def delete_dataset(self, dataset_id: str) -> DatasetLifecycleMutationResult:
+        dataset = self._require_manageable_dataset(dataset_id)
+        state = self._session_repository.get_session_state()
+        if not self._can_manage_datasets(state):
+            raise service_error(
+                403,
+                code="dataset_delete_denied",
+                category="permission_denied",
+                message="The active session cannot delete this dataset.",
+            )
+        updated = self._repository.set_dataset_lifecycle_state(dataset_id, "deleted")
+        if updated is None:
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {dataset_id} was not found.",
+            )
+        dataset = self._with_allowed_actions(updated, state)
+        self._append_audit_record(
+            state=state,
+            action_kind="dataset.deleted",
+            dataset=dataset,
+            payload={"dataset_id": dataset_id},
+        )
+        return DatasetLifecycleMutationResult(
+            dataset=dataset,
+            catalog_row=self._catalog_row(dataset, state),
+        )
+
+    def ingest_raw_data(
+        self,
+        dataset_id: str,
+        draft: RawDataIngestionDraft,
+    ) -> RawDataIngestionResult:
+        dataset = self._require_visible_dataset(dataset_id)
+        state = self._session_repository.get_session_state()
+        allowed_actions = self._allowed_actions(dataset, state)
+        if not allowed_actions.ingest_raw_data:
+            raise service_error(
+                403,
+                code="dataset_ingestion_denied",
+                category="permission_denied",
+                message="The active session cannot ingest raw data into this dataset.",
+            )
+        result = self._repository.ingest_raw_data(dataset_id, draft)
+        if result is None:
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {dataset_id} was not found.",
+            )
+        materialized_dataset = self._with_allowed_actions(result.dataset, state)
+        self._append_audit_record(
+            state=state,
+            action_kind="dataset.raw_data_ingested",
+            dataset=materialized_dataset,
+            payload={
+                "dataset_id": dataset_id,
+                "ingestion_kind": draft.kind,
+                "design_id": result.design.design_id,
+                "trace_ids": [trace.trace_id for trace in result.traces],
+            },
+        )
+        return RawDataIngestionResult(
+            dataset=materialized_dataset,
+            design=result.design,
+            traces=result.traces,
         )
 
     def list_tagged_core_metrics(self, dataset_id: str) -> list[TaggedCoreMetricSummary]:
@@ -473,10 +637,35 @@ class DatasetService:
             }
         )
 
+    def _require_manageable_dataset(self, dataset_id: str) -> DatasetDetail:
+        state = self._session_repository.get_session_state()
+        dataset = self._repository.get_dataset(dataset_id)
+        if dataset is None or dataset.lifecycle_state == "deleted":
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {dataset_id} was not found.",
+            )
+        if not self._is_dataset_manageable_in_context(dataset, state):
+            raise service_error(
+                403,
+                code="dataset_not_visible_in_workspace",
+                category="permission_denied",
+                message="The selected dataset is not visible in the active workspace.",
+            )
+        return DatasetDetail(
+            **{
+                **dataset.__dict__,
+                "allowed_actions": self._allowed_actions(dataset, state),
+            }
+        )
+
     def _visible_datasets(self, state: SessionState) -> list[DatasetDetail]:
         rows = [
             dataset
             for dataset in self._repository.list_dataset_details()
+            if dataset.lifecycle_state != "deleted"
             if self._authorization_service.is_visible_dataset(dataset, state)
         ]
         return sorted(rows, key=lambda dataset: dataset.updated_at, reverse=True)
@@ -487,6 +676,24 @@ class DatasetService:
         state: SessionState,
     ) -> DatasetAllowedActions:
         return self._authorization_service.build_dataset_allowed_actions(dataset, state)
+
+    def _is_dataset_manageable_in_context(
+        self,
+        dataset: DatasetDetail,
+        state: SessionState,
+    ) -> bool:
+        if state.runtime_mode == "local":
+            return (
+                dataset.workspace_id == state.workspace_id
+                and dataset.visibility_scope == "local"
+            )
+        if dataset.workspace_id != state.workspace_id:
+            return False
+        if dataset.visibility_scope == "workspace":
+            return True
+        if state.user is not None and state.user.platform_role == "admin":
+            return True
+        return dataset.owner_user_id == state.user.user_id if state.user is not None else False
 
     def _updated_fields(
         self,
@@ -501,3 +708,55 @@ class DatasetService:
         if current.source != updated.source:
             changed_fields.append("source")
         return tuple(changed_fields)
+
+    def _with_allowed_actions(self, dataset: DatasetDetail, state: SessionState) -> DatasetDetail:
+        return DatasetDetail(
+            **{
+                **dataset.__dict__,
+                "allowed_actions": self._allowed_actions(dataset, state),
+            }
+        )
+
+    def _catalog_row(
+        self,
+        dataset: DatasetDetail,
+        state: SessionState,
+    ) -> DatasetCatalogRow:
+        return DatasetCatalogRow(
+            dataset_id=dataset.dataset_id,
+            name=dataset.name,
+            visibility_scope=dataset.visibility_scope,
+            lifecycle_state=dataset.lifecycle_state,
+            device_type=dataset.device_type,
+            updated_at=dataset.updated_at,
+            allowed_actions=self._allowed_actions(dataset, state),
+            family=dataset.family,
+            owner_display_name=dataset.owner,
+        )
+
+    def _can_manage_datasets(self, state: SessionState) -> bool:
+        if state.runtime_mode == "local":
+            return True
+        return self._authorization_service.build_session_capabilities(state).can_manage_datasets
+
+    def _append_audit_record(
+        self,
+        *,
+        state: SessionState,
+        action_kind: str,
+        dataset: DatasetDetail,
+        payload: dict[str, object],
+    ) -> None:
+        if self._audit_repository is None:
+            return
+        self._audit_repository.append(
+            build_audit_record(
+                state=state,
+                action_kind=action_kind,
+                resource_kind="dataset",
+                resource_id=dataset.dataset_id,
+                outcome="completed",
+                payload=payload,
+                workspace_id=dataset.workspace_id,
+            )
+        )

@@ -1,36 +1,24 @@
+import sys
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
-import sys
-
-_WORKSPACE_SRC = Path(__file__).resolve().parents[4] / "src"
-if str(_WORKSPACE_SRC) not in sys.path:
-    sys.path.insert(0, str(_WORKSPACE_SRC))
-
-from core.simulation.domain.circuit import (
-    CircuitDefinition,
-    expand_circuit_definition,
-    format_circuit_definition,
-    format_expanded_circuit_definition,
-    parse_circuit_definition_source,
-)
-from core.simulation.domain.validators import CircuitValidationError
+from typing import Any
 
 from src.app.domain.circuit_definitions import (
     CircuitDefinitionCloneDraft,
     CircuitDefinitionDraft,
     CircuitDefinitionRecord,
     CircuitDefinitionUpdate,
-    ValidationSummary,
     ValidationNotice,
+    ValidationSummary,
 )
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     CharacterizationAnalysisTraceCompatibility,
-    CharacterizationArtifactRef,
-    CharacterizationDiagnostic,
     CharacterizationAppliedTag,
+    CharacterizationArtifactRef,
     CharacterizationDesignatedMetricOption,
+    CharacterizationDiagnostic,
     CharacterizationIdentifySurface,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
@@ -39,9 +27,12 @@ from src.app.domain.datasets import (
     CharacterizationTaggingRequest,
     CharacterizationTaggingResult,
     DatasetAllowedActions,
+    DatasetCreateDraft,
     DatasetDetail,
     DatasetProfileUpdate,
     DesignBrowseRow,
+    RawDataIngestionDraft,
+    RawDataIngestionResult,
     TaggedCoreMetricSummary,
     TraceAxis,
     TraceDetail,
@@ -69,6 +60,7 @@ class InMemoryRewriteCatalogRepository:
         self._circuit_definitions = {
             definition.definition_id: definition for definition in _seed_circuit_definitions()
         }
+        self._next_dataset_id = 100
         self._next_definition_id = max(self._circuit_definitions) + 1
 
     def list_dataset_details(self) -> list[DatasetDetail]:
@@ -76,6 +68,49 @@ class InMemoryRewriteCatalogRepository:
 
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None:
         return self._datasets.get(dataset_id)
+
+    def create_dataset(
+        self,
+        *,
+        workspace_id: str,
+        visibility_scope: str,
+        owner_user_id: str,
+        owner_display_name: str,
+        draft: DatasetCreateDraft,
+    ) -> DatasetDetail:
+        dataset_id = _build_dataset_id(
+            workspace_id=workspace_id,
+            name=draft.name,
+            counter=self._next_dataset_id,
+        )
+        created = DatasetDetail(
+            dataset_id=dataset_id,
+            name=draft.name,
+            family=draft.family,
+            owner=owner_display_name,
+            owner_user_id=owner_user_id,
+            workspace_id=workspace_id,
+            visibility_scope=visibility_scope,
+            lifecycle_state="active",
+            updated_at="2026-03-17T10:15:00Z",
+            device_type=draft.device_type,
+            capabilities=(),
+            source=draft.source,
+            status="Ready",
+            allowed_actions=DatasetAllowedActions(
+                select=True,
+                update_profile=True,
+                publish=visibility_scope != "workspace" and workspace_id != "local-space",
+                archive=True,
+                delete=True,
+                ingest_raw_data=True,
+            ),
+        )
+        self._datasets[dataset_id] = created
+        self._tagged_core_metrics[dataset_id] = ()
+        self._designs[dataset_id] = ()
+        self._next_dataset_id += 1
+        return created
 
     def set_dataset_lifecycle_state(
         self,
@@ -85,9 +120,93 @@ class InMemoryRewriteCatalogRepository:
         dataset = self._datasets.get(dataset_id)
         if dataset is None:
             return None
-        updated_dataset = replace(dataset, lifecycle_state=lifecycle_state)
+        updated_dataset = replace(
+            dataset,
+            lifecycle_state=lifecycle_state,
+            updated_at="2026-03-17T10:18:00Z",
+        )
         self._datasets[dataset_id] = updated_dataset
         return updated_dataset
+
+    def ingest_raw_data(
+        self,
+        dataset_id: str,
+        draft: RawDataIngestionDraft,
+    ) -> RawDataIngestionResult | None:
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None:
+            return None
+        design_id = draft.design_id or _build_design_id(draft.design_name)
+        trace_rows: list[TraceMetadataSummary] = list(
+            self._trace_summaries.get((dataset_id, design_id), ())
+        )
+        ingested_trace_rows: list[TraceMetadataSummary] = []
+        for index, trace in enumerate(draft.traces, start=1):
+            trace_id = trace.trace_id or _build_trace_id(
+                kind=draft.kind,
+                parameter=trace.parameter,
+                index=index,
+            )
+            summary = TraceMetadataSummary(
+                trace_id=trace_id,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                family=trace.family,
+                parameter=trace.parameter,
+                representation=trace.representation,
+                trace_mode_group=trace.trace_mode_group,
+                source_kind=draft.kind,
+                stage_kind=trace.stage_kind,
+                provenance_summary=trace.provenance_summary,
+            )
+            detail = TraceDetail(
+                trace_id=trace_id,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                axes=trace.axes,
+                preview_payload=trace.preview_payload,
+                payload_ref=build_trace_payload_ref(
+                    payload_role="dataset_primary",
+                    store_key=f"trace_store/datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr",
+                    store_uri=f"trace_store/datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr",
+                    group_path=f"/datasets/{dataset_id}/designs/{design_id}",
+                    array_path=trace_id,
+                    dtype="complex64",
+                    shape=tuple(axis.length for axis in trace.axes),
+                    chunk_shape=tuple(axis.length for axis in trace.axes),
+                ),
+                result_handles=(),
+            )
+            self._trace_details[(dataset_id, design_id, trace_id)] = detail
+            trace_rows = [row for row in trace_rows if row.trace_id != trace_id]
+            trace_rows.append(summary)
+            ingested_trace_rows.append(summary)
+        self._trace_summaries[(dataset_id, design_id)] = tuple(
+            sorted(trace_rows, key=lambda row: row.trace_id)
+        )
+
+        design_rows = list(self._designs.get(dataset_id, ()))
+        source_coverage = _build_source_coverage(self._trace_summaries[(dataset_id, design_id)])
+        design_row = DesignBrowseRow(
+            design_id=design_id,
+            dataset_id=dataset_id,
+            name=draft.design_name,
+            source_coverage=source_coverage,
+            compare_readiness=_compare_readiness_for(source_coverage),
+            trace_count=len(self._trace_summaries[(dataset_id, design_id)]),
+            updated_at="2026-03-17T10:20:00Z",
+        )
+        design_rows = [row for row in design_rows if row.design_id != design_id]
+        design_rows.append(design_row)
+        self._designs[dataset_id] = tuple(sorted(design_rows, key=lambda row: row.design_id))
+
+        updated_dataset = replace(dataset, updated_at="2026-03-17T10:20:00Z")
+        self._datasets[dataset_id] = updated_dataset
+        return RawDataIngestionResult(
+            dataset=updated_dataset,
+            design=design_row,
+            traces=tuple(ingested_trace_rows),
+        )
 
     def update_dataset_profile(
         self,
@@ -200,14 +319,15 @@ class InMemoryRewriteCatalogRepository:
             else option
             for option in detail.identify_surface.source_parameters
         )
-        updated_applied_tags = tuple(
-            tag
-            for tag in detail.identify_surface.applied_tags
-            if not (
-                tag.artifact_id == request.artifact_id
-                and tag.source_parameter == request.source_parameter
-            )
-        ) + (
+        updated_applied_tags = (
+            *(
+                tag
+                for tag in detail.identify_surface.applied_tags
+                if not (
+                    tag.artifact_id == request.artifact_id
+                    and tag.source_parameter == request.source_parameter
+                )
+            ),
             CharacterizationAppliedTag(
                 artifact_id=request.artifact_id,
                 source_parameter=request.source_parameter,
@@ -385,6 +505,56 @@ def _build_circuit_definition_record(
     )
 
 
+def _build_dataset_id(*, workspace_id: str, name: str, counter: int) -> str:
+    slug = _slugify(name)
+    if workspace_id == "local-space":
+        return f"local-{slug}-{counter}"
+    return f"{slug}-{counter}"
+
+
+def _build_design_id(name: str) -> str:
+    return f"design_{_slugify(name)}"
+
+
+def _build_trace_id(*, kind: str, parameter: str, index: int) -> str:
+    return f"trace_{_slugify(kind)}_{_slugify(parameter)}_{index}"
+
+
+def _build_source_coverage(
+    traces: tuple[TraceMetadataSummary, ...],
+) -> dict[str, int]:
+    coverage = {
+        "measurement": 0,
+        "layout_simulation": 0,
+        "circuit_simulation": 0,
+    }
+    for trace in traces:
+        coverage[trace.source_kind] = coverage.get(trace.source_kind, 0) + 1
+    return coverage
+
+
+def _compare_readiness_for(source_coverage: dict[str, int]) -> str:
+    if (
+        source_coverage.get("measurement", 0) > 0
+        and source_coverage.get("layout_simulation", 0) > 0
+    ):
+        return "ready"
+    if sum(source_coverage.values()) > 0:
+        return "inspect_only"
+    return "blocked"
+
+
+def _slugify(value: str) -> str:
+    return "-".join(
+        token
+        for token in "".join(
+            character.lower() if character.isalnum() else "-"
+            for character in value.strip()
+        ).split("-")
+        if token
+    )
+
+
 class _CircuitInspectionResult:
     def __init__(
         self,
@@ -398,11 +568,40 @@ class _CircuitInspectionResult:
         self.validation_summary = validation_summary
 
 
+def _load_circuit_domain() -> tuple[Any, Any, Any, Any, type[Exception]]:
+    workspace_src = Path(__file__).resolve().parents[4] / "src"
+    if str(workspace_src) not in sys.path:
+        sys.path.insert(0, str(workspace_src))
+
+    from core.simulation.domain.circuit import (
+        expand_circuit_definition,
+        format_circuit_definition,
+        format_expanded_circuit_definition,
+        parse_circuit_definition_source,
+    )
+    from core.simulation.domain.validators import CircuitValidationError
+
+    return (
+        parse_circuit_definition_source,
+        expand_circuit_definition,
+        format_circuit_definition,
+        format_expanded_circuit_definition,
+        CircuitValidationError,
+    )
+
+
 def _inspect_circuit_definition(source_text: str) -> _CircuitInspectionResult:
+    (
+        parse_circuit_definition_source,
+        expand_circuit_definition,
+        format_circuit_definition,
+        format_expanded_circuit_definition,
+        validation_error_type,
+    ) = _load_circuit_domain()
     try:
         parsed = parse_circuit_definition_source(source_text)
         expanded = expand_circuit_definition(parsed)
-    except CircuitValidationError as exc:
+    except validation_error_type as exc:
         raise ValueError(str(exc)) from exc
     except (TypeError, ValueError) as exc:
         raise ValueError(str(exc)) from exc
@@ -434,7 +633,11 @@ def _inspect_circuit_definition(source_text: str) -> _CircuitInspectionResult:
         ),
     )
     return _CircuitInspectionResult(
-        normalized_output=_normalized_output(parsed),
+        normalized_output=_normalized_output(
+            parsed,
+            format_circuit_definition=format_circuit_definition,
+            format_expanded_circuit_definition=format_expanded_circuit_definition,
+        ),
         validation_notices=notices,
         validation_summary=ValidationSummary(
             status="valid",
@@ -445,7 +648,12 @@ def _inspect_circuit_definition(source_text: str) -> _CircuitInspectionResult:
     )
 
 
-def _normalized_output(parsed: CircuitDefinition) -> str:
+def _normalized_output(
+    parsed: Any,
+    *,
+    format_circuit_definition: Any,
+    format_expanded_circuit_definition: Any,
+) -> str:
     return (
         "{\n"
         f'  "source": {format_circuit_definition(parsed)!r},\n'
@@ -1056,7 +1264,10 @@ def _seed_characterization_analysis_registry() -> dict[
                     matched_trace_count=1,
                     selected_trace_count=0,
                     recommended_trace_modes=("sideband",),
-                    summary="One compatible sideband trace is visible, but comparison coverage remains thin.",
+                    summary=(
+                        "One compatible sideband trace is visible, but "
+                        "comparison coverage remains thin."
+                    ),
                 ),
             ),
             CharacterizationAnalysisRegistryRow(
@@ -1068,7 +1279,10 @@ def _seed_characterization_analysis_registry() -> dict[
                     matched_trace_count=0,
                     selected_trace_count=0,
                     recommended_trace_modes=("base", "sideband"),
-                    summary="No compatible trace bundle currently satisfies the identification prerequisites.",
+                    summary=(
+                        "No compatible trace bundle currently satisfies the "
+                        "identification prerequisites."
+                    ),
                 ),
             ),
         ),
@@ -1114,7 +1328,10 @@ def _seed_characterization_analysis_registry() -> dict[
                     matched_trace_count=1,
                     selected_trace_count=0,
                     recommended_trace_modes=("base",),
-                    summary="The temperature sweep exposes one high-quality base trace for resonator fitting.",
+                    summary=(
+                        "The temperature sweep exposes one high-quality base "
+                        "trace for resonator fitting."
+                    ),
                 ),
             ),
         ),
@@ -1508,13 +1725,19 @@ def _seed_characterization_result_details() -> dict[
             updated_at="2026-03-14T09:54:00Z",
             input_trace_ids=("trace_flux_b_measurement",),
             payload={
-                "blocking_reason": "At least one comparison trace is required before screening can produce persisted artifacts.",
+                "blocking_reason": (
+                    "At least one comparison trace is required before "
+                    "screening can produce persisted artifacts."
+                ),
             },
             diagnostics=(
                 CharacterizationDiagnostic(
                     severity="warning",
                     code="trace_selection_incomplete",
-                    message="The selected design scope does not yet expose a compatible comparison pair.",
+                    message=(
+                        "The selected design scope does not yet expose a "
+                        "compatible comparison pair."
+                    ),
                     blocking=True,
                 ),
             ),

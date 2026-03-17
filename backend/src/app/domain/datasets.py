@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
 
@@ -15,6 +17,7 @@ TraceStageKind = Literal["raw", "preprocess", "postprocess"]
 CharacterizationResultStatus = Literal["completed", "failed", "blocked"]
 CharacterizationTaggingStatus = Literal["applied", "already_applied"]
 CharacterizationAvailabilityState = Literal["recommended", "available", "unavailable"]
+RawDataIngestionKind = Literal["measurement", "layout_simulation"]
 
 
 @dataclass(frozen=True)
@@ -23,6 +26,8 @@ class DatasetAllowedActions:
     update_profile: bool
     publish: bool
     archive: bool
+    delete: bool = False
+    ingest_raw_data: bool = False
 
 
 @dataclass(frozen=True)
@@ -67,6 +72,49 @@ class DatasetProfileUpdate:
 class DatasetProfileUpdateResult:
     dataset: DatasetDetail
     updated_fields: tuple[DatasetProfileField, ...]
+
+
+@dataclass(frozen=True)
+class DatasetCreateDraft:
+    name: str
+    family: str
+    device_type: str
+    source: str
+
+
+@dataclass(frozen=True)
+class DatasetLifecycleMutationResult:
+    dataset: DatasetDetail
+    catalog_row: DatasetCatalogRow
+
+
+@dataclass(frozen=True)
+class RawDataTraceDraft:
+    trace_id: str | None
+    family: TraceFamily
+    parameter: str
+    representation: str
+    trace_mode_group: TraceModeGroup
+    stage_kind: TraceStageKind
+    provenance_summary: str
+    axes: tuple[TraceAxis, ...]
+    preview_payload: dict[str, object]
+
+
+@dataclass(frozen=True)
+class RawDataIngestionDraft:
+    kind: RawDataIngestionKind
+    design_name: str
+    design_id: str | None
+    provenance_label: str
+    traces: tuple[RawDataTraceDraft, ...]
+
+
+@dataclass(frozen=True)
+class RawDataIngestionResult:
+    dataset: DatasetDetail
+    design: DesignBrowseRow
+    traces: tuple[TraceMetadataSummary, ...]
 
 
 @dataclass(frozen=True)
