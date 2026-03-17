@@ -33,6 +33,8 @@ import {
   resolveShellTaskLabel,
   resolveShellWorkspaceMemberships,
   resolveWorkspaceSwitchNotice,
+  subscribeToGlobalContextRequests,
+  type ShellGlobalContextSection,
 } from "@/components/layout/workspace-shell-contract";
 import { ShellNotice } from "@/components/layout/shell-notice";
 import { cx } from "@/features/shared/components/surface-kit";
@@ -47,7 +49,7 @@ type WorkspaceStatusStripProps = Readonly<{
   interactionBoundaryRef?: RefObject<HTMLElement | null>;
 }>;
 
-type ContextSectionId = "runtime" | "workspace" | "dataset" | "tasks";
+type ContextSectionId = ShellGlobalContextSection;
 
 type SurfaceNotice = Readonly<{
   tone: "success" | "info" | "warning" | "error";
@@ -430,6 +432,13 @@ export function WorkspaceStatusStrip({
       setDatasetNotice(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    return subscribeToGlobalContextRequests((section) => {
+      setSelectedSection(section);
+      onOpenChange(true);
+    });
+  }, [onOpenChange]);
 
   useEffect(() => {
     setRuntimeTargetInput(serverTargetDraft);

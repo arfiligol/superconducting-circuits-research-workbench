@@ -1,91 +1,82 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { EditorState } from "@codemirror/state";
+import { json } from "@codemirror/lang-json";
+import { EditorView } from "@codemirror/view";
 import {
+  ArrowUpRight,
+  Database,
   FileCode2,
   LoaderCircle,
   Play,
-  Search,
+  RefreshCcw,
+  Shapes,
   WandSparkles,
-  Waypoints,
+  Workflow,
 } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import CodeMirror from "@uiw/react-codemirror";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import type { CircuitDefinitionSummary } from "@/features/circuit-definition-editor/lib/contracts";
-import { buildNormalizedOutputPreview } from "@/features/circuit-definition-editor/lib/preview";
+import {
+  buildCircuitDefinitionCatalogHref,
+  buildCircuitDefinitionEditorHref,
+  buildCircuitSchemdrawHref,
+} from "@/features/circuit-definition-editor/lib/routes";
+import { formatCircuitNetlistSource } from "@/features/circuit-definition-editor/lib/netlist";
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import {
   buildSimulationRequestSummary,
-  filterSimulationDefinitions,
-  filterSimulationTasks,
+  formatSimulationTaskStatusLabel,
+  hasSimulationTaskResult,
+  resolvePostProcessingUpstreamTaskId,
   resolveSimulationSelectionRecovery,
-  summarizeSimulationTasks,
-  type SimulationTaskScope,
-  type SimulationTaskStatusFilter,
+  summarizeSimulationTaskResults,
 } from "@/features/simulation/lib/workflow";
+import { AppSelectField } from "@/features/shared/components/app-select";
 import {
-  ResearchTaskQueuePanel,
-  ResearchWorkflowHero,
-  ResearchWorkflowOverviewPanel,
-} from "@/features/shared/components/research-workflow-panels";
-import {
+  SurfaceHeader,
   SurfacePanel,
   SurfaceTag,
   cx,
   resolveSurfaceInsetToneClass,
 } from "@/features/shared/components/surface-kit";
-import { TaskEventHistoryPanel } from "@/features/shared/components/task-event-history-panel";
 import {
-  TaskAttachmentPanel,
-  TaskLifecyclePanel,
-  TaskResultPanel,
-} from "@/features/shared/components/task-workflow-panels";
+  requestOpenGlobalContext,
+  resolveShellTaskHref,
+} from "@/components/layout/workspace-shell-contract";
 import { ApiError } from "@/lib/api/client";
-import type { TaskExecutionStatus } from "@/lib/api/tasks";
-import { summarizeTaskEventHistory } from "@/lib/task-event-history";
-import { summarizeResearchWorkflowSurface } from "@/lib/research-workflow-surface";
-import {
-  resolveTaskConnectionState,
-  summarizeTaskActionGates,
-  summarizeTaskContextBinding,
-  resolveTaskRecoveryNotice,
-  summarizeTaskLifecycle,
-  summarizeTaskResultHandoff,
-  summarizeTaskResultSurface,
-} from "@/lib/task-surface";
+import type { TaskDetail, TaskExecutionStatus, TaskSummary } from "@/lib/api/tasks";
+import { resolveTaskConnectionState, resolveTaskRecoveryNotice } from "@/lib/task-surface";
+import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
 const simulationRequestSchema = z.object({
-  summaryNote: z.string().trim().max(180, "Keep the request note within 180 characters."),
+  simulationNote: z.string().trim().max(180, "Keep the request note within 180 characters."),
+  postProcessingNote: z
+    .string()
+    .trim()
+    .max(180, "Keep the request note within 180 characters."),
 });
 
 type SimulationRequestValues = z.infer<typeof simulationRequestSchema>;
 
 const defaultRequestValues: SimulationRequestValues = {
-  summaryNote: "",
+  simulationNote: "",
+  postProcessingNote: "",
 };
 
-const simulationTaskScopeOptions = [
-  { label: "Current definition", value: "definition" },
-  { label: "Active dataset", value: "dataset" },
-  { label: "All simulation tasks", value: "all" },
-] as const satisfies readonly Readonly<{
-  label: string;
-  value: SimulationTaskScope;
-}>[];
+type StageTone = "default" | "primary" | "success" | "warning" | "error";
 
-const simulationTaskStatusOptions = [
-  { label: "All statuses", value: "all" },
-  { label: "Queued or running", value: "active" },
-  { label: "Completed", value: "completed" },
-  { label: "Failed", value: "failed" },
-] as const satisfies readonly Readonly<{
+type WorkflowStageState = Readonly<{
   label: string;
-  value: SimulationTaskStatusFilter;
-}>[];
+  tone: StageTone;
+  message: string;
+}>;
 
 function buildSimulationSearchHref(
   pathname: string,
@@ -106,10 +97,6 @@ function buildSimulationSearchHref(
   return nextSearch ? `${pathname}?${nextSearch}` : pathname;
 }
 
-function lineCount(value: string) {
-  return value.split("\n").length;
-}
-
 function parseTaskIdParam(value: string | null): number | null {
   if (!value) {
     return null;
@@ -117,6 +104,10 @@ function parseTaskIdParam(value: string | null): number | null {
 
   const parsedValue = Number.parseInt(value, 10);
   return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+function lineCount(value: string) {
+  return value.split("\n").length;
 }
 
 function describeApiError(error: Error | undefined) {
@@ -133,163 +124,308 @@ function describeApiError(error: Error | undefined) {
   return error.message;
 }
 
-function taskStatusTone(status: TaskExecutionStatus) {
+function taskStatusTone(status: TaskExecutionStatus): StageTone {
   if (status === "completed") {
-    return "success" as const;
+    return "success";
   }
 
   if (
-    status === "running" ||
+    status === "queued" ||
     status === "dispatching" ||
+    status === "running" ||
     status === "cancellation_requested" ||
     status === "cancelling" ||
     status === "termination_requested"
   ) {
-    return "primary" as const;
+    return "primary";
   }
 
   if (status === "failed" || status === "cancelled" || status === "terminated") {
-    return "warning" as const;
+    return "warning";
   }
 
-  return "default" as const;
+  return "default";
 }
 
-function definitionStatusTone(
-  status: CircuitDefinitionSummary["validation_status"],
-) {
-  return status === "warning" ? ("warning" as const) : ("success" as const);
-}
-
-function taskKindLabel(kind: "simulation" | "post_processing" | "characterization") {
-  if (kind === "post_processing") {
-    return "Post Processing";
+function formatCodeValue(value: string | null | undefined, fallback: string) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return fallback;
   }
 
-  if (kind === "characterization") {
-    return "Characterization";
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return trimmed;
   }
-
-  return "Simulation";
 }
 
-type DefinitionCardProps = Readonly<{
-  definition: CircuitDefinitionSummary;
-  isActive: boolean;
-  onSelect: (definitionId: number) => void;
-  isPinned?: boolean;
-}>;
+function resolveSetupStageState(input: Readonly<{
+  stageLabel: string;
+  blockedReason: string | null;
+  latestTask: TaskSummary | undefined;
+}>): WorkflowStageState {
+  if (input.blockedReason) {
+    return {
+      label: "Blocked",
+      tone: "warning",
+      message: input.blockedReason,
+    };
+  }
 
-function DefinitionCard({
-  definition,
-  isActive,
-  onSelect,
-  isPinned = false,
-}: DefinitionCardProps) {
+  if (!input.latestTask) {
+    return {
+      label: "Not started",
+      tone: "default",
+      message: `${input.stageLabel} has not been submitted yet.`,
+    };
+  }
+
+  if (input.latestTask.status === "completed") {
+    return {
+      label: "Completed",
+      tone: "success",
+      message: `Latest ${input.stageLabel.toLowerCase()} run completed successfully. You can review the result or launch another run.`,
+    };
+  }
+
+  const statusLabel = formatSimulationTaskStatusLabel(input.latestTask.status);
+  return {
+    label: statusLabel,
+    tone: taskStatusTone(input.latestTask.status),
+    message: `Latest ${input.stageLabel.toLowerCase()} task #${input.latestTask.taskId} is ${statusLabel.toLowerCase()}.`,
+  };
+}
+
+function resolveResultStageState(input: Readonly<{
+  stageLabel: string;
+  blockedReason?: string | null;
+  latestTask: TaskSummary | undefined;
+  detail: TaskDetail | undefined;
+  hasResult: boolean;
+}>): WorkflowStageState {
+  if (input.blockedReason) {
+    return {
+      label: "Blocked",
+      tone: "warning",
+      message: input.blockedReason,
+    };
+  }
+
+  if (!input.latestTask) {
+    return {
+      label: "Not started",
+      tone: "default",
+      message: `${input.stageLabel} is still waiting for its first run.`,
+    };
+  }
+
+  if (input.latestTask.status === "completed") {
+    if (input.hasResult) {
+      return {
+        label: "Completed",
+        tone: "success",
+        message: `Latest ${input.stageLabel.toLowerCase()} output is ready to inspect.`,
+      };
+    }
+
+    return {
+      label: "Completed",
+      tone: "warning",
+      message: `Latest ${input.stageLabel.toLowerCase()} task completed, but persisted outputs are not available yet.`,
+    };
+  }
+
+  const statusLabel = formatSimulationTaskStatusLabel(input.latestTask.status);
+  const progressSummary =
+    input.detail?.progress.summary ?? input.detail?.dispatch.status ?? input.latestTask.summary;
+
+  return {
+    label: statusLabel,
+    tone: taskStatusTone(input.latestTask.status),
+    message: `Latest ${input.stageLabel.toLowerCase()} task #${input.latestTask.taskId} is ${statusLabel.toLowerCase()}. ${progressSummary}`,
+  };
+}
+
+function SummaryCard({
+  label,
+  value,
+  detail,
+}: Readonly<{
+  label: string;
+  value: string;
+  detail?: string;
+}>) {
   return (
-    <button
-      type="button"
-      onClick={() => {
-        onSelect(definition.definition_id);
-      }}
-      className={cx(
-        "w-full cursor-pointer rounded-[1rem] border px-4 py-4 text-left shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition",
-        isActive
-          ? "border-primary/40 bg-card"
-          : "border-border bg-card hover:border-primary/25 hover:bg-primary/5",
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-foreground">{definition.name}</h2>
-          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-            Definition #{definition.definition_id}
-          </p>
-        </div>
-        <SurfaceTag tone={definitionStatusTone(definition.validation_status)}>
-          {definition.validation_status === "warning" ? "Warnings" : "Ready"}
-        </SurfaceTag>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-        {isActive ? <SurfaceTag tone="primary">Selected</SurfaceTag> : null}
-        {isPinned ? <SurfaceTag tone="warning">Pinned</SurfaceTag> : null}
-        <SurfaceTag tone={definition.preview_artifact_count > 0 ? "primary" : "default"}>
-          {definition.preview_artifact_count} artifacts
-        </SurfaceTag>
-      </div>
-
-      <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-        <span>Created: {definition.created_at}</span>
-        <span className="sm:text-right">{definition.element_count} elements</span>
-      </div>
-    </button>
+    <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-foreground">{value}</p>
+      {detail ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p> : null}
+    </div>
   );
 }
 
-type TaskCardProps = Readonly<{
-  isSelected: boolean;
-  onAttach: (taskId: number) => void;
-  task: ReturnType<typeof filterSimulationTasks>[number];
-}>;
+function StageNotice({
+  tone,
+  title,
+  message,
+  actions,
+}: Readonly<{
+  tone: StageTone;
+  title: string;
+  message: string;
+  actions?: React.ReactNode;
+}>) {
+  const toneClass =
+    tone === "error"
+      ? resolveSurfaceInsetToneClass("error")
+      : tone === "warning"
+        ? resolveSurfaceInsetToneClass("warning")
+        : tone === "success"
+          ? resolveSurfaceInsetToneClass("success")
+          : tone === "primary"
+            ? resolveSurfaceInsetToneClass("primary")
+            : "border-border bg-surface text-foreground";
 
-function TaskCard({ isSelected, onAttach, task }: TaskCardProps) {
   return (
-    <div
-      className={cx(
-        "rounded-[1rem] border px-4 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition",
-        isSelected
-          ? "border-primary/40 bg-card"
-          : "border-border bg-card hover:border-primary/25 hover:bg-primary/5",
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-foreground">
-            {task.summary || `${taskKindLabel(task.kind)} task`}
-          </h3>
-          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-            Task #{task.taskId}
+    <div className={cx("rounded-[0.95rem] border px-4 py-4 text-sm", toneClass)}>
+      <p className="font-medium text-foreground">{title}</p>
+      <p className="mt-2 leading-6">{message}</p>
+      {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
+function ReadOnlyCodeSurface({
+  label,
+  detail,
+  value,
+  height,
+}: Readonly<{
+  label: string;
+  detail: string;
+  value: string;
+  height: string;
+}>) {
+  const extensions = useMemo(
+    () => [json(), EditorState.readOnly.of(true), EditorView.editable.of(false), vsCodeDarkEditorTheme],
+    [],
+  );
+
+  return (
+    <div className="overflow-hidden rounded-[0.95rem] border border-border bg-background shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
+      <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {label}
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
         </div>
-        <SurfaceTag tone={taskStatusTone(task.status)}>
-          {task.status}
-        </SurfaceTag>
+        <FileCode2 className="h-4 w-4 text-muted-foreground" />
       </div>
+      <CodeMirror
+        value={value}
+        height={height}
+        theme="dark"
+        editable={false}
+        extensions={extensions}
+        className="text-sm leading-6"
+      />
+    </div>
+  );
+}
 
-      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-        <SurfaceTag tone="default">{taskKindLabel(task.kind)}</SurfaceTag>
-        <SurfaceTag tone="default">{task.executionMode}</SurfaceTag>
-        {task.definitionId !== null ? (
-          <SurfaceTag tone="default">Definition #{task.definitionId}</SurfaceTag>
-        ) : null}
-        {task.datasetId ? <SurfaceTag tone="default">{task.datasetId}</SurfaceTag> : null}
+function WorkflowStageSection({
+  step,
+  title,
+  description,
+  status,
+  actions,
+  children,
+}: Readonly<{
+  step: number;
+  title: string;
+  description: string;
+  status: WorkflowStageState;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}>) {
+  return (
+    <section className="rounded-[1.15rem] border border-border bg-card px-5 py-5 shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
+      <div className="grid gap-5 lg:grid-cols-[56px_minmax(0,1fr)]">
+        <div className="flex lg:justify-center">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-semibold text-primary">
+            {step}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-col gap-3 border-b border-border/80 pb-4 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-foreground">{title}</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                {description}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <SurfaceTag tone={status.tone}>{status.label}</SurfaceTag>
+              {actions}
+            </div>
+          </div>
+          <div className="mt-4 space-y-4">{children}</div>
+        </div>
       </div>
+    </section>
+  );
+}
 
-      <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-        <span>Submitted: {task.submittedAt}</span>
-        <span className="sm:text-right">{task.ownerDisplayName}</span>
-      </div>
+function StageTaskActions({
+  task,
+  resolvedTaskId,
+  onViewTask,
+  onOpenGlobalContext,
+}: Readonly<{
+  task: TaskSummary | undefined;
+  resolvedTaskId: number | null;
+  onViewTask: (taskId: number) => void;
+  onOpenGlobalContext: (taskId: number) => void;
+}>) {
+  if (!task) {
+    return null;
+  }
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-4">
-        <p className="text-xs text-muted-foreground">
-          {task.hasActionAuthority
-            ? task.allowedActions.attach
-              ? "Attach is allowed by backend task authority."
-              : "Attach is blocked by backend task authority."
-            : "Attach authority is not exposed by the backend yet."}
-        </p>
+  const isAttached = resolvedTaskId === task.taskId;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          onViewTask(task.taskId);
+        }}
+        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+      >
+        View Task
+      </button>
+      {!isAttached ? (
         <button
           type="button"
           onClick={() => {
-            onAttach(task.taskId);
+            onViewTask(task.taskId);
           }}
-          disabled={!task.allowedActions.attach}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
         >
-          Attach
+          Resume Latest Run
         </button>
-      </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          onOpenGlobalContext(task.taskId);
+        }}
+        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+      >
+        Open in Global Context
+      </button>
     </div>
   );
 }
@@ -299,11 +435,6 @@ export function SimulationWorkbenchShell() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
-  const [definitionQuery, setDefinitionQuery] = useState("");
-  const [taskQuery, setTaskQuery] = useState("");
-  const [taskScope, setTaskScope] = useState<SimulationTaskScope>("definition");
-  const [taskStatusFilter, setTaskStatusFilter] =
-    useState<SimulationTaskStatusFilter>("all");
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
 
   const form = useForm<SimulationRequestValues>({
@@ -325,34 +456,22 @@ export function SimulationWorkbenchShell() {
     activeDefinition,
     activeDefinitionError,
     isDefinitionTransitioning,
-    simulationTasks,
     latestSimulationTask,
+    latestSimulationStageTask,
+    latestSimulationTaskDetail,
+    latestSimulationTaskError,
+    latestPostProcessingTask,
+    latestPostProcessingTaskDetail,
+    latestPostProcessingTaskError,
     resolvedTaskId,
     activeTask,
     activeTaskError,
-    isTaskTransitioning,
     taskMutationStatus,
     submitSimulationTask,
     clearTaskMutationStatus,
     refreshSimulationWorkflow,
   } = useSimulationWorkflowData(rawDefinitionId, requestedTaskId);
 
-  const filteredDefinitions = filterSimulationDefinitions(definitions, definitionQuery);
-  const pinnedDefinition =
-    resolvedDefinitionId !== null &&
-    !filteredDefinitions.some(
-      (definition) => definition.definition_id === resolvedDefinitionId,
-    )
-      ? definitions?.find((definition) => definition.definition_id === resolvedDefinitionId)
-      : undefined;
-  const taskSummary = summarizeSimulationTasks(simulationTasks);
-  const filteredTasks = filterSimulationTasks(simulationTasks, {
-    searchQuery: taskQuery,
-    scope: taskScope,
-    statusFilter: taskStatusFilter,
-    selectedDefinitionId: resolvedDefinitionId,
-    activeDatasetId: activeDatasetState.activeDataset?.datasetId ?? null,
-  });
   const definitionRecovery = resolveSimulationSelectionRecovery(
     requestedDefinitionId,
     resolvedDefinitionId,
@@ -369,45 +488,114 @@ export function SimulationWorkbenchShell() {
     latestSimulationTask?.taskId ?? null,
     activeTaskError,
   );
-  const taskLifecycleSummary = summarizeTaskLifecycle(activeTask);
-  const taskResultSummary = summarizeTaskResultSurface(activeTask);
-  const taskActionGates = summarizeTaskActionGates(activeTask);
-  const taskContextBinding = summarizeTaskContextBinding({
-    task: activeTask,
-    activeDatasetId: activeDatasetState.activeDataset?.datasetId ?? null,
-    activeDefinitionId: resolvedDefinitionId,
-  });
-  const taskResultHandoff = summarizeTaskResultHandoff(activeTask, taskResultSummary);
-  const eventHistorySummary = summarizeTaskEventHistory(activeTask);
-  const workflowSurfaceSummary = summarizeResearchWorkflowSurface({
-    connectionState: taskConnectionState,
-    lifecycleSummary: taskLifecycleSummary,
-    eventHistorySummary,
-    resultSummary: taskResultSummary,
-  });
-  const normalizedPreview = buildNormalizedOutputPreview(
-    activeDefinition?.normalized_output ?? "{\n  \"circuit\": \"pending\"\n}",
+  const definitionsErrorMessage = describeApiError(definitionsError);
+  const activeDefinitionErrorMessage = describeApiError(activeDefinitionError);
+  const activeTaskErrorMessage = describeApiError(activeTaskError);
+  const simulationStageErrorMessage = describeApiError(latestSimulationTaskError);
+  const postProcessingStageErrorMessage = describeApiError(latestPostProcessingTaskError);
+  const definitionOptions = useMemo(
+    () =>
+      (definitions ?? []).map((definition) => ({
+        value: String(definition.definition_id),
+        label: definition.name,
+        description: `Definition #${definition.definition_id} · ${definition.preview_artifact_count} preview artifacts`,
+      })),
+    [definitions],
   );
-  const requestSummaryPreview = buildSimulationRequestSummary({
+  const formattedSourceText = useMemo(() => {
+    if (!activeDefinition?.source_text) {
+      return "{\n  \"name\": \"pending_definition\"\n}";
+    }
+
+    return (
+      formatCircuitNetlistSource(activeDefinition.source_text, {
+        canonicalName: activeDefinition.name,
+      }).formattedSource || activeDefinition.source_text
+    );
+  }, [activeDefinition]);
+  const formattedNormalizedOutput = useMemo(
+    () =>
+      formatCodeValue(
+        activeDefinition?.normalized_output,
+        "{\n  \"expanded_netlist\": \"pending_definition\"\n}",
+      ),
+    [activeDefinition],
+  );
+  const simulationRequestPreview = buildSimulationRequestSummary({
     kind: "simulation",
     definitionId: resolvedDefinitionId,
     definitionName: selectedDefinitionSummary?.name ?? null,
     datasetId: activeDatasetState.activeDataset?.datasetId ?? null,
     datasetName: activeDatasetState.activeDataset?.name ?? null,
-    note: form.watch("summaryNote"),
+    note: form.watch("simulationNote"),
   });
-  const definitionsErrorMessage = describeApiError(definitionsError);
-  const activeDefinitionErrorMessage = describeApiError(activeDefinitionError);
-  const activeTaskErrorMessage = describeApiError(activeTaskError);
-  const eventHistoryNarrative = !activeTask
-    ? "Attach or submit a simulation task to inspect its persisted dispatch trail."
-    : taskConnectionState.isStaleSnapshot && resolvedTaskId !== null
-      ? `Showing persisted events from task #${activeTask.taskId} while task #${resolvedTaskId} reattaches so the simulation surface stays readable during route switching.`
-      : taskConnectionState.hasNewerLatestTask && taskConnectionState.latestTaskId !== null
-        ? `Task #${taskConnectionState.selectedTaskId} remains attached for comparison while newer simulation activity exists on task #${taskConnectionState.latestTaskId}.`
-        : latestSimulationTask && resolvedTaskId === latestSimulationTask.taskId
-        ? `Following the latest simulation task #${latestSimulationTask.taskId}. Persisted events should advance here as dispatch, progress, and result publication change.`
-        : `Task #${activeTask.taskId} keeps a persisted event trail alongside dispatch and progress so refreshes do not erase execution context.`;
+  const postProcessingRequestPreview = buildSimulationRequestSummary({
+    kind: "post_processing",
+    definitionId: resolvedDefinitionId,
+    definitionName: selectedDefinitionSummary?.name ?? null,
+    datasetId: activeDatasetState.activeDataset?.datasetId ?? null,
+    datasetName: activeDatasetState.activeDataset?.name ?? null,
+    note: form.watch("postProcessingNote"),
+  });
+  const simulationSetupBlockedReason =
+    resolvedDefinitionId === null
+      ? "Select a definition before submitting a simulation run."
+      : !activeDatasetState.activeDataset
+        ? "Attach an active dataset in the shell before submitting a simulation run."
+        : !session?.canSubmitTasks
+          ? "The current session does not allow submitting simulation tasks."
+          : null;
+  const simulationResultReady =
+    latestSimulationStageTask?.resultAvailability === "ready" ||
+    hasSimulationTaskResult(latestSimulationTaskDetail);
+  const postProcessingSetupBlockedReason =
+    simulationSetupBlockedReason ??
+    (!simulationResultReady
+      ? "Simulation result required before post-processing can start."
+      : null);
+  const simulationSetupState = resolveSetupStageState({
+    stageLabel: "Simulation",
+    blockedReason: simulationSetupBlockedReason,
+    latestTask: latestSimulationStageTask,
+  });
+  const simulationResultState = resolveResultStageState({
+    stageLabel: "Simulation Result",
+    latestTask: latestSimulationStageTask,
+    detail: latestSimulationTaskDetail,
+    hasResult: simulationResultReady,
+  });
+  const postProcessingSetupState = resolveSetupStageState({
+    stageLabel: "Post Processing",
+    blockedReason: postProcessingSetupBlockedReason,
+    latestTask: latestPostProcessingTask,
+  });
+  const postProcessingResultReady =
+    latestPostProcessingTask?.resultAvailability === "ready" ||
+    hasSimulationTaskResult(latestPostProcessingTaskDetail);
+  const postProcessingResultState = resolveResultStageState({
+    stageLabel: "Post Processing Result",
+    blockedReason: !simulationResultReady
+      ? "Post-processing result stays blocked until a simulation result is available."
+      : null,
+    latestTask: latestPostProcessingTask,
+    detail: latestPostProcessingTaskDetail,
+    hasResult: postProcessingResultReady,
+  });
+  const simulationResultSummary = summarizeSimulationTaskResults(latestSimulationTaskDetail);
+  const postProcessingResultSummary = summarizeSimulationTaskResults(
+    latestPostProcessingTaskDetail,
+  );
+  const explicitUpstreamSimulationTaskId = resolvePostProcessingUpstreamTaskId(
+    latestPostProcessingTaskDetail,
+  );
+
+  function replaceSearchState(updates: Readonly<Record<string, string | null>>) {
+    startTransition(() => {
+      router.replace(buildSimulationSearchHref(pathname, searchParams.toString(), updates), {
+        scroll: false,
+      });
+    });
+  }
 
   useEffect(() => {
     if (resolvedDefinitionId === null || resolvedDefinitionId === rawDefinitionId) {
@@ -424,14 +612,6 @@ export function SimulationWorkbenchShell() {
     });
   }, [pathname, rawDefinitionId, resolvedDefinitionId, router, searchParams]);
 
-  function replaceSearchState(updates: Readonly<Record<string, string | null>>) {
-    startTransition(() => {
-      router.replace(buildSimulationSearchHref(pathname, searchParams.toString(), updates), {
-        scroll: false,
-      });
-    });
-  }
-
   async function handleRefreshWorkflow() {
     setIsRefreshingWorkflow(true);
     try {
@@ -442,14 +622,15 @@ export function SimulationWorkbenchShell() {
   }
 
   async function handleSubmit(kind: "simulation" | "post_processing") {
-    const values = await form.trigger();
-    if (!values) {
+    const fieldName = kind === "simulation" ? "simulationNote" : "postProcessingNote";
+    const isValid = await form.trigger(fieldName);
+    if (!isValid) {
       return;
     }
 
     const task = await submitSimulationTask({
       kind,
-      note: form.getValues("summaryNote"),
+      note: form.getValues(fieldName),
     });
 
     replaceSearchState({
@@ -458,502 +639,694 @@ export function SimulationWorkbenchShell() {
     });
   }
 
+  function attachTask(taskId: number) {
+    replaceSearchState({
+      definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
+      taskId: String(taskId),
+    });
+  }
+
+  function openTaskInGlobalContext(taskId: number) {
+    attachTask(taskId);
+    requestOpenGlobalContext("tasks");
+  }
+
   return (
-    <div className="space-y-8">
-      <ResearchWorkflowHero
+    <div className="space-y-6">
+      <SurfaceHeader
         eyebrow="Research Workflow"
         title="Circuit Simulation"
-        description="Attach a canonical definition, submit persisted simulation work, and reattach to task, event, and result state without falling back to page-local placeholders."
-        contextTags={[
-          {
-            label: selectedDefinitionSummary?.name ?? "Definition pending",
-            tone: "primary",
-          },
-          {
-            label: activeDatasetState.activeDataset?.name ?? "Dataset not attached",
-            tone: activeDatasetState.activeDataset
-              ? "success"
-              : activeDatasetState.status === "error"
-                ? "warning"
-                : "default",
-          },
-          ...(resolvedTaskId !== null
-            ? [
-                {
-                  label: `Task #${resolvedTaskId}`,
-                  tone: taskConnectionState.isAttached ? "success" : "warning",
-                } as const,
-              ]
-            : []),
-          {
-            label: taskLifecycleSummary.statusLabel,
-            tone: taskLifecycleSummary.tone,
-          },
-          ...(taskConnectionState.isFollowingLatest
-            ? [{ label: "Following latest queue task", tone: "success" as const }]
-            : []),
-        ]}
-        submitAuthorityLabel={`Workspace submit authority: ${
-          session?.canSubmitTasks ? "available" : "disabled for this session"
-        }.`}
-        stats={[
-          { label: "Simulation Tasks", value: String(taskSummary.total) },
-          { label: "Active", value: String(taskSummary.activeCount), tone: "primary" },
-          { label: "Result-backed", value: String(taskSummary.resultBackedCount) },
-        ]}
+        description="Run simulation and post-processing as a five-stage pipeline. Queue browse, worker health, cancel, terminate, retry, and deep diagnostics stay in Global Context."
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              void handleRefreshWorkflow();
+            }}
+            disabled={isRefreshingWorkflow}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCcw className={cx("h-3.5 w-3.5", isRefreshingWorkflow && "animate-spin")} />
+            Refresh Workflow
+          </button>
+        }
       />
 
+      <div className="flex flex-wrap gap-2">
+        <SurfaceTag tone="primary">
+          {selectedDefinitionSummary?.name ?? "Definition pending"}
+        </SurfaceTag>
+        <SurfaceTag tone={activeDatasetState.activeDataset ? "success" : "warning"}>
+          {activeDatasetState.activeDataset?.name ?? "Dataset not attached"}
+        </SurfaceTag>
+        {resolvedTaskId !== null ? (
+          <SurfaceTag tone={taskConnectionState.isAttached ? "success" : "warning"}>
+            Task #{resolvedTaskId}
+          </SurfaceTag>
+        ) : null}
+      </div>
+
       {definitionsError ? (
-        <div className={cx("rounded-[1rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("error"))}>
-          Unable to load circuit definitions. {definitionsErrorMessage}
-        </div>
+        <StageNotice
+          tone="error"
+          title="Definition catalog unavailable"
+          message={`Unable to load visible definitions. ${definitionsErrorMessage}`}
+        />
       ) : null}
 
       {taskMutationStatus.message ? (
-        <div
-          className={cx(
-            "rounded-[1rem] border px-4 py-3 text-sm",
+        <StageNotice
+          tone={taskMutationStatus.state === "error" ? "error" : "success"}
+          title={
             taskMutationStatus.state === "error"
-              ? resolveSurfaceInsetToneClass("error")
-              : "border-primary/30 bg-primary/8 text-foreground",
-          )}
-        >
-          {taskMutationStatus.message}
-        </div>
+              ? "Run submission failed"
+              : "Run submission accepted"
+          }
+          message={taskMutationStatus.message}
+        />
       ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.82fr)_minmax(0,1.18fr)]">
-        <div className="space-y-4">
-          <SurfacePanel
-            title="Canonical Definition"
-            description="Simulation authority starts from the persisted circuit definition contract, not from page-local setup state."
-          >
-            <label className="rounded-[0.9rem] border border-border bg-surface px-4 py-3">
-              <span className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                <Search className="h-3.5 w-3.5" />
-                Search definitions
-              </span>
-              <input
-                value={definitionQuery}
-                onChange={(event) => {
-                  setDefinitionQuery(event.target.value);
+      {taskRecovery ? (
+        <StageNotice
+          tone="warning"
+          title={taskRecovery.title}
+          message={taskRecovery.message}
+          actions={
+            latestSimulationTask ? (
+              <button
+                type="button"
+                onClick={() => {
+                  attachTask(latestSimulationTask.taskId);
                 }}
-                placeholder="Find by name or id"
-                className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-
-            {definitionRecovery ? (
-              <div
-                className={cx(
-                "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
-                definitionRecovery.tone === "warning"
-                    ? resolveSurfaceInsetToneClass("warning")
-                    : "border-border bg-surface text-muted-foreground",
-              )}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
               >
-                <p className="font-medium text-foreground">{definitionRecovery.title}</p>
-                <p className="mt-1">{definitionRecovery.message}</p>
-              </div>
-            ) : null}
+                Resume Latest Run
+              </button>
+            ) : null
+          }
+        />
+      ) : null}
 
-            {isDefinitionsLoading && !definitions ? (
-              <div className="mt-4 rounded-[0.9rem] border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-                Loading canonical definitions...
-              </div>
-            ) : null}
-
-            {pinnedDefinition ? (
-              <div className="mt-4 space-y-2">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Selected definition
-                </p>
-                <DefinitionCard
-                  definition={pinnedDefinition}
-                  isActive
-                  isPinned
-                  onSelect={(definitionId) => {
-                    clearTaskMutationStatus();
-                    replaceSearchState({ definitionId: String(definitionId) });
-                  }}
-                />
-              </div>
-            ) : null}
-
-            <div className="mt-4 space-y-3">
-              {filteredDefinitions.map((definition) => (
-                <DefinitionCard
-                  key={definition.definition_id}
-                  definition={definition}
-                  isActive={definition.definition_id === resolvedDefinitionId}
-                  onSelect={(definitionId) => {
-                    clearTaskMutationStatus();
-                    replaceSearchState({ definitionId: String(definitionId) });
-                  }}
-                />
-              ))}
-            </div>
-
-            {filteredDefinitions.length === 0 && (definitions?.length ?? 0) > 0 ? (
-              <div className="mt-4 rounded-[0.9rem] border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-                No canonical definitions match the current search.
-              </div>
-            ) : null}
-          </SurfacePanel>
-
-          <SurfacePanel
-            title="Simulation Setup"
-            description="Use the active dataset plus the selected canonical definition to submit persisted simulation or post-processing work."
-          >
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Active Dataset
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {activeDatasetState.activeDataset?.name ?? "Attach a dataset in the shell first"}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {activeDatasetState.activeDataset?.datasetId ?? "No dataset in session"}
-                </p>
-              </div>
-              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Canonical Definition
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {selectedDefinitionSummary?.name ?? "Select a definition"}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {resolvedDefinitionId !== null
-                    ? `Definition #${resolvedDefinitionId}`
-                    : "No definition selected"}
-                </p>
-              </div>
-            </div>
-
-            <form
-              className="mt-4 space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
+      {!taskRecovery && taskConnectionState.hasNewerLatestTask && latestSimulationTask ? (
+        <StageNotice
+          tone="primary"
+          title="Latest task available"
+          message={`You are inspecting task #${taskConnectionState.selectedTaskId}, while newer pipeline activity exists on task #${latestSimulationTask.taskId}.`}
+          actions={
+            <button
+              type="button"
+              onClick={() => {
+                attachTask(latestSimulationTask.taskId);
               }}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
             >
-              <label className="block rounded-[0.9rem] border border-border bg-surface px-4 py-3">
-                <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Request Note
-                </span>
-                <textarea
-                  {...form.register("summaryNote")}
-                  rows={4}
-                  placeholder="Optional context for this run, for example basis check or cache verification."
-                  className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </label>
-              {form.formState.errors.summaryNote ? (
-                <p className="text-sm text-rose-700 dark:text-rose-300">
-                  {form.formState.errors.summaryNote.message}
-                </p>
+              Resume Latest Run
+            </button>
+          }
+        />
+      ) : null}
+
+      <div className="space-y-5">
+        <WorkflowStageSection
+          step={1}
+          title="Definition / Netlist Context"
+          description="Read the persisted definition and its expanded netlist before changing setup or launching a new run."
+          status={{
+            label: activeDefinition ? "Ready" : isDefinitionsLoading ? "Loading" : "Blocked",
+            tone: activeDefinition ? "success" : isDefinitionsLoading ? "primary" : "warning",
+            message: activeDefinition
+              ? "Definition context is ready."
+              : "Select a visible definition first.",
+          }}
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={buildCircuitDefinitionCatalogHref()}
+                className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+              >
+                Open Schemas
+              </Link>
+              {resolvedDefinitionId !== null ? (
+                <>
+                  <Link
+                    href={buildCircuitDefinitionEditorHref(resolvedDefinitionId)}
+                    className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                  >
+                    Open Schema Editor
+                  </Link>
+                  <Link
+                    href={buildCircuitSchemdrawHref(resolvedDefinitionId)}
+                    className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                  >
+                    Open Schemdraw
+                  </Link>
+                </>
               ) : null}
+            </div>
+          }
+        >
+          {definitionRecovery ? (
+            <StageNotice
+              tone={definitionRecovery.tone === "warning" ? "warning" : "default"}
+              title={definitionRecovery.title}
+              message={definitionRecovery.message}
+            />
+          ) : null}
 
-              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Submission Preview
-                </p>
-                <p className="mt-2 text-foreground">{requestSummaryPreview}</p>
-              </div>
+          {activeDefinitionError ? (
+            <StageNotice
+              tone="error"
+              title="Definition detail unavailable"
+              message={`Unable to load definition detail. ${activeDefinitionErrorMessage}`}
+            />
+          ) : null}
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleSubmit("simulation");
-                  }}
-                  disabled={
-                    taskMutationStatus.state === "submitting" ||
-                    !session?.canSubmitTasks ||
-                    !activeDatasetState.activeDataset ||
-                    resolvedDefinitionId === null
-                  }
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Play className="h-4 w-4" />
-                  Run Simulation
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleSubmit("post_processing");
-                  }}
-                  disabled={
-                    taskMutationStatus.state === "submitting" ||
-                    !session?.canSubmitTasks ||
-                    !activeDatasetState.activeDataset ||
-                    resolvedDefinitionId === null
-                  }
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <WandSparkles className="h-4 w-4" />
-                  Run Post Processing
-                </button>
-              </div>
-            </form>
-          </SurfacePanel>
-
-          <ResearchTaskQueuePanel
-            title="Simulation Task Queue"
-            description="Inspect recent simulation and post-processing tasks, then attach a task into the shared research workflow surface."
-            searchValue={taskQuery}
-            onSearchChange={setTaskQuery}
-            searchPlaceholder="Find by task id, summary, or dataset"
-            scopeValue={taskScope}
-            onScopeChange={(value) => {
-              setTaskScope(value as SimulationTaskScope);
-            }}
-            scopeOptions={simulationTaskScopeOptions}
-            statusValue={taskStatusFilter}
-            onStatusChange={(value) => {
-              setTaskStatusFilter(value as SimulationTaskStatusFilter);
-            }}
-            statusOptions={simulationTaskStatusOptions}
-            summaryLabel={`Showing ${filteredTasks.length} of ${simulationTasks.length} simulation tasks`}
-            summaryTags={[
-              ...(taskConnectionState.mode === "explicit" && resolvedTaskId !== null
-                ? [{ label: `Locked to task #${resolvedTaskId}`, tone: "warning" as const }]
-                : []),
-              ...(taskConnectionState.isFollowingLatest && taskConnectionState.latestTaskId !== null
-                ? [
-                    {
-                      label: `Following latest #${taskConnectionState.latestTaskId}`,
-                      tone: "success" as const,
-                    },
-                  ]
-                : []),
-            ]}
-            isRefreshing={isRefreshingWorkflow}
-            onRefresh={() => {
-              void handleRefreshWorkflow();
-            }}
-            isEmpty={filteredTasks.length === 0}
-            emptyMessage="No simulation tasks match the current filters."
-          >
-            {filteredTasks.map((task) => (
-              <TaskCard
-                key={task.taskId}
-                isSelected={task.taskId === resolvedTaskId}
-                onAttach={(taskId) => {
-                  replaceSearchState({ taskId: String(taskId) });
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
+            <div className="space-y-4">
+              <AppSelectField
+                label="Selected Definition"
+                value={resolvedDefinitionId !== null ? String(resolvedDefinitionId) : ""}
+                onChange={(value) => {
+                  clearTaskMutationStatus();
+                  replaceSearchState({ definitionId: value, taskId: null });
                 }}
-                task={task}
+                options={definitionOptions}
+                placeholder={
+                  isDefinitionsLoading
+                    ? "Loading definitions"
+                    : definitions?.length
+                      ? "Select a definition"
+                      : "No definitions available"
+                }
+                disabled={isDefinitionsLoading || definitionOptions.length === 0}
               />
-            ))}
-          </ResearchTaskQueuePanel>
-        </div>
 
-        <div className="space-y-4">
-          <ResearchWorkflowOverviewPanel
-            summary={workflowSurfaceSummary}
-            narrative={eventHistoryNarrative}
-          />
-
-          <TaskAttachmentPanel
-            task={activeTask}
-            connectionState={taskConnectionState}
-            recoveryNotice={taskRecovery}
-            taskErrorMessage={activeTaskErrorMessage}
-            isRefreshing={isRefreshingWorkflow}
-            isTransitioning={isTaskTransitioning}
-            onRefresh={() => {
-              void handleRefreshWorkflow();
-            }}
-            onAttachLatest={
-              latestSimulationTask
-                ? () => {
-                    replaceSearchState({ taskId: String(latestSimulationTask.taskId) });
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SummaryCard
+                  label="Definition"
+                  value={activeDefinition?.name ?? "No definition selected"}
+                  detail={
+                    resolvedDefinitionId !== null
+                      ? `Definition #${resolvedDefinitionId}`
+                      : "Select a persisted definition from the visible catalog."
                   }
-                : null
-            }
-            onFollowLatest={() => {
-              replaceSearchState({ taskId: null });
-            }}
+                />
+                <SummaryCard
+                  label="Validation"
+                  value={activeDefinition?.validation_summary.status ?? "Pending"}
+                  detail={
+                    activeDefinition
+                      ? `${activeDefinition.validation_summary.notice_count} persisted notices`
+                      : "Validation summary arrives with definition detail."
+                  }
+                />
+                <SummaryCard
+                  label="Visibility"
+                  value={activeDefinition?.visibility_scope ?? "Pending"}
+                  detail={
+                    activeDefinition?.workspace_id
+                      ? `Workspace ${activeDefinition.workspace_id}`
+                      : "Workspace detail is pending."
+                  }
+                />
+                <SummaryCard
+                  label="Source Snapshot"
+                  value={activeDefinition ? `${lineCount(formattedSourceText)} lines` : "Pending"}
+                  detail={
+                    activeDefinition
+                      ? `${lineCount(formattedNormalizedOutput)} expanded lines`
+                      : "Source and expanded netlist appear after definition detail loads."
+                  }
+                />
+              </div>
+
+              <StageNotice
+                tone="default"
+                title="Workflow boundary"
+                message="Definition context stays readable here. Queue browse, worker health, cancel, terminate, retry, and deep task diagnostics stay in Global Context."
+              />
+            </div>
+
+            <div className="grid gap-4">
+              <ReadOnlyCodeSurface
+                label="Canonical Source"
+                detail="Persisted definition source used as simulation authority."
+                value={formattedSourceText}
+                height="260px"
+              />
+              <ReadOnlyCodeSurface
+                label="Expanded Netlist Snapshot"
+                detail="Persisted normalized output snapshot used for readable netlist context."
+                value={formattedNormalizedOutput}
+                height="240px"
+              />
+            </div>
+          </div>
+
+          {isDefinitionTransitioning ? (
+            <div className="flex items-center gap-3 rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Refreshing definition context...
+            </div>
+          ) : null}
+        </WorkflowStageSection>
+
+        <WorkflowStageSection
+          step={2}
+          title="Simulation Setup"
+          description="Bind the active dataset to the selected definition, record the run note, and launch the simulation stage."
+          status={simulationSetupState}
+        >
+          <StageNotice
+            tone={simulationSetupState.tone}
+            title={`Simulation Setup · ${simulationSetupState.label}`}
+            message={simulationSetupState.message}
           />
 
-          <TaskLifecyclePanel task={activeTask} summary={taskLifecycleSummary} />
+          <div className="grid gap-3 md:grid-cols-3">
+            <SummaryCard
+              label="Active Dataset"
+              value={activeDatasetState.activeDataset?.name ?? "Dataset required"}
+              detail={
+                activeDatasetState.activeDataset?.datasetId ??
+                "Attach a dataset from the shell before running simulation."
+              }
+            />
+            <SummaryCard
+              label="Definition Binding"
+              value={selectedDefinitionSummary?.name ?? "Definition required"}
+              detail={
+                resolvedDefinitionId !== null
+                  ? `Definition #${resolvedDefinitionId}`
+                  : "Simulation submission requires a visible persisted definition."
+              }
+            />
+            <SummaryCard
+              label="Submit Authority"
+              value={session?.canSubmitTasks ? "Available" : "Blocked"}
+              detail="The current frontend-visible submit contract binds dataset, definition, and request summary."
+            />
+          </div>
 
-          <SurfacePanel
-            title="Task Controls / Result Handoff"
-            description="Attach follows backend `allowed_actions.attach`. Cancel, terminate, and retry remain gated by backend action authority even before the control mutation adapter is wired."
-          >
-            <div className="grid gap-3 md:grid-cols-4">
-              {[
-                taskActionGates.attach,
-                taskActionGates.cancel,
-                taskActionGates.terminate,
-                taskActionGates.retry,
-              ].map((gate) => (
-                <div
-                  key={gate.action}
-                  className={cx(
-                    "rounded-[0.9rem] border px-4 py-4",
-                    gate.enabled
-                      ? "border-primary/25 bg-primary/10"
-                      : "border-border bg-surface",
-                  )}
-                >
+          <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+            <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              Simulation Run Note
+            </span>
+            <textarea
+              {...form.register("simulationNote")}
+              rows={4}
+              placeholder="Optional context for this run, for example frequency sweep check or cache verification."
+              className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+
+          {form.formState.errors.simulationNote ? (
+            <p className="text-sm text-rose-700 dark:text-rose-300">
+              {form.formState.errors.simulationNote.message}
+            </p>
+          ) : null}
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Submission Preview
+              </p>
+              <p className="mt-2 text-foreground">{simulationRequestPreview}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void handleSubmit("simulation");
+              }}
+              disabled={taskMutationStatus.state === "submitting" || simulationSetupBlockedReason !== null}
+              className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {taskMutationStatus.state === "submitting" ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              Run Simulation
+            </button>
+          </div>
+
+          {latestSimulationStageTask ? (
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    {gate.action}
+                    Latest Simulation Run
                   </p>
                   <p className="mt-2 text-sm font-semibold text-foreground">
-                    {gate.enabled ? "Allowed" : "Blocked"}
+                    Task #{latestSimulationStageTask.taskId}
                   </p>
-                  <p className="mt-2 text-xs text-muted-foreground">{gate.reason}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {latestSimulationTaskDetail?.progress.summary ??
+                      latestSimulationStageTask.summary}
+                  </p>
                 </div>
-              ))}
-            </div>
-
-            {!taskActionGates.hasActionAuthority ? (
-              <div className={cx("mt-4 rounded-[0.9rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("warning"))}>
-                Backend `allowed_actions` are not present in the current task payload, so control
-                buttons stay gated instead of guessing permissions in the page body.
+                <SurfaceTag tone={taskStatusTone(latestSimulationStageTask.status)}>
+                  {formatSimulationTaskStatusLabel(latestSimulationStageTask.status)}
+                </SurfaceTag>
               </div>
-            ) : null}
-
-            {taskContextBinding ? (
-              <div
-                className={cx(
-                "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
-                taskContextBinding.tone === "warning"
-                    ? resolveSurfaceInsetToneClass("warning")
-                    : resolveSurfaceInsetToneClass("success"),
-              )}
-              >
-                <p className="font-medium">{taskContextBinding.title}</p>
-                <p className="mt-1">{taskContextBinding.message}</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <SummaryCard
+                  label="Submitted"
+                  value={latestSimulationStageTask.submittedAt ?? "Pending"}
+                />
+                <SummaryCard
+                  label="Result"
+                  value={simulationResultReady ? "Ready" : "Pending"}
+                  detail={
+                    latestSimulationStageTask.resultAvailability
+                      ? `Backend result availability: ${latestSimulationStageTask.resultAvailability}`
+                      : "Result status is inferred from persisted task detail."
+                  }
+                />
+                <SummaryCard
+                  label="Progress"
+                  value={
+                    latestSimulationTaskDetail
+                      ? `${Math.round(latestSimulationTaskDetail.progress.percentComplete)}%`
+                      : formatSimulationTaskStatusLabel(latestSimulationStageTask.status)
+                  }
+                />
               </div>
-            ) : null}
-
-            <div
-              className={cx(
-                "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
-                taskResultHandoff.tone === "success"
-                  ? resolveSurfaceInsetToneClass("success")
-                  : taskResultHandoff.tone === "warning"
-                    ? resolveSurfaceInsetToneClass("warning")
-                    : taskResultHandoff.tone === "primary"
-                      ? "border-primary/30 bg-primary/8 text-foreground"
-                      : "border-border bg-surface text-muted-foreground",
-              )}
-            >
-              <p className="font-medium">{taskResultHandoff.title}</p>
-              <p className="mt-1">{taskResultHandoff.message}</p>
-              {taskResultHandoff.isReady ? (
-                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Persisted result refs stay available in the panel below after refresh or reattach.
-                </p>
-              ) : null}
+              <div className="mt-4">
+                <StageTaskActions
+                  task={latestSimulationStageTask}
+                  resolvedTaskId={resolvedTaskId}
+                  onViewTask={attachTask}
+                  onOpenGlobalContext={openTaskInGlobalContext}
+                />
+              </div>
             </div>
-          </SurfacePanel>
+          ) : null}
+        </WorkflowStageSection>
 
-          <TaskEventHistoryPanel
-            title="Task Event History"
-            description="Inspect persisted event records so dispatch changes, progress movement, and task outcomes remain readable after refresh or recovery."
-            task={activeTask}
-            narrative={eventHistoryNarrative}
-            emptyMessage="No persisted simulation task events are attached yet. Submit or attach a task to inspect its backend event history."
+        <WorkflowStageSection
+          step={3}
+          title="Simulation Result"
+          description="Inspect the latest simulation output without turning the page into a queue or worker dashboard."
+          status={simulationResultState}
+        >
+          <StageNotice
+            tone={simulationResultState.tone}
+            title={`Simulation Result · ${simulationResultState.label}`}
+            message={
+              simulationStageErrorMessage
+                ? `${simulationResultState.message} ${simulationStageErrorMessage}`
+                : simulationResultState.message
+            }
           />
 
-          <TaskResultPanel task={activeTask} summary={taskResultSummary} />
-
-          <SurfacePanel
-            title="Canonical Definition Snapshot"
-            description="The simulation surface stays anchored to the selected backend definition detail, even while task state refreshes or reattaches."
-          >
-            {activeDefinitionError ? (
-              <div className={cx("rounded-[0.9rem] border px-4 py-3 text-sm", resolveSurfaceInsetToneClass("error"))}>
-                Unable to load definition detail. {activeDefinitionErrorMessage}
+          {latestSimulationStageTask ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <SummaryCard
+                  label="Latest Run"
+                  value={`#${latestSimulationStageTask.taskId}`}
+                  detail={latestSimulationStageTask.summary}
+                />
+                <SummaryCard
+                  label="Trace Batch"
+                  value={
+                    simulationResultSummary.traceBatchId !== null
+                      ? String(simulationResultSummary.traceBatchId)
+                      : "Pending"
+                  }
+                />
+                <SummaryCard
+                  label="Result Handles"
+                  value={String(simulationResultSummary.resultHandleCount)}
+                  detail={`${simulationResultSummary.materializedHandleCount} materialized`}
+                />
+                <SummaryCard
+                  label="Trace Payload"
+                  value={simulationResultSummary.hasTracePayload ? "Attached" : "Pending"}
+                  detail={`${simulationResultSummary.metadataRecordCount} metadata records`}
+                />
               </div>
-            ) : null}
 
-            {isDefinitionTransitioning && resolvedDefinitionId !== null ? (
-              <div className="mb-4 flex items-center gap-3 rounded-[0.9rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
+              <StageNotice
+                tone={simulationResultReady ? "success" : simulationResultState.tone}
+                title="Result handoff"
+                message={
+                  simulationResultReady
+                    ? `Simulation result is ready for downstream work. Post Processing Setup can now use simulation task #${latestSimulationStageTask.taskId} as its upstream result source.`
+                    : "Persisted simulation outputs are not ready yet. Post Processing Setup stays blocked until the simulation result becomes available."
+                }
+                actions={
+                  <StageTaskActions
+                    task={latestSimulationStageTask}
+                    resolvedTaskId={resolvedTaskId}
+                    onViewTask={attachTask}
+                    onOpenGlobalContext={openTaskInGlobalContext}
+                  />
+                }
+              />
+            </>
+          ) : null}
+        </WorkflowStageSection>
+
+        <WorkflowStageSection
+          step={4}
+          title="Post Processing Setup"
+          description="Use the latest available simulation result as the upstream input for downstream post-processing."
+          status={postProcessingSetupState}
+        >
+          <StageNotice
+            tone={postProcessingSetupState.tone}
+            title={`Post Processing Setup · ${postProcessingSetupState.label}`}
+            message={postProcessingSetupState.message}
+          />
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <SummaryCard
+              label="Upstream Simulation"
+              value={
+                latestSimulationStageTask
+                  ? `Task #${latestSimulationStageTask.taskId}`
+                  : "Simulation required"
+              }
+              detail={
+                simulationResultReady
+                  ? "A persisted simulation result is available for downstream work."
+                  : "Post-processing stays blocked until simulation publishes a persisted result."
+              }
+            />
+            <SummaryCard
+              label="Downstream Contract"
+              value="Summary-bound"
+              detail="Current frontend-visible submit contract keeps post-processing setup to dataset, definition, and request summary."
+            />
+            <SummaryCard
+              label="Submit Authority"
+              value={session?.canSubmitTasks ? "Available" : "Blocked"}
+              detail="Post-processing still respects the same backend task authority as simulation."
+            />
+          </div>
+
+          <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+            <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              Post Processing Note
+            </span>
+            <textarea
+              {...form.register("postProcessingNote")}
+              rows={4}
+              placeholder="Optional context for the downstream stage, for example export bundle or analysis handoff."
+              className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+
+          {form.formState.errors.postProcessingNote ? (
+            <p className="text-sm text-rose-700 dark:text-rose-300">
+              {form.formState.errors.postProcessingNote.message}
+            </p>
+          ) : null}
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Submission Preview
+              </p>
+              <p className="mt-2 text-foreground">{postProcessingRequestPreview}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void handleSubmit("post_processing");
+              }}
+              disabled={
+                taskMutationStatus.state === "submitting" || postProcessingSetupBlockedReason !== null
+              }
+              className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {taskMutationStatus.state === "submitting" ? (
                 <LoaderCircle className="h-4 w-4 animate-spin" />
-                Refreshing canonical definition detail...
-              </div>
-            ) : null}
+              ) : (
+                <WandSparkles className="h-4 w-4" />
+              )}
+              Run Post Processing
+            </button>
+          </div>
 
-            <div className="grid gap-3 md:grid-cols-4">
-              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Definition
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {activeDefinition?.name ?? "None selected"}
-                </p>
-              </div>
-              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Validation
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {activeDefinition?.validation_status ?? "pending"}
-                </p>
-              </div>
-              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Preview Fields
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {normalizedPreview.fieldCount}
-                </p>
-              </div>
-              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Source Lines
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {activeDefinition ? lineCount(activeDefinition.source_text) : 0}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="space-y-3">
-                {normalizedPreview.fields.slice(0, 6).map((field) => (
-                  <div
-                    key={field.key}
-                    className="rounded-[0.9rem] border border-border bg-surface px-4 py-3"
-                  >
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      {field.label}
-                    </p>
-                    <p className="mt-2 text-sm font-semibold text-foreground">{field.value}</p>
-                  </div>
-                ))}
-                {normalizedPreview.fields.length === 0 ? (
-                  <div className="rounded-[0.9rem] border border-dashed border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-                    No structured normalized output is available for the selected definition yet.
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="rounded-[0.9rem] border border-border bg-background">
-                <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <FileCode2 className="h-4 w-4" />
-                    <span>source_text.yml</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Waypoints className="h-4 w-4" />
-                    <span>simulation authority</span>
-                  </div>
+          {latestPostProcessingTask ? (
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Latest Post Processing Run
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">
+                    Task #{latestPostProcessingTask.taskId}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {latestPostProcessingTaskDetail?.progress.summary ??
+                      latestPostProcessingTask.summary}
+                  </p>
                 </div>
-                <pre className="max-h-[22rem] overflow-auto px-4 py-4 text-sm leading-6 text-foreground">
-                  {activeDefinition?.source_text ?? "circuit:\n  name: pending_selection\n"}
-                </pre>
+                <SurfaceTag tone={taskStatusTone(latestPostProcessingTask.status)}>
+                  {formatSimulationTaskStatusLabel(latestPostProcessingTask.status)}
+                </SurfaceTag>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <SummaryCard
+                  label="Submitted"
+                  value={latestPostProcessingTask.submittedAt ?? "Pending"}
+                />
+                <SummaryCard
+                  label="Upstream"
+                  value={
+                    explicitUpstreamSimulationTaskId !== null
+                      ? `Simulation #${explicitUpstreamSimulationTaskId}`
+                      : latestSimulationStageTask
+                        ? `Simulation #${latestSimulationStageTask.taskId}`
+                        : "Pending"
+                  }
+                  detail={
+                    explicitUpstreamSimulationTaskId !== null
+                      ? "Recovered from persisted post-processing result provenance."
+                      : latestSimulationStageTask
+                        ? "Paired with the latest simulation result visible in the current page context."
+                        : "Simulation result is still required."
+                  }
+                />
+                <SummaryCard
+                  label="Result"
+                  value={postProcessingResultReady ? "Ready" : "Pending"}
+                  detail={
+                    latestPostProcessingTask.resultAvailability
+                      ? `Backend result availability: ${latestPostProcessingTask.resultAvailability}`
+                      : "Result status is inferred from persisted task detail."
+                  }
+                />
+              </div>
+              <div className="mt-4">
+                <StageTaskActions
+                  task={latestPostProcessingTask}
+                  resolvedTaskId={resolvedTaskId}
+                  onViewTask={attachTask}
+                  onOpenGlobalContext={openTaskInGlobalContext}
+                />
               </div>
             </div>
-          </SurfacePanel>
+          ) : null}
+        </WorkflowStageSection>
+
+        <WorkflowStageSection
+          step={5}
+          title="Post Processing Result"
+          description="Keep the downstream result tied to its post-processing stage and make the upstream simulation relation explicit."
+          status={postProcessingResultState}
+        >
+          <StageNotice
+            tone={postProcessingResultState.tone}
+            title={`Post Processing Result · ${postProcessingResultState.label}`}
+            message={
+              postProcessingStageErrorMessage
+                ? `${postProcessingResultState.message} ${postProcessingStageErrorMessage}`
+                : postProcessingResultState.message
+            }
+          />
+
+          {latestPostProcessingTask ? (
+            <>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <SummaryCard
+                  label="Latest Run"
+                  value={`#${latestPostProcessingTask.taskId}`}
+                  detail={latestPostProcessingTask.summary}
+                />
+                <SummaryCard
+                  label="Analysis Run"
+                  value={
+                    postProcessingResultSummary.analysisRunId !== null
+                      ? String(postProcessingResultSummary.analysisRunId)
+                      : "Pending"
+                  }
+                />
+                <SummaryCard
+                  label="Result Handles"
+                  value={String(postProcessingResultSummary.resultHandleCount)}
+                  detail={`${postProcessingResultSummary.materializedHandleCount} materialized`}
+                />
+                <SummaryCard
+                  label="Trace Payload"
+                  value={postProcessingResultSummary.hasTracePayload ? "Attached" : "Pending"}
+                  detail={`${postProcessingResultSummary.metadataRecordCount} metadata records`}
+                />
+              </div>
+
+              <StageNotice
+                tone={postProcessingResultReady ? "success" : postProcessingResultState.tone}
+                title="Downstream handoff"
+                message={
+                  explicitUpstreamSimulationTaskId !== null
+                    ? `This downstream result is attached to post-processing task #${latestPostProcessingTask.taskId} and traces back to simulation task #${explicitUpstreamSimulationTaskId}.`
+                    : latestSimulationStageTask
+                      ? `This downstream result is attached to post-processing task #${latestPostProcessingTask.taskId}. The page can pair it with the latest simulation task #${latestSimulationStageTask.taskId}, but the backend payload does not expose a narrower upstream task id here.`
+                      : `This downstream result is attached to post-processing task #${latestPostProcessingTask.taskId}. Upstream simulation context is not currently available in the page.`
+                }
+                actions={
+                  <StageTaskActions
+                    task={latestPostProcessingTask}
+                    resolvedTaskId={resolvedTaskId}
+                    onViewTask={attachTask}
+                    onOpenGlobalContext={openTaskInGlobalContext}
+                  />
+                }
+              />
+            </>
+          ) : null}
+        </WorkflowStageSection>
+      </div>
+
+      <div className="rounded-[1rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2">
+          <Workflow className="h-4 w-4 text-primary" />
+          <p className="font-medium text-foreground">Global Context owns the infrastructure.</p>
         </div>
-      </section>
+        <p className="mt-2 leading-6">
+          Queue browsing, worker lane health, attach / cancel / terminate / retry, and deeper task
+          diagnostics stay in Global Context. This page only keeps the stage-local execution state
+          needed to finish the simulation workflow.
+        </p>
+        {latestSimulationTask ? (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                openTaskInGlobalContext(latestSimulationTask.taskId);
+              }}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+            >
+              <ArrowUpRight className="h-3.5 w-3.5" />
+              Open Latest Pipeline Task in Global Context
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

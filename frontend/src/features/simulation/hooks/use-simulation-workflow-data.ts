@@ -12,6 +12,7 @@ import {
 import { resolveSimulationDefinitionId } from "@/features/simulation/lib/definition-id";
 import {
   buildSimulationRequestSummary,
+  resolveLatestSimulationStageTask,
   resolveLatestSimulationTask,
 } from "@/features/simulation/lib/workflow";
 import { useActiveDataset } from "@/lib/app-state/active-dataset";
@@ -83,6 +84,14 @@ export function useSimulationWorkflowData(
     .map(normalizeTaskSummary)
     .filter((task) => task.kind === "simulation" || task.kind === "post_processing");
   const latestSimulationTask = resolveLatestSimulationTask(simulationTasks);
+  const latestSimulationStageTask = resolveLatestSimulationStageTask(
+    simulationTasks,
+    "simulation",
+  );
+  const latestPostProcessingTask = resolveLatestSimulationStageTask(
+    simulationTasks,
+    "post_processing",
+  );
   const resolvedTaskId = selectedTaskId ?? latestSimulationTask?.taskId ?? null;
   const taskKey = resolvedTaskId ? taskDetailKey(resolvedTaskId) : null;
   const taskDetailQuery = useSWR(
@@ -102,6 +111,54 @@ export function useSimulationWorkflowData(
   const activeTask = taskDetailQuery.data;
   const hasAttachedTask =
     typeof resolvedTaskId === "number" && activeTask?.taskId === resolvedTaskId;
+  const simulationStageTaskKey = latestSimulationStageTask
+    ? taskDetailKey(latestSimulationStageTask.taskId)
+    : null;
+  const simulationStageTaskQuery = useSWR(
+    simulationStageTaskKey,
+    () =>
+      latestSimulationStageTask
+        ? getTask(latestSimulationStageTask.taskId)
+        : Promise.resolve(undefined),
+    {
+      keepPreviousData: true,
+      refreshInterval(currentData) {
+        if (!currentData) {
+          return 5_000;
+        }
+
+        return currentData.status === "queued" || currentData.status === "running" ? 2_000 : 0;
+      },
+    },
+  );
+  const latestSimulationTaskDetail =
+    activeTask?.taskId === latestSimulationStageTask?.taskId
+      ? activeTask
+      : simulationStageTaskQuery.data;
+  const postProcessingStageTaskKey = latestPostProcessingTask
+    ? taskDetailKey(latestPostProcessingTask.taskId)
+    : null;
+  const postProcessingStageTaskQuery = useSWR(
+    postProcessingStageTaskKey,
+    () =>
+      latestPostProcessingTask
+        ? getTask(latestPostProcessingTask.taskId)
+        : Promise.resolve(undefined),
+    {
+      keepPreviousData: true,
+      refreshInterval(currentData) {
+        if (!currentData) {
+          return 5_000;
+        }
+
+        return currentData.status === "queued" || currentData.status === "running" ? 2_000 : 0;
+      },
+    },
+  );
+  const latestPostProcessingTaskDetail =
+    activeTask?.taskId === latestPostProcessingTask?.taskId
+      ? activeTask
+      : postProcessingStageTaskQuery.data;
 
   async function submitSimulationTask({
     kind,
@@ -176,6 +233,8 @@ export function useSimulationWorkflowData(
       definitionDetailQuery.mutate(),
       taskQueueState.refreshTaskQueue().then(() => undefined),
       taskDetailQuery.mutate(),
+      simulationStageTaskQuery.mutate(),
+      postProcessingStageTaskQuery.mutate(),
       activeDatasetState.refreshActiveDataset(),
     ]);
   }
@@ -196,6 +255,16 @@ export function useSimulationWorkflowData(
       (!hasAttachedDefinition || definitionDetailQuery.isLoading),
     simulationTasks,
     latestSimulationTask,
+    latestSimulationStageTask,
+    latestSimulationTaskDetail,
+    latestSimulationTaskError: simulationStageTaskQuery.error as Error | undefined,
+    isLatestSimulationTaskLoading:
+      Boolean(latestSimulationStageTask) && !latestSimulationTaskDetail,
+    latestPostProcessingTask,
+    latestPostProcessingTaskDetail,
+    latestPostProcessingTaskError: postProcessingStageTaskQuery.error as Error | undefined,
+    isLatestPostProcessingTaskLoading:
+      Boolean(latestPostProcessingTask) && !latestPostProcessingTaskDetail,
     resolvedTaskId,
     activeTask,
     activeTaskError: taskDetailQuery.error as Error | undefined,

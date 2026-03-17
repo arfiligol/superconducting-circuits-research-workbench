@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ChevronRight, UserRound } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { WorkspaceAccountPanel } from "@/components/layout/workspace-account-panel";
 import { WorkspaceStatusStrip } from "@/components/layout/workspace-status-strip";
@@ -12,6 +12,7 @@ import {
   resolveShellConnectionTargetLabel,
   resolveSessionWorkspaceLabel,
   resolveShellUserInitials,
+  subscribeToGlobalContextRequests,
 } from "@/components/layout/workspace-shell-contract";
 import { cx } from "@/features/shared/components/surface-kit";
 import { useAppSession } from "@/lib/app-state";
@@ -68,6 +69,12 @@ export function WorkspaceHeader() {
       tone: "error" as const,
     };
   }, [authSummary, session]);
+
+  useEffect(() => {
+    return subscribeToGlobalContextRequests(() => {
+      setActivePanel("context");
+    });
+  }, []);
 
   return (
     <>

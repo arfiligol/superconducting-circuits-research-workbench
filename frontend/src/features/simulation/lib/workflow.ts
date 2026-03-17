@@ -2,10 +2,11 @@ import type {
   CircuitDefinitionSummary,
 } from "@/features/circuit-definition-editor/lib/contracts";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
-import type { TaskDetail, TaskSummary } from "@/lib/api/tasks";
+import type { TaskDetail, TaskExecutionStatus, TaskSummary } from "@/lib/api/tasks";
 
 export type SimulationTaskScope = "all" | "definition" | "dataset";
 export type SimulationTaskStatusFilter = "all" | "active" | "completed" | "failed";
+export type SimulationStageKind = "simulation" | "post_processing";
 
 export type SimulationSelectionRecovery = Readonly<{
   tone: "default" | "warning";
@@ -47,8 +48,53 @@ function isSimulationLaneTask(task: TaskSummary) {
   return task.kind === "simulation" || task.kind === "post_processing";
 }
 
+export function isSimulationTaskActive(status: TaskExecutionStatus) {
+  return (
+    status === "queued" ||
+    status === "dispatching" ||
+    status === "running" ||
+    status === "cancellation_requested" ||
+    status === "cancelling" ||
+    status === "termination_requested"
+  );
+}
+
+export function isSimulationTaskCompleted(status: TaskExecutionStatus) {
+  return status === "completed";
+}
+
+export function isSimulationTaskTerminal(status: TaskExecutionStatus) {
+  return (
+    status === "completed" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "terminated"
+  );
+}
+
+export function formatSimulationTaskStatusLabel(status: TaskExecutionStatus) {
+  switch (status) {
+    case "queued":
+    case "dispatching":
+      return "Queued";
+    case "running":
+    case "cancellation_requested":
+    case "cancelling":
+    case "termination_requested":
+      return "Running";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+    case "cancelled":
+      return "Cancelled";
+    case "terminated":
+      return "Terminated";
+  }
+}
+
 function isActiveTask(task: TaskSummary) {
-  return task.status === "queued" || task.status === "running";
+  return isSimulationTaskActive(task.status);
 }
 
 function matchesTaskScope(
@@ -170,6 +216,14 @@ export function resolveLatestSimulationTask(
   return simulationTasks.find(isActiveTask) ?? simulationTasks[0];
 }
 
+export function resolveLatestSimulationStageTask(
+  tasks: readonly TaskSummary[],
+  kind: SimulationStageKind,
+): TaskSummary | undefined {
+  const stageTasks = tasks.filter((task) => task.kind === kind);
+  return stageTasks.find(isActiveTask) ?? stageTasks[0];
+}
+
 export function filterSimulationTasks(
   tasks: readonly TaskSummary[],
   options: FilterSimulationTasksOptions,
@@ -285,4 +339,39 @@ export function summarizeSimulationTaskResults(
     traceBatchId: task?.resultRefs.traceBatchId ?? null,
     analysisRunId: task?.resultRefs.analysisRunId ?? null,
   };
+}
+
+export function hasSimulationTaskResult(task: TaskDetail | undefined) {
+  if (!task || task.status !== "completed") {
+    return false;
+  }
+
+  return (
+    task.resultRefs.traceBatchId !== null ||
+    task.resultRefs.analysisRunId !== null ||
+    task.resultRefs.tracePayload !== null ||
+    task.resultRefs.metadataRecords.length > 0 ||
+    task.resultRefs.resultHandles.length > 0
+  );
+}
+
+export function resolvePostProcessingUpstreamTaskId(
+  task: Pick<TaskDetail, "taskId" | "resultRefs"> | undefined,
+): number | null {
+  if (!task) {
+    return null;
+  }
+
+  for (const handle of task.resultRefs.resultHandles) {
+    const sourceTaskId = handle.provenance.sourceTaskId ?? handle.provenanceTaskId;
+    if (sourceTaskId !== null && sourceTaskId !== task.taskId) {
+      return sourceTaskId;
+    }
+  }
+
+  if (task.resultRefs.tracePayload === null) {
+    return null;
+  }
+
+  return null;
 }

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -13,13 +16,27 @@ import {
   buildSimulationRequestSummary,
   filterSimulationDefinitions,
   filterSimulationTasks,
+  formatSimulationTaskStatusLabel,
+  hasSimulationTaskResult,
+  resolveLatestSimulationStageTask,
   resolveLatestSimulationTask,
+  resolvePostProcessingUpstreamTaskId,
   resolveSimulationSelectionRecovery,
   resolveSimulationTaskAttachmentState,
   resolveSimulationTaskRecovery,
   summarizeSimulationTaskResults,
   summarizeSimulationTasks,
 } from "../src/features/simulation/lib/workflow";
+
+const simulationWorkbenchSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-workbench-shell.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 
 describe("simulation definition routing helpers", () => {
   const definitions = [
@@ -147,6 +164,12 @@ describe("simulation task workflow helpers", () => {
       "Simulation request for FloatingQubitWithXYLine · dataset Fluxonium sweep 031 · cache validation",
     );
     expect(resolveLatestSimulationTask(tasks)?.taskId).toBe(31);
+    expect(resolveLatestSimulationStageTask(tasks, "simulation")?.taskId).toBe(31);
+    expect(resolveLatestSimulationStageTask(tasks, "post_processing")?.taskId).toBe(29);
+    expect(formatSimulationTaskStatusLabel("dispatching")).toBe("Queued");
+    expect(formatSimulationTaskStatusLabel("running")).toBe("Running");
+    expect(formatSimulationTaskStatusLabel("completed")).toBe("Completed");
+    expect(formatSimulationTaskStatusLabel("failed")).toBe("Failed");
   });
 
   it("filters and summarizes simulation-lane tasks", () => {
@@ -243,114 +266,114 @@ describe("simulation task workflow helpers", () => {
   });
 
   it("summarizes task result refs", () => {
-    expect(
-      summarizeSimulationTaskResults({
-        taskId: 29,
-        kind: "post_processing",
-        lane: "simulation",
-        executionMode: "run",
+    const completedPostProcessingTask = {
+      taskId: 29,
+      kind: "post_processing",
+      lane: "simulation",
+      executionMode: "run",
+      status: "completed",
+      submittedAt: "2026-03-12 10:10:00",
+      ownerUserId: "user-dev-01",
+      ownerDisplayName: "Device Lab",
+      workspaceId: "workspace-lab",
+      workspaceSlug: "device-lab",
+      visibilityScope: "workspace",
+      datasetId: "fluxonium-2025-031",
+      definitionId: 18,
+      summary: "Post-processing request for FloatingQubitWithXYLine",
+      hasActionAuthority: true,
+      allowedActions: {
+        attach: true,
+        cancel: false,
+        terminate: false,
+        retry: true,
+      },
+      queueBackend: "in_memory_scaffold",
+      workerTaskName: "post_processing_run_task",
+      requestReady: true,
+      submittedFromActiveDataset: true,
+      dispatch: {
+        dispatchKey: "dispatch:29:post_processing_run_task",
         status: "completed",
-        submittedAt: "2026-03-12 10:10:00",
-        ownerUserId: "user-dev-01",
-        ownerDisplayName: "Device Lab",
-        workspaceId: "workspace-lab",
-        workspaceSlug: "device-lab",
-        visibilityScope: "workspace",
-        datasetId: "fluxonium-2025-031",
-        definitionId: 18,
-        summary: "Post-processing request for FloatingQubitWithXYLine",
-        hasActionAuthority: true,
-        allowedActions: {
-          attach: true,
-          cancel: false,
-          terminate: false,
-          retry: true,
+        submissionSource: "active_dataset",
+        acceptedAt: "2026-03-12 10:10:00",
+        lastUpdatedAt: "2026-03-12 10:11:00",
+      },
+      events: [
+        {
+          eventKey: "task-event-29-completed",
+          eventType: "task_completed",
+          level: "info",
+          occurredAt: "2026-03-12 10:11:00",
+          message: "Post-processing artifacts were materialized.",
+          metadata: {
+            task_id: 29,
+            phase: "completed",
+          },
         },
-        queueBackend: "in_memory_scaffold",
-        workerTaskName: "post_processing_run_task",
-        requestReady: true,
-        submittedFromActiveDataset: true,
-        dispatch: {
-          dispatchKey: "dispatch:29:post_processing_run_task",
-          status: "completed",
-          submissionSource: "active_dataset",
-          acceptedAt: "2026-03-12 10:10:00",
-          lastUpdatedAt: "2026-03-12 10:11:00",
-        },
-        events: [
+      ],
+      progress: {
+        phase: "completed",
+        percentComplete: 100,
+        summary: "Post-processing complete",
+        updatedAt: "2026-03-12 10:11:00",
+      },
+      resultRefs: {
+        traceBatchId: 44,
+        analysisRunId: 9,
+        metadataRecords: [
           {
-            eventKey: "task-event-29-completed",
-            eventType: "task_completed",
-            level: "info",
-            occurredAt: "2026-03-12 10:11:00",
-            message: "Post-processing artifacts were materialized.",
-            metadata: {
-              task_id: 29,
-              phase: "completed",
+            backend: "sqlite_metadata",
+            recordType: "trace_batch",
+            recordId: "trace-batch-44",
+            version: 1,
+            schemaVersion: "trace-batch/v1",
+          },
+        ],
+        tracePayload: {
+          contractVersion: "trace-payload/v1",
+          backend: "local_zarr",
+          payloadRole: "task_output",
+          storeKey: "trace-output-44",
+          storeUri: "/data/trace-output-44.zarr",
+          groupPath: "/",
+          arrayPath: "/s11",
+          dtype: "float64",
+          shape: [801],
+          chunkShape: [128],
+          schemaVersion: "zarr/v2",
+        },
+        resultHandles: [
+          {
+            contractVersion: "result-handle/v1",
+            handleId: "handle-44",
+            kind: "simulation_trace",
+            status: "materialized",
+            label: "S11",
+            metadataRecord: {
+              backend: "sqlite_metadata",
+              recordType: "result_handle",
+              recordId: "handle-44",
+              version: 1,
+              schemaVersion: "result-handle/v1",
+            },
+            payloadBackend: "local_zarr",
+            payloadFormat: "zarr",
+            payloadRole: "trace_payload",
+            payloadLocator: "/data/trace-output-44.zarr",
+            provenanceTaskId: 29,
+            provenance: {
+              sourceDatasetId: "fluxonium-2025-031",
+              sourceTaskId: 31,
+              traceBatchRecord: null,
+              analysisRunRecord: null,
             },
           },
         ],
-        progress: {
-          phase: "completed",
-          percentComplete: 100,
-          summary: "Post-processing complete",
-          updatedAt: "2026-03-12 10:11:00",
-        },
-        resultRefs: {
-          traceBatchId: 44,
-          analysisRunId: 9,
-          metadataRecords: [
-            {
-              backend: "sqlite_metadata",
-              recordType: "trace_batch",
-              recordId: "trace-batch-44",
-              version: 1,
-              schemaVersion: "trace-batch/v1",
-            },
-          ],
-          tracePayload: {
-            contractVersion: "trace-payload/v1",
-            backend: "local_zarr",
-            payloadRole: "task_output",
-            storeKey: "trace-output-44",
-            storeUri: "/data/trace-output-44.zarr",
-            groupPath: "/",
-            arrayPath: "/s11",
-            dtype: "float64",
-            shape: [801],
-            chunkShape: [128],
-            schemaVersion: "zarr/v2",
-          },
-          resultHandles: [
-            {
-              contractVersion: "result-handle/v1",
-              handleId: "handle-44",
-              kind: "simulation_trace",
-              status: "materialized",
-              label: "S11",
-              metadataRecord: {
-                backend: "sqlite_metadata",
-                recordType: "result_handle",
-                recordId: "handle-44",
-                version: 1,
-                schemaVersion: "result-handle/v1",
-              },
-              payloadBackend: "local_zarr",
-              payloadFormat: "zarr",
-              payloadRole: "trace_payload",
-              payloadLocator: "/data/trace-output-44.zarr",
-              provenanceTaskId: 29,
-              provenance: {
-                sourceDatasetId: "fluxonium-2025-031",
-                sourceTaskId: 29,
-                traceBatchRecord: null,
-                analysisRunRecord: null,
-              },
-            },
-          ],
-        },
-      }),
-    ).toEqual({
+      },
+    } as const;
+
+    expect(summarizeSimulationTaskResults(completedPostProcessingTask)).toEqual({
       metadataRecordCount: 1,
       resultHandleCount: 1,
       materializedHandleCount: 1,
@@ -358,6 +381,27 @@ describe("simulation task workflow helpers", () => {
       traceBatchId: 44,
       analysisRunId: 9,
     });
+    expect(hasSimulationTaskResult(completedPostProcessingTask)).toBe(true);
+    expect(resolvePostProcessingUpstreamTaskId(completedPostProcessingTask)).toBe(31);
+  });
+});
+
+describe("simulation workflow source contract", () => {
+  it("keeps the page organized around the five-stage workflow instead of task dashboards", () => {
+    expect(simulationWorkbenchSource).toContain("Definition / Netlist Context");
+    expect(simulationWorkbenchSource).toContain("Simulation Setup");
+    expect(simulationWorkbenchSource).toContain("Simulation Result");
+    expect(simulationWorkbenchSource).toContain("Post Processing Setup");
+    expect(simulationWorkbenchSource).toContain("Post Processing Result");
+    expect(simulationWorkbenchSource).toContain("Run Simulation");
+    expect(simulationWorkbenchSource).toContain("Run Post Processing");
+    expect(simulationWorkbenchSource).toContain("Open in Global Context");
+    expect(simulationWorkbenchSource).not.toContain("Simulation Task Queue");
+    expect(simulationWorkbenchSource).not.toContain("Research Workflow State");
+    expect(simulationWorkbenchSource).not.toContain("Task Attachment / Recovery");
+    expect(simulationWorkbenchSource).not.toContain("Dispatch / Execution Status");
+    expect(simulationWorkbenchSource).not.toContain("Task Event History");
+    expect(simulationWorkbenchSource).not.toContain("Persisted Result Surface");
   });
 });
 

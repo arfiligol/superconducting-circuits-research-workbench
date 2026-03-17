@@ -24,6 +24,9 @@ export type ShellAuthViewState =
   | "authenticated"
   | "anonymous"
   | "degraded";
+export type ShellGlobalContextSection = "runtime" | "workspace" | "dataset" | "tasks";
+
+const openGlobalContextEventName = "workspace:open-global-context";
 
 type ShellAuthSummaryInput = Readonly<{
   session: SessionSnapshot | undefined;
@@ -209,6 +212,46 @@ export function resolveShellUserInitials(displayName: string | null | undefined)
     .map((part) => part.charAt(0).toUpperCase())
     .join("")
     .slice(0, 2);
+}
+
+export function requestOpenGlobalContext(section: ShellGlobalContextSection = "tasks") {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(openGlobalContextEventName, {
+      detail: {
+        section,
+      },
+    }),
+  );
+}
+
+export function subscribeToGlobalContextRequests(
+  listener: (section: ShellGlobalContextSection) => void,
+) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handleOpenRequest = (event: Event) => {
+    const section =
+      event instanceof CustomEvent &&
+      event.detail &&
+      typeof event.detail === "object" &&
+      "section" in event.detail &&
+      typeof event.detail.section === "string"
+        ? (event.detail.section as ShellGlobalContextSection)
+        : "tasks";
+
+    listener(section);
+  };
+
+  window.addEventListener(openGlobalContextEventName, handleOpenRequest);
+  return () => {
+    window.removeEventListener(openGlobalContextEventName, handleOpenRequest);
+  };
 }
 
 export function resolveShellTaskHref(task: Pick<TaskSummary, "lane" | "taskId">) {
