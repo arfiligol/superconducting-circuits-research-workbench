@@ -566,60 +566,6 @@ function resolveWheelStep(input: HTMLInputElement) {
   return precision > 0 ? 10 ** -precision : 1;
 }
 
-function clampWheelValue(input: HTMLInputElement, nextValue: number) {
-  const min = Number(input.min);
-  const max = Number(input.max);
-
-  if (Number.isFinite(min)) {
-    nextValue = Math.max(nextValue, min);
-  }
-  if (Number.isFinite(max)) {
-    nextValue = Math.min(nextValue, max);
-  }
-
-  return nextValue;
-}
-
-function commitWheelValue(
-  input: HTMLInputElement,
-  nextValue: number,
-  precision: number,
-  onChange?: React.ChangeEventHandler<HTMLInputElement>,
-) {
-  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-  const serializedValue = precision > 0 ? nextValue.toFixed(precision) : String(nextValue);
-
-  if (valueSetter) {
-    valueSetter.call(input, serializedValue);
-  } else {
-    input.value = serializedValue;
-  }
-
-  if (onChange) {
-    onChange({
-      target: input,
-      currentTarget: input,
-      type: "change",
-      bubbles: true,
-      cancelable: false,
-      defaultPrevented: false,
-      eventPhase: Event.AT_TARGET,
-      isTrusted: false,
-      nativeEvent: new Event("change", { bubbles: true }),
-      preventDefault() {},
-      isDefaultPrevented: () => false,
-      stopPropagation() {},
-      isPropagationStopped: () => false,
-      persist() {},
-      timeStamp: Date.now(),
-    } as React.ChangeEvent<HTMLInputElement>);
-    return;
-  }
-
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
 function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const lastWheelAdjustmentAtRef = useRef<number>(0);
@@ -649,22 +595,40 @@ function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputEle
       if (input.disabled || input.readOnly) {
         return;
       }
-
-      const currentValue = input.value === "" ? 0 : Number(input.value);
-      if (!Number.isFinite(currentValue)) {
-        return;
-      }
-
-      const step = resolveWheelStep(input);
       const direction = event.deltaY < 0 ? 1 : -1;
-      const precision = Math.max(countDecimalPlaces(input.value), countDecimalPlaces(String(step)));
-      const nextValue = clampWheelValue(input, currentValue + direction * step);
+      const originalStepAttribute = input.getAttribute("step");
+      const temporaryStep =
+        originalStepAttribute === null || originalStepAttribute === "any"
+          ? String(resolveWheelStep(input))
+          : null;
 
-      if (nextValue === currentValue) {
+      if (temporaryStep) {
+        input.setAttribute("step", temporaryStep);
+      }
+
+      const previousValue = input.value;
+      try {
+        if (direction > 0) {
+          input.stepUp();
+        } else {
+          input.stepDown();
+        }
+      } finally {
+        if (temporaryStep) {
+          if (originalStepAttribute === null) {
+            input.removeAttribute("step");
+          } else {
+            input.setAttribute("step", originalStepAttribute);
+          }
+        }
+      }
+
+      if (input.value === previousValue) {
         return;
       }
 
-      commitWheelValue(input, nextValue, precision, props.onChange);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
     };
 
     const listenerOptions = { passive: false, capture: true } as const;
