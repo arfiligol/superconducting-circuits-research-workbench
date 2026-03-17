@@ -15,11 +15,14 @@ import {
 import {
   buildSimulationRequestSummary,
   filterSimulationDefinitions,
+  filterSimulationTasksByContext,
   filterSimulationTasks,
   formatSimulationTaskStatusLabel,
   hasSimulationTaskResult,
   resolveLatestSimulationStageTask,
+  resolveLatestSimulationStageTaskInContext,
   resolveLatestSimulationTask,
+  resolveLatestSimulationTaskInContext,
   resolvePostProcessingUpstreamTaskId,
   resolveSimulationSelectionRecovery,
   resolveSimulationTaskAttachmentState,
@@ -34,6 +37,12 @@ const simulationWorkbenchSource = readFileSync(
       "../src/features/simulation/components/simulation-workbench-shell.tsx",
       import.meta.url,
     ),
+  ),
+  "utf8",
+);
+const simulationWorkflowHookSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/simulation/hooks/use-simulation-workflow-data.ts", import.meta.url),
   ),
   "utf8",
 );
@@ -189,6 +198,125 @@ describe("simulation task workflow helpers", () => {
       failedCount: 0,
       resultBackedCount: 1,
     });
+  });
+
+  it("binds the latest simulation and post-processing stages to the current definition and dataset", () => {
+    const contextBoundTasks = [
+      {
+        taskId: 55,
+        kind: "simulation",
+        lane: "simulation",
+        executionMode: "run",
+        status: "completed",
+        submittedAt: "2026-03-12 10:35:00",
+        ownerUserId: "user-dev-01",
+        ownerDisplayName: "Device Lab",
+        workspaceId: "workspace-lab",
+        workspaceSlug: "device-lab",
+        visibilityScope: "workspace",
+        datasetId: "fluxonium-2025-031",
+        definitionId: 18,
+        summary: "Simulation request for FloatingQubitWithXYLine",
+        hasActionAuthority: true,
+        allowedActions: {
+          attach: true,
+          cancel: false,
+          terminate: false,
+          retry: true,
+        },
+      },
+      {
+        taskId: 56,
+        kind: "post_processing",
+        lane: "simulation",
+        executionMode: "run",
+        status: "queued",
+        submittedAt: "2026-03-12 10:40:00",
+        ownerUserId: "user-dev-01",
+        ownerDisplayName: "Device Lab",
+        workspaceId: "workspace-lab",
+        workspaceSlug: "device-lab",
+        visibilityScope: "workspace",
+        datasetId: "fluxonium-2025-031",
+        definitionId: 18,
+        summary: "Post-processing request for FloatingQubitWithXYLine",
+        hasActionAuthority: true,
+        allowedActions: {
+          attach: true,
+          cancel: true,
+          terminate: false,
+          retry: false,
+        },
+      },
+      {
+        taskId: 57,
+        kind: "simulation",
+        lane: "simulation",
+        executionMode: "run",
+        status: "running",
+        submittedAt: "2026-03-12 10:50:00",
+        ownerUserId: "user-dev-01",
+        ownerDisplayName: "Device Lab",
+        workspaceId: "workspace-lab",
+        workspaceSlug: "device-lab",
+        visibilityScope: "workspace",
+        datasetId: "fluxonium-2025-999",
+        definitionId: 18,
+        summary: "Simulation request for another dataset",
+        hasActionAuthority: true,
+        allowedActions: {
+          attach: true,
+          cancel: true,
+          terminate: false,
+          retry: false,
+        },
+      },
+      {
+        taskId: 58,
+        kind: "post_processing",
+        lane: "simulation",
+        executionMode: "run",
+        status: "completed",
+        submittedAt: "2026-03-12 10:55:00",
+        ownerUserId: "user-dev-01",
+        ownerDisplayName: "Device Lab",
+        workspaceId: "workspace-lab",
+        workspaceSlug: "device-lab",
+        visibilityScope: "workspace",
+        datasetId: "fluxonium-2025-031",
+        definitionId: 24,
+        summary: "Post-processing request for another definition",
+        hasActionAuthority: true,
+        allowedActions: {
+          attach: true,
+          cancel: false,
+          terminate: false,
+          retry: true,
+        },
+      },
+    ] as const;
+    const pageContext = {
+      definitionId: 18,
+      datasetId: "fluxonium-2025-031",
+    } as const;
+
+    expect(filterSimulationTasksByContext(contextBoundTasks, pageContext).map((task) => task.taskId)).toEqual([
+      55,
+      56,
+    ]);
+    expect(resolveLatestSimulationTask(contextBoundTasks)?.taskId).toBe(56);
+    expect(resolveLatestSimulationTaskInContext(contextBoundTasks, pageContext)?.taskId).toBe(56);
+    expect(
+      resolveLatestSimulationStageTaskInContext(contextBoundTasks, "simulation", pageContext)
+        ?.taskId,
+    ).toBe(55);
+    expect(
+      resolveLatestSimulationStageTaskInContext(
+        contextBoundTasks,
+        "post_processing",
+        pageContext,
+      )?.taskId,
+    ).toBe(56);
   });
 
   it("reports task recovery and attachment state", () => {
@@ -402,6 +530,16 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Dispatch / Execution Status");
     expect(simulationWorkbenchSource).not.toContain("Task Event History");
     expect(simulationWorkbenchSource).not.toContain("Persisted Result Surface");
+  });
+
+  it("binds stage authority to the current definition and dataset context", () => {
+    expect(simulationWorkflowHookSource).toContain("resolveLatestSimulationTaskInContext(");
+    expect(simulationWorkflowHookSource).toContain("resolveLatestSimulationStageTaskInContext(");
+    expect(simulationWorkflowHookSource).toContain("const pageContext = {");
+    expect(simulationWorkbenchSource).toContain("summarizeTaskContextBinding");
+    expect(simulationWorkbenchSource).toContain("taskContextBinding?.hasMismatch");
+    expect(simulationWorkbenchSource).toContain("title={taskContextBinding.title}");
+    expect(simulationWorkbenchSource).toContain("message={taskContextBinding.message}");
   });
 });
 

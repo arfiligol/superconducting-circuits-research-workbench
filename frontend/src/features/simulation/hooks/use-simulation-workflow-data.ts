@@ -12,8 +12,9 @@ import {
 import { resolveSimulationDefinitionId } from "@/features/simulation/lib/definition-id";
 import {
   buildSimulationRequestSummary,
-  resolveLatestSimulationStageTask,
-  resolveLatestSimulationTask,
+  filterSimulationTasksByContext,
+  resolveLatestSimulationStageTaskInContext,
+  resolveLatestSimulationTaskInContext,
 } from "@/features/simulation/lib/workflow";
 import { useActiveDataset } from "@/lib/app-state/active-dataset";
 import { useAppSession } from "@/lib/app-state/app-session";
@@ -79,18 +80,29 @@ export function useSimulationWorkflowData(
   const hasAttachedDefinition =
     typeof resolvedDefinitionId === "number" &&
     activeDefinition?.definition_id === resolvedDefinitionId;
+  const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null;
+  const pageContext = {
+    definitionId: resolvedDefinitionId,
+    datasetId: activeDatasetId,
+  } as const;
 
   const simulationTasks = taskQueueState.tasks
     .map(normalizeTaskSummary)
     .filter((task) => task.kind === "simulation" || task.kind === "post_processing");
-  const latestSimulationTask = resolveLatestSimulationTask(simulationTasks);
-  const latestSimulationStageTask = resolveLatestSimulationStageTask(
+  const currentContextSimulationTasks = filterSimulationTasksByContext(
+    simulationTasks,
+    pageContext,
+  );
+  const latestSimulationTask = resolveLatestSimulationTaskInContext(simulationTasks, pageContext);
+  const latestSimulationStageTask = resolveLatestSimulationStageTaskInContext(
     simulationTasks,
     "simulation",
+    pageContext,
   );
-  const latestPostProcessingTask = resolveLatestSimulationStageTask(
+  const latestPostProcessingTask = resolveLatestSimulationStageTaskInContext(
     simulationTasks,
     "post_processing",
+    pageContext,
   );
   const resolvedTaskId = selectedTaskId ?? latestSimulationTask?.taskId ?? null;
   const taskKey = resolvedTaskId ? taskDetailKey(resolvedTaskId) : null;
@@ -254,6 +266,7 @@ export function useSimulationWorkflowData(
       typeof resolvedDefinitionId === "number" &&
       (!hasAttachedDefinition || definitionDetailQuery.isLoading),
     simulationTasks,
+    currentContextSimulationTasks,
     latestSimulationTask,
     latestSimulationStageTask,
     latestSimulationTaskDetail,

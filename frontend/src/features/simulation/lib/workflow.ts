@@ -7,6 +7,10 @@ import type { TaskDetail, TaskExecutionStatus, TaskSummary } from "@/lib/api/tas
 export type SimulationTaskScope = "all" | "definition" | "dataset";
 export type SimulationTaskStatusFilter = "all" | "active" | "completed" | "failed";
 export type SimulationStageKind = "simulation" | "post_processing";
+export type SimulationPageContext = Readonly<{
+  definitionId: number | null;
+  datasetId: string | null;
+}>;
 
 export type SimulationSelectionRecovery = Readonly<{
   tone: "default" | "warning";
@@ -216,12 +220,45 @@ export function resolveLatestSimulationTask(
   return simulationTasks.find(isActiveTask) ?? simulationTasks[0];
 }
 
+export function matchesSimulationTaskContext(
+  task: Pick<TaskSummary, "definitionId" | "datasetId">,
+  context: SimulationPageContext,
+) {
+  if (typeof context.definitionId !== "number" || !context.datasetId) {
+    return false;
+  }
+
+  return task.definitionId === context.definitionId && task.datasetId === context.datasetId;
+}
+
+export function filterSimulationTasksByContext(
+  tasks: readonly TaskSummary[],
+  context: SimulationPageContext,
+) {
+  return tasks.filter((task) => matchesSimulationTaskContext(task, context));
+}
+
+export function resolveLatestSimulationTaskInContext(
+  tasks: readonly TaskSummary[],
+  context: SimulationPageContext,
+) {
+  return resolveLatestSimulationTask(filterSimulationTasksByContext(tasks, context));
+}
+
 export function resolveLatestSimulationStageTask(
   tasks: readonly TaskSummary[],
   kind: SimulationStageKind,
 ): TaskSummary | undefined {
   const stageTasks = tasks.filter((task) => task.kind === kind);
   return stageTasks.find(isActiveTask) ?? stageTasks[0];
+}
+
+export function resolveLatestSimulationStageTaskInContext(
+  tasks: readonly TaskSummary[],
+  kind: SimulationStageKind,
+  context: SimulationPageContext,
+) {
+  return resolveLatestSimulationStageTask(filterSimulationTasksByContext(tasks, context), kind);
 }
 
 export function filterSimulationTasks(

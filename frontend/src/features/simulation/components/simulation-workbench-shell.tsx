@@ -52,7 +52,11 @@ import {
 } from "@/components/layout/workspace-shell-contract";
 import { ApiError } from "@/lib/api/client";
 import type { TaskDetail, TaskExecutionStatus, TaskSummary } from "@/lib/api/tasks";
-import { resolveTaskConnectionState, resolveTaskRecoveryNotice } from "@/lib/task-surface";
+import {
+  resolveTaskConnectionState,
+  resolveTaskRecoveryNotice,
+  summarizeTaskContextBinding,
+} from "@/lib/task-surface";
 import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
 const simulationRequestSchema = z.object({
@@ -488,6 +492,11 @@ export function SimulationWorkbenchShell() {
     latestSimulationTask?.taskId ?? null,
     activeTaskError,
   );
+  const taskContextBinding = summarizeTaskContextBinding({
+    task: activeTask,
+    activeDatasetId: activeDatasetState.activeDataset?.datasetId ?? null,
+    activeDefinitionId: resolvedDefinitionId,
+  });
   const definitionsErrorMessage = describeApiError(definitionsError);
   const activeDefinitionErrorMessage = describeApiError(activeDefinitionError);
   const activeTaskErrorMessage = describeApiError(activeTaskError);
@@ -727,7 +736,42 @@ export function SimulationWorkbenchShell() {
         />
       ) : null}
 
-      {!taskRecovery && taskConnectionState.hasNewerLatestTask && latestSimulationTask ? (
+      {!taskRecovery && taskContextBinding?.hasMismatch ? (
+        <StageNotice
+          tone="warning"
+          title={taskContextBinding.title}
+          message={taskContextBinding.message}
+          actions={
+            <>
+              {latestSimulationTask && latestSimulationTask.taskId !== activeTask?.taskId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    attachTask(latestSimulationTask.taskId);
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                >
+                  Resume Latest Run
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  requestOpenGlobalContext("tasks");
+                }}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+              >
+                Open in Global Context
+              </button>
+            </>
+          }
+        />
+      ) : null}
+
+      {!taskRecovery &&
+      !taskContextBinding?.hasMismatch &&
+      taskConnectionState.hasNewerLatestTask &&
+      latestSimulationTask ? (
         <StageNotice
           tone="primary"
           title="Latest task available"
