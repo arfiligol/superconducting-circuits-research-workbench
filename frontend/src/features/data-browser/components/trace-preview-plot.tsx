@@ -1,7 +1,8 @@
 "use client";
 
-import type { CSSProperties, ComponentType } from "react";
+import { useMemo, type CSSProperties, type ComponentType } from "react";
 import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
 
 type PlotComponentProps = Readonly<{
   data: readonly Record<string, unknown>[];
@@ -34,6 +35,54 @@ export function TracePreviewPlot({
   yLabel,
   title,
 }: TracePreviewPlotProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme !== "light";
+  const axisColor = isDark ? "#e7edf6" : "#0f172a";
+  const gridColor = isDark ? "rgba(148, 163, 184, 0.22)" : "rgba(148, 163, 184, 0.18)";
+  const lineColor = isDark ? "rgba(148, 163, 184, 0.42)" : "rgba(148, 163, 184, 0.3)";
+  const layout = useMemo(
+    () => ({
+      title: undefined,
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      margin: { t: 18, r: 18, b: 52, l: 58 },
+      xaxis: {
+        title: {
+          text: xLabel,
+          standoff: 16,
+          font: { color: axisColor },
+        },
+        tickfont: {
+          color: axisColor,
+        },
+        zeroline: false,
+        gridcolor: gridColor,
+        linecolor: lineColor,
+        tickcolor: lineColor,
+        automargin: true,
+      },
+      yaxis: {
+        title: {
+          text: yLabel,
+          standoff: 14,
+          font: { color: axisColor },
+        },
+        tickfont: {
+          color: axisColor,
+        },
+        zeroline: false,
+        gridcolor: gridColor,
+        linecolor: lineColor,
+        tickcolor: lineColor,
+        automargin: true,
+      },
+      font: {
+        color: axisColor,
+      },
+    }),
+    [axisColor, gridColor, lineColor, xLabel, yLabel],
+  );
+
   return (
     <div className="overflow-hidden rounded-[0.95rem] border border-border/80 bg-background">
       <Plot
@@ -54,35 +103,7 @@ export function TracePreviewPlot({
             hovertemplate: `${xLabel}: %{x}<br>${yLabel}: %{y}<extra>${title}</extra>`,
           },
         ]}
-        layout={{
-          title: undefined,
-          paper_bgcolor: "rgba(0,0,0,0)",
-          plot_bgcolor: "rgba(0,0,0,0)",
-          margin: { t: 18, r: 18, b: 52, l: 58 },
-          xaxis: {
-            title: {
-              text: xLabel,
-              standoff: 16,
-            },
-            zeroline: false,
-            gridcolor: "rgba(148, 163, 184, 0.18)",
-            linecolor: "rgba(148, 163, 184, 0.3)",
-            automargin: true,
-          },
-          yaxis: {
-            title: {
-              text: yLabel,
-              standoff: 14,
-            },
-            zeroline: false,
-            gridcolor: "rgba(148, 163, 184, 0.18)",
-            linecolor: "rgba(148, 163, 184, 0.3)",
-            automargin: true,
-          },
-          font: {
-            color: "#0f172a",
-          },
-        }}
+        layout={layout}
         config={{
           displaylogo: false,
           responsive: true,

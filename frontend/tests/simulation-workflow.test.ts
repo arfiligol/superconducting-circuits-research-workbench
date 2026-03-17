@@ -647,6 +647,13 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
     expect(simulationWorkbenchSource).toContain("Operation Config JSON");
     expect(simulationWorkbenchSource).toContain("Latest simulation setup was rehydrated");
+    expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
+    expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
+    expect(simulationWorkbenchSource).not.toContain('title="Workflow boundary"');
+    expect(simulationWorkbenchSource).not.toContain("Open Schemas");
+    expect(simulationWorkbenchSource).not.toContain("Open Schema Editor");
+    expect(simulationWorkbenchSource).not.toContain("Open Schemdraw");
+    expect(simulationWorkbenchSource).not.toContain('label="Visibility"');
     expect(simulationWorkbenchSource).not.toContain("Summary-bound");
     expect(simulationWorkbenchSource).not.toContain("Simulation Task Queue");
     expect(simulationWorkbenchSource).not.toContain("Research Workflow State");

@@ -16,18 +16,11 @@ import {
   WandSparkles,
   Workflow,
 } from "lucide-react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CodeMirror from "@uiw/react-codemirror";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import {
-  buildCircuitDefinitionCatalogHref,
-  buildCircuitDefinitionEditorHref,
-  buildCircuitSchemdrawHref,
-} from "@/features/circuit-definition-editor/lib/routes";
-import { formatCircuitNetlistSource } from "@/features/circuit-definition-editor/lib/netlist";
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import {
@@ -167,10 +160,6 @@ function parseTaskIdParam(value: string | null): number | null {
 
   const parsedValue = Number.parseInt(value, 10);
   return Number.isFinite(parsedValue) ? parsedValue : null;
-}
-
-function lineCount(value: string) {
-  return value.split("\n").length;
 }
 
 function describeApiError(error: Error | undefined) {
@@ -686,25 +675,30 @@ export function SimulationWorkbenchShell() {
       })),
     [definitions],
   );
-  const formattedSourceText = useMemo(() => {
-    if (!activeDefinition?.source_text) {
-      return "{\n  \"name\": \"pending_definition\"\n}";
+  const formattedExpandedNetlist = useMemo(() => {
+    const fallback = "pending_definition";
+    const normalizedOutput = activeDefinition?.normalized_output?.trim();
+    if (!normalizedOutput) {
+      return fallback;
     }
 
-    return (
-      formatCircuitNetlistSource(activeDefinition.source_text, {
-        canonicalName: activeDefinition.name,
-      }).formattedSource || activeDefinition.source_text
-    );
+    try {
+      const parsed = JSON.parse(normalizedOutput) as Record<string, unknown>;
+      const expanded = parsed?.expanded;
+
+      if (typeof expanded === "string") {
+        return expanded.trim() || fallback;
+      }
+
+      if (expanded && typeof expanded === "object") {
+        return JSON.stringify(expanded, null, 2);
+      }
+
+      return formatCodeValue(normalizedOutput, fallback);
+    } catch {
+      return normalizedOutput;
+    }
   }, [activeDefinition]);
-  const formattedNormalizedOutput = useMemo(
-    () =>
-      formatCodeValue(
-        activeDefinition?.normalized_output,
-        "{\n  \"expanded_netlist\": \"pending_definition\"\n}",
-      ),
-    [activeDefinition],
-  );
   const simulationRequestPreview = buildSimulationRequestSummary({
     kind: "simulation",
     definitionId: resolvedDefinitionId,
@@ -1098,7 +1092,7 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={1}
           title="Definition / Netlist Context"
-          description="Read the persisted definition and its expanded netlist before changing setup or launching a new run."
+          description="Confirm the selected definition and review the expanded netlist before launching a new run."
           status={{
             label: activeDefinition ? "Ready" : isDefinitionsLoading ? "Loading" : "Blocked",
             tone: activeDefinition ? "success" : isDefinitionsLoading ? "primary" : "warning",
@@ -1106,32 +1100,6 @@ export function SimulationWorkbenchShell() {
               ? "Definition context is ready."
               : "Select a visible definition first.",
           }}
-          actions={
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href={buildCircuitDefinitionCatalogHref()}
-                className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-              >
-                Open Schemas
-              </Link>
-              {resolvedDefinitionId !== null ? (
-                <>
-                  <Link
-                    href={buildCircuitDefinitionEditorHref(resolvedDefinitionId)}
-                    className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                  >
-                    Open Schema Editor
-                  </Link>
-                  <Link
-                    href={buildCircuitSchemdrawHref(resolvedDefinitionId)}
-                    className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                  >
-                    Open Schemdraw
-                  </Link>
-                </>
-              ) : null}
-            </div>
-          }
         >
           {definitionRecovery ? (
             <StageNotice
@@ -1149,8 +1117,8 @@ export function SimulationWorkbenchShell() {
             />
           ) : null}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-            <div className="space-y-4">
+          <div className="space-y-4">
+            <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.6fr)_minmax(0,1.4fr)]">
               <AppSelectField
                 label="Selected Definition"
                 value={resolvedDefinitionId !== null ? String(resolvedDefinitionId) : ""}
@@ -1169,66 +1137,22 @@ export function SimulationWorkbenchShell() {
                 disabled={isDefinitionsLoading || definitionOptions.length === 0}
               />
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <SummaryCard
-                  label="Definition"
-                  value={activeDefinition?.name ?? "No definition selected"}
-                  detail={
-                    resolvedDefinitionId !== null
-                      ? `Definition #${resolvedDefinitionId}`
-                      : "Select a persisted definition from the visible catalog."
-                  }
-                />
-                <SummaryCard
-                  label="Validation"
-                  value={activeDefinition?.validation_summary.status ?? "Pending"}
-                  detail={
-                    activeDefinition
-                      ? `${activeDefinition.validation_summary.notice_count} persisted notices`
-                      : "Validation summary arrives with definition detail."
-                  }
-                />
-                <SummaryCard
-                  label="Visibility"
-                  value={activeDefinition?.visibility_scope ?? "Pending"}
-                  detail={
-                    activeDefinition?.workspace_id
-                      ? `Workspace ${activeDefinition.workspace_id}`
-                      : "Workspace detail is pending."
-                  }
-                />
-                <SummaryCard
-                  label="Source Snapshot"
-                  value={activeDefinition ? `${lineCount(formattedSourceText)} lines` : "Pending"}
-                  detail={
-                    activeDefinition
-                      ? `${lineCount(formattedNormalizedOutput)} expanded lines`
-                      : "Source and expanded netlist appear after definition detail loads."
-                  }
-                />
+              <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Expanded Netlist
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Read-only normalized output used as the simulation-side netlist reference.
+                </p>
               </div>
-
-              <StageNotice
-                tone="default"
-                title="Workflow boundary"
-                message="Definition context stays readable here. Queue browse, worker health, cancel, terminate, retry, and deep task diagnostics stay in Global Context."
-              />
             </div>
 
-            <div className="grid gap-4">
-              <ReadOnlyCodeSurface
-                label="Canonical Source"
-                detail="Persisted definition source used as simulation authority."
-                value={formattedSourceText}
-                height="260px"
-              />
-              <ReadOnlyCodeSurface
-                label="Expanded Netlist Snapshot"
-                detail="Persisted normalized output snapshot used for readable netlist context."
-                value={formattedNormalizedOutput}
-                height="240px"
-              />
-            </div>
+            <ReadOnlyCodeSurface
+              label="Expanded Netlist"
+              detail="Scrollable read-only expanded netlist for simulation context."
+              value={formattedExpandedNetlist}
+              height="320px"
+            />
           </div>
 
           {isDefinitionTransitioning ? (
