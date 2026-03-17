@@ -1,4 +1,7 @@
-from collections.abc import Sequence
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -63,6 +66,281 @@ TaskEventMetadataValue = TaskExecutionHistoryMetadataValue
 TaskEventOrder = Literal["asc", "desc"]
 TaskDispatchStatus = _TaskDispatchStatus
 task_submission_source_for = _task_submission_source_for
+
+
+@dataclass(frozen=True)
+class SimulationFrequencySweep:
+    start_ghz: float
+    stop_ghz: float
+    point_count: int
+    spacing: Literal["linear", "log"] = "linear"
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "start_ghz": self.start_ghz,
+            "stop_ghz": self.stop_ghz,
+            "point_count": self.point_count,
+            "spacing": self.spacing,
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> SimulationFrequencySweep:
+        return cls(
+            start_ghz=float(payload["start_ghz"]),
+            stop_ghz=float(payload["stop_ghz"]),
+            point_count=int(payload["point_count"]),
+            spacing=cast(Literal["linear", "log"], payload.get("spacing", "linear")),
+        )
+
+
+@dataclass(frozen=True)
+class SimulationParameterSweep:
+    parameter: str
+    values: tuple[float, ...]
+    unit: str | None = None
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "parameter": self.parameter,
+            "values": list(self.values),
+            "unit": self.unit,
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> SimulationParameterSweep:
+        raw_values = payload.get("values", ())
+        values = tuple(float(value) for value in raw_values) if isinstance(raw_values, list) else ()
+        return cls(
+            parameter=str(payload["parameter"]),
+            values=values,
+            unit=str(payload["unit"]) if isinstance(payload.get("unit"), str) else None,
+        )
+
+
+@dataclass(frozen=True)
+class SimulationHarmonicBalanceSettings:
+    enabled: bool
+    harmonic_count: int | None = None
+    oversample_factor: int | None = None
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "enabled": self.enabled,
+            "harmonic_count": self.harmonic_count,
+            "oversample_factor": self.oversample_factor,
+        }
+
+    @classmethod
+    def from_mapping(
+        cls,
+        payload: Mapping[str, object],
+    ) -> SimulationHarmonicBalanceSettings:
+        harmonic_count = payload.get("harmonic_count")
+        oversample_factor = payload.get("oversample_factor")
+        return cls(
+            enabled=bool(payload.get("enabled", False)),
+            harmonic_count=int(harmonic_count) if isinstance(harmonic_count, int | float) else None,
+            oversample_factor=(
+                int(oversample_factor) if isinstance(oversample_factor, int | float) else None
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class SimulationSolverSettings:
+    solver_family: str
+    max_iterations: int
+    convergence_tolerance: float
+    harmonic_balance: SimulationHarmonicBalanceSettings | None = None
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "solver_family": self.solver_family,
+            "max_iterations": self.max_iterations,
+            "convergence_tolerance": self.convergence_tolerance,
+            "harmonic_balance": (
+                self.harmonic_balance.to_mapping()
+                if self.harmonic_balance is not None
+                else None
+            ),
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> SimulationSolverSettings:
+        harmonic_balance = payload.get("harmonic_balance")
+        return cls(
+            solver_family=str(payload["solver_family"]),
+            max_iterations=int(payload["max_iterations"]),
+            convergence_tolerance=float(payload["convergence_tolerance"]),
+            harmonic_balance=(
+                SimulationHarmonicBalanceSettings.from_mapping(harmonic_balance)
+                if isinstance(harmonic_balance, Mapping)
+                else None
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class SimulationSourceSpec:
+    source_id: str
+    kind: str
+    target: str
+    amplitude: float
+    frequency_ghz: float | None = None
+    phase_deg: float | None = None
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "source_id": self.source_id,
+            "kind": self.kind,
+            "target": self.target,
+            "amplitude": self.amplitude,
+            "frequency_ghz": self.frequency_ghz,
+            "phase_deg": self.phase_deg,
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> SimulationSourceSpec:
+        frequency_ghz = payload.get("frequency_ghz")
+        phase_deg = payload.get("phase_deg")
+        return cls(
+            source_id=str(payload["source_id"]),
+            kind=str(payload["kind"]),
+            target=str(payload["target"]),
+            amplitude=float(payload["amplitude"]),
+            frequency_ghz=float(frequency_ghz)
+            if isinstance(frequency_ghz, int | float)
+            else None,
+            phase_deg=float(phase_deg) if isinstance(phase_deg, int | float) else None,
+        )
+
+
+@dataclass(frozen=True)
+class SimulationSetup:
+    frequency_sweep: SimulationFrequencySweep
+    parameter_sweeps: tuple[SimulationParameterSweep, ...]
+    solver: SimulationSolverSettings
+    sources: tuple[SimulationSourceSpec, ...]
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "frequency_sweep": self.frequency_sweep.to_mapping(),
+            "parameter_sweeps": [sweep.to_mapping() for sweep in self.parameter_sweeps],
+            "solver": self.solver.to_mapping(),
+            "sources": [source.to_mapping() for source in self.sources],
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> SimulationSetup:
+        parameter_sweeps = payload.get("parameter_sweeps", ())
+        sources = payload.get("sources", ())
+        return cls(
+            frequency_sweep=SimulationFrequencySweep.from_mapping(
+                cast(Mapping[str, object], payload["frequency_sweep"])
+            ),
+            parameter_sweeps=tuple(
+                SimulationParameterSweep.from_mapping(cast(Mapping[str, object], sweep))
+                for sweep in parameter_sweeps
+                if isinstance(sweep, Mapping)
+            ),
+            solver=SimulationSolverSettings.from_mapping(
+                cast(Mapping[str, object], payload["solver"])
+            ),
+            sources=tuple(
+                SimulationSourceSpec.from_mapping(cast(Mapping[str, object], source))
+                for source in sources
+                if isinstance(source, Mapping)
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class PostProcessingTraceSelection:
+    trace_family: str
+    representation: str
+    design_id: str | None = None
+    trace_ids: tuple[str, ...] = ()
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "trace_family": self.trace_family,
+            "representation": self.representation,
+            "design_id": self.design_id,
+            "trace_ids": list(self.trace_ids),
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> PostProcessingTraceSelection:
+        raw_trace_ids = payload.get("trace_ids", ())
+        return cls(
+            trace_family=str(payload["trace_family"]),
+            representation=str(payload["representation"]),
+            design_id=(
+                str(payload["design_id"])
+                if isinstance(payload.get("design_id"), str)
+                else None
+            ),
+            trace_ids=(
+                tuple(str(value) for value in raw_trace_ids)
+                if isinstance(raw_trace_ids, list)
+                else ()
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class PostProcessingOperation:
+    operation: str
+    enabled: bool
+    config: dict[str, object]
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "operation": self.operation,
+            "enabled": self.enabled,
+            "config": dict(self.config),
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> PostProcessingOperation:
+        config = payload.get("config")
+        return cls(
+            operation=str(payload["operation"]),
+            enabled=bool(payload.get("enabled", True)),
+            config=dict(config) if isinstance(config, Mapping) else {},
+        )
+
+
+@dataclass(frozen=True)
+class PostProcessingSetup:
+    output_view: str
+    selections: tuple[PostProcessingTraceSelection, ...]
+    operations: tuple[PostProcessingOperation, ...]
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "output_view": self.output_view,
+            "selections": [selection.to_mapping() for selection in self.selections],
+            "operations": [operation.to_mapping() for operation in self.operations],
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> PostProcessingSetup:
+        selections = payload.get("selections", ())
+        operations = payload.get("operations", ())
+        return cls(
+            output_view=str(payload["output_view"]),
+            selections=tuple(
+                PostProcessingTraceSelection.from_mapping(cast(Mapping[str, object], selection))
+                for selection in selections
+                if isinstance(selection, Mapping)
+            ),
+            operations=tuple(
+                PostProcessingOperation.from_mapping(cast(Mapping[str, object], operation))
+                for operation in operations
+                if isinstance(operation, Mapping)
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -174,6 +452,10 @@ class TaskDetail(TaskSummary):
     submitted_from_active_dataset: bool
     progress: TaskProgress
     result_refs: TaskResultRefs
+    simulation_setup: SimulationSetup | None = None
+    post_processing_setup: PostProcessingSetup | None = None
+    upstream_task_id: int | None = None
+    downstream_task_ids: tuple[int, ...] = ()
     control_state: TaskControlState = "none"
     retry_of_task_id: int | None = None
     dispatch: TaskDispatch | None = None
@@ -210,6 +492,9 @@ class TaskSubmissionDraft:
     dataset_id: str | None
     definition_id: int | None
     summary: str | None
+    simulation_setup: SimulationSetup | None = None
+    post_processing_setup: PostProcessingSetup | None = None
+    upstream_task_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -229,6 +514,9 @@ class TaskCreateDraft:
     request_ready: bool
     submitted_from_active_dataset: bool
     submission_source: TaskSubmissionSource
+    simulation_setup: SimulationSetup | None = None
+    post_processing_setup: PostProcessingSetup | None = None
+    upstream_task_id: int | None = None
     retry_of_task_id: int | None = None
 
 
@@ -396,3 +684,56 @@ def resolve_retry_of_task_id(events: Sequence[TaskEvent]) -> int | None:
         if isinstance(retry_of_task_id, int):
             return retry_of_task_id
     return None
+
+
+def resolve_upstream_task_id(events: Sequence[TaskEvent]) -> int | None:
+    for event in events:
+        upstream_task_id = event.metadata.get("upstream_task_id")
+        if isinstance(upstream_task_id, int):
+            return upstream_task_id
+    return None
+
+
+def resolve_downstream_task_ids(events: Sequence[TaskEvent]) -> tuple[int, ...]:
+    for event in events:
+        raw_downstream_task_ids = event.metadata.get("downstream_task_ids")
+        if isinstance(raw_downstream_task_ids, list):
+            return tuple(
+                task_id for task_id in raw_downstream_task_ids if isinstance(task_id, int)
+            )
+        if isinstance(raw_downstream_task_ids, str):
+            parsed = _parse_json_payload(raw_downstream_task_ids)
+            if isinstance(parsed, list):
+                return tuple(task_id for task_id in parsed if isinstance(task_id, int))
+    return ()
+
+
+def resolve_simulation_setup(events: Sequence[TaskEvent]) -> SimulationSetup | None:
+    for event in events:
+        payload = event.metadata.get("simulation_setup")
+        if isinstance(payload, Mapping):
+            return SimulationSetup.from_mapping(payload)
+        if isinstance(payload, str):
+            parsed = _parse_json_payload(payload)
+            if isinstance(parsed, Mapping):
+                return SimulationSetup.from_mapping(parsed)
+    return None
+
+
+def resolve_post_processing_setup(events: Sequence[TaskEvent]) -> PostProcessingSetup | None:
+    for event in events:
+        payload = event.metadata.get("post_processing_setup")
+        if isinstance(payload, Mapping):
+            return PostProcessingSetup.from_mapping(payload)
+        if isinstance(payload, str):
+            parsed = _parse_json_payload(payload)
+            if isinstance(parsed, Mapping):
+                return PostProcessingSetup.from_mapping(parsed)
+    return None
+
+
+def _parse_json_payload(payload: str) -> object | None:
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        return None

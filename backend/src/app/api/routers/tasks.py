@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -12,6 +13,15 @@ from src.app.api.presenters.storage import (
     build_trace_payload_ref_response,
 )
 from src.app.domain.tasks import (
+    PostProcessingOperation,
+    PostProcessingSetup,
+    PostProcessingTraceSelection,
+    SimulationFrequencySweep,
+    SimulationHarmonicBalanceSettings,
+    SimulationParameterSweep,
+    SimulationSetup,
+    SimulationSolverSettings,
+    SimulationSourceSpec,
     TaskDetail,
     TaskEvent,
     TaskEventHistoryQuery,
@@ -231,11 +241,26 @@ def _parse_submission_payload(payload: object) -> TaskSubmissionDraft:
             category="validation_error",
             message="definition_id must be an integer or null.",
         )
+    raw_upstream_task_id = body.get("upstream_task_id")
+    if raw_upstream_task_id is None:
+        upstream_task_id = None
+    elif isinstance(raw_upstream_task_id, int):
+        upstream_task_id = raw_upstream_task_id
+    else:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="upstream_task_id must be an integer or null.",
+        )
     return TaskSubmissionDraft(
         kind=kind,
         dataset_id=dataset_id,
         definition_id=definition_id,
         summary=summary,
+        simulation_setup=_parse_simulation_setup(body.get("simulation_setup")),
+        post_processing_setup=_parse_post_processing_setup(body.get("post_processing_setup")),
+        upstream_task_id=upstream_task_id,
     )
 
 
@@ -283,6 +308,18 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
         "worker_task_name": task.worker_task_name,
         "request_ready": task.request_ready,
         "submitted_from_active_dataset": task.submitted_from_active_dataset,
+        "simulation_setup": (
+            _serialize_simulation_setup(task.simulation_setup)
+            if task.simulation_setup is not None
+            else None
+        ),
+        "post_processing_setup": (
+            _serialize_post_processing_setup(task.post_processing_setup)
+            if task.post_processing_setup is not None
+            else None
+        ),
+        "upstream_task_id": task.upstream_task_id,
+        "downstream_task_ids": list(task.downstream_task_ids),
         "control_state": task.control_state,
         "retry_of_task_id": task.retry_of_task_id,
         "allowed_actions": {
@@ -343,7 +380,10 @@ def _serialize_task_event(event: TaskEvent) -> dict[str, object]:
         "level": event.level,
         "occurred_at": event.occurred_at,
         "message": event.message,
-        "metadata": dict(event.metadata),
+        "metadata": {
+            key: _deserialize_task_event_metadata_value(key, value)
+            for key, value in dict(event.metadata).items()
+        },
     }
 
 
@@ -411,6 +451,379 @@ def _optional_string(value: object, *, field_name: str) -> str | None:
             message=f"{field_name} must not be empty when provided.",
         )
     return stripped
+
+
+def _parse_simulation_setup(payload: object) -> SimulationSetup | None:
+    if payload is None:
+        return None
+    body = _as_mapping(payload)
+    frequency_sweep = _require_mapping(
+        body.get("frequency_sweep"),
+        field_name="simulation_setup.frequency_sweep",
+    )
+    return SimulationSetup(
+        frequency_sweep=SimulationFrequencySweep(
+            start_ghz=_required_number(
+                frequency_sweep.get("start_ghz"),
+                field_name="simulation_setup.frequency_sweep.start_ghz",
+            ),
+            stop_ghz=_required_number(
+                frequency_sweep.get("stop_ghz"),
+                field_name="simulation_setup.frequency_sweep.stop_ghz",
+            ),
+            point_count=_required_int(
+                frequency_sweep.get("point_count"),
+                field_name="simulation_setup.frequency_sweep.point_count",
+                minimum=1,
+            ),
+            spacing=_required_literal(
+                frequency_sweep.get("spacing"),
+                field_name="simulation_setup.frequency_sweep.spacing",
+                allowed={"linear", "log"},
+                default="linear",
+            ),
+        ),
+        parameter_sweeps=_parse_parameter_sweeps(body.get("parameter_sweeps")),
+        solver=_parse_solver_settings(body.get("solver")),
+        sources=_parse_source_specs(body.get("sources")),
+    )
+
+
+def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
+    if payload is None:
+        return None
+    body = _as_mapping(payload)
+    output_view = _required_string(
+        body.get("output_view"),
+        field_name="post_processing_setup.output_view",
+    )
+    raw_selections = body.get("selections")
+    raw_operations = body.get("operations")
+    if not isinstance(raw_selections, list):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="post_processing_setup.selections must be an array.",
+        )
+    if not isinstance(raw_operations, list):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="post_processing_setup.operations must be an array.",
+        )
+    return PostProcessingSetup(
+        output_view=output_view,
+        selections=tuple(_parse_trace_selection(item) for item in raw_selections),
+        operations=tuple(_parse_post_processing_operation(item) for item in raw_operations),
+    )
+
+
+def _parse_parameter_sweeps(payload: object) -> tuple[SimulationParameterSweep, ...]:
+    if payload is None:
+        return ()
+    if not isinstance(payload, list):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="simulation_setup.parameter_sweeps must be an array.",
+        )
+    sweeps: list[SimulationParameterSweep] = []
+    for index, item in enumerate(payload):
+        body = _require_mapping(
+            item,
+            field_name=f"simulation_setup.parameter_sweeps[{index}]",
+        )
+        raw_values = body.get("values")
+        if not isinstance(raw_values, list) or len(raw_values) == 0:
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message=(
+                    f"simulation_setup.parameter_sweeps[{index}].values must be "
+                    "a non-empty array."
+                ),
+            )
+        sweeps.append(
+            SimulationParameterSweep(
+                parameter=_required_string(
+                    body.get("parameter"),
+                    field_name=f"simulation_setup.parameter_sweeps[{index}].parameter",
+                ),
+                values=tuple(
+                    _required_number(
+                        value,
+                        field_name=(
+                            f"simulation_setup.parameter_sweeps[{index}].values[{value_index}]"
+                        ),
+                    )
+                    for value_index, value in enumerate(raw_values)
+                ),
+                unit=_optional_string(
+                    body.get("unit"),
+                    field_name=f"simulation_setup.parameter_sweeps[{index}].unit",
+                ),
+            )
+        )
+    return tuple(sweeps)
+
+
+def _parse_solver_settings(payload: object) -> SimulationSolverSettings:
+    body = _require_mapping(payload, field_name="simulation_setup.solver")
+    raw_harmonic_balance = body.get("harmonic_balance")
+    harmonic_balance = None
+    if raw_harmonic_balance is not None:
+        hb_body = _require_mapping(
+            raw_harmonic_balance,
+            field_name="simulation_setup.solver.harmonic_balance",
+        )
+        harmonic_balance = SimulationHarmonicBalanceSettings(
+            enabled=_required_bool(
+                hb_body.get("enabled"),
+                field_name="simulation_setup.solver.harmonic_balance.enabled",
+            ),
+            harmonic_count=_optional_int(
+                hb_body.get("harmonic_count"),
+                field_name="simulation_setup.solver.harmonic_balance.harmonic_count",
+                minimum=1,
+            ),
+            oversample_factor=_optional_int(
+                hb_body.get("oversample_factor"),
+                field_name="simulation_setup.solver.harmonic_balance.oversample_factor",
+                minimum=1,
+            ),
+        )
+    return SimulationSolverSettings(
+        solver_family=_required_string(
+            body.get("solver_family"),
+            field_name="simulation_setup.solver.solver_family",
+        ),
+        max_iterations=_required_int(
+            body.get("max_iterations"),
+            field_name="simulation_setup.solver.max_iterations",
+            minimum=1,
+        ),
+        convergence_tolerance=_required_number(
+            body.get("convergence_tolerance"),
+            field_name="simulation_setup.solver.convergence_tolerance",
+        ),
+        harmonic_balance=harmonic_balance,
+    )
+
+
+def _parse_source_specs(payload: object) -> tuple[SimulationSourceSpec, ...]:
+    if not isinstance(payload, list) or len(payload) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="simulation_setup.sources must be a non-empty array.",
+        )
+    sources: list[SimulationSourceSpec] = []
+    for index, item in enumerate(payload):
+        body = _require_mapping(item, field_name=f"simulation_setup.sources[{index}]")
+        sources.append(
+            SimulationSourceSpec(
+                source_id=_required_string(
+                    body.get("source_id"),
+                    field_name=f"simulation_setup.sources[{index}].source_id",
+                ),
+                kind=_required_string(
+                    body.get("kind"),
+                    field_name=f"simulation_setup.sources[{index}].kind",
+                ),
+                target=_required_string(
+                    body.get("target"),
+                    field_name=f"simulation_setup.sources[{index}].target",
+                ),
+                amplitude=_required_number(
+                    body.get("amplitude"),
+                    field_name=f"simulation_setup.sources[{index}].amplitude",
+                ),
+                frequency_ghz=_optional_number(
+                    body.get("frequency_ghz"),
+                    field_name=f"simulation_setup.sources[{index}].frequency_ghz",
+                ),
+                phase_deg=_optional_number(
+                    body.get("phase_deg"),
+                    field_name=f"simulation_setup.sources[{index}].phase_deg",
+                ),
+            )
+        )
+    return tuple(sources)
+
+
+def _parse_trace_selection(payload: object) -> PostProcessingTraceSelection:
+    body = _require_mapping(payload, field_name="post_processing_setup.selections[]")
+    raw_trace_ids = body.get("trace_ids")
+    if raw_trace_ids is not None and not isinstance(raw_trace_ids, list):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="post_processing_setup.selections[].trace_ids must be an array.",
+        )
+    return PostProcessingTraceSelection(
+        trace_family=_required_string(
+            body.get("trace_family"),
+            field_name="post_processing_setup.selections[].trace_family",
+        ),
+        representation=_required_string(
+            body.get("representation"),
+            field_name="post_processing_setup.selections[].representation",
+        ),
+        design_id=_optional_string(
+            body.get("design_id"),
+            field_name="post_processing_setup.selections[].design_id",
+        ),
+        trace_ids=tuple(str(trace_id) for trace_id in raw_trace_ids or ()),
+    )
+
+
+def _parse_post_processing_operation(payload: object) -> PostProcessingOperation:
+    body = _require_mapping(payload, field_name="post_processing_setup.operations[]")
+    raw_config = body.get("config")
+    if raw_config is not None and not isinstance(raw_config, dict):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="post_processing_setup.operations[].config must be an object.",
+        )
+    return PostProcessingOperation(
+        operation=_required_string(
+            body.get("operation"),
+            field_name="post_processing_setup.operations[].operation",
+        ),
+        enabled=_required_bool(
+            body.get("enabled", True),
+            field_name="post_processing_setup.operations[].enabled",
+        ),
+        config=dict(raw_config or {}),
+    )
+
+
+def _serialize_simulation_setup(setup: SimulationSetup) -> dict[str, object]:
+    return setup.to_mapping()
+
+
+def _serialize_post_processing_setup(setup: PostProcessingSetup) -> dict[str, object]:
+    return setup.to_mapping()
+
+
+def _require_mapping(payload: object, *, field_name: str) -> dict[str, object]:
+    if not isinstance(payload, dict):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be an object.",
+        )
+    return payload
+
+
+def _required_string(value: object, *, field_name: str) -> str:
+    resolved = _optional_string(value, field_name=field_name)
+    if resolved is None:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} is required.",
+        )
+    return resolved
+
+
+def _required_number(value: object, *, field_name: str) -> float:
+    if not isinstance(value, int | float):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be a number.",
+        )
+    return float(value)
+
+
+def _optional_number(value: object, *, field_name: str) -> float | None:
+    if value is None:
+        return None
+    return _required_number(value, field_name=field_name)
+
+
+def _required_int(value: object, *, field_name: str, minimum: int | None = None) -> int:
+    if not isinstance(value, int):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be an integer.",
+        )
+    if minimum is not None and value < minimum:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be greater than or equal to {minimum}.",
+        )
+    return value
+
+
+def _optional_int(value: object, *, field_name: str, minimum: int | None = None) -> int | None:
+    if value is None:
+        return None
+    return _required_int(value, field_name=field_name, minimum=minimum)
+
+
+def _required_bool(value: object, *, field_name: str) -> bool:
+    if not isinstance(value, bool):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be a boolean.",
+        )
+    return value
+
+
+def _required_literal(
+    value: object,
+    *,
+    field_name: str,
+    allowed: set[str],
+    default: str | None = None,
+) -> str:
+    if value is None:
+        if default is not None:
+            return default
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} is required.",
+        )
+    if not isinstance(value, str) or value not in allowed:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be one of {', '.join(sorted(allowed))}.",
+        )
+    return value
+
+
+def _deserialize_task_event_metadata_value(key: str, value: object) -> object:
+    if key not in {"simulation_setup", "post_processing_setup", "downstream_task_ids"}:
+        return value
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
 
 
 def _parse_status_filter(value: str | None) -> TaskStatus | None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -11,6 +12,8 @@ from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import DatasetDetail
 from src.app.domain.session import SessionState
 from src.app.domain.tasks import (
+    PostProcessingSetup,
+    SimulationSetup,
     TaskAllowedActions,
     TaskCreateDraft,
     TaskDetail,
@@ -192,6 +195,7 @@ class TaskService:
         )
         resolved_dataset_id = draft.dataset_id or session.active_dataset_id
         submitted_from_active_dataset = draft.dataset_id is None and resolved_dataset_id is not None
+        upstream_task = self._resolve_upstream_task(draft.upstream_task_id)
 
         if draft.kind == "simulation" and draft.definition_id is None:
             raise service_error(
@@ -200,6 +204,13 @@ class TaskService:
                 category="validation",
                 message="Simulation tasks require definition_id.",
             )
+        if draft.kind == "simulation" and draft.simulation_setup is None:
+            raise service_error(
+                422,
+                code="simulation_setup_required",
+                category="validation",
+                message="Simulation tasks require simulation_setup.",
+            )
 
         if draft.kind in {"post_processing", "characterization"} and resolved_dataset_id is None:
             raise service_error(
@@ -207,6 +218,20 @@ class TaskService:
                 code="dataset_context_required",
                 category="validation",
                 message=f"{draft.kind} tasks require dataset_id or an active dataset.",
+            )
+        if draft.kind == "post_processing" and draft.post_processing_setup is None:
+            raise service_error(
+                422,
+                code="post_processing_setup_required",
+                category="validation",
+                message="Post-processing tasks require post_processing_setup.",
+            )
+        if draft.kind == "post_processing" and upstream_task is None:
+            raise service_error(
+                422,
+                code="post_processing_upstream_required",
+                category="validation",
+                message="Post-processing tasks require upstream_task_id.",
             )
 
         if (
@@ -230,6 +255,12 @@ class TaskService:
                 code="circuit_definition_not_found",
                 category="not_found",
                 message=f"Circuit definition {draft.definition_id} was not found.",
+            )
+        if upstream_task is not None:
+            self._validate_upstream_task(
+                upstream_task=upstream_task,
+                draft=draft,
+                resolved_dataset_id=resolved_dataset_id,
             )
 
         owner_user_id = _session_user_id(session)
@@ -264,10 +295,17 @@ class TaskService:
                 request_ready=worker_route.request_ready,
                 submitted_from_active_dataset=submitted_from_active_dataset,
                 submission_source=submission_source,
+                simulation_setup=draft.simulation_setup,
+                post_processing_setup=draft.post_processing_setup,
+                upstream_task_id=draft.upstream_task_id,
             )
         )
         detail = self.get_task(created_task.task_id)
-        self._merge_submission_audit_metadata(detail)
+        self._merge_submission_metadata(
+            detail,
+            draft=draft,
+            upstream_task=upstream_task,
+        )
         self._append_audit_record(
             action_kind="task.submitted",
             resource_id=str(detail.task_id),
@@ -277,6 +315,7 @@ class TaskService:
                 "lane": detail.lane,
                 "dataset_id": detail.dataset_id,
                 "definition_id": detail.definition_id,
+                "upstream_task_id": detail.upstream_task_id,
                 "submission_source": detail.dispatch.submission_source if detail.dispatch else None,
             },
         )
@@ -436,6 +475,9 @@ class TaskService:
                         dataset_id=source_task.dataset_id,
                     )
                 ),
+                simulation_setup=source_task.simulation_setup,
+                post_processing_setup=source_task.post_processing_setup,
+                upstream_task_id=source_task.upstream_task_id,
                 retry_of_task_id=source_task.task_id,
             )
         )
@@ -462,7 +504,23 @@ class TaskService:
                 },
             ),
         )
-        self._merge_submission_audit_metadata(created_detail)
+        self._merge_submission_metadata(
+            created_detail,
+            draft=TaskSubmissionDraft(
+                kind=created_detail.kind,
+                dataset_id=created_detail.dataset_id,
+                definition_id=created_detail.definition_id,
+                summary=created_detail.summary,
+                simulation_setup=created_detail.simulation_setup,
+                post_processing_setup=created_detail.post_processing_setup,
+                upstream_task_id=created_detail.upstream_task_id,
+            ),
+            upstream_task=(
+                self.get_task(created_detail.upstream_task_id)
+                if created_detail.upstream_task_id is not None
+                else None
+            ),
+        )
         self._append_audit_record(
             action_kind="task.retried",
             resource_id=str(created_detail.task_id),
@@ -657,14 +715,36 @@ class TaskService:
             ),
         )
 
-    def _merge_submission_audit_metadata(self, task: TaskDetail) -> None:
+    def _merge_submission_metadata(
+        self,
+        task: TaskDetail,
+        *,
+        draft: TaskSubmissionDraft,
+        upstream_task: TaskDetail | None,
+    ) -> None:
         if len(task.events) == 0:
             return
+        submission_metadata = {
+            "audit_action": "task.submitted",
+            **_submission_contract_metadata(draft),
+        }
         self._repository.merge_task_event_metadata(
             task.task_id,
             task.events[0].event_key,
-            {"audit_action": "task.submitted"},
+            submission_metadata,
         )
+        if upstream_task is not None and len(upstream_task.events) > 0:
+            downstream_task_ids = tuple(
+                sorted({*upstream_task.downstream_task_ids, task.task_id})
+            )
+            self._repository.merge_task_event_metadata(
+                upstream_task.task_id,
+                upstream_task.events[0].event_key,
+                {
+                    "downstream_task_ids": json.dumps(list(downstream_task_ids)),
+                    "audit_action": "task.submitted",
+                },
+            )
 
     def _merge_lifecycle_audit_metadata(
         self,
@@ -702,11 +782,79 @@ class TaskService:
             )
         )
 
+    def _resolve_upstream_task(self, upstream_task_id: int | None) -> TaskDetail | None:
+        if upstream_task_id is None:
+            return None
+        task = self._repository.get_task(upstream_task_id)
+        if task is None:
+            raise service_error(
+                404,
+                code="upstream_task_not_found",
+                category="not_found",
+                message=f"Upstream task {upstream_task_id} was not found.",
+            )
+        return task
+
+    def _validate_upstream_task(
+        self,
+        *,
+        upstream_task: TaskDetail,
+        draft: TaskSubmissionDraft,
+        resolved_dataset_id: str | None,
+    ) -> None:
+        session = self._session_repository.get_session_state()
+        if not self._is_visible(upstream_task, session, scope="workspace"):
+            raise service_error(
+                404,
+                code="upstream_task_not_found",
+                category="not_found",
+                message=f"Upstream task {upstream_task.task_id} was not found.",
+            )
+        if draft.kind == "post_processing" and upstream_task.kind != "simulation":
+            raise service_error(
+                422,
+                code="post_processing_upstream_invalid",
+                category="validation",
+                message="Post-processing tasks must reference an upstream simulation task.",
+            )
+        if resolved_dataset_id is not None and upstream_task.dataset_id != resolved_dataset_id:
+            raise service_error(
+                422,
+                code="upstream_task_dataset_mismatch",
+                category="validation",
+                message="upstream_task_id must belong to the same dataset context as the new task.",
+            )
+
 
 def _default_task_summary(task_kind: TaskKind, dataset_id: str | None) -> str:
     if dataset_id is None:
         return f"{task_kind.replace('_', ' ')} task accepted by rewrite scaffold."
     return f"{task_kind.replace('_', ' ')} task accepted for dataset {dataset_id}."
+
+
+def _submission_contract_metadata(
+    draft: TaskSubmissionDraft,
+) -> dict[str, object]:
+    metadata: dict[str, object] = {}
+    if draft.simulation_setup is not None:
+        metadata["simulation_setup"] = json.dumps(
+            _serialize_simulation_setup(draft.simulation_setup)
+        )
+    if draft.post_processing_setup is not None:
+        metadata["post_processing_setup"] = json.dumps(
+            _serialize_post_processing_setup(draft.post_processing_setup)
+        )
+    if draft.upstream_task_id is not None:
+        metadata["upstream_task_id"] = draft.upstream_task_id
+    return metadata
+
+
+def _serialize_simulation_setup(setup: SimulationSetup) -> dict[str, object]:
+    return setup.to_mapping()
+
+
+def _serialize_post_processing_setup(setup: PostProcessingSetup) -> dict[str, object]:
+    return setup.to_mapping()
 
 
 def _session_user_id(session: SessionState) -> str:

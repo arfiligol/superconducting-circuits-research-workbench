@@ -970,6 +970,9 @@ class InMemoryRewriteAppStateRepository:
                 updated_at="2026-03-12 10:30:00",
             ),
             result_refs=build_pending_result_refs(task_id=task_id, draft=draft),
+            simulation_setup=draft.simulation_setup,
+            post_processing_setup=draft.post_processing_setup,
+            upstream_task_id=draft.upstream_task_id,
         )
         self._tasks[task.task_id] = task
         self._next_task_id += 1

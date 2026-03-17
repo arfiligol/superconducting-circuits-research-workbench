@@ -25,8 +25,12 @@ from src.app.domain.tasks import (
     TaskVisibilityScope,
     build_task_dispatch,
     build_task_event_history,
+    resolve_downstream_task_ids,
+    resolve_post_processing_setup,
     resolve_retry_of_task_id,
+    resolve_simulation_setup,
     resolve_task_control_state,
+    resolve_upstream_task_id,
 )
 from src.app.infrastructure.persistence.models import (
     RewriteTaskDispatchRecord,
@@ -352,8 +356,10 @@ def _apply_task_event_row(row: RewriteTaskEventRecord, event: TaskEvent) -> bool
     if row.message != event.message:
         row.message = event.message
         changed = True
-    if row.metadata_json != event.metadata:
-        row.metadata_json = cast(dict[str, object], event.metadata)
+    merged_metadata = dict(row.metadata_json or {})
+    merged_metadata.update(cast(dict[str, object], event.metadata))
+    if row.metadata_json != merged_metadata:
+        row.metadata_json = merged_metadata
         changed = True
     return changed
 
@@ -420,6 +426,10 @@ def _to_task_detail(
             updated_at=row.progress_updated_at,
         ),
         result_refs=result_refs or _empty_result_refs(),
+        simulation_setup=resolve_simulation_setup(events),
+        post_processing_setup=resolve_post_processing_setup(events),
+        upstream_task_id=resolve_upstream_task_id(events),
+        downstream_task_ids=resolve_downstream_task_ids(events),
         control_state=resolve_task_control_state(cast(TaskStatus, row.status), events),
         retry_of_task_id=resolve_retry_of_task_id(events),
         dispatch=_to_task_dispatch(dispatch_row),

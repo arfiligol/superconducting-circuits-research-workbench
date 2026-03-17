@@ -46,6 +46,68 @@ def _login(test_client: TestClient = client) -> dict[str, object]:
     return payload["data"]
 
 
+def _simulation_setup_payload() -> dict[str, object]:
+    return {
+        "frequency_sweep": {
+            "start_ghz": 4.0,
+            "stop_ghz": 8.0,
+            "point_count": 401,
+            "spacing": "linear",
+        },
+        "parameter_sweeps": [
+            {
+                "parameter": "junction.inductance_lj",
+                "values": [8.4, 8.6, 8.8],
+                "unit": "nH",
+            }
+        ],
+        "solver": {
+            "solver_family": "hfss-hb",
+            "max_iterations": 40,
+            "convergence_tolerance": 1e-6,
+            "harmonic_balance": {
+                "enabled": True,
+                "harmonic_count": 7,
+                "oversample_factor": 3,
+            },
+        },
+        "sources": [
+            {
+                "source_id": "drive-port-a",
+                "kind": "port_drive",
+                "target": "port_A",
+                "amplitude": -35.0,
+                "frequency_ghz": 6.45,
+                "phase_deg": 0.0,
+            }
+        ],
+    }
+
+
+def _post_processing_setup_payload() -> dict[str, object]:
+    return {
+        "output_view": "fit-report",
+        "selections": [
+            {
+                "trace_family": "s_matrix",
+                "representation": "db",
+                "design_id": "design-alpha",
+                "trace_ids": ["trace-s11-raw"],
+            }
+        ],
+        "operations": [
+            {
+                "operation": "fit_resonance",
+                "enabled": True,
+                "config": {
+                    "model": "hanger",
+                    "window_ghz": [6.2, 6.7],
+                },
+            }
+        ],
+    }
+
+
 @contextmanager
 def _bind_client_app_context(test_client: TestClient):
     app_context_id = test_client.cookies.get("sc_app_context")
@@ -667,6 +729,71 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert len(records) == 1
     assert records[0].action_kind == "task.submitted"
     assert records[0].outcome == "accepted"
+
+
+def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> None:
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "definition_id": 3,
+            "summary": "Fluxonium sweep with HB setup.",
+            "simulation_setup": _simulation_setup_payload(),
+        },
+    )
+
+    assert response.status_code == 201
+    task = response.json()["data"]["task"]
+    assert task["simulation_setup"] == _simulation_setup_payload()
+    assert task["post_processing_setup"] is None
+    assert task["upstream_task_id"] is None
+    assert task["downstream_task_ids"] == []
+    assert task["events"][0]["metadata"]["simulation_setup"] == _simulation_setup_payload()
+
+    reset_runtime_state()
+
+    reloaded = client.get(f"/tasks/{task['task_id']}").json()["data"]
+    assert reloaded["simulation_setup"] == _simulation_setup_payload()
+    assert reloaded["summary"] == "Fluxonium sweep with HB setup."
+
+
+def test_post_processing_task_persists_upstream_lineage_and_downstream_reference() -> None:
+    simulation_response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "definition_id": 3,
+            "summary": "Upstream simulation for fit bundle.",
+            "simulation_setup": _simulation_setup_payload(),
+        },
+    )
+    upstream_task_id = simulation_response.json()["data"]["task"]["task_id"]
+
+    post_processing_response = client.post(
+        "/tasks",
+        json={
+            "kind": "post_processing",
+            "dataset_id": "local-dataset-001",
+            "summary": "Fit the latest fluxonium run.",
+            "upstream_task_id": upstream_task_id,
+            "post_processing_setup": _post_processing_setup_payload(),
+        },
+    )
+
+    assert post_processing_response.status_code == 201
+    task = post_processing_response.json()["data"]["task"]
+    assert task["upstream_task_id"] == upstream_task_id
+    assert task["post_processing_setup"] == _post_processing_setup_payload()
+    assert task["events"][0]["metadata"]["upstream_task_id"] == upstream_task_id
+
+    upstream = client.get(f"/tasks/{upstream_task_id}").json()["data"]
+    assert upstream["downstream_task_ids"] == [task["task_id"]]
+
+    reset_runtime_state()
+
+    reloaded = client.get(f"/tasks/{task['task_id']}").json()["data"]
+    assert reloaded["upstream_task_id"] == upstream_task_id
+    assert reloaded["post_processing_setup"] == _post_processing_setup_payload()
 
 
 def test_submitted_task_survives_runtime_reset_in_routes() -> None:
