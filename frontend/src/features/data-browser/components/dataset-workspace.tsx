@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, LoaderCircle, Save, Search, Upload } from "lucide-react";
+import { Archive, ArrowRight, LoaderCircle, Plus, Save, Search, Trash2, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -16,6 +16,7 @@ import {
   SurfaceTag,
   cx,
 } from "@/features/shared/components/surface-kit";
+import { ConfirmActionDialog } from "@/lib/confirm-action-dialog";
 
 const profileSchema = z.object({
   device_type: z.string().trim().min(1, "Device type is required."),
@@ -30,6 +31,30 @@ const emptyForm: ProfileValues = {
   capabilities_text: "",
   source: "",
 };
+
+const createDatasetSchema = z.object({
+  name: z.string().trim().min(1, "Dataset name is required."),
+  family: z.string().trim().min(1, "Dataset family is required."),
+  device_type: z.string().trim().min(1, "Device type is required."),
+  source: z.string().trim().min(1, "Source is required."),
+});
+
+type CreateDatasetValues = z.infer<typeof createDatasetSchema>;
+
+const emptyCreateForm: CreateDatasetValues = {
+  name: "",
+  family: "",
+  device_type: "",
+  source: "manual",
+};
+
+type PendingLifecycleAction =
+  | Readonly<{
+      kind: "archive" | "delete";
+      datasetId: string;
+      datasetName: string;
+    }>
+  | null;
 
 function parseCapabilities(value: string) {
   return value
@@ -77,6 +102,9 @@ export function DatasetWorkspace() {
     tone: "success" | "warning";
     message: string;
   } | null>(null);
+  const [pendingLifecycleAction, setPendingLifecycleAction] = useState<PendingLifecycleAction>(null);
+  const [isLifecyclePending, setIsLifecyclePending] = useState(false);
+  const [isCreatePending, setIsCreatePending] = useState(false);
   const [datasetSearch, setDatasetSearch] = useState("");
   const [isSelectingDataset, startDatasetTransition] = useTransition();
   const {
@@ -91,10 +119,17 @@ export function DatasetWorkspace() {
     metricsError,
     isMetricsLoading,
     saveProfile,
+    createDataset,
+    archiveActiveDataset,
+    deleteActiveDataset,
   } = useDashboardData();
   const form = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: emptyForm,
+  });
+  const createForm = useForm<CreateDatasetValues>({
+    resolver: zodResolver(createDatasetSchema),
+    defaultValues: emptyCreateForm,
   });
 
   useEffect(() => {
@@ -133,6 +168,62 @@ export function DatasetWorkspace() {
     }
   }
 
+  async function onCreateDataset(values: CreateDatasetValues) {
+    setIsCreatePending(true);
+    try {
+      const result = await createDataset({
+        name: values.name.trim(),
+        family: values.family.trim(),
+        device_type: values.device_type.trim(),
+        source: values.source.trim(),
+      });
+      createForm.reset({
+        ...emptyCreateForm,
+        source: values.source.trim(),
+      });
+      setSaveState({
+        tone: "success",
+        message: `Dataset ${result.dataset.name} was created and added to the visible catalog.`,
+      });
+    } catch (error) {
+      setSaveState({
+        tone: "warning",
+        message: error instanceof Error ? error.message : "Unable to create dataset.",
+      });
+    } finally {
+      setIsCreatePending(false);
+    }
+  }
+
+  async function confirmLifecycleAction() {
+    if (!pendingLifecycleAction) {
+      return;
+    }
+
+    setIsLifecyclePending(true);
+    try {
+      const result =
+        pendingLifecycleAction.kind === "archive"
+          ? await archiveActiveDataset()
+          : await deleteActiveDataset();
+      setSaveState({
+        tone: "success",
+        message:
+          result.operation === "archived"
+            ? `Dataset ${result.dataset.name} was archived.`
+            : `Dataset ${result.dataset.name} was deleted.`,
+      });
+      setPendingLifecycleAction(null);
+    } catch (error) {
+      setSaveState({
+        tone: "warning",
+        message: error instanceof Error ? error.message : "Unable to change dataset lifecycle.",
+      });
+    } finally {
+      setIsLifecyclePending(false);
+    }
+  }
+
   const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? "";
   const catalogRows = catalog?.rows ?? [];
   const filteredRows = useMemo(
@@ -140,6 +231,9 @@ export function DatasetWorkspace() {
     [catalogRows, datasetSearch],
   );
   const canSwitchDataset = session?.capabilities.canSwitchDataset ?? false;
+  const canManageDatasets = session?.capabilities.canManageDatasets ?? false;
+  const canArchiveDataset = Boolean(profile?.allowed_actions.archive);
+  const canDeleteDataset = Boolean(profile?.allowed_actions.delete);
 
   return (
     <div className="space-y-8">
@@ -210,6 +304,11 @@ export function DatasetWorkspace() {
           {catalogError ? (
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
               Unable to load visible datasets. {catalogError.message}
+            </div>
+          ) : null}
+          {activeDatasetState.activeDatasetError ? (
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+              Unable to switch the active dataset. {activeDatasetState.activeDatasetError.message}
             </div>
           ) : null}
 
@@ -436,10 +535,144 @@ export function DatasetWorkspace() {
 
           <SurfacePanel
             title="Dataset Lifecycle"
-            description="This page manages session selection and profile metadata, but it does not fake lifecycle mutations that the backend has not exposed."
+            description="Lifecycle actions are driven by backend authority. Create, archive, and delete only appear when the current session and dataset allow them."
           >
-            <div className="rounded-xl border border-amber-500/35 bg-amber-50 px-4 py-4 text-sm text-amber-950 dark:bg-amber-950/35 dark:text-amber-200">
-              Create, archive, and delete dataset actions are not exposed through the current frontend-visible backend contract. Use the existing backend lifecycle surface once those endpoints are materialized.
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Create Dataset
+                </p>
+                {canManageDatasets ? (
+                  <form
+                    className="mt-3 space-y-3"
+                    onSubmit={createForm.handleSubmit(onCreateDataset)}
+                  >
+                    <label className="block">
+                      <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        Name
+                      </span>
+                      <input
+                        {...createForm.register("name")}
+                        disabled={isCreatePending}
+                        placeholder="Fluxonium sweep 040"
+                        className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        Family
+                      </span>
+                      <input
+                        {...createForm.register("family")}
+                        disabled={isCreatePending}
+                        placeholder="fluxonium"
+                        className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                      />
+                    </label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                          Device Type
+                        </span>
+                        <input
+                          {...createForm.register("device_type")}
+                          disabled={isCreatePending}
+                          placeholder="fluxonium"
+                          className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                          Source
+                        </span>
+                        <input
+                          {...createForm.register("source")}
+                          disabled={isCreatePending}
+                          placeholder="manual"
+                          className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isCreatePending}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCreatePending ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                      Create Dataset
+                    </button>
+                  </form>
+                ) : (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Dataset creation is hidden because backend authority does not allow it for this
+                    session.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Active Dataset Lifecycle
+                </p>
+                {profile ? (
+                  <>
+                    <p className="mt-3 text-sm font-semibold text-foreground">{profile.name}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {profile.dataset_id} · {profile.lifecycle_state}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {canArchiveDataset ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingLifecycleAction({
+                              kind: "archive",
+                              datasetId: profile.dataset_id,
+                              datasetName: profile.name,
+                            });
+                          }}
+                          disabled={isLifecyclePending}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Archive className="h-4 w-4" />
+                          Archive Dataset
+                        </button>
+                      ) : null}
+                      {canDeleteDataset ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingLifecycleAction({
+                              kind: "delete",
+                              datasetId: profile.dataset_id,
+                              datasetName: profile.name,
+                            });
+                          }}
+                          disabled={isLifecyclePending}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-500/20 dark:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete Dataset
+                        </button>
+                      ) : null}
+                    </div>
+                    {!canArchiveDataset && !canDeleteDataset ? (
+                      <p className="mt-4 text-sm text-muted-foreground">
+                        This dataset does not expose archive or delete actions for the current
+                        session.
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Attach a dataset to view lifecycle actions.
+                  </p>
+                )}
+              </div>
             </div>
           </SurfacePanel>
         </div>
@@ -483,6 +716,32 @@ export function DatasetWorkspace() {
           </div>
         )}
       </SurfacePanel>
+
+      <ConfirmActionDialog
+        open={pendingLifecycleAction !== null}
+        title={
+          pendingLifecycleAction?.kind === "archive" ? "Archive active dataset?" : "Delete active dataset?"
+        }
+        description={
+          pendingLifecycleAction?.kind === "archive"
+            ? `Archive ${pendingLifecycleAction.datasetName}. The dataset remains visible for historical context but exits active workflow use.`
+            : `Delete ${pendingLifecycleAction?.datasetName ?? "this dataset"}. This lifecycle change is backend-authoritative and cannot be undone from this page.`
+        }
+        confirmLabel={
+          pendingLifecycleAction?.kind === "archive" ? "Archive dataset" : "Delete dataset"
+        }
+        tone={pendingLifecycleAction?.kind === "delete" ? "destructive" : "default"}
+        isPending={isLifecyclePending}
+        onCancel={() => {
+          if (isLifecyclePending) {
+            return;
+          }
+          setPendingLifecycleAction(null);
+        }}
+        onConfirm={() => {
+          void confirmLifecycleAction();
+        }}
+      />
     </div>
   );
 }

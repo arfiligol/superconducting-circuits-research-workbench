@@ -19,6 +19,7 @@ import {
   filterSimulationTasks,
   formatSimulationTaskStatusLabel,
   hasSimulationTaskResult,
+  resolveContextBoundAttachedTask,
   resolveLatestSimulationStageTask,
   resolveLatestSimulationStageTaskInContext,
   resolveLatestSimulationTask,
@@ -319,6 +320,124 @@ describe("simulation task workflow helpers", () => {
     ).toBe(56);
   });
 
+  it("can recover stage authority from an explicitly attached task detail when queue rows omit context", () => {
+    expect(
+      resolveContextBoundAttachedTask(
+        {
+          taskId: 371,
+          kind: "simulation",
+          lane: "simulation",
+          executionMode: "run",
+          status: "queued",
+          submittedAt: "2026-03-12 10:30:00",
+          ownerUserId: "user-dev-01",
+          ownerDisplayName: "Device Lab",
+          workspaceId: "workspace-lab",
+          workspaceSlug: "device-lab",
+          visibilityScope: "workspace",
+          datasetId: "fluxonium-2025-031",
+          definitionId: 18,
+          summary: "Simulation request for FloatingQubitWithXYLine",
+          hasActionAuthority: true,
+          allowedActions: {
+            attach: true,
+            cancel: true,
+            terminate: false,
+            retry: false,
+          },
+          queueBackend: "in_memory_scaffold",
+          workerTaskName: "simulation_run_task",
+          requestReady: true,
+          submittedFromActiveDataset: true,
+          dispatch: {
+            dispatchKey: "dispatch:371:simulation_run_task",
+            status: "accepted",
+            submissionSource: "active_dataset",
+            acceptedAt: "2026-03-12 10:30:00",
+            lastUpdatedAt: "2026-03-12 10:30:00",
+          },
+          events: [],
+          progress: {
+            phase: "queued",
+            percentComplete: 0,
+            summary: "queued",
+            updatedAt: "2026-03-12 10:30:00",
+          },
+          resultRefs: {
+            traceBatchId: null,
+            analysisRunId: null,
+            metadataRecords: [],
+            tracePayload: null,
+            resultHandles: [],
+          },
+        },
+        {
+          definitionId: 18,
+          datasetId: "fluxonium-2025-031",
+        },
+        "simulation",
+      )?.taskId,
+    ).toBe(371);
+
+    expect(
+      resolveContextBoundAttachedTask(
+        {
+          taskId: 910,
+          kind: "simulation",
+          lane: "simulation",
+          executionMode: "run",
+          status: "completed",
+          submittedAt: "2026-03-12 10:40:00",
+          ownerUserId: "user-dev-01",
+          ownerDisplayName: "Device Lab",
+          workspaceId: "workspace-lab",
+          workspaceSlug: "device-lab",
+          visibilityScope: "workspace",
+          datasetId: "other-dataset",
+          definitionId: 18,
+          summary: "Simulation request for another dataset",
+          hasActionAuthority: true,
+          allowedActions: {
+            attach: true,
+            cancel: false,
+            terminate: false,
+            retry: true,
+          },
+          queueBackend: "in_memory_scaffold",
+          workerTaskName: "simulation_run_task",
+          requestReady: true,
+          submittedFromActiveDataset: true,
+          dispatch: {
+            dispatchKey: "dispatch:910:simulation_run_task",
+            status: "completed",
+            submissionSource: "active_dataset",
+            acceptedAt: "2026-03-12 10:40:00",
+            lastUpdatedAt: "2026-03-12 10:45:00",
+          },
+          events: [],
+          progress: {
+            phase: "completed",
+            percentComplete: 100,
+            summary: "completed",
+            updatedAt: "2026-03-12 10:45:00",
+          },
+          resultRefs: {
+            traceBatchId: 12,
+            analysisRunId: null,
+            metadataRecords: [],
+            tracePayload: null,
+            resultHandles: [],
+          },
+        },
+        {
+          definitionId: 18,
+          datasetId: "fluxonium-2025-031",
+        },
+        "simulation",
+      ),
+    ).toBeUndefined();
+  });
+
   it("reports task recovery and attachment state", () => {
     expect(resolveSimulationTaskRecovery(91, 31, new Error("not found"))?.title).toBe(
       "Task reattach available",
@@ -524,6 +643,11 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Run Simulation");
     expect(simulationWorkbenchSource).toContain("Run Post Processing");
     expect(simulationWorkbenchSource).toContain("Open in Global Context");
+    expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
+    expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
+    expect(simulationWorkbenchSource).toContain("Operation Config JSON");
+    expect(simulationWorkbenchSource).toContain("Latest simulation setup was rehydrated");
+    expect(simulationWorkbenchSource).not.toContain("Summary-bound");
     expect(simulationWorkbenchSource).not.toContain("Simulation Task Queue");
     expect(simulationWorkbenchSource).not.toContain("Research Workflow State");
     expect(simulationWorkbenchSource).not.toContain("Task Attachment / Recovery");
@@ -540,6 +664,10 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("taskContextBinding?.hasMismatch");
     expect(simulationWorkbenchSource).toContain("title={taskContextBinding.title}");
     expect(simulationWorkbenchSource).toContain("message={taskContextBinding.message}");
+    expect(simulationWorkflowHookSource).toContain("simulation_setup: simulationSetup ?? null");
+    expect(simulationWorkflowHookSource).toContain("post_processing_setup: postProcessingSetup ?? null");
+    expect(simulationWorkflowHookSource).toContain("attachedContextTask");
+    expect(simulationWorkflowHookSource).toContain("upstreamSimulationStageTask");
   });
 });
 

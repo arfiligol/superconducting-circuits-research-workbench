@@ -2,7 +2,12 @@ import type {
   CircuitDefinitionSummary,
 } from "@/features/circuit-definition-editor/lib/contracts";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
-import type { TaskDetail, TaskExecutionStatus, TaskSummary } from "@/lib/api/tasks";
+import {
+  normalizeTaskSummary,
+  type TaskDetail,
+  type TaskExecutionStatus,
+  type TaskSummary,
+} from "@/lib/api/tasks";
 
 export type SimulationTaskScope = "all" | "definition" | "dataset";
 export type SimulationTaskStatusFilter = "all" | "active" | "completed" | "failed";
@@ -261,6 +266,22 @@ export function resolveLatestSimulationStageTaskInContext(
   return resolveLatestSimulationStageTask(filterSimulationTasksByContext(tasks, context), kind);
 }
 
+export function resolveContextBoundAttachedTask(
+  task: TaskDetail | undefined,
+  context: SimulationPageContext,
+  kind?: SimulationStageKind,
+): TaskSummary | undefined {
+  if (!task || !matchesSimulationTaskContext(task, context)) {
+    return undefined;
+  }
+
+  if (kind && task.kind !== kind) {
+    return undefined;
+  }
+
+  return normalizeTaskSummary(task);
+}
+
 export function filterSimulationTasks(
   tasks: readonly TaskSummary[],
   options: FilterSimulationTasksOptions,
@@ -393,10 +414,14 @@ export function hasSimulationTaskResult(task: TaskDetail | undefined) {
 }
 
 export function resolvePostProcessingUpstreamTaskId(
-  task: Pick<TaskDetail, "taskId" | "resultRefs"> | undefined,
+  task: (Pick<TaskDetail, "taskId" | "resultRefs"> & { upstreamTaskId?: number | null }) | undefined,
 ): number | null {
   if (!task) {
     return null;
+  }
+
+  if (typeof task.upstreamTaskId === "number") {
+    return task.upstreamTaskId;
   }
 
   for (const handle of task.resultRefs.resultHandles) {

@@ -3,6 +3,9 @@
 import useSWR, { useSWRConfig } from "swr";
 
 import {
+  archiveDataset,
+  createDataset,
+  deleteDataset,
   datasetCatalogKey,
   datasetMetricsKey,
   datasetProfileKey,
@@ -10,6 +13,7 @@ import {
   listDatasetCatalog,
   listTaggedCoreMetrics,
   updateDatasetProfile,
+  type DatasetCreateDraft,
   type DatasetProfileUpdate,
 } from "@/lib/api/datasets";
 import { useActiveDataset } from "@/lib/app-state/active-dataset";
@@ -42,6 +46,40 @@ export function useDashboardData() {
     return result;
   }
 
+  async function refreshDatasetState(nextActiveDatasetId?: string | null) {
+    const targetDatasetId = nextActiveDatasetId ?? activeDatasetId;
+    await Promise.all([
+      mutate(datasetCatalogKey),
+      targetDatasetId ? mutate(datasetProfileKey(targetDatasetId)) : Promise.resolve(undefined),
+      targetDatasetId ? mutate(datasetMetricsKey(targetDatasetId)) : Promise.resolve(undefined),
+      activeDatasetState.refreshActiveDataset(),
+    ]);
+  }
+
+  async function createDatasetEntry(payload: DatasetCreateDraft) {
+    const result = await createDataset(payload);
+    await refreshDatasetState(result.dataset.dataset_id);
+    return result;
+  }
+
+  async function archiveActiveDataset() {
+    if (!activeDatasetId) {
+      throw new Error("Attach a dataset before requesting archive.");
+    }
+    const result = await archiveDataset(activeDatasetId);
+    await refreshDatasetState(result.dataset.dataset_id);
+    return result;
+  }
+
+  async function deleteActiveDataset() {
+    if (!activeDatasetId) {
+      throw new Error("Attach a dataset before requesting deletion.");
+    }
+    const result = await deleteDataset(activeDatasetId);
+    await refreshDatasetState(result.dataset.dataset_id);
+    return result;
+  }
+
   return {
     activeDatasetState,
     catalog: catalogQuery.data,
@@ -54,5 +92,9 @@ export function useDashboardData() {
     metricsError: metricsQuery.error as Error | undefined,
     isMetricsLoading: metricsQuery.isLoading,
     saveProfile,
+    createDataset: createDatasetEntry,
+    archiveActiveDataset,
+    deleteActiveDataset,
+    refreshDatasetState,
   };
 }

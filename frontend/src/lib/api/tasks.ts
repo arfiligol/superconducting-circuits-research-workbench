@@ -3,7 +3,6 @@ import { apiRequest, apiRequestEnvelope } from "@/lib/api/client";
 import { components } from "./generated/schema";
 
 type TaskSummaryResponseShape = components["schemas"]["TaskSummaryResponse"];
-type TaskDetailResponseShape = components["schemas"]["TaskDetailResponse"];
 type TaskAllowedActionsResponse = Readonly<{
   attach: boolean;
   cancel: boolean;
@@ -11,6 +10,75 @@ type TaskAllowedActionsResponse = Readonly<{
   retry: boolean;
   rejection_reason?: string | null;
 }>;
+type SimulationFrequencySweepResponseShape = Readonly<{
+  start_ghz: number;
+  stop_ghz: number;
+  point_count: number;
+  spacing: "linear" | "log";
+}>;
+type SimulationParameterSweepResponseShape = Readonly<{
+  parameter: string;
+  values: readonly number[];
+  unit?: string | null;
+}>;
+type SimulationHarmonicBalanceResponseShape = Readonly<{
+  enabled: boolean;
+  harmonic_count?: number | null;
+  oversample_factor?: number | null;
+}>;
+type SimulationSolverSettingsResponseShape = Readonly<{
+  solver_family: string;
+  max_iterations: number;
+  convergence_tolerance: number;
+  harmonic_balance?: SimulationHarmonicBalanceResponseShape | null;
+}>;
+type SimulationSourceSpecResponseShape = Readonly<{
+  source_id: string;
+  kind: string;
+  target: string;
+  amplitude: number;
+  frequency_ghz?: number | null;
+  phase_deg?: number | null;
+}>;
+type SimulationSetupResponseShape = Readonly<{
+  frequency_sweep: SimulationFrequencySweepResponseShape;
+  parameter_sweeps: readonly SimulationParameterSweepResponseShape[];
+  solver: SimulationSolverSettingsResponseShape;
+  sources: readonly SimulationSourceSpecResponseShape[];
+}>;
+type PostProcessingTraceSelectionResponseShape = Readonly<{
+  trace_family: string;
+  representation: string;
+  design_id?: string | null;
+  trace_ids: readonly string[];
+}>;
+type PostProcessingOperationResponseShape = Readonly<{
+  operation: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}>;
+type PostProcessingSetupResponseShape = Readonly<{
+  output_view: string;
+  selections: readonly PostProcessingTraceSelectionResponseShape[];
+  operations: readonly PostProcessingOperationResponseShape[];
+}>;
+type TaskResultHandoffResponseShape = Readonly<{
+  availability: TaskResultAvailability;
+  primary_result_handle_id: string | null;
+  result_handle_count: number;
+  trace_payload_available: boolean;
+}>;
+type TaskDetailResponseShape = components["schemas"]["TaskDetailResponse"] &
+  Readonly<{
+    simulation_setup?: SimulationSetupResponseShape | null;
+    post_processing_setup?: PostProcessingSetupResponseShape | null;
+    upstream_task_id?: number | null;
+    downstream_task_ids?: readonly number[];
+    retry_of_task_id?: number | null;
+    control_state?: TaskControlState;
+    dispatch?: components["schemas"]["TaskDispatchResponse"] | null;
+    result_handoff?: TaskResultHandoffResponseShape;
+  }>;
 type LiveTaskQueueRowResponseShape = Readonly<{
   task_id: number;
   summary: string;
@@ -58,6 +126,128 @@ export type TaskExecutionStatus =
 export type TaskVisibilityScope = "local" | "private" | "workspace" | "owned";
 export type TaskResultAvailability = "pending" | "ready" | "none";
 export type TaskControlState = "none" | "cancellation_requested" | "termination_requested";
+
+export type SimulationFrequencySweep = Readonly<{
+  startGhz: number;
+  stopGhz: number;
+  pointCount: number;
+  spacing: "linear" | "log";
+}>;
+
+export type SimulationParameterSweep = Readonly<{
+  parameter: string;
+  values: readonly number[];
+  unit: string | null;
+}>;
+
+export type SimulationHarmonicBalanceSettings = Readonly<{
+  enabled: boolean;
+  harmonicCount: number | null;
+  oversampleFactor: number | null;
+}>;
+
+export type SimulationSolverSettings = Readonly<{
+  solverFamily: string;
+  maxIterations: number;
+  convergenceTolerance: number;
+  harmonicBalance: SimulationHarmonicBalanceSettings | null;
+}>;
+
+export type SimulationSourceSpec = Readonly<{
+  sourceId: string;
+  kind: string;
+  target: string;
+  amplitude: number;
+  frequencyGhz: number | null;
+  phaseDeg: number | null;
+}>;
+
+export type SimulationSetup = Readonly<{
+  frequencySweep: SimulationFrequencySweep;
+  parameterSweeps: readonly SimulationParameterSweep[];
+  solver: SimulationSolverSettings;
+  sources: readonly SimulationSourceSpec[];
+}>;
+
+export type PostProcessingTraceSelection = Readonly<{
+  traceFamily: string;
+  representation: string;
+  designId: string | null;
+  traceIds: readonly string[];
+}>;
+
+export type PostProcessingOperation = Readonly<{
+  operation: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}>;
+
+export type PostProcessingSetup = Readonly<{
+  outputView: string;
+  selections: readonly PostProcessingTraceSelection[];
+  operations: readonly PostProcessingOperation[];
+}>;
+
+export type SimulationFrequencySweepDraft = Readonly<{
+  start_ghz: number;
+  stop_ghz: number;
+  point_count: number;
+  spacing?: "linear" | "log";
+}>;
+
+export type SimulationParameterSweepDraft = Readonly<{
+  parameter: string;
+  values: readonly number[];
+  unit?: string | null;
+}>;
+
+export type SimulationHarmonicBalanceSettingsDraft = Readonly<{
+  enabled: boolean;
+  harmonic_count?: number | null;
+  oversample_factor?: number | null;
+}>;
+
+export type SimulationSolverSettingsDraft = Readonly<{
+  solver_family: string;
+  max_iterations: number;
+  convergence_tolerance: number;
+  harmonic_balance?: SimulationHarmonicBalanceSettingsDraft | null;
+}>;
+
+export type SimulationSourceSpecDraft = Readonly<{
+  source_id: string;
+  kind: string;
+  target: string;
+  amplitude: number;
+  frequency_ghz?: number | null;
+  phase_deg?: number | null;
+}>;
+
+export type SimulationSetupDraft = Readonly<{
+  frequency_sweep: SimulationFrequencySweepDraft;
+  parameter_sweeps?: readonly SimulationParameterSweepDraft[];
+  solver: SimulationSolverSettingsDraft;
+  sources: readonly SimulationSourceSpecDraft[];
+}>;
+
+export type PostProcessingTraceSelectionDraft = Readonly<{
+  trace_family: string;
+  representation: string;
+  design_id?: string | null;
+  trace_ids?: readonly string[];
+}>;
+
+export type PostProcessingOperationDraft = Readonly<{
+  operation: string;
+  enabled: boolean;
+  config?: Record<string, unknown>;
+}>;
+
+export type PostProcessingSetupDraft = Readonly<{
+  output_view: string;
+  selections: readonly PostProcessingTraceSelectionDraft[];
+  operations: readonly PostProcessingOperationDraft[];
+}>;
 
 export type TaskMetadataRecordRef = Readonly<{
   backend: "sqlite_metadata";
@@ -123,6 +313,13 @@ export type TaskEvent = Readonly<{
   metadata: Readonly<Record<string, string | number | boolean | readonly string[] | null>>;
 }>;
 
+export type TaskResultHandoff = Readonly<{
+  availability: TaskResultAvailability;
+  primaryResultHandleId: string | null;
+  resultHandleCount: number;
+  tracePayloadAvailable: boolean;
+}>;
+
 export type TaskAllowedActions = Readonly<{
   attach: boolean;
   cancel: boolean;
@@ -169,6 +366,11 @@ export type TaskDetail = TaskSummary &
       | "characterization_crash_task";
     requestReady: boolean;
     submittedFromActiveDataset: boolean;
+    simulationSetup?: SimulationSetup | null;
+    postProcessingSetup?: PostProcessingSetup | null;
+    upstreamTaskId?: number | null;
+    downstreamTaskIds?: readonly number[];
+    retryOfTaskId?: number | null;
     dispatch: TaskDispatch;
     events: readonly TaskEvent[];
     progress: Readonly<{
@@ -177,6 +379,7 @@ export type TaskDetail = TaskSummary &
       summary: string;
       updatedAt: string;
     }>;
+    resultHandoff?: TaskResultHandoff;
     resultRefs: Readonly<{
       traceBatchId: number | null;
       analysisRunId: number | null;
@@ -186,7 +389,15 @@ export type TaskDetail = TaskSummary &
     }>;
   }>;
 
-export type TaskSubmissionDraft = components["schemas"]["TaskSubmissionRequest"];
+export type TaskSubmissionDraft = Readonly<{
+  kind: TaskKind;
+  dataset_id?: string | null;
+  definition_id?: number | null;
+  summary?: string | null;
+  simulation_setup?: SimulationSetupDraft | null;
+  post_processing_setup?: PostProcessingSetupDraft | null;
+  upstream_task_id?: number | null;
+}>;
 export type TaskMutationResponse = components["schemas"]["TaskMutationResponse"];
 export type TaskSummaryLike = Omit<TaskSummary, "hasActionAuthority" | "allowedActions"> &
   Readonly<
@@ -217,6 +428,12 @@ const emptyTaskAllowedActions: TaskAllowedActions = {
   terminate: false,
   retry: false,
   rejectionReason: null,
+};
+const defaultTaskResultHandoff: TaskResultHandoff = {
+  availability: "pending",
+  primaryResultHandleId: null,
+  resultHandleCount: 0,
+  tracePayloadAvailable: false,
 };
 
 export function taskDetailKey(taskId: number) {
@@ -292,6 +509,22 @@ function mapTaskDispatch(payload: components["schemas"]["TaskDispatchResponse"])
 }
 
 function mapTaskEvent(payload: components["schemas"]["TaskEventResponse"]): TaskEvent {
+  function normalizeMetadataValue(
+    value: unknown,
+  ): string | number | boolean | readonly string[] | null {
+    if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.filter((item): item is string => typeof item === "string");
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return null;
+    }
+  }
+
   return {
     eventKey: payload.event_key,
     eventType: payload.event_type,
@@ -301,9 +534,89 @@ function mapTaskEvent(payload: components["schemas"]["TaskEventResponse"]): Task
     metadata: Object.fromEntries(
       Object.entries(payload.metadata).map(([key, value]) => [
         key,
-        Array.isArray(value) ? [...value] : value,
+        normalizeMetadataValue(value),
       ]),
     ),
+  };
+}
+
+function mapSimulationSetupResponse(
+  payload: SimulationSetupResponseShape | null | undefined,
+): SimulationSetup | null {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    frequencySweep: {
+      startGhz: payload.frequency_sweep.start_ghz,
+      stopGhz: payload.frequency_sweep.stop_ghz,
+      pointCount: payload.frequency_sweep.point_count,
+      spacing: payload.frequency_sweep.spacing,
+    },
+    parameterSweeps: payload.parameter_sweeps.map((sweep) => ({
+      parameter: sweep.parameter,
+      values: [...sweep.values],
+      unit: sweep.unit ?? null,
+    })),
+    solver: {
+      solverFamily: payload.solver.solver_family,
+      maxIterations: payload.solver.max_iterations,
+      convergenceTolerance: payload.solver.convergence_tolerance,
+      harmonicBalance: payload.solver.harmonic_balance
+        ? {
+            enabled: payload.solver.harmonic_balance.enabled,
+            harmonicCount: payload.solver.harmonic_balance.harmonic_count ?? null,
+            oversampleFactor: payload.solver.harmonic_balance.oversample_factor ?? null,
+          }
+        : null,
+    },
+    sources: payload.sources.map((source) => ({
+      sourceId: source.source_id,
+      kind: source.kind,
+      target: source.target,
+      amplitude: source.amplitude,
+      frequencyGhz: source.frequency_ghz ?? null,
+      phaseDeg: source.phase_deg ?? null,
+    })),
+  };
+}
+
+function mapPostProcessingSetupResponse(
+  payload: PostProcessingSetupResponseShape | null | undefined,
+): PostProcessingSetup | null {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    outputView: payload.output_view,
+    selections: payload.selections.map((selection) => ({
+      traceFamily: selection.trace_family,
+      representation: selection.representation,
+      designId: selection.design_id ?? null,
+      traceIds: [...selection.trace_ids],
+    })),
+    operations: payload.operations.map((operation) => ({
+      operation: operation.operation,
+      enabled: operation.enabled,
+      config: { ...operation.config },
+    })),
+  };
+}
+
+function mapTaskResultHandoff(
+  payload: TaskResultHandoffResponseShape | undefined,
+): TaskResultHandoff {
+  if (!payload) {
+    return defaultTaskResultHandoff;
+  }
+
+  return {
+    availability: payload.availability,
+    primaryResultHandleId: payload.primary_result_handle_id,
+    resultHandleCount: payload.result_handle_count,
+    tracePayloadAvailable: payload.trace_payload_available,
   };
 }
 
@@ -449,13 +762,33 @@ export async function listTasks() {
 }
 
 export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDetail {
+  const fallbackDispatchStatus: TaskDispatch["status"] =
+    payload.status === "completed"
+      ? "completed"
+      : payload.status === "failed"
+        ? "failed"
+        : "running";
+
   return {
     ...mapTaskSummaryResponse(payload),
     queueBackend: payload.queue_backend,
     workerTaskName: payload.worker_task_name,
     requestReady: payload.request_ready,
     submittedFromActiveDataset: payload.submitted_from_active_dataset,
-    dispatch: mapTaskDispatch(payload.dispatch),
+    simulationSetup: mapSimulationSetupResponse(payload.simulation_setup),
+    postProcessingSetup: mapPostProcessingSetupResponse(payload.post_processing_setup),
+    upstreamTaskId: payload.upstream_task_id ?? null,
+    downstreamTaskIds: [...(payload.downstream_task_ids ?? [])],
+    retryOfTaskId: payload.retry_of_task_id ?? null,
+    dispatch: payload.dispatch
+      ? mapTaskDispatch(payload.dispatch)
+      : {
+          dispatchKey: `task:${payload.task_id}`,
+          status: fallbackDispatchStatus,
+          submissionSource: "definition_only",
+          acceptedAt: payload.submitted_at,
+          lastUpdatedAt: payload.submitted_at,
+        },
     events: payload.events.map(mapTaskEvent),
     progress: {
       phase: payload.progress.phase,
@@ -463,6 +796,7 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
       summary: payload.progress.summary,
       updatedAt: payload.progress.updated_at,
     },
+    resultHandoff: mapTaskResultHandoff(payload.result_handoff),
     resultRefs: {
       traceBatchId: payload.result_refs.trace_batch_id,
       analysisRunId: payload.result_refs.analysis_run_id,

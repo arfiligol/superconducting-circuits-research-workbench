@@ -12,6 +12,8 @@ export type DatasetAllowedActions = Readonly<{
   update_profile: boolean;
   publish: boolean;
   archive: boolean;
+  delete?: boolean;
+  ingest_raw_data?: boolean;
 }>;
 
 export type CursorMeta = Readonly<{
@@ -63,6 +65,22 @@ export type DatasetProfileUpdateResult = Readonly<{
   updated_fields: Array<"device_type" | "capabilities" | "source">;
 }>;
 
+export type DatasetCreateDraft = Readonly<{
+  name: string;
+  family: string;
+  device_type: string;
+  source: string;
+}>;
+
+export type DatasetLifecycleOperation = "created" | "archived" | "deleted";
+
+export type DatasetLifecycleMutationResult = Readonly<{
+  operation: DatasetLifecycleOperation;
+  dataset: DatasetProfile;
+  catalog_row: DatasetCatalogRow;
+  catalog_rows: DatasetCatalogRow[];
+}>;
+
 export type TaggedCoreMetricSummary = Readonly<{
   metric_id: string;
   label: string;
@@ -98,6 +116,35 @@ export type TraceAxis = Readonly<{
   name: string;
   unit: string;
   length: number;
+}>;
+
+export type RawDataIngestionKind = "measurement" | "layout_simulation";
+
+export type RawDataTraceDraft = Readonly<{
+  trace_id?: string | null;
+  family: TraceFamily;
+  parameter: string;
+  representation: string;
+  trace_mode_group: TraceModeGroup;
+  stage_kind: TraceStageKind;
+  provenance_summary: string;
+  axes: TraceAxis[];
+  preview_payload: Record<string, unknown>;
+}>;
+
+export type RawDataIngestionDraft = Readonly<{
+  kind: RawDataIngestionKind;
+  design_name: string;
+  design_id?: string | null;
+  provenance_label: string;
+  traces: RawDataTraceDraft[];
+}>;
+
+export type RawDataIngestionResult = Readonly<{
+  operation: "materialized";
+  dataset: DatasetProfile;
+  design: DesignBrowseRow;
+  traces: TraceMetadataRow[];
 }>;
 
 export type TracePayloadRef = Readonly<{

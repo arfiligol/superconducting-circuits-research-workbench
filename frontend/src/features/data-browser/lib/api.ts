@@ -2,11 +2,15 @@ import { apiRequest, apiRequestEnvelope } from "@/lib/api/client";
 
 import type {
   DatasetCatalogRow,
+  DatasetCreateDraft,
+  DatasetLifecycleMutationResult,
   DatasetProfile,
   DatasetProfileUpdate,
   DatasetProfileUpdateResult,
   DesignBrowseRow,
   PagedRows,
+  RawDataIngestionDraft,
+  RawDataIngestionResult,
   TaggedCoreMetricSummary,
   TraceDetail,
   TraceMetadataRow,
@@ -27,6 +31,14 @@ function datasetCatalogPageKey(cursor?: string | null, limit?: number | null) {
 
 export function datasetProfileKey(datasetId: string) {
   return `/api/backend/datasets/${encodeURIComponent(datasetId)}/profile`;
+}
+
+export function datasetArchiveKey(datasetId: string) {
+  return `/api/backend/datasets/${encodeURIComponent(datasetId)}/archive`;
+}
+
+export function datasetIngestionsKey(datasetId: string) {
+  return `/api/backend/datasets/${encodeURIComponent(datasetId)}/ingestions`;
 }
 
 export function datasetMetricsKey(datasetId: string) {
@@ -120,6 +132,15 @@ export async function getDatasetProfile(datasetId: string): Promise<DatasetProfi
   return apiRequest<DatasetProfile>(datasetProfileKey(datasetId));
 }
 
+export async function createDataset(
+  payload: DatasetCreateDraft,
+): Promise<DatasetLifecycleMutationResult> {
+  return apiRequest<DatasetLifecycleMutationResult>(datasetCatalogKey, {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export async function updateDatasetProfile(
   datasetId: string,
   payload: DatasetProfileUpdate,
@@ -135,6 +156,32 @@ export async function listTaggedCoreMetrics(
 ): Promise<TaggedCoreMetricSummary[]> {
   const response = await apiRequest<{ rows: TaggedCoreMetricSummary[] }>(datasetMetricsKey(datasetId));
   return response.rows;
+}
+
+export async function archiveDataset(
+  datasetId: string,
+): Promise<DatasetLifecycleMutationResult> {
+  return apiRequest<DatasetLifecycleMutationResult>(datasetArchiveKey(datasetId), {
+    method: "POST",
+  });
+}
+
+export async function deleteDataset(
+  datasetId: string,
+): Promise<DatasetLifecycleMutationResult> {
+  return apiRequest<DatasetLifecycleMutationResult>(`/api/backend/datasets/${encodeURIComponent(datasetId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function ingestRawData(
+  datasetId: string,
+  payload: RawDataIngestionDraft,
+): Promise<RawDataIngestionResult> {
+  return apiRequest<RawDataIngestionResult>(datasetIngestionsKey(datasetId), {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export async function listDesignBrowseRows(

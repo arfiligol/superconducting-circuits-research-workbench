@@ -13,6 +13,7 @@ import { resolveSimulationDefinitionId } from "@/features/simulation/lib/definit
 import {
   buildSimulationRequestSummary,
   filterSimulationTasksByContext,
+  resolveContextBoundAttachedTask,
   resolveLatestSimulationStageTaskInContext,
   resolveLatestSimulationTaskInContext,
 } from "@/features/simulation/lib/workflow";
@@ -22,6 +23,8 @@ import { useTaskQueue } from "@/lib/app-state/task-queue";
 import {
   getTask,
   normalizeTaskSummary,
+  type PostProcessingSetupDraft,
+  type SimulationSetupDraft,
   submitTask,
   taskDetailKey,
   tasksListKey,
@@ -36,6 +39,9 @@ type TaskMutationStatus = Readonly<{
 type SubmitSimulationTaskInput = Readonly<{
   kind: "simulation" | "post_processing";
   note: string;
+  simulationSetup?: SimulationSetupDraft | null;
+  postProcessingSetup?: PostProcessingSetupDraft | null;
+  upstreamTaskId?: number | null;
 }>;
 
 export function useSimulationWorkflowData(
@@ -93,18 +99,21 @@ export function useSimulationWorkflowData(
     simulationTasks,
     pageContext,
   );
-  const latestSimulationTask = resolveLatestSimulationTaskInContext(simulationTasks, pageContext);
-  const latestSimulationStageTask = resolveLatestSimulationStageTaskInContext(
+  const latestSimulationTaskFromQueue = resolveLatestSimulationTaskInContext(
+    simulationTasks,
+    pageContext,
+  );
+  const latestSimulationStageTaskFromQueue = resolveLatestSimulationStageTaskInContext(
     simulationTasks,
     "simulation",
     pageContext,
   );
-  const latestPostProcessingTask = resolveLatestSimulationStageTaskInContext(
+  const latestPostProcessingTaskFromQueue = resolveLatestSimulationStageTaskInContext(
     simulationTasks,
     "post_processing",
     pageContext,
   );
-  const resolvedTaskId = selectedTaskId ?? latestSimulationTask?.taskId ?? null;
+  const resolvedTaskId = selectedTaskId ?? latestSimulationTaskFromQueue?.taskId ?? null;
   const taskKey = resolvedTaskId ? taskDetailKey(resolvedTaskId) : null;
   const taskDetailQuery = useSWR(
     taskKey,
@@ -123,6 +132,54 @@ export function useSimulationWorkflowData(
   const activeTask = taskDetailQuery.data;
   const hasAttachedTask =
     typeof resolvedTaskId === "number" && activeTask?.taskId === resolvedTaskId;
+  const attachedContextTask = resolveContextBoundAttachedTask(activeTask, pageContext);
+  const attachedSimulationStageTask = resolveContextBoundAttachedTask(
+    activeTask,
+    pageContext,
+    "simulation",
+  );
+  const attachedPostProcessingStageTask = resolveContextBoundAttachedTask(
+    activeTask,
+    pageContext,
+    "post_processing",
+  );
+  const upstreamSimulationTaskId =
+    activeTask?.kind === "post_processing" && attachedPostProcessingStageTask
+      ? activeTask.upstreamTaskId ?? null
+      : null;
+  const upstreamSimulationTaskKey = upstreamSimulationTaskId
+    ? taskDetailKey(upstreamSimulationTaskId)
+    : null;
+  const upstreamSimulationTaskQuery = useSWR(
+    upstreamSimulationTaskKey,
+    () =>
+      upstreamSimulationTaskId
+        ? getTask(upstreamSimulationTaskId)
+        : Promise.resolve(undefined),
+    {
+      keepPreviousData: true,
+      refreshInterval(currentData) {
+        if (!currentData) {
+          return 5_000;
+        }
+
+        return currentData.status === "queued" || currentData.status === "running" ? 2_000 : 0;
+      },
+    },
+  );
+  const upstreamSimulationStageTask = resolveContextBoundAttachedTask(
+    upstreamSimulationTaskQuery.data,
+    pageContext,
+    "simulation",
+  );
+  const latestSimulationTask =
+    latestSimulationTaskFromQueue ?? attachedContextTask ?? upstreamSimulationStageTask;
+  const latestSimulationStageTask =
+    latestSimulationStageTaskFromQueue ??
+    attachedSimulationStageTask ??
+    upstreamSimulationStageTask;
+  const latestPostProcessingTask =
+    latestPostProcessingTaskFromQueue ?? attachedPostProcessingStageTask;
   const simulationStageTaskKey = latestSimulationStageTask
     ? taskDetailKey(latestSimulationStageTask.taskId)
     : null;
@@ -146,7 +203,9 @@ export function useSimulationWorkflowData(
   const latestSimulationTaskDetail =
     activeTask?.taskId === latestSimulationStageTask?.taskId
       ? activeTask
-      : simulationStageTaskQuery.data;
+      : upstreamSimulationTaskQuery.data?.taskId === latestSimulationStageTask?.taskId
+        ? upstreamSimulationTaskQuery.data
+        : simulationStageTaskQuery.data;
   const postProcessingStageTaskKey = latestPostProcessingTask
     ? taskDetailKey(latestPostProcessingTask.taskId)
     : null;
@@ -175,6 +234,9 @@ export function useSimulationWorkflowData(
   async function submitSimulationTask({
     kind,
     note,
+    simulationSetup,
+    postProcessingSetup,
+    upstreamTaskId,
   }: SubmitSimulationTaskInput): Promise<TaskDetail> {
     if (!session?.canSubmitTasks) {
       const error = new Error("This session cannot submit tasks.");
@@ -210,6 +272,9 @@ export function useSimulationWorkflowData(
           datasetName: activeDatasetState.activeDataset?.name ?? null,
           note,
         }),
+        simulation_setup: simulationSetup ?? null,
+        post_processing_setup: postProcessingSetup ?? null,
+        upstream_task_id: upstreamTaskId ?? null,
       });
 
       await Promise.all([
@@ -245,6 +310,7 @@ export function useSimulationWorkflowData(
       definitionDetailQuery.mutate(),
       taskQueueState.refreshTaskQueue().then(() => undefined),
       taskDetailQuery.mutate(),
+      upstreamSimulationTaskQuery.mutate(),
       simulationStageTaskQuery.mutate(),
       postProcessingStageTaskQuery.mutate(),
       activeDatasetState.refreshActiveDataset(),
@@ -270,7 +336,9 @@ export function useSimulationWorkflowData(
     latestSimulationTask,
     latestSimulationStageTask,
     latestSimulationTaskDetail,
-    latestSimulationTaskError: simulationStageTaskQuery.error as Error | undefined,
+    latestSimulationTaskError:
+      (simulationStageTaskQuery.error as Error | undefined) ??
+      (upstreamSimulationTaskQuery.error as Error | undefined),
     isLatestSimulationTaskLoading:
       Boolean(latestSimulationStageTask) && !latestSimulationTaskDetail,
     latestPostProcessingTask,

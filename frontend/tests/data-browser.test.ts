@@ -153,18 +153,23 @@ describe("page-boundary source contracts", () => {
     expect(datasetWorkspaceSource).toContain("saveProfile(");
     expect(datasetWorkspaceSource).toContain("Save Profile");
     expect(datasetWorkspaceSource).toContain("dedicated dataset management surface");
-    expect(datasetWorkspaceSource).toContain("Create, archive, and delete dataset actions are not exposed");
+    expect(datasetWorkspaceSource).toContain("Create Dataset");
+    expect(datasetWorkspaceSource).toContain("Archive Dataset");
+    expect(datasetWorkspaceSource).toContain("Delete Dataset");
+    expect(datasetWorkspaceSource).toContain("activeDatasetState.activeDatasetError");
+    expect(datasetWorkspaceSource).toContain("Unable to switch the active dataset.");
+    expect(datasetWorkspaceSource).not.toContain("not exposed through the current frontend-visible backend contract");
     expect(rawDataWorkspaceSource).not.toContain("saveProfile(");
     expect(rawDataWorkspaceSource).not.toContain("Save Profile");
     expect(rawDataWorkspaceSource).not.toContain("Dataset Profile");
   });
 
-  it("adds a dedicated data-ingestion page without faking upload success", () => {
+  it("submits dedicated measurement and layout ingestion without fake upload success", () => {
     expect(dataIngestionWorkspaceSource).toContain("Measurement");
     expect(dataIngestionWorkspaceSource).toContain("Layout Simulation");
-    expect(dataIngestionWorkspaceSource).toContain("Blocked by backend contract");
-    expect(dataIngestionWorkspaceSource).toContain("Upload unavailable");
-    expect(dataIngestionWorkspaceSource).toContain("no raw-data upload or ingestion mutation surface");
+    expect(dataIngestionWorkspaceSource).toContain("Submit {selectedScopeSummary.title} Ingestion");
+    expect(dataIngestionWorkspaceSource).toContain("Preview Payload JSON");
+    expect(dataIngestionWorkspaceSource).toContain("Handoff to Raw Data Browser");
     expect(dataIngestionWorkspaceSource).not.toContain("Upload complete");
   });
 
