@@ -11,9 +11,9 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: App Router layout、workspace shell 與 data-dense 頁面結構規範。
-version: v2.2.0
-last_updated: 2026-03-16
-updated_by: docs-team
+version: v2.3.0
+last_updated: 2026-03-18
+updated_by: codex
 ---
 
 # Layout Patterns
@@ -71,6 +71,28 @@ updated_by: docs-team
     能用佈局、分區、按鈕層級與狀態位置說清楚的事情，就不要再加一段輔助文字。
     說明文字應是補充，不應成為整個 UX 的主要導引機制。
 
+## Single-primary-task Rule
+
+| Rule | Meaning |
+|---|---|
+| One page, one primary job | 每個 page body 應明確服務一個主任務，例如 dataset management、raw-data browse、simulation workflow、schemdraw authoring |
+| Secondary surfaces stay secondary | 支援資訊可以存在，但不得稀釋主任務或搶走首屏注意力 |
+| Shell context stays in shell | `Runtime Mode`、`Active Workspace`、`Active Dataset`、`Tasks Queue`、worker summary 屬於 shared shell，不應在各頁重做 context summary wall |
+| Cross-page CTA is not IA | `Open X`、`Go to Y`、`Handoff to Z` 不是資訊架構；只有在它是單一主要下一步時才應出現 |
+
+!!! warning "Do not overbuild page bodies"
+    不要因為某塊資訊「看起來完整」就把它塞進 page body。
+    duplicated shell context、authority summary、handoff cards、navigation button walls 與大段 explanation copy，若不是完成本頁主任務不可缺，就不應存在。
+
+## Noise Budget
+
+| Keep | Remove or demote |
+|---|---|
+| 清楚的 section hierarchy、必要的 state、單一 primary CTA | runtime mode cards、target dataset cards、submit authority cards 等重複 shell context |
+| 主流程需要的 concise blocking reason | 只是為了「幫忙解釋」而放的大段補充文字 |
+| 與本頁主任務直接相關的結果 / 狀態 | 跨頁導航牆、handoff wall、與本頁無直接關聯的 summary cards |
+| 可快速掃讀的 metadata 與 status | 會讓頁面變成管理牆或 diagnostics wall 的額外資訊 |
+
 ## Agent Rule { #agent-rule }
 
 ```markdown
@@ -85,4 +107,8 @@ updated_by: docs-team
 - Do not collapse the entire product into one flat page tree without layout boundaries.
 - Prefer guidance through layout hierarchy before adding explanatory copy.
 - Keep shell and dashboard surfaces low-noise; helper text should be concise and only where ambiguity or risk remains.
+- Each page body should serve one primary task; do not dilute it with duplicated shell context or cross-page CTA walls.
+- Keep runtime mode, active workspace, active dataset, task queue, and worker summary in shared shell surfaces unless the page cannot function without rendering a task-local subset.
+- Use follow-up navigation only when it is the single primary next action, not as a substitute for clear IA.
+- Remove or demote authority summaries, handoff cards, and helper panels that are not required to complete the page's primary job.
 ```

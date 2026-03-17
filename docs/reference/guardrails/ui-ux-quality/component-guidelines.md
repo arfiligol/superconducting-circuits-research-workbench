@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: frontend component 選型、表單、dialog 與資料表格規範。
-version: v2.3.0
-last_updated: 2026-03-16
+version: v2.4.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
@@ -70,6 +70,22 @@ updated_by: codex
 - empty / loading / error state 應簡短直接，不應變成一大段說明牆
 - shell、sidebar、header 與 login entry 尤其應避免多餘文字
 
+## Anti-overbuild Contract
+
+- page 不應因為「資訊很多比較完整」就增加不必要的卡片、summary 與按鈕
+- duplicated shell context 不屬於 feature page component inventory，例如：
+  - `Runtime Mode`
+  - `Active Workspace`
+  - `Active Dataset`
+  - `Submit Authority`
+  - global queue / worker summary
+- cross-page navigation buttons 必須節制；若不是單一明確下一步，就不應成為常駐 component
+- authority explanation、DTO authoring helper、handoff preview 卡片若不是完成本頁任務必需，應移除或降級
+
+!!! warning "Single-task surfaces beat 'complete-looking' surfaces"
+    frontend page 正確性的第一原則，是讓使用者能快速完成本頁主任務。
+    不要為了看起來完整，就把別的頁面責任、shell context 或 infrastructure explanation 帶進來。
+
 !!! tip "Use copy as support, not scaffolding"
     若一個 surface 需要大量文字才能被理解，優先先調整 component hierarchy、grouping 與 layout。
     只有在這些都不足時，再加入精簡的輔助文案。
@@ -90,4 +106,6 @@ updated_by: codex
 - Load summary rows first; fetch heavy detail payload only on explicit detail interaction.
 - Prefer hierarchy, metadata, and status over long helper copy in dense product UI.
 - Keep error, empty, and recovery copy concise; do not turn product surfaces into diagnostics walls.
+- Keep page bodies focused on one primary task; do not add duplicated shell context cards, authority summaries, or cross-page CTA walls unless they are strictly required.
+- Treat helper components, handoff cards, and debug-heavy surfaces as secondary; remove them when they start competing with the page's main workflow.
 ```

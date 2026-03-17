@@ -1,155 +1,142 @@
 ---
+title: "Dashboard"
 aliases:
-- Dashboard UI
-- Pipeline Dashboard
+  - "Dashboard UI"
+  - "Workspace Dashboard"
 tags:
-- diataxis/reference
-- audience/team
-- sot/true
-- topic/ui
+  - diataxis/reference
+  - audience/team
+  - sot/true
+  - topic/ui
 page_id: app.page.dashboard
 route: /dashboard
 status: draft
 owner: docs-team
 audience: team
-scope: Pipeline /dashboard 的資料摘要與 Dataset Metadata 單一編輯入口契約
-version: v0.5.0
-last_updated: 2026-03-17
+scope: "/dashboard 的 summary-first landing page 契約，承接目前 dataset context、tagged metrics 摘要與 dedicated workspace/pipeline entry points"
+version: v0.6.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
 # Dashboard
 
-本頁是 `WORKSPACE` section 的 canonical landing page，負責 workspace-level dataset summary 與 Dataset Metadata 單一編輯入口。
+## Purpose
 
-!!! info "Page Frame"
-    本頁負責 active dataset 選擇、dataset metadata 編輯、tagged core metrics 摘要與後續操作指引。
-    raw data browse、analysis execution、simulation execution 不屬於本頁責任。
+`/dashboard` 是 `Dashboard` sidebar group 的 canonical landing page。它是 summary-first workspace overview，不是 dataset metadata 的唯一正式入口。
 
-!!! tip "Shared Shell"
-    本頁使用 shared [Header](../shared-shell/header.md) 與 [Sidebar](../shared-shell/sidebar.md)。
-    active dataset context 必須與 shell-level session state 一致。
+本頁負責：
 
-!!! warning "Current IA Baseline"
-    `WORKSPACE` 是 sidebar 的 top-level section；
-    `/dashboard` 則是該 section 目前的 canonical landing page。
-    若產品未來要在 `WORKSPACE` 下新增 `Tasks` / `Session` dedicated pages，必須先更新 frontend SoT，再改 sidebar / route implementation。
+- 概覽目前 active dataset context
+- 顯示 tagged core metrics 的唯讀摘要
+- 提供前往 `Dataset`、`Data Ingestion`、`Raw Data Browser` 等 dedicated surfaces 的精簡 entry
 
-!!! tip "Workspace, not pipeline sequence"
-    本頁屬於 `WORKSPACE` section，而不是 `PIPELINE` sequence。
-    它回答的是目前 workspace / dataset 的概況與操作脈絡，不是資料分析流程的其中一步。
+本頁不負責：
 
----
+- dataset profile 編輯
+- raw-data ingestion authoring
+- raw trace browse
+- simulation / characterization configuration
 
-## 核心職責
+!!! warning "Dashboard is not the dataset-management page"
+    dataset profile edit、lifecycle actions 與 active dataset browse 應回到 [Dataset](dataset.md)。
+    `Dashboard` 只做 overview 與 next-step entry，不應重新變回 metadata editor。
 
-=== "負責事項"
-    *   **資料導航**: 選擇 Active Dataset。
-    *   **定義物理量**: 編輯 Device Type、Capabilities 等 Dataset Profile。
-    *   **狀態監測**: 顯示 Dataset Metadata 摘要與已標記的關鍵度量 (Tagged Core Metrics)。
-    *   **流程指引**: 提供前往 `Characterization` / `Identify Mode` 的後續操作建議。
+## User Goal
 
-=== "非職責範圍"
-    *   ❌ 不提供 Raw Trace 瀏覽。
-    *   ❌ 不處理 Simulation 或 Characterization 的詳細配置與執行。
-    *   ❌ 不提供 Result 的細節預覽。
+- 快速確認目前 dataset context 是否正確
+- 看到 tagged core metrics 是否已就緒
+- 從 overview 進入正確的 dedicated page
 
-!!! warning "單一編輯入口規範"
-    Dataset Metadata 的正式可寫入口**僅限於 `/dashboard`**。其他頁面僅提供唯讀摘要，不得提供等價的寫入互動。
+非目標：
 
----
+- 不在此頁完成 dataset lifecycle 或 profile mutation
+- 不在此頁直接提交 ingestion
+- 不在此頁建立大量跨頁 handoff / explanation UI
 
-## 使用者目標 (User Goals)
+## Layout Structure
 
-1.  **環境確認**: 明確目前運作中的 Active Dataset 為何。
-2.  **硬體定義**: 修改 Device Type 與相關 Capabilities 以符合物理現況。
-3.  **效率提升**: 使用 `Auto Suggest` 自動產生建議的 Profile 參數。
-4.  **成果確認**: 快速檢視當前 Dataset 已有的 Tagged Core Metrics 標記完成度。
-
----
-
-## UI 與 組件規格
-
-### 頁面結構 (Layout)
+1. Page header
+2. Compact overview stats
+3. Current dataset context summary
+4. Dedicated page entry cards
+5. Tagged core metrics read-only summary
 
 ```mermaid
 flowchart TD
-    Header[Workspace Header] --> Body[Main Layout]
-    Body --> Sidebar[Unified Sidebar]
-    Body --> Content[Dashboard Main Content]
-    
-    subgraph Content
-        H1[Page Header / Title]
-        Selector[Target Dataset Selector]
-        Form[Metadata Editor Form]
-        Metrics[Tagged Core Metrics Section]
-    end
+    Header["Shared Header / Global Context"] --> Main["Dashboard Page Body"]
+    Main --> H1["Page Header"]
+    Main --> Stats["Overview Stats"]
+    Main --> Context["Current Dataset Context"]
+    Main --> Entry["Dedicated Page Entry Cards"]
+    Main --> Metrics["Tagged Core Metrics Summary"]
 ```
 
-### 組件清單 (Components)
+## Component Inventory
 
-| ID | 元件名稱 | 位置 | 作用 |
-| :--- | :--- | :--- | :--- |
-| **C1** | Target Dataset Selector | Page Top | 切換 Active Dataset 並刷新表單數據。 |
-| **C2** | Metadata Summary Text | Editor Area | 顯示 Device、Capabilities 與 Source 摘要。 |
-| **C3** | Device Type Field | Form | 編輯 Dataset Profile 的 Device Type。 |
-| **C4** | Capabilities Field | Form | 透過 Multi-select 編輯硬體實力。 |
-| **C5** | Action Buttons | Form | 提供 `Auto Suggest` (Secondary) 與 `Save` (Primary)。 |
-| **C6** | Tagged Core Metrics | Page Bottom | 以唯讀卡片形式顯示關鍵標記參數。 |
+| ID | Component | Role | Required behavior |
+|---|---|---|---|
+| `C1` | Page Header | page identity | 說明這是 overview-first landing page，而不是 management page |
+| `C2` | Overview Stats | summary | 顯示可快速掃讀的 dataset / metrics 狀態 |
+| `C3` | Current Dataset Context | context summary | 顯示 active dataset 的 concise summary，不承接編輯責任 |
+| `C4` | Dedicated Page Entry Cards | next-step navigation | 以少量清楚 entry cards 導向 `Dataset`、`Data Ingestion`、`Raw Data Browser` |
+| `C5` | Tagged Core Metrics Summary | read-only result summary | 顯示 active dataset 相關的 tagged metrics 摘要 |
 
----
+## Data & State Contract
 
-## 資料與狀態契約 (Contract)
+### Data dependencies
 
-=== "數據依賴 (Data Dependencies)"
-    | 資料名稱 | 來源 | 必要性 | 用途 |
-    | :--- | :--- | :---: | :--- |
-    | active dataset summary | session / workspace | ✅ | 切換 Target Dataset。 |
-    | dataset profile detail | dataset profile service | ✅ | 填充 Metadata 表單。 |
-    | tagged core metrics | derived metric service | ⚠️ | 顯示唯讀摘要。 |
-    | mutation response | dataset mutation bus | ✅ | 處理儲存反饋。 |
+| Data | Source | Required | Use |
+|---|---|---:|---|
+| active dataset summary | session surface | ✅ | 顯示目前 context |
+| visible dataset count | datasets surface | ✅ | overview stats |
+| dataset profile summary | datasets surface | ⚠️ | 只做 concise summary，不做 editing |
+| tagged core metrics summary | characterization results surface | ⚠️ | read-only summary |
 
-=== "頁面狀態 (States)"
-    | 狀態 | 視覺表現 |
-    | :--- | :--- |
-    | `Default` | 正常顯示 Selector 與 Form。 |
-    | `Loading` | Dataset Profile 請求中，Form 呈現 Skeleton 狀態。 |
-    | `Empty` | Dataset 存在但尚未進行 `Identify Mode` 標記 (顯示指引)。 |
-    | `Error` | 讀取或儲存失敗，顯示全域錯誤回饋。 |
+### UI states
 
-!!! tip "Empty State 指引"
-    當 `Tagged Core Metrics` 為空時，頁面必須提供明確的連結，指引使用者前往 `Characterization` 頁面執行 `Identify Mode`。
+| State | Required behavior |
+|---|---|
+| `loading` | overview stats / summary 區塊分區 loading；不要把整頁變成大面積 diagnostics |
+| `empty` | 若尚無 active dataset 或 metrics，顯示 concise next-step guidance |
+| `partial` | profile / metrics 任一區塊失敗時，只影響該區塊 |
+| `error` | 顯示局部 error block，不影響其他 summary 區塊 |
 
----
+## Interaction Flows
 
-## 互動流程 (Interaction)
+1. **Open a dedicated page**
+   - 使用者從 entry card 點進 `Dataset`、`Data Ingestion` 或 `Raw Data Browser`
+   - Dashboard 不應先再鋪一輪 handoff explanation
 
-??? info "流程 A: 切換 Target Dataset"
-    1.  使用者於 C1 選擇新 Dataset。
-    2.  Metadata Form 與 Tagged Metrics 進入 Loading。
-    3.  成功後，頁面 context 更新為新 Dataset。
+2. **Refresh after shell context change**
+   - Header / Global Context 切換 active dataset
+   - Dashboard 重新拉取 overview stats、dataset summary 與 tagged metrics
+   - page body 不得自己發明另一套 dataset context
 
-??? tip "流程 B: Auto Suggest 與儲存"
-    1.  點擊 `Auto Suggest`: 系統由 backend 取得建議並填入 Form，此時為 Dirty State。
-    2.  點擊 `Save Metadata`: 提交 Mutation，成功後即時反映至全站 Session。
+3. **Metrics empty state**
+   - 若 active dataset 尚無 tagged metrics
+   - 顯示 concise empty guidance
+   - 不把 characterization workflow 直接塞回 dashboard
 
----
+## Visual Rules
 
-## 驗證檢查清單 (Acceptance Checklist)
+- overview-first，不可退化成 dataset management wall
+- dedicated page entry 可以存在，但必須維持為小型 next-step cluster，而不是大型 CTA 牆
+- page body 不得重複 `Runtime Mode`、`Active Dataset`、`Tasks Queue`、submit authority 等 shell-owned context
+- tagged metrics 區塊保持 read-only summary，不承擔 identify / analysis 操作
 
-- [ ] 是否提供完整的 Dataset Selector、Device Type 與 Capabilities 編輯？
-- [ ] 儲存成功後，Session 中的 Profile 是否立即同步更新？
-- [ ] Tagged Metrics 是否以**唯讀**方式顯示？
-- [ ] 在無標記數據時，是否有明確指引前往 `Identify Mode`？
-- [ ] 確認 `/dashboard` 是唯一的 Metadata 寫入路徑？
+## Acceptance Checklist
 
----
+- [ ] `Dashboard` 被定義為 summary-first landing page，而不是 dataset metadata editor
+- [ ] dataset profile mutation 不再屬於 `/dashboard`
+- [ ] entry cards 只導向 dedicated pages，不變成過量 cross-page CTA 牆
+- [ ] active dataset context 來自 shared shell / session，page body 不重複造一份 shell context
+- [ ] tagged core metrics 只做 read-only summary
 
-## 相關參考
+## Related
 
-*   [Raw Data Browser](raw-data-browser.md)
-*   [Header](../shared-shell/header.md)
-*   [Sidebar](../shared-shell/sidebar.md)
-*   [Circuit Simulation](../research-workflow/circuit-simulation.md)
-*   [Backend: Session & Workspace](../../backend/session-workspace.md)
-*   [Backend: Datasets & Results](../../backend/datasets-results.md)
+- [Dataset](dataset.md)
+- [Data Ingestion](data-ingestion.md)
+- [Raw Data Browser](raw-data-browser.md)
+- [Header](../shared-shell/header.md)
+- [Sidebar](../shared-shell/sidebar.md)

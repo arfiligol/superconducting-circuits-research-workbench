@@ -7,6 +7,22 @@
 Rewrite branch 目前同時保留 legacy NiceGUI runtime 與新的 `frontend/`、`backend/`、`desktop/` foundation。
 請用獨立入口操作 rewrite stack，不要把 legacy runtime helper 當成 rewrite 啟動方式。
 
+### Runtime Modes
+
+目前產品模型是「同一個 app shell，兩種 runtime mode」：
+
+- `Local Mode`
+  - 適合本機操作、教學、草稿與單機工作流
+  - 對使用者來說是 app 內建的本地 authority surface
+  - 對 repo contributor 來說，通常代表啟動 rewrite 本機 stack
+- `Online Mode`
+  - 使用同一個 shell，但改連到獨立的 backend server target
+  - 需要明確啟動 server，並在 app 內輸入 target (`IP:Port` / origin) 後再進入 online flow
+
+!!! info "Contributor shorthand"
+    如果你只是想把 app 跑起來並開始操作，先用 `npm run rewrite:dev`。
+    這會啟動 repo 內的 rewrite frontend + local backend pairing，作為本機開發 baseline。
+
 ### Rewrite Quick Start
 
 ```bash
@@ -25,6 +41,49 @@ npm run rewrite:dev
 # Stop rewrite stack
 npm run rewrite:stop
 ```
+
+### Runtime Startup Paths
+
+#### Local Mode / Local Development Baseline
+
+如果你要的是本機 baseline：
+
+```bash
+# Repo-root orchestration: frontend + local backend
+npm run rewrite:dev
+```
+
+常用入口：
+
+- frontend: [http://127.0.0.1:3000](http://127.0.0.1:3000)
+- backend health: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+
+這條路徑最適合：
+
+- 本機操作
+- UI / workflow 開發
+- schemdraw / schema / dataset / task baseline 驗證
+- Desktop wrapper 連本機 frontend
+
+#### Online / Server Mode
+
+如果你要驗證 app 連外部 server target 的 online flow，請先啟動 backend server：
+
+```bash
+cd backend && uv sync
+cd backend && uv run uvicorn src.app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+接著在 app 內：
+
+1. 進入 runtime-mode entry（例如 Header `Global Context`、Account、Auth Entry）
+2. 輸入 server target，例如 `http://127.0.0.1:8000`
+3. 切到 `Online Mode`
+4. 視目前 session 狀態再進入 sign-in / retry / target validation flow
+
+!!! warning "Mode switch is not a data bridge"
+    `Local Mode` 和 `Online Mode` 是 context switch，不會自動搬移 datasets、schemas、results 或 tasks。
+    local/online 之間的資料移動仍應透過明確的 import / upload / download / export flow。
 
 ### Rewrite Desktop Wrapper
 

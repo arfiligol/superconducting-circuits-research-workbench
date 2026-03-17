@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
-version: v0.20.0
-last_updated: 2026-03-17
+version: v0.21.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
@@ -31,15 +31,20 @@ updated_by: codex
     本頁只列真正存在的 frontend reference pages。
 
 !!! warning "Do Not Rewrite Sidebar Taxonomy In Implementation"
-    目前 frontend SoT 以 `WORKSPACE`、`PIPELINE`、`CIRCUIT SIMULATION` 為 sidebar groups，且 `/dashboard` 仍是 `WORKSPACE` section 的 canonical landing page。
-    若產品要在 `WORKSPACE` 下新增 `Tasks` / `Session`，或替 `PIPELINE` 新增 overview route，必須先更新 SoT，再改 frontend implementation。
+    目前 frontend 的可見 sidebar groups 為 `Dashboard`、`Pipeline`、`Circuit Simulation`。
+    其中 `Dashboard` 承擔 workspace-level overview / operations 語意。
+    若產品要新增 `Tasks` / `Session`，或替 `Pipeline` 新增 overview route，必須先更新 SoT，再改 frontend implementation。
+
+!!! warning "Anti-overbuild baseline"
+    frontend page specs 除了定義功能，也要定義禁止條件。
+    duplicated shell context、cross-page CTA walls、authority summary cards 與 handoff explanation，不應因為「看起來完整」就被塞回 page body。
 
 ## Sidebar Section Meanings
 
 | Section | Meaning | Current baseline |
 |---|---|---|
-| `WORKSPACE` | workspace-level overview / operations / cross-workflow context | 目前由 `/dashboard` 作為 canonical landing page |
-| `PIPELINE` | data-analysis flow；item order 具有 UX 引導含義 | 放資料分析流程節點，不放 system / task infra management page |
+| `Dashboard` | workspace-level overview / operations / cross-workflow context | 目前由 `/dashboard` 作為 canonical landing page，並包含 `Dataset` entry |
+| `Pipeline` | data-analysis flow；item order 具有 UX 引導含義 | 放 `Data Ingestion`、`Raw Data`、`Characterization` 等流程節點，不放 system / task infra management page |
 | `CIRCUIT SIMULATION` | definition-driven modeling / simulation flow | 放 schema、schemdraw、simulation 等建模工作頁 |
 
 ## Page Map
@@ -58,12 +63,14 @@ updated_by: codex
     |---|---|---|
     | [Task Management](shared-workflow/task-management.md) | runtime-mode-aware `Global Context` queue section、attach、cancel、terminate、retry、refresh recovery | [App / Shared / Runtime Modes](../shared/runtime-modes.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Audit Logging](../shared/audit-logging.md) |
 
-=== "Workspace"
+=== "Workspace / Pipeline Pages"
 
-    | Page | Core focus | Authority pair |
-    |---|---|---|
-    | [Dashboard](workspace/dashboard.md) | `WORKSPACE` section 的 canonical landing page；active dataset、dataset metadata、tagged core metrics summary | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Characterization Results](../backend/characterization-results.md) |
-    | [Raw Data Browser](workspace/raw-data-browser.md) | design list、trace preview、compare readiness、summary-only browse | [Backend / Datasets & Results](../backend/datasets-results.md) |
+    | Page | Sidebar group | Core focus | Authority pair |
+    |---|---|---|---|
+    | [Dashboard](workspace/dashboard.md) | `Dashboard` | summary-first landing page；目前 dataset context、tagged core metrics 與 dedicated page entry points | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Characterization Results](../backend/characterization-results.md) |
+    | [Dataset](workspace/dataset.md) | `Dashboard` | visible dataset catalog、active dataset switch、profile edit、lifecycle actions | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
+    | [Data Ingestion](workspace/data-ingestion.md) | `Pipeline` | upload-first raw-data intake、validation、preprocess、import handoff | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
+    | [Raw Data Browser](workspace/raw-data-browser.md) | `Pipeline` | design list、trace preview、compare readiness、summary-only browse | [Backend / Datasets & Results](../backend/datasets-results.md) |
 
 === "Definition"
 

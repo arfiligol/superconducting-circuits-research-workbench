@@ -15,8 +15,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/circuit-schemdraw 的 linked schema context、source editor、SVG live preview、backend diagnostics 與 advanced mapping disclosure 契約"
-version: v0.7.0
-last_updated: 2026-03-16
+version: v0.8.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
@@ -41,6 +41,7 @@ updated_by: codex
 
 | Responsibility | Meaning |
 |---|---|
+| Page header utilities | 只允許 compact adjacent-navigation，例如 `Back to Catalog` 與 `Open Schema Editor`；不應長成 handoff button wall |
 | Source editing | 使用者在 code editor 中撰寫 Schemdraw Python source |
 | SVG live preview | 直接檢視最新成功 render 的 SVG |
 | Linked schema context | 在工作區頂部顯示 linked schema 選擇與 lightweight context summary |
@@ -59,11 +60,10 @@ updated_by: codex
 
 ```mermaid
 flowchart TD
-    Header["Workspace Header"] --> Context["Linked Schema Context"]
+    Header["Page Header"] --> Context["Linked Schema Context"]
     Context --> Main["Primary Work Area"]
     Main --> Editor["Schemdraw Source Editor"]
     Main --> Preview["SVG Live Preview"]
-    Main --> Controls["Render Controls"]
     Main --> Diagnostics["Backend Diagnostics"]
     Diagnostics --> Snapshot["Linked Schema Snapshot"]
 ```
@@ -72,12 +72,13 @@ flowchart TD
 
 | ID | Component | Required behavior |
 |---|---|---|
-| `C1` | Linked Schema Context | 全寬顯示 linked schema selection 與 lightweight summary |
+| `C0` | Page Header Actions | 只保留 compact utilities，例如 `Back to Catalog`、`Open Schema Editor` |
+| `C1` | Linked Schema Context | 全寬顯示 linked schema selection、summary cards 與 lightweight chips |
 | `C2` | Schemdraw Source Editor | 左側 primary editor，負責 source editing |
 | `C3` | SVG Live Preview | 右側 primary preview，顯示最新成功 render 的 SVG |
-| `C4` | Render Controls | 至少包含 `Render Now`、`Reset Template` |
+| `C4` | Render Controls | 主要為 `Render Now`；`Reset Template` 屬於 advanced mapping disclosure 的附屬動作 |
 | `C5` | Backend Diagnostics | 全寬 support/debug surface，顯示 backend diagnostics 與 render status |
-| `C6` | Linked Schema Snapshot | 全寬 read-only reference surface，顯示 linked schema snapshot |
+| `C6` | Linked Schema Snapshot | 全寬 read-only code surface，顯示 linked schema snapshot |
 | `C7` | Advanced Mapping Disclosure | optional advanced disclosure，用於 relation metadata / mapping，不得佔據 main workspace slot |
 
 ## Three-step Processing Flow
@@ -111,7 +112,8 @@ flowchart TD
 | No implicit persistence | 本頁不保存 schema source、不保存 render draft |
 | Advanced mapping is secondary | relation mapping / config 只能作 advanced disclosure，不得比 editor 或 preview 更顯眼 |
 | Diagnostics are support-only | diagnostics 應位於 editor / preview 之下，不得和 primary work area 同級競爭注意力 |
-| Snapshot is reference-only | linked schema snapshot 為 read-only reference，不得壓過 editor / preview 的主要工作流 |
+| Snapshot is reference-only | linked schema snapshot 為 read-only code surface，不得壓過 editor / preview 的主要工作流 |
+| No cross-page CTA wall | 除了 compact adjacent-navigation 之外，不得額外堆疊 handoff / preview / authority buttons |
 
 ??? example "Edit-to-preview behavior"
     1. 使用者修改 Python source。
@@ -157,6 +159,7 @@ flowchart TD
     * [ ] stale preview 與 latest-only apply 有正式定義
     * [ ] main hierarchy 明確是 `Linked Schema Context -> Source Editor + SVG Live Preview -> Backend Diagnostics -> Linked Schema Snapshot`
     * [ ] relation mapping / config 被定義為 optional advanced concern，不佔 main workspace slot
+    * [ ] linked schema snapshot 被定義為 read-only code surface，而不是壓扁的文字 blob
     * [ ] page 不會把 preview workflow誤寫成 task queue 或 persistence workflow
 
 ## Related

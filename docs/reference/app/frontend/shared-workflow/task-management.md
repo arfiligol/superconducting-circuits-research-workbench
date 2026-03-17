@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend runtime-mode-aware shared header task queue、task attachment、worker summary、control actions 與 refresh recovery contract
-version: v0.10.0
-last_updated: 2026-03-17
+version: v0.11.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
@@ -89,6 +89,10 @@ updated_by: codex
 !!! warning "Workflow pages must not duplicate the global queue"
     workflow page 可以顯示 stage-local execution summary、latest run summary、`View Task` 或 `Open in Global Context`。
     但不得在 page body 重新做一份全域 queue、worker dashboard、或大型 attachment / recovery diagnostics wall。
+
+!!! warning "Cross-page buttons are not a substitute for IA"
+    `Open Task Center`、`Go to Dataset`、`Open Raw Data` 之類的按鈕，只能在它是單一主要下一步時出現。
+    workflow page 不應用一排 handoff buttons 取代清楚的 page ownership 與 section hierarchy。
 
 !!! info "Section switcher, not stacked dump"
     `Tasks Queue` 是 `Global Context` panel 內的一個 section。
@@ -225,6 +229,8 @@ updated_by: codex
 | Workflow pages stay workflow-first | page-local task UI 只能回答目前 stage 是否可繼續，不得取代 global queue / worker surfaces |
 | Stage-local summary only | inline task UI 最多顯示 latest run summary、status、compact failure summary 與 jump actions |
 | Deep task control stays global | 完整 queue browse、worker lane state、跨頁 recovery 與 event drill-down 應回到 Header `Global Context` |
+| No duplicated shell context | page body 不得再補 runtime mode、active dataset、submit authority 等與 shared shell 重複的 context cards |
+| No handoff wall | 不得把 attach、recovery、cross-page navigation 做成頁面主視覺；若需要 deeper control，導回 `Global Context` |
 
 === "Characterization"
 

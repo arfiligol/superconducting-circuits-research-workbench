@@ -14,8 +14,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/circuit-simulation 的 canonical definition 選擇、simulation setup、task submission、attached-task review 與 post-processing 契約"
-version: v0.20.0
-last_updated: 2026-03-17
+version: v0.21.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
@@ -30,6 +30,10 @@ updated_by: codex
 !!! tip "Shared Surfaces"
     本頁使用 shared [Header](../shared-shell/header.md)、[Sidebar](../shared-shell/sidebar.md) 與 [Task Management](../shared-workflow/task-management.md)。
     `Tasks Queue` 與 `Worker Status` 由 Header 提供；本頁只保留完成 workflow 所需的最小 stage-local task state。
+
+!!! warning "No duplicated shell context"
+    page body 不得再鋪 `Runtime Mode`、`Active Dataset`、`Submit Authority`、queue summary、worker summary 或大量 cross-page handoff buttons。
+    若某資訊可由 Header / Global Context 取得，本頁就不應再重做一次。
 
 !!! warning "Pipeline-first, not task-dominated"
     task 是執行基礎設施，不是頁面的主要資訊架構。
@@ -104,14 +108,25 @@ graph TD
 !!! warning "Setup vs Definition"
     此處的配置屬於「運行參數」，僅存於 task snapshot 中，不會回寫至 Circuit Definition 的源碼。
 
-=== "Sweep & Solver"
-    * **Frequency Sweep**: 設定 Start、Stop 與 Points。
-    * **HB Solve**: 設定 Harmonics 與進階 Solver 容差。
-    * **Parameter Sweeps**: 啟用多軸參數掃描模式。
+| Setup section | Current contract |
+|---|---|
+| `Signal Frequency Sweep Range` | persisted on task |
+| `Parameter Sweep Setup` | persisted on task；sweep target 只能來自 schema parameters 或 source-derived controls，若無可用 target 必須 forced disable |
+| `HB Solving` | main HB / solver controls persisted on task |
+| `Sources` | persisted on task；page 應收斂成 JosephsonCircuits pump-source authoring surface，而不是 generic source-kind form builder |
+| `PTC` | local draft only；ports 來自 schema-defined ports，預設全部不選 |
+| `Advanced hbsolve Options` | 目前應視為 local-draft-first advanced surface；正式 backend authority 未定前，不得假裝是穩定 persisted contract |
 
-=== "Sources & PTC"
-    * **Sources**: 設定 Pump 頻率、埠口電流與模式。
-    * **PTC**: 埠口終止補償 (Port Termination Compensation)，僅作用於 `Y/Z` 參數。
+!!! tip "Saved setups are browser-local"
+    `Save` / `Manage` simulation setups 目前屬於 browser-local saved setups，
+    scope 為 per selected definition。
+    它們不是 backend resources，也不是 persisted task history。
+
+!!! warning "Local Draft Only"
+    `Local Draft Only` 代表：
+    - 僅存在 browser-local draft
+    - 不隨 task 提交
+    - 不從 persisted task detail rehydrate
 
 ## Runnable Stage Contract
 
@@ -142,6 +157,21 @@ graph TD
 | Downstream relation | post-processing result 必須明確指出其 upstream simulation result / run |
 | Export / compare | 應附著在對應的 result stage，而不是 task diagnostics 區塊 |
 | Re-entry | refresh / reattach 後，頁面必須能回到正確 stage result，而不是只剩 generic task detail |
+
+## Post-processing Direction
+
+| Concern | Current SoT |
+|---|---|
+| Setup model | `Post Processing Setup` 應收斂成 step-based process list，而不是單一 generic operation form |
+| Step order | order matters，列表順序就是執行順序 |
+| Source selection | downstream source 應允許 `Raw` 或 `PTC` |
+| UI density | stage 4 應維持 card-based、低噪音 authoring surface，不應變成 generic field wall |
+| Stage 5 | `Post Processing Result` 仍承接 downstream result，且必須明確連回 upstream simulation result |
+
+!!! info "Do not freeze temporary generic forms"
+    `Post Processing Setup` / `Post Processing Result` 目前仍在快速調整。
+    文件應固定 owner boundary、step-based direction 與 upstream/downstream relation，
+    不應把暫時的 generic field form 長相寫死成最終 SoT。
 
 ## Event And Recovery Density
 

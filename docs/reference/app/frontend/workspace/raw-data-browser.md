@@ -14,18 +14,18 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/raw-data 的 design list、trace preview、filtering、cursor-based browse 與 summary-only browse contract"
-version: v0.7.0
-last_updated: 2026-03-14
+version: v0.8.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
 # Raw Data Browser
 
-本頁為 Raw Data Designs 與 Trace Preview 的中心瀏覽工作區。
+本頁為 active dataset 內 design / trace browse 與 single-trace preview 的中心工作區。
 
 !!! info "Page Frame"
     本頁負責 design list、trace filtering、compare readiness 與單筆 trace preview。
-    raw data upload、dataset metadata 編輯、analysis execution 不屬於本頁責任。
+    raw data upload、dataset metadata 編輯、analysis execution 與 shell context 管理不屬於本頁責任。
 
 !!! tip "Shared Shell"
     本頁使用 shared [Header](../shared-shell/header.md) 與 [Sidebar](../shared-shell/sidebar.md)。
@@ -48,9 +48,14 @@ updated_by: codex
 === "非職責範圍"
     *   ❌ 不處理 Simulation 設定、Schema 編輯或分析執行。
     *   ❌ 不處理 Raw Data 的建立、上傳或 Metadata 編輯。
+    *   ❌ 不重複顯示 `Runtime Mode`、`Active Dataset`、`Submit Authority` 等 shell context。
 
 !!! tip "效能關鍵"
     本頁嚴格遵守 **Summary-only** 原則。在列表階段，**禁止**預載任何大規模的數值載荷 (Numeric Payload)。
+
+!!! warning "Browse page, not handoff page"
+    本頁是 browse / preview surface，不應因為看起來方便，就再塞 `Open Dataset`、`Open Data Ingestion` 等 cross-page CTA 牆。
+    若使用者需要回到其他頁面，應透過清楚 IA 與 Sidebar / Header 完成。
 
 ---
 
@@ -133,15 +138,20 @@ graph TD
 | **Table First** | 優先以表格呈現，避免將頁面變成混亂的卡片堆疊。 |
 | **Hierarchy** | 遵守「選 Design → 選 Trace → 看內容」的垂直流向。 |
 | **Visibility** | Compare Readiness 等關鍵判斷指標應比一般中繼資料更醒目。 |
+| **Low-noise context** | page body 不重複 shell context；只保留完成 design / trace browse 必需的 dataset-local context。 |
 
 !!! warning "唯讀限制"
-    本頁僅顯示**唯讀**的 Design Summary。所有 Dataset Metadata 的修改必須回到 [Dashboard](dashboard.md)。
+    本頁僅顯示**唯讀**的 Design Summary。
+    dataset profile 與 lifecycle 修改必須回到 [Dataset](dataset.md)；
+    raw-data intake 則回到 [Data Ingestion](data-ingestion.md)。
 
 ---
 
 ## 相關參考
 
 *   [Dashboard](dashboard.md)
+*   [Dataset](dataset.md)
+*   [Data Ingestion](data-ingestion.md)
 *   [Header](../shared-shell/header.md)
 *   [Sidebar](../shared-shell/sidebar.md)
 *   [Backend: Datasets & Results](../../backend/datasets-results.md)

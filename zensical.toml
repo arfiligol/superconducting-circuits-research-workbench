@@ -85,6 +85,7 @@ nav = [
       { "Overview" = "explanation/physics/index.md" },
       { "Symbol Glossary" = "explanation/physics/symbol-glossary.md" },
       { "Schur Complement & Kron Reduction" = "explanation/physics/schur-complement-kron-reduction.md" },
+      { "Coupled Transmission Lines: Even/Odd, Maxwell, Mutual" = "explanation/physics/coupled-transmission-lines-even-odd-maxwell-mutual.md" },
     ] },
     { "Architecture" = [
       { "Overview" = "explanation/architecture/index.md" },
@@ -136,6 +137,8 @@ nav = [
         ] },
         { "Workspace" = [
           { "Dashboard" = "reference/app/frontend/workspace/dashboard.md" },
+          { "Dataset" = "reference/app/frontend/workspace/dataset.md" },
+          { "Data Ingestion" = "reference/app/frontend/workspace/data-ingestion.md" },
           { "Raw Data Browser" = "reference/app/frontend/workspace/raw-data-browser.md" },
         ] },
         { "Definition" = [

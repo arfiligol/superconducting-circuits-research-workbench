@@ -48,7 +48,7 @@ updated_by: team
 | 編號 | 主題 | 節點類型 |
 |------|------|----------|
 | B1 | Lumped vs Distributed | Model |
-| B2 | Transmission Lines & Modes | Model |
+| B2 | [Transmission Lines & Modes](./coupled-transmission-lines-even-odd-maxwell-mutual.md) | Model |
 | B3 | Impedance, Admittance, Matching | Model |
 | B4 | Scattering Parameters (S-parameters) | Model |
 | B5 | Resonators & Coupling (Q, κ, bandwidth, ringdown) | Model |

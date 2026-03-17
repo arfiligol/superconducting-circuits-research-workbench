@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared sidebar 的導航、route grouping 與 responsive shell contract
-version: v0.6.0
-last_updated: 2026-03-17
+version: v0.7.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
@@ -62,27 +62,27 @@ updated_by: codex
 
 | Concern | Current SoT |
 |---|---|
-| `Dashboard` page | 目前仍是單一 canonical page，但它屬於 `WORKSPACE` section 的 landing page，不得在 frontend implementation 中自行拆成 `Workspace` / `Session` 雙頁 |
-| `WORKSPACE` group | 是 top-level nav group，代表 workspace-level overview / operations surfaces，不是單一 page title 的別名 |
+| `Dashboard` page | 目前仍是 `Dashboard` group 的 canonical landing page，但它不再是 dataset metadata 的唯一入口 |
+| `Dashboard` group | 目前的可見 label 仍是 `Dashboard`；語意上它承擔 workspace-level overview / operations surfaces |
 | `PIPELINE` overview | 若未新增正式 page spec，不得自行在 sidebar 補一個 pipeline overview route |
 | Route / label changes | route naming、sidebar labels 與 group hierarchy 需要先更新 SoT，再進行 frontend implementation |
 
 !!! warning "No silent IA rewrite in frontend"
-    如果產品想在 `WORKSPACE` section 下新增 `Tasks`、`Session` 或其他 dedicated pages，必須先更新 frontend reference 與相關 page specs。
+    如果產品想新增 `Tasks`、`Session` 或其他 dedicated pages，必須先更新 frontend reference 與相關 page specs。
     不得由 sidebar implementation 先行改名、補頁或變更 route taxonomy。
 
 ## Section Semantics
 
 | Section | What it means | What it should contain | What it should not become |
 |---|---|---|---|
-| `WORKSPACE` | workspace-level overview、operational entry 與跨 workflow context | `/dashboard` 與未來可能的 workspace-level overview / task entry surfaces | dataset-analysis sequence、definition authoring flow |
+| `Dashboard` | workspace-level overview、operational entry 與跨 workflow context | `Dashboard`、`Dataset` 與未來可能的 workspace-level overview / task entry surfaces | dataset-analysis sequence、definition authoring flow |
 | `PIPELINE` | data analysis flow；item order 具有 UX 引導意義 | raw data、analysis、結果前後關係明確的 workflow pages | queue / worker / infra management pages |
 | `CIRCUIT SIMULATION` | definition-driven modeling / simulation flow | schema / definition-related pages、schemdraw、simulation workbench | workspace overview 或全域 operations surface |
 
 !!! tip "Section order is product language"
     Sidebar 的三個 top-level sections 不只是分類。
     它們同時在傳達產品心智模型：
-    `WORKSPACE` 回答「我在哪個工作空間與操作脈絡」；
+    `Dashboard` 回答「我目前在哪個操作脈絡與工作總覽」；
     `PIPELINE` 回答「資料分析流程走到哪一步」；
     `CIRCUIT SIMULATION` 回答「定義、建模與模擬在哪裡進行」。
 
@@ -90,9 +90,9 @@ updated_by: codex
 
 | Allowed label | Meaning |
 |---|---|
-| `WORKSPACE` | workspace-level overview / operations 群組 |
-| `PIPELINE` | data-analysis workflow 群組；item order 具有 UX 引導意義 |
-| `CIRCUIT SIMULATION` | definition-driven modeling / simulation 群組 |
+| `Dashboard` | workspace-level overview / operations 群組 |
+| `Pipeline` | data-analysis workflow 群組；item order 具有 UX 引導意義 |
+| `Circuit Simulation` | definition-driven modeling / simulation 群組 |
 
 !!! tip "No helper copy in the sidebar"
     若使用者需要理解群組用途，應透過 page body、overview page、empty state 或 onboarding surface 引導。
@@ -104,9 +104,9 @@ updated_by: codex
 
     | Group | Purpose |
     |---|---|
-    | `WORKSPACE` | workspace landing / overview / operations：目前至少包含 `Dashboard` |
-    | `PIPELINE` | data-analysis flow：例如 `Raw Data Browser`、`Characterization`；順序應保持有引導意味 |
-    | `CIRCUIT SIMULATION` | definition-driven modeling flow：例如 `Schemas`、`Schemdraw`、`Circuit Simulation` |
+    | `Dashboard` | workspace landing / overview / operations：目前包含 `Dashboard`、`Dataset` |
+    | `Pipeline` | data-analysis flow：目前包含 `Data Ingestion`、`Raw Data`、`Characterization`；順序應保持有引導意味 |
+    | `Circuit Simulation` | definition-driven modeling flow：目前包含 `Schemas`、`Schemdraw`、`Simulation` |
 
 === "Required Behaviors"
 
@@ -135,6 +135,8 @@ updated_by: codex
 | Consumer | Why it depends on Sidebar |
 |---|---|
 | [Dashboard](../workspace/dashboard.md) | 共享 pipeline 導覽入口 |
+| [Dataset](../workspace/dataset.md) | 共享 dataset management 導覽入口 |
+| [Data Ingestion](../workspace/data-ingestion.md) | 共享 pipeline intake 導覽入口 |
 | [Raw Data Browser](../workspace/raw-data-browser.md) | 共享 design browse 導覽入口 |
 | [Schemas](../definition/schemas.md) | 共享 definition workflow entry |
 | [Schema Editor](../definition/schema-editor.md) | 共享 catalog-to-editor navigation |

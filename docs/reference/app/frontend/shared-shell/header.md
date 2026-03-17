@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared header 的 shell identity、runtime mode entry、global context entry、account surface、developer mode 與 shell-side panel contract
-version: v0.8.0
-last_updated: 2026-03-17
+version: v0.9.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
@@ -33,6 +33,11 @@ updated_by: codex
 !!! warning "Global Context Lives In Header"
     `Runtime Mode`、`Active Workspace`、`Active Dataset` 與 `Tasks Queue` 是 shared shell 的 global context。
     使用者必須能在 Header 直接點擊、展開與操作它們，而不是各頁各自重造入口。
+
+!!! warning "Page Bodies Must Not Duplicate Shell Context"
+    以下內容屬於 shared shell，不應在各 page body 再鋪成 summary cards 或 authority walls：
+    `Runtime Mode`、`Active Workspace`、`Active Dataset`、`Tasks Queue`、worker summary、queue recovery / attach / cancel / retry / terminate、shell-level session / authority summary。
+    若頁面只是在重複 shell 已知資訊，就應移除，而不是保留成「helpful context」。
 
 !!! tip "Compact Trigger, Heavy Management Elsewhere"
     Header 仍然是 global context owner，但應優先承載 compact triggers / chips。
@@ -240,6 +245,7 @@ updated_by: codex
 | Shell-side panel owns heavy management | workspace switch、dataset switch、queue rows、worker detail 與 account detail 應集中在右側 panel |
 | Account is preference-first | account panel 優先承擔 personal/app preference，不承擔 workspace 與 collaboration 管理面 |
 | Responsive collapse | 窄螢幕可縮成 icon + chips，但仍必須保留 dataset、queue 與 user menu trigger |
+| Helpful context is not enough | page 若能透過 Header / Global Context 取得資訊，就不應再重做 runtime / dataset / authority summary cards |
 
 !!! tip "Header vs Sidebar"
     Header 負責 global context 與 user controls 的 entry。
