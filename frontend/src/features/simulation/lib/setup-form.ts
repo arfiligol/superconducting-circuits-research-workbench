@@ -107,6 +107,50 @@ export type SimulationSetupFormValues = z.infer<typeof simulationSetupFormSchema
 export type SimulationParameterSweepAxisForm = SimulationSetupFormValues["simulationParameterSweepAxes"][number];
 export type SimulationSourceForm = SimulationSetupFormValues["simulationSources"][number];
 
+export function cloneSimulationSetupFormValues(
+  values: Readonly<SimulationSetupFormValues>,
+): SimulationSetupFormValues {
+  return {
+    simulationStartGhz: values.simulationStartGhz,
+    simulationStopGhz: values.simulationStopGhz,
+    simulationPointCount: values.simulationPointCount,
+    simulationSpacing: values.simulationSpacing,
+    simulationParameterSweepEnabled: values.simulationParameterSweepEnabled,
+    simulationParameterSweepAxes: values.simulationParameterSweepAxes.map((axis) => ({
+      parameter: axis.parameter,
+      mode: axis.mode,
+      start: axis.start,
+      stop: axis.stop,
+      pointCount: axis.pointCount,
+      explicitValues: axis.explicitValues,
+      unit: axis.unit,
+    })),
+    simulationSolverFamily: values.simulationSolverFamily,
+    simulationMaxIterations: values.simulationMaxIterations,
+    simulationConvergenceTolerance: values.simulationConvergenceTolerance,
+    simulationHarmonicBalanceEnabled: values.simulationHarmonicBalanceEnabled,
+    simulationHarmonicCount: values.simulationHarmonicCount,
+    simulationOversampleFactor: values.simulationOversampleFactor,
+    simulationSources: values.simulationSources.map((source) => ({
+      sourceId: source.sourceId,
+      kind: source.kind,
+      target: source.target,
+      amplitude: source.amplitude,
+      frequencyGhz: source.frequencyGhz,
+      phaseDeg: source.phaseDeg,
+    })),
+    simulationPtcEnabled: values.simulationPtcEnabled,
+    simulationPtcMode: values.simulationPtcMode,
+    simulationPtcCompensatePorts: values.simulationPtcCompensatePorts,
+    simulationPtcManualNotes: values.simulationPtcManualNotes,
+    simulationAdvancedDampingStrategy: values.simulationAdvancedDampingStrategy,
+    simulationAdvancedLineSearchEnabled: values.simulationAdvancedLineSearchEnabled,
+    simulationAdvancedResidualClamp: values.simulationAdvancedResidualClamp,
+    simulationAdvancedNewtonRelaxation: values.simulationAdvancedNewtonRelaxation,
+    simulationAdvancedNotes: values.simulationAdvancedNotes,
+  };
+}
+
 export function createDefaultSimulationParameterSweepAxis(): SimulationParameterSweepAxisForm {
   return {
     parameter: "",

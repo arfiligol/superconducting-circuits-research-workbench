@@ -14,9 +14,12 @@ import {
   Play,
   Plus,
   RefreshCcw,
+  Save,
+  Settings2,
   Trash2,
   WandSparkles,
   Workflow,
+  X,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CodeMirror from "@uiw/react-codemirror";
@@ -28,12 +31,24 @@ import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/defi
 import {
   buildSimulationSetupDraft,
   buildSimulationSetupFormValuesFromPersistedSetup,
+  cloneSimulationSetupFormValues,
   createDefaultSimulationParameterSweepAxis,
   createDefaultSimulationSource,
   defaultSimulationSetupFormValues,
   parseCommaSeparatedStringValues,
   simulationSetupFormSchema,
+  type SimulationSetupFormValues,
 } from "@/features/simulation/lib/setup-form";
+import {
+  createSavedSimulationSetupRecord,
+  filterSavedSimulationSetupsByDefinition,
+  readSavedSimulationSetupRecords,
+  removeSavedSimulationSetupRecord,
+  replaceSavedSimulationSetupRecord,
+  SAVED_SIMULATION_SETUPS_STORAGE_KEY,
+  serializeSavedSimulationSetupRecords,
+  type SavedSimulationSetupRecord,
+} from "@/features/simulation/lib/saved-setups";
 import {
   buildSimulationRequestSummary,
   formatSimulationTaskStatusLabel,
@@ -514,11 +529,22 @@ function SetupTextInput(props: Readonly<React.InputHTMLAttributes<HTMLInputEleme
   );
 }
 
+function preventNestedWheelScroll(event: React.WheelEvent<HTMLInputElement>) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
   return (
     <input
       {...props}
       type="number"
+      onWheel={(event) => {
+        props.onWheel?.(event);
+        if (!event.defaultPrevented) {
+          preventNestedWheelScroll(event);
+        }
+      }}
       className={cx(
         "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15 disabled:opacity-60",
         props.className,
@@ -541,6 +567,105 @@ function SetupSelect(props: Readonly<React.SelectHTMLAttributes<HTMLSelectElemen
 
 function LocalDraftBadge() {
   return <SurfaceTag tone="warning">Local draft only</SurfaceTag>;
+}
+
+function SetupSlideToggle({
+  checked,
+  onCheckedChange,
+  label,
+  description,
+  disabled = false,
+}: Readonly<{
+  checked: boolean;
+  onCheckedChange: (nextChecked: boolean) => void;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}>) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) {
+          onCheckedChange(!checked);
+        }
+      }}
+      className={cx(
+        "flex w-full items-center justify-between gap-4 rounded-[0.95rem] border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-60",
+        checked
+          ? "border-primary/35 bg-primary/10"
+          : "border-border bg-background hover:border-primary/25 hover:bg-primary/5",
+      )}
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-foreground">{label}</span>
+        {description ? (
+          <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
+        ) : null}
+      </span>
+      <span
+        className={cx(
+          "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition",
+          checked
+            ? "border-primary/30 bg-primary"
+            : "border-border bg-muted/70",
+        )}
+      >
+        <span
+          className={cx(
+            "inline-flex h-5 w-5 rounded-full bg-white shadow-[0_4px_12px_rgba(15,23,42,0.22)] transition-transform",
+            checked ? "translate-x-6" : "translate-x-1",
+          )}
+        />
+      </span>
+    </button>
+  );
+}
+
+function OverlayDialog({
+  open,
+  title,
+  description,
+  children,
+  onClose,
+}: Readonly<{
+  open: boolean;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}>) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-3xl rounded-[1.1rem] border border-border bg-card shadow-[0_28px_90px_rgba(0,0,0,0.38)]">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:border-primary/35 hover:bg-primary/10 hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto px-5 py-5">{children}</div>
+      </div>
+    </div>
+  );
 }
 
 function StageTaskActions({
@@ -595,6 +720,20 @@ function StageTaskActions({
   );
 }
 
+function formatSavedSetupTimestamp(isoTimestamp: string) {
+  const parsedTimestamp = new Date(isoTimestamp);
+  if (Number.isNaN(parsedTimestamp.getTime())) {
+    return isoTimestamp;
+  }
+
+  return parsedTimestamp.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function SimulationWorkbenchShell() {
   const router = useRouter();
   const pathname = usePathname();
@@ -603,6 +742,15 @@ export function SimulationWorkbenchShell() {
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
   const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
   const [simulationSetupBuildError, setSimulationSetupBuildError] = useState<string | null>(null);
+  const [savedSimulationSetups, setSavedSimulationSetups] = useState<
+    readonly SavedSimulationSetupRecord[]
+  >([]);
+  const [hasHydratedSavedSetups, setHasHydratedSavedSetups] = useState(false);
+  const [selectedSavedSetupId, setSelectedSavedSetupId] = useState<string | null>(null);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+  const [saveSetupNameDraft, setSaveSetupNameDraft] = useState("");
+  const [savedSetupFeedback, setSavedSetupFeedback] = useState<string | null>(null);
 
   const form = useForm<SimulationRequestValues>({
     resolver: zodResolver(simulationRequestSchema),
@@ -658,6 +806,15 @@ export function SimulationWorkbenchShell() {
     resolvedDefinitionId,
     definitions,
   );
+  const selectedDefinitionDisplay =
+    selectedDefinitionSummary ??
+    (activeDefinition
+      ? {
+          definition_id: activeDefinition.definition_id,
+          name: activeDefinition.name,
+          preview_artifact_count: activeDefinition.preview_artifacts.length,
+        }
+      : null);
   const taskConnectionState = resolveTaskConnectionState({
     requestedTaskId,
     resolvedTaskId,
@@ -679,16 +836,29 @@ export function SimulationWorkbenchShell() {
   const simulationStageErrorMessage = describeApiError(latestSimulationTaskError);
   const postProcessingStageErrorMessage = describeApiError(latestPostProcessingTaskError);
   const definitionOptions = useMemo(
-    () =>
-      (definitions ?? []).map((definition) => ({
+    () => {
+      const options = (definitions ?? []).map((definition) => ({
         value: String(definition.definition_id),
         label: definition.name,
         description: `Definition #${definition.definition_id} · ${definition.preview_artifact_count} preview artifacts`,
-      })),
-    [definitions],
+      }));
+
+      if (options.length > 0 || !activeDefinition) {
+        return options;
+      }
+
+      return [
+        {
+          value: String(activeDefinition.definition_id),
+          label: activeDefinition.name,
+          description: `Definition #${activeDefinition.definition_id} · ${activeDefinition.preview_artifacts.length} preview artifacts`,
+        },
+      ];
+    },
+    [activeDefinition, definitions],
   );
   const formattedExpandedNetlist = useMemo(() => {
-    const fallback = "pending_definition";
+    const fallback = "// Expanded netlist is loading for the selected definition.";
     const normalizedOutput = activeDefinition?.normalized_output?.trim();
     if (!normalizedOutput) {
       return fallback;
@@ -714,7 +884,7 @@ export function SimulationWorkbenchShell() {
   const simulationRequestPreview = buildSimulationRequestSummary({
     kind: "simulation",
     definitionId: resolvedDefinitionId,
-    definitionName: selectedDefinitionSummary?.name ?? null,
+    definitionName: selectedDefinitionDisplay?.name ?? null,
     datasetId: activeDatasetState.activeDataset?.datasetId ?? null,
     datasetName: activeDatasetState.activeDataset?.name ?? null,
     note: form.watch("simulationNote"),
@@ -722,11 +892,17 @@ export function SimulationWorkbenchShell() {
   const postProcessingRequestPreview = buildSimulationRequestSummary({
     kind: "post_processing",
     definitionId: resolvedDefinitionId,
-    definitionName: selectedDefinitionSummary?.name ?? null,
+    definitionName: selectedDefinitionDisplay?.name ?? null,
     datasetId: activeDatasetState.activeDataset?.datasetId ?? null,
     datasetName: activeDatasetState.activeDataset?.name ?? null,
     note: form.watch("postProcessingNote"),
   });
+  const visibleSavedSetups = useMemo(
+    () => filterSavedSimulationSetupsByDefinition(savedSimulationSetups, resolvedDefinitionId),
+    [resolvedDefinitionId, savedSimulationSetups],
+  );
+  const activeSavedSetup =
+    visibleSavedSetups.find((setup) => setup.id === selectedSavedSetupId) ?? null;
   const simulationSetupBlockedReason =
     resolvedDefinitionId === null
       ? "Select a definition before submitting a simulation run."
@@ -834,6 +1010,147 @@ export function SimulationWorkbenchShell() {
     );
     setHydratedPostTaskId(latestPostProcessingTaskDetail.taskId);
   }, [form, hydratedPostTaskId, latestPostProcessingTaskDetail]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setSavedSimulationSetups(
+      readSavedSimulationSetupRecords(
+        window.localStorage.getItem(SAVED_SIMULATION_SETUPS_STORAGE_KEY),
+      ),
+    );
+    setHasHydratedSavedSetups(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedSavedSetups || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      SAVED_SIMULATION_SETUPS_STORAGE_KEY,
+      serializeSavedSimulationSetupRecords(savedSimulationSetups),
+    );
+  }, [hasHydratedSavedSetups, savedSimulationSetups]);
+
+  useEffect(() => {
+    if (!selectedSavedSetupId) {
+      return;
+    }
+
+    if (!visibleSavedSetups.some((setup) => setup.id === selectedSavedSetupId)) {
+      setSelectedSavedSetupId(null);
+    }
+  }, [selectedSavedSetupId, visibleSavedSetups]);
+
+  function snapshotCurrentSimulationSetup(): SimulationSetupFormValues {
+    const values = form.getValues();
+    return cloneSimulationSetupFormValues({
+      simulationStartGhz: values.simulationStartGhz,
+      simulationStopGhz: values.simulationStopGhz,
+      simulationPointCount: values.simulationPointCount,
+      simulationSpacing: values.simulationSpacing,
+      simulationParameterSweepEnabled: values.simulationParameterSweepEnabled,
+      simulationParameterSweepAxes: values.simulationParameterSweepAxes,
+      simulationSolverFamily: values.simulationSolverFamily,
+      simulationMaxIterations: values.simulationMaxIterations,
+      simulationConvergenceTolerance: values.simulationConvergenceTolerance,
+      simulationHarmonicBalanceEnabled: values.simulationHarmonicBalanceEnabled,
+      simulationHarmonicCount: values.simulationHarmonicCount,
+      simulationOversampleFactor: values.simulationOversampleFactor,
+      simulationSources: values.simulationSources,
+      simulationPtcEnabled: values.simulationPtcEnabled,
+      simulationPtcMode: values.simulationPtcMode,
+      simulationPtcCompensatePorts: values.simulationPtcCompensatePorts,
+      simulationPtcManualNotes: values.simulationPtcManualNotes,
+      simulationAdvancedDampingStrategy: values.simulationAdvancedDampingStrategy,
+      simulationAdvancedLineSearchEnabled: values.simulationAdvancedLineSearchEnabled,
+      simulationAdvancedResidualClamp: values.simulationAdvancedResidualClamp,
+      simulationAdvancedNewtonRelaxation: values.simulationAdvancedNewtonRelaxation,
+      simulationAdvancedNotes: values.simulationAdvancedNotes,
+    });
+  }
+
+  function buildSavedSetupNameSuggestion() {
+    const baseName = selectedDefinitionDisplay?.name ?? "Simulation Setup";
+    const nextIndex = visibleSavedSetups.length + 1;
+    return `${baseName} ${nextIndex}`;
+  }
+
+  function applySavedSetup(record: SavedSimulationSetupRecord) {
+    form.reset(
+      {
+        ...form.getValues(),
+        ...cloneSimulationSetupFormValues(record.values),
+      },
+      { keepDefaultValues: true },
+    );
+    setSelectedSavedSetupId(record.id);
+    setSavedSetupFeedback(`Loaded saved setup “${record.name}”.`);
+    setSimulationSetupBuildError(null);
+    setIsSaveDialogOpen(false);
+    setIsManageDialogOpen(false);
+  }
+
+  function persistSavedSetup(name: string, existingRecordId?: string | null) {
+    if (resolvedDefinitionId === null) {
+      setSavedSetupFeedback("Select a definition before saving a setup.");
+      return;
+    }
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setSavedSetupFeedback("Saved setup name is required.");
+      return;
+    }
+
+    const existingRecord = existingRecordId
+      ? visibleSavedSetups.find((record) => record.id === existingRecordId) ?? null
+      : null;
+    const nowIso = new Date().toISOString();
+    const nextRecord = createSavedSimulationSetupRecord({
+      id: existingRecord?.id ?? (typeof crypto !== "undefined" ? crypto.randomUUID() : `setup-${Date.now()}`),
+      definitionId: resolvedDefinitionId,
+      definitionName: selectedDefinitionDisplay?.name ?? null,
+      name: trimmedName,
+      createdAt: existingRecord?.createdAt ?? nowIso,
+      updatedAt: nowIso,
+      values: snapshotCurrentSimulationSetup(),
+    });
+
+    setSavedSimulationSetups((current) => replaceSavedSimulationSetupRecord(current, nextRecord));
+    setSelectedSavedSetupId(nextRecord.id);
+    setSavedSetupFeedback(
+      existingRecord
+        ? `Updated saved setup “${nextRecord.name}”.`
+        : `Saved “${nextRecord.name}” in this browser.`,
+    );
+    setSaveSetupNameDraft(nextRecord.name);
+    setIsSaveDialogOpen(false);
+  }
+
+  function handleSaveSetup() {
+    if (activeSavedSetup) {
+      persistSavedSetup(activeSavedSetup.name, activeSavedSetup.id);
+      return;
+    }
+
+    setSaveSetupNameDraft(buildSavedSetupNameSuggestion());
+    setIsSaveDialogOpen(true);
+  }
+
+  function deleteSavedSetup(recordId: string) {
+    const record = savedSimulationSetups.find((entry) => entry.id === recordId);
+    setSavedSimulationSetups((current) => removeSavedSimulationSetupRecord(current, recordId));
+    if (selectedSavedSetupId === recordId) {
+      setSelectedSavedSetupId(null);
+    }
+    setSavedSetupFeedback(
+      record ? `Deleted saved setup “${record.name}”.` : "Deleted saved setup.",
+    );
+  }
 
   function replaceSearchState(updates: Readonly<Record<string, string | null>>) {
     startTransition(() => {
@@ -944,7 +1261,7 @@ export function SimulationWorkbenchShell() {
 
       <div className="flex flex-wrap gap-2">
         <SurfaceTag tone="primary">
-          {selectedDefinitionSummary?.name ?? "Definition pending"}
+          {selectedDefinitionDisplay?.name ?? "Definition pending"}
         </SurfaceTag>
         <SurfaceTag tone={activeDatasetState.activeDataset ? "success" : "warning"}>
           {activeDatasetState.activeDataset?.name ?? "Dataset not attached"}
@@ -1091,13 +1408,15 @@ export function SimulationWorkbenchShell() {
                 }}
                 options={definitionOptions}
                 placeholder={
-                  isDefinitionsLoading
-                    ? "Loading definitions"
-                    : definitions?.length
-                      ? "Select a definition"
-                      : "No definitions available"
+                  selectedDefinitionDisplay
+                    ? selectedDefinitionDisplay.name
+                    : isDefinitionsLoading
+                      ? "Loading definitions"
+                      : definitions?.length
+                        ? "Select a definition"
+                        : "No definitions available"
                 }
-                disabled={isDefinitionsLoading || definitionOptions.length === 0}
+                disabled={definitionOptions.length === 0}
               />
 
               <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
@@ -1131,6 +1450,33 @@ export function SimulationWorkbenchShell() {
           title="Simulation Setup"
           description="Author the runnable simulation setup in six focused sections. Persisted sections submit with the task; unsupported sections stay as local draft notes."
           status={simulationSetupState}
+          actions={
+            <>
+              <SurfaceTag tone={activeSavedSetup ? "success" : "default"}>
+                {activeSavedSetup ? `Saved · ${activeSavedSetup.name}` : "Unsaved draft"}
+              </SurfaceTag>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManageDialogOpen(true);
+                }}
+                disabled={resolvedDefinitionId === null}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                Manage
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSetup}
+                disabled={resolvedDefinitionId === null}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Save
+              </button>
+            </>
+          }
         >
           <StageNotice
             tone={simulationSetupState.tone}
@@ -1144,7 +1490,7 @@ export function SimulationWorkbenchShell() {
                 Dataset · {activeDatasetState.activeDataset?.name ?? "Attach in Global Context"}
               </SurfaceTag>
               <SurfaceTag tone={resolvedDefinitionId !== null ? "success" : "warning"}>
-                Definition · {selectedDefinitionSummary?.name ?? "Selection required"}
+                Definition · {selectedDefinitionDisplay?.name ?? "Selection required"}
               </SurfaceTag>
               <SurfaceTag tone={session?.canSubmitTasks ? "primary" : "warning"}>
                 {session?.canSubmitTasks ? "Persisted task submit available" : "Persisted task submit blocked"}
@@ -1155,11 +1501,17 @@ export function SimulationWorkbenchShell() {
               simulation setup. PTC and Advanced hbsolve Options stay browser-local until the
               backend contract exposes those fields.
             </p>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              Saved setups stay in this browser and are scoped to the selected definition.
+            </p>
             {latestSimulationTaskDetail?.simulationSetup ? (
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
                 Persisted simulation setup was rehydrated from task #
                 {latestSimulationTaskDetail.taskId}. Local-only draft sections were left unchanged.
               </p>
+            ) : null}
+            {savedSetupFeedback ? (
+              <p className="mt-2 text-xs leading-5 text-foreground/80">{savedSetupFeedback}</p>
             ) : null}
           </div>
 
@@ -1226,7 +1578,7 @@ export function SimulationWorkbenchShell() {
               ) : null
             }
           >
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3">
+            <div className="grid gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
               <div>
                 <p className="text-sm font-medium text-foreground">Sweep authoring</p>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -1234,21 +1586,19 @@ export function SimulationWorkbenchShell() {
                   frequency sweep.
                 </p>
               </div>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground">
-                <input
-                  type="checkbox"
-                  checked={parameterSweepEnabled}
-                  onChange={(event) => {
-                    form.setValue("simulationParameterSweepEnabled", event.target.checked, {
-                      shouldDirty: true,
-                    });
-                    if (event.target.checked && parameterSweepFieldArray.fields.length === 0) {
-                      parameterSweepFieldArray.append(createDefaultSimulationParameterSweepAxis());
-                    }
-                  }}
-                />
-                Enable parameter sweeps
-              </label>
+              <SetupSlideToggle
+                checked={parameterSweepEnabled}
+                label="Enable parameter sweeps"
+                description="Use a slide toggle to reveal or hide the parameter-sweep authoring surface."
+                onCheckedChange={(nextChecked) => {
+                  form.setValue("simulationParameterSweepEnabled", nextChecked, {
+                    shouldDirty: true,
+                  });
+                  if (nextChecked && parameterSweepFieldArray.fields.length === 0) {
+                    parameterSweepFieldArray.append(createDefaultSimulationParameterSweepAxis());
+                  }
+                }}
+              />
             </div>
 
             {parameterSweepEnabled ? (
@@ -1411,17 +1761,23 @@ export function SimulationWorkbenchShell() {
             </div>
 
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
                 <div>
                   <p className="text-sm font-medium text-foreground">Harmonic balance</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                     Enable harmonic balance specific controls for this simulation request.
                   </p>
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground">
-                  <input type="checkbox" {...form.register("simulationHarmonicBalanceEnabled")} />
-                  Enable harmonic balance
-                </label>
+                <SetupSlideToggle
+                  checked={harmonicBalanceEnabled}
+                  label="Enable harmonic balance"
+                  description="Turns harmonic-count and oversample controls into active persisted solver fields."
+                  onCheckedChange={(nextChecked) => {
+                    form.setValue("simulationHarmonicBalanceEnabled", nextChecked, {
+                      shouldDirty: true,
+                    });
+                  }}
+                />
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -1588,15 +1944,16 @@ export function SimulationWorkbenchShell() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
-                <label className="inline-flex cursor-pointer items-center gap-3 text-sm text-foreground">
-                  <input type="checkbox" {...form.register("simulationPtcEnabled")} />
-                  Enable PTC draft
-                </label>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Use this to track a local tuning draft without sending it to the backend.
-                </p>
-              </div>
+              <SetupSlideToggle
+                checked={ptcEnabled}
+                label="Enable PTC draft"
+                description="Use this to track a local tuning draft without sending it to the backend."
+                onCheckedChange={(nextChecked) => {
+                  form.setValue("simulationPtcEnabled", nextChecked, {
+                    shouldDirty: true,
+                  });
+                }}
+              />
               <SetupInputField label="Mode">
                 <SetupSelect {...form.register("simulationPtcMode")} disabled={!ptcEnabled}>
                   <option value="auto">Auto compensate</option>
@@ -1672,18 +2029,16 @@ export function SimulationWorkbenchShell() {
                     placeholder="adaptive"
                   />
                 </SetupInputField>
-                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
-                  <label className="inline-flex cursor-pointer items-center gap-3 text-sm text-foreground">
-                    <input
-                      type="checkbox"
-                      {...form.register("simulationAdvancedLineSearchEnabled")}
-                    />
-                    Enable line search
-                  </label>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    Local-only toggle for advanced hbsolve experimentation notes.
-                  </p>
-                </div>
+                <SetupSlideToggle
+                  checked={form.watch("simulationAdvancedLineSearchEnabled")}
+                  label="Enable line search"
+                  description="Local-only toggle for advanced hbsolve experimentation notes."
+                  onCheckedChange={(nextChecked) => {
+                    form.setValue("simulationAdvancedLineSearchEnabled", nextChecked, {
+                      shouldDirty: true,
+                    });
+                  }}
+                />
                 <SetupInputField label="Residual Clamp">
                   <SetupTextInput
                     {...form.register("simulationAdvancedResidualClamp")}
@@ -1990,10 +2345,16 @@ export function SimulationWorkbenchShell() {
             </label>
           </div>
 
-          <label className="flex items-center gap-3 rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-            <input type="checkbox" {...form.register("postOperationEnabled")} />
-            <span className="text-sm text-foreground">Enable operation</span>
-          </label>
+          <SetupSlideToggle
+            checked={form.watch("postOperationEnabled")}
+            label="Enable operation"
+            description="Controls whether this post-processing operation is included in the downstream payload."
+            onCheckedChange={(nextChecked) => {
+              form.setValue("postOperationEnabled", nextChecked, {
+                shouldDirty: true,
+              });
+            }}
+          />
 
           <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
             <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
@@ -2217,6 +2578,136 @@ export function SimulationWorkbenchShell() {
           </div>
         ) : null}
       </div>
+
+      <OverlayDialog
+        open={isSaveDialogOpen}
+        title="Save Simulation Setup"
+        description="Store the current Simulation Setup locally in this browser for the selected definition. This does not create a backend resource."
+        onClose={() => {
+          setIsSaveDialogOpen(false);
+        }}
+      >
+        <div className="space-y-4">
+          <SetupInputField label="Setup Name">
+            <SetupTextInput
+              value={saveSetupNameDraft}
+              onChange={(event) => {
+                setSaveSetupNameDraft(event.target.value);
+              }}
+              placeholder={buildSavedSetupNameSuggestion()}
+            />
+          </SetupInputField>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSaveDialogOpen(false);
+              }}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                persistSavedSetup(saveSetupNameDraft, activeSavedSetup?.id ?? null);
+              }}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            >
+              <Save className="h-4 w-4" />
+              Save Setup
+            </button>
+          </div>
+        </div>
+      </OverlayDialog>
+
+      <OverlayDialog
+        open={isManageDialogOpen}
+        title="Manage Saved Setups"
+        description="Review saved Simulation Setup drafts for the current definition, load one into Stage 2, or remove old drafts."
+        onClose={() => {
+          setIsManageDialogOpen(false);
+        }}
+      >
+        <div className="space-y-4">
+          {visibleSavedSetups.length > 0 ? (
+            <div className="space-y-3">
+              {visibleSavedSetups.map((setup) => {
+                const isActive = setup.id === activeSavedSetup?.id;
+                return (
+                  <div
+                    key={setup.id}
+                    className="rounded-[0.95rem] border border-border bg-surface px-4 py-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">{setup.name}</p>
+                          {isActive ? <SurfaceTag tone="success">Current</SurfaceTag> : null}
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          {setup.definitionName ?? "Definition"} · Updated{" "}
+                          {formatSavedSetupTimestamp(setup.updatedAt)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            applySavedSetup(setup);
+                          }}
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10"
+                        >
+                          Load
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            deleteSavedSetup(setup.id);
+                          }}
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-rose-300 hover:bg-rose-50 dark:hover:border-rose-400/40 dark:hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-[0.95rem] border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
+              No saved setups exist for the current definition yet.
+            </div>
+          )}
+
+          <div className="flex flex-wrap justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsManageDialogOpen(false);
+                setSaveSetupNameDraft(buildSavedSetupNameSuggestion());
+                setIsSaveDialogOpen(true);
+              }}
+              disabled={resolvedDefinitionId === null}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Plus className="h-4 w-4" />
+              Save Current as New
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsManageDialogOpen(false);
+              }}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </OverlayDialog>
     </div>
   );
 }

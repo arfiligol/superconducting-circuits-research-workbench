@@ -6,8 +6,17 @@ import { describe, expect, it } from "vitest";
 import {
   buildSimulationSetupDraft,
   buildSimulationSetupFormValuesFromPersistedSetup,
+  cloneSimulationSetupFormValues,
   defaultSimulationSetupFormValues,
 } from "../src/features/simulation/lib/setup-form";
+import {
+  createSavedSimulationSetupRecord,
+  filterSavedSimulationSetupsByDefinition,
+  readSavedSimulationSetupRecords,
+  removeSavedSimulationSetupRecord,
+  replaceSavedSimulationSetupRecord,
+  serializeSavedSimulationSetupRecords,
+} from "../src/features/simulation/lib/saved-setups";
 import {
   mapTaskDetailResponse,
   taskDetailKey,
@@ -639,6 +648,46 @@ describe("simulation task workflow helpers", () => {
 });
 
 describe("simulation workflow source contract", () => {
+  it("stores saved simulation setups as definition-scoped local browser drafts", () => {
+    const baselineRecord = createSavedSimulationSetupRecord({
+      id: "setup-local-1",
+      definitionId: 18,
+      definitionName: "FloatingQubitWithXYLine",
+      name: "Baseline sweep",
+      createdAt: "2026-03-18T12:00:00Z",
+      updatedAt: "2026-03-18T12:00:00Z",
+      values: cloneSimulationSetupFormValues(defaultSimulationSetupFormValues),
+    });
+    const updatedRecord = createSavedSimulationSetupRecord({
+      ...baselineRecord,
+      updatedAt: "2026-03-18T13:00:00Z",
+      values: cloneSimulationSetupFormValues({
+        ...defaultSimulationSetupFormValues,
+        simulationStartGhz: 3,
+      }),
+    });
+    const otherDefinitionRecord = createSavedSimulationSetupRecord({
+      id: "setup-local-2",
+      definitionId: 24,
+      definitionName: "TransmonControlReference",
+      name: "Alt definition setup",
+      createdAt: "2026-03-18T12:30:00Z",
+      updatedAt: "2026-03-18T12:30:00Z",
+      values: cloneSimulationSetupFormValues(defaultSimulationSetupFormValues),
+    });
+
+    const savedRecords = replaceSavedSimulationSetupRecord([baselineRecord], updatedRecord);
+    const allRecords = replaceSavedSimulationSetupRecord(savedRecords, otherDefinitionRecord);
+    const serialized = serializeSavedSimulationSetupRecords(allRecords);
+    const parsedRecords = readSavedSimulationSetupRecords(serialized);
+
+    expect(filterSavedSimulationSetupsByDefinition(parsedRecords, 18).map((record) => record.name)).toEqual([
+      "Baseline sweep",
+    ]);
+    expect(filterSavedSimulationSetupsByDefinition(parsedRecords, 18)[0]?.values.simulationStartGhz).toBe(3);
+    expect(removeSavedSimulationSetupRecord(parsedRecords, "setup-local-1")).toHaveLength(1);
+  });
+
   it("maps persisted simulation setup while leaving local-only drafts outside backend authority", () => {
     const draft = buildSimulationSetupDraft({
       ...defaultSimulationSetupFormValues,
@@ -811,6 +860,13 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Run Simulation");
     expect(simulationWorkbenchSource).toContain("Run Post Processing");
     expect(simulationWorkbenchSource).toContain("Open in Global Context");
+    expect(simulationWorkbenchSource).toContain("Saved setups stay in this browser");
+    expect(simulationWorkbenchSource).toContain("Manage");
+    expect(simulationWorkbenchSource).toContain("Save");
+    expect(simulationWorkbenchSource).toContain('role="switch"');
+    expect(simulationWorkbenchSource).toContain("preventNestedWheelScroll");
+    expect(simulationWorkbenchSource).toContain("onWheel={(event) => {");
+    expect(simulationWorkbenchSource).not.toContain('type="checkbox"');
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
     expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
