@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend runtime-mode-aware shared header task queue、task attachment、worker summary、control actions 與 refresh recovery contract
-version: v0.9.0
-last_updated: 2026-03-16
+version: v0.10.0
+last_updated: 2026-03-17
 updated_by: codex
 ---
 
@@ -85,6 +85,10 @@ updated_by: codex
 !!! tip "Drawer, not inline strip"
     `Tasks Queue` 是 shared shell management surface，應集中在右側 `Shell-Side Panel`。
     Header 只保留 trigger / badge / compact worker summary，不應再鋪一條第二層大型 queue strip。
+
+!!! warning "Workflow pages must not duplicate the global queue"
+    workflow page 可以顯示 stage-local execution summary、latest run summary、`View Task` 或 `Open in Global Context`。
+    但不得在 page body 重新做一份全域 queue、worker dashboard、或大型 attachment / recovery diagnostics wall。
 
 !!! info "Section switcher, not stacked dump"
     `Tasks Queue` 是 `Global Context` panel 內的一個 section。
@@ -210,8 +214,17 @@ updated_by: codex
     | Aspect | Requirement |
     |---|---|
     | Queue entry | queue 由 Header trigger + shell-side panel 提供，頁面不重複造一份全域 queue |
-    | Result handoff | 任務完成後切到 raw / post-processing result surface |
+    | Page-local task UI | 只允許 stage-local status、latest run summary、`View Task`、`Resume Latest`、`Open in Global Context` |
+    | Result handoff | 任務完成後切到 simulation result 或 post-processing result stage，不做 generic task diagnostics page |
     | Context binding | task 與 active definition、dataset 必須可同時被看見 |
+
+## Workflow Page Guardrail
+
+| Rule | Meaning |
+|---|---|
+| Workflow pages stay workflow-first | page-local task UI 只能回答目前 stage 是否可繼續，不得取代 global queue / worker surfaces |
+| Stage-local summary only | inline task UI 最多顯示 latest run summary、status、compact failure summary 與 jump actions |
+| Deep task control stays global | 完整 queue browse、worker lane state、跨頁 recovery 與 event drill-down 應回到 Header `Global Context` |
 
 === "Characterization"
 

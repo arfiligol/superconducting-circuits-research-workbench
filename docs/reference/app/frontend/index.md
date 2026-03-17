@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
-version: v0.18.0
-last_updated: 2026-03-16
+version: v0.20.0
+last_updated: 2026-03-17
 updated_by: codex
 ---
 
@@ -31,8 +31,16 @@ updated_by: codex
     本頁只列真正存在的 frontend reference pages。
 
 !!! warning "Do Not Rewrite Sidebar Taxonomy In Implementation"
-    目前 frontend SoT 仍以 `DASHBOARD`、`PIPELINE`、`CIRCUIT SIMULATION` 為 sidebar groups，且 `/dashboard` 仍是 canonical page。
-    若產品要改成 `Workspace` / `Session` dedicated pages，或替 `PIPELINE` 新增 overview route，必須先更新 SoT，再改 frontend implementation。
+    目前 frontend SoT 以 `WORKSPACE`、`PIPELINE`、`CIRCUIT SIMULATION` 為 sidebar groups，且 `/dashboard` 仍是 `WORKSPACE` section 的 canonical landing page。
+    若產品要在 `WORKSPACE` 下新增 `Tasks` / `Session`，或替 `PIPELINE` 新增 overview route，必須先更新 SoT，再改 frontend implementation。
+
+## Sidebar Section Meanings
+
+| Section | Meaning | Current baseline |
+|---|---|---|
+| `WORKSPACE` | workspace-level overview / operations / cross-workflow context | 目前由 `/dashboard` 作為 canonical landing page |
+| `PIPELINE` | data-analysis flow；item order 具有 UX 引導含義 | 放資料分析流程節點，不放 system / task infra management page |
+| `CIRCUIT SIMULATION` | definition-driven modeling / simulation flow | 放 schema、schemdraw、simulation 等建模工作頁 |
 
 ## Page Map
 
@@ -54,7 +62,7 @@ updated_by: codex
 
     | Page | Core focus | Authority pair |
     |---|---|---|
-    | [Dashboard](workspace/dashboard.md) | active dataset、dataset metadata、tagged core metrics summary | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Characterization Results](../backend/characterization-results.md) |
+    | [Dashboard](workspace/dashboard.md) | `WORKSPACE` section 的 canonical landing page；active dataset、dataset metadata、tagged core metrics summary | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Characterization Results](../backend/characterization-results.md) |
     | [Raw Data Browser](workspace/raw-data-browser.md) | design list、trace preview、compare readiness、summary-only browse | [Backend / Datasets & Results](../backend/datasets-results.md) |
 
 === "Definition"
@@ -69,7 +77,7 @@ updated_by: codex
     | Page | Core focus | Authority pair |
     |---|---|---|
     | [Schemdraw](research-workflow/schemdraw.md) | linked schema context、source editor、SVG live preview、backend-owned diagnostics/render | [Backend / Schemdraw Render](../backend/schemdraw-render.md), [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
-    | [Circuit Simulation](research-workflow/circuit-simulation.md) | definition-bound run setup、task attach、result handoff、shared queue | [Backend / Circuit Definitions](../backend/circuit-definitions.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
+    | [Circuit Simulation](research-workflow/circuit-simulation.md) | pipeline-first simulation workflow、stage-local run state、simulation result、post-processing result | [Backend / Circuit Definitions](../backend/circuit-definitions.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
     | [Characterization](research-workflow/characterization.md) | design scope、run analysis、task attach、run history、result view | [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Characterization Results](../backend/characterization-results.md) |
 
 ## Surface Pairing

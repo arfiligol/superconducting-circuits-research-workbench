@@ -13,14 +13,14 @@ status: draft
 owner: docs-team
 audience: team
 scope: Pipeline /dashboard 的資料摘要與 Dataset Metadata 單一編輯入口契約
-version: v0.4.0
-last_updated: 2026-03-16
+version: v0.5.0
+last_updated: 2026-03-17
 updated_by: codex
 ---
 
 # Dashboard
 
-本頁為 pipeline workspace 的核心數據摘要與 Dataset Metadata 單一編輯入口。
+本頁是 `WORKSPACE` section 的 canonical landing page，負責 workspace-level dataset summary 與 Dataset Metadata 單一編輯入口。
 
 !!! info "Page Frame"
     本頁負責 active dataset 選擇、dataset metadata 編輯、tagged core metrics 摘要與後續操作指引。
@@ -31,8 +31,13 @@ updated_by: codex
     active dataset context 必須與 shell-level session state 一致。
 
 !!! warning "Current IA Baseline"
-    `/dashboard` 目前仍是 canonical dashboard page。
-    若產品未來要改成 `Workspace` / `Session` dedicated pages，或把 `Dashboard` 改為純 group container，必須先更新 frontend SoT，再改 sidebar / route implementation。
+    `WORKSPACE` 是 sidebar 的 top-level section；
+    `/dashboard` 則是該 section 目前的 canonical landing page。
+    若產品未來要在 `WORKSPACE` 下新增 `Tasks` / `Session` dedicated pages，必須先更新 frontend SoT，再改 sidebar / route implementation。
+
+!!! tip "Workspace, not pipeline sequence"
+    本頁屬於 `WORKSPACE` section，而不是 `PIPELINE` sequence。
+    它回答的是目前 workspace / dataset 的概況與操作脈絡，不是資料分析流程的其中一步。
 
 ---
 
