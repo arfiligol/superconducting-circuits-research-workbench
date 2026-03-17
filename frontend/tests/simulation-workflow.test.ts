@@ -720,19 +720,17 @@ describe("simulation workflow source contract", () => {
       simulationSources: [
         {
           sourceId: "src_drive_1",
-          kind: "pump",
-          target: "port_1",
-          amplitude: 1,
-          frequencyGhz: "5.0",
-          phaseDeg: "0",
+          port: "port_1",
+          currentAmp: 1,
+          pumpFreqGhz: 5,
+          sourceMode: "1",
         },
         {
           sourceId: "src_probe_2",
-          kind: "probe",
-          target: "port_2",
-          amplitude: 0.15,
-          frequencyGhz: "",
-          phaseDeg: "90",
+          port: "port_2",
+          currentAmp: 0.15,
+          pumpFreqGhz: 6.2,
+          sourceMode: "1, 0",
         },
       ],
     });
@@ -756,15 +754,15 @@ describe("simulation workflow source contract", () => {
         target: "port_1",
         amplitude: 1,
         frequency_ghz: 5,
-        phase_deg: 0,
+        phase_deg: null,
       },
       {
         source_id: "src_probe_2",
-        kind: "probe",
+        kind: "pump",
         target: "port_2",
         amplitude: 0.15,
-        frequency_ghz: null,
-        phase_deg: 90,
+        frequency_ghz: 6.2,
+        phase_deg: null,
       },
     ]);
 
@@ -812,15 +810,15 @@ describe("simulation workflow source contract", () => {
             target: "port_1",
             amplitude: 1,
             frequencyGhz: 5,
-            phaseDeg: 0,
+            phaseDeg: null,
           },
           {
             sourceId: "src_probe_2",
-            kind: "probe",
+            kind: "pump",
             target: "port_2",
             amplitude: 0.15,
-            frequencyGhz: null,
-            phaseDeg: 90,
+            frequencyGhz: 6.2,
+            phaseDeg: null,
           },
         ],
       },
@@ -839,6 +837,12 @@ describe("simulation workflow source contract", () => {
       },
     ]);
     expect(rehydrated.simulationSources).toHaveLength(2);
+    expect(rehydrated.simulationSources[0]).toMatchObject({
+      port: "port_1",
+      currentAmp: 1,
+      pumpFreqGhz: 5,
+      sourceMode: "1",
+    });
     expect(rehydrated.simulationPtcEnabled).toBe(true);
     expect(rehydrated.simulationPtcManualNotes).toBe("manual offsets");
     expect(rehydrated.simulationAdvancedNotes).toBe("local-only advanced draft");
@@ -868,32 +872,25 @@ describe("simulation workflow source contract", () => {
       deriveSimulationSweepTargetOptions(definitionSource, [
         {
           sourceId: "src_drive_1",
-          kind: "pump",
-          target: "port_1",
-          amplitude: 1,
-          frequencyGhz: "5.0",
-          phaseDeg: "0",
+          port: "port_1",
+          currentAmp: 1,
+          pumpFreqGhz: 5,
+          sourceMode: "1",
         },
       ]),
     ).toEqual([
       { value: "Lj", label: "Lj (pH)", unit: "pH", source: "schema" },
       { value: "Cj", label: "Cj (fF)", unit: "fF", source: "schema" },
       {
-        value: "sources[1].amplitude",
-        label: "src_drive_1 · Current amplitude (A)",
+        value: "sources[1].current_amp",
+        label: "Port 1 · Source current (A)",
         unit: "A",
         source: "source",
       },
       {
-        value: "sources[1].frequency_ghz",
-        label: "src_drive_1 · Frequency (GHz)",
+        value: "sources[1].pump_freq_ghz",
+        label: "Port 1 · Pump freq (GHz)",
         unit: "GHz",
-        source: "source",
-      },
-      {
-        value: "sources[1].phase_deg",
-        label: "src_drive_1 · Phase (deg)",
-        unit: "deg",
         source: "source",
       },
     ]);
@@ -919,10 +916,13 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Add Axis");
     expect(simulationWorkbenchSource).toContain("Add Source");
     expect(simulationWorkbenchSource).toContain("Local draft only");
+    expect(simulationWorkbenchSource).toContain("Source Current Ip (A)");
+    expect(simulationWorkbenchSource).toContain("Source Mode");
+    expect(simulationWorkbenchSource).toContain("Pump Source");
     expect(simulationWorkbenchSource).toContain("Run Simulation");
     expect(simulationWorkbenchSource).toContain("Run Post Processing");
     expect(simulationWorkbenchSource).toContain("Open in Global Context");
-    expect(simulationWorkbenchSource).toContain("Saved setups stay in this browser");
+    expect(simulationWorkbenchSource).toContain("Browser-saved per selected definition");
     expect(simulationWorkbenchSource).toContain("Manage");
     expect(simulationWorkbenchSource).toContain("Save");
     expect(simulationWorkbenchSource).toContain('role="switch"');
@@ -951,6 +951,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Persisted Result Surface");
     expect(simulationWorkbenchSource).not.toContain("Definition Binding");
     expect(simulationWorkbenchSource).not.toContain("Sweep Parameter (optional)");
+    expect(simulationWorkbenchSource).not.toContain("Phase (deg)");
     expect(simulationWorkbenchSource).toContain("deriveSimulationSweepTargetOptions");
     expect(simulationWorkbenchSource).toContain("deriveSimulationPtcPortOptions");
     expect(simulationWorkbenchSource).toContain("No sweep targets are currently available");

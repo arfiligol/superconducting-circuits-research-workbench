@@ -19,18 +19,17 @@ export const simulationParameterSweepAxisSchema = z.object({
 });
 
 export const simulationSourceFormSchema = z.object({
-  sourceId: z.string().trim().min(1, "Source id is required."),
-  kind: z.string().trim().min(1, "Source kind is required."),
-  target: z.string().trim().min(1, "Source target is required."),
-  amplitude: z.number(),
-  frequencyGhz: z.string().trim(),
-  phaseDeg: z.string().trim(),
+  sourceId: z.string().trim(),
+  port: z.string().trim().min(1, "Source port is required."),
+  currentAmp: z.number(),
+  pumpFreqGhz: z.number().positive("Pump frequency must be greater than 0."),
+  sourceMode: z.string().trim().min(1, "Source mode is required."),
 });
 
 export const simulationSetupFormSchema = z
   .object({
-    simulationStartGhz: z.number().positive("Start GHz must be a positive number."),
-    simulationStopGhz: z.number().positive("Stop GHz must be a positive number."),
+    simulationStartGhz: z.number().positive("Start GHz must be greater than 0."),
+    simulationStopGhz: z.number().positive("Stop GHz must be greater than 0."),
     simulationPointCount: z.number().int().min(1, "Point count must be at least 1."),
     simulationSpacing: z.enum(["linear", "log"]),
     simulationParameterSweepEnabled: z.boolean(),
@@ -58,6 +57,14 @@ export const simulationSetupFormSchema = z
     simulationAdvancedNotes: z.string().trim(),
   })
   .superRefine((values, context) => {
+    if (values.simulationStopGhz <= values.simulationStartGhz) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["simulationStopGhz"],
+        message: "Stop GHz must be greater than Start GHz.",
+      });
+    }
+
     if (!values.simulationParameterSweepEnabled) {
       return;
     }
@@ -145,11 +152,10 @@ export function cloneSimulationSetupFormValues(
     simulationOversampleFactor: values.simulationOversampleFactor,
     simulationSources: values.simulationSources.map((source) => ({
       sourceId: source.sourceId,
-      kind: source.kind,
-      target: source.target,
-      amplitude: source.amplitude,
-      frequencyGhz: source.frequencyGhz,
-      phaseDeg: source.phaseDeg,
+      port: source.port,
+      currentAmp: source.currentAmp,
+      pumpFreqGhz: source.pumpFreqGhz,
+      sourceMode: source.sourceMode,
     })),
     simulationPtcEnabled: values.simulationPtcEnabled,
     simulationPtcMode: values.simulationPtcMode,
@@ -179,12 +185,11 @@ export function createDefaultSimulationParameterSweepAxis(
 
 export function createDefaultSimulationSource(): SimulationSourceForm {
   return {
-    sourceId: "src_drive_1",
-    kind: "pump",
-    target: "port_1",
-    amplitude: 1,
-    frequencyGhz: "5.0",
-    phaseDeg: "0",
+    sourceId: "src_pump_1",
+    port: "port_1",
+    currentAmp: 0,
+    pumpFreqGhz: 5,
+    sourceMode: "1",
   };
 }
 
@@ -213,18 +218,6 @@ export const defaultSimulationSetupFormValues: SimulationSetupFormValues = {
   simulationAdvancedNotes: "",
 };
 
-export function parseOptionalNumericInput(value: string) {
-  const normalized = value.trim();
-  if (!normalized) {
-    return null;
-  }
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`"${value}" is not a valid number.`);
-  }
-  return parsed;
-}
-
 export function parseCommaSeparatedStringValues(value: string) {
   return value
     .split(",")
@@ -249,7 +242,11 @@ function buildSourceSweepTargetLabel(
   fieldLabel: string,
   unit: string | null,
 ) {
-  const sourceName = source.sourceId.trim() || `Source ${sourceIndex + 1}`;
+  const sourceName = source.port.trim()
+    ? source.port
+        .trim()
+        .replace(/^port_(\d+)$/i, "Port $1")
+    : `Source ${sourceIndex + 1}`;
   return unit
     ? `${sourceName} · ${fieldLabel} (${unit})`
     : `${sourceName} · ${fieldLabel}`;
@@ -291,19 +288,14 @@ export function deriveSimulationSweepTargetOptions(
   sources.forEach((source, sourceIndex) => {
     const optionSpecs = [
       {
-        value: `sources[${sourceIndex + 1}].amplitude`,
-        label: buildSourceSweepTargetLabel(source, sourceIndex, "Current amplitude", "A"),
+        value: `sources[${sourceIndex + 1}].current_amp`,
+        label: buildSourceSweepTargetLabel(source, sourceIndex, "Source current", "A"),
         unit: "A",
       },
       {
-        value: `sources[${sourceIndex + 1}].frequency_ghz`,
-        label: buildSourceSweepTargetLabel(source, sourceIndex, "Frequency", "GHz"),
+        value: `sources[${sourceIndex + 1}].pump_freq_ghz`,
+        label: buildSourceSweepTargetLabel(source, sourceIndex, "Pump freq", "GHz"),
         unit: "GHz",
-      },
-      {
-        value: `sources[${sourceIndex + 1}].phase_deg`,
-        label: buildSourceSweepTargetLabel(source, sourceIndex, "Phase", "deg"),
-        unit: "deg",
       },
     ] as const;
 
@@ -416,12 +408,12 @@ export function buildSimulationSetupDraft(
       },
     },
     sources: values.simulationSources.map((source) => ({
-      source_id: source.sourceId.trim(),
-      kind: source.kind.trim(),
-      target: source.target.trim(),
-      amplitude: source.amplitude,
-      frequency_ghz: parseOptionalNumericInput(source.frequencyGhz),
-      phase_deg: parseOptionalNumericInput(source.phaseDeg),
+      source_id: source.sourceId.trim() || `src_pump_${source.port.trim() || "1"}`,
+      kind: "pump",
+      target: source.port.trim(),
+      amplitude: source.currentAmp,
+      frequency_ghz: source.pumpFreqGhz,
+      phase_deg: null,
     })),
   };
 }
@@ -469,17 +461,10 @@ export function buildSimulationSetupFormValuesFromPersistedSetup<
       setup.sources.length > 0
         ? setup.sources.map((source) => ({
             sourceId: source.sourceId,
-            kind: source.kind,
-            target: source.target,
-            amplitude: source.amplitude,
-            frequencyGhz:
-              source.frequencyGhz !== null && source.frequencyGhz !== undefined
-                ? String(source.frequencyGhz)
-                : "",
-            phaseDeg:
-              source.phaseDeg !== null && source.phaseDeg !== undefined
-                ? String(source.phaseDeg)
-                : "",
+            port: source.target,
+            currentAmp: source.amplitude,
+            pumpFreqGhz: source.frequencyGhz ?? 0,
+            sourceMode: currentValues.simulationSources[0]?.sourceMode ?? "1",
           }))
         : [createDefaultSimulationSource()],
   };

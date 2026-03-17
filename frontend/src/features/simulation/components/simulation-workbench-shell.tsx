@@ -519,6 +519,31 @@ function SetupInputField({
   );
 }
 
+function CompactField({
+  label,
+  detail,
+  children,
+  error,
+  className,
+}: Readonly<{
+  label: string;
+  detail?: string;
+  children: React.ReactNode;
+  error?: string;
+  className?: string;
+}>) {
+  return (
+    <label className={cx("block min-w-0", className)}>
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </span>
+      {detail ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{detail}</span> : null}
+      <div className="mt-2">{children}</div>
+      {error ? <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{error}</p> : null}
+    </label>
+  );
+}
+
 function SetupTextInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
   return (
     <input
@@ -694,16 +719,23 @@ function SetupSlideToggle({
         }
       }}
       className={cx(
-        "flex w-full items-center justify-between gap-4 rounded-[0.95rem] border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-60",
+        "flex w-full cursor-pointer items-center justify-between gap-4 rounded-[0.95rem] border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-60",
         checked
           ? "border-primary/35 bg-primary/10"
           : "border-border bg-background hover:border-primary/25 hover:bg-primary/5",
       )}
     >
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-foreground">{label}</span>
+      <span className={cx("min-w-0", !disabled && "cursor-pointer")}>
+        <span className={cx("block text-sm font-medium text-foreground", !disabled && "cursor-pointer")}>{label}</span>
         {description ? (
-          <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
+          <span
+            className={cx(
+              "mt-1 block text-xs leading-5 text-muted-foreground",
+              !disabled && "cursor-pointer",
+            )}
+          >
+            {description}
+          </span>
         ) : null}
       </span>
       <span
@@ -712,12 +744,14 @@ function SetupSlideToggle({
           checked
             ? "border-primary/30 bg-primary"
             : "border-border bg-muted/70",
+          !disabled && "cursor-pointer",
         )}
       >
         <span
           className={cx(
             "inline-flex h-5 w-5 rounded-full bg-white shadow-[0_4px_12px_rgba(15,23,42,0.22)] transition-transform",
             checked ? "translate-x-6" : "translate-x-1",
+            !disabled && "cursor-pointer",
           )}
         />
       </span>
@@ -1569,36 +1603,25 @@ export function SimulationWorkbenchShell() {
           ) : null}
 
           <div className="space-y-4">
-            <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.6fr)_minmax(0,1.4fr)]">
-              <AppSelectField
-                label="Selected Definition"
-                value={resolvedDefinitionId !== null ? String(resolvedDefinitionId) : ""}
-                onChange={(value) => {
-                  clearTaskMutationStatus();
-                  replaceSearchState({ definitionId: value, taskId: null });
-                }}
-                options={definitionOptions}
-                placeholder={
-                  selectedDefinitionDisplay
-                    ? selectedDefinitionDisplay.name
-                    : isDefinitionsLoading
-                      ? "Loading definitions"
-                      : definitions?.length
-                        ? "Select a definition"
-                        : "No definitions available"
-                }
-                disabled={definitionOptions.length === 0}
-              />
-
-              <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Expanded Netlist
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Read-only normalized output used as the simulation-side netlist reference.
-                </p>
-              </div>
-            </div>
+            <AppSelectField
+              label="Selected Definition"
+              value={resolvedDefinitionId !== null ? String(resolvedDefinitionId) : ""}
+              onChange={(value) => {
+                clearTaskMutationStatus();
+                replaceSearchState({ definitionId: value, taskId: null });
+              }}
+              options={definitionOptions}
+              placeholder={
+                selectedDefinitionDisplay
+                  ? selectedDefinitionDisplay.name
+                  : isDefinitionsLoading
+                    ? "Loading definitions"
+                    : definitions?.length
+                      ? "Select a definition"
+                      : "No definitions available"
+              }
+              disabled={definitionOptions.length === 0}
+            />
 
             <ReadOnlyCodeSurface
               label="Expanded Netlist"
@@ -1654,28 +1677,22 @@ export function SimulationWorkbenchShell() {
             />
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-border bg-surface px-4 py-3 text-xs">
             {activeSavedSetup ? (
               <SurfaceTag tone="success">Saved · {activeSavedSetup.name}</SurfaceTag>
             ) : (
               <SurfaceTag tone="default">Unsaved draft</SurfaceTag>
             )}
-            {activeDatasetState.activeDataset ? (
-              <SurfaceTag tone="success">Dataset · {activeDatasetState.activeDataset.name}</SurfaceTag>
-            ) : null}
-            {selectedDefinitionDisplay ? (
-              <SurfaceTag tone="success">Definition · {selectedDefinitionDisplay.name}</SurfaceTag>
-            ) : null}
-            <span className="text-xs leading-5 text-muted-foreground">
-              Saved setups stay in this browser and are scoped to the selected definition.
+            <span className="leading-5 text-muted-foreground">
+              Browser-saved per selected definition.
             </span>
             {latestSimulationTaskDetail?.simulationSetup ? (
-              <span className="text-xs leading-5 text-muted-foreground">
+              <span className="leading-5 text-muted-foreground">
                 Rehydrated from task #{latestSimulationTaskDetail.taskId}.
               </span>
             ) : null}
             {savedSetupFeedback ? (
-              <span className="text-xs leading-5 text-foreground/80">{savedSetupFeedback}</span>
+              <span className="leading-5 text-foreground/80">{savedSetupFeedback}</span>
             ) : null}
           </div>
 
@@ -1684,41 +1701,45 @@ export function SimulationWorkbenchShell() {
             description="Set the main frequency sweep window that defines the simulation sampling range."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
           >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <SetupInputField
-                label="Start Freq (GHz)"
-                error={form.formState.errors.simulationStartGhz?.message}
-              >
-                <SetupNumberInput
-                  {...form.register("simulationStartGhz", { valueAsNumber: true })}
-                  step="any"
-                />
-              </SetupInputField>
-              <SetupInputField
-                label="Stop Freq (GHz)"
-                error={form.formState.errors.simulationStopGhz?.message}
-              >
-                <SetupNumberInput
-                  {...form.register("simulationStopGhz", { valueAsNumber: true })}
-                  step="any"
-                />
-              </SetupInputField>
-              <SetupInputField
-                label="Points"
-                detail="Number of sample points across the sweep."
-                error={form.formState.errors.simulationPointCount?.message}
-              >
-                <SetupNumberInput
-                  {...form.register("simulationPointCount", { valueAsNumber: true })}
-                  min={1}
-                />
-              </SetupInputField>
-              <SetupInputField label="Spacing">
-                <SetupSelect {...form.register("simulationSpacing")}>
-                  <option value="linear">Linear</option>
-                  <option value="log">Log</option>
-                </SetupSelect>
-              </SetupInputField>
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <CompactField
+                  label="Start Freq (GHz)"
+                  error={form.formState.errors.simulationStartGhz?.message}
+                >
+                  <SetupNumberInput
+                    {...form.register("simulationStartGhz", { valueAsNumber: true })}
+                    step="any"
+                    min={0.000001}
+                  />
+                </CompactField>
+                <CompactField
+                  label="Stop Freq (GHz)"
+                  error={form.formState.errors.simulationStopGhz?.message}
+                >
+                  <SetupNumberInput
+                    {...form.register("simulationStopGhz", { valueAsNumber: true })}
+                    step="any"
+                    min={0.000001}
+                  />
+                </CompactField>
+                <CompactField
+                  label="Points"
+                  detail="Number of sample points across the sweep."
+                  error={form.formState.errors.simulationPointCount?.message}
+                >
+                  <SetupNumberInput
+                    {...form.register("simulationPointCount", { valueAsNumber: true })}
+                    min={1}
+                  />
+                </CompactField>
+                <CompactField label="Spacing">
+                  <SetupSelect {...form.register("simulationSpacing")}>
+                    <option value="linear">Linear</option>
+                    <option value="log">Log</option>
+                  </SetupSelect>
+                </CompactField>
+              </div>
             </div>
           </SetupSection>
 
@@ -1728,11 +1749,35 @@ export function SimulationWorkbenchShell() {
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
           >
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">Enable parameter sweeps</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Sweep targets are derived from schema parameters and simulation sources.
-                </p>
+              <div className="min-w-[260px] flex-1">
+                <SetupSlideToggle
+                  checked={parameterSweepEnabled}
+                  label="Enable parameter sweeps"
+                  description={
+                    sweepTargetOptions.length > 0
+                      ? "Sweep targets come from schema parameters and JosephsonCircuits source controls."
+                      : "No schema parameters or source controls are available for sweeping on this definition."
+                  }
+                  disabled={sweepTargetOptions.length === 0}
+                  onCheckedChange={(nextChecked) => {
+                    form.setValue("simulationParameterSweepEnabled", nextChecked, {
+                      shouldDirty: true,
+                    });
+                    if (
+                      nextChecked &&
+                      parameterSweepFieldArray.fields.length === 0 &&
+                      sweepTargetOptions.length > 0
+                    ) {
+                      const fallbackOption = sweepTargetOptions[0];
+                      parameterSweepFieldArray.append(
+                        createDefaultSimulationParameterSweepAxis({
+                          parameter: fallbackOption?.value ?? "",
+                          unit: fallbackOption?.unit ?? "",
+                        }),
+                      );
+                    }
+                  }}
+                />
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -1753,36 +1798,6 @@ export function SimulationWorkbenchShell() {
                   <Plus className="h-3.5 w-3.5" />
                   Add Axis
                 </button>
-                <div className="min-w-[220px]">
-                  <SetupSlideToggle
-                    checked={parameterSweepEnabled}
-                    label="Enable parameter sweeps"
-                    description={
-                      sweepTargetOptions.length > 0
-                        ? "Turn this on to reveal the sweep axis list."
-                        : "No schema or source sweep targets are available for this definition."
-                    }
-                    disabled={sweepTargetOptions.length === 0}
-                    onCheckedChange={(nextChecked) => {
-                      form.setValue("simulationParameterSweepEnabled", nextChecked, {
-                        shouldDirty: true,
-                      });
-                      if (
-                        nextChecked &&
-                        parameterSweepFieldArray.fields.length === 0 &&
-                        sweepTargetOptions.length > 0
-                      ) {
-                        const fallbackOption = sweepTargetOptions[0];
-                        parameterSweepFieldArray.append(
-                          createDefaultSimulationParameterSweepAxis({
-                            parameter: fallbackOption?.value ?? "",
-                            unit: fallbackOption?.unit ?? "",
-                          }),
-                        );
-                      }
-                    }}
-                  />
-                </div>
               </div>
             </div>
 
@@ -1809,11 +1824,11 @@ export function SimulationWorkbenchShell() {
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-foreground">Axis {index + 1}</p>
-                          {axisDerivedUnit ? (
-                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                              Schema unit · {axisDerivedUnit}
-                            </p>
-                          ) : null}
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            {axisDerivedUnit
+                              ? `Schema unit · ${axisDerivedUnit}`
+                              : "Schema unit unavailable"}
+                          </p>
                         </div>
                         <button
                           type="button"
@@ -1827,72 +1842,75 @@ export function SimulationWorkbenchShell() {
                         </button>
                       </div>
 
-                      <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-6">
-                        <SetupInputField
-                          label="Target / Parameter"
-                          error={axisErrors?.parameter?.message}
+                      <div className="mt-4 rounded-[0.9rem] border border-border/60 bg-surface/40 px-4 py-4">
+                        <div
+                          className={cx(
+                            "grid gap-4",
+                            axisMode === "explicit"
+                              ? "xl:grid-cols-[minmax(260px,1.3fr)_190px_minmax(300px,1.2fr)]"
+                              : "xl:grid-cols-[minmax(260px,1.3fr)_190px_minmax(0,1.4fr)]",
+                          )}
                         >
-                          <SetupSelect
-                            value={axisParameter}
-                            onChange={(event) => {
-                              const nextOption =
-                                sweepTargetOptionsByValue.get(event.target.value) ?? null;
-                              form.setValue(
-                                `simulationParameterSweepAxes.${index}.parameter`,
-                                event.target.value,
-                                { shouldDirty: true },
-                              );
-                              form.setValue(
-                                `simulationParameterSweepAxes.${index}.unit`,
-                                nextOption?.unit ?? "",
-                                { shouldDirty: false },
-                              );
-                            }}
+                          <CompactField
+                            label="Target / Parameter"
+                            error={axisErrors?.parameter?.message}
+                            detail={
+                              axisDerivedUnit
+                                ? `Schema unit · ${axisDerivedUnit}`
+                                : "Schema unit unavailable"
+                            }
                           >
-                            {sweepTargetOptions.some((option) => option.source === "schema") ? (
-                              <optgroup label="Circuit schema">
-                                {sweepTargetOptions
-                                  .filter((option) => option.source === "schema")
-                                  .map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                              </optgroup>
-                            ) : null}
-                            {sweepTargetOptions.some((option) => option.source === "source") ? (
-                              <optgroup label="Simulation sources">
-                                {sweepTargetOptions
-                                  .filter((option) => option.source === "source")
-                                  .map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                              </optgroup>
-                            ) : null}
-                          </SetupSelect>
-                        </SetupInputField>
-                        <SummaryCard
-                          label="Unit"
-                          value={axisDerivedUnit ?? "Schema unit unavailable"}
-                          detail={
-                            axisDerivedUnit
-                              ? "Read from the selected target."
-                              : "No unit metadata is available for the selected target."
-                          }
-                        />
-                        <SetupInputField label="Axis Mode">
-                          <SetupSelect
-                            {...form.register(`simulationParameterSweepAxes.${index}.mode`)}
-                          >
-                            <option value="range">Range builder</option>
-                            <option value="explicit">Explicit values</option>
-                          </SetupSelect>
-                        </SetupInputField>
-                        {axisMode === "explicit" ? (
-                          <div className="xl:col-span-3">
-                            <SetupInputField
+                            <SetupSelect
+                              value={axisParameter}
+                              onChange={(event) => {
+                                const nextOption =
+                                  sweepTargetOptionsByValue.get(event.target.value) ?? null;
+                                form.setValue(
+                                  `simulationParameterSweepAxes.${index}.parameter`,
+                                  event.target.value,
+                                  { shouldDirty: true },
+                                );
+                                form.setValue(
+                                  `simulationParameterSweepAxes.${index}.unit`,
+                                  nextOption?.unit ?? "",
+                                  { shouldDirty: false },
+                                );
+                              }}
+                            >
+                              {sweepTargetOptions.some((option) => option.source === "schema") ? (
+                                <optgroup label="Circuit schema">
+                                  {sweepTargetOptions
+                                    .filter((option) => option.source === "schema")
+                                    .map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                </optgroup>
+                              ) : null}
+                              {sweepTargetOptions.some((option) => option.source === "source") ? (
+                                <optgroup label="Simulation sources">
+                                  {sweepTargetOptions
+                                    .filter((option) => option.source === "source")
+                                    .map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                </optgroup>
+                              ) : null}
+                            </SetupSelect>
+                          </CompactField>
+                          <CompactField label="Axis Mode">
+                            <SetupSelect
+                              {...form.register(`simulationParameterSweepAxes.${index}.mode`)}
+                            >
+                              <option value="range">Range builder</option>
+                              <option value="explicit">Explicit values</option>
+                            </SetupSelect>
+                          </CompactField>
+                          {axisMode === "explicit" ? (
+                            <CompactField
                               label="Explicit Values"
                               detail="Comma-separated values submitted directly to the persisted sweep array."
                               error={axisErrors?.explicitValues?.message}
@@ -1903,45 +1921,39 @@ export function SimulationWorkbenchShell() {
                                 )}
                                 placeholder="1.0, 1.1, 1.2"
                               />
-                            </SetupInputField>
-                          </div>
-                        ) : (
-                          <>
-                            <SetupInputField
-                              label="Start"
-                              error={axisErrors?.start?.message}
-                            >
-                              <SetupNumberInput
-                                {...form.register(`simulationParameterSweepAxes.${index}.start`, {
-                                  valueAsNumber: true,
-                                })}
-                                step="any"
-                              />
-                            </SetupInputField>
-                            <SetupInputField
-                              label="Stop"
-                              error={axisErrors?.stop?.message}
-                            >
-                              <SetupNumberInput
-                                {...form.register(`simulationParameterSweepAxes.${index}.stop`, {
-                                  valueAsNumber: true,
-                                })}
-                                step="any"
-                              />
-                            </SetupInputField>
-                            <SetupInputField
-                              label="Points"
-                              error={axisErrors?.pointCount?.message}
-                            >
-                              <SetupNumberInput
-                                {...form.register(`simulationParameterSweepAxes.${index}.pointCount`, {
-                                  valueAsNumber: true,
-                                })}
-                                min={1}
-                              />
-                            </SetupInputField>
-                          </>
-                        )}
+                            </CompactField>
+                          ) : (
+                            <div className="grid gap-4 md:grid-cols-3">
+                              <CompactField label="Start" error={axisErrors?.start?.message}>
+                                <SetupNumberInput
+                                  {...form.register(`simulationParameterSweepAxes.${index}.start`, {
+                                    valueAsNumber: true,
+                                  })}
+                                  step="any"
+                                />
+                              </CompactField>
+                              <CompactField label="Stop" error={axisErrors?.stop?.message}>
+                                <SetupNumberInput
+                                  {...form.register(`simulationParameterSweepAxes.${index}.stop`, {
+                                    valueAsNumber: true,
+                                  })}
+                                  step="any"
+                                />
+                              </CompactField>
+                              <CompactField label="Points" error={axisErrors?.pointCount?.message}>
+                                <SetupNumberInput
+                                  {...form.register(
+                                    `simulationParameterSweepAxes.${index}.pointCount`,
+                                    {
+                                      valueAsNumber: true,
+                                    },
+                                  )}
+                                  min={1}
+                                />
+                              </CompactField>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1956,42 +1968,52 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="HB Solving"
-            description="Keep the two main JosephsonCircuits harmonic controls visible here and move denser solver tuning into Advanced hbsolve Options."
+            description="Keep JosephsonCircuits harmonic controls here."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
           >
-            <div className="grid gap-3 md:grid-cols-2">
-              <SetupInputField
-                label="Nmodulation Harmonics"
-                error={form.formState.errors.simulationHarmonicCount?.message}
-              >
-                <SetupNumberInput
-                  {...form.register("simulationHarmonicCount", { valueAsNumber: true })}
-                  min={1}
-                  disabled={!harmonicBalanceEnabled}
-                />
-              </SetupInputField>
-              <SetupInputField
-                label="Npump Harmonics"
-                error={form.formState.errors.simulationOversampleFactor?.message}
-              >
-                <SetupNumberInput
-                  {...form.register("simulationOversampleFactor", { valueAsNumber: true })}
-                  min={1}
-                  disabled={!harmonicBalanceEnabled}
-                />
-              </SetupInputField>
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <CompactField
+                  label="Nmodulation Harmonics"
+                  error={form.formState.errors.simulationHarmonicCount?.message}
+                >
+                  <SetupNumberInput
+                    {...form.register("simulationHarmonicCount", { valueAsNumber: true })}
+                    min={1}
+                    disabled={!harmonicBalanceEnabled}
+                  />
+                </CompactField>
+                <CompactField
+                  label="Npump Harmonics"
+                  error={form.formState.errors.simulationOversampleFactor?.message}
+                >
+                  <SetupNumberInput
+                    {...form.register("simulationOversampleFactor", { valueAsNumber: true })}
+                    min={1}
+                    disabled={!harmonicBalanceEnabled}
+                  />
+                </CompactField>
+              </div>
             </div>
           </SetupSection>
 
           <SetupSection
             title="Sources"
-            description="Build one or more simulation sources. Multiple source cards submit through the persisted sources[] contract."
+            description="JosephsonCircuits sources here are pump sources: Pump Freq, Source Port, Source Current Ip, and Source Mode."
             status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
             actions={
               <button
                 type="button"
                 onClick={() => {
-                  sourceFieldArray.append(createDefaultSimulationSource());
+                  const nextIndex = sourceFieldArray.fields.length + 1;
+                  sourceFieldArray.append({
+                    ...createDefaultSimulationSource(),
+                    sourceId: `src_pump_${nextIndex}`,
+                    port:
+                      ptcPortOptions[nextIndex - 1]?.value ??
+                      ptcPortOptions[0]?.value ??
+                      `port_${nextIndex}`,
+                  });
                   clearTaskMutationStatus();
                 }}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
@@ -2012,9 +2034,11 @@ export function SimulationWorkbenchShell() {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-foreground">Source {index + 1}</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            Pump Source {index + 1}
+                          </p>
                           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                            Drive source persisted with the simulation task.
+                            Port, current, and pump frequency submit with the simulation task.
                           </p>
                         </div>
                         <button
@@ -2029,57 +2053,55 @@ export function SimulationWorkbenchShell() {
                         </button>
                       </div>
 
-                      <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-6">
-                        <SetupInputField
-                          label="Source Id"
-                          error={sourceErrors?.sourceId?.message}
-                        >
-                          <SetupTextInput
-                            {...form.register(`simulationSources.${index}.sourceId`)}
-                            placeholder="src_drive_1"
-                          />
-                        </SetupInputField>
-                        <SetupInputField label="Kind" error={sourceErrors?.kind?.message}>
-                          <SetupTextInput
-                            {...form.register(`simulationSources.${index}.kind`)}
-                            placeholder="pump"
-                          />
-                        </SetupInputField>
-                        <SetupInputField label="Target" error={sourceErrors?.target?.message}>
-                          <SetupTextInput
-                            {...form.register(`simulationSources.${index}.target`)}
-                            placeholder="port_1"
-                          />
-                        </SetupInputField>
-                        <SetupInputField
-                          label="Amplitude"
-                          error={sourceErrors?.amplitude?.message}
-                        >
-                          <SetupNumberInput
-                            {...form.register(`simulationSources.${index}.amplitude`, {
-                              valueAsNumber: true,
-                            })}
-                            step="any"
-                          />
-                        </SetupInputField>
-                        <SetupInputField
-                          label="Frequency (GHz)"
-                          error={sourceErrors?.frequencyGhz?.message}
-                        >
-                          <SetupTextInput
-                            {...form.register(`simulationSources.${index}.frequencyGhz`)}
-                            placeholder="optional"
-                          />
-                        </SetupInputField>
-                        <SetupInputField
-                          label="Phase (deg)"
-                          error={sourceErrors?.phaseDeg?.message}
-                        >
-                          <SetupTextInput
-                            {...form.register(`simulationSources.${index}.phaseDeg`)}
-                            placeholder="optional"
-                          />
-                        </SetupInputField>
+                      <div className="mt-4 rounded-[0.9rem] border border-border/60 bg-surface/40 px-4 py-4">
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                          <CompactField label="Pump Freq (GHz)" error={sourceErrors?.pumpFreqGhz?.message}>
+                            <SetupNumberInput
+                              {...form.register(`simulationSources.${index}.pumpFreqGhz`, {
+                                valueAsNumber: true,
+                              })}
+                              min={0.000001}
+                              step="any"
+                            />
+                          </CompactField>
+                          <CompactField label="Source Port" error={sourceErrors?.port?.message}>
+                            {ptcPortOptions.length > 0 ? (
+                              <SetupSelect {...form.register(`simulationSources.${index}.port`)}>
+                                {ptcPortOptions.map((port) => (
+                                  <option key={port.value} value={port.value}>
+                                    {port.label}
+                                  </option>
+                                ))}
+                              </SetupSelect>
+                            ) : (
+                              <SetupTextInput
+                                {...form.register(`simulationSources.${index}.port`)}
+                                placeholder="port_1"
+                              />
+                            )}
+                          </CompactField>
+                          <CompactField
+                            label="Source Current Ip (A)"
+                            error={sourceErrors?.currentAmp?.message}
+                          >
+                            <SetupNumberInput
+                              {...form.register(`simulationSources.${index}.currentAmp`, {
+                                valueAsNumber: true,
+                              })}
+                              step="any"
+                            />
+                          </CompactField>
+                          <CompactField
+                            label="Source Mode"
+                            detail="JosephsonCircuits mode tuple, for example 1 or 1, 0."
+                            error={sourceErrors?.sourceMode?.message}
+                          >
+                            <SetupTextInput
+                              {...form.register(`simulationSources.${index}.sourceMode`)}
+                              placeholder="1"
+                            />
+                          </CompactField>
+                        </div>
                       </div>
                     </div>
                   );
@@ -2095,7 +2117,7 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="PTC"
-            description="Capture local port-tuning intent with schema-derived port selection, without pretending the backend already persists it."
+            description="Choose which schema-defined ports should use the local PTC draft."
             status={<LocalDraftBadge />}
             actions={
               <button
@@ -2114,80 +2136,80 @@ export function SimulationWorkbenchShell() {
               </button>
             }
           >
-            <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_240px]">
-              <SetupSlideToggle
-                checked={ptcEnabled}
-                label="Enable PTC draft"
-                description={
-                  ptcPortOptions.length > 0
-                    ? "Track local PTC intent with schema-derived port selection."
-                    : "No schema ports are available for PTC on this definition."
-                }
-                disabled={ptcPortOptions.length === 0}
-                onCheckedChange={(nextChecked) => {
-                  form.setValue("simulationPtcEnabled", nextChecked, {
-                    shouldDirty: true,
-                  });
-                }}
-              />
-              <SetupInputField label="Mode">
-                <SetupSelect {...form.register("simulationPtcMode")} disabled={!ptcEnabled}>
-                  <option value="auto">Auto compensate</option>
-                  <option value="manual">Manual review</option>
-                </SetupSelect>
-              </SetupInputField>
-            </div>
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_220px]">
+                <SetupSlideToggle
+                  checked={ptcEnabled}
+                  label="Enable PTC draft"
+                  description={
+                    ptcPortOptions.length > 0
+                      ? "PTC stays browser-local for now and uses schema-derived ports."
+                      : "No schema ports are available for PTC on this definition."
+                  }
+                  disabled={ptcPortOptions.length === 0}
+                  onCheckedChange={(nextChecked) => {
+                    form.setValue("simulationPtcEnabled", nextChecked, {
+                      shouldDirty: true,
+                    });
+                  }}
+                />
+                <CompactField label="Mode">
+                  <SetupSelect {...form.register("simulationPtcMode")} disabled={!ptcEnabled}>
+                    <option value="auto">Auto compensate</option>
+                    <option value="manual">Manual review</option>
+                  </SetupSelect>
+                </CompactField>
+              </div>
 
-            {ptcPortOptions.length > 0 ? (
-              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  {ptcPortOptions.map((port) => {
-                    const isSelected = selectedPtcPorts.has(port.value);
-                    return (
-                      <button
-                        key={port.value}
-                        type="button"
-                        disabled={!ptcEnabled}
-                        onClick={() => {
-                          const nextSelection = new Set(selectedPtcPorts);
-                          if (nextSelection.has(port.value)) {
-                            nextSelection.delete(port.value);
-                          } else {
-                            nextSelection.add(port.value);
-                          }
-                          form.setValue(
-                            "simulationPtcCompensatePorts",
-                            [...nextSelection].join(", "),
-                            { shouldDirty: true },
-                          );
-                        }}
-                        className={cx(
-                          "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60",
-                          isSelected
-                            ? "border-primary/35 bg-primary text-primary-foreground"
-                            : "border-border bg-surface text-foreground hover:border-primary/35 hover:bg-primary/10",
-                        )}
-                      >
-                        {port.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                  Choose the ports that should use the local PTC draft. Default is no selected
-                  ports.
-                </p>
+              <div className="mt-4">
+                {ptcPortOptions.length > 0 ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {ptcPortOptions.map((port) => {
+                        const isSelected = selectedPtcPorts.has(port.value);
+                        return (
+                          <button
+                            key={port.value}
+                            type="button"
+                            disabled={!ptcEnabled}
+                            onClick={() => {
+                              const nextSelection = new Set(selectedPtcPorts);
+                              if (nextSelection.has(port.value)) {
+                                nextSelection.delete(port.value);
+                              } else {
+                                nextSelection.add(port.value);
+                              }
+                              form.setValue(
+                                "simulationPtcCompensatePorts",
+                                [...nextSelection].join(", "),
+                                { shouldDirty: true },
+                              );
+                            }}
+                            className={cx(
+                              "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60",
+                              isSelected
+                                ? "border-primary/35 bg-primary text-primary-foreground"
+                                : "border-border bg-surface text-foreground hover:border-primary/35 hover:bg-primary/10",
+                            )}
+                          >
+                            {port.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-[0.95rem] border border-dashed border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
+                    This definition does not expose any schema ports for PTC selection.
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                This definition does not expose any schema ports for PTC selection.
-              </div>
-            )}
+            </div>
           </SetupSection>
 
           <SetupSection
             title="Advanced hbsolve Options"
-            description="Keep denser solver controls and experimental hbsolve notes collapsed until they are needed."
+            description="Dense hbsolve tuning lives here."
             status={
               <>
                 <SurfaceTag tone="primary">Persisted on task</SurfaceTag>
@@ -2214,101 +2236,98 @@ export function SimulationWorkbenchShell() {
           >
             {isAdvancedHbsolveExpanded ? (
               <div className="space-y-4">
-                <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-                  <SetupInputField
-                    label="Solver Family"
-                    error={form.formState.errors.simulationSolverFamily?.message}
-                  >
-                    <SetupTextInput
-                      {...form.register("simulationSolverFamily")}
-                      placeholder="harmonic_balance"
+                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                  <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+                    <CompactField
+                      label="Solver Family"
+                      error={form.formState.errors.simulationSolverFamily?.message}
+                    >
+                      <SetupTextInput
+                        {...form.register("simulationSolverFamily")}
+                        placeholder="harmonic_balance"
+                      />
+                    </CompactField>
+                    <CompactField
+                      label="Max Iterations"
+                      error={form.formState.errors.simulationMaxIterations?.message}
+                    >
+                      <SetupNumberInput
+                        {...form.register("simulationMaxIterations", { valueAsNumber: true })}
+                        min={1}
+                      />
+                    </CompactField>
+                    <CompactField
+                      label="Convergence Tolerance"
+                      error={form.formState.errors.simulationConvergenceTolerance?.message}
+                    >
+                      <SetupNumberInput
+                        {...form.register("simulationConvergenceTolerance", {
+                          valueAsNumber: true,
+                        })}
+                        step="any"
+                      />
+                    </CompactField>
+                    <SetupSlideToggle
+                      checked={harmonicBalanceEnabled}
+                      label="Enable harmonic balance"
+                      description="Persist whether hbsolve harmonic-balance mode is active for this run."
+                      onCheckedChange={(nextChecked) => {
+                        form.setValue("simulationHarmonicBalanceEnabled", nextChecked, {
+                          shouldDirty: true,
+                        });
+                      }}
                     />
-                  </SetupInputField>
-                  <SetupInputField
-                    label="Max Iterations"
-                    error={form.formState.errors.simulationMaxIterations?.message}
-                  >
-                    <SetupNumberInput
-                      {...form.register("simulationMaxIterations", { valueAsNumber: true })}
-                      min={1}
-                    />
-                  </SetupInputField>
-                  <SetupInputField
-                    label="Convergence Tolerance"
-                    error={form.formState.errors.simulationConvergenceTolerance?.message}
-                  >
-                    <SetupNumberInput
-                      {...form.register("simulationConvergenceTolerance", {
-                        valueAsNumber: true,
-                      })}
-                      step="any"
-                    />
-                  </SetupInputField>
-                  <SetupSlideToggle
-                    checked={harmonicBalanceEnabled}
-                    label="Enable harmonic balance"
-                    description="Persist whether hbsolve harmonic-balance mode is active for this run."
-                    onCheckedChange={(nextChecked) => {
-                      form.setValue("simulationHarmonicBalanceEnabled", nextChecked, {
-                        shouldDirty: true,
-                      });
-                    }}
-                  />
+                  </div>
                 </div>
 
-                <div className="rounded-[0.95rem] border border-dashed border-amber-400/50 bg-amber-50/70 px-4 py-4 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-                  Damping strategy, line search, residual clamp, relaxation, and freeform notes
-                  are still local draft only. They help authoring now, but they are not persisted
-                  on the task yet.
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <SetupInputField label="Damping Strategy">
-                    <SetupTextInput
-                      {...form.register("simulationAdvancedDampingStrategy")}
-                      placeholder="adaptive"
+                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <CompactField label="Damping Strategy">
+                      <SetupTextInput
+                        {...form.register("simulationAdvancedDampingStrategy")}
+                        placeholder="adaptive"
+                      />
+                    </CompactField>
+                    <SetupSlideToggle
+                      checked={form.watch("simulationAdvancedLineSearchEnabled")}
+                      label="Enable line search"
+                      description="Local-only toggle for advanced hbsolve experimentation notes."
+                      onCheckedChange={(nextChecked) => {
+                        form.setValue("simulationAdvancedLineSearchEnabled", nextChecked, {
+                          shouldDirty: true,
+                        });
+                      }}
                     />
-                  </SetupInputField>
-                  <SetupSlideToggle
-                    checked={form.watch("simulationAdvancedLineSearchEnabled")}
-                    label="Enable line search"
-                    description="Local-only toggle for advanced hbsolve experimentation notes."
-                    onCheckedChange={(nextChecked) => {
-                      form.setValue("simulationAdvancedLineSearchEnabled", nextChecked, {
-                        shouldDirty: true,
-                      });
-                    }}
-                  />
-                  <SetupInputField label="Residual Clamp">
-                    <SetupTextInput
-                      {...form.register("simulationAdvancedResidualClamp")}
-                      placeholder="1e-6"
-                    />
-                  </SetupInputField>
-                  <SetupInputField label="Newton Relaxation">
-                    <SetupTextInput
-                      {...form.register("simulationAdvancedNewtonRelaxation")}
-                      placeholder="0.85"
-                    />
-                  </SetupInputField>
-                  <SetupInputField
-                    label="Advanced Notes"
-                    detail="Keep any extra hbsolve options or reminders in local draft form."
-                  >
-                    <textarea
-                      {...form.register("simulationAdvancedNotes")}
-                      rows={4}
-                      placeholder="Optional advanced hbsolve notes."
-                      className="w-full resize-none rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
-                    />
-                  </SetupInputField>
+                    <CompactField label="Residual Clamp">
+                      <SetupTextInput
+                        {...form.register("simulationAdvancedResidualClamp")}
+                        placeholder="1e-6"
+                      />
+                    </CompactField>
+                    <CompactField label="Newton Relaxation">
+                      <SetupTextInput
+                        {...form.register("simulationAdvancedNewtonRelaxation")}
+                        placeholder="0.85"
+                      />
+                    </CompactField>
+                    <CompactField
+                      label="Advanced Notes"
+                      detail="Keep any extra hbsolve options or reminders in local draft form."
+                      className="md:col-span-2 xl:col-span-3"
+                    >
+                      <textarea
+                        {...form.register("simulationAdvancedNotes")}
+                        rows={4}
+                        placeholder="Optional advanced hbsolve notes."
+                        className="w-full resize-none rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+                      />
+                    </CompactField>
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                Advanced hbsolve options stay collapsed until you need them. Solver family,
-                convergence, and harmonic-balance enable live here, while the extra draft fields
-                still remain browser-local.
+                Advanced hbsolve options stay collapsed until you need them.
               </div>
             )}
           </SetupSection>
