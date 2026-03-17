@@ -502,13 +502,12 @@ export function WorkspaceStatusStrip({
   const triggerLabel = runtimeValue;
   const triggerDetail = `${workspaceValue} · ${datasetSummary.value} · ${queueValue}`;
   const modeTargetValue =
-    runtimeMode === "local"
-      ? "Local backend"
-      : ((session?.connection.label ?? session?.connection.origin ?? runtimeTargetInput.trim()) ||
-          "Server target pending");
+    (session?.connection.target?.kind === "remote"
+      ? (session.connection.label ?? session.connection.origin)
+      : runtimeTargetInput.trim()) || "Server target pending";
   const runtimeRefreshCopy =
     runtimeMode === "local"
-      ? "Refresh rechecks the Local Space session envelope without changing runtime mode."
+      ? "Refresh only re-fetches the Local Space session envelope. It does not call online auth refresh."
       : "Refresh revalidates the current online session and target summary without switching modes.";
 
   async function handleWorkspaceSwitch(workspaceId: string) {
@@ -714,10 +713,10 @@ export function WorkspaceStatusStrip({
               <div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <RuntimeModeCard
-                    label="Local Mode"
-                    title="Local Space"
+                    label="Mode"
+                    title="Local Mode"
                     details={[
-                      "Pairs the shell with the local backend and bypasses remote sign-in.",
+                      "Workspace: Local Space · no remote sign-in required.",
                       "Datasets, schemas, results, and tasks stay local until you explicitly import or export them.",
                       "Queue and dataset context rebuild for Local Space on every mode switch.",
                     ]}
@@ -728,9 +727,10 @@ export function WorkspaceStatusStrip({
                     }}
                   />
                   <RuntimeModeCard
-                    label={runtimeSwitchingTo === "online" ? "Connecting..." : "Online Mode"}
-                    title={modeTargetValue}
+                    label={runtimeSwitchingTo === "online" ? "Connecting..." : "Mode"}
+                    title="Online Mode"
                     details={[
+                      `Target: ${modeTargetValue}.`,
                       "Validates the server target before rebuilding the online shell context.",
                       "Requires sign-in when auth is missing and never silently carries a previous remote session across mode switches.",
                       "Context reset is mode-only. Switching online never bridges local datasets, schemas, results, or tasks.",
@@ -944,6 +944,12 @@ export function WorkspaceStatusStrip({
                     />
                   ) : null}
                   <Link
+                    href="/dataset"
+                    className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                  >
+                    Open Dataset
+                  </Link>
+                  <Link
                     href="/raw-data"
                     className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
                   >
@@ -1011,23 +1017,26 @@ export function WorkspaceStatusStrip({
                       const isSelected = row.dataset_id === activeDataset?.datasetId;
                       const isNullSelected = !activeDataset && isNullOption;
                       const isBusy = selectingDatasetId === (isNullOption ? "__clear__" : row.dataset_id);
+                      const isUnavailable = isBusy || !row.allowed_actions.select || !canSwitchDataset;
 
                       return (
                         <button
                           key={row.dataset_id}
                           type="button"
-                          disabled={
-                            (isSelected || isNullSelected) || isBusy || !row.allowed_actions.select || !canSwitchDataset
-                          }
+                          disabled={isUnavailable}
+                          aria-pressed={isSelected || isNullSelected}
                           onClick={() => {
+                            if (isSelected || isNullSelected) {
+                              return;
+                            }
                             void handleDatasetSelection(isNullOption ? null : row.dataset_id);
                           }}
                           className={cx(
-                            "w-full rounded-[0.95rem] border px-4 py-4 text-left transition",
+                            "w-full cursor-pointer rounded-[0.95rem] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                             isSelected || isNullSelected
-                              ? "border-primary/35 bg-primary/10"
-                              : "border-border bg-background hover:border-primary/25 hover:bg-surface-elevated",
-                            (!row.allowed_actions.select || isBusy || !canSwitchDataset) &&
+                              ? "border-primary/35 bg-primary/10 shadow-[0_14px_28px_rgba(37,99,235,0.14)]"
+                              : "border-border bg-background hover:-translate-y-0.5 hover:border-primary/25 hover:bg-surface-elevated hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]",
+                            isUnavailable &&
                               "cursor-not-allowed opacity-70",
                           )}
                         >

@@ -1,36 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle, Save } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
+import Link from "next/link";
+import { ArrowRight, Database, Upload } from "lucide-react";
 
-import { useAppSession } from "@/lib/app-state";
 import { useDashboardData } from "@/features/data-browser/hooks/use-dashboard-data";
-import { AppSelectField } from "@/features/shared/components/app-select";
 import { SurfaceHeader, SurfacePanel, SurfaceStat, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
-
-const profileSchema = z.object({
-  device_type: z.string().trim().min(1, "Device type is required."),
-  capabilities_text: z.string().trim(),
-  source: z.string().trim().min(1, "Source is required."),
-});
-
-type ProfileValues = z.infer<typeof profileSchema>;
-
-const emptyForm: ProfileValues = {
-  device_type: "",
-  capabilities_text: "",
-  source: "",
-};
-
-function parseCapabilities(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-}
 
 function formatCapabilities(values: readonly string[]) {
   return values.length > 0 ? values.join(", ") : "None tagged";
@@ -41,12 +15,6 @@ function readinessTone(count: number) {
 }
 
 export function DashboardWorkspace() {
-  const { session } = useAppSession();
-  const [saveState, setSaveState] = useState<{
-    tone: "success" | "warning";
-    message: string;
-  } | null>(null);
-  const [isSelectingDataset, startDatasetTransition] = useTransition();
   const {
     activeDatasetState,
     catalog,
@@ -58,59 +26,15 @@ export function DashboardWorkspace() {
     metrics,
     metricsError,
     isMetricsLoading,
-    saveProfile,
   } = useDashboardData();
-  const form = useForm<ProfileValues>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: emptyForm,
-  });
-
-  useEffect(() => {
-    if (!profile) {
-      form.reset(emptyForm);
-      return;
-    }
-    form.reset({
-      device_type: profile.device_type,
-      capabilities_text: profile.capabilities.join(", "),
-      source: profile.source,
-    });
-  }, [form, profile]);
-
-  async function onSubmit(values: ProfileValues) {
-    try {
-      const result = await saveProfile({
-        device_type: values.device_type.trim(),
-        capabilities: parseCapabilities(values.capabilities_text),
-        source: values.source.trim(),
-      });
-      form.reset({
-        device_type: result.dataset.device_type,
-        capabilities_text: result.dataset.capabilities.join(", "),
-        source: result.dataset.source,
-      });
-      setSaveState({
-        tone: "success",
-        message: "Dataset profile saved through the canonical dashboard write surface.",
-      });
-    } catch (error) {
-      setSaveState({
-        tone: "warning",
-        message: error instanceof Error ? error.message : "Unable to save dataset profile.",
-      });
-    }
-  }
-
-  const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? "";
   const catalogRows = catalog?.rows ?? [];
-  const canSwitchDataset = session?.capabilities.canSwitchDataset ?? false;
 
   return (
     <div className="space-y-8">
       <SurfaceHeader
         eyebrow="Workspace Dashboard"
         title="Dashboard"
-        description="Use the session-backed active dataset to edit dataset profile metadata, review read-only tagged core metrics, and confirm the current dataset context before entering analysis surfaces."
+        description="Keep the dashboard overview-first. Use it to confirm the current dataset context, tagged metrics, and workflow entry points before moving into dedicated management or ingestion pages."
         actions={
           <>
             <SurfaceTag tone="primary">
@@ -130,93 +54,70 @@ export function DashboardWorkspace() {
         />
         <SurfaceStat
           label="Profile Status"
-          value={profile?.allowed_actions.update_profile ? "Writable" : "Read-only"}
-          tone={profile?.allowed_actions.update_profile ? "primary" : "default"}
+          value={profile?.allowed_actions.update_profile ? "Managed in Dataset" : "Read-only"}
+          tone="default"
         />
       </div>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.72fr)_minmax(0,1.28fr)]">
+      <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
         <SurfacePanel
-          title="Active Dataset"
-          description="Selecting a dataset here mutates the shared session context instead of creating page-local dataset state."
+          title="Current Dataset Context"
+          description="Dashboard now summarizes the active dataset instead of carrying the full dataset workflow."
         >
           {catalogError ? (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
               Unable to load the dataset catalog. {catalogError.message}
             </div>
           ) : null}
 
-          <div className="space-y-4">
-            <div className="flex items-end gap-3">
-              <AppSelectField
-                className="flex-1"
-                label="Session Active Dataset"
-                value={activeDatasetId}
-                disabled={
-                  !canSwitchDataset ||
-                  isCatalogLoading ||
-                  catalogRows.length === 0 ||
-                  isSelectingDataset
-                }
-                placeholder={
-                  isCatalogLoading ? "Loading visible datasets..." : "Select a dataset"
-                }
-                onChange={(nextValue) => {
-                  setSaveState(null);
-                  startDatasetTransition(() => {
-                    void activeDatasetState.setActiveDataset(nextValue);
-                  });
-                }}
-                options={catalogRows.map((row) => ({
-                  value: row.dataset_id,
-                  label: row.name,
-                  description: `${row.family} · ${row.owner_display_name}`,
-                }))}
-              />
-              {isSelectingDataset ? (
-                <LoaderCircle className="mb-3 h-4 w-4 animate-spin text-muted-foreground" />
-              ) : null}
-            </div>
-
-            {!canSwitchDataset ? (
-              <div className="rounded-xl border border-amber-500/35 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/35 dark:text-amber-200">
-                Dataset switching is disabled for the current session authority.
+          {profile ? (
+            <div className="rounded-xl border border-border/80 bg-surface px-4 py-4 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <SurfaceTag tone="primary">{profile.visibility_scope}</SurfaceTag>
+                <SurfaceTag>{profile.lifecycle_state}</SurfaceTag>
+                <SurfaceTag>{profile.status}</SurfaceTag>
               </div>
-            ) : null}
-
-            {profile ? (
-              <div className="rounded-xl border border-border/80 bg-surface px-4 py-4 text-sm">
-                <div className="flex flex-wrap gap-2">
-                  <SurfaceTag tone="primary">{profile.visibility_scope}</SurfaceTag>
-                  <SurfaceTag>{profile.lifecycle_state}</SurfaceTag>
-                  <SurfaceTag>{profile.status}</SurfaceTag>
+              <dl className="mt-4 grid gap-4 md:grid-cols-2">
+                <div>
+                  <dt className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Owner
+                  </dt>
+                  <dd className="mt-1 font-medium text-foreground">{profile.owner_display_name}</dd>
                 </div>
-                <dl className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div>
-                    <dt className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Owner
-                    </dt>
-                    <dd className="mt-1 font-medium text-foreground">{profile.owner_display_name}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Updated
-                    </dt>
-                    <dd className="mt-1 font-medium text-foreground">{profile.updated_at}</dd>
-                  </div>
-                </dl>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-                {isCatalogLoading ? "Loading dataset context..." : "Attach a dataset from the shared shell or dashboard selector."}
-              </div>
-            )}
-          </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Updated
+                  </dt>
+                  <dd className="mt-1 font-medium text-foreground">{profile.updated_at}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Device Type
+                  </dt>
+                  <dd className="mt-1 font-medium text-foreground">{profile.device_type}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Capabilities
+                  </dt>
+                  <dd className="mt-1 font-medium text-foreground">
+                    {formatCapabilities(profile.capabilities)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
+              {isCatalogLoading
+                ? "Loading dataset context..."
+                : "Attach a dataset from Global Context or open the Dataset page to manage dataset state."}
+            </div>
+          )}
         </SurfacePanel>
 
         <SurfacePanel
-          title="Dataset Profile"
-          description="This is the only metadata write surface. Raw-data and downstream analysis pages remain summary-only."
+          title="Workflow Entry Points"
+          description="Move from dashboard overview into the dedicated pages that now own dataset management and raw-data intake."
         >
           {profileError ? (
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
@@ -228,93 +129,65 @@ export function DashboardWorkspace() {
               Unable to load tagged core metrics. {metricsError.message}
             </div>
           ) : null}
-          {saveState ? (
-            <div
-              className={cx(
-                "mb-4 rounded-xl border px-4 py-3 text-sm",
-                saveState.tone === "success"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-foreground"
-                  : "border-amber-500/30 bg-amber-500/10 text-foreground",
-              )}
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <Link
+              href="/dataset"
+              className="rounded-xl border border-border bg-surface px-4 py-4 transition hover:border-primary/30 hover:bg-surface-elevated"
             >
-              {saveState.message}
-            </div>
-          ) : null}
-
-          <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
-            <div className="grid gap-3 xl:grid-cols-2">
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Device Type
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Database className="h-5 w-5" />
                 </span>
-                <input
-                  {...form.register("device_type")}
-                  disabled={!profile || isProfileLoading}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="Fluxonium"
-                />
-                {form.formState.errors.device_type?.message ? (
-                  <p className="mt-2 text-xs text-amber-600">
-                    {form.formState.errors.device_type.message}
+                <div>
+                  <p className="font-semibold text-foreground">Dataset</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Primary browse, active-selection, and dataset profile management surface.
                   </p>
-                ) : null}
-              </label>
-
-              <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Source
-                </span>
-                <input
-                  {...form.register("source")}
-                  disabled={!profile || isProfileLoading}
-                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  placeholder="manual"
-                />
-                {form.formState.errors.source?.message ? (
-                  <p className="mt-2 text-xs text-amber-600">
-                    {form.formState.errors.source.message}
-                  </p>
-                ) : null}
-              </label>
-            </div>
-
-            <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Capabilities
-              </span>
-              <input
-                {...form.register("capabilities_text")}
-                disabled={!profile || isProfileLoading}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                placeholder="characterization, simulation_review"
-              />
-            </label>
-
-            <div className="flex items-center justify-between rounded-xl border border-border/80 bg-surface px-4 py-3 text-sm">
-              <div>
-                <p className="font-medium text-foreground">
-                  {profile ? formatCapabilities(profile.capabilities) : "No dataset selected"}
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  Dashboard remains the canonical write surface for device type, capabilities, and source.
-                </p>
+                </div>
               </div>
-              <button
-                type="submit"
-                disabled={!profile || isProfileLoading || !form.formState.isDirty}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Save className="h-4 w-4" />
-                Save Profile
-              </button>
-            </div>
-          </form>
+            </Link>
+
+            <Link
+              href="/data-ingestion"
+              className="rounded-xl border border-border bg-surface px-4 py-4 transition hover:border-primary/30 hover:bg-surface-elevated"
+            >
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Upload className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Data Ingestion</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Explicit entry for raw measurement and layout-simulation intake.
+                  </p>
+                </div>
+              </div>
+            </Link>
+
+            <Link
+              href="/raw-data"
+              className="rounded-xl border border-border bg-surface px-4 py-4 transition hover:border-primary/30 hover:bg-surface-elevated"
+            >
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <ArrowRight className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Raw Data Browser</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Inspect design scopes, trace summaries, and single-trace previews after ingestion.
+                  </p>
+                </div>
+              </div>
+            </Link>
+          </div>
         </SurfacePanel>
       </section>
 
       <SurfacePanel
         title="Tagged Core Metrics"
-        description="Read-only summaries follow the active dataset. Identification and tagging stay outside the dashboard write surface."
+        description="Read-only summaries follow the active dataset. Dashboard stays summary-first and no longer owns dataset profile edits."
       >
         {isMetricsLoading ? (
           <div className="rounded-xl border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">

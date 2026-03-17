@@ -781,6 +781,13 @@ describe("circuit schemdraw workspace source contracts", () => {
     expect(snapshotIndex).toBeGreaterThan(diagnosticsIndex);
   });
 
+  it("renders the linked schema snapshot as a read-only code surface instead of a text blob", () => {
+    expect(schemdrawWorkspaceSource).toContain("Linked Schema Snapshot");
+    expect(schemdrawWorkspaceSource).toContain("editable={false}");
+    expect(schemdrawWorkspaceSource).toContain("extensions={[json()]}");
+    expect(schemdrawWorkspaceSource).not.toContain("<pre className=\"overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6 text-muted-foreground\">");
+  });
+
   it("demotes relation config into an advanced disclosure instead of a primary workspace card", () => {
     expect(schemdrawWorkspaceSource).toContain("Advanced relation mapping");
     expect(schemdrawWorkspaceSource).not.toContain("Relation Config Editor");

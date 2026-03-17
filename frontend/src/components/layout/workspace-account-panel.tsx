@@ -79,7 +79,7 @@ export function WorkspaceAccountPanel({
 
   const runtimeTargetLabel =
     runtimeMode === "local"
-      ? "Local backend"
+      ? "No online target"
       : resolveShellConnectionTargetLabel(session);
   const runtimeSummaryTitle =
     runtimeMode === "local"

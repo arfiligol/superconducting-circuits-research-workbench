@@ -334,6 +334,12 @@ describe("session contract mapping", () => {
     });
   });
 
+  it("keeps local-mode refresh on the session envelope path instead of the auth-refresh path", () => {
+    expect(appSessionSource).toContain('runtimeMode === "local"');
+    expect(appSessionSource).toContain("await getSession()");
+    expect(appSessionSource).toContain("await refreshCurrentSession()");
+  });
+
   it("preserves broader auth states and modes from the session surface", () => {
     expect(
       mapSessionResponse({

@@ -104,7 +104,7 @@ export function resolveSessionWorkspaceLabel(
 
 export function resolveShellConnectionTargetLabel(session: SessionSnapshot | undefined) {
   if (!session || session.runtimeMode === "local") {
-    return "Local backend";
+    return "No online target";
   }
 
   return resolveConnectionTargetLabel(session.connection) ?? "Server target pending";

@@ -9,9 +9,11 @@ import {
 
 describe("workspaceNavigation", () => {
   it("covers the canonical shell route families", () => {
-    expect(workspaceNavigation).toHaveLength(6);
+    expect(workspaceNavigation).toHaveLength(8);
     expect(workspaceNavigation.map((item) => item.label)).toEqual([
       "Dashboard",
+      "Dataset",
+      "Data Ingestion",
       "Raw Data",
       "Schemas",
       "Schemdraw",
@@ -33,7 +35,7 @@ describe("workspaceNavigation", () => {
       "Pipeline",
       "Circuit Simulation",
     ]);
-    expect(workspaceNavigationGroups.map((group) => group.items.length)).toEqual([1, 2, 3]);
+    expect(workspaceNavigationGroups.map((group) => group.items.length)).toEqual([2, 3, 3]);
   });
 
   it("keeps the shell navigation title-only while preserving icons", () => {
@@ -49,6 +51,14 @@ describe("workspaceNavigation", () => {
     expect(resolveWorkspacePageIdentity("/schemas")).toEqual({
       sectionLabel: "Circuit Simulation",
       pageTitle: "Schemas",
+    });
+    expect(resolveWorkspacePageIdentity("/dataset")).toEqual({
+      sectionLabel: "Dashboard",
+      pageTitle: "Dataset",
+    });
+    expect(resolveWorkspacePageIdentity("/data-ingestion")).toEqual({
+      sectionLabel: "Pipeline",
+      pageTitle: "Data Ingestion",
     });
     expect(resolveWorkspacePageIdentity("/circuit-definition-editor")).toEqual({
       sectionLabel: "Circuit Simulation",

@@ -26,6 +26,18 @@ const rawDataWorkspaceSource = readFileSync(
   ),
   "utf8",
 );
+const datasetWorkspaceSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/dataset-workspace.tsx", import.meta.url),
+  ),
+  "utf8",
+);
+const dataIngestionWorkspaceSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/data-ingestion-workspace.tsx", import.meta.url),
+  ),
+  "utf8",
+);
 const dashboardDataHookSource = readFileSync(
   fileURLToPath(new URL("../src/features/data-browser/hooks/use-dashboard-data.ts", import.meta.url)),
   "utf8",
@@ -132,13 +144,28 @@ describe("raw-data selection helpers", () => {
 });
 
 describe("page-boundary source contracts", () => {
-  it("keeps dashboard as the only metadata write surface", () => {
-    expect(dashboardWorkspaceSource).toContain("saveProfile(");
-    expect(dashboardWorkspaceSource).toContain("Save Profile");
-    expect(dashboardWorkspaceSource).toContain("only metadata write surface");
+  it("moves dataset profile management into the dedicated dataset page while keeping dashboard summary-first", () => {
+    expect(dashboardWorkspaceSource).toContain("overview-first");
+    expect(dashboardWorkspaceSource).toContain('href="/dataset"');
+    expect(dashboardWorkspaceSource).toContain('href="/data-ingestion"');
+    expect(dashboardWorkspaceSource).not.toContain("Save Profile");
+    expect(dashboardWorkspaceSource).not.toContain("saveProfile(");
+    expect(datasetWorkspaceSource).toContain("saveProfile(");
+    expect(datasetWorkspaceSource).toContain("Save Profile");
+    expect(datasetWorkspaceSource).toContain("dedicated dataset management surface");
+    expect(datasetWorkspaceSource).toContain("Create, archive, and delete dataset actions are not exposed");
     expect(rawDataWorkspaceSource).not.toContain("saveProfile(");
     expect(rawDataWorkspaceSource).not.toContain("Save Profile");
     expect(rawDataWorkspaceSource).not.toContain("Dataset Profile");
+  });
+
+  it("adds a dedicated data-ingestion page without faking upload success", () => {
+    expect(dataIngestionWorkspaceSource).toContain("Measurement");
+    expect(dataIngestionWorkspaceSource).toContain("Layout Simulation");
+    expect(dataIngestionWorkspaceSource).toContain("Blocked by backend contract");
+    expect(dataIngestionWorkspaceSource).toContain("Upload unavailable");
+    expect(dataIngestionWorkspaceSource).toContain("no raw-data upload or ingestion mutation surface");
+    expect(dataIngestionWorkspaceSource).not.toContain("Upload complete");
   });
 
   it("keeps raw-data summary-first and metadata-read-only", () => {

@@ -150,7 +150,7 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
   const canShowLogoutAction = runtimeMode === "online" && !isLogin && authSummary.state === "authenticated";
   const currentTargetLabel =
     runtimeMode === "local"
-      ? "Local backend"
+      ? "No online target"
       : ((session?.connection.label ?? session?.connection.origin ?? targetInput.trim()) ||
           "Server target pending");
 
@@ -324,7 +324,9 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
                       : authSummary.triggerName}
                   </p>
                   <p className="truncate text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    {resolveRuntimeModeLabel(runtimeMode)} · {currentTargetLabel}
+                    {runtimeMode === "local"
+                      ? `${resolveRuntimeModeLabel(runtimeMode)} · ${resolveSessionWorkspaceLabel(session)}`
+                      : `${resolveRuntimeModeLabel(runtimeMode)} · ${currentTargetLabel}`}
                   </p>
                 </div>
               </div>

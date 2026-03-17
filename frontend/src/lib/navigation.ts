@@ -6,6 +6,7 @@ import {
   Database,
   FilePenLine,
   LayoutDashboard,
+  Upload,
 } from "lucide-react";
 
 export type WorkspaceNavigationItem = Readonly<{
@@ -25,6 +26,20 @@ export const workspaceNavigation: readonly WorkspaceNavigationItem[] = [
     group: "dashboard",
     icon: LayoutDashboard,
     aliases: ["/"],
+  },
+  {
+    href: "/dataset",
+    label: "Dataset",
+    pageTitle: "Dataset",
+    group: "dashboard",
+    icon: Database,
+  },
+  {
+    href: "/data-ingestion",
+    label: "Data Ingestion",
+    pageTitle: "Data Ingestion",
+    group: "pipeline",
+    icon: Upload,
   },
   {
     href: "/raw-data",
@@ -102,6 +117,16 @@ const workspacePageIdentities: readonly WorkspacePageIdentity[] = [
     href: "/dashboard",
     sectionLabel: "Dashboard",
     pageTitle: "Dashboard",
+  },
+  {
+    href: "/dataset",
+    sectionLabel: "Dashboard",
+    pageTitle: "Dataset",
+  },
+  {
+    href: "/data-ingestion",
+    sectionLabel: "Pipeline",
+    pageTitle: "Data Ingestion",
   },
   {
     href: "/raw-data",

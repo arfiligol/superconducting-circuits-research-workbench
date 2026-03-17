@@ -54,6 +54,12 @@ const rawDataSource = readFileSync(
   ),
   "utf8",
 );
+const datasetWorkspaceSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/dataset-workspace.tsx", import.meta.url),
+  ),
+  "utf8",
+);
 const dashboardSource = readFileSync(
   fileURLToPath(
     new URL("../src/features/data-browser/components/dashboard-workspace.tsx", import.meta.url),
@@ -197,6 +203,9 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("Search Datasets");
     expect(statusStripSource).toContain("handleDatasetSelection(");
     expect(statusStripSource).toContain("syncRouteDataset(");
+    expect(statusStripSource).toContain('href="/dataset"');
+    expect(statusStripSource).toContain("aria-pressed={isSelected || isNullSelected}");
+    expect(statusStripSource).toContain("cursor-pointer rounded-[0.95rem]");
     expect(statusStripSource).toContain("No active dataset");
     expect(statusStripSource).not.toContain("Clear active dataset");
   });
@@ -205,10 +214,13 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("RuntimeModeCard");
     expect(statusStripSource).toContain("Local Space");
     expect(statusStripSource).toContain("Server Target (IP:Port or origin)");
-    expect(statusStripSource).toContain("Refresh rechecks the Local Space session envelope");
+    expect(statusStripSource).toContain("Refresh only re-fetches the Local Space session envelope");
+    expect(statusStripSource).toContain("does not call online auth refresh");
+    expect(statusStripSource).toContain('title="Online Mode"');
     expect(statusStripSource).not.toContain("Active Mode");
     expect(statusStripSource).not.toContain("Context Target");
     expect(statusStripSource).not.toContain("Context Reset");
+    expect(statusStripSource).not.toContain("Local backend");
   });
 
   it("combines queue and worker runtime context into one shell surface", () => {
@@ -250,14 +262,18 @@ describe("workspace shell source contracts", () => {
     expect(authEntrySource).toContain("Retry target");
     expect(authEntrySource).toContain("Edit target");
     expect(authEntrySource).toContain("Switch to Local Mode");
+    expect(authEntrySource).toContain("No online target");
     expect(authEntrySource).not.toContain("Auth State");
     expect(authEntrySource).not.toContain("Session Mode");
+    expect(authEntrySource).not.toContain("Local backend");
   });
 
   it("keeps the account drawer focused on account and preferences instead of workspace collaboration management", () => {
     expect(accountPanelSource).toContain('title="Account"');
     expect(accountPanelSource).toContain("Preferences");
     expect(accountPanelSource).toContain("Developer Mode");
+    expect(accountPanelSource).toContain("No online target");
+    expect(accountPanelSource).not.toContain("Local backend");
     expect(accountPanelSource).toContain("Theme ownership stays in the account drawer.");
     expect(accountPanelSource).not.toContain("Workspace Collaboration");
     expect(accountPanelSource).not.toContain("Pending Invitations");
@@ -294,7 +310,6 @@ describe("workspace shell source contracts", () => {
     for (const source of [
       schemaCatalogSource,
       rawDataSource,
-      dashboardSource,
       characterizationSource,
       schemdrawSource,
       researchPanelsSource,
@@ -302,6 +317,8 @@ describe("workspace shell source contracts", () => {
       expect(source).toContain("AppSelectField");
       expect(source).not.toContain("<select");
     }
+    expect(dashboardSource).not.toContain("<select");
+    expect(datasetWorkspaceSource).not.toContain("<select");
   });
 
   it("keeps touched workflow surfaces off pale-on-pale rose warnings", () => {

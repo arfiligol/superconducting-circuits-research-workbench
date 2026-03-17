@@ -728,9 +728,19 @@ export function CircuitSchemdrawWorkspace() {
         </div>
 
         <div className="mt-4 rounded-[0.8rem] border border-border bg-surface px-4 py-4">
-          <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6 text-muted-foreground">
-            {activeDefinition?.normalized_output ?? '{\n  "linked_schema": "pending"\n}'}
-          </pre>
+          <CodeMirror
+            value={activeDefinition?.normalized_output ?? '{\n  "linked_schema": "pending"\n}'}
+            editable={false}
+            basicSetup={{
+              lineNumbers: true,
+              foldGutter: false,
+              highlightActiveLine: false,
+              highlightActiveLineGutter: false,
+            }}
+            extensions={[json()]}
+            theme={vsCodeDarkEditorTheme}
+            className="overflow-hidden rounded-[0.9rem] border border-border/80 bg-background text-sm"
+          />
         </div>
       </section>
     </div>

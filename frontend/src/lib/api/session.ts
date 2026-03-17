@@ -502,7 +502,7 @@ function mapConnectionTarget(
     return {
       kind: "local",
       origin: "local",
-      label: fallbackLabel ?? "Local backend",
+      label: fallbackLabel ?? "No online target",
       isActive: true,
       validationStatus: null,
       lastCheckedAt: null,

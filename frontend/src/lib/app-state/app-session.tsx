@@ -134,7 +134,10 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
         serverTargetDraft,
         setServerTargetDraft,
         async refreshSession() {
-          const nextSession = await refreshCurrentSession();
+          const nextSession =
+            runtimeMode === "local"
+              ? await getSession()
+              : await refreshCurrentSession();
           return sessionQuery.mutate(nextSession, { revalidate: false });
         },
         async replaceSession(nextSession) {
