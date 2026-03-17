@@ -78,6 +78,12 @@ const schemdrawSource = readFileSync(
   ),
   "utf8",
 );
+const simulationSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/simulation/components/simulation-workbench-shell.tsx", import.meta.url),
+  ),
+  "utf8",
+);
 const researchPanelsSource = readFileSync(
   fileURLToPath(
     new URL("../src/features/shared/components/research-workflow-panels.tsx", import.meta.url),
@@ -312,14 +318,16 @@ describe("workspace shell source contracts", () => {
 
   it("adopts the shared app-owned select across visible workflow surfaces", () => {
     expect(sharedSelectSource).toContain("aria-haspopup=\"listbox\"");
+    expect(sharedSelectSource).toContain("export function AppInlineSelect");
     for (const source of [
       schemaCatalogSource,
       rawDataSource,
       characterizationSource,
       schemdrawSource,
+      simulationSource,
       researchPanelsSource,
     ]) {
-      expect(source).toContain("AppSelectField");
+      expect(source.includes("AppSelectField") || source.includes("AppInlineSelect")).toBe(true);
       expect(source).not.toContain("<select");
     }
     expect(dashboardSource).not.toContain("<select");

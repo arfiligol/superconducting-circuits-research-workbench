@@ -27,7 +27,7 @@ import {
 } from "@/features/circuit-schemdraw/lib/editor-diagnostics";
 import type { SchemdrawFailureDetail } from "@/features/circuit-schemdraw/lib/render";
 import { resolveSchemdrawSelectionRecovery } from "@/features/circuit-schemdraw/lib/workflow";
-import { AppSelectField } from "@/features/shared/components/app-select";
+import { AppInlineSelect } from "@/features/shared/components/app-select";
 import {
   SurfaceTag,
   cx,
@@ -400,45 +400,51 @@ export function CircuitSchemdrawWorkspace() {
           ) : null}
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_repeat(3,minmax(0,0.55fr))]">
-          <AppSelectField
-            label="Linked Schema"
-            value={resolvedDefinitionId === null ? "" : String(resolvedDefinitionId)}
-            disabled={isDefinitionsLoading || isNavigating}
-            placeholder={isDefinitionsLoading ? "Loading schemas..." : "No linked schema"}
-            onChange={(nextValue) => {
-              replaceDefinitionId(nextValue ? Number(nextValue) : null);
-            }}
-            options={[
-              { value: "", label: "No linked schema" },
-              ...(definitions ?? []).map((definition) => ({
-                value: String(definition.definition_id),
-                label: definition.name,
-                description: `Definition #${definition.definition_id}`,
-              })),
-            ]}
-          />
+        <div className="mt-4 rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Linked Schema
+              </p>
+              <div className="mt-2 max-w-2xl">
+                <AppInlineSelect
+                  ariaLabel="Linked schema"
+                  value={resolvedDefinitionId === null ? "" : String(resolvedDefinitionId)}
+                  disabled={isDefinitionsLoading || isNavigating}
+                  placeholder={isDefinitionsLoading ? "Loading schemas..." : "No linked schema"}
+                  onChange={(nextValue) => {
+                    replaceDefinitionId(nextValue ? Number(nextValue) : null);
+                  }}
+                  options={[
+                    { value: "", label: "No linked schema" },
+                    ...(definitions ?? []).map((definition) => ({
+                      value: String(definition.definition_id),
+                      label: definition.name,
+                      description: `Definition #${definition.definition_id}`,
+                    })),
+                  ]}
+                />
+              </div>
+            </div>
 
-          <SummaryCard
-            label="Definition Id"
-            value={resolvedDefinitionId === null ? "--" : String(resolvedDefinitionId)}
-          />
-          <SummaryCard
-            label="Schema State"
-            value={
-              isDefinitionTransitioning
-                ? "Refreshing"
-                : resolvedDefinitionId === null
-                  ? "Unlinked"
-                  : selectionRecovery
-                    ? "Recovered"
-                    : "Attached"
-            }
-          />
-          <SummaryCard
-            label="Preview State"
-            value={renderSurface.isStale ? "Stale" : renderSurface.statusLabel}
-          />
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <SurfaceTag tone="default">
+                Definition {resolvedDefinitionId === null ? "--" : `#${resolvedDefinitionId}`}
+              </SurfaceTag>
+              <SurfaceTag tone={selectionRecovery ? "warning" : resolvedDefinitionId === null ? "default" : "primary"}>
+                {isDefinitionTransitioning
+                  ? "Refreshing"
+                  : resolvedDefinitionId === null
+                    ? "Unlinked"
+                    : selectionRecovery
+                      ? "Recovered"
+                      : "Attached"}
+              </SurfaceTag>
+              <SurfaceTag tone={previewTone}>
+                {renderSurface.isStale ? "Stale preview" : renderSurface.statusLabel}
+              </SurfaceTag>
+            </div>
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-muted-foreground">

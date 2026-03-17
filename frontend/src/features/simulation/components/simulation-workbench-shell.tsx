@@ -59,7 +59,11 @@ import {
   resolveSimulationSelectionRecovery,
   summarizeSimulationTaskResults,
 } from "@/features/simulation/lib/workflow";
-import { AppSelectField } from "@/features/shared/components/app-select";
+import {
+  AppInlineSelect,
+  AppSelectField,
+  type AppSelectOption,
+} from "@/features/shared/components/app-select";
 import {
   SurfaceHeader,
   SurfacePanel,
@@ -121,6 +125,21 @@ type WorkflowStageState = Readonly<{
 }>;
 
 const FREQUENCY_WHEEL_STEP_GHZ = 0.001;
+
+const spacingSelectOptions: readonly AppSelectOption[] = [
+  { value: "linear", label: "Linear" },
+  { value: "log", label: "Log" },
+];
+
+const parameterSweepModeOptions: readonly AppSelectOption[] = [
+  { value: "range", label: "Range builder" },
+  { value: "explicit", label: "Explicit values" },
+];
+
+const ptcModeOptions: readonly AppSelectOption[] = [
+  { value: "auto", label: "Auto compensate" },
+  { value: "manual", label: "Manual notes" },
+];
 
 const simulationStageFieldNames = [
   "simulationNote",
@@ -687,18 +706,6 @@ function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputEle
   );
 }
 
-function SetupSelect(props: Readonly<React.SelectHTMLAttributes<HTMLSelectElement>>) {
-  return (
-    <select
-      {...props}
-      className={cx(
-        "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/45 focus:ring-2 focus:ring-primary/15 disabled:opacity-60",
-        props.className,
-      )}
-    />
-  );
-}
-
 function LocalDraftBadge() {
   return <SurfaceTag>Browser-local only</SurfaceTag>;
 }
@@ -1054,9 +1061,27 @@ export function SimulationWorkbenchShell() {
     () => new Map(sweepTargetOptions.map((option) => [option.value, option] as const)),
     [sweepTargetOptions],
   );
+  const sweepTargetSelectOptions = useMemo<readonly AppSelectOption[]>(
+    () =>
+      sweepTargetOptions.map((option) => ({
+        value: option.value,
+        label: option.label,
+        description: option.unit ? `Schema unit · ${option.unit}` : undefined,
+        group: option.source === "schema" ? "Circuit Schema" : "Source Controls",
+      })),
+    [sweepTargetOptions],
+  );
   const ptcPortOptions = useMemo(
     () => deriveSimulationPtcPortOptions(activeDefinition?.source_text ?? null),
     [activeDefinition?.source_text],
+  );
+  const sourcePortSelectOptions = useMemo<readonly AppSelectOption[]>(
+    () =>
+      ptcPortOptions.map((port) => ({
+        value: port.value,
+        label: port.label,
+      })),
+    [ptcPortOptions],
   );
   const selectedPtcPorts = useMemo(
     () => new Set(parseCommaSeparatedStringValues(selectedPtcPortsValue)),
@@ -1730,10 +1755,16 @@ export function SimulationWorkbenchShell() {
                   />
                 </CompactField>
                 <CompactField label="Spacing">
-                  <SetupSelect {...form.register("simulationSpacing")}>
-                    <option value="linear">Linear</option>
-                    <option value="log">Log</option>
-                  </SetupSelect>
+                  <AppInlineSelect
+                    ariaLabel="Signal sweep spacing"
+                    value={form.watch("simulationSpacing")}
+                    onChange={(nextValue) => {
+                      form.setValue("simulationSpacing", nextValue as "linear" | "log", {
+                        shouldDirty: true,
+                      });
+                    }}
+                    options={spacingSelectOptions}
+                  />
                 </CompactField>
               </div>
             </div>
@@ -1851,15 +1882,17 @@ export function SimulationWorkbenchShell() {
                               : "Schema unit unavailable"
                           }
                         >
-                          <SetupSelect
+                          <AppInlineSelect
+                            ariaLabel={`Simulation parameter sweep axis ${index + 1} target`}
                             value={axisParameter}
+                            options={sweepTargetSelectOptions}
+                            placeholder="Select a sweep target"
                             disabled={sweepTargetOptions.length === 0}
-                            onChange={(event) => {
-                              const nextOption =
-                                sweepTargetOptionsByValue.get(event.target.value) ?? null;
+                            onChange={(nextValue) => {
+                              const nextOption = sweepTargetOptionsByValue.get(nextValue) ?? null;
                               form.setValue(
                                 `simulationParameterSweepAxes.${index}.parameter`,
-                                event.target.value,
+                                nextValue,
                                 { shouldDirty: true },
                               );
                               form.setValue(
@@ -1868,38 +1901,21 @@ export function SimulationWorkbenchShell() {
                                 { shouldDirty: false },
                               );
                             }}
-                          >
-                            {sweepTargetOptions.some((option) => option.source === "schema") ? (
-                              <optgroup label="Circuit schema">
-                                {sweepTargetOptions
-                                  .filter((option) => option.source === "schema")
-                                  .map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                              </optgroup>
-                            ) : null}
-                            {sweepTargetOptions.some((option) => option.source === "source") ? (
-                              <optgroup label="Simulation sources">
-                                {sweepTargetOptions
-                                  .filter((option) => option.source === "source")
-                                  .map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                              </optgroup>
-                            ) : null}
-                          </SetupSelect>
+                          />
                         </CompactField>
                         <CompactField label="Axis Mode">
-                          <SetupSelect
-                            {...form.register(`simulationParameterSweepAxes.${index}.mode`)}
-                          >
-                            <option value="range">Range builder</option>
-                            <option value="explicit">Explicit values</option>
-                          </SetupSelect>
+                          <AppInlineSelect
+                            ariaLabel={`Simulation parameter sweep axis ${index + 1} mode`}
+                            value={axisMode}
+                            onChange={(nextValue) => {
+                              form.setValue(
+                                `simulationParameterSweepAxes.${index}.mode`,
+                                nextValue as "range" | "explicit",
+                                { shouldDirty: true },
+                              );
+                            }}
+                            options={parameterSweepModeOptions}
+                          />
                         </CompactField>
                         {axisMode === "explicit" ? (
                           <CompactField
@@ -2071,13 +2087,16 @@ export function SimulationWorkbenchShell() {
                         </CompactField>
                         <CompactField label="Source Port" error={sourceErrors?.port?.message}>
                           {ptcPortOptions.length > 0 ? (
-                            <SetupSelect {...form.register(`simulationSources.${index}.port`)}>
-                              {ptcPortOptions.map((port) => (
-                                <option key={port.value} value={port.value}>
-                                  {port.label}
-                                </option>
-                              ))}
-                            </SetupSelect>
+                            <AppInlineSelect
+                              ariaLabel={`Simulation source ${index + 1} port`}
+                              value={form.watch(`simulationSources.${index}.port`)}
+                              onChange={(nextValue) => {
+                                form.setValue(`simulationSources.${index}.port`, nextValue, {
+                                  shouldDirty: true,
+                                });
+                              }}
+                              options={sourcePortSelectOptions}
+                            />
                           ) : (
                             <SetupTextInput
                               {...form.register(`simulationSources.${index}.port`)}
@@ -2159,10 +2178,17 @@ export function SimulationWorkbenchShell() {
                   }}
                 />
                 <CompactField label="Mode">
-                  <SetupSelect {...form.register("simulationPtcMode")} disabled={!ptcEnabled}>
-                    <option value="auto">Auto compensate</option>
-                    <option value="manual">Manual review</option>
-                  </SetupSelect>
+                  <AppInlineSelect
+                    ariaLabel="PTC mode"
+                    value={form.watch("simulationPtcMode")}
+                    onChange={(nextValue) => {
+                      form.setValue("simulationPtcMode", nextValue as "auto" | "manual", {
+                        shouldDirty: true,
+                      });
+                    }}
+                    options={ptcModeOptions}
+                    disabled={!ptcEnabled}
+                  />
                 </CompactField>
               </div>
 
