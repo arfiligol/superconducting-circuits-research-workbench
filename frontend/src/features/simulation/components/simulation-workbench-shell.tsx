@@ -7,22 +7,33 @@ import { json } from "@codemirror/lang-json";
 import { EditorView } from "@codemirror/view";
 import {
   ArrowUpRight,
-  Database,
+  ChevronDown,
+  ChevronRight,
   FileCode2,
   LoaderCircle,
   Play,
+  Plus,
   RefreshCcw,
-  Shapes,
+  Trash2,
   WandSparkles,
   Workflow,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CodeMirror from "@uiw/react-codemirror";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
+import {
+  buildSimulationSetupDraft,
+  buildSimulationSetupFormValuesFromPersistedSetup,
+  createDefaultSimulationParameterSweepAxis,
+  createDefaultSimulationSource,
+  defaultSimulationSetupFormValues,
+  parseCommaSeparatedStringValues,
+  simulationSetupFormSchema,
+} from "@/features/simulation/lib/setup-form";
 import {
   buildSimulationRequestSummary,
   formatSimulationTaskStatusLabel,
@@ -52,32 +63,8 @@ import {
 } from "@/lib/task-surface";
 import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
-const simulationRequestSchema = z.object({
+const simulationRequestSchema = simulationSetupFormSchema.extend({
   simulationNote: z.string().trim().max(180, "Keep the request note within 180 characters."),
-  simulationStartGhz: z.number().positive("Start GHz must be a positive number."),
-  simulationStopGhz: z.number().positive("Stop GHz must be a positive number."),
-  simulationPointCount: z.number().int().min(1, "Point count must be at least 1."),
-  simulationSpacing: z.enum(["linear", "log"]),
-  simulationSolverFamily: z.string().trim().min(1, "Solver family is required."),
-  simulationMaxIterations: z.number().int().min(1, "Max iterations must be at least 1."),
-  simulationConvergenceTolerance: z
-    .number()
-    .positive("Convergence tolerance must be a positive number."),
-  simulationHarmonicBalanceEnabled: z.boolean(),
-  simulationHarmonicCount: z.number().int().min(1, "Harmonic count must be at least 1."),
-  simulationOversampleFactor: z
-    .number()
-    .int()
-    .min(1, "Oversample factor must be at least 1."),
-  simulationSourceId: z.string().trim().min(1, "Source id is required."),
-  simulationSourceKind: z.string().trim().min(1, "Source kind is required."),
-  simulationSourceTarget: z.string().trim().min(1, "Source target is required."),
-  simulationSourceAmplitude: z.number(),
-  simulationSourceFrequencyGhz: z.string().trim(),
-  simulationSourcePhaseDeg: z.string().trim(),
-  simulationSweepParameter: z.string().trim(),
-  simulationSweepValues: z.string().trim(),
-  simulationSweepUnit: z.string().trim(),
   postProcessingNote: z
     .string()
     .trim()
@@ -95,26 +82,8 @@ const simulationRequestSchema = z.object({
 type SimulationRequestValues = z.infer<typeof simulationRequestSchema>;
 
 const defaultRequestValues: SimulationRequestValues = {
+  ...defaultSimulationSetupFormValues,
   simulationNote: "",
-  simulationStartGhz: 1,
-  simulationStopGhz: 8,
-  simulationPointCount: 401,
-  simulationSpacing: "linear",
-  simulationSolverFamily: "harmonic_balance",
-  simulationMaxIterations: 80,
-  simulationConvergenceTolerance: 0.000001,
-  simulationHarmonicBalanceEnabled: true,
-  simulationHarmonicCount: 3,
-  simulationOversampleFactor: 2,
-  simulationSourceId: "src_drive_1",
-  simulationSourceKind: "pump",
-  simulationSourceTarget: "port_1",
-  simulationSourceAmplitude: 1,
-  simulationSourceFrequencyGhz: "5.0",
-  simulationSourcePhaseDeg: "0",
-  simulationSweepParameter: "",
-  simulationSweepValues: "",
-  simulationSweepUnit: "",
   postProcessingNote: "",
   postOutputView: "table",
   postSelectionTraceFamily: "y_matrix",
@@ -133,6 +102,23 @@ type WorkflowStageState = Readonly<{
   tone: StageTone;
   message: string;
 }>;
+
+const simulationStageFieldNames = [
+  "simulationNote",
+  "simulationStartGhz",
+  "simulationStopGhz",
+  "simulationPointCount",
+  "simulationSpacing",
+  "simulationParameterSweepEnabled",
+  "simulationParameterSweepAxes",
+  "simulationSolverFamily",
+  "simulationMaxIterations",
+  "simulationConvergenceTolerance",
+  "simulationHarmonicBalanceEnabled",
+  "simulationHarmonicCount",
+  "simulationOversampleFactor",
+  "simulationSources",
+] as const;
 
 function buildSimulationSearchHref(
   pathname: string,
@@ -212,88 +198,6 @@ function formatCodeValue(value: string | null | undefined, fallback: string) {
   }
 }
 
-function parseOptionalNumberInput(value: string) {
-  const normalized = value.trim();
-  if (!normalized) {
-    return null;
-  }
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`"${value}" is not a valid number.`);
-  }
-  return parsed;
-}
-
-function parseCommaSeparatedStrings(value: string) {
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}
-
-function parseCommaSeparatedNumbers(value: string) {
-  const segments = parseCommaSeparatedStrings(value);
-  return segments.map((segment) => {
-    const parsed = Number(segment);
-    if (!Number.isFinite(parsed)) {
-      throw new Error(`"${segment}" is not a valid numeric sweep value.`);
-    }
-    return parsed;
-  });
-}
-
-function buildSimulationSetupDraft(values: SimulationRequestValues) {
-  const parameter = values.simulationSweepParameter.trim();
-  const sweepValues = parseCommaSeparatedNumbers(values.simulationSweepValues);
-
-  if (parameter.length > 0 && sweepValues.length === 0) {
-    throw new Error("Provide at least one sweep value when a sweep parameter is set.");
-  }
-
-  return {
-    frequency_sweep: {
-      start_ghz: values.simulationStartGhz,
-      stop_ghz: values.simulationStopGhz,
-      point_count: values.simulationPointCount,
-      spacing: values.simulationSpacing,
-    },
-    parameter_sweeps:
-      parameter.length > 0
-        ? [
-            {
-              parameter,
-              values: sweepValues,
-              unit: values.simulationSweepUnit.trim() || null,
-            },
-          ]
-        : [],
-    solver: {
-      solver_family: values.simulationSolverFamily.trim(),
-      max_iterations: values.simulationMaxIterations,
-      convergence_tolerance: values.simulationConvergenceTolerance,
-      harmonic_balance: {
-        enabled: values.simulationHarmonicBalanceEnabled,
-        harmonic_count: values.simulationHarmonicBalanceEnabled
-          ? values.simulationHarmonicCount
-          : null,
-        oversample_factor: values.simulationHarmonicBalanceEnabled
-          ? values.simulationOversampleFactor
-          : null,
-      },
-    },
-    sources: [
-      {
-        source_id: values.simulationSourceId.trim(),
-        kind: values.simulationSourceKind.trim(),
-        target: values.simulationSourceTarget.trim(),
-        amplitude: values.simulationSourceAmplitude,
-        frequency_ghz: parseOptionalNumberInput(values.simulationSourceFrequencyGhz),
-        phase_deg: parseOptionalNumberInput(values.simulationSourcePhaseDeg),
-      },
-    ],
-  };
-}
-
 function buildPostProcessingSetupDraft(values: SimulationRequestValues) {
   let config: Record<string, unknown> = {};
   try {
@@ -314,7 +218,7 @@ function buildPostProcessingSetupDraft(values: SimulationRequestValues) {
         trace_family: values.postSelectionTraceFamily.trim(),
         representation: values.postSelectionRepresentation.trim(),
         design_id: values.postSelectionDesignId.trim() || null,
-        trace_ids: parseCommaSeparatedStrings(values.postSelectionTraceIds),
+        trace_ids: parseCommaSeparatedStringValues(values.postSelectionTraceIds),
       },
     ],
     operations: [
@@ -545,6 +449,100 @@ function WorkflowStageSection({
   );
 }
 
+function SetupSection({
+  title,
+  description,
+  status,
+  actions,
+  children,
+}: Readonly<{
+  title: string;
+  description: string;
+  status?: React.ReactNode;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}>) {
+  return (
+    <section className="rounded-[1rem] border border-border bg-surface px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col gap-3 border-b border-border/80 pb-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            {status}
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+        </div>
+        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      </div>
+      <div className="mt-4 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function SetupInputField({
+  label,
+  detail,
+  children,
+  error,
+}: Readonly<{
+  label: string;
+  detail?: string;
+  children: React.ReactNode;
+  error?: string;
+}>) {
+  return (
+    <label className="block rounded-[0.95rem] border border-border bg-background px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.04)]">
+      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </span>
+      {detail ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{detail}</span> : null}
+      <div className="mt-3">{children}</div>
+      {error ? <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{error}</p> : null}
+    </label>
+  );
+}
+
+function SetupTextInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
+  return (
+    <input
+      {...props}
+      className={cx(
+        "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15",
+        props.className,
+      )}
+    />
+  );
+}
+
+function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
+  return (
+    <input
+      {...props}
+      type="number"
+      className={cx(
+        "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15 disabled:opacity-60",
+        props.className,
+      )}
+    />
+  );
+}
+
+function SetupSelect(props: Readonly<React.SelectHTMLAttributes<HTMLSelectElement>>) {
+  return (
+    <select
+      {...props}
+      className={cx(
+        "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/45 focus:ring-2 focus:ring-primary/15 disabled:opacity-60",
+        props.className,
+      )}
+    />
+  );
+}
+
+function LocalDraftBadge() {
+  return <SurfaceTag tone="warning">Local draft only</SurfaceTag>;
+}
+
 function StageTaskActions({
   task,
   resolvedTaskId,
@@ -603,13 +601,27 @@ export function SimulationWorkbenchShell() {
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
+  const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
+  const [simulationSetupBuildError, setSimulationSetupBuildError] = useState<string | null>(null);
 
   const form = useForm<SimulationRequestValues>({
     resolver: zodResolver(simulationRequestSchema),
     defaultValues: defaultRequestValues,
   });
+  const parameterSweepFieldArray = useFieldArray({
+    control: form.control,
+    name: "simulationParameterSweepAxes",
+  });
+  const sourceFieldArray = useFieldArray({
+    control: form.control,
+    name: "simulationSources",
+  });
   const [hydratedSimulationTaskId, setHydratedSimulationTaskId] = useState<number | null>(null);
   const [hydratedPostTaskId, setHydratedPostTaskId] = useState<number | null>(null);
+  const parameterSweepEnabled = form.watch("simulationParameterSweepEnabled");
+  const harmonicBalanceEnabled = form.watch("simulationHarmonicBalanceEnabled");
+  const ptcEnabled = form.watch("simulationPtcEnabled");
+  const ptcMode = form.watch("simulationPtcMode");
 
   const requestedDefinitionId = searchParams.get("definitionId");
   const requestedTaskId = parseTaskIdParam(searchParams.get("taskId"));
@@ -775,66 +787,14 @@ export function SimulationWorkbenchShell() {
       return;
     }
 
-    const setup = latestSimulationTaskDetail.simulationSetup;
-    const firstSweep = setup.parameterSweeps[0];
-    const firstSource = setup.sources[0];
-
-    form.setValue("simulationStartGhz", setup.frequencySweep.startGhz, { shouldDirty: false });
-    form.setValue("simulationStopGhz", setup.frequencySweep.stopGhz, { shouldDirty: false });
-    form.setValue("simulationPointCount", setup.frequencySweep.pointCount, { shouldDirty: false });
-    form.setValue("simulationSpacing", setup.frequencySweep.spacing, { shouldDirty: false });
-    form.setValue("simulationSolverFamily", setup.solver.solverFamily, { shouldDirty: false });
-    form.setValue("simulationMaxIterations", setup.solver.maxIterations, { shouldDirty: false });
-    form.setValue(
-      "simulationConvergenceTolerance",
-      setup.solver.convergenceTolerance,
-      { shouldDirty: false },
+    form.reset(
+      buildSimulationSetupFormValuesFromPersistedSetup(
+        form.getValues(),
+        latestSimulationTaskDetail.simulationSetup,
+      ),
+      { keepDefaultValues: true },
     );
-    form.setValue(
-      "simulationHarmonicBalanceEnabled",
-      setup.solver.harmonicBalance?.enabled ?? false,
-      { shouldDirty: false },
-    );
-    form.setValue(
-      "simulationHarmonicCount",
-      setup.solver.harmonicBalance?.harmonicCount ?? defaultRequestValues.simulationHarmonicCount,
-      { shouldDirty: false },
-    );
-    form.setValue(
-      "simulationOversampleFactor",
-      setup.solver.harmonicBalance?.oversampleFactor ??
-        defaultRequestValues.simulationOversampleFactor,
-      { shouldDirty: false },
-    );
-    form.setValue("simulationSourceId", firstSource?.sourceId ?? "", { shouldDirty: false });
-    form.setValue("simulationSourceKind", firstSource?.kind ?? "", { shouldDirty: false });
-    form.setValue("simulationSourceTarget", firstSource?.target ?? "", { shouldDirty: false });
-    form.setValue(
-      "simulationSourceAmplitude",
-      firstSource?.amplitude ?? defaultRequestValues.simulationSourceAmplitude,
-      { shouldDirty: false },
-    );
-    form.setValue(
-      "simulationSourceFrequencyGhz",
-      firstSource?.frequencyGhz !== null && firstSource?.frequencyGhz !== undefined
-        ? String(firstSource.frequencyGhz)
-        : "",
-      { shouldDirty: false },
-    );
-    form.setValue(
-      "simulationSourcePhaseDeg",
-      firstSource?.phaseDeg !== null && firstSource?.phaseDeg !== undefined
-        ? String(firstSource.phaseDeg)
-        : "",
-      { shouldDirty: false },
-    );
-    form.setValue("simulationSweepParameter", firstSweep?.parameter ?? "", {
-      shouldDirty: false,
-    });
-    form.setValue("simulationSweepValues", firstSweep ? firstSweep.values.join(", ") : "", {
-      shouldDirty: false,
-    });
-    form.setValue("simulationSweepUnit", firstSweep?.unit ?? "", { shouldDirty: false });
+    setSimulationSetupBuildError(null);
     setHydratedSimulationTaskId(latestSimulationTaskDetail.taskId);
   }, [form, hydratedSimulationTaskId, latestSimulationTaskDetail]);
 
@@ -908,12 +868,15 @@ export function SimulationWorkbenchShell() {
   }
 
   async function handleSubmit(kind: "simulation" | "post_processing") {
+    const fieldNames =
+      kind === "simulation" ? simulationStageFieldNames : ["postProcessingNote"] as const;
     const fieldName = kind === "simulation" ? "simulationNote" : "postProcessingNote";
-    const isValid = await form.trigger(fieldName);
+    const isValid = await form.trigger(fieldNames);
     if (!isValid) {
       return;
     }
 
+    setSimulationSetupBuildError(null);
     const values = form.getValues();
     let simulationSetup = null;
     let postProcessingSetup = null;
@@ -925,7 +888,7 @@ export function SimulationWorkbenchShell() {
       const message =
         error instanceof Error ? error.message : "Unable to build and submit workflow setup.";
       if (kind === "simulation") {
-        form.setError("simulationSweepValues", { type: "manual", message });
+        setSimulationSetupBuildError(message);
       } else {
         form.setError("postOperationConfigJson", { type: "manual", message });
       }
@@ -1166,7 +1129,7 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={2}
           title="Simulation Setup"
-          description="Author frequency sweep, solver, source, and optional parameter sweep setup, then submit a real simulation setup payload."
+          description="Author the runnable simulation setup in six focused sections. Persisted sections submit with the task; unsupported sections stay as local draft notes."
           status={simulationSetupState}
         >
           <StageNotice
@@ -1175,241 +1138,583 @@ export function SimulationWorkbenchShell() {
             message={simulationSetupState.message}
           />
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <SummaryCard
-              label="Active Dataset"
-              value={activeDatasetState.activeDataset?.name ?? "Dataset required"}
-              detail={
-                activeDatasetState.activeDataset?.datasetId ??
-                "Attach a dataset from the shell before running simulation."
-              }
-            />
-            <SummaryCard
-              label="Definition Binding"
-              value={selectedDefinitionSummary?.name ?? "Definition required"}
-              detail={
-                resolvedDefinitionId !== null
-                  ? `Definition #${resolvedDefinitionId}`
-                  : "Simulation submission requires a visible persisted definition."
-              }
-            />
-            <SummaryCard
-              label="Submit Authority"
-              value={session?.canSubmitTasks ? "Available" : "Blocked"}
-              detail="Simulation setup submit is backend-authoritative and persisted on the task."
-            />
+          <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <SurfaceTag tone={activeDatasetState.activeDataset ? "success" : "warning"}>
+                Dataset · {activeDatasetState.activeDataset?.name ?? "Attach in Global Context"}
+              </SurfaceTag>
+              <SurfaceTag tone={resolvedDefinitionId !== null ? "success" : "warning"}>
+                Definition · {selectedDefinitionSummary?.name ?? "Selection required"}
+              </SurfaceTag>
+              <SurfaceTag tone={session?.canSubmitTasks ? "primary" : "warning"}>
+                {session?.canSubmitTasks ? "Persisted task submit available" : "Persisted task submit blocked"}
+              </SurfaceTag>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Signal sweep, parameter sweeps, HB solving, and sources submit as persisted
+              simulation setup. PTC and Advanced hbsolve Options stay browser-local until the
+              backend contract exposes those fields.
+            </p>
+            {latestSimulationTaskDetail?.simulationSetup ? (
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                Persisted simulation setup was rehydrated from task #
+                {latestSimulationTaskDetail.taskId}. Local-only draft sections were left unchanged.
+              </p>
+            ) : null}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Start (GHz)
-              </span>
-              <input
-                {...form.register("simulationStartGhz", { valueAsNumber: true })}
-                type="number"
-                step="any"
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Stop (GHz)
-              </span>
-              <input
-                {...form.register("simulationStopGhz", { valueAsNumber: true })}
-                type="number"
-                step="any"
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Points
-              </span>
-              <input
-                {...form.register("simulationPointCount", { valueAsNumber: true })}
-                type="number"
-                min={1}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Spacing
-              </span>
-              <select
-                {...form.register("simulationSpacing")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
+          <SetupSection
+            title="Signal Frequency Sweep Range"
+            description="Set the main frequency sweep window that defines the simulation sampling range."
+            status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
+          >
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <SetupInputField
+                label="Start Freq (GHz)"
+                error={form.formState.errors.simulationStartGhz?.message}
               >
-                <option value="linear">linear</option>
-                <option value="log">log</option>
-              </select>
-            </label>
-          </div>
+                <SetupNumberInput
+                  {...form.register("simulationStartGhz", { valueAsNumber: true })}
+                  step="any"
+                />
+              </SetupInputField>
+              <SetupInputField
+                label="Stop Freq (GHz)"
+                error={form.formState.errors.simulationStopGhz?.message}
+              >
+                <SetupNumberInput
+                  {...form.register("simulationStopGhz", { valueAsNumber: true })}
+                  step="any"
+                />
+              </SetupInputField>
+              <SetupInputField
+                label="Points"
+                detail="Number of sample points across the sweep."
+                error={form.formState.errors.simulationPointCount?.message}
+              >
+                <SetupNumberInput
+                  {...form.register("simulationPointCount", { valueAsNumber: true })}
+                  min={1}
+                />
+              </SetupInputField>
+              <SetupInputField label="Spacing">
+                <SetupSelect {...form.register("simulationSpacing")}>
+                  <option value="linear">Linear</option>
+                  <option value="log">Log</option>
+                </SetupSelect>
+              </SetupInputField>
+            </div>
+          </SetupSection>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Solver Family
-              </span>
-              <input
-                {...form.register("simulationSolverFamily")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="harmonic_balance"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Max Iterations
-              </span>
-              <input
-                {...form.register("simulationMaxIterations", { valueAsNumber: true })}
-                type="number"
-                min={1}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Convergence Tolerance
-              </span>
-              <input
-                {...form.register("simulationConvergenceTolerance", { valueAsNumber: true })}
-                type="number"
-                step="any"
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-              />
-            </label>
-            <label className="flex items-center gap-3 rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <input type="checkbox" {...form.register("simulationHarmonicBalanceEnabled")} />
-              <span className="text-sm text-foreground">Enable Harmonic Balance</span>
-            </label>
-          </div>
+          <SetupSection
+            title="Parameter Sweep Setup"
+            description="Add one or more sweep axes. Range mode expands start, stop, and points into the persisted values array."
+            status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
+            actions={
+              parameterSweepEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    parameterSweepFieldArray.append(createDefaultSimulationParameterSweepAxis());
+                    clearTaskMutationStatus();
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Axis
+                </button>
+              ) : null
+            }
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Sweep authoring</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Turn this on when the simulation needs one or more parameter axes beyond the main
+                  frequency sweep.
+                </p>
+              </div>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground">
+                <input
+                  type="checkbox"
+                  checked={parameterSweepEnabled}
+                  onChange={(event) => {
+                    form.setValue("simulationParameterSweepEnabled", event.target.checked, {
+                      shouldDirty: true,
+                    });
+                    if (event.target.checked && parameterSweepFieldArray.fields.length === 0) {
+                      parameterSweepFieldArray.append(createDefaultSimulationParameterSweepAxis());
+                    }
+                  }}
+                />
+                Enable parameter sweeps
+              </label>
+            </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Harmonic Count
-              </span>
-              <input
-                {...form.register("simulationHarmonicCount", { valueAsNumber: true })}
-                type="number"
-                min={1}
-                disabled={!form.watch("simulationHarmonicBalanceEnabled")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none disabled:opacity-60"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Oversample Factor
-              </span>
-              <input
-                {...form.register("simulationOversampleFactor", { valueAsNumber: true })}
-                type="number"
-                min={1}
-                disabled={!form.watch("simulationHarmonicBalanceEnabled")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none disabled:opacity-60"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Source Id
-              </span>
-              <input
-                {...form.register("simulationSourceId")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="src_drive_1"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Source Kind
-              </span>
-              <input
-                {...form.register("simulationSourceKind")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="pump"
-              />
-            </label>
-          </div>
+            {parameterSweepEnabled ? (
+              <div className="space-y-3">
+                {parameterSweepFieldArray.fields.map((field, index) => {
+                  const axisErrors = form.formState.errors.simulationParameterSweepAxes?.[index];
+                  const axisMode = form.watch(`simulationParameterSweepAxes.${index}.mode`);
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Source Target
-              </span>
-              <input
-                {...form.register("simulationSourceTarget")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="port_1"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Source Amplitude
-              </span>
-              <input
-                {...form.register("simulationSourceAmplitude", { valueAsNumber: true })}
-                type="number"
-                step="any"
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Source Frequency (GHz)
-              </span>
-              <input
-                {...form.register("simulationSourceFrequencyGhz")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="optional"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Source Phase (deg)
-              </span>
-              <input
-                {...form.register("simulationSourcePhaseDeg")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="optional"
-              />
-            </label>
-          </div>
+                  return (
+                    <div
+                      key={field.id}
+                      className="rounded-[0.95rem] border border-border bg-background px-4 py-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Axis {index + 1}</p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            Persisted as a parameter sweep values array on the simulation task.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            parameterSweepFieldArray.remove(index);
+                          }}
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition hover:border-rose-300 hover:bg-rose-50 dark:hover:border-rose-400/40 dark:hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remove Axis
+                        </button>
+                      </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Sweep Parameter (optional)
-              </span>
-              <input
-                {...form.register("simulationSweepParameter")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="L_q"
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <SetupInputField
+                          label="Target / Parameter"
+                          detail="Parameter path or target name for this sweep axis."
+                          error={axisErrors?.parameter?.message}
+                        >
+                          <SetupTextInput
+                            {...form.register(`simulationParameterSweepAxes.${index}.parameter`)}
+                            placeholder="L_q"
+                          />
+                        </SetupInputField>
+                        <SetupInputField label="Axis Mode">
+                          <SetupSelect
+                            {...form.register(`simulationParameterSweepAxes.${index}.mode`)}
+                          >
+                            <option value="range">Range builder</option>
+                            <option value="explicit">Explicit values</option>
+                          </SetupSelect>
+                        </SetupInputField>
+                        <SetupInputField
+                          label="Unit"
+                          detail="Optional engineering unit for this sweep axis."
+                          error={axisErrors?.unit?.message}
+                        >
+                          <SetupTextInput
+                            {...form.register(`simulationParameterSweepAxes.${index}.unit`)}
+                            placeholder="nH"
+                          />
+                        </SetupInputField>
+                        <SetupInputField
+                          label="Start"
+                          detail="Range builder start value."
+                          error={axisErrors?.start?.message}
+                        >
+                          <SetupNumberInput
+                            {...form.register(`simulationParameterSweepAxes.${index}.start`, {
+                              valueAsNumber: true,
+                            })}
+                            step="any"
+                          />
+                        </SetupInputField>
+                        <SetupInputField
+                          label="Stop"
+                          detail="Range builder stop value."
+                          error={axisErrors?.stop?.message}
+                        >
+                          <SetupNumberInput
+                            {...form.register(`simulationParameterSweepAxes.${index}.stop`, {
+                              valueAsNumber: true,
+                            })}
+                            step="any"
+                          />
+                        </SetupInputField>
+                        <SetupInputField
+                          label="Points"
+                          detail="Range builder sample count."
+                          error={axisErrors?.pointCount?.message}
+                        >
+                          <SetupNumberInput
+                            {...form.register(`simulationParameterSweepAxes.${index}.pointCount`, {
+                              valueAsNumber: true,
+                            })}
+                            min={1}
+                          />
+                        </SetupInputField>
+                      </div>
+
+                      <SetupInputField
+                        label="Explicit Values"
+                        detail={
+                          axisMode === "explicit"
+                            ? "Comma-separated values submitted directly to the persisted values array."
+                            : "Optional override. Range builder stays authoritative while Axis Mode is set to Range builder."
+                        }
+                        error={axisErrors?.explicitValues?.message}
+                      >
+                        <SetupTextInput
+                          {...form.register(`simulationParameterSweepAxes.${index}.explicitValues`)}
+                          placeholder="1.0, 1.1, 1.2"
+                        />
+                      </SetupInputField>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                Parameter sweeps are disabled for this run. Turn them on to add one or more axes.
+              </div>
+            )}
+          </SetupSection>
+
+          <SetupSection
+            title="HB Solving"
+            description="Keep the solver family, convergence settings, and harmonic balance controls together as one solver authoring surface."
+            status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
+          >
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <SetupInputField
+                label="Solver Family"
+                error={form.formState.errors.simulationSolverFamily?.message}
+              >
+                <SetupTextInput
+                  {...form.register("simulationSolverFamily")}
+                  placeholder="harmonic_balance"
+                />
+              </SetupInputField>
+              <SetupInputField
+                label="Max Iterations"
+                error={form.formState.errors.simulationMaxIterations?.message}
+              >
+                <SetupNumberInput
+                  {...form.register("simulationMaxIterations", { valueAsNumber: true })}
+                  min={1}
+                />
+              </SetupInputField>
+              <SetupInputField
+                label="Convergence Tolerance"
+                error={form.formState.errors.simulationConvergenceTolerance?.message}
+              >
+                <SetupNumberInput
+                  {...form.register("simulationConvergenceTolerance", {
+                    valueAsNumber: true,
+                  })}
+                  step="any"
+                />
+              </SetupInputField>
+            </div>
+
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Harmonic balance</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Enable harmonic balance specific controls for this simulation request.
+                  </p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground">
+                  <input type="checkbox" {...form.register("simulationHarmonicBalanceEnabled")} />
+                  Enable harmonic balance
+                </label>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <SetupInputField
+                  label="Harmonic Count"
+                  error={form.formState.errors.simulationHarmonicCount?.message}
+                >
+                  <SetupNumberInput
+                    {...form.register("simulationHarmonicCount", { valueAsNumber: true })}
+                    min={1}
+                    disabled={!harmonicBalanceEnabled}
+                  />
+                </SetupInputField>
+                <SetupInputField
+                  label="Oversample Factor"
+                  error={form.formState.errors.simulationOversampleFactor?.message}
+                >
+                  <SetupNumberInput
+                    {...form.register("simulationOversampleFactor", { valueAsNumber: true })}
+                    min={1}
+                    disabled={!harmonicBalanceEnabled}
+                  />
+                </SetupInputField>
+              </div>
+            </div>
+          </SetupSection>
+
+          <SetupSection
+            title="Sources"
+            description="Build one or more simulation sources. Multiple source cards submit through the persisted sources[] contract."
+            status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
+            actions={
+              <button
+                type="button"
+                onClick={() => {
+                  sourceFieldArray.append(createDefaultSimulationSource());
+                  clearTaskMutationStatus();
+                }}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Source
+              </button>
+            }
+          >
+            {sourceFieldArray.fields.length > 0 ? (
+              <div className="space-y-3">
+                {sourceFieldArray.fields.map((field, index) => {
+                  const sourceErrors = form.formState.errors.simulationSources?.[index];
+                  return (
+                    <div
+                      key={field.id}
+                      className="rounded-[0.95rem] border border-border bg-background px-4 py-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Source {index + 1}</p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            Drive source persisted with the simulation task.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sourceFieldArray.remove(index);
+                          }}
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition hover:border-rose-300 hover:bg-rose-50 dark:hover:border-rose-400/40 dark:hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remove Source
+                        </button>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <SetupInputField
+                          label="Source Id"
+                          error={sourceErrors?.sourceId?.message}
+                        >
+                          <SetupTextInput
+                            {...form.register(`simulationSources.${index}.sourceId`)}
+                            placeholder="src_drive_1"
+                          />
+                        </SetupInputField>
+                        <SetupInputField label="Kind" error={sourceErrors?.kind?.message}>
+                          <SetupTextInput
+                            {...form.register(`simulationSources.${index}.kind`)}
+                            placeholder="pump"
+                          />
+                        </SetupInputField>
+                        <SetupInputField label="Target" error={sourceErrors?.target?.message}>
+                          <SetupTextInput
+                            {...form.register(`simulationSources.${index}.target`)}
+                            placeholder="port_1"
+                          />
+                        </SetupInputField>
+                        <SetupInputField
+                          label="Amplitude"
+                          error={sourceErrors?.amplitude?.message}
+                        >
+                          <SetupNumberInput
+                            {...form.register(`simulationSources.${index}.amplitude`, {
+                              valueAsNumber: true,
+                            })}
+                            step="any"
+                          />
+                        </SetupInputField>
+                        <SetupInputField
+                          label="Frequency (GHz)"
+                          detail="Optional per-source frequency override."
+                          error={sourceErrors?.frequencyGhz?.message}
+                        >
+                          <SetupTextInput
+                            {...form.register(`simulationSources.${index}.frequencyGhz`)}
+                            placeholder="optional"
+                          />
+                        </SetupInputField>
+                        <SetupInputField
+                          label="Phase (deg)"
+                          detail="Optional per-source phase override."
+                          error={sourceErrors?.phaseDeg?.message}
+                        >
+                          <SetupTextInput
+                            {...form.register(`simulationSources.${index}.phaseDeg`)}
+                            placeholder="optional"
+                          />
+                        </SetupInputField>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                No sources are configured for this run yet. Add a source to submit a persisted
+                source spec.
+              </div>
+            )}
+          </SetupSection>
+
+          <SetupSection
+            title="PTC"
+            description="Capture port tuning compensation intent without pretending the backend already persists it."
+            status={<LocalDraftBadge />}
+            actions={
+              <button
+                type="button"
+                onClick={() => {
+                  form.setValue("simulationPtcEnabled", false, { shouldDirty: true });
+                  form.setValue("simulationPtcMode", defaultRequestValues.simulationPtcMode, {
+                    shouldDirty: true,
+                  });
+                  form.setValue("simulationPtcCompensatePorts", "", { shouldDirty: true });
+                  form.setValue("simulationPtcManualNotes", "", { shouldDirty: true });
+                }}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+              >
+                Reset local draft
+              </button>
+            }
+          >
+            <div className="rounded-[0.95rem] border border-dashed border-amber-400/50 bg-amber-50/70 px-4 py-4 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+              These fields stay local to the browser for now. They are visible during authoring but
+              are not included in persisted simulation task submission or task rehydration.
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
+                <label className="inline-flex cursor-pointer items-center gap-3 text-sm text-foreground">
+                  <input type="checkbox" {...form.register("simulationPtcEnabled")} />
+                  Enable PTC draft
+                </label>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Use this to track a local tuning draft without sending it to the backend.
+                </p>
+              </div>
+              <SetupInputField label="Mode">
+                <SetupSelect {...form.register("simulationPtcMode")} disabled={!ptcEnabled}>
+                  <option value="auto">Auto compensate</option>
+                  <option value="manual">Manual review</option>
+                </SetupSelect>
+              </SetupInputField>
+              <SetupInputField
+                label="Compensate Ports"
+                detail="Comma-separated port ids or targets to include in this local PTC draft."
+              >
+                <SetupTextInput
+                  {...form.register("simulationPtcCompensatePorts")}
+                  disabled={!ptcEnabled}
+                  placeholder="port_1, port_2"
+                />
+              </SetupInputField>
+            </div>
+
+            <SetupInputField
+              label="Manual Affordance"
+              detail={
+                ptcMode === "manual"
+                  ? "Record manual offsets, notes, or next-step instructions for this local draft."
+                  : "Keep a short local note even when using auto compensate mode."
+              }
+            >
+              <textarea
+                {...form.register("simulationPtcManualNotes")}
+                rows={4}
+                disabled={!ptcEnabled}
+                placeholder={
+                  ptcMode === "manual"
+                    ? "Describe manual port compensation steps."
+                    : "Optional local note for the PTC draft."
+                }
+                className="w-full resize-none rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
               />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Sweep Values (comma separated)
-              </span>
-              <input
-                {...form.register("simulationSweepValues")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="1.0, 1.1, 1.2"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Sweep Unit
-              </span>
-              <input
-                {...form.register("simulationSweepUnit")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="nH"
-              />
-            </label>
-          </div>
+            </SetupInputField>
+          </SetupSection>
+
+          <SetupSection
+            title="Advanced hbsolve Options"
+            description="Keep advanced hbsolve draft settings out of the main flow until they are needed."
+            status={<LocalDraftBadge />}
+            actions={
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAdvancedHbsolveExpanded((current) => !current);
+                }}
+                aria-expanded={isAdvancedHbsolveExpanded}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+              >
+                {isAdvancedHbsolveExpanded ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+                {isAdvancedHbsolveExpanded ? "Hide options" : "Show options"}
+              </button>
+            }
+          >
+            <div className="rounded-[0.95rem] border border-dashed border-amber-400/50 bg-amber-50/70 px-4 py-4 text-sm text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+              Advanced hbsolve options are local draft only. They can guide authoring now, but the
+              backend does not persist or rehydrate them yet.
+            </div>
+
+            {isAdvancedHbsolveExpanded ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <SetupInputField label="Damping Strategy">
+                  <SetupTextInput
+                    {...form.register("simulationAdvancedDampingStrategy")}
+                    placeholder="adaptive"
+                  />
+                </SetupInputField>
+                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
+                  <label className="inline-flex cursor-pointer items-center gap-3 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      {...form.register("simulationAdvancedLineSearchEnabled")}
+                    />
+                    Enable line search
+                  </label>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    Local-only toggle for advanced hbsolve experimentation notes.
+                  </p>
+                </div>
+                <SetupInputField label="Residual Clamp">
+                  <SetupTextInput
+                    {...form.register("simulationAdvancedResidualClamp")}
+                    placeholder="1e-6"
+                  />
+                </SetupInputField>
+                <SetupInputField label="Newton Relaxation">
+                  <SetupTextInput
+                    {...form.register("simulationAdvancedNewtonRelaxation")}
+                    placeholder="0.85"
+                  />
+                </SetupInputField>
+                <SetupInputField
+                  label="Advanced Notes"
+                  detail="Keep any extra hbsolve options or reminders in local draft form."
+                >
+                  <textarea
+                    {...form.register("simulationAdvancedNotes")}
+                    rows={4}
+                    placeholder="Optional advanced hbsolve notes."
+                    className="w-full resize-none rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+                  />
+                </SetupInputField>
+              </div>
+            ) : (
+              <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                Advanced hbsolve options stay collapsed until you need them. Expanding this section
+                will not change persisted task payloads.
+              </div>
+            )}
+          </SetupSection>
 
           <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
             <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
@@ -1428,9 +1733,9 @@ export function SimulationWorkbenchShell() {
               {form.formState.errors.simulationNote.message}
             </p>
           ) : null}
-          {form.formState.errors.simulationSweepValues ? (
+          {simulationSetupBuildError ? (
             <p className="text-sm text-rose-700 dark:text-rose-300">
-              {form.formState.errors.simulationSweepValues.message}
+              {simulationSetupBuildError}
             </p>
           ) : null}
 
@@ -1440,11 +1745,10 @@ export function SimulationWorkbenchShell() {
                 Submission Preview
               </p>
               <p className="mt-2 text-foreground">{simulationRequestPreview}</p>
-              {latestSimulationTaskDetail?.simulationSetup ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Latest simulation setup was rehydrated from task #{latestSimulationTaskDetail.taskId}.
-                </p>
-              ) : null}
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                The first four sections submit with the simulation task. PTC and Advanced hbsolve
+                Options remain local-only until backend persistence support lands.
+              </p>
             </div>
             <button
               type="button"

@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildSimulationSetupDraft,
+  buildSimulationSetupFormValuesFromPersistedSetup,
+  defaultSimulationSetupFormValues,
+} from "../src/features/simulation/lib/setup-form";
+import {
   mapTaskDetailResponse,
   taskDetailKey,
   unwrapTaskMutation,
@@ -634,19 +639,183 @@ describe("simulation task workflow helpers", () => {
 });
 
 describe("simulation workflow source contract", () => {
+  it("maps persisted simulation setup while leaving local-only drafts outside backend authority", () => {
+    const draft = buildSimulationSetupDraft({
+      ...defaultSimulationSetupFormValues,
+      simulationStartGhz: 4,
+      simulationStopGhz: 9,
+      simulationPointCount: 801,
+      simulationParameterSweepEnabled: true,
+      simulationParameterSweepAxes: [
+        {
+          parameter: "L_q",
+          mode: "range",
+          start: 1,
+          stop: 1.2,
+          pointCount: 3,
+          explicitValues: "",
+          unit: "nH",
+        },
+        {
+          parameter: "C_q",
+          mode: "explicit",
+          start: 0,
+          stop: 0,
+          pointCount: 1,
+          explicitValues: "12, 14, 16",
+          unit: "fF",
+        },
+      ],
+      simulationSources: [
+        {
+          sourceId: "src_drive_1",
+          kind: "pump",
+          target: "port_1",
+          amplitude: 1,
+          frequencyGhz: "5.0",
+          phaseDeg: "0",
+        },
+        {
+          sourceId: "src_probe_2",
+          kind: "probe",
+          target: "port_2",
+          amplitude: 0.15,
+          frequencyGhz: "",
+          phaseDeg: "90",
+        },
+      ],
+    });
+
+    expect(draft.parameter_sweeps).toEqual([
+      {
+        parameter: "L_q",
+        values: [1, 1.1, 1.2],
+        unit: "nH",
+      },
+      {
+        parameter: "C_q",
+        values: [12, 14, 16],
+        unit: "fF",
+      },
+    ]);
+    expect(draft.sources).toEqual([
+      {
+        source_id: "src_drive_1",
+        kind: "pump",
+        target: "port_1",
+        amplitude: 1,
+        frequency_ghz: 5,
+        phase_deg: 0,
+      },
+      {
+        source_id: "src_probe_2",
+        kind: "probe",
+        target: "port_2",
+        amplitude: 0.15,
+        frequency_ghz: null,
+        phase_deg: 90,
+      },
+    ]);
+
+    const rehydrated = buildSimulationSetupFormValuesFromPersistedSetup(
+      {
+        ...defaultSimulationSetupFormValues,
+        simulationPtcEnabled: true,
+        simulationPtcMode: "manual",
+        simulationPtcCompensatePorts: "port_1, port_2",
+        simulationPtcManualNotes: "manual offsets",
+        simulationAdvancedDampingStrategy: "adaptive",
+        simulationAdvancedLineSearchEnabled: true,
+        simulationAdvancedResidualClamp: "1e-6",
+        simulationAdvancedNewtonRelaxation: "0.85",
+        simulationAdvancedNotes: "local-only advanced draft",
+      },
+      {
+        frequencySweep: {
+          startGhz: 5,
+          stopGhz: 8,
+          pointCount: 501,
+          spacing: "log",
+        },
+        parameterSweeps: [
+          {
+            parameter: "L_q",
+            values: [1, 1.1, 1.2],
+            unit: "nH",
+          },
+        ],
+        solver: {
+          solverFamily: "harmonic_balance",
+          maxIterations: 120,
+          convergenceTolerance: 1e-7,
+          harmonicBalance: {
+            enabled: true,
+            harmonicCount: 5,
+            oversampleFactor: 3,
+          },
+        },
+        sources: [
+          {
+            sourceId: "src_drive_1",
+            kind: "pump",
+            target: "port_1",
+            amplitude: 1,
+            frequencyGhz: 5,
+            phaseDeg: 0,
+          },
+          {
+            sourceId: "src_probe_2",
+            kind: "probe",
+            target: "port_2",
+            amplitude: 0.15,
+            frequencyGhz: null,
+            phaseDeg: 90,
+          },
+        ],
+      },
+    );
+
+    expect(rehydrated.simulationParameterSweepEnabled).toBe(true);
+    expect(rehydrated.simulationParameterSweepAxes).toEqual([
+      {
+        parameter: "L_q",
+        mode: "explicit",
+        start: 1,
+        stop: 1.2,
+        pointCount: 3,
+        explicitValues: "1, 1.1, 1.2",
+        unit: "nH",
+      },
+    ]);
+    expect(rehydrated.simulationSources).toHaveLength(2);
+    expect(rehydrated.simulationPtcEnabled).toBe(true);
+    expect(rehydrated.simulationPtcManualNotes).toBe("manual offsets");
+    expect(rehydrated.simulationAdvancedNotes).toBe("local-only advanced draft");
+  });
+
   it("keeps the page organized around the five-stage workflow instead of task dashboards", () => {
     expect(simulationWorkbenchSource).toContain("Definition / Netlist Context");
     expect(simulationWorkbenchSource).toContain("Simulation Setup");
     expect(simulationWorkbenchSource).toContain("Simulation Result");
     expect(simulationWorkbenchSource).toContain("Post Processing Setup");
     expect(simulationWorkbenchSource).toContain("Post Processing Result");
+    expect(simulationWorkbenchSource).toContain("Signal Frequency Sweep Range");
+    expect(simulationWorkbenchSource).toContain("Parameter Sweep Setup");
+    expect(simulationWorkbenchSource).toContain("HB Solving");
+    expect(simulationWorkbenchSource).toContain("Sources");
+    expect(simulationWorkbenchSource).toContain("PTC");
+    expect(simulationWorkbenchSource).toContain("Advanced hbsolve Options");
+    expect(simulationWorkbenchSource).toContain("Add Axis");
+    expect(simulationWorkbenchSource).toContain("Add Source");
+    expect(simulationWorkbenchSource).toContain("Local draft only");
     expect(simulationWorkbenchSource).toContain("Run Simulation");
     expect(simulationWorkbenchSource).toContain("Run Post Processing");
     expect(simulationWorkbenchSource).toContain("Open in Global Context");
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
+    expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
     expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
     expect(simulationWorkbenchSource).toContain("Operation Config JSON");
-    expect(simulationWorkbenchSource).toContain("Latest simulation setup was rehydrated");
+    expect(simulationWorkbenchSource).toContain("Persisted simulation setup was rehydrated");
     expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
     expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
     expect(simulationWorkbenchSource).not.toContain('title="Workflow boundary"');
@@ -661,6 +830,8 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Dispatch / Execution Status");
     expect(simulationWorkbenchSource).not.toContain("Task Event History");
     expect(simulationWorkbenchSource).not.toContain("Persisted Result Surface");
+    expect(simulationWorkbenchSource).not.toContain("Definition Binding");
+    expect(simulationWorkbenchSource).not.toContain("Sweep Parameter (optional)");
   });
 
   it("binds stage authority to the current definition and dataset context", () => {
