@@ -100,8 +100,11 @@ describe("circuit schemdraw routing helpers", () => {
     expect(parseSchemdrawDefinitionIdParam(null)).toBeNull();
   });
 
-  it("falls back to the first definition when the selection is missing or invalid", () => {
-    expect(resolveSchemdrawDefinitionId(null, definitions)).toBe(18);
+  it("keeps the page unlinked when no linked schema is selected", () => {
+    expect(resolveSchemdrawDefinitionId(null, definitions)).toBeNull();
+  });
+
+  it("falls back to the first definition when the selection is invalid", () => {
     expect(resolveSchemdrawDefinitionId("999", definitions)).toBe(18);
     expect(resolveSchemdrawDefinitionId("new", definitions)).toBe(18);
   });
@@ -110,7 +113,7 @@ describe("circuit schemdraw routing helpers", () => {
     expect(resolveSchemdrawDefinitionId("12", definitions)).toBe(12);
   });
 
-  it("supports an explicitly cleared linked schema selection", () => {
+  it("supports an explicitly cleared linked schema selection even before definitions load", () => {
     expect(resolveSchemdrawDefinitionId(null, undefined)).toBeNull();
   });
 });

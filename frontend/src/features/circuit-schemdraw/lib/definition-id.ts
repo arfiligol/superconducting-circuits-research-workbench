@@ -10,6 +10,10 @@ export function resolveSchemdrawDefinitionId(
   currentValue: string | null,
   definitions: readonly CircuitDefinitionSummary[] | undefined,
 ): number | null {
+  if (currentValue === null) {
+    return null;
+  }
+
   if (!definitions || definitions.length === 0) {
     return parseSchemdrawDefinitionIdParam(currentValue);
   }
