@@ -46,7 +46,23 @@ def _login(test_client: TestClient = client) -> dict[str, object]:
     return payload["data"]
 
 
-def _simulation_setup_payload() -> dict[str, object]:
+def _simulation_ptc_payload(
+    *,
+    enabled: bool = True,
+    mode: str = "auto",
+    compensate_ports: tuple[str, ...] = ("port_1", "port_2"),
+) -> dict[str, object]:
+    return {
+        "enabled": enabled,
+        "mode": mode,
+        "compensate_ports": list(compensate_ports),
+    }
+
+
+def _simulation_setup_payload(
+    *,
+    ptc: dict[str, object] | None = None,
+) -> dict[str, object]:
     return {
         "frequency_sweep": {
             "start_ghz": 4.0,
@@ -81,6 +97,7 @@ def _simulation_setup_payload() -> dict[str, object]:
                 "phase_deg": 0.0,
             }
         ],
+        "ptc": ptc,
     }
 
 
@@ -732,39 +749,53 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
 
 
 def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> None:
+    simulation_setup = _simulation_setup_payload(ptc=_simulation_ptc_payload())
     response = client.post(
         "/tasks",
         json={
             "kind": "simulation",
             "definition_id": 3,
             "summary": "Fluxonium sweep with HB setup.",
-            "simulation_setup": _simulation_setup_payload(),
+            "simulation_setup": simulation_setup,
         },
     )
 
     assert response.status_code == 201
     task = response.json()["data"]["task"]
-    assert task["simulation_setup"] == _simulation_setup_payload()
+    assert task["simulation_setup"] == simulation_setup
+    assert task["simulation_setup"]["ptc"] == _simulation_ptc_payload()
+    assert task["downstream_source_capabilities"] == {
+        "raw": {"available": True},
+        "ptc": {
+            "available": True,
+            "enabled": True,
+            "mode": "auto",
+            "compensate_ports": ["port_1", "port_2"],
+        },
+    }
     assert task["post_processing_setup"] is None
     assert task["upstream_task_id"] is None
     assert task["downstream_task_ids"] == []
-    assert task["events"][0]["metadata"]["simulation_setup"] == _simulation_setup_payload()
+    assert task["events"][0]["metadata"]["simulation_setup"] == simulation_setup
 
     reset_runtime_state()
 
     reloaded = client.get(f"/tasks/{task['task_id']}").json()["data"]
-    assert reloaded["simulation_setup"] == _simulation_setup_payload()
+    assert reloaded["simulation_setup"] == simulation_setup
+    assert reloaded["simulation_setup"]["ptc"] == _simulation_ptc_payload()
+    assert reloaded["downstream_source_capabilities"]["ptc"]["available"] is True
     assert reloaded["summary"] == "Fluxonium sweep with HB setup."
 
 
 def test_post_processing_task_persists_upstream_lineage_and_downstream_reference() -> None:
+    simulation_setup = _simulation_setup_payload(ptc=_simulation_ptc_payload())
     simulation_response = client.post(
         "/tasks",
         json={
             "kind": "simulation",
             "definition_id": 3,
             "summary": "Upstream simulation for fit bundle.",
-            "simulation_setup": _simulation_setup_payload(),
+            "simulation_setup": simulation_setup,
         },
     )
     upstream_task_id = simulation_response.json()["data"]["task"]["task_id"]
@@ -794,6 +825,65 @@ def test_post_processing_task_persists_upstream_lineage_and_downstream_reference
     reloaded = client.get(f"/tasks/{task['task_id']}").json()["data"]
     assert reloaded["upstream_task_id"] == upstream_task_id
     assert reloaded["post_processing_setup"] == _post_processing_setup_payload()
+
+
+def test_submit_simulation_task_rejects_invalid_ptc_payload() -> None:
+    simulation_setup = _simulation_setup_payload(
+        ptc={
+            "enabled": True,
+            "mode": "auto",
+            "compensate_ports": "port_1",
+        }
+    )
+
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "definition_id": 3,
+            "summary": "Reject malformed ptc payload.",
+            "simulation_setup": simulation_setup,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["ok"] is False
+    assert response.json()["error"]["code"] == "request_validation_failed"
+    assert (
+        response.json()["error"]["message"]
+        == "simulation_setup.ptc.compensate_ports must be an array."
+    )
+
+
+def test_simulation_task_detail_exposes_disabled_ptc_capability_state() -> None:
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "definition_id": 3,
+            "summary": "Simulation with disabled ptc.",
+            "simulation_setup": _simulation_setup_payload(
+                ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+            ),
+        },
+    )
+
+    assert response.status_code == 201
+    task = response.json()["data"]["task"]
+    assert task["simulation_setup"]["ptc"] == {
+        "enabled": False,
+        "mode": "manual",
+        "compensate_ports": ["port_1", "port_2"],
+    }
+    assert task["downstream_source_capabilities"] == {
+        "raw": {"available": True},
+        "ptc": {
+            "available": False,
+            "enabled": False,
+            "mode": "manual",
+            "compensate_ports": ["port_1", "port_2"],
+        },
+    }
 
 
 def test_submitted_task_survives_runtime_reset_in_routes() -> None:

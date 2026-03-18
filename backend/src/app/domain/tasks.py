@@ -216,11 +216,37 @@ class SimulationSourceSpec:
 
 
 @dataclass(frozen=True)
+class SimulationPtcSetup:
+    enabled: bool
+    mode: Literal["auto", "manual"]
+    compensate_ports: tuple[str, ...]
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "enabled": self.enabled,
+            "mode": self.mode,
+            "compensate_ports": list(self.compensate_ports),
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> SimulationPtcSetup:
+        raw_ports = payload.get("compensate_ports", ())
+        return cls(
+            enabled=bool(payload["enabled"]),
+            mode=cast(Literal["auto", "manual"], payload["mode"]),
+            compensate_ports=tuple(
+                str(port) for port in raw_ports if isinstance(port, str)
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class SimulationSetup:
     frequency_sweep: SimulationFrequencySweep
     parameter_sweeps: tuple[SimulationParameterSweep, ...]
     solver: SimulationSolverSettings
     sources: tuple[SimulationSourceSpec, ...]
+    ptc: SimulationPtcSetup | None = None
 
     def to_mapping(self) -> dict[str, object]:
         return {
@@ -228,12 +254,14 @@ class SimulationSetup:
             "parameter_sweeps": [sweep.to_mapping() for sweep in self.parameter_sweeps],
             "solver": self.solver.to_mapping(),
             "sources": [source.to_mapping() for source in self.sources],
+            "ptc": self.ptc.to_mapping() if self.ptc is not None else None,
         }
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> SimulationSetup:
         parameter_sweeps = payload.get("parameter_sweeps", ())
         sources = payload.get("sources", ())
+        ptc = payload.get("ptc")
         return cls(
             frequency_sweep=SimulationFrequencySweep.from_mapping(
                 cast(Mapping[str, object], payload["frequency_sweep"])
@@ -250,6 +278,11 @@ class SimulationSetup:
                 SimulationSourceSpec.from_mapping(cast(Mapping[str, object], source))
                 for source in sources
                 if isinstance(source, Mapping)
+            ),
+            ptc=(
+                SimulationPtcSetup.from_mapping(ptc)
+                if isinstance(ptc, Mapping)
+                else None
             ),
         )
 

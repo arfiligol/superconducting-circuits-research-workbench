@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Body, Depends, Query, status
 from fastapi.responses import JSONResponse
@@ -19,6 +19,7 @@ from src.app.domain.tasks import (
     SimulationFrequencySweep,
     SimulationHarmonicBalanceSettings,
     SimulationParameterSweep,
+    SimulationPtcSetup,
     SimulationSetup,
     SimulationSolverSettings,
     SimulationSourceSpec,
@@ -313,6 +314,7 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
             if task.simulation_setup is not None
             else None
         ),
+        "downstream_source_capabilities": _serialize_downstream_source_capabilities(task),
         "post_processing_setup": (
             _serialize_post_processing_setup(task.post_processing_setup)
             if task.post_processing_setup is not None
@@ -486,6 +488,7 @@ def _parse_simulation_setup(payload: object) -> SimulationSetup | None:
         parameter_sweeps=_parse_parameter_sweeps(body.get("parameter_sweeps")),
         solver=_parse_solver_settings(body.get("solver")),
         sources=_parse_source_specs(body.get("sources")),
+        ptc=_parse_ptc_setup(body.get("ptc")),
     )
 
 
@@ -656,6 +659,41 @@ def _parse_source_specs(payload: object) -> tuple[SimulationSourceSpec, ...]:
     return tuple(sources)
 
 
+def _parse_ptc_setup(payload: object) -> SimulationPtcSetup | None:
+    if payload is None:
+        return None
+    body = _require_mapping(payload, field_name="simulation_setup.ptc")
+    raw_ports = body.get("compensate_ports")
+    if not isinstance(raw_ports, list):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="simulation_setup.ptc.compensate_ports must be an array.",
+        )
+    return SimulationPtcSetup(
+        enabled=_required_bool(
+            body.get("enabled"),
+            field_name="simulation_setup.ptc.enabled",
+        ),
+        mode=cast(
+            str,
+            _required_literal(
+                body.get("mode"),
+                field_name="simulation_setup.ptc.mode",
+                allowed={"auto", "manual"},
+            ),
+        ),
+        compensate_ports=tuple(
+            _required_string(
+                value,
+                field_name=f"simulation_setup.ptc.compensate_ports[{index}]",
+            )
+            for index, value in enumerate(raw_ports)
+        ),
+    )
+
+
 def _parse_trace_selection(payload: object) -> PostProcessingTraceSelection:
     body = _require_mapping(payload, field_name="post_processing_setup.selections[]")
     raw_trace_ids = body.get("trace_ids")
@@ -708,6 +746,21 @@ def _parse_post_processing_operation(payload: object) -> PostProcessingOperation
 
 def _serialize_simulation_setup(setup: SimulationSetup) -> dict[str, object]:
     return setup.to_mapping()
+
+
+def _serialize_downstream_source_capabilities(task: TaskDetail) -> dict[str, object]:
+    ptc = task.simulation_setup.ptc if task.simulation_setup is not None else None
+    return {
+        "raw": {
+            "available": task.kind == "simulation",
+        },
+        "ptc": {
+            "available": ptc.enabled if ptc is not None else False,
+            "enabled": ptc.enabled if ptc is not None else False,
+            "mode": ptc.mode if ptc is not None else None,
+            "compensate_ports": list(ptc.compensate_ports) if ptc is not None else [],
+        },
+    }
 
 
 def _serialize_post_processing_setup(setup: PostProcessingSetup) -> dict[str, object]:
