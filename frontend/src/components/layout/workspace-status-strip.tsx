@@ -1116,15 +1116,29 @@ export function WorkspaceStatusStrip({
                   : "Online task rows and runtime status come from active workspace authority and never merge with local task context."
               }
               actions={
-                <ActionButton
-                  label="Refresh queue"
-                  spinning={isTaskQueueRefreshing || isActiveTaskLoading}
-                  disabled={isTaskQueueLoading}
-                  onClick={() => {
-                    void refreshTaskQueue();
-                    void refreshActiveTask();
-                  }}
-                />
+                <>
+                  <Link
+                    href={
+                      activeTaskDetail
+                        ? `/tasks?taskId=${activeTaskDetail.taskId}${runtimeMode === "local" ? "&scope=local" : ""}`
+                        : runtimeMode === "local"
+                          ? "/tasks?scope=local"
+                          : "/tasks"
+                    }
+                    className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                  >
+                    Open Tasks Page
+                  </Link>
+                  <ActionButton
+                    label="Refresh queue"
+                    spinning={isTaskQueueRefreshing || isActiveTaskLoading}
+                    disabled={isTaskQueueLoading}
+                    onClick={() => {
+                      void refreshTaskQueue();
+                      void refreshActiveTask();
+                    }}
+                  />
+                </>
               }
             >
               <div className="space-y-4">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LoaderCircle, RefreshCcw } from "lucide-react";
 
 import type { TaskDetail, TaskExecutionStatus, TaskResultHandleRef } from "@/lib/api/tasks";
@@ -345,15 +346,30 @@ export function TaskLifecyclePanel({ task, summary }: TaskLifecyclePanelProps) {
 type TaskResultPanelProps = Readonly<{
   task: TaskDetail | undefined;
   summary: TaskResultSurfaceSummary;
+  showTasksPageLink?: boolean;
 }>;
 
-export function TaskResultPanel({ task, summary }: TaskResultPanelProps) {
+export function TaskResultPanel({
+  task,
+  summary,
+  showTasksPageLink = true,
+}: TaskResultPanelProps) {
   const groupedHandles = groupTaskResultHandles(task);
 
   return (
     <SurfacePanel
       title="Persisted Result Surface"
       description="Inspect trace payloads, metadata records, and result handles directly from the persisted task contract."
+      actions={
+        task && showTasksPageLink ? (
+          <Link
+            href={`/tasks?taskId=${task.taskId}`}
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+          >
+            Open Tasks Page
+          </Link>
+        ) : null
+      }
     >
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <SurfaceStat

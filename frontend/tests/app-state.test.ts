@@ -1176,6 +1176,9 @@ describe("task queue store", () => {
       ],
       generatedAt: "2026-03-17T12:00:00Z",
       totalCount: 1,
+      nextCursor: null,
+      prevCursor: null,
+      hasMore: false,
     });
   });
 

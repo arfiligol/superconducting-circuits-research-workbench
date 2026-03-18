@@ -68,6 +68,10 @@ describe("workspaceNavigation", () => {
       sectionLabel: "Pipeline",
       pageTitle: "Raw Data Browser",
     });
+    expect(resolveWorkspacePageIdentity("/tasks")).toEqual({
+      sectionLabel: "Workspace",
+      pageTitle: "Tasks",
+    });
     expect(resolveWorkspacePageIdentity(null)).toEqual({
       sectionLabel: "Workspace",
       pageTitle: "Overview",

@@ -163,6 +163,11 @@ const workspacePageIdentities: readonly WorkspacePageIdentity[] = [
     sectionLabel: "Pipeline",
     pageTitle: "Characterization",
   },
+  {
+    href: "/tasks",
+    sectionLabel: "Workspace",
+    pageTitle: "Tasks",
+  },
 ] as const;
 
 function matchesWorkspacePath(pathname: string, path: string) {

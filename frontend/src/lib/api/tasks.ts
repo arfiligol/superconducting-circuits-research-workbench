@@ -124,6 +124,18 @@ type TaskQueueResponseShape = Readonly<{
 type TaskQueueMetaResponseShape = Readonly<{
   generated_at?: string;
   total_count?: number;
+  next_cursor?: string | null;
+  prev_cursor?: string | null;
+  has_more?: boolean;
+}>;
+type TaskEventsResponseShape = Readonly<{
+  task_id: number;
+  events: readonly components["schemas"]["TaskEventResponse"][];
+}>;
+type TaskEventsMetaResponseShape = Readonly<{
+  generated_at?: string;
+  limit?: number;
+  event_count?: number;
 }>;
 type SimulationResultExplorerSourceResponseShape = Readonly<{
   key: string;
@@ -638,6 +650,28 @@ export type TaskQueueReadModel = Readonly<{
   workerSummary: readonly WorkerLaneSummary[];
   generatedAt: string | null;
   totalCount: number | null;
+  nextCursor: string | null;
+  prevCursor: string | null;
+  hasMore: boolean;
+}>;
+export type TaskListQuery = Readonly<{
+  scope?: "local" | "workspace" | "owned";
+  status?: TaskExecutionStatus;
+  lane?: TaskLane;
+  datasetId?: string | null;
+  searchQuery?: string | null;
+  limit?: number;
+}>;
+export type TaskEventHistoryQuery = Readonly<{
+  order?: "asc" | "desc";
+  limit?: number;
+  eventType?: TaskEvent["eventType"] | null;
+}>;
+export type TaskEventHistoryReadModel = Readonly<{
+  taskId: number;
+  events: readonly TaskEvent[];
+  generatedAt: string | null;
+  eventCount: number;
 }>;
 
 export const tasksListKey = "/api/backend/tasks";
@@ -668,6 +702,53 @@ const defaultDownstreamSourceCapabilities: DownstreamSourceCapabilities = {
 
 export function taskDetailKey(taskId: number) {
   return `/api/backend/tasks/${encodeURIComponent(taskId)}`;
+}
+
+export function buildTasksListKey(query?: TaskListQuery) {
+  if (!query) {
+    return tasksListKey;
+  }
+
+  const params = new URLSearchParams();
+  if (query.scope) {
+    params.set("scope", query.scope);
+  }
+  if (query.status) {
+    params.set("status", query.status);
+  }
+  if (query.lane) {
+    params.set("lane", query.lane);
+  }
+  if (query.datasetId) {
+    params.set("dataset_id", query.datasetId);
+  }
+  if (query.searchQuery) {
+    params.set("q", query.searchQuery);
+  }
+  if (typeof query.limit === "number") {
+    params.set("limit", String(query.limit));
+  }
+
+  const search = params.toString();
+  return search ? `${tasksListKey}?${search}` : tasksListKey;
+}
+
+export function taskEventsKey(taskId: number, query?: TaskEventHistoryQuery) {
+  const params = new URLSearchParams();
+
+  if (query?.order) {
+    params.set("order", query.order);
+  }
+  if (typeof query?.limit === "number") {
+    params.set("limit", String(query.limit));
+  }
+  if (query?.eventType) {
+    params.set("event_type", query.eventType);
+  }
+
+  const basePath = `/api/backend/tasks/${encodeURIComponent(taskId)}/events`;
+  const search = params.toString();
+  return search ? `${basePath}?${search}` : basePath;
 }
 
 export function simulationResultExplorerKey(
@@ -1135,12 +1216,27 @@ export function mapTaskQueueResponse(
     workerSummary: payload.worker_summary.map(mapWorkerLaneSummaryResponse),
     generatedAt: meta?.generated_at ?? null,
     totalCount: meta?.total_count ?? null,
+    nextCursor: meta?.next_cursor ?? null,
+    prevCursor: meta?.prev_cursor ?? null,
+    hasMore: meta?.has_more ?? false,
   };
 }
 
-export async function listTasks() {
+export function mapTaskEventsResponse(
+  payload: TaskEventsResponseShape,
+  meta?: TaskEventsMetaResponseShape,
+): TaskEventHistoryReadModel {
+  return {
+    taskId: payload.task_id,
+    events: payload.events.map(mapTaskEvent),
+    generatedAt: meta?.generated_at ?? null,
+    eventCount: meta?.event_count ?? payload.events.length,
+  };
+}
+
+export async function listTasks(query?: TaskListQuery) {
   const response = await apiRequestEnvelope<TaskQueueResponseShape | TaskSummaryResponseShape[]>(
-    tasksListKey,
+    buildTasksListKey(query),
   );
 
   if (Array.isArray(response.data)) {
@@ -1149,6 +1245,9 @@ export async function listTasks() {
       workerSummary: [],
       generatedAt: null,
       totalCount: response.data.length,
+      nextCursor: null,
+      prevCursor: null,
+      hasMore: false,
     } satisfies TaskQueueReadModel;
   }
 
@@ -1211,6 +1310,13 @@ export async function getTask(taskId: number) {
   return mapTaskDetailResponse(response);
 }
 
+export async function getTaskEvents(taskId: number, query?: TaskEventHistoryQuery) {
+  const response = await apiRequestEnvelope<TaskEventsResponseShape>(
+    taskEventsKey(taskId, query),
+  );
+  return mapTaskEventsResponse(response.data, response.meta as TaskEventsMetaResponseShape | undefined);
+}
+
 export async function getSimulationResultExplorer(
   taskId: number,
   query?: SimulationResultExplorerQuery,
@@ -1232,4 +1338,30 @@ export async function submitTask(payload: TaskSubmissionDraft) {
   });
 
   return unwrapTaskMutation(response);
+}
+
+async function mutateTask(
+  taskId: number,
+  operation: "cancel" | "terminate" | "retry",
+) {
+  const response = await apiRequest<TaskMutationResponse>(
+    `/api/backend/tasks/${encodeURIComponent(taskId)}/${operation}`,
+    {
+      method: "POST",
+    },
+  );
+
+  return unwrapTaskMutation(response);
+}
+
+export function cancelTask(taskId: number) {
+  return mutateTask(taskId, "cancel");
+}
+
+export function terminateTask(taskId: number) {
+  return mutateTask(taskId, "terminate");
+}
+
+export function retryTask(taskId: number) {
+  return mutateTask(taskId, "retry");
 }
