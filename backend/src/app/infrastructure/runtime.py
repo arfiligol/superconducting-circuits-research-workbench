@@ -7,6 +7,9 @@ from src.app.infrastructure.audit_store import (
 )
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.infrastructure.invitation_delivery import WorkspaceInvitationDeliveryService
+from src.app.infrastructure.local_simulation_execution_driver import (
+    LocalSimulationExecutionDriver,
+)
 from src.app.infrastructure.persistence import (
     SqliteRewriteStorageMetadataRepository,
     SqliteRewriteTaskSnapshotRepository,
@@ -167,6 +170,14 @@ def get_audit_log_service() -> AuditLogService:
 
 
 @lru_cache(maxsize=1)
+def get_local_simulation_execution_driver() -> LocalSimulationExecutionDriver:
+    return LocalSimulationExecutionDriver(
+        task_repository=get_rewrite_task_repository(),
+        execution_runtime_factory=get_task_execution_runtime,
+    )
+
+
+@lru_cache(maxsize=1)
 def get_task_service() -> TaskService:
     return TaskService(
         repository=get_rewrite_task_repository(),
@@ -176,6 +187,7 @@ def get_task_service() -> TaskService:
         dataset_repository=get_rewrite_catalog_repository(),
         circuit_definition_repository=get_rewrite_catalog_repository(),
         authorization_service=get_authorization_service(),
+        execution_driver=get_local_simulation_execution_driver(),
     )
 
 
@@ -206,5 +218,6 @@ def reset_runtime_state() -> None:
     get_session_service.cache_clear()
     get_workspace_collaboration_service.cache_clear()
     get_audit_log_service.cache_clear()
+    get_local_simulation_execution_driver.cache_clear()
     get_task_service.cache_clear()
     get_task_execution_runtime.cache_clear()

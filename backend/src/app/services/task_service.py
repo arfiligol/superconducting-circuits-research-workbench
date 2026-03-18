@@ -86,6 +86,10 @@ class TaskProcessorSummaryRepository(Protocol):
     def list_lane_summaries(self, workspace_id: str) -> Sequence[WorkerLaneSummary]: ...
 
 
+class TaskExecutionDriver(Protocol):
+    def execute_submitted_task(self, task_id: int) -> None: ...
+
+
 class TaskService:
     def __init__(
         self,
@@ -96,6 +100,7 @@ class TaskService:
         authorization_service: AuthorizationService | None = None,
         audit_repository: TaskAuditRepository | None = None,
         processor_summary_repository: TaskProcessorSummaryRepository | None = None,
+        execution_driver: TaskExecutionDriver | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
@@ -106,6 +111,7 @@ class TaskService:
         )
         self._audit_repository = audit_repository
         self._processor_summary_repository = processor_summary_repository
+        self._execution_driver = execution_driver
 
     def list_tasks(self, query: TaskListQuery) -> list[TaskDetail]:
         tasks = [
@@ -318,6 +324,11 @@ class TaskService:
                 "upstream_task_id": detail.upstream_task_id,
                 "submission_source": detail.dispatch.submission_source if detail.dispatch else None,
             },
+        )
+        self._execute_submitted_task_if_supported(
+            task_id=detail.task_id,
+            task_kind=detail.kind,
+            runtime_mode=session.runtime_mode,
         )
         return self.get_task(created_task.task_id)
 
@@ -781,6 +792,19 @@ class TaskService:
                 payload=payload,
             )
         )
+
+    def _execute_submitted_task_if_supported(
+        self,
+        *,
+        task_id: int,
+        task_kind: TaskKind,
+        runtime_mode: str,
+    ) -> None:
+        if self._execution_driver is None:
+            return
+        if runtime_mode != "local" or task_kind != "simulation":
+            return
+        self._execution_driver.execute_submitted_task(task_id)
 
     def _resolve_upstream_task(self, upstream_task_id: int | None) -> TaskDetail | None:
         if upstream_task_id is None:

@@ -784,7 +784,7 @@ def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> N
     assert reloaded["simulation_setup"] == simulation_setup
     assert reloaded["simulation_setup"]["ptc"] == _simulation_ptc_payload()
     assert reloaded["downstream_source_capabilities"]["ptc"]["available"] is True
-    assert reloaded["summary"] == "Fluxonium sweep with HB setup."
+    assert reloaded["summary"] == "simulation_smoke_task completed in the simulation lane."
 
 
 def test_post_processing_task_persists_upstream_lineage_and_downstream_reference() -> None:
@@ -884,6 +884,85 @@ def test_simulation_task_detail_exposes_disabled_ptc_capability_state() -> None:
             "compensate_ports": ["port_1", "port_2"],
         },
     }
+
+
+def test_submit_local_simulation_task_executes_to_terminal_with_materialized_results() -> None:
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "dataset_id": "local-dataset-001",
+            "definition_id": 3,
+            "summary": "Local execution lane proof.",
+            "simulation_setup": _simulation_setup_payload(
+                ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+            ),
+        },
+    )
+
+    assert response.status_code == 201
+    task = response.json()["data"]["task"]
+    assert task["status"] == "completed"
+    assert task["dispatch"]["status"] == "completed"
+    assert task["progress"]["phase"] == "completed"
+    assert task["result_handoff"] == {
+        "availability": "ready",
+        "primary_result_handle_id": f"task-result:{task['task_id']}:primary",
+        "result_handle_count": 1,
+        "trace_payload_available": True,
+    }
+    assert task["result_refs"]["trace_batch_id"] == task["task_id"]
+    assert task["result_refs"]["trace_payload"]["store_key"] == (
+        f"tasks/{task['task_id']}/simulation-trace.zarr"
+    )
+    assert task["result_refs"]["result_handles"][0]["status"] == "materialized"
+    assert [event["event_type"] for event in task["events"]] == [
+        "task_submitted",
+        "task_running",
+        "task_running",
+        "task_completed",
+    ]
+    assert task["events"][1]["metadata"]["audit_action"] == "worker.task_started"
+    assert task["events"][-1]["metadata"]["audit_action"] == "worker.task_completed"
+
+    reset_runtime_state()
+
+    reloaded = client.get(f"/tasks/{task['task_id']}").json()["data"]
+    assert reloaded["status"] == "completed"
+    assert reloaded["result_handoff"]["availability"] == "ready"
+    assert reloaded["result_refs"]["trace_payload"]["store_key"] == (
+        f"tasks/{task['task_id']}/simulation-trace.zarr"
+    )
+    assert reloaded["events"][-1]["event_type"] == "task_completed"
+
+
+def test_local_simulation_submit_does_not_leave_queue_stuck_or_worker_summary_misleading() -> None:
+    submitted = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "dataset_id": "local-dataset-001",
+            "definition_id": 3,
+            "summary": "Queue truthfulness proof.",
+            "simulation_setup": _simulation_setup_payload(
+                ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+            ),
+        },
+    ).json()["data"]["task"]
+
+    queue = client.get("/tasks").json()["data"]
+    submitted_row = next(row for row in queue["rows"] if row["task_id"] == submitted["task_id"])
+    simulation_summary = next(
+        summary for summary in queue["worker_summary"] if summary["lane"] == "simulation"
+    )
+
+    assert submitted_row["status"] == "completed"
+    assert submitted_row["result_availability"] == "ready"
+    assert simulation_summary["healthy_processors"] == 1
+    assert simulation_summary["busy_processors"] == 0
+    assert simulation_summary["degraded_processors"] == 0
+    assert simulation_summary["draining_processors"] == 0
+    assert simulation_summary["offline_processors"] == 1
 
 
 def test_submitted_task_survives_runtime_reset_in_routes() -> None:
