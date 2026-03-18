@@ -52,20 +52,29 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 @router.get("")
 def list_tasks(
     task_service: Annotated[TaskService, Depends(get_task_service)],
-    status_filter: Annotated[str | None, Query(alias="status")] = None,
+    status: Annotated[str | None, Query()] = None,
     lane: Annotated[str | None, Query()] = None,
-    scope: Annotated[str, Query()] = "workspace",
+    scope: Annotated[str | None, Query()] = None,
+    scope_filter: Annotated[str | None, Query()] = None,
+    status_filter: Annotated[str | None, Query()] = None,
+    lane_filter: Annotated[str | None, Query()] = None,
     dataset_id: Annotated[str | None, Query(min_length=1)] = None,
     search_query: Annotated[str | None, Query(alias="q", min_length=1)] = None,
+    after: Annotated[str | None, Query(min_length=1)] = None,
+    before: Annotated[str | None, Query(min_length=1)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> JSONResponse:
     try:
+        resolved_scope = _parse_scope_filter(scope_filter or scope or "workspace")
         query = TaskListQuery(
-            status=_parse_status_filter(status_filter),
-            lane=_parse_lane_filter(lane),
-            scope=_parse_scope(scope),
+            status=_parse_exact_status_filter(status),
+            status_filter=_parse_status_filter(status_filter),
+            lane=_parse_lane_filter(lane_filter or lane),
+            scope=resolved_scope,
             dataset_id=dataset_id,
             search_query=search_query,
+            after=after,
+            before=before,
             limit=limit,
         )
         queue = task_service.get_queue_view(query)
@@ -75,16 +84,18 @@ def list_tasks(
         data={
             "rows": [_serialize_queue_row(row) for row in queue.rows],
             "worker_summary": [
-                {
-                    "lane": summary.lane,
-                    "healthy_processors": summary.healthy_processors,
-                    "busy_processors": summary.busy_processors,
-                    "degraded_processors": summary.degraded_processors,
-                    "draining_processors": summary.draining_processors,
-                    "offline_processors": summary.offline_processors,
-                }
-                for summary in queue.worker_summary
+                _serialize_worker_summary(summary) for summary in queue.worker_summary
             ],
+            "aggregate_summary": {
+                "total": queue.aggregate_summary.total,
+                "pending": queue.aggregate_summary.pending,
+                "running": queue.aggregate_summary.running,
+                "completed": queue.aggregate_summary.completed,
+                "failed": queue.aggregate_summary.failed,
+                "cancelled": queue.aggregate_summary.cancelled,
+                "terminated": queue.aggregate_summary.terminated,
+                "result_ready": queue.aggregate_summary.result_ready,
+            },
         },
         meta={
             "generated_at": _generated_at(),
@@ -93,13 +104,49 @@ def list_tasks(
             "prev_cursor": queue.prev_cursor,
             "has_more": queue.has_more,
             "filter_echo": {
-                "status": status_filter,
+                "status": status,
                 "lane": lane,
                 "scope": scope,
+                "scope_filter": scope_filter or resolved_scope,
+                "status_filter": status_filter or "all",
+                "lane_filter": lane_filter or lane,
                 "dataset_id": dataset_id,
                 "q": search_query,
+                "after": after,
+                "before": before,
             },
             "total_count": queue.total_count,
+        },
+    )
+
+
+@router.get("/runtime/processors")
+def list_runtime_processors(
+    task_service: Annotated[TaskService, Depends(get_task_service)],
+    lane_filter: Annotated[str | None, Query()] = None,
+    lane: Annotated[str | None, Query()] = None,
+) -> JSONResponse:
+    try:
+        resolved_lane = _parse_lane_filter(lane_filter or lane)
+        runtime_view = task_service.get_processor_runtime_view(lane=resolved_lane)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "processors": [
+                _serialize_processor_detail(processor)
+                for processor in runtime_view.processors
+            ],
+            "worker_summary": [
+                _serialize_worker_summary(summary) for summary in runtime_view.worker_summary
+            ],
+        },
+        meta={
+            "generated_at": _generated_at(),
+            "filter_echo": {
+                "lane": lane,
+                "lane_filter": lane_filter or lane,
+            },
         },
     )
 
@@ -422,6 +469,28 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
             ],
         },
         "events": [_serialize_task_event(event) for event in task.events],
+    }
+
+
+def _serialize_worker_summary(summary) -> dict[str, object]:
+    return {
+        "lane": summary.lane,
+        "healthy_processors": summary.healthy_processors,
+        "busy_processors": summary.busy_processors,
+        "degraded_processors": summary.degraded_processors,
+        "draining_processors": summary.draining_processors,
+        "offline_processors": summary.offline_processors,
+    }
+
+
+def _serialize_processor_detail(processor) -> dict[str, object]:
+    return {
+        "processor_id": processor.processor_id,
+        "lane": processor.lane,
+        "state": processor.state,
+        "current_task_id": processor.current_task_id,
+        "last_heartbeat_at": processor.last_heartbeat_at,
+        "runtime_metadata": processor.runtime_metadata,
     }
 
 
@@ -929,7 +998,7 @@ def _deserialize_task_event_metadata_value(key: str, value: object) -> object:
         return value
 
 
-def _parse_status_filter(value: str | None) -> TaskStatus | None:
+def _parse_exact_status_filter(value: str | None) -> TaskStatus | None:
     if value is None:
         return None
     if value not in {
@@ -957,6 +1026,19 @@ def _parse_status_filter(value: str | None) -> TaskStatus | None:
     return value
 
 
+def _parse_status_filter(value: str | None) -> str:
+    if value is None:
+        return "all"
+    if value not in {"active", "recent", "all"}:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="status_filter must be active, recent or all.",
+        )
+    return value
+
+
 def _parse_lane_filter(value: str | None) -> TaskLane | None:
     if value is None:
         return None
@@ -970,12 +1052,13 @@ def _parse_lane_filter(value: str | None) -> TaskLane | None:
     return value
 
 
-def _parse_scope(value: str) -> TaskVisibilityScope:
-    if value not in {"local", "workspace", "owned"}:
+def _parse_scope_filter(value: str) -> TaskVisibilityScope:
+    normalized = "owned" if value == "mine" else value
+    if normalized not in {"local", "workspace", "owned"}:
         raise service_error(
             400,
             code="request_validation_failed",
             category="validation_error",
-            message="scope must be local, workspace or owned.",
+            message="scope_filter must be local, workspace or mine.",
         )
-    return value
+    return cast(TaskVisibilityScope, normalized)

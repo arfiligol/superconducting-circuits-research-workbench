@@ -64,6 +64,7 @@ TaskEventType = Literal[
 TaskEventLevel = TaskExecutionHistoryLevel
 TaskEventMetadataValue = TaskExecutionHistoryMetadataValue
 TaskEventOrder = Literal["asc", "desc"]
+TaskBrowseStatusFilter = Literal["active", "recent", "all"]
 TaskDispatchStatus = _TaskDispatchStatus
 task_submission_source_for = _task_submission_source_for
 
@@ -453,6 +454,34 @@ class WorkerLaneSummary:
 
 
 @dataclass(frozen=True)
+class TaskQueueAggregateSummary:
+    total: int
+    pending: int
+    running: int
+    completed: int
+    failed: int
+    cancelled: int
+    terminated: int
+    result_ready: int
+
+
+@dataclass(frozen=True)
+class TaskProcessorDetail:
+    processor_id: str
+    lane: TaskLane
+    state: Literal["healthy", "busy", "degraded", "draining", "offline"]
+    current_task_id: int | None
+    last_heartbeat_at: str
+    runtime_metadata: dict[str, object]
+
+
+@dataclass(frozen=True)
+class TaskProcessorRuntimeView:
+    processors: tuple[TaskProcessorDetail, ...]
+    worker_summary: tuple[WorkerLaneSummary, ...]
+
+
+@dataclass(frozen=True)
 class TaskQueueRow:
     task_id: int
     summary: str
@@ -473,6 +502,7 @@ class TaskQueueRow:
 class TaskQueueView:
     rows: tuple[TaskQueueRow, ...]
     worker_summary: tuple[WorkerLaneSummary, ...]
+    aggregate_summary: TaskQueueAggregateSummary
     total_count: int
     next_cursor: str | None
     prev_cursor: str | None
@@ -500,10 +530,13 @@ class TaskDetail(TaskSummary):
 @dataclass(frozen=True)
 class TaskListQuery:
     status: TaskStatus | None = None
+    status_filter: TaskBrowseStatusFilter = "all"
     lane: TaskLane | None = None
     scope: TaskVisibilityScope = "workspace"
     dataset_id: str | None = None
     search_query: str | None = None
+    after: str | None = None
+    before: str | None = None
     limit: int = 20
 
 

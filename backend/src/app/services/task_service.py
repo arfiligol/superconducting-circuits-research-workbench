@@ -6,7 +6,11 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sc_core.tasking import evaluate_task_control_action, resolve_worker_task_route
+from sc_core.tasking import (
+    ProcessorHeartbeat,
+    evaluate_task_control_action,
+    resolve_worker_task_route,
+)
 
 from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import DatasetDetail
@@ -23,6 +27,9 @@ from src.app.domain.tasks import (
     TaskKind,
     TaskLifecycleUpdate,
     TaskListQuery,
+    TaskProcessorDetail,
+    TaskProcessorRuntimeView,
+    TaskQueueAggregateSummary,
     TaskQueueRow,
     TaskQueueView,
     TaskResultAvailability,
@@ -85,6 +92,11 @@ class TaskAuditRepository(Protocol):
 class TaskProcessorSummaryRepository(Protocol):
     def list_lane_summaries(self, workspace_id: str) -> Sequence[WorkerLaneSummary]: ...
 
+    def list_heartbeats(
+        self,
+        workspace_id: str | None = None,
+    ) -> Sequence[ProcessorHeartbeat]: ...
+
 
 class TaskExecutionDriver(Protocol):
     def execute_submitted_task(self, task_id: int) -> None: ...
@@ -132,9 +144,10 @@ class TaskService:
             if self._matches_query(task, query)
         ]
         sorted_tasks = _sort_tasks(visible_tasks)
+        paged_tasks, next_cursor, prev_cursor = _paginate_tasks(sorted_tasks, query=query)
         rows = tuple(
             _build_queue_row(task, self._build_allowed_actions(task, session))
-            for task in sorted_tasks[: query.limit]
+            for task in paged_tasks
         )
         visible_workspace_tasks = [
             self._normalize_task(task)
@@ -145,6 +158,7 @@ class TaskService:
                 scope="local" if session.runtime_mode == "local" else "workspace",
             )
         ]
+        aggregate_summary = _build_queue_aggregate_summary(sorted_tasks)
         return TaskQueueView(
             rows=rows,
             worker_summary=_build_worker_summary(
@@ -157,13 +171,49 @@ class TaskService:
                     else ()
                 ),
             ),
+            aggregate_summary=aggregate_summary,
             total_count=len(sorted_tasks),
-            next_cursor=str(rows[-1].task_id)
-            if len(sorted_tasks) > query.limit and len(rows) > 0
-            else None,
-            prev_cursor=None,
-            has_more=len(sorted_tasks) > query.limit,
+            next_cursor=next_cursor,
+            prev_cursor=prev_cursor,
+            has_more=next_cursor is not None or prev_cursor is not None,
         )
+
+    def get_processor_runtime_view(
+        self,
+        *,
+        lane: str | None = None,
+    ) -> TaskProcessorRuntimeView:
+        session = self._session_repository.get_session_state()
+        if session.runtime_mode == "local":
+            processors = _build_local_processor_details(
+                visible_tasks=[
+                    self._normalize_task(task)
+                    for task in self._repository.list_tasks()
+                    if self._is_visible(task, session, scope="local")
+                ],
+                lane=lane,
+            )
+            summary = _summaries_for_processor_details(processors)
+            return TaskProcessorRuntimeView(processors=processors, worker_summary=summary)
+
+        if self._processor_summary_repository is None:
+            return TaskProcessorRuntimeView(processors=(), worker_summary=())
+        heartbeats = tuple(
+            heartbeat
+            for heartbeat in self._processor_summary_repository.list_heartbeats(
+                session.workspace_id
+            )
+            if lane is None or heartbeat.lane == lane
+        )
+        processors = tuple(_serialize_processor_heartbeat(heartbeat) for heartbeat in heartbeats)
+        summary = tuple(
+            summary
+            for summary in self._processor_summary_repository.list_lane_summaries(
+                session.workspace_id
+            )
+            if lane is None or summary.lane == lane
+        )
+        return TaskProcessorRuntimeView(processors=processors, worker_summary=summary)
 
     def get_task(self, task_id: int) -> TaskDetail:
         history = self._load_visible_task_history(task_id)
@@ -649,6 +699,8 @@ class TaskService:
             return False
         if query.status is not None and task.status != query.status:
             return False
+        if not _matches_status_filter(task, query.status_filter):
+            return False
         if query.lane is not None and task.lane != query.lane:
             return False
         if query.dataset_id is not None and task.dataset_id != query.dataset_id:
@@ -671,9 +723,10 @@ class TaskService:
     ) -> bool:
         if not self._authorization_service.is_visible_task(task, session):
             return False
-        if session.runtime_mode == "local":
+        resolved_scope = _resolve_scope_for_session(scope, session)
+        if resolved_scope == "local":
             return task.visibility_scope == "local"
-        if scope == "owned":
+        if resolved_scope == "owned":
             return task.owner_user_id == _session_user_id(session)
         return True
 
@@ -1042,6 +1095,57 @@ def _sort_tasks(tasks: Sequence[TaskDetail]) -> list[TaskDetail]:
     )
 
 
+def _paginate_tasks(
+    tasks: Sequence[TaskDetail],
+    *,
+    query: TaskListQuery,
+) -> tuple[tuple[TaskDetail, ...], str | None, str | None]:
+    if query.after is not None and query.before is not None:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="after and before cannot be used together.",
+        )
+    start_index = 0
+    end_index = len(tasks)
+    if query.after is not None:
+        cursor_index = _find_cursor_index(tasks, query.after)
+        start_index = cursor_index + 1
+        end_index = min(start_index + query.limit, len(tasks))
+    elif query.before is not None:
+        cursor_index = _find_cursor_index(tasks, query.before)
+        end_index = cursor_index
+        start_index = max(end_index - query.limit, 0)
+    else:
+        end_index = min(query.limit, len(tasks))
+    paged = tuple(tasks[start_index:end_index])
+    next_cursor = str(paged[-1].task_id) if end_index < len(tasks) and len(paged) > 0 else None
+    prev_cursor = str(paged[0].task_id) if start_index > 0 and len(paged) > 0 else None
+    return paged, next_cursor, prev_cursor
+
+
+def _find_cursor_index(tasks: Sequence[TaskDetail], cursor: str) -> int:
+    try:
+        cursor_task_id = int(cursor)
+    except ValueError as exc:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="cursor must be a task_id string.",
+        ) from exc
+    for index, task in enumerate(tasks):
+        if task.task_id == cursor_task_id:
+            return index
+    raise service_error(
+        400,
+        code="request_validation_failed",
+        category="validation_error",
+        message=f"cursor task {cursor_task_id} was not found in the current filter scope.",
+    )
+
+
 def _task_priority(task: TaskDetail) -> int:
     if task.status in {
         "dispatching",
@@ -1153,6 +1257,51 @@ def _result_availability_for(task: TaskDetail) -> TaskResultAvailability:
     return "pending"
 
 
+def _matches_status_filter(task: TaskDetail, status_filter: str) -> bool:
+    if status_filter == "all":
+        return True
+    if status_filter == "active":
+        return task.status in {
+            "queued",
+            "dispatching",
+            "running",
+            "cancellation_requested",
+            "cancelling",
+            "termination_requested",
+        }
+    return task.status in {"completed", "failed", "cancelled", "terminated"}
+
+
+def _build_queue_aggregate_summary(tasks: Sequence[TaskDetail]) -> TaskQueueAggregateSummary:
+    pending = sum(1 for task in tasks if task.status in {"queued", "dispatching"})
+    running = sum(
+        1
+        for task in tasks
+        if task.status
+        in {
+            "running",
+            "cancellation_requested",
+            "cancelling",
+            "termination_requested",
+        }
+    )
+    completed = sum(1 for task in tasks if task.status == "completed")
+    failed = sum(1 for task in tasks if task.status == "failed")
+    cancelled = sum(1 for task in tasks if task.status == "cancelled")
+    terminated = sum(1 for task in tasks if task.status == "terminated")
+    result_ready = sum(1 for task in tasks if _result_availability_for(task) == "ready")
+    return TaskQueueAggregateSummary(
+        total=len(tasks),
+        pending=pending,
+        running=running,
+        completed=completed,
+        failed=failed,
+        cancelled=cancelled,
+        terminated=terminated,
+        result_ready=result_ready,
+    )
+
+
 def _build_worker_summary(
     *,
     visible_tasks: Sequence[TaskDetail],
@@ -1183,6 +1332,115 @@ def _build_worker_summary(
                 degraded_processors=degraded_processors,
                 draining_processors=draining_processors,
                 offline_processors=0,
+            )
+        )
+    return tuple(summaries)
+
+
+def _resolve_scope_for_session(scope: str, session: SessionState) -> str:
+    if session.runtime_mode == "local":
+        return "local"
+    return scope
+
+
+def _serialize_processor_heartbeat(heartbeat: ProcessorHeartbeat) -> TaskProcessorDetail:
+    return TaskProcessorDetail(
+        processor_id=heartbeat.processor_id,
+        lane=heartbeat.lane,
+        state=heartbeat.state,
+        current_task_id=heartbeat.current_task_id,
+        last_heartbeat_at=heartbeat.last_heartbeat_at.isoformat(),
+        runtime_metadata=dict(heartbeat.runtime_metadata),
+    )
+
+
+def _build_local_processor_details(
+    *,
+    visible_tasks: Sequence[TaskDetail],
+    lane: str | None,
+) -> tuple[TaskProcessorDetail, ...]:
+    recorded_at = _generated_at()
+    processors: list[TaskProcessorDetail] = []
+    for lane_name in ("simulation", "characterization"):
+        if lane is not None and lane != lane_name:
+            continue
+        active_task = next(
+            (
+                task
+                for task in visible_tasks
+                if task.lane == lane_name
+                and task.status
+                in {
+                    "dispatching",
+                    "running",
+                    "cancellation_requested",
+                    "cancelling",
+                    "termination_requested",
+                }
+            ),
+            None,
+        )
+        if lane_name == "simulation":
+            processors.append(
+                TaskProcessorDetail(
+                    processor_id="local-simulation-processor",
+                    lane="simulation",
+                    state="busy" if active_task is not None else "healthy",
+                    current_task_id=active_task.task_id if active_task is not None else None,
+                    last_heartbeat_at=(
+                        active_task.progress.updated_at if active_task is not None else recorded_at
+                    ),
+                    runtime_metadata={
+                        "authority": "local_runtime",
+                        "execution_mode": "in_process",
+                        "capacity": 1,
+                    },
+                )
+            )
+            continue
+        processors.append(
+            TaskProcessorDetail(
+                processor_id="local-characterization-processor",
+                lane="characterization",
+                state="offline",
+                current_task_id=None,
+                last_heartbeat_at=recorded_at,
+                runtime_metadata={
+                    "authority": "local_runtime",
+                    "execution_mode": "not_configured",
+                    "capacity": 0,
+                },
+            )
+        )
+    return tuple(processors)
+
+
+def _summaries_for_processor_details(
+    processors: Sequence[TaskProcessorDetail],
+) -> tuple[WorkerLaneSummary, ...]:
+    summaries: list[WorkerLaneSummary] = []
+    for lane in ("simulation", "characterization"):
+        lane_processors = [processor for processor in processors if processor.lane == lane]
+        if len(lane_processors) == 0:
+            continue
+        summaries.append(
+            WorkerLaneSummary(
+                lane=lane,  # type: ignore[arg-type]
+                healthy_processors=sum(
+                    1 for processor in lane_processors if processor.state == "healthy"
+                ),
+                busy_processors=sum(
+                    1 for processor in lane_processors if processor.state == "busy"
+                ),
+                degraded_processors=sum(
+                    1 for processor in lane_processors if processor.state == "degraded"
+                ),
+                draining_processors=sum(
+                    1 for processor in lane_processors if processor.state == "draining"
+                ),
+                offline_processors=sum(
+                    1 for processor in lane_processors if processor.state == "offline"
+                ),
             )
         )
     return tuple(summaries)

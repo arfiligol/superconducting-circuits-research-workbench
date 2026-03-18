@@ -633,12 +633,27 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
             "offline_processors": 1,
         },
     ]
+    assert payload["data"]["aggregate_summary"] == {
+        "total": 1,
+        "pending": 0,
+        "running": 1,
+        "completed": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "terminated": 0,
+        "result_ready": 0,
+    }
     assert payload["meta"]["filter_echo"] == {
         "status": None,
         "lane": None,
-        "scope": "workspace",
+        "scope": None,
+        "scope_filter": "workspace",
+        "status_filter": "all",
+        "lane_filter": None,
         "dataset_id": None,
         "q": None,
+        "after": None,
+        "before": None,
     }
 
 
@@ -655,6 +670,148 @@ def test_list_tasks_supports_filters_and_hides_non_visible_rows() -> None:
 
     default_response = client.get("/tasks")
     assert [row["task_id"] for row in default_response.json()["data"]["rows"]] == [301, 302, 303]
+
+
+def test_list_tasks_supports_docs_aligned_scope_status_and_lane_filters() -> None:
+    _login()
+
+    response = client.get(
+        "/tasks?scope_filter=mine&status_filter=recent&lane_filter=simulation"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [row["task_id"] for row in payload["data"]["rows"]] == [303]
+    assert payload["data"]["aggregate_summary"] == {
+        "total": 1,
+        "pending": 0,
+        "running": 0,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 0,
+        "terminated": 0,
+        "result_ready": 1,
+    }
+    assert payload["meta"]["filter_echo"] == {
+        "status": None,
+        "lane": None,
+        "scope": None,
+        "scope_filter": "mine",
+        "status_filter": "recent",
+        "lane_filter": "simulation",
+        "dataset_id": None,
+        "q": None,
+        "after": None,
+        "before": None,
+    }
+
+
+def test_list_tasks_supports_cursor_browse_with_after_and_before() -> None:
+    _login()
+
+    first_page = client.get("/tasks?status_filter=all&limit=1")
+    assert first_page.status_code == 200
+    first_payload = first_page.json()
+    assert [row["task_id"] for row in first_payload["data"]["rows"]] == [301]
+    assert first_payload["meta"]["next_cursor"] == "301"
+    assert first_payload["meta"]["prev_cursor"] is None
+    assert first_payload["meta"]["has_more"] is True
+
+    second_page = client.get("/tasks?status_filter=all&limit=1&after=301")
+    assert second_page.status_code == 200
+    second_payload = second_page.json()
+    assert [row["task_id"] for row in second_payload["data"]["rows"]] == [302]
+    assert second_payload["meta"]["next_cursor"] == "302"
+    assert second_payload["meta"]["prev_cursor"] == "302"
+    assert second_payload["meta"]["has_more"] is True
+
+    backward_page = client.get("/tasks?status_filter=all&limit=1&before=302")
+    assert backward_page.status_code == 200
+    backward_payload = backward_page.json()
+    assert [row["task_id"] for row in backward_payload["data"]["rows"]] == [301]
+    assert backward_payload["meta"]["next_cursor"] == "301"
+    assert backward_payload["meta"]["prev_cursor"] is None
+
+
+def test_list_tasks_local_scope_semantics_stay_truthful() -> None:
+    response = client.get("/tasks?scope_filter=mine")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [row["task_id"] for row in payload["data"]["rows"]] == [300]
+    assert payload["data"]["rows"][0]["visibility_scope"] == "local"
+    assert payload["meta"]["filter_echo"]["scope_filter"] == "mine"
+
+
+def test_list_runtime_processors_returns_standalone_worker_detail() -> None:
+    response = client.get("/tasks/runtime/processors")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["data"]["processors"] == [
+        {
+            "processor_id": "local-simulation-processor",
+            "lane": "simulation",
+            "state": "busy",
+            "current_task_id": 300,
+            "last_heartbeat_at": "2026-03-17 08:50:00",
+            "runtime_metadata": {
+                "authority": "local_runtime",
+                "execution_mode": "in_process",
+                "capacity": 1,
+            },
+        },
+        {
+            "processor_id": "local-characterization-processor",
+            "lane": "characterization",
+            "state": "offline",
+            "current_task_id": None,
+            "last_heartbeat_at": payload["data"]["processors"][1]["last_heartbeat_at"],
+            "runtime_metadata": {
+                "authority": "local_runtime",
+                "execution_mode": "not_configured",
+                "capacity": 0,
+            },
+        },
+    ]
+    assert payload["data"]["worker_summary"] == [
+        {
+            "lane": "simulation",
+            "healthy_processors": 0,
+            "busy_processors": 1,
+            "degraded_processors": 0,
+            "draining_processors": 0,
+            "offline_processors": 0,
+        },
+        {
+            "lane": "characterization",
+            "healthy_processors": 0,
+            "busy_processors": 0,
+            "degraded_processors": 0,
+            "draining_processors": 0,
+            "offline_processors": 1,
+        },
+    ]
+    assert payload["meta"]["filter_echo"] == {
+        "lane": None,
+        "lane_filter": None,
+    }
+
+
+def test_list_runtime_processors_supports_lane_filter_for_online_workspace() -> None:
+    _login()
+
+    response = client.get("/tasks/runtime/processors?lane_filter=simulation")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert all(processor["lane"] == "simulation" for processor in payload["data"]["processors"])
+    assert all(summary["lane"] == "simulation" for summary in payload["data"]["worker_summary"])
+    assert payload["meta"]["filter_echo"] == {
+        "lane": None,
+        "lane_filter": "simulation",
+    }
 
 
 def test_get_task_returns_attach_ready_detail_with_result_handoff() -> None:
