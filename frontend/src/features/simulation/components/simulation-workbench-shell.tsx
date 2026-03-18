@@ -84,21 +84,35 @@ import {
 } from "@/lib/task-surface";
 import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
-const simulationRequestSchema = simulationSetupFormSchema.extend({
-  simulationNote: z.string().trim().max(180, "Keep the request note within 180 characters."),
-  postProcessingNote: z
-    .string()
-    .trim()
-    .max(180, "Keep the request note within 180 characters."),
-  postOutputView: z.string().trim().min(1, "Output view is required."),
-  postSelectionTraceFamily: z.string().trim().min(1, "Trace family is required."),
-  postSelectionRepresentation: z.string().trim().min(1, "Representation is required."),
-  postSelectionDesignId: z.string().trim(),
-  postSelectionTraceIds: z.string().trim(),
-  postOperationName: z.string().trim().min(1, "Operation name is required."),
-  postOperationEnabled: z.boolean(),
-  postOperationConfigJson: z.string().trim().min(1, "Operation config JSON is required."),
-});
+const simulationRequestSchema = simulationSetupFormSchema
+  .extend({
+    simulationNote: z.string().trim().max(180, "Keep the request note within 180 characters."),
+    postProcessingNote: z
+      .string()
+      .trim()
+      .max(180, "Keep the request note within 180 characters."),
+    postSourceSelection: z.enum(["raw", "ptc"]),
+    postOutputView: z.string().trim().min(1, "Output view is required."),
+    postSelectionTraceFamily: z.string().trim().min(1, "Trace family is required."),
+    postSelectionRepresentation: z.string().trim().min(1, "Representation is required."),
+    postSelectionDesignId: z.string().trim(),
+    postSelectionTraceIds: z.string().trim(),
+    postOperationName: z.string().trim().min(1, "Operation name is required."),
+    postOperationEnabled: z.boolean(),
+    postOperationConfigJson: z.string().trim().min(1, "Operation config JSON is required."),
+  })
+  .superRefine((values, context) => {
+    if (
+      values.postSourceSelection === "ptc" &&
+      !["y_matrix", "z_matrix"].includes(values.postSelectionTraceFamily.trim())
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["postSelectionTraceFamily"],
+        message: "PTC source is only available for Y/Z trace families.",
+      });
+    }
+  });
 
 type SimulationRequestValues = z.infer<typeof simulationRequestSchema>;
 
@@ -106,6 +120,7 @@ const defaultRequestValues: SimulationRequestValues = {
   ...defaultSimulationSetupFormValues,
   simulationNote: "",
   postProcessingNote: "",
+  postSourceSelection: "raw",
   postOutputView: "table",
   postSelectionTraceFamily: "y_matrix",
   postSelectionRepresentation: "imaginary",
@@ -141,6 +156,38 @@ const ptcModeOptions: readonly AppSelectOption[] = [
   { value: "auto", label: "Auto compensate" },
   { value: "manual", label: "Manual notes" },
 ];
+const postProcessingSourceOptions: readonly AppSelectOption[] = [
+  {
+    value: "raw",
+    label: "Raw",
+    description: "Use the solver-native upstream simulation result.",
+  },
+  {
+    value: "ptc",
+    label: "PTC",
+    description: "Use the PTC-capable upstream output when it was persisted.",
+  },
+];
+const postProcessingOutputViewOptions: readonly AppSelectOption[] = [
+  { value: "table", label: "Table" },
+  { value: "fit-report", label: "Fit report" },
+];
+const rawTraceFamilyOptions: readonly AppSelectOption[] = [
+  { value: "s_matrix", label: "S Matrix" },
+  { value: "y_matrix", label: "Y Matrix" },
+  { value: "z_matrix", label: "Z Matrix" },
+];
+const ptcTraceFamilyOptions: readonly AppSelectOption[] = [
+  { value: "y_matrix", label: "Y Matrix" },
+  { value: "z_matrix", label: "Z Matrix" },
+];
+const postProcessingRepresentationOptions: readonly AppSelectOption[] = [
+  { value: "real", label: "Real" },
+  { value: "imaginary", label: "Imaginary" },
+  { value: "magnitude", label: "Magnitude" },
+  { value: "phase", label: "Phase" },
+  { value: "db", label: "dB" },
+];
 
 const simulationStageFieldNames = [
   "simulationNote",
@@ -157,6 +204,9 @@ const simulationStageFieldNames = [
   "simulationHarmonicCount",
   "simulationOversampleFactor",
   "simulationSources",
+  "simulationPtcEnabled",
+  "simulationPtcMode",
+  "simulationPtcCompensatePorts",
 ] as const;
 
 function buildSimulationSearchHref(
@@ -707,8 +757,8 @@ function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputEle
   );
 }
 
-function LocalDraftBadge() {
-  return <SurfaceTag>Browser-local only</SurfaceTag>;
+function DraftOnlyBadge() {
+  return <SurfaceTag>Local draft only</SurfaceTag>;
 }
 
 function SetupSlideToggle({
@@ -923,6 +973,7 @@ export function SimulationWorkbenchShell() {
   const parameterSweepEnabled = form.watch("simulationParameterSweepEnabled");
   const harmonicBalanceEnabled = form.watch("simulationHarmonicBalanceEnabled");
   const ptcEnabled = form.watch("simulationPtcEnabled");
+  const postSourceSelection = form.watch("postSourceSelection");
   const watchedSimulationSources = form.watch("simulationSources");
   const selectedPtcPortsValue = form.watch("simulationPtcCompensatePorts");
 
@@ -1088,6 +1139,54 @@ export function SimulationWorkbenchShell() {
     () => new Set(parseCommaSeparatedStringValues(selectedPtcPortsValue)),
     [selectedPtcPortsValue],
   );
+  const downstreamSourceCapabilities =
+    latestSimulationTaskDetail?.downstreamSourceCapabilities ?? null;
+  const postProcessingSourceSelectOptions = useMemo<readonly AppSelectOption[]>(
+    () =>
+      postProcessingSourceOptions.map((option) => {
+        if (option.value === "raw") {
+          const available = downstreamSourceCapabilities?.raw.available ?? false;
+          return {
+            ...option,
+            description: available
+              ? "Use the solver-native upstream simulation result."
+              : "Raw output becomes available after the upstream simulation persists a result.",
+            disabled: !available,
+          };
+        }
+
+        const ptcCapability = downstreamSourceCapabilities?.ptc;
+        return {
+          ...option,
+          description:
+            ptcCapability?.available
+              ? ptcCapability.compensatePorts.length > 0
+                ? `Available from ${ptcCapability.compensatePorts.join(", ")}.`
+                : "Available from the upstream persisted PTC output."
+              : ptcCapability?.enabled
+                ? "PTC was enabled upstream, but no persisted PTC-capable output is available yet."
+                : "PTC is unavailable because the upstream simulation run did not persist PTC output.",
+          disabled: !(ptcCapability?.available ?? false),
+        };
+      }),
+    [downstreamSourceCapabilities],
+  );
+  const selectedPostProcessingSourceCapability =
+    postSourceSelection === "ptc"
+      ? downstreamSourceCapabilities?.ptc ?? null
+      : downstreamSourceCapabilities?.raw ?? null;
+  const postProcessingTraceFamilySelectOptions =
+    postSourceSelection === "ptc" ? ptcTraceFamilyOptions : rawTraceFamilyOptions;
+  const selectedPostProcessingSourceSummary =
+    postSourceSelection === "ptc"
+      ? selectedPostProcessingSourceCapability?.available
+        ? "PTC-capable upstream output is available for this simulation run."
+        : postProcessingSourceSelectOptions.find((option) => option.value === "ptc")?.description ??
+          "PTC output is not available from the upstream simulation run."
+      : selectedPostProcessingSourceCapability?.available
+        ? "Raw solver-native output is available for downstream post-processing."
+        : postProcessingSourceSelectOptions.find((option) => option.value === "raw")?.description ??
+          "Raw output is not available from the upstream simulation run.";
   const simulationSetupBlockedReason =
     resolvedDefinitionId === null
       ? "Select a definition before submitting a simulation run."
@@ -1099,11 +1198,17 @@ export function SimulationWorkbenchShell() {
   const simulationResultReady =
     latestSimulationStageTask?.resultAvailability === "ready" ||
     hasSimulationTaskResult(latestSimulationTaskDetail);
+  const postProcessingSourceBlockedReason =
+    !simulationResultReady
+      ? null
+      : !selectedPostProcessingSourceCapability?.available
+        ? selectedPostProcessingSourceSummary
+        : null;
   const postProcessingSetupBlockedReason =
     simulationSetupBlockedReason ??
     (!simulationResultReady
       ? "Simulation result required before post-processing can start."
-      : null);
+      : postProcessingSourceBlockedReason);
   const simulationSetupState = resolveSetupStageState({
     stageLabel: "Simulation",
     blockedReason: simulationSetupBlockedReason,
@@ -1194,6 +1299,33 @@ export function SimulationWorkbenchShell() {
       form.setValue("simulationPtcCompensatePorts", normalizedSelection, { shouldDirty: false });
     }
   }, [form, ptcEnabled, ptcPortOptions, selectedPtcPortsValue]);
+
+  useEffect(() => {
+    const rawAvailable = downstreamSourceCapabilities?.raw.available ?? false;
+    const ptcAvailable = downstreamSourceCapabilities?.ptc.available ?? false;
+
+    if (postSourceSelection === "ptc" && !ptcAvailable && rawAvailable) {
+      form.setValue("postSourceSelection", "raw", { shouldDirty: false });
+      return;
+    }
+
+    if (postSourceSelection === "raw" && !rawAvailable && ptcAvailable) {
+      form.setValue("postSourceSelection", "ptc", { shouldDirty: false });
+    }
+  }, [downstreamSourceCapabilities, form, postSourceSelection]);
+
+  useEffect(() => {
+    const allowedTraceFamilies = new Set(
+      postProcessingTraceFamilySelectOptions.map((option) => option.value),
+    );
+    const currentTraceFamily = form.getValues("postSelectionTraceFamily");
+    if (allowedTraceFamilies.has(currentTraceFamily)) {
+      return;
+    }
+
+    const fallbackTraceFamily = postProcessingTraceFamilySelectOptions[0]?.value ?? "y_matrix";
+    form.setValue("postSelectionTraceFamily", fallbackTraceFamily, { shouldDirty: false });
+  }, [form, postProcessingTraceFamilySelectOptions]);
 
   useEffect(() => {
     if (
@@ -2137,8 +2269,8 @@ export function SimulationWorkbenchShell() {
 
           <SetupSection
             title="PTC"
-            description="Choose the schema-defined ports for the browser-local PTC draft."
-            status={<LocalDraftBadge />}
+            description="Choose the schema-defined ports that should be included in the persisted PTC setup for this run."
+            status={<SurfaceTag tone="primary">Persisted on task</SurfaceTag>}
             actions={
               <button
                 type="button"
@@ -2152,23 +2284,22 @@ export function SimulationWorkbenchShell() {
                 }}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
               >
-                Reset local draft
+                Reset PTC
               </button>
             }
           >
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
               <p className="text-xs leading-5 text-muted-foreground">
-                Browser-local only. PTC selections are not submitted with the task and do not
-                rehydrate from persisted runs.
+                PTC is submitted with the simulation setup and restored from persisted task detail.
               </p>
 
               <div className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_220px]">
                 <SetupSlideToggle
                   checked={ptcEnabled}
-                  label="Enable PTC draft"
+                  label="Enable PTC"
                   description={
                     ptcPortOptions.length > 0
-                      ? "PTC stays browser-local for now and uses schema-derived ports."
+                      ? "Schema-derived ports are persisted with the simulation run."
                       : "No schema ports are available for PTC on this definition."
                   }
                   disabled={ptcPortOptions.length === 0}
@@ -2245,7 +2376,7 @@ export function SimulationWorkbenchShell() {
             status={
               <>
                 <SurfaceTag tone="primary">Persisted on task</SurfaceTag>
-                <LocalDraftBadge />
+                <DraftOnlyBadge />
               </>
             }
             actions={
@@ -2546,70 +2677,94 @@ export function SimulationWorkbenchShell() {
             }
           />
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Output View
-              </span>
-              <input
-                {...form.register("postOutputView")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="table"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Trace Family
-              </span>
-              <input
-                {...form.register("postSelectionTraceFamily")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="y_matrix"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Representation
-              </span>
-              <input
-                {...form.register("postSelectionRepresentation")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="imaginary"
-              />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Selection Design Id (optional)
-              </span>
-              <input
-                {...form.register("postSelectionDesignId")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
-                placeholder="design_flux_scan_a"
-              />
-            </label>
+          <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+            <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+              <CompactField label="Source Selection">
+                <AppInlineSelect
+                  ariaLabel="Post-processing source selection"
+                  value={postSourceSelection}
+                  onChange={(nextValue) => {
+                    form.setValue("postSourceSelection", nextValue as "raw" | "ptc", {
+                      shouldDirty: true,
+                    });
+                  }}
+                  options={postProcessingSourceSelectOptions}
+                />
+              </CompactField>
+              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">
+                  {postSourceSelection === "ptc" ? "PTC source" : "Raw source"}
+                </p>
+                <p className="mt-2 leading-6">{selectedPostProcessingSourceSummary}</p>
+              </div>
+            </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3 md:col-span-2">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Trace Ids (comma separated)
-              </span>
-              <input
+          <div className="grid gap-4 xl:grid-cols-4">
+            <CompactField label="Output View">
+              <AppInlineSelect
+                ariaLabel="Post-processing output view"
+                value={form.watch("postOutputView")}
+                onChange={(nextValue) => {
+                  form.setValue("postOutputView", nextValue, {
+                    shouldDirty: true,
+                  });
+                }}
+                options={postProcessingOutputViewOptions}
+              />
+            </CompactField>
+            <CompactField label="Trace Family" error={form.formState.errors.postSelectionTraceFamily?.message}>
+              <AppInlineSelect
+                ariaLabel="Post-processing trace family"
+                value={form.watch("postSelectionTraceFamily")}
+                onChange={(nextValue) => {
+                  form.setValue("postSelectionTraceFamily", nextValue, {
+                    shouldDirty: true,
+                  });
+                }}
+                options={postProcessingTraceFamilySelectOptions}
+              />
+            </CompactField>
+            <CompactField
+              label="Representation"
+              error={form.formState.errors.postSelectionRepresentation?.message}
+            >
+              <AppInlineSelect
+                ariaLabel="Post-processing representation"
+                value={form.watch("postSelectionRepresentation")}
+                onChange={(nextValue) => {
+                  form.setValue("postSelectionRepresentation", nextValue, {
+                    shouldDirty: true,
+                  });
+                }}
+                options={postProcessingRepresentationOptions}
+              />
+            </CompactField>
+            <CompactField label="Selection Design Id">
+              <SetupTextInput
+                {...form.register("postSelectionDesignId")}
+                placeholder="design_flux_scan_a"
+              />
+            </CompactField>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <CompactField
+              label="Trace Ids"
+              detail="Comma-separated trace ids included in the downstream selection."
+              className="md:col-span-2"
+            >
+              <SetupTextInput
                 {...form.register("postSelectionTraceIds")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
                 placeholder="trace_001, trace_002"
               />
-            </label>
-            <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Operation Name
-              </span>
-              <input
+            </CompactField>
+            <CompactField label="Operation Name" error={form.formState.errors.postOperationName?.message}>
+              <SetupTextInput
                 {...form.register("postOperationName")}
-                className="mt-2 w-full bg-transparent text-sm text-foreground outline-none"
                 placeholder="normalize"
               />
-            </label>
+            </CompactField>
           </div>
 
           <SetupSlideToggle

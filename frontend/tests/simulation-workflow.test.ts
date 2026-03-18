@@ -821,6 +821,11 @@ describe("simulation workflow source contract", () => {
             phaseDeg: null,
           },
         ],
+        ptc: {
+          enabled: true,
+          mode: "manual",
+          compensatePorts: ["port_1", "port_2"],
+        },
       },
     );
 
@@ -844,6 +849,7 @@ describe("simulation workflow source contract", () => {
       sourceMode: "1",
     });
     expect(rehydrated.simulationPtcEnabled).toBe(true);
+    expect(rehydrated.simulationPtcCompensatePorts).toBe("port_1, port_2");
     expect(rehydrated.simulationPtcManualNotes).toBe("manual offsets");
     expect(rehydrated.simulationAdvancedNotes).toBe("local-only advanced draft");
   });
@@ -918,13 +924,19 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Schema unit ·");
     expect(simulationWorkbenchSource).toContain("Add Axis");
     expect(simulationWorkbenchSource).toContain("Add Source");
-    expect(simulationWorkbenchSource).toContain("Browser-local only");
+    expect(simulationWorkbenchSource).toContain("Persisted on task");
+    expect(simulationWorkbenchSource).toContain(
+      "PTC is submitted with the simulation setup and restored from persisted task detail.",
+    );
     expect(simulationWorkbenchSource).toContain("Source Current Ip (A)");
     expect(simulationWorkbenchSource).toContain("Source Mode");
     expect(simulationWorkbenchSource).toContain("Pump Source");
     expect(simulationWorkbenchSource).toContain("Run Simulation");
     expect(simulationWorkbenchSource).toContain("Run Post Processing");
     expect(simulationWorkbenchSource).toContain("Open in Global Context");
+    expect(simulationWorkbenchSource).toContain("postSourceSelection");
+    expect(simulationWorkbenchSource).toContain("downstreamSourceCapabilities");
+    expect(simulationWorkbenchSource).toContain("PTC source");
     expect(simulationWorkbenchSource).toContain("Browser-saved per selected definition");
     expect(simulationWorkbenchSource).toContain("Manage");
     expect(simulationWorkbenchSource).toContain("Save");
@@ -959,6 +971,8 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Dataset not attached");
     expect(simulationWorkbenchSource).not.toContain("Sweep Parameter (optional)");
     expect(simulationWorkbenchSource).not.toContain("Phase (deg)");
+    expect(simulationWorkbenchSource).not.toContain("Browser-local only");
+    expect(simulationWorkbenchSource).not.toContain("not submitted with the task");
     expect(simulationWorkbenchSource).toContain("deriveSimulationSweepTargetOptions");
     expect(simulationWorkbenchSource).toContain("deriveSimulationPtcPortOptions");
     expect(simulationWorkbenchSource).toContain("No sweep targets are currently available");
@@ -1002,6 +1016,54 @@ describe("task api detail mapping", () => {
       worker_task_name: "simulation_run_task",
       request_ready: true,
       submitted_from_active_dataset: true,
+      simulation_setup: {
+        frequency_sweep: {
+          start_ghz: 4,
+          stop_ghz: 8,
+          point_count: 801,
+          spacing: "linear",
+        },
+        parameter_sweeps: [],
+        solver: {
+          solver_family: "harmonic_balance",
+          max_iterations: 120,
+          convergence_tolerance: 1e-7,
+          harmonic_balance: {
+            enabled: true,
+            harmonic_count: 5,
+            oversample_factor: 3,
+          },
+        },
+        sources: [
+          {
+            source_id: "src_drive_1",
+            kind: "pump",
+            target: "port_1",
+            amplitude: 0.9,
+            frequency_ghz: 5.1,
+            phase_deg: null,
+          },
+        ],
+        ptc: {
+          enabled: true,
+          mode: "manual",
+          compensate_ports: ["port_1", "port_2"],
+        },
+      },
+      downstream_source_capabilities: {
+        raw: {
+          available: true,
+          enabled: true,
+          mode: null,
+          compensate_ports: [],
+        },
+        ptc: {
+          available: true,
+          enabled: true,
+          mode: "manual",
+          compensate_ports: ["port_1", "port_2"],
+        },
+      },
       dispatch: {
         dispatch_key: "dispatch:31:simulation_run_task",
         status: "running",
@@ -1095,6 +1157,25 @@ describe("task api detail mapping", () => {
 
     expect(detail.resultRefs.traceBatchId).toBe(44);
     expect(detail.resultRefs.resultHandles[0]?.handleId).toBe("handle-44");
+    expect(detail.simulationSetup?.ptc).toEqual({
+      enabled: true,
+      mode: "manual",
+      compensatePorts: ["port_1", "port_2"],
+    });
+    expect(detail.downstreamSourceCapabilities).toEqual({
+      raw: {
+        available: true,
+        enabled: true,
+        mode: null,
+        compensatePorts: [],
+      },
+      ptc: {
+        available: true,
+        enabled: true,
+        mode: "manual",
+        compensatePorts: ["port_1", "port_2"],
+      },
+    });
     expect(detail.dispatch).toEqual({
       dispatchKey: "dispatch:31:simulation_run_task",
       status: "running",

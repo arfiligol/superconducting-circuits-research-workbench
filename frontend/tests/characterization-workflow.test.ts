@@ -311,17 +311,24 @@ describe("characterization task helpers", () => {
 });
 
 describe("characterization source contracts", () => {
-  it("keeps persisted artifact surfaces while adding shared task queue and attachment semantics", () => {
+  it("keeps characterization workbench-first while pushing queue browsing back to Global Context", () => {
     expect(characterizationWorkspaceSource).toContain("Analysis Registry");
     expect(characterizationWorkspaceSource).toContain("Run History");
     expect(characterizationWorkspaceSource).toContain("Result Summary List");
     expect(characterizationWorkspaceSource).toContain("Persisted Result Detail");
     expect(characterizationWorkspaceSource).toContain("Payload Preview");
     expect(characterizationWorkspaceSource).toContain("Identify & Tag");
-    expect(characterizationWorkspaceSource).toContain("Characterization Task Queue");
-    expect(characterizationWorkspaceSource).toContain("TaskLifecyclePanel");
-    expect(characterizationWorkspaceSource).toContain("Task Controls / Result Handoff");
-    expect(characterizationWorkspaceSource).toContain("Run History remains the persisted artifact surface");
+    expect(characterizationWorkspaceSource).toContain("Characterization Workbench Summary");
+    expect(characterizationWorkspaceSource).toContain("Current Run");
+    expect(characterizationWorkspaceSource).toContain(
+      "Queue browsing and task management stay in Global Context.",
+    );
+    expect(characterizationWorkspaceSource).toContain("Open in Global Context");
+    expect(characterizationWorkspaceSource).not.toContain("Characterization Task Queue");
+    expect(characterizationWorkspaceSource).not.toContain("TaskLifecyclePanel");
+    expect(characterizationWorkspaceSource).not.toContain("Task Controls / Result Handoff");
+    expect(characterizationWorkspaceSource).not.toContain("ResearchTaskQueuePanel");
+    expect(characterizationWorkspaceSource).not.toContain("ResearchWorkflowHero");
     expect(characterizationWorkspaceSource).not.toContain("Run Analysis");
     expect(characterizationWorkspaceSource).not.toContain("submitCharacterizationTask");
   });

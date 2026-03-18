@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { TracePreviewPlot } from "@/features/data-browser/components/trace-preview-plot";
 import { useRawDataBrowserData } from "@/features/data-browser/hooks/use-raw-data-browser-data";
 import { resolveTracePreviewSemantics } from "@/features/data-browser/lib/trace-preview";
-import { AppSelectField } from "@/features/shared/components/app-select";
+import { AppInlineSelect } from "@/features/shared/components/app-select";
 import { SurfaceHeader, SurfacePanel, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
 
 function readinessTone(value: "ready" | "inspect_only" | "blocked") {
@@ -59,6 +59,36 @@ function SearchField({
   );
 }
 
+function TraceFilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: Readonly<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly string[];
+}>) {
+  return (
+    <div className="min-w-0">
+      <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <AppInlineSelect
+        ariaLabel={label}
+        value={value}
+        onChange={onChange}
+        options={options.map((option) => ({
+          value: option,
+          label: option ? option.replaceAll("_", " ") : `All ${label.toLowerCase()}`,
+        }))}
+        placeholder={`All ${label.toLowerCase()}`}
+      />
+    </div>
+  );
+}
+
 export function RawDataBrowserWorkspace() {
   const browser = useRawDataBrowserData();
   const deferredDesignSearch = useDeferredValue(browser.designSearch);
@@ -98,16 +128,6 @@ export function RawDataBrowserWorkspace() {
         eyebrow="Raw Data Browser"
         title="Raw Data"
         description="Browse dataset-local design scopes, filter trace metadata, inspect compare readiness, and open one trace preview at a time without mixing metadata writes into this page."
-        actions={
-          <>
-            <SurfaceTag tone="primary">
-              {browser.activeDatasetState.activeDataset?.name ?? "No active dataset"}
-            </SurfaceTag>
-            <SurfaceTag>
-              {browser.activeDatasetState.activeDataset?.datasetId ?? "Attach a dataset in the shell"}
-            </SurfaceTag>
-          </>
-        }
       />
 
       <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
@@ -241,44 +261,53 @@ export function RawDataBrowserWorkspace() {
                 Unable to load trace summaries. {browser.tracesError.message}
               </div>
             ) : null}
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <div className="xl:col-span-2">
-                <SearchField
-                  label="Search Trace Summaries"
-                  placeholder="Search parameter, provenance, or trace id"
-                  value={browser.filters.search}
+            <div className="rounded-[1rem] border border-border bg-surface px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_220px_220px_240px]">
+                <div className="min-w-0">
+                  <p className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    <Search className="h-3.5 w-3.5" />
+                    Search Trace Summaries
+                  </p>
+                  <div className="flex items-center gap-3 rounded-[0.95rem] border border-border/80 bg-background px-3 py-3">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <input
+                      value={browser.filters.search}
+                      onChange={(event) => {
+                        browser.setFilters((current) => ({
+                          ...current,
+                          search: event.target.value,
+                        }));
+                      }}
+                      placeholder="Search parameter, provenance, or trace id"
+                      className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                </div>
+                <TraceFilterSelect
+                  label="Family"
+                  value={browser.filters.family}
                   onChange={(value) => {
-                    browser.setFilters((current) => ({
-                      ...current,
-                      search: value,
-                    }));
+                    browser.setFilters((current) => ({ ...current, family: value }));
                   }}
+                  options={["", "s_matrix", "y_matrix", "z_matrix"]}
+                />
+                <TraceFilterSelect
+                  label="Representation"
+                  value={browser.filters.representation}
+                  onChange={(value) => {
+                    browser.setFilters((current) => ({ ...current, representation: value }));
+                  }}
+                  options={["", "real", "imaginary", "magnitude", "phase"]}
+                />
+                <TraceFilterSelect
+                  label="Source"
+                  value={browser.filters.sourceKind}
+                  onChange={(value) => {
+                    browser.setFilters((current) => ({ ...current, sourceKind: value }));
+                  }}
+                  options={["", "measurement", "layout_simulation", "circuit_simulation"]}
                 />
               </div>
-              <FilterSelect
-                label="Family"
-                value={browser.filters.family}
-                onChange={(value) => {
-                  browser.setFilters((current) => ({ ...current, family: value }));
-                }}
-                options={["", "s_matrix", "y_matrix", "z_matrix"]}
-              />
-              <FilterSelect
-                label="Representation"
-                value={browser.filters.representation}
-                onChange={(value) => {
-                  browser.setFilters((current) => ({ ...current, representation: value }));
-                }}
-                options={["", "real", "imaginary", "magnitude", "phase"]}
-              />
-              <FilterSelect
-                label="Source"
-                value={browser.filters.sourceKind}
-                onChange={(value) => {
-                  browser.setFilters((current) => ({ ...current, sourceKind: value }));
-                }}
-                options={["", "measurement", "layout_simulation", "circuit_simulation"]}
-              />
             </div>
 
             {browser.isTracesLoading ? (
@@ -537,29 +566,5 @@ export function RawDataBrowserWorkspace() {
         </div>
       </section>
     </div>
-  );
-}
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: Readonly<{
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: readonly string[];
-}>) {
-  return (
-    <AppSelectField
-      label={label}
-      value={value}
-      onChange={onChange}
-      options={options.map((option) => ({
-        value: option,
-        label: option || "All",
-      }))}
-    />
   );
 }

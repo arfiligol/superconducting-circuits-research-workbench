@@ -6,64 +6,28 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useCharacterizationWorkflowData } from "@/features/characterization/hooks/use-characterization-workflow-data";
 import {
-  filterCharacterizationTasks,
   characterizationStatusTone,
   resolveCharacterizationSelectionRecovery,
   summarizeCharacterizationResults,
-  summarizeCharacterizationTasks,
-  type CharacterizationTaskScope,
-  type CharacterizationTaskStatusFilter,
   type CharacterizationResultStatusFilter,
 } from "@/features/characterization/lib/workflow";
-import {
-  ResearchTaskQueuePanel,
-  ResearchWorkflowHero,
-  ResearchWorkflowOverviewPanel,
-} from "@/features/shared/components/research-workflow-panels";
 import { AppSelectField } from "@/features/shared/components/app-select";
 import {
+  SurfaceHeader,
   SurfacePanel,
-  SurfaceStat,
   SurfaceTag,
   cx,
 } from "@/features/shared/components/surface-kit";
-import { TaskEventHistoryPanel } from "@/features/shared/components/task-event-history-panel";
-import {
-  TaskAttachmentPanel,
-  TaskLifecyclePanel,
-  TaskResultPanel,
-} from "@/features/shared/components/task-workflow-panels";
 import { ApiError } from "@/lib/api/client";
 import type { TaskExecutionStatus } from "@/lib/api/tasks";
-import { summarizeTaskEventHistory } from "@/lib/task-event-history";
-import { summarizeResearchWorkflowSurface } from "@/lib/research-workflow-surface";
+import { requestOpenGlobalContext } from "@/components/layout/workspace-shell-contract";
 import {
-  resolveTaskConnectionState,
   resolveTaskRecoveryNotice,
-  summarizeTaskActionGates,
   summarizeTaskContextBinding,
   summarizeTaskLifecycle,
   summarizeTaskResultHandoff,
   summarizeTaskResultSurface,
 } from "@/lib/task-surface";
-
-const taskScopeOptions = [
-  { label: "Active dataset", value: "dataset" },
-  { label: "All characterization tasks", value: "all" },
-] as const satisfies readonly Readonly<{
-  label: string;
-  value: CharacterizationTaskScope;
-}>[];
-
-const taskStatusOptions = [
-  { label: "All statuses", value: "all" },
-  { label: "Queued or running", value: "active" },
-  { label: "Completed", value: "completed" },
-  { label: "Failed", value: "failed" },
-] as const satisfies readonly Readonly<{
-  label: string;
-  value: CharacterizationTaskStatusFilter;
-}>[];
 
 const statusOptions = [
   { label: "All persisted results", value: "all" },
@@ -183,63 +147,22 @@ function taskStatusTone(status: TaskExecutionStatus) {
   return "default" as const;
 }
 
-type CharacterizationTaskCardProps = Readonly<{
-  isSelected: boolean;
-  onAttach: (taskId: number) => void;
-  task: ReturnType<typeof filterCharacterizationTasks>[number];
-}>;
-
-function CharacterizationTaskCard({
-  isSelected,
-  onAttach,
-  task,
-}: CharacterizationTaskCardProps) {
+function WorkbenchSummaryItem({
+  label,
+  value,
+  detail,
+}: Readonly<{
+  label: string;
+  value: string;
+  detail: string;
+}>) {
   return (
     <div
-      className={cx(
-        "rounded-[1rem] border px-4 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] transition",
-        isSelected
-          ? "border-primary/40 bg-card"
-          : "border-border bg-card hover:border-primary/25 hover:bg-primary/5",
-      )}
+      className="rounded-[0.95rem] border border-border bg-background px-4 py-4 shadow-[0_6px_18px_rgba(15,23,42,0.05)]"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-foreground">
-            {task.summary || "Characterization task"}
-          </h3>
-          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-            Task #{task.taskId}
-          </p>
-        </div>
-        <SurfaceTag tone={taskStatusTone(task.status)}>{task.status}</SurfaceTag>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-        <SurfaceTag tone="default">{task.executionMode}</SurfaceTag>
-        {task.datasetId ? <SurfaceTag tone="default">{task.datasetId}</SurfaceTag> : null}
-        <SurfaceTag tone="default">{task.ownerDisplayName}</SurfaceTag>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-4">
-        <p className="text-xs text-muted-foreground">
-          {task.hasActionAuthority
-            ? task.allowedActions.attach
-              ? "Attach is allowed by backend task authority."
-              : "Attach is blocked by backend task authority."
-            : "Attach authority is not exposed by the backend yet."}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            onAttach(task.taskId);
-          }}
-          disabled={!task.allowedActions.attach}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Attach
-        </button>
-      </div>
+      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-foreground">{value}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
     </div>
   );
 }
@@ -296,10 +219,6 @@ export function CharacterizationWorkspace() {
   } = useCharacterizationWorkflowData(parseTaskIdParam(searchParams.get("taskId")));
   const [selectedSourceSelection, setSelectedSourceSelection] = useState("");
   const [selectedDesignatedMetric, setSelectedDesignatedMetric] = useState("");
-  const [taskQuery, setTaskQuery] = useState("");
-  const [taskScope, setTaskScope] = useState<CharacterizationTaskScope>("dataset");
-  const [taskStatusFilter, setTaskStatusFilter] =
-    useState<CharacterizationTaskStatusFilter>("all");
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
 
   const selectionRecovery = resolveCharacterizationSelectionRecovery({
@@ -310,19 +229,6 @@ export function CharacterizationWorkspace() {
     resolvedResultId: selectedResultId,
   });
   const resultSummary = summarizeCharacterizationResults(results);
-  const taskSummary = summarizeCharacterizationTasks(characterizationTasks);
-  const filteredTasks = filterCharacterizationTasks(characterizationTasks, {
-    searchQuery: taskQuery,
-    scope: taskScope,
-    statusFilter: taskStatusFilter,
-    activeDatasetId: activeDatasetState.activeDataset?.datasetId ?? null,
-  });
-  const taskConnectionState = resolveTaskConnectionState({
-    requestedTaskId: parseTaskIdParam(searchParams.get("taskId")),
-    resolvedTaskId,
-    latestTaskId: latestCharacterizationTask?.taskId ?? null,
-    activeTask,
-  });
   const taskRecovery = resolveTaskRecoveryNotice(
     parseTaskIdParam(searchParams.get("taskId")),
     latestCharacterizationTask?.taskId ?? null,
@@ -330,19 +236,11 @@ export function CharacterizationWorkspace() {
   );
   const taskLifecycleSummary = summarizeTaskLifecycle(activeTask);
   const taskResultSummary = summarizeTaskResultSurface(activeTask);
-  const taskActionGates = summarizeTaskActionGates(activeTask);
   const taskContextBinding = summarizeTaskContextBinding({
     task: activeTask,
     activeDatasetId: activeDatasetState.activeDataset?.datasetId ?? null,
   });
   const taskResultHandoff = summarizeTaskResultHandoff(activeTask, taskResultSummary);
-  const eventHistorySummary = summarizeTaskEventHistory(activeTask);
-  const workflowSurfaceSummary = summarizeResearchWorkflowSurface({
-    connectionState: taskConnectionState,
-    lifecycleSummary: taskLifecycleSummary,
-    eventHistorySummary,
-    resultSummary: taskResultSummary,
-  });
   const selectedAnalysisLabel =
     analysisRegistry.find((analysis) => analysis.analysisId === selectedAnalysisId)?.label ??
     selectedAnalysisId;
@@ -359,15 +257,6 @@ export function CharacterizationWorkspace() {
       : taggingMutationState.state === "error"
         ? "border-amber-500/30 bg-amber-500/10"
         : "border-border bg-surface";
-  const eventHistoryNarrative = !activeTask
-    ? "Attach a characterization task to inspect persisted dispatch, event, and result state alongside run history."
-    : taskConnectionState.isStaleSnapshot && resolvedTaskId !== null
-      ? `Showing persisted events from task #${activeTask.taskId} while task #${resolvedTaskId} reattaches so the page keeps execution context during refresh or route changes.`
-      : taskConnectionState.hasNewerLatestTask && taskConnectionState.latestTaskId !== null
-        ? `Task #${taskConnectionState.selectedTaskId} remains attached for comparison while newer characterization activity exists on task #${taskConnectionState.latestTaskId}.`
-        : latestCharacterizationTask && resolvedTaskId === latestCharacterizationTask.taskId
-          ? `Following the latest characterization task #${latestCharacterizationTask.taskId}. Persisted events and result publication should continue to update here.`
-          : `Task #${activeTask.taskId} keeps a persisted event trail so refreshes do not erase characterization execution context.`;
 
   useEffect(() => {
     const firstSourceParameter = resultDetail?.identifySurface.sourceParameters[0];
@@ -421,42 +310,22 @@ export function CharacterizationWorkspace() {
 
   return (
     <div className="space-y-8">
-      <ResearchWorkflowHero
+      <SurfaceHeader
         eyebrow="Research Workflow"
         title="Characterization"
-        description="Attach persisted characterization tasks, recover them after refresh, and hand off terminal work into the persisted run-history and result surfaces without replacing those artifact views."
-        contextTags={[
-          {
-            label: activeDatasetState.activeDataset?.name ?? "Dataset not attached",
-            tone: activeDatasetState.activeDataset
-              ? "success"
-              : activeDatasetState.status === "error"
-                ? "warning"
-                : "default",
-          },
-          ...(selectedDesignId ? [{ label: selectedDesignId, tone: "primary" as const }] : []),
-          ...(resolvedTaskId !== null
-            ? [
-                {
-                  label: `Task #${resolvedTaskId}`,
-                  tone: taskConnectionState.isAttached ? "success" : "warning",
-                } as const,
-              ]
-            : []),
-          {
-            label: taskLifecycleSummary.statusLabel,
-            tone: taskLifecycleSummary.tone,
-          },
-          ...(taskConnectionState.isFollowingLatest
-            ? [{ label: "Following latest queue task", tone: "success" as const }]
-            : []),
-        ]}
-        submitAuthorityLabel="Characterization keeps persisted result and run-history surfaces intact while task attachment and recovery semantics come from the shared task contract."
-        stats={[
-          { label: "Task Rows", value: String(taskSummary.total) },
-          { label: "Active", value: String(taskSummary.activeCount), tone: "primary" },
-          { label: "Persisted Results", value: String(resultSummary.total) },
-        ]}
+        description="Stay inside the characterization workbench: design scope, analysis registry, run history, and persisted results. Queue browse and worker management stay in Global Context."
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              void handleRefreshWorkflow();
+            }}
+            disabled={isRefreshingWorkflow}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Refresh Workbench
+          </button>
+        }
       />
 
       {selectionRecovery ? (
@@ -473,13 +342,6 @@ export function CharacterizationWorkspace() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <SurfaceStat label="Visible Designs" value={String(designs.length)} tone="primary" />
-        <SurfaceStat label="Analysis Registry" value={String(analysisRegistry.length)} />
-        <SurfaceStat label="Persisted Results" value={String(resultSummary.total)} />
-        <SurfaceStat label="Run History Rows" value={String(runHistory.length)} />
-      </div>
-
       {!activeDatasetState.activeDataset ? (
         <SurfacePanel
           title="Attach Active Dataset"
@@ -492,168 +354,154 @@ export function CharacterizationWorkspace() {
         </SurfacePanel>
       ) : (
         <div className="space-y-6">
-          <ResearchTaskQueuePanel
-            title="Characterization Task Queue"
-            description="Attach persisted characterization tasks into the page body while keeping Run History as the artifact surface rather than a replacement queue."
-            searchValue={taskQuery}
-            onSearchChange={setTaskQuery}
-            searchPlaceholder="Find by task id, summary, or dataset"
-            scopeValue={taskScope}
-            onScopeChange={(value) => {
-              setTaskScope(value as CharacterizationTaskScope);
-            }}
-            scopeOptions={taskScopeOptions}
-            statusValue={taskStatusFilter}
-            onStatusChange={(value) => {
-              setTaskStatusFilter(value as CharacterizationTaskStatusFilter);
-            }}
-            statusOptions={taskStatusOptions}
-            summaryLabel={`Showing ${filteredTasks.length} of ${characterizationTasks.length} characterization tasks`}
-            summaryTags={[
-              ...(taskConnectionState.mode === "explicit" && resolvedTaskId !== null
-                ? [{ label: `Locked to task #${resolvedTaskId}`, tone: "warning" as const }]
-                : []),
-              ...(taskConnectionState.isFollowingLatest && taskConnectionState.latestTaskId !== null
-                ? [
-                    {
-                      label: `Following latest #${taskConnectionState.latestTaskId}`,
-                      tone: "success" as const,
-                    },
-                  ]
-                : []),
-            ]}
-            isRefreshing={isRefreshingWorkflow}
-            onRefresh={() => {
-              void handleRefreshWorkflow();
-            }}
-            isEmpty={filteredTasks.length === 0}
-            emptyMessage="No characterization tasks match the current filters."
-          >
-            {filteredTasks.map((task) => (
-              <CharacterizationTaskCard
-                key={task.taskId}
-                isSelected={task.taskId === resolvedTaskId}
-                onAttach={(taskId) => {
-                  replaceSearchState({ taskId: String(taskId) });
-                }}
-                task={task}
-              />
-            ))}
-          </ResearchTaskQueuePanel>
-
-          <ResearchWorkflowOverviewPanel
-            summary={workflowSurfaceSummary}
-            narrative={eventHistoryNarrative}
-          />
-
-          <TaskAttachmentPanel
-            task={activeTask}
-            connectionState={taskConnectionState}
-            recoveryNotice={taskRecovery}
-            taskErrorMessage={activeTaskErrorMessage}
-            isRefreshing={isRefreshingWorkflow}
-            isTransitioning={isTaskTransitioning}
-            onRefresh={() => {
-              void handleRefreshWorkflow();
-            }}
-            onAttachLatest={
-              latestCharacterizationTask
-                ? () => {
-                    replaceSearchState({ taskId: String(latestCharacterizationTask.taskId) });
-                  }
-                : null
-            }
-            onFollowLatest={() => {
-              replaceSearchState({ taskId: null });
-            }}
-          />
-
-          <TaskLifecyclePanel task={activeTask} summary={taskLifecycleSummary} />
-
           <SurfacePanel
-            title="Task Controls / Result Handoff"
-            description="Attach follows backend `allowed_actions.attach`. Run History remains the persisted artifact surface, while control availability stays keyed to backend action authority."
+            title="Characterization Workbench Summary"
+            description="One summary surface for the current workbench context. Queue browsing and task management stay in Global Context."
           >
-            <div className="grid gap-3 md:grid-cols-4">
-              {[
-                taskActionGates.attach,
-                taskActionGates.cancel,
-                taskActionGates.terminate,
-                taskActionGates.retry,
-              ].map((gate) => (
-                <div
-                  key={gate.action}
-                  className={cx(
-                    "rounded-[0.9rem] border px-4 py-4",
-                    gate.enabled
-                      ? "border-primary/25 bg-primary/10"
-                      : "border-border bg-surface",
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,0.45fr))]">
+              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  {selectedDesignId ? <SurfaceTag tone="primary">{selectedDesignId}</SurfaceTag> : null}
+                  {selectedAnalysisId ? (
+                    <SurfaceTag tone="default">{selectedAnalysisLabel}</SurfaceTag>
+                  ) : (
+                    <SurfaceTag tone="default">All analyses</SurfaceTag>
                   )}
-                >
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    {gate.action}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">
-                    {gate.enabled ? "Allowed" : "Blocked"}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">{gate.reason}</p>
+                  <SurfaceTag tone={taskLifecycleSummary.tone}>{taskLifecycleSummary.statusLabel}</SurfaceTag>
                 </div>
-              ))}
-            </div>
-
-            {!taskActionGates.hasActionAuthority ? (
-              <div className="mt-4 rounded-[0.9rem] border border-amber-500/30 bg-amber-500/8 px-4 py-3 text-sm text-foreground">
-                Backend `allowed_actions` are not present in the current task payload, so control
-                affordances stay gated rather than guessed in the page body.
-              </div>
-            ) : null}
-
-            {taskContextBinding ? (
-              <div
-                className={cx(
-                  "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
-                  taskContextBinding.tone === "warning"
-                    ? "border-amber-500/30 bg-amber-500/8 text-foreground"
-                    : "border-emerald-500/25 bg-emerald-500/10 text-foreground",
-                )}
-              >
-                <p className="font-medium">{taskContextBinding.title}</p>
-                <p className="mt-1">{taskContextBinding.message}</p>
-              </div>
-            ) : null}
-
-            <div
-              className={cx(
-                "mt-4 rounded-[0.9rem] border px-4 py-3 text-sm",
-                taskResultHandoff.tone === "success"
-                  ? "border-emerald-500/25 bg-emerald-500/10 text-foreground"
-                  : taskResultHandoff.tone === "warning"
-                    ? "border-amber-500/30 bg-amber-500/8 text-foreground"
-                    : taskResultHandoff.tone === "primary"
-                      ? "border-primary/30 bg-primary/8 text-foreground"
-                      : "border-border bg-surface text-muted-foreground",
-              )}
-            >
-              <p className="font-medium">{taskResultHandoff.title}</p>
-              <p className="mt-1">{taskResultHandoff.message}</p>
-              {taskResultHandoff.isReady ? (
-                <p className="mt-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Continue into Run History and Persisted Result Detail below for artifact review
-                  and identify tagging.
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Characterization stays focused on design-scoped registry, run history, and persisted result detail. Task awareness is kept compact so the workbench remains the primary surface.
                 </p>
-              ) : null}
+              </div>
+              <WorkbenchSummaryItem
+                label="Visible Designs"
+                value={String(designs.length)}
+                detail="Dataset-local design scopes available for characterization."
+              />
+              <WorkbenchSummaryItem
+                label="Persisted Results"
+                value={String(resultSummary.total)}
+                detail="Persisted characterization results in the current scope."
+              />
+              <WorkbenchSummaryItem
+                label="Run History"
+                value={String(runHistory.length)}
+                detail="Visible run-history rows on the current page."
+              />
             </div>
           </SurfacePanel>
 
-          <TaskEventHistoryPanel
-            title="Task Event History"
-            description="Inspect persisted event records so dispatch changes, progress movement, and task outcomes remain readable after refresh or recovery."
-            task={activeTask}
-            narrative={eventHistoryNarrative}
-            emptyMessage="No persisted characterization task events are attached yet. Use the queue above to attach a task into this workflow surface."
-          />
+          <SurfacePanel
+            title="Current Run"
+            description="Compact task awareness only. Attach, queue browse, and deeper recovery stay in Global Context."
+            actions={
+              <button
+                type="button"
+                onClick={() => {
+                  requestOpenGlobalContext("tasks");
+                }}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+              >
+                Open in Global Context
+              </button>
+            }
+          >
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
+              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      Current Characterization Run
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">
+                      {activeTask
+                        ? `Task #${activeTask.taskId}`
+                        : latestCharacterizationTask
+                          ? `Latest task #${latestCharacterizationTask.taskId}`
+                          : "No attached characterization task"}
+                    </p>
+                  </div>
+                  <SurfaceTag tone={taskLifecycleSummary.tone}>{taskLifecycleSummary.statusLabel}</SurfaceTag>
+                </div>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {activeTask?.summary ??
+                    latestCharacterizationTask?.summary ??
+                    "Persisted run awareness appears here after you attach a characterization task from Global Context."}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {activeTask ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        replaceSearchState({ taskId: String(activeTask.taskId) });
+                      }}
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                    >
+                      View Task
+                    </button>
+                  ) : null}
+                  {latestCharacterizationTask &&
+                  latestCharacterizationTask.taskId !== activeTask?.taskId ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        replaceSearchState({ taskId: String(latestCharacterizationTask.taskId) });
+                      }}
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                    >
+                      Resume Latest
+                    </button>
+                  ) : null}
+                </div>
+              </div>
 
-          <TaskResultPanel task={activeTask} summary={taskResultSummary} />
+              <div className="space-y-3">
+                <div
+                  className={cx(
+                    "rounded-[0.95rem] border px-4 py-4 text-sm",
+                    taskResultHandoff.tone === "success"
+                      ? "border-emerald-500/25 bg-emerald-500/10 text-foreground"
+                      : taskResultHandoff.tone === "warning"
+                        ? "border-amber-500/30 bg-amber-500/8 text-foreground"
+                        : taskResultHandoff.tone === "primary"
+                          ? "border-primary/30 bg-primary/8 text-foreground"
+                          : "border-border bg-surface text-muted-foreground",
+                  )}
+                >
+                  <p className="font-medium">{taskResultHandoff.title}</p>
+                  <p className="mt-2">{taskResultHandoff.message}</p>
+                </div>
+
+                {taskRecovery ? (
+                  <div className="rounded-[0.95rem] border border-amber-500/30 bg-amber-500/8 px-4 py-4 text-sm text-foreground">
+                    <p className="font-medium">{taskRecovery.title}</p>
+                    <p className="mt-2">{taskRecovery.message}</p>
+                  </div>
+                ) : null}
+
+                {!taskRecovery && taskContextBinding ? (
+                  <div
+                    className={cx(
+                      "rounded-[0.95rem] border px-4 py-4 text-sm",
+                      taskContextBinding.tone === "warning"
+                        ? "border-amber-500/30 bg-amber-500/8 text-foreground"
+                        : "border-emerald-500/25 bg-emerald-500/10 text-foreground",
+                    )}
+                  >
+                    <p className="font-medium">{taskContextBinding.title}</p>
+                    <p className="mt-2">{taskContextBinding.message}</p>
+                  </div>
+                ) : null}
+
+                {activeTaskErrorMessage ? (
+                  <div className="rounded-[0.95rem] border border-amber-500/30 bg-amber-500/8 px-4 py-4 text-sm text-foreground">
+                    <p className="font-medium">Task detail unavailable</p>
+                    <p className="mt-2">{activeTaskErrorMessage}</p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </SurfacePanel>
 
           <div className="grid gap-6 xl:grid-cols-[0.95fr_1fr_1fr]">
             <SurfacePanel

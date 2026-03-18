@@ -415,6 +415,11 @@ export function buildSimulationSetupDraft(
       frequency_ghz: source.pumpFreqGhz,
       phase_deg: null,
     })),
+    ptc: {
+      enabled: values.simulationPtcEnabled,
+      mode: values.simulationPtcMode,
+      compensate_ports: parseCommaSeparatedStringValues(values.simulationPtcCompensatePorts),
+    },
   };
 }
 
@@ -467,5 +472,9 @@ export function buildSimulationSetupFormValuesFromPersistedSetup<
             sourceMode: currentValues.simulationSources[0]?.sourceMode ?? "1",
           }))
         : [createDefaultSimulationSource()],
+    simulationPtcEnabled: setup.ptc?.enabled ?? false,
+    simulationPtcMode:
+      setup.ptc?.mode === "manual" ? "manual" : defaultSimulationSetupFormValues.simulationPtcMode,
+    simulationPtcCompensatePorts: setup.ptc?.compensatePorts.join(", ") ?? "",
   };
 }

@@ -116,17 +116,22 @@ function AppSelectCore({
           }
         }}
         className={cx(
-          "flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-[0.9rem] border border-border px-3 py-2 text-left text-sm text-foreground transition hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-60",
-          buttonClassName ?? "bg-card",
+          "group flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-[1rem] border border-border/85 px-4 py-3 text-left text-sm text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_24px_rgba(15,23,42,0.06)] transition hover:border-primary/40 hover:bg-primary/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60",
+          buttonClassName ?? "bg-background/90 backdrop-blur-sm",
           triggerClassName,
         )}
       >
-        <span className={cx("truncate", !selectedOption && "text-muted-foreground")}>
+        <span
+          className={cx(
+            "truncate pr-2 text-[0.95rem]",
+            !selectedOption && "text-muted-foreground",
+          )}
+        >
           {selectedOption?.label ?? placeholder}
         </span>
         <ChevronDown
           className={cx(
-            "h-4 w-4 shrink-0 text-muted-foreground transition",
+            "h-4 w-4 shrink-0 text-muted-foreground/90 transition group-hover:text-foreground",
             isOpen && "rotate-180",
           )}
         />
@@ -137,17 +142,17 @@ function AppSelectCore({
           role="listbox"
           aria-labelledby={labelId}
           className={cx(
-            "absolute left-0 right-0 top-[calc(100%+0.45rem)] z-30 max-h-72 overflow-y-auto rounded-[1rem] border border-border bg-card p-2 shadow-[0_18px_50px_rgba(15,23,42,0.24)]",
+            "absolute left-0 right-0 top-[calc(100%+0.55rem)] z-30 max-h-80 overflow-y-auto rounded-[1.15rem] border border-border/90 bg-card/95 p-2.5 shadow-[0_28px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/40 backdrop-blur-xl",
             menuClassName,
           )}
         >
           {optionGroups.map((group, groupIndex) => (
             <div
               key={group.label ?? `ungrouped-${groupIndex}`}
-              className={cx(groupIndex > 0 && "mt-2 border-t border-border/80 pt-2")}
+              className={cx(groupIndex > 0 && "mt-2 border-t border-border/70 pt-2")}
             >
               {group.label ? (
-                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   {group.label}
                 </p>
               ) : null}
@@ -168,10 +173,10 @@ function AppSelectCore({
                       onOpenChange(false);
                     }}
                     className={cx(
-                      "flex w-full cursor-pointer items-start justify-between gap-3 rounded-[0.85rem] px-3 py-2.5 text-left transition",
+                      "flex w-full cursor-pointer items-start justify-between gap-3 rounded-[0.95rem] border border-transparent px-3.5 py-3 text-left transition",
                       isSelected
-                        ? "bg-primary/10 text-foreground"
-                        : "text-foreground hover:bg-primary/5",
+                        ? "border-primary/18 bg-primary/[0.08] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
+                        : "text-foreground hover:border-border/80 hover:bg-background/80",
                       option.disabled && "cursor-not-allowed opacity-55",
                     )}
                   >
@@ -215,9 +220,15 @@ export function AppSelectField({
   return (
     <div
       ref={rootRef}
-      className={cx("relative rounded-xl border border-border bg-surface px-4 py-3", className)}
+      className={cx(
+        "relative rounded-[1rem] border border-border/80 bg-surface px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]",
+        className,
+      )}
     >
-      <p id={labelId} className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+      <p
+        id={labelId}
+        className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
+      >
         {label}
       </p>
       <AppSelectCore
@@ -269,7 +280,7 @@ export function AppInlineSelect({
         disabled={disabled}
         triggerClassName={triggerClassName}
         menuClassName={menuClassName}
-        buttonClassName="bg-surface"
+        buttonClassName="bg-surface/95 backdrop-blur-sm"
       />
     </div>
   );

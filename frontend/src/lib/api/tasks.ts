@@ -40,11 +40,27 @@ type SimulationSourceSpecResponseShape = Readonly<{
   frequency_ghz?: number | null;
   phase_deg?: number | null;
 }>;
+type SimulationPtcSetupResponseShape = Readonly<{
+  enabled: boolean;
+  mode: string;
+  compensate_ports: readonly string[];
+}>;
 type SimulationSetupResponseShape = Readonly<{
   frequency_sweep: SimulationFrequencySweepResponseShape;
   parameter_sweeps: readonly SimulationParameterSweepResponseShape[];
   solver: SimulationSolverSettingsResponseShape;
   sources: readonly SimulationSourceSpecResponseShape[];
+  ptc?: SimulationPtcSetupResponseShape | null;
+}>;
+type DownstreamSourceCapabilityResponseShape = Readonly<{
+  available: boolean;
+  enabled?: boolean | null;
+  mode?: string | null;
+  compensate_ports?: readonly string[];
+}>;
+type DownstreamSourceCapabilitiesResponseShape = Readonly<{
+  raw: DownstreamSourceCapabilityResponseShape;
+  ptc: DownstreamSourceCapabilityResponseShape;
 }>;
 type PostProcessingTraceSelectionResponseShape = Readonly<{
   trace_family: string;
@@ -71,6 +87,7 @@ type TaskResultHandoffResponseShape = Readonly<{
 type TaskDetailResponseShape = components["schemas"]["TaskDetailResponse"] &
   Readonly<{
     simulation_setup?: SimulationSetupResponseShape | null;
+    downstream_source_capabilities?: DownstreamSourceCapabilitiesResponseShape | null;
     post_processing_setup?: PostProcessingSetupResponseShape | null;
     upstream_task_id?: number | null;
     downstream_task_ids?: readonly number[];
@@ -161,12 +178,30 @@ export type SimulationSourceSpec = Readonly<{
   frequencyGhz: number | null;
   phaseDeg: number | null;
 }>;
+export type SimulationPtcSetup = Readonly<{
+  enabled: boolean;
+  mode: string;
+  compensatePorts: readonly string[];
+}>;
 
 export type SimulationSetup = Readonly<{
   frequencySweep: SimulationFrequencySweep;
   parameterSweeps: readonly SimulationParameterSweep[];
   solver: SimulationSolverSettings;
   sources: readonly SimulationSourceSpec[];
+  ptc?: SimulationPtcSetup | null;
+}>;
+
+export type DownstreamSourceCapability = Readonly<{
+  available: boolean;
+  enabled: boolean;
+  mode: string | null;
+  compensatePorts: readonly string[];
+}>;
+
+export type DownstreamSourceCapabilities = Readonly<{
+  raw: DownstreamSourceCapability;
+  ptc: DownstreamSourceCapability;
 }>;
 
 export type PostProcessingTraceSelection = Readonly<{
@@ -222,12 +257,18 @@ export type SimulationSourceSpecDraft = Readonly<{
   frequency_ghz?: number | null;
   phase_deg?: number | null;
 }>;
+export type SimulationPtcSetupDraft = Readonly<{
+  enabled: boolean;
+  mode: string;
+  compensate_ports: readonly string[];
+}>;
 
 export type SimulationSetupDraft = Readonly<{
   frequency_sweep: SimulationFrequencySweepDraft;
   parameter_sweeps?: readonly SimulationParameterSweepDraft[];
   solver: SimulationSolverSettingsDraft;
   sources: readonly SimulationSourceSpecDraft[];
+  ptc?: SimulationPtcSetupDraft | null;
 }>;
 
 export type PostProcessingTraceSelectionDraft = Readonly<{
@@ -367,6 +408,7 @@ export type TaskDetail = TaskSummary &
     requestReady: boolean;
     submittedFromActiveDataset: boolean;
     simulationSetup?: SimulationSetup | null;
+    downstreamSourceCapabilities?: DownstreamSourceCapabilities | null;
     postProcessingSetup?: PostProcessingSetup | null;
     upstreamTaskId?: number | null;
     downstreamTaskIds?: readonly number[];
@@ -434,6 +476,16 @@ const defaultTaskResultHandoff: TaskResultHandoff = {
   primaryResultHandleId: null,
   resultHandleCount: 0,
   tracePayloadAvailable: false,
+};
+const defaultDownstreamSourceCapability: DownstreamSourceCapability = {
+  available: false,
+  enabled: false,
+  mode: null,
+  compensatePorts: [],
+};
+const defaultDownstreamSourceCapabilities: DownstreamSourceCapabilities = {
+  raw: defaultDownstreamSourceCapability,
+  ptc: defaultDownstreamSourceCapability,
 };
 
 export function taskDetailKey(taskId: number) {
@@ -579,6 +631,42 @@ function mapSimulationSetupResponse(
       frequencyGhz: source.frequency_ghz ?? null,
       phaseDeg: source.phase_deg ?? null,
     })),
+    ptc: payload.ptc
+      ? {
+          enabled: payload.ptc.enabled,
+          mode: payload.ptc.mode,
+          compensatePorts: [...payload.ptc.compensate_ports],
+        }
+      : null,
+  };
+}
+
+function mapDownstreamSourceCapability(
+  payload: DownstreamSourceCapabilityResponseShape | null | undefined,
+  fallback: DownstreamSourceCapability = defaultDownstreamSourceCapability,
+): DownstreamSourceCapability {
+  if (!payload) {
+    return fallback;
+  }
+
+  return {
+    available: payload.available,
+    enabled: payload.enabled ?? payload.available,
+    mode: payload.mode ?? null,
+    compensatePorts: [...(payload.compensate_ports ?? [])],
+  };
+}
+
+function mapDownstreamSourceCapabilities(
+  payload: DownstreamSourceCapabilitiesResponseShape | null | undefined,
+): DownstreamSourceCapabilities {
+  if (!payload) {
+    return defaultDownstreamSourceCapabilities;
+  }
+
+  return {
+    raw: mapDownstreamSourceCapability(payload.raw, defaultDownstreamSourceCapabilities.raw),
+    ptc: mapDownstreamSourceCapability(payload.ptc, defaultDownstreamSourceCapabilities.ptc),
   };
 }
 
@@ -776,6 +864,9 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
     requestReady: payload.request_ready,
     submittedFromActiveDataset: payload.submitted_from_active_dataset,
     simulationSetup: mapSimulationSetupResponse(payload.simulation_setup),
+    downstreamSourceCapabilities: payload.downstream_source_capabilities
+      ? mapDownstreamSourceCapabilities(payload.downstream_source_capabilities)
+      : null,
     postProcessingSetup: mapPostProcessingSetupResponse(payload.post_processing_setup),
     upstreamTaskId: payload.upstream_task_id ?? null,
     downstreamTaskIds: [...(payload.downstream_task_ids ?? [])],

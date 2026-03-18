@@ -197,8 +197,20 @@ describe("page-boundary source contracts", () => {
   it("strengthens raw-data search affordance and keeps the wording consistent", () => {
     expect(rawDataWorkspaceSource).toContain("function SearchField");
     expect(rawDataWorkspaceSource).toContain('label="Search Design"');
-    expect(rawDataWorkspaceSource).toContain('label="Search Trace Summaries"');
+    expect(rawDataWorkspaceSource).toContain("Search Trace Summaries");
     expect(rawDataWorkspaceSource).toContain("<Search className=");
+  });
+
+  it("keeps trace-summary filters in one dense unified block instead of fragmented mini cards", () => {
+    expect(rawDataWorkspaceSource).toContain("function TraceFilterSelect");
+    expect(rawDataWorkspaceSource).toContain(
+      'grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_220px_220px_240px]',
+    );
+    expect(rawDataWorkspaceSource).toContain('label="Family"');
+    expect(rawDataWorkspaceSource).toContain('label="Representation"');
+    expect(rawDataWorkspaceSource).toContain('label="Source"');
+    expect(rawDataWorkspaceSource).toContain("AppInlineSelect");
+    expect(rawDataWorkspaceSource).not.toContain("function FilterSelect");
   });
 
   it("rebuilds single trace preview as plot and table views over one payload", () => {
