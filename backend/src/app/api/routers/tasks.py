@@ -322,6 +322,8 @@ def _serialize_queue_row(queue_row: TaskQueueRow) -> dict[str, object]:
         "task_kind": queue_row.task_kind,
         "owner_display_name": queue_row.owner_display_name,
         "visibility_scope": queue_row.visibility_scope,
+        "dataset_id": queue_row.dataset_id,
+        "definition_id": queue_row.definition_id,
         "updated_at": queue_row.updated_at,
         "result_availability": queue_row.result_availability,
         "allowed_actions": {

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
@@ -18,6 +18,10 @@ from src.app.infrastructure.storage_reference_factory import (
 
 class TaskDetailRepository(Protocol):
     def get_task(self, task_id: int) -> TaskDetail | None: ...
+
+
+class TaskListingRepository(TaskDetailRepository, Protocol):
+    def list_tasks(self) -> Sequence[TaskDetail]: ...
 
 
 class TaskExecutionRuntime(Protocol):
@@ -126,6 +130,49 @@ class LocalSimulationExecutionDriver:
                 message=str(exc),
                 worker_pid=worker_pid,
             )
+
+
+class LocalTaskExecutionDriver:
+    def __init__(
+        self,
+        *,
+        task_repository: TaskListingRepository,
+        execution_runtime_factory: Callable[[], TaskExecutionRuntime],
+        simulation_driver: LocalSimulationExecutionDriver,
+    ) -> None:
+        self._task_repository = task_repository
+        self._execution_runtime_factory = execution_runtime_factory
+        self._simulation_driver = simulation_driver
+
+    def recover_queued_tasks(self) -> None:
+        queued_local_tasks = sorted(
+            (
+                task
+                for task in self._task_repository.list_tasks()
+                if task.visibility_scope == "local" and task.status == "queued"
+            ),
+            key=lambda task: (task.submitted_at, task.task_id),
+        )
+        for task in queued_local_tasks:
+            self.execute_submitted_task(task.task_id)
+
+    def execute_submitted_task(self, task_id: int) -> None:
+        task = self._task_repository.get_task(task_id)
+        if task is None or task.visibility_scope != "local" or task.status != "queued":
+            return
+        if task.kind == "simulation":
+            self._simulation_driver.execute_submitted_task(task.task_id)
+            return
+        if task.kind != "characterization":
+            return
+        runtime = self._execution_runtime_factory()
+        runtime.fail_task(
+            task.task_id,
+            recorded_at=datetime.now(UTC),
+            exc_type="UnsupportedExecutionLane",
+            message=f"No local execution lane is registered for {task.kind} tasks.",
+            worker_pid=os.getpid(),
+        )
 
 
 def _heartbeat_details(task: TaskDetail) -> dict[str, object]:

@@ -602,6 +602,8 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
         "task_kind": "simulation",
         "owner_display_name": "Local Operator",
         "visibility_scope": "local",
+        "dataset_id": "local-dataset-001",
+        "definition_id": 3,
         "updated_at": "2026-03-17 08:50:00",
         "result_availability": "pending",
         "allowed_actions": {
@@ -616,7 +618,7 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
     assert payload["data"]["worker_summary"] == [
         {
             "lane": "simulation",
-            "healthy_processors": 1,
+            "healthy_processors": 0,
             "busy_processors": 1,
             "degraded_processors": 0,
             "draining_processors": 0,
@@ -624,11 +626,11 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
         },
         {
             "lane": "characterization",
-            "healthy_processors": 1,
+            "healthy_processors": 0,
             "busy_processors": 0,
             "degraded_processors": 0,
             "draining_processors": 0,
-            "offline_processors": 0,
+            "offline_processors": 1,
         },
     ]
     assert payload["meta"]["filter_echo"] == {
@@ -730,22 +732,26 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert task["task_id"] == 306
     assert task["dataset_id"] == "local-dataset-001"
     assert task["visibility_scope"] == "local"
-    assert task["dispatch"]["status"] == "accepted"
+    assert task["status"] == "failed"
+    assert task["dispatch"]["status"] == "failed"
     assert task["result_handoff"] == {
-        "availability": "pending",
+        "availability": "none",
         "primary_result_handle_id": "task-result:306:primary",
         "result_handle_count": 1,
         "trace_payload_available": False,
     }
     assert task["events"][0]["metadata"]["audit_action"] == "task.submitted"
+    assert task["events"][-1]["event_type"] == "task_failed"
+    assert task["events"][-1]["metadata"]["audit_action"] == "worker.task_failed"
 
     records = get_task_audit_repository().list_records_for_resource(
         resource_kind="task",
         resource_id="306",
     )
-    assert len(records) == 1
-    assert records[0].action_kind == "task.submitted"
-    assert records[0].outcome == "accepted"
+    assert sorted(record.action_kind for record in records) == [
+        "task.submitted",
+        "worker.task_failed",
+    ]
 
 
 def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> None:
@@ -958,28 +964,95 @@ def test_local_simulation_submit_does_not_leave_queue_stuck_or_worker_summary_mi
 
     assert submitted_row["status"] == "completed"
     assert submitted_row["result_availability"] == "ready"
-    assert simulation_summary["healthy_processors"] == 1
-    assert simulation_summary["busy_processors"] == 0
+    assert simulation_summary["healthy_processors"] == 0
+    assert simulation_summary["busy_processors"] == 1
     assert simulation_summary["degraded_processors"] == 0
     assert simulation_summary["draining_processors"] == 0
-    assert simulation_summary["offline_processors"] == 1
+    assert simulation_summary["offline_processors"] == 0
 
 
-def test_submitted_task_survives_runtime_reset_in_routes() -> None:
-    created = client.post("/tasks", json={"kind": "characterization"}).json()["data"]["task"]
+def test_retry_local_simulation_executes_to_terminal_in_routes() -> None:
+    submitted = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "dataset_id": "local-dataset-001",
+            "definition_id": 3,
+            "summary": "Retry route truthfulness proof.",
+            "simulation_setup": _simulation_setup_payload(
+                ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+            ),
+        },
+    ).json()["data"]["task"]
+    retried = client.post(f"/tasks/{submitted['task_id']}/retry").json()["data"]["task"]
+
+    assert retried["retry_of_task_id"] == submitted["task_id"]
+    assert retried["status"] == "completed"
+    assert retried["dispatch"]["status"] == "completed"
+    assert retried["result_handoff"]["availability"] == "ready"
+    assert retried["events"][-1]["event_type"] == "task_completed"
+
+
+def test_runtime_bootstrap_recovers_stranded_local_simulation_task() -> None:
+    service = get_task_service()
+    original_driver = service._execution_driver
+    service.set_execution_driver(None)
+    try:
+        created = client.post(
+            "/tasks",
+            json={
+                "kind": "simulation",
+                "dataset_id": "local-dataset-001",
+                "definition_id": 3,
+                "summary": "Bootstrap recovery proof.",
+                "simulation_setup": _simulation_setup_payload(
+                    ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+                ),
+            },
+        ).json()["data"]["task"]
+    finally:
+        service.set_execution_driver(original_driver)
+
+    assert created["status"] == "queued"
+    assert created["dispatch"]["status"] == "accepted"
+
+    reset_runtime_state()
+
+    reloaded = client.get(f"/tasks/{created['task_id']}").json()["data"]
+    assert reloaded["status"] == "completed"
+    assert reloaded["dispatch"]["status"] == "completed"
+    assert reloaded["result_handoff"]["availability"] == "ready"
+    assert reloaded["events"][-1]["event_type"] == "task_completed"
+
+
+def test_runtime_bootstrap_fails_stranded_local_unsupported_task() -> None:
+    service = get_task_service()
+    original_driver = service._execution_driver
+    service.set_execution_driver(None)
+    try:
+        created = client.post("/tasks", json={"kind": "characterization"}).json()["data"]["task"]
+    finally:
+        service.set_execution_driver(original_driver)
+
+    assert created["status"] == "queued"
+    assert created["dispatch"]["status"] == "accepted"
 
     reset_runtime_state()
 
     queue_response = client.get("/tasks")
     assert [row["task_id"] for row in queue_response.json()["data"]["rows"]][:2] == [300, 306]
 
-    detail_response = client.get("/tasks/306")
+    detail_response = client.get(f"/tasks/{created['task_id']}")
     assert detail_response.status_code == 200
-    assert detail_response.json()["data"]["dispatch"] == created["dispatch"]
+    detail = detail_response.json()["data"]
+    assert detail["status"] == "failed"
+    assert detail["dispatch"]["status"] == "failed"
+    assert detail["events"][-1]["event_type"] == "task_failed"
 
-    events_response = client.get("/tasks/306/events?order=asc&limit=10")
+    events_response = client.get(f"/tasks/{created['task_id']}/events?order=asc&limit=10")
     assert [event["event_type"] for event in events_response.json()["data"]["events"]] == [
-        "task_submitted"
+        "task_submitted",
+        "task_failed",
     ]
 
 
@@ -1072,14 +1145,20 @@ def test_retry_denies_non_terminal_task() -> None:
 
 
 def test_runtime_updates_flow_through_detail_events_and_result_handoff() -> None:
-    submitted_task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary="Execution runtime route proof.",
+    service = get_task_service()
+    original_driver = service._execution_driver
+    service.set_execution_driver(None)
+    try:
+        submitted_task = service.submit_task(
+            TaskSubmissionDraft(
+                kind="characterization",
+                dataset_id=None,
+                definition_id=None,
+                summary="Execution runtime route proof.",
+            )
         )
-    )
+    finally:
+        service.set_execution_driver(original_driver)
 
     get_task_execution_runtime().start_task(
         submitted_task.task_id,

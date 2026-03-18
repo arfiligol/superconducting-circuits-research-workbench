@@ -462,6 +462,8 @@ class TaskQueueRow:
     task_kind: TaskKind
     owner_display_name: str
     visibility_scope: TaskVisibilityScope
+    dataset_id: str | None
+    definition_id: int | None
     updated_at: str
     result_availability: TaskResultAvailability
     allowed_actions: TaskAllowedActions

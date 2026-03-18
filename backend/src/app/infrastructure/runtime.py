@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from functools import lru_cache
 
 from src.app.infrastructure.audit_store import (
@@ -9,6 +10,7 @@ from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapt
 from src.app.infrastructure.invitation_delivery import WorkspaceInvitationDeliveryService
 from src.app.infrastructure.local_simulation_execution_driver import (
     LocalSimulationExecutionDriver,
+    LocalTaskExecutionDriver,
 )
 from src.app.infrastructure.persistence import (
     SqliteRewriteStorageMetadataRepository,
@@ -38,6 +40,14 @@ from src.app.services.simulation_result_explorer_service import (
 from src.app.services.task_service import TaskService
 from src.app.services.workspace_collaboration_service import WorkspaceCollaborationService
 from src.app.settings import get_settings
+
+
+@dataclass(frozen=True)
+class _TaskRuntimeBundle:
+    task_service: TaskService
+    execution_runtime: RewriteExecutionRuntime
+    local_task_execution_driver: LocalTaskExecutionDriver
+    local_simulation_execution_driver: LocalSimulationExecutionDriver
 
 
 @lru_cache(maxsize=1)
@@ -173,16 +183,8 @@ def get_audit_log_service() -> AuditLogService:
 
 
 @lru_cache(maxsize=1)
-def get_local_simulation_execution_driver() -> LocalSimulationExecutionDriver:
-    return LocalSimulationExecutionDriver(
-        task_repository=get_rewrite_task_repository(),
-        execution_runtime_factory=get_task_execution_runtime,
-    )
-
-
-@lru_cache(maxsize=1)
-def get_task_service() -> TaskService:
-    return TaskService(
+def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
+    task_service = TaskService(
         repository=get_rewrite_task_repository(),
         audit_repository=get_task_audit_repository(),
         processor_summary_repository=get_processor_runtime_repository(),
@@ -190,8 +192,39 @@ def get_task_service() -> TaskService:
         dataset_repository=get_rewrite_catalog_repository(),
         circuit_definition_repository=get_rewrite_catalog_repository(),
         authorization_service=get_authorization_service(),
-        execution_driver=get_local_simulation_execution_driver(),
+        execution_driver=None,
     )
+    execution_runtime = RewriteExecutionRuntime(
+        task_service=task_service,
+        task_repository=get_rewrite_task_repository(),
+        audit_repository=get_task_audit_repository(),
+        processor_runtime_repository=get_processor_runtime_repository(),
+    )
+    local_simulation_execution_driver = LocalSimulationExecutionDriver(
+        task_repository=get_rewrite_task_repository(),
+        execution_runtime_factory=lambda: execution_runtime,
+    )
+    local_task_execution_driver = LocalTaskExecutionDriver(
+        task_repository=get_rewrite_task_repository(),
+        execution_runtime_factory=lambda: execution_runtime,
+        simulation_driver=local_simulation_execution_driver,
+    )
+    task_service.set_execution_driver(local_task_execution_driver)
+    local_task_execution_driver.recover_queued_tasks()
+    return _TaskRuntimeBundle(
+        task_service=task_service,
+        execution_runtime=execution_runtime,
+        local_task_execution_driver=local_task_execution_driver,
+        local_simulation_execution_driver=local_simulation_execution_driver,
+    )
+
+
+def get_local_simulation_execution_driver() -> LocalSimulationExecutionDriver:
+    return _get_task_runtime_bundle().local_simulation_execution_driver
+
+
+def get_task_service() -> TaskService:
+    return _get_task_runtime_bundle().task_service
 
 
 @lru_cache(maxsize=1)
@@ -199,14 +232,8 @@ def get_simulation_result_explorer_service() -> SimulationResultExplorerService:
     return SimulationResultExplorerService(get_task_service())
 
 
-@lru_cache(maxsize=1)
 def get_task_execution_runtime() -> RewriteExecutionRuntime:
-    return RewriteExecutionRuntime(
-        task_service=get_task_service(),
-        task_repository=get_rewrite_task_repository(),
-        audit_repository=get_task_audit_repository(),
-        processor_runtime_repository=get_processor_runtime_repository(),
-    )
+    return _get_task_runtime_bundle().execution_runtime
 
 
 def reset_runtime_state() -> None:
@@ -226,7 +253,5 @@ def reset_runtime_state() -> None:
     get_session_service.cache_clear()
     get_workspace_collaboration_service.cache_clear()
     get_audit_log_service.cache_clear()
-    get_local_simulation_execution_driver.cache_clear()
-    get_task_service.cache_clear()
+    _get_task_runtime_bundle.cache_clear()
     get_simulation_result_explorer_service.cache_clear()
-    get_task_execution_runtime.cache_clear()
