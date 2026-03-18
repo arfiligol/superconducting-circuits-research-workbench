@@ -125,6 +125,92 @@ type TaskQueueMetaResponseShape = Readonly<{
   generated_at?: string;
   total_count?: number;
 }>;
+type SimulationResultExplorerSourceResponseShape = Readonly<{
+  key: string;
+  label: string;
+}>;
+type SimulationResultExplorerMetricResponseShape = Readonly<{
+  key: string;
+  label: string;
+  unit: string;
+}>;
+type SimulationResultExplorerFamilyResponseShape = Readonly<{
+  key: string;
+  label: string;
+  available_sources: readonly SimulationResultExplorerSourceResponseShape[];
+  available_metrics: readonly SimulationResultExplorerMetricResponseShape[];
+}>;
+type SimulationResultExplorerPortResponseShape = Readonly<{
+  port: number;
+  label: string;
+}>;
+type SimulationResultExplorerModeResponseShape = Readonly<{
+  key: string;
+  label: string;
+}>;
+type SimulationResultExplorerSelectionResponseShape = Readonly<{
+  family: string;
+  source: string;
+  metric: string;
+  z0_ohm: number;
+  output_port: number;
+  input_port: number;
+  output_port_label?: string;
+  input_port_label?: string;
+  output_mode?: string;
+  input_mode?: string;
+}>;
+type SimulationResultExplorerPlotAxisResponseShape = Readonly<{
+  label: string;
+  unit: string;
+  values?: readonly number[];
+}>;
+type SimulationResultExplorerPlotSeriesResponseShape = Readonly<{
+  series_id: string;
+  label: string;
+  values: readonly number[];
+  unit: string;
+}>;
+type SimulationResultExplorerPlotResponseShape = Readonly<{
+  x_axis: SimulationResultExplorerPlotAxisResponseShape;
+  y_axis: SimulationResultExplorerPlotAxisResponseShape;
+  series: readonly SimulationResultExplorerPlotSeriesResponseShape[];
+  metadata: Readonly<{
+    family: string;
+    source: string;
+    metric: string;
+    z0_ohm: number;
+    output_port: number;
+    input_port: number;
+    output_port_label?: string;
+    input_port_label?: string;
+    trace_payload_store_key?: string | null;
+  }>;
+}>;
+type SimulationResultExplorerBootstrapResponseShape = Readonly<{
+  families: readonly SimulationResultExplorerFamilyResponseShape[];
+  trace_selector: Readonly<{
+    output_ports: readonly SimulationResultExplorerPortResponseShape[];
+    input_ports: readonly SimulationResultExplorerPortResponseShape[];
+    output_modes: readonly SimulationResultExplorerModeResponseShape[];
+    input_modes: readonly SimulationResultExplorerModeResponseShape[];
+  }>;
+  default_selection: SimulationResultExplorerSelectionResponseShape;
+}>;
+type SimulationResultExplorerResultBasisResponseShape = Readonly<{
+  trace_payload_available: boolean;
+  primary_result_handle_id: string | null;
+  trace_batch_id: number | null;
+}>;
+type SimulationResultExplorerResponseShape = Readonly<{
+  task_id: number;
+  task_status: TaskExecutionStatus;
+  runtime_mode: "local" | "online";
+  bootstrap: SimulationResultExplorerBootstrapResponseShape;
+  selection: SimulationResultExplorerSelectionResponseShape;
+  plot: SimulationResultExplorerPlotResponseShape;
+  result_basis: SimulationResultExplorerResultBasisResponseShape;
+}>;
 
 export type TaskKind = "simulation" | "post_processing" | "characterization";
 export type TaskLane = "simulation" | "characterization";
@@ -455,6 +541,98 @@ export type WorkerLaneSummary = Readonly<{
   drainingProcessors: number;
   offlineProcessors: number;
 }>;
+export type SimulationResultExplorerSource = Readonly<{
+  key: string;
+  label: string;
+}>;
+export type SimulationResultExplorerMetric = Readonly<{
+  key: string;
+  label: string;
+  unit: string;
+}>;
+export type SimulationResultExplorerFamily = Readonly<{
+  key: string;
+  label: string;
+  availableSources: readonly SimulationResultExplorerSource[];
+  availableMetrics: readonly SimulationResultExplorerMetric[];
+}>;
+export type SimulationResultExplorerPort = Readonly<{
+  port: number;
+  label: string;
+}>;
+export type SimulationResultExplorerMode = Readonly<{
+  key: string;
+  label: string;
+}>;
+export type SimulationResultExplorerSelection = Readonly<{
+  family: string;
+  source: string;
+  metric: string;
+  z0Ohm: number;
+  outputPort: number;
+  inputPort: number;
+  outputPortLabel: string | null;
+  inputPortLabel: string | null;
+  outputMode: string | null;
+  inputMode: string | null;
+}>;
+export type SimulationResultExplorerPlotAxis = Readonly<{
+  label: string;
+  unit: string;
+  values: readonly number[];
+}>;
+export type SimulationResultExplorerSeries = Readonly<{
+  seriesId: string;
+  label: string;
+  values: readonly number[];
+  unit: string;
+}>;
+export type SimulationResultExplorerPlot = Readonly<{
+  xAxis: SimulationResultExplorerPlotAxis;
+  yAxis: SimulationResultExplorerPlotAxis;
+  series: readonly SimulationResultExplorerSeries[];
+  metadata: Readonly<{
+    family: string;
+    source: string;
+    metric: string;
+    z0Ohm: number;
+    outputPort: number;
+    inputPort: number;
+    outputPortLabel: string | null;
+    inputPortLabel: string | null;
+    tracePayloadStoreKey: string | null;
+  }>;
+}>;
+export type SimulationResultExplorerPayload = Readonly<{
+  taskId: number;
+  taskStatus: TaskExecutionStatus;
+  runtimeMode: "local" | "online";
+  bootstrap: Readonly<{
+    families: readonly SimulationResultExplorerFamily[];
+    traceSelector: Readonly<{
+      outputPorts: readonly SimulationResultExplorerPort[];
+      inputPorts: readonly SimulationResultExplorerPort[];
+      outputModes: readonly SimulationResultExplorerMode[];
+      inputModes: readonly SimulationResultExplorerMode[];
+    }>;
+    defaultSelection: SimulationResultExplorerSelection;
+  }>;
+  selection: SimulationResultExplorerSelection;
+  plot: SimulationResultExplorerPlot;
+  resultBasis: Readonly<{
+    tracePayloadAvailable: boolean;
+    primaryResultHandleId: string | null;
+    traceBatchId: number | null;
+  }>;
+}>;
+export type SimulationResultExplorerQuery = Readonly<{
+  family?: string;
+  source?: string;
+  metric?: string;
+  z0?: number;
+  outputPort?: number;
+  inputPort?: number;
+}>;
 export type TaskQueueReadModel = Readonly<{
   rows: readonly TaskSummary[];
   workerSummary: readonly WorkerLaneSummary[];
@@ -490,6 +668,36 @@ const defaultDownstreamSourceCapabilities: DownstreamSourceCapabilities = {
 
 export function taskDetailKey(taskId: number) {
   return `/api/backend/tasks/${encodeURIComponent(taskId)}`;
+}
+
+export function simulationResultExplorerKey(
+  taskId: number,
+  query?: SimulationResultExplorerQuery,
+) {
+  const params = new URLSearchParams();
+
+  if (query?.family) {
+    params.set("family", query.family);
+  }
+  if (query?.source) {
+    params.set("source", query.source);
+  }
+  if (query?.metric) {
+    params.set("metric", query.metric);
+  }
+  if (typeof query?.z0 === "number") {
+    params.set("z0", String(query.z0));
+  }
+  if (typeof query?.outputPort === "number") {
+    params.set("output_port", String(query.outputPort));
+  }
+  if (typeof query?.inputPort === "number") {
+    params.set("input_port", String(query.inputPort));
+  }
+
+  const basePath = `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/explorer`;
+  const search = params.toString();
+  return search ? `${basePath}?${search}` : basePath;
 }
 
 function mapMetadataRecordRef(
@@ -820,6 +1028,104 @@ export function mapWorkerLaneSummaryResponse(
   };
 }
 
+function mapSimulationResultExplorerSelection(
+  payload: SimulationResultExplorerSelectionResponseShape,
+): SimulationResultExplorerSelection {
+  return {
+    family: payload.family,
+    source: payload.source,
+    metric: payload.metric,
+    z0Ohm: payload.z0_ohm,
+    outputPort: payload.output_port,
+    inputPort: payload.input_port,
+    outputPortLabel: payload.output_port_label ?? null,
+    inputPortLabel: payload.input_port_label ?? null,
+    outputMode: payload.output_mode ?? null,
+    inputMode: payload.input_mode ?? null,
+  };
+}
+
+export function mapSimulationResultExplorerResponse(
+  payload: SimulationResultExplorerResponseShape,
+): SimulationResultExplorerPayload {
+  return {
+    taskId: payload.task_id,
+    taskStatus: payload.task_status,
+    runtimeMode: payload.runtime_mode,
+    bootstrap: {
+      families: payload.bootstrap.families.map((family) => ({
+        key: family.key,
+        label: family.label,
+        availableSources: family.available_sources.map((source) => ({
+          key: source.key,
+          label: source.label,
+        })),
+        availableMetrics: family.available_metrics.map((metric) => ({
+          key: metric.key,
+          label: metric.label,
+          unit: metric.unit,
+        })),
+      })),
+      traceSelector: {
+        outputPorts: payload.bootstrap.trace_selector.output_ports.map((port) => ({
+          port: port.port,
+          label: port.label,
+        })),
+        inputPorts: payload.bootstrap.trace_selector.input_ports.map((port) => ({
+          port: port.port,
+          label: port.label,
+        })),
+        outputModes: payload.bootstrap.trace_selector.output_modes.map((mode) => ({
+          key: mode.key,
+          label: mode.label,
+        })),
+        inputModes: payload.bootstrap.trace_selector.input_modes.map((mode) => ({
+          key: mode.key,
+          label: mode.label,
+        })),
+      },
+      defaultSelection: mapSimulationResultExplorerSelection(
+        payload.bootstrap.default_selection,
+      ),
+    },
+    selection: mapSimulationResultExplorerSelection(payload.selection),
+    plot: {
+      xAxis: {
+        label: payload.plot.x_axis.label,
+        unit: payload.plot.x_axis.unit,
+        values: [...(payload.plot.x_axis.values ?? [])],
+      },
+      yAxis: {
+        label: payload.plot.y_axis.label,
+        unit: payload.plot.y_axis.unit,
+        values: [...(payload.plot.y_axis.values ?? [])],
+      },
+      series: payload.plot.series.map((series) => ({
+        seriesId: series.series_id,
+        label: series.label,
+        values: [...series.values],
+        unit: series.unit,
+      })),
+      metadata: {
+        family: payload.plot.metadata.family,
+        source: payload.plot.metadata.source,
+        metric: payload.plot.metadata.metric,
+        z0Ohm: payload.plot.metadata.z0_ohm,
+        outputPort: payload.plot.metadata.output_port,
+        inputPort: payload.plot.metadata.input_port,
+        outputPortLabel: payload.plot.metadata.output_port_label ?? null,
+        inputPortLabel: payload.plot.metadata.input_port_label ?? null,
+        tracePayloadStoreKey: payload.plot.metadata.trace_payload_store_key ?? null,
+      },
+    },
+    resultBasis: {
+      tracePayloadAvailable: payload.result_basis.trace_payload_available,
+      primaryResultHandleId: payload.result_basis.primary_result_handle_id,
+      traceBatchId: payload.result_basis.trace_batch_id,
+    },
+  };
+}
+
 export function mapTaskQueueResponse(
   payload: TaskQueueResponseShape,
   meta?: TaskQueueMetaResponseShape,
@@ -903,6 +1209,16 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
 export async function getTask(taskId: number) {
   const response = await apiRequest<TaskDetailResponseShape>(taskDetailKey(taskId));
   return mapTaskDetailResponse(response);
+}
+
+export async function getSimulationResultExplorer(
+  taskId: number,
+  query?: SimulationResultExplorerQuery,
+) {
+  const response = await apiRequest<SimulationResultExplorerResponseShape>(
+    simulationResultExplorerKey(taskId, query),
+  );
+  return mapSimulationResultExplorerResponse(response);
 }
 
 export function unwrapTaskMutation(response: TaskMutationResponse): TaskDetail {

@@ -27,6 +27,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
+import { SimulationResultExplorer } from "@/features/simulation/components/simulation-result-explorer";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import {
   buildSimulationSetupDraft,
@@ -967,6 +968,7 @@ export function SimulationWorkbenchShell() {
   const [, startTransition] = useTransition();
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
   const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
+  const [isSimulationResultSupportOpen, setIsSimulationResultSupportOpen] = useState(false);
   const [simulationSetupBuildError, setSimulationSetupBuildError] = useState<string | null>(null);
   const [savedSimulationSetups, setSavedSimulationSetups] = useState<
     readonly SavedSimulationSetupRecord[]
@@ -1278,7 +1280,6 @@ export function SimulationWorkbenchShell() {
     detail: latestPostProcessingTaskDetail,
     hasResult: postProcessingResultReady,
   });
-  const simulationResultSummary = summarizeSimulationTaskResults(latestSimulationTaskDetail);
   const simulationTaskResultSurface = summarizeTaskResultSurface(latestSimulationTaskDetail);
   const postProcessingResultSummary = summarizeSimulationTaskResults(
     latestPostProcessingTaskDetail,
@@ -1387,6 +1388,10 @@ export function SimulationWorkbenchShell() {
     setSimulationSetupBuildError(null);
     setHydratedSimulationTaskId(latestSimulationTaskDetail.taskId);
   }, [form, hydratedSimulationTaskId, latestSimulationTaskDetail]);
+
+  useEffect(() => {
+    setIsSimulationResultSupportOpen(false);
+  }, [latestSimulationTaskDetail?.taskId]);
 
   useEffect(() => {
     if (
@@ -2731,53 +2736,47 @@ export function SimulationWorkbenchShell() {
                 ? `${simulationResultState.message} ${simulationStageErrorMessage}`
                 : simulationResultState.message
             }
+            actions={
+              latestSimulationStageAuthority ? (
+                <StageTaskActions
+                  task={latestSimulationStageAuthority}
+                  resolvedTaskId={resolvedTaskId}
+                  onViewTask={attachTask}
+                  onOpenGlobalContext={openTaskInGlobalContext}
+                />
+              ) : undefined
+            }
           />
 
           {latestSimulationStageAuthority ? (
             <>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-3">
                 <SummaryCard
                   label="Latest Run"
                   value={`#${latestSimulationStageAuthority.taskId}`}
                   detail={latestSimulationStageAuthority.summary}
                 />
                 <SummaryCard
-                  label="Trace Batch"
-                  value={
-                    simulationResultSummary.traceBatchId !== null
-                      ? String(simulationResultSummary.traceBatchId)
-                      : "Pending"
+                  label="Result Availability"
+                  value={simulationResultReady ? "Explorer ready" : "Pending"}
+                  detail={
+                    latestSimulationTaskDetail?.resultHandoff?.availability
+                      ? `Persisted handoff · ${latestSimulationTaskDetail.resultHandoff.availability}`
+                      : latestSimulationStageAuthority.resultAvailability
+                        ? `Queue summary · ${latestSimulationStageAuthority.resultAvailability}`
+                        : "Waiting for persisted result handoff."
                   }
                 />
                 <SummaryCard
-                  label="Result Handles"
-                  value={String(simulationResultSummary.resultHandleCount)}
-                  detail={`${simulationResultSummary.materializedHandleCount} materialized`}
-                />
-                <SummaryCard
-                  label="Trace Payload"
-                  value={simulationResultSummary.hasTracePayload ? "Attached" : "Pending"}
-                  detail={`${simulationResultSummary.metadataRecordCount} metadata records`}
+                  label="Downstream State"
+                  value={simulationResultReady ? "Post Processing unblocked" : "Post Processing blocked"}
+                  detail={
+                    simulationResultReady
+                      ? `Simulation task #${latestSimulationStageAuthority.taskId} can now act as the upstream result source.`
+                      : "Persisted simulation outputs are not ready yet."
+                  }
                 />
               </div>
-
-              <StageNotice
-                tone={simulationResultReady ? "success" : simulationResultState.tone}
-                title="Result handoff"
-                message={
-                  simulationResultReady
-                    ? `Simulation result is ready for downstream work. Post Processing Setup can now use simulation task #${latestSimulationStageAuthority.taskId} as its upstream result source.`
-                    : "Persisted simulation outputs are not ready yet. Post Processing Setup stays blocked until the simulation result becomes available."
-                }
-                actions={
-                  <StageTaskActions
-                    task={latestSimulationStageAuthority}
-                    resolvedTaskId={resolvedTaskId}
-                    onViewTask={attachTask}
-                    onOpenGlobalContext={openTaskInGlobalContext}
-                  />
-                }
-              />
 
               {latestSimulationTaskDetail &&
               (latestSimulationTaskDetail.status === "queued" ||
@@ -2791,12 +2790,43 @@ export function SimulationWorkbenchShell() {
                 </div>
               ) : null}
 
-              {latestSimulationTaskDetail ? (
+              {latestSimulationTaskDetail && simulationResultReady ? (
                 <div className="mt-4">
-                  <TaskResultPanel
-                    task={latestSimulationTaskDetail}
-                    summary={simulationTaskResultSurface}
-                  />
+                  <SimulationResultExplorer task={latestSimulationTaskDetail} />
+                </div>
+              ) : null}
+
+              {latestSimulationTaskDetail ? (
+                <div className="mt-4 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSimulationResultSupportOpen((current) => !current);
+                    }}
+                    aria-expanded={isSimulationResultSupportOpen}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                  >
+                    {isSimulationResultSupportOpen ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    )}
+                    {isSimulationResultSupportOpen
+                      ? "Hide persisted result support"
+                      : "Show persisted result support"}
+                  </button>
+
+                  {isSimulationResultSupportOpen ? (
+                    <TaskResultPanel
+                      task={latestSimulationTaskDetail}
+                      summary={simulationTaskResultSurface}
+                    />
+                  ) : (
+                    <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                      Persisted refs, trace payload metadata, and result handles remain available
+                      as secondary support when you need to inspect the task contract directly.
+                    </div>
+                  )}
                 </div>
               ) : null}
             </>

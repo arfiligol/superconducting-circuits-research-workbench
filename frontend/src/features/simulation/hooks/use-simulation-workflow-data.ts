@@ -13,6 +13,7 @@ import { resolveSimulationDefinitionId } from "@/features/simulation/lib/definit
 import {
   buildSimulationRequestSummary,
   filterSimulationTasksByContext,
+  hasSimulationTaskResult,
   resolveContextBoundAttachedTask,
   resolveLatestSimulationStageTaskInContext,
   resolveLatestSimulationTaskInContext,
@@ -125,7 +126,7 @@ export function useSimulationWorkflowData(
           return 5_000;
         }
 
-        return currentData.status === "queued" || currentData.status === "running" ? 2_000 : 0;
+        return shouldRefreshTaskDetail(currentData) ? 2_000 : 0;
       },
     },
   );
@@ -163,7 +164,7 @@ export function useSimulationWorkflowData(
           return 5_000;
         }
 
-        return currentData.status === "queued" || currentData.status === "running" ? 2_000 : 0;
+        return shouldRefreshTaskDetail(currentData) ? 2_000 : 0;
       },
     },
   );
@@ -196,7 +197,7 @@ export function useSimulationWorkflowData(
           return 5_000;
         }
 
-        return currentData.status === "queued" || currentData.status === "running" ? 2_000 : 0;
+        return shouldRefreshTaskDetail(currentData) ? 2_000 : 0;
       },
     },
   );
@@ -222,7 +223,7 @@ export function useSimulationWorkflowData(
           return 5_000;
         }
 
-        return currentData.status === "queued" || currentData.status === "running" ? 2_000 : 0;
+        return shouldRefreshTaskDetail(currentData) ? 2_000 : 0;
       },
     },
   );
@@ -359,4 +360,12 @@ export function useSimulationWorkflowData(
     refreshTaskQueue: taskQueueState.refreshTaskQueue,
     refreshActiveTask: taskDetailQuery.mutate,
   };
+}
+
+function shouldRefreshTaskDetail(task: TaskDetail) {
+  return (
+    task.status === "queued" ||
+    task.status === "running" ||
+    (task.status === "completed" && !hasSimulationTaskResult(task))
+  );
 }
