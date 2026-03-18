@@ -76,6 +76,23 @@ function failureTone(detail: SchemdrawFailureDetail) {
   return detail.kind === "relation_config" ? ("warning" as const) : ("error" as const);
 }
 
+function describeSchemdrawDiagnosticSource(
+  source: SchemdrawFailureDetail["source"],
+) {
+  switch (source) {
+    case "python_syntax":
+      return "Python syntax";
+    case "render_runtime":
+      return "Render runtime";
+    case "relation_config":
+      return "Advanced mapping";
+    case "request":
+      return "Request";
+    default:
+      return "Diagnostic";
+  }
+}
+
 function SummaryCard({
   label,
   value,
@@ -177,6 +194,17 @@ function FailureDetailCard({
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.16em]">{detail.title}</p>
           <p className="mt-2 leading-6">{detail.userMessage}</p>
+          {detail.source || detail.line || detail.column ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+              {detail.source ? (
+                <SurfaceTag tone={failureTone(detail)}>
+                  {describeSchemdrawDiagnosticSource(detail.source)}
+                </SurfaceTag>
+              ) : null}
+              {detail.line ? <SurfaceTag tone="default">line {detail.line}</SurfaceTag> : null}
+              {detail.column ? <SurfaceTag tone="default">column {detail.column}</SurfaceTag> : null}
+            </div>
+          ) : null}
         </div>
         <SurfaceTag tone={failureTone(detail)}>
           {detail.kind === "transport"
@@ -676,23 +704,28 @@ export function CircuitSchemdrawWorkspace() {
                       : "border-border bg-surface text-muted-foreground",
                 )}
               >
-                {developerModeEnabled ? (
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.16em]">
-                    <SurfaceTag tone={diagnostic.severity === "error" ? "error" : diagnostic.severity === "warning" ? "warning" : "primary"}>
-                      {diagnostic.code}
-                    </SurfaceTag>
-                    <SurfaceTag tone="default">{diagnostic.source}</SurfaceTag>
-                    <SurfaceTag tone="default">
-                      {diagnostic.blocking ? "blocking" : "non-blocking"}
-                    </SurfaceTag>
-                    {diagnostic.line ? <SurfaceTag tone="default">line {diagnostic.line}</SurfaceTag> : null}
-                    {diagnostic.column ? <SurfaceTag tone="default">column {diagnostic.column}</SurfaceTag> : null}
-                  </div>
-                ) : (
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/76 dark:text-foreground/76">
-                    {diagnostic.blocking ? "Blocking diagnostic" : "Diagnostic"}
-                  </p>
-                )}
+                <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.16em]">
+                  <SurfaceTag
+                    tone={
+                      diagnostic.severity === "error"
+                        ? "error"
+                        : diagnostic.severity === "warning"
+                          ? "warning"
+                          : "primary"
+                    }
+                  >
+                    {describeSchemdrawDiagnosticSource(diagnostic.source)}
+                  </SurfaceTag>
+                  {diagnostic.blocking ? <SurfaceTag tone="default">blocking</SurfaceTag> : null}
+                  {diagnostic.line ? <SurfaceTag tone="default">line {diagnostic.line}</SurfaceTag> : null}
+                  {diagnostic.column ? <SurfaceTag tone="default">column {diagnostic.column}</SurfaceTag> : null}
+                  {developerModeEnabled ? (
+                    <>
+                      <SurfaceTag tone="default">{diagnostic.code}</SurfaceTag>
+                      <SurfaceTag tone="default">{diagnostic.source}</SurfaceTag>
+                    </>
+                  ) : null}
+                </div>
                 <p className="mt-2 text-foreground/86 dark:text-foreground/84">{diagnostic.message}</p>
               </div>
             ))}

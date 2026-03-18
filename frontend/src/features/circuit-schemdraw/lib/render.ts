@@ -215,14 +215,17 @@ export function buildRenderSurfaceFromResponse(
   }
 
   const primaryDiagnostic = response.diagnostics[0] ?? null;
+  const isRuntimeFailure =
+    response.status === "runtime_error" ||
+    (response.status === "blocked" && primaryDiagnostic?.source === "render_runtime");
   const isRelationConfigBlocked =
     response.status === "blocked" && primaryDiagnostic?.source === "relation_config";
 
   return {
-    phase: response.status === "runtime_error" ? "runtime_error" : "syntax_error",
+    phase: isRuntimeFailure ? "runtime_error" : "syntax_error",
     statusLabel: isRelationConfigBlocked
       ? "Relation Invalid"
-      : response.status === "runtime_error"
+      : isRuntimeFailure
         ? "Runtime Error"
         : "Syntax Error",
     diagnostics: response.diagnostics,
@@ -340,7 +343,9 @@ function buildFailureDetailFromResponse(
   response: SchemdrawRenderResponse,
 ): SchemdrawFailureDetail {
   const primaryDiagnostic = response.diagnostics[0] ?? null;
-  const isRuntimeError = response.status === "runtime_error";
+  const isRuntimeError =
+    response.status === "runtime_error" ||
+    (response.status === "blocked" && primaryDiagnostic?.source === "render_runtime");
   const isRelationConfigBlocked =
     response.status === "blocked" && primaryDiagnostic?.source === "relation_config";
 

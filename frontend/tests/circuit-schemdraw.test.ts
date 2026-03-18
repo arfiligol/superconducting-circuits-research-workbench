@@ -530,6 +530,46 @@ describe("circuit schemdraw render helpers", () => {
     });
   });
 
+  it("treats blocked render-runtime diagnostics as runtime errors instead of syntax errors", () => {
+    expect(
+      buildRenderSurfaceFromResponse(
+        {
+          request_id: "req-9",
+          document_version: 9,
+          status: "blocked",
+          svg: null,
+          diagnostics: [
+            {
+              severity: "error",
+              code: "schemdraw_runtime_error",
+              message: "module 'schemdraw.elements' has no attribute 'Note'",
+              source: "render_runtime",
+              blocking: true,
+              line: 30,
+            },
+          ],
+        },
+        {
+          ...createInitialRenderSurface(),
+          svg: "<svg>old</svg>",
+          requestId: "req-5",
+          appliedDocumentVersion: 5,
+        },
+      ),
+    ).toMatchObject({
+      phase: "runtime_error",
+      statusLabel: "Runtime Error",
+      svg: "<svg>old</svg>",
+      isStale: true,
+      failureDetail: {
+        kind: "runtime_error",
+        errorCode: "schemdraw_runtime_error",
+        line: 30,
+        source: "render_runtime",
+      },
+    });
+  });
+
   it("maps api errors into diagnostics with latest backend locations", () => {
     expect(
       buildRenderSurfaceFromError(
