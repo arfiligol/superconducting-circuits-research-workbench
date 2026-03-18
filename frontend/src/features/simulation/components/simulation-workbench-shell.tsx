@@ -66,6 +66,7 @@ import {
   AppSelectField,
   type AppSelectOption,
 } from "@/features/shared/components/app-select";
+import { AppNumberInput } from "@/features/shared/components/app-number-input";
 import { TaskResultPanel } from "@/features/shared/components/task-workflow-panels";
 import {
   SurfaceHeader,
@@ -652,128 +653,6 @@ function SetupTextInput(props: Readonly<React.InputHTMLAttributes<HTMLInputEleme
       {...props}
       className={cx(
         "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15",
-        props.className,
-      )}
-    />
-  );
-}
-
-function countDecimalPlaces(rawValue: string) {
-  if (!rawValue) {
-    return 0;
-  }
-
-  const normalized = rawValue.trim().toLowerCase();
-  if (!normalized) {
-    return 0;
-  }
-
-  const exponentIndex = normalized.indexOf("e");
-  if (exponentIndex >= 0) {
-    const mantissa = normalized.slice(0, exponentIndex);
-    const exponent = Number(normalized.slice(exponentIndex + 1));
-    const mantissaPlaces = mantissa.split(".")[1]?.length ?? 0;
-    if (!Number.isFinite(exponent)) {
-      return mantissaPlaces;
-    }
-    return Math.max(0, mantissaPlaces - exponent);
-  }
-
-  return normalized.split(".")[1]?.length ?? 0;
-}
-
-function resolveWheelStep(input: HTMLInputElement) {
-  const stepAttribute = input.getAttribute("step");
-  if (stepAttribute && stepAttribute !== "any") {
-    const parsedStep = Number(stepAttribute);
-    if (Number.isFinite(parsedStep) && parsedStep > 0) {
-      return parsedStep;
-    }
-  }
-
-  const precision = countDecimalPlaces(input.value);
-  return precision > 0 ? 10 ** -precision : 1;
-}
-
-function SetupNumberInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const lastWheelAdjustmentAtRef = useRef<number>(0);
-
-  useEffect(() => {
-    const input = inputRef.current;
-    if (!input) {
-      return undefined;
-    }
-
-    const handleWheel = (event: WheelEvent) => {
-      const isTargetInput = event.target instanceof Node && input.contains(event.target);
-      const isActiveInput = document.activeElement === input;
-      const isHoveredInput = input.matches(":hover");
-      if (!isTargetInput && !isActiveInput && !isHoveredInput) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (event.timeStamp - lastWheelAdjustmentAtRef.current < 80) {
-        return;
-      }
-      lastWheelAdjustmentAtRef.current = event.timeStamp;
-
-      if (input.disabled || input.readOnly) {
-        return;
-      }
-      const direction = event.deltaY < 0 ? 1 : -1;
-      const originalStepAttribute = input.getAttribute("step");
-      const temporaryStep =
-        originalStepAttribute === null || originalStepAttribute === "any"
-          ? String(resolveWheelStep(input))
-          : null;
-
-      if (temporaryStep) {
-        input.setAttribute("step", temporaryStep);
-      }
-
-      const previousValue = input.value;
-      try {
-        if (direction > 0) {
-          input.stepUp();
-        } else {
-          input.stepDown();
-        }
-      } finally {
-        if (temporaryStep) {
-          if (originalStepAttribute === null) {
-            input.removeAttribute("step");
-          } else {
-            input.setAttribute("step", originalStepAttribute);
-          }
-        }
-      }
-
-      if (input.value === previousValue) {
-        return;
-      }
-
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    };
-
-    const listenerOptions = { passive: false, capture: true } as const;
-    input.addEventListener("wheel", handleWheel, listenerOptions);
-    return () => {
-      input.removeEventListener("wheel", handleWheel, listenerOptions);
-    };
-  }, []);
-
-  return (
-    <input
-      {...props}
-      ref={inputRef}
-      type="number"
-      className={cx(
-        "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15 disabled:opacity-60",
         props.className,
       )}
     />
@@ -1996,7 +1875,7 @@ export function SimulationWorkbenchShell() {
                   label="Start Freq (GHz)"
                   error={form.formState.errors.simulationStartGhz?.message}
                 >
-                  <SetupNumberInput
+                  <AppNumberInput
                     {...form.register("simulationStartGhz", { valueAsNumber: true })}
                     step={String(FREQUENCY_WHEEL_STEP_GHZ)}
                     min={String(FREQUENCY_WHEEL_STEP_GHZ)}
@@ -2006,7 +1885,7 @@ export function SimulationWorkbenchShell() {
                   label="Stop Freq (GHz)"
                   error={form.formState.errors.simulationStopGhz?.message}
                 >
-                  <SetupNumberInput
+                  <AppNumberInput
                     {...form.register("simulationStopGhz", { valueAsNumber: true })}
                     step={String(FREQUENCY_WHEEL_STEP_GHZ)}
                     min={String(FREQUENCY_WHEEL_STEP_GHZ)}
@@ -2016,7 +1895,7 @@ export function SimulationWorkbenchShell() {
                   label="Points"
                   error={form.formState.errors.simulationPointCount?.message}
                 >
-                  <SetupNumberInput
+                  <AppNumberInput
                     {...form.register("simulationPointCount", { valueAsNumber: true })}
                     min={1}
                   />
@@ -2200,7 +2079,7 @@ export function SimulationWorkbenchShell() {
                         ) : (
                           <div className="grid gap-4 md:grid-cols-3">
                             <CompactField label="Start" error={axisErrors?.start?.message}>
-                              <SetupNumberInput
+                              <AppNumberInput
                                 {...form.register(`simulationParameterSweepAxes.${index}.start`, {
                                   valueAsNumber: true,
                                 })}
@@ -2217,7 +2096,7 @@ export function SimulationWorkbenchShell() {
                               />
                             </CompactField>
                             <CompactField label="Stop" error={axisErrors?.stop?.message}>
-                              <SetupNumberInput
+                              <AppNumberInput
                                 {...form.register(`simulationParameterSweepAxes.${index}.stop`, {
                                   valueAsNumber: true,
                                 })}
@@ -2234,7 +2113,7 @@ export function SimulationWorkbenchShell() {
                               />
                             </CompactField>
                             <CompactField label="Points" error={axisErrors?.pointCount?.message}>
-                              <SetupNumberInput
+                              <AppNumberInput
                                 {...form.register(
                                   `simulationParameterSweepAxes.${index}.pointCount`,
                                   {
@@ -2269,7 +2148,7 @@ export function SimulationWorkbenchShell() {
                   label="Nmodulation Harmonics"
                   error={form.formState.errors.simulationHarmonicCount?.message}
                 >
-                  <SetupNumberInput
+                  <AppNumberInput
                     {...form.register("simulationHarmonicCount", { valueAsNumber: true })}
                     min={1}
                     disabled={!harmonicBalanceEnabled}
@@ -2279,7 +2158,7 @@ export function SimulationWorkbenchShell() {
                   label="Npump Harmonics"
                   error={form.formState.errors.simulationOversampleFactor?.message}
                 >
-                  <SetupNumberInput
+                  <AppNumberInput
                     {...form.register("simulationOversampleFactor", { valueAsNumber: true })}
                     min={1}
                     disabled={!harmonicBalanceEnabled}
@@ -2344,7 +2223,7 @@ export function SimulationWorkbenchShell() {
 
                       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         <CompactField label="Pump Freq (GHz)" error={sourceErrors?.pumpFreqGhz?.message}>
-                          <SetupNumberInput
+                          <AppNumberInput
                             {...form.register(`simulationSources.${index}.pumpFreqGhz`, {
                               valueAsNumber: true,
                             })}
@@ -2375,7 +2254,7 @@ export function SimulationWorkbenchShell() {
                           label="Source Current Ip (A)"
                           error={sourceErrors?.currentAmp?.message}
                         >
-                          <SetupNumberInput
+                          <AppNumberInput
                             {...form.register(`simulationSources.${index}.currentAmp`, {
                               valueAsNumber: true,
                             })}
@@ -2548,7 +2427,7 @@ export function SimulationWorkbenchShell() {
                       label="Max Iterations"
                       error={form.formState.errors.simulationMaxIterations?.message}
                     >
-                      <SetupNumberInput
+                      <AppNumberInput
                         {...form.register("simulationMaxIterations", { valueAsNumber: true })}
                         min={1}
                       />
@@ -2557,7 +2436,7 @@ export function SimulationWorkbenchShell() {
                       label="Convergence Tolerance"
                       error={form.formState.errors.simulationConvergenceTolerance?.message}
                     >
-                      <SetupNumberInput
+                      <AppNumberInput
                         {...form.register("simulationConvergenceTolerance", {
                           valueAsNumber: true,
                         })}

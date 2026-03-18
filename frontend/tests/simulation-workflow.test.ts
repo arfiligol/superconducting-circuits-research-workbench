@@ -1133,9 +1133,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Manage");
     expect(simulationWorkbenchSource).toContain("Save");
     expect(simulationWorkbenchSource).toContain('role="switch"');
-    expect(simulationWorkbenchSource).toContain('addEventListener("wheel"');
-    expect(simulationWorkbenchSource).toContain("resolveWheelStep");
-    expect(simulationWorkbenchSource).toContain("stepUp()");
+    expect(simulationWorkbenchSource).toContain("AppNumberInput");
+    expect(simulationWorkbenchSource).toContain("<AppNumberInput");
+    expect(simulationWorkbenchSource).not.toContain("function SetupNumberInput");
     expect(simulationWorkbenchSource).not.toContain('type="checkbox"');
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
@@ -1173,7 +1173,8 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("simulationTaskResultSurface");
     expect(simulationWorkbenchSource).toContain("Live result refresh");
     expect(simulationResultExplorerSource).toContain("Simulation Result Explorer");
-    expect(simulationResultExplorerSource).toContain('aria-label="Result family"');
+    expect(simulationResultExplorerSource).toContain("AppSegmentedControl");
+    expect(simulationResultExplorerSource).toContain('ariaLabel="Simulation result family"');
     expect(simulationResultExplorerSource).toContain("Simulation result source");
     expect(simulationResultExplorerSource).toContain("Simulation result metric");
     expect(simulationResultExplorerSource).toContain("Simulation result output port");

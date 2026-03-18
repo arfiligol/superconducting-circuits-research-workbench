@@ -7,6 +7,7 @@ import { TracePreviewPlot } from "@/features/data-browser/components/trace-previ
 import { useRawDataBrowserData } from "@/features/data-browser/hooks/use-raw-data-browser-data";
 import { resolveTracePreviewSemantics } from "@/features/data-browser/lib/trace-preview";
 import { AppInlineSelect } from "@/features/shared/components/app-select";
+import { AppSegmentedControl } from "@/features/shared/components/app-segmented-control";
 import { SurfaceHeader, SurfacePanel, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
 
 function readinessTone(value: "ready" | "inspect_only" | "blocked") {
@@ -462,30 +463,15 @@ export function RawDataBrowserWorkspace() {
                         Plot and table are two views over the same preview payload.
                       </p>
                     </div>
-                    <div
-                      className="inline-flex rounded-[0.95rem] border border-border/80 bg-background/90 p-1 shadow-[0_8px_24px_rgba(15,23,42,0.06)]"
-                      role="group"
-                      aria-label="Single trace preview view"
-                    >
-                      {(["plot", "table"] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => {
-                            setPreviewMode(mode);
-                          }}
-                          aria-pressed={previewMode === mode}
-                          className={cx(
-                            "min-h-9 rounded-[0.75rem] px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
-                            previewMode === mode
-                              ? "bg-primary/12 text-foreground shadow-[0_8px_20px_rgba(37,99,235,0.14)]"
-                              : "text-muted-foreground hover:bg-surface hover:text-foreground",
-                          )}
-                        >
-                          {mode === "plot" ? "Plot" : "Table"}
-                        </button>
-                      ))}
-                    </div>
+                    <AppSegmentedControl
+                      value={previewMode}
+                      onChange={setPreviewMode}
+                      options={[
+                        { value: "plot", label: "Plot" },
+                        { value: "table", label: "Table" },
+                      ]}
+                      ariaLabel="Single trace preview view"
+                    />
                   </div>
 
                   <div className="mt-4">

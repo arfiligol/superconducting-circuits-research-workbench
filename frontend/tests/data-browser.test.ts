@@ -216,8 +216,9 @@ describe("page-boundary source contracts", () => {
   it("rebuilds single trace preview as plot and table views over one payload", () => {
     expect(rawDataWorkspaceSource).toContain("TracePreviewPlot");
     expect(rawDataWorkspaceSource).toContain("previewMode");
-    expect(rawDataWorkspaceSource).toContain('aria-label="Single trace preview view"');
-    expect(rawDataWorkspaceSource).toContain('mode === "plot" ? "Plot" : "Table"');
+    expect(rawDataWorkspaceSource).toContain("AppSegmentedControl");
+    expect(rawDataWorkspaceSource).toContain('ariaLabel="Single trace preview view"');
+    expect(rawDataWorkspaceSource).toContain('{ value: "plot", label: "Plot" }');
     expect(rawDataWorkspaceSource).toContain("same preview payload");
     expect(rawDataWorkspaceSource).not.toContain("Result Handles");
   });

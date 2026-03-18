@@ -6,11 +6,16 @@ import { DatabaseZap, LineChart, Rows3 } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { useSimulationResultExplorer } from "@/features/simulation/hooks/use-simulation-result-explorer";
+import { AppNumberInput } from "@/features/shared/components/app-number-input";
+import {
+  AppSegmentedControl,
+  type AppSegmentedOption,
+} from "@/features/shared/components/app-segmented-control";
 import {
   AppInlineSelect,
   type AppSelectOption,
 } from "@/features/shared/components/app-select";
-import { SurfacePanel, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
+import { SurfacePanel, SurfaceTag } from "@/features/shared/components/surface-kit";
 import type { TaskDetail } from "@/lib/api/tasks";
 
 type PlotComponentProps = Readonly<{
@@ -176,6 +181,13 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
   const [viewMode, setViewMode] = useState<ExplorerViewMode>("plot");
   const [z0Input, setZ0Input] = useState("50");
   const explorer = useSimulationResultExplorer(task.taskId, true);
+  const viewOptions = useMemo<readonly AppSegmentedOption<ExplorerViewMode>[]>(
+    () => [
+      { value: "plot", label: "Plot" },
+      { value: "table", label: "Table" },
+    ],
+    [],
+  );
 
   useEffect(() => {
     setViewMode("plot");
@@ -233,6 +245,14 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
     : "Result";
   const hasSeries = (payload?.plot.series.length ?? 0) > 0;
   const showZ0Control = selection?.family !== "s_matrix";
+  const familySegmentOptions = useMemo<readonly AppSegmentedOption[]>(
+    () =>
+      familyOptions.map((family) => ({
+        value: family.key,
+        label: family.label,
+      })),
+    [familyOptions],
+  );
 
   if (explorer.isLoading || (!payload && !explorer.error)) {
     return (
@@ -266,65 +286,31 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
       title="Simulation Result Explorer"
       description="Inspect persisted simulation outputs with backend-owned family, source, metric, and port selectors."
       actions={
-        <div
-          className="inline-flex rounded-[0.95rem] border border-border/80 bg-background/90 p-1 shadow-[0_8px_24px_rgba(15,23,42,0.06)]"
-          role="group"
-          aria-label="Simulation result explorer view"
-        >
-          {(["plot", "table"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => {
-                setViewMode(mode);
-              }}
-              aria-pressed={viewMode === mode}
-              className={cx(
-                "min-h-9 rounded-[0.75rem] px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
-                viewMode === mode
-                  ? "bg-primary/12 text-foreground shadow-[0_8px_20px_rgba(37,99,235,0.14)]"
-                  : "text-muted-foreground hover:bg-surface hover:text-foreground",
-              )}
-            >
-              {mode === "plot" ? "Plot" : "Table"}
-            </button>
-          ))}
-        </div>
+        <AppSegmentedControl
+          value={viewMode}
+          onChange={setViewMode}
+          options={viewOptions}
+          ariaLabel="Simulation result explorer view"
+        />
       }
     >
       <div className="space-y-3">
         <div className="rounded-[0.95rem] border border-border/80 bg-background px-4 py-4">
           <div className="space-y-4">
-            <div
-              className="flex flex-wrap items-center gap-2"
-              role="tablist"
-              aria-label="Result family"
-            >
-              {familyOptions.map((family) => {
-                const isSelected = selection.family === family.key;
-                return (
-                  <button
-                    key={family.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={isSelected}
-                    onClick={() => {
-                      explorer.setFamily(family.key);
-                    }}
-                    className={cx(
-                      "inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
-                      isSelected
-                        ? "border-primary/30 bg-primary/12 text-foreground shadow-[0_10px_24px_rgba(37,99,235,0.14)]"
-                        : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:bg-primary/8 hover:text-foreground",
-                    )}
-                  >
-                    {family.label}
-                  </button>
-                );
-              })}
-            </div>
+            <AppSegmentedControl
+              value={selection.family}
+              onChange={explorer.setFamily}
+              options={familySegmentOptions}
+              ariaLabel="Simulation result family"
+            />
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)_minmax(0,0.95fr)_minmax(0,0.95fr)]">
+            <div
+              className={
+                showZ0Control
+                  ? "grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,0.74fr)_minmax(0,1.08fr)_minmax(0,0.76fr)_minmax(0,0.76fr)_minmax(0,0.54fr)]"
+                  : "grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.2fr)_minmax(0,0.86fr)_minmax(0,0.86fr)]"
+              }
+            >
               <ExplorerField label="Source">
                 <AppInlineSelect
                   ariaLabel="Simulation result source"
@@ -342,7 +328,7 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
                   valueClassName="text-[0.84rem] sm:text-[0.9rem]"
                 />
               </ExplorerField>
-              <ExplorerField label="Output Port">
+              <ExplorerField label="Output">
                 <AppInlineSelect
                   ariaLabel="Simulation result output port"
                   value={String(selection.outputPort)}
@@ -352,7 +338,7 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
                   options={outputPortOptions}
                 />
               </ExplorerField>
-              <ExplorerField label="Input Port">
+              <ExplorerField label="Input">
                 <AppInlineSelect
                   ariaLabel="Simulation result input port"
                   value={String(selection.inputPort)}
@@ -362,16 +348,13 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
                   options={inputPortOptions}
                 />
               </ExplorerField>
-            </div>
-
-            {showZ0Control ? (
-              <div className="max-w-[17rem]">
-                <ExplorerField label="Z0 (Ohm)">
-                  <input
-                    type="number"
+              {showZ0Control ? (
+                <ExplorerField label="Z0">
+                  <AppNumberInput
                     min="1"
                     step="0.1"
                     value={z0Input}
+                    wheelBehavior="adjust"
                     onChange={(event) => {
                       setZ0Input(event.target.value);
                     }}
@@ -383,11 +366,11 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
                         setZ0Input(String(selection.z0));
                       }
                     }}
-                    className="min-h-11 w-full rounded-[1rem] border border-border/85 bg-surface/95 px-4 py-3 text-sm text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_24px_rgba(15,23,42,0.06)] outline-none transition focus:border-primary/45 focus:ring-2 focus:ring-primary/20"
+                    className="min-h-11 rounded-[1rem] border-border/85 bg-surface/95 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_24px_rgba(15,23,42,0.06)] focus:ring-primary/20"
                   />
                 </ExplorerField>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </div>
 
