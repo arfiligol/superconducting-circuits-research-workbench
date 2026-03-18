@@ -989,8 +989,11 @@ def test_retry_local_simulation_executes_to_terminal_in_routes() -> None:
     assert retried["retry_of_task_id"] == submitted["task_id"]
     assert retried["status"] == "completed"
     assert retried["dispatch"]["status"] == "completed"
+    assert retried["simulation_setup"] == submitted["simulation_setup"]
     assert retried["result_handoff"]["availability"] == "ready"
     assert retried["events"][-1]["event_type"] == "task_completed"
+    explorer = client.get(f"/tasks/{retried['task_id']}/simulation-results/explorer")
+    assert explorer.status_code == 200
 
 
 def test_runtime_bootstrap_recovers_stranded_local_simulation_task() -> None:

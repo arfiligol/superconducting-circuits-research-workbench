@@ -254,3 +254,23 @@ def test_ptc_source_is_gated_to_y_and_z_families_only() -> None:
         "raw",
         "ptc",
     ]
+
+
+def test_retry_task_recovers_missing_persisted_setup_for_explorer() -> None:
+    source_task = _submit_local_simulation(ptc_enabled=True)
+    retried = client.post(f"/tasks/{source_task['task_id']}/retry").json()["data"]["task"]
+
+    with _bind_client_app_context(client):
+        task_service = get_task_service()
+        retried_detail = task_service.get_task(retried["task_id"])
+        task_service._repository.merge_task_event_metadata(
+            retried_detail.task_id,
+            retried_detail.events[0].event_key,
+            {"simulation_setup": None},
+        )
+
+    recovered_detail = client.get(f"/tasks/{retried['task_id']}").json()["data"]
+    assert recovered_detail["simulation_setup"] == source_task["simulation_setup"]
+
+    explorer = client.get(f"/tasks/{retried['task_id']}/simulation-results/explorer")
+    assert explorer.status_code == 200

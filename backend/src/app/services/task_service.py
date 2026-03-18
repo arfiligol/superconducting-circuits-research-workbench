@@ -523,13 +523,13 @@ class TaskService:
         self._merge_submission_metadata(
             created_detail,
             draft=TaskSubmissionDraft(
-                kind=created_detail.kind,
-                dataset_id=created_detail.dataset_id,
-                definition_id=created_detail.definition_id,
+                kind=source_task.kind,
+                dataset_id=source_task.dataset_id,
+                definition_id=source_task.definition_id,
                 summary=created_detail.summary,
-                simulation_setup=created_detail.simulation_setup,
-                post_processing_setup=created_detail.post_processing_setup,
-                upstream_task_id=created_detail.upstream_task_id,
+                simulation_setup=source_task.simulation_setup,
+                post_processing_setup=source_task.post_processing_setup,
+                upstream_task_id=source_task.upstream_task_id,
             ),
             upstream_task=(
                 self.get_task(created_detail.upstream_task_id)
@@ -716,8 +716,14 @@ class TaskService:
         )
 
     def _normalize_task(self, task: TaskDetail) -> TaskDetail:
+        simulation_setup, post_processing_setup = self._resolve_retry_contract_snapshot(
+            task,
+            seen_task_ids={task.task_id},
+        )
         return replace(
             task,
+            simulation_setup=simulation_setup,
+            post_processing_setup=post_processing_setup,
             dispatch=build_task_dispatch(
                 task_id=task.task_id,
                 worker_task_name=task.worker_task_name,
@@ -735,6 +741,39 @@ class TaskService:
                 )
             ),
         )
+
+    def _resolve_retry_contract_snapshot(
+        self,
+        task: TaskDetail,
+        *,
+        seen_task_ids: set[int],
+    ) -> tuple[SimulationSetup | None, PostProcessingSetup | None]:
+        simulation_setup = task.simulation_setup
+        post_processing_setup = task.post_processing_setup
+        if task.retry_of_task_id is None or (
+            simulation_setup is not None and post_processing_setup is not None
+        ):
+            return simulation_setup, post_processing_setup
+
+        if task.retry_of_task_id in seen_task_ids:
+            return simulation_setup, post_processing_setup
+
+        retry_source = self._repository.get_task(task.retry_of_task_id)
+        if retry_source is None:
+            return simulation_setup, post_processing_setup
+
+        seen_task_ids.add(retry_source.task_id)
+        source_simulation_setup, source_post_processing_setup = (
+            self._resolve_retry_contract_snapshot(
+                retry_source,
+                seen_task_ids=seen_task_ids,
+            )
+        )
+        if simulation_setup is None:
+            simulation_setup = source_simulation_setup
+        if post_processing_setup is None:
+            post_processing_setup = source_post_processing_setup
+        return simulation_setup, post_processing_setup
 
     def _merge_submission_metadata(
         self,
