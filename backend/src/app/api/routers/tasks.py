@@ -36,8 +36,14 @@ from src.app.domain.tasks import (
     TaskVisibilityScope,
 )
 from src.app.infrastructure.request_debug import current_debug_ref
-from src.app.infrastructure.runtime import get_task_service
+from src.app.infrastructure.runtime import (
+    get_simulation_result_explorer_service,
+    get_task_service,
+)
 from src.app.services.service_errors import ServiceError, service_error
+from src.app.services.simulation_result_explorer_service import (
+    SimulationResultExplorerService,
+)
 from src.app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -110,6 +116,48 @@ def get_task(
     return _success_response(
         data=_serialize_task_detail(task, task_service),
         meta={"generated_at": _generated_at()},
+    )
+
+
+@router.get("/{task_id}/simulation-results/explorer")
+def get_simulation_result_explorer(
+    task_id: int,
+    explorer_service: Annotated[
+        SimulationResultExplorerService,
+        Depends(get_simulation_result_explorer_service),
+    ],
+    family: Annotated[str | None, Query()] = None,
+    source: Annotated[str | None, Query()] = None,
+    metric: Annotated[str | None, Query()] = None,
+    z0: Annotated[float | None, Query(gt=0, alias="z0")] = None,
+    output_port: Annotated[int | None, Query(ge=1)] = None,
+    input_port: Annotated[int | None, Query(ge=1)] = None,
+) -> JSONResponse:
+    try:
+        payload = explorer_service.get_explorer_payload(
+            task_id,
+            family=family,
+            source=source,
+            metric=metric,
+            z0_ohm=z0,
+            output_port=output_port,
+            input_port=input_port,
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=payload,
+        meta={
+            "generated_at": _generated_at(),
+            "filter_echo": {
+                "family": family,
+                "source": source,
+                "metric": metric,
+                "z0": z0,
+                "output_port": output_port,
+                "input_port": input_port,
+            },
+        },
     )
 
 

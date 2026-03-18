@@ -32,6 +32,9 @@ from src.app.services.dataset_service import DatasetService
 from src.app.services.health_service import HealthService
 from src.app.services.schemdraw_render_service import SchemdrawRenderService
 from src.app.services.session_service import SessionService
+from src.app.services.simulation_result_explorer_service import (
+    SimulationResultExplorerService,
+)
 from src.app.services.task_service import TaskService
 from src.app.services.workspace_collaboration_service import WorkspaceCollaborationService
 from src.app.settings import get_settings
@@ -192,6 +195,11 @@ def get_task_service() -> TaskService:
 
 
 @lru_cache(maxsize=1)
+def get_simulation_result_explorer_service() -> SimulationResultExplorerService:
+    return SimulationResultExplorerService(get_task_service())
+
+
+@lru_cache(maxsize=1)
 def get_task_execution_runtime() -> RewriteExecutionRuntime:
     return RewriteExecutionRuntime(
         task_service=get_task_service(),
@@ -220,4 +228,5 @@ def reset_runtime_state() -> None:
     get_audit_log_service.cache_clear()
     get_local_simulation_execution_driver.cache_clear()
     get_task_service.cache_clear()
+    get_simulation_result_explorer_service.cache_clear()
     get_task_execution_runtime.cache_clear()
