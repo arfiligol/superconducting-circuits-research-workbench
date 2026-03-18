@@ -647,7 +647,19 @@ def test_schemdraw_render_returns_blocking_diagnostics_for_invalid_source() -> N
     response = client.post(
         "/schemdraw/render",
         json={
-            "source_text": "def build_drawing(relation):\n    return (\n",
+            "source_text": (
+                "import schemdraw\n"
+                "import schemdraw.elements as elm\n\n"
+                "def build_drawing(relation):\n"
+                "    d = schemdraw.Drawing(show=False)\n"
+                "    d += elm.Note().at((2.0, -1.2)).label(\n"
+                "        'Mutual coupling:\n"
+                "M = L12·Δz\n"
+                "or use K(L1,L2)',\n"
+                "        loc='center'\n"
+                "    )\n"
+                "    return d\n"
+            ),
             "relation_config": {"tag": "draft"},
             "linked_schema": None,
             "document_version": 21,
@@ -661,7 +673,12 @@ def test_schemdraw_render_returns_blocking_diagnostics_for_invalid_source() -> N
     assert payload["status"] == "syntax_error"
     assert payload["svg"] is None
     assert payload["diagnostics"][0]["code"] == "schemdraw_syntax_error"
+    assert payload["diagnostics"][0]["source"] == "python_syntax"
+    assert payload["diagnostics"][0]["message"] != "The Schemdraw source cannot be parsed."
+    assert "string literal" in payload["diagnostics"][0]["message"].lower()
     assert payload["diagnostics"][0]["blocking"] is True
+    assert payload["diagnostics"][0]["line"] is not None
+    assert payload["diagnostics"][0]["column"] is not None
 
 
 def test_schemdraw_render_returns_runtime_diagnostic_when_entrypoint_fails() -> None:
@@ -672,7 +689,7 @@ def test_schemdraw_render_returns_runtime_diagnostic_when_entrypoint_fails() -> 
                 "import schemdraw\n"
                 "import schemdraw.elements as elm\n\n"
                 "def build_drawing(relation):\n"
-                "    raise ValueError('boom from build_drawing')\n"
+                "    return 1 / 0\n"
             ),
             "relation_config": {"tag": "draft"},
             "linked_schema": None,
@@ -687,6 +704,7 @@ def test_schemdraw_render_returns_runtime_diagnostic_when_entrypoint_fails() -> 
     assert payload["status"] == "runtime_error"
     assert payload["svg"] is None
     assert payload["diagnostics"][0]["code"] == "schemdraw_runtime_error"
+    assert "division by zero" in payload["diagnostics"][0]["message"]
     assert payload["diagnostics"][0]["line"] == 5
 
 
@@ -713,6 +731,7 @@ def test_schemdraw_render_returns_runtime_diagnostic_for_top_level_source_failur
     assert payload["status"] == "runtime_error"
     assert payload["svg"] is None
     assert payload["diagnostics"][0]["code"] == "schemdraw_runtime_error"
+    assert "division by zero" in payload["diagnostics"][0]["message"]
     assert payload["diagnostics"][0]["blocking"] is True
     assert payload["diagnostics"][0]["line"] == 2
 

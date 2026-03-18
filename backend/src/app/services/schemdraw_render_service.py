@@ -224,12 +224,17 @@ def _validate_python_source(
     try:
         return (), ast.parse(source_text)
     except SyntaxError as exc:
+        message = exc.msg.strip() if isinstance(exc.msg, str) and len(exc.msg.strip()) > 0 else None
         return (
             (
                 SchemdrawDiagnostic(
                     severity="error",
                     code="schemdraw_syntax_error",
-                    message="The Schemdraw source cannot be parsed.",
+                    message=(
+                        f"Python syntax error: {message}"
+                        if message is not None
+                        else "Python syntax error."
+                    ),
                     source="python_syntax",
                     blocking=True,
                     line=exc.lineno,
