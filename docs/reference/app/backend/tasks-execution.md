@@ -10,8 +10,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Backend task queue read model、control actions、worker summary、event history 與 result attachment surface
-version: v0.10.0
-last_updated: 2026-03-14
+version: v0.11.0
+last_updated: 2026-03-18
 updated_by: codex
 ---
 
@@ -61,8 +61,21 @@ task submit response 至少必須提供：
     | `dataset_id` | active dataset |
     | `definition_id` | selected canonical definition |
     | `task_kind` | simulation lane task |
-    | `setup` | frequency sweep、solver、sources、PTC 等設定 |
+    | `setup` | frequency sweep、parameter sweeps、solver、sources 與 persisted `ptc` 設定 |
     | `post_processing_plan` | optional，若同時聲明後處理需求 |
+
+### `simulation_setup.ptc` contract
+
+| Field | Meaning |
+|---|---|
+| `enabled` | 此 simulation run 是否啟用 PTC |
+| `mode` | stable、backend-recognized 的 PTC mode |
+| `selected_ports[]` | schema-defined port selection；未選時預設為空 |
+| `config` | solver-required PTC config payload |
+
+!!! warning "PTC is task authority"
+    `PTC` 不屬於長期 browser-local draft。
+    一旦使用者以 `PTC` 參與 simulation stage，backend 必須把它持久化在 `setup.ptc`，並在 task detail / refresh recovery 中回傳同一份 canonical snapshot。
 
 === "Characterization Submit"
 
@@ -165,10 +178,21 @@ Header queue rows 至少必須能讀到：
 
 | Surface | Required meaning |
 |---|---|
-| task detail | 附加後重建 page body 所需的完整 persisted state |
-| task events | append-only lifecycle and execution events |
-| execution metadata | worker / processor / result refs / runtime-safe metadata |
-| result attachment | terminal task 如何連到 persisted result |
+| task detail | 附加後重建 page body 所需的完整 persisted state；simulation task 必須能回傳完整 `setup` snapshot，包含 `setup.ptc` |
+| task events | append-only lifecycle and execution events；可附帶 accepted `PTC` config、materialization milestones 等 stable execution metadata |
+| execution metadata | worker / processor / result refs / runtime-safe metadata；simulation task 應能表達 downstream source availability，例如 `Raw` / `PTC` |
+| result attachment | terminal task 如何連到 persisted result；simulation task 必須明確指出 downstream 是否有 `Raw`、`PTC`，或兩者皆有 |
+
+## Downstream Source Availability
+
+| Source | Rule |
+|---|---|
+| `Raw` | upstream simulation run 成功 materialize solver-native result 後可用 |
+| `PTC` | 只有在 `setup.ptc.enabled = true`，且 completed simulation run 真正 persisted / materialized PTC-capable output 時才可用 |
+
+!!! tip "Do not infer from UI state"
+    downstream `PTC` source availability 不得只靠 frontend 當前 toggle 或 browser draft 推定。
+    page / result surface 必須以 task detail、execution metadata 或 persisted result attachment 的 authority echo 為準。
 
 ## Worker Summary Pairing
 
@@ -192,6 +216,7 @@ Header queue rows 至少必須能讀到：
 | Queue is globally consumable | Header 在任何頁都能消費同一份 queue read model |
 | Detail is attach-ready | simulation / characterization 必須能以 `task_id` 重新附加 |
 | Result handoff is explicit | task terminal 後要能分辨 `result ready` 與 `no result` |
+| `PTC` capability is persisted | simulation task 的 `PTC` config 與 downstream `PTC` availability 必須能由 persisted task / result authority 重建 |
 | Control actions are auditable | `cancel` / `terminate` / `retry` 必須可進入 audit trail |
 
 ## Request / Response Examples
@@ -212,6 +237,12 @@ Header queue rows 至少必須能讀到：
         "solver": {
           "nmod": 6,
           "npump": 3
+        },
+        "ptc": {
+          "enabled": true,
+          "mode": "backend_defined_mode",
+          "selected_ports": ["port_ro"],
+          "config": {}
         }
       }
     }
@@ -230,6 +261,42 @@ Header queue rows 至少必須能讀到：
         "owner_user_id": "user_12",
         "dataset_id": "ds_xy_001",
         "definition_id": "def_lc_12"
+      }
+    }
+    ```
+
+!!! example "Simulation task detail excerpt"
+    Response:
+    ```json
+    {
+      "ok": true,
+      "data": {
+        "task_id": "task_501",
+        "task_kind": "simulation",
+        "status": "completed",
+        "setup": {
+          "frequency_sweep": {
+            "start_ghz": 1.0,
+            "stop_ghz": 8.0,
+            "points": 401
+          },
+          "solver": {
+            "nmod": 6,
+            "npump": 3
+          },
+          "ptc": {
+            "enabled": true,
+            "mode": "backend_defined_mode",
+            "selected_ports": ["port_ro"],
+            "config": {}
+          }
+        },
+        "execution_metadata": {
+          "downstream_sources": {
+            "raw": true,
+            "ptc": true
+          }
+        }
       }
     }
     ```

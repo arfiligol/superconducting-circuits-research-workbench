@@ -14,7 +14,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/circuit-simulation 的 canonical definition 選擇、simulation setup、task submission、attached-task review 與 post-processing 契約"
-version: v0.21.0
+version: v0.22.0
 last_updated: 2026-03-18
 updated_by: codex
 ---
@@ -114,19 +114,24 @@ graph TD
 | `Parameter Sweep Setup` | persisted on task；sweep target 只能來自 schema parameters 或 source-derived controls，若無可用 target 必須 forced disable |
 | `HB Solving` | main HB / solver controls persisted on task |
 | `Sources` | persisted on task；page 應收斂成 JosephsonCircuits pump-source authoring surface，而不是 generic source-kind form builder |
-| `PTC` | local draft only；ports 來自 schema-defined ports，預設全部不選 |
+| `PTC` | persisted on task；屬於 `Simulation Setup` authority；至少包含 `enabled / disabled`、stable `mode`、schema-defined `selected ports` 與 solver-required config；ports 預設全部不選 |
 | `Advanced hbsolve Options` | 目前應視為 local-draft-first advanced surface；正式 backend authority 未定前，不得假裝是穩定 persisted contract |
 
 !!! tip "Saved setups are browser-local"
     `Save` / `Manage` simulation setups 目前屬於 browser-local saved setups，
     scope 為 per selected definition。
     它們不是 backend resources，也不是 persisted task history。
+    browser-local setup 可以暫存 `PTC` authoring draft，但 canonical run snapshot 仍以 persisted task `setup.ptc` 為準。
 
-!!! warning "Local Draft Only"
-    `Local Draft Only` 代表：
-    - 僅存在 browser-local draft
-    - 不隨 task 提交
-    - 不從 persisted task detail rehydrate
+!!! warning "Implementation transition"
+    目前某些 implementation 可能仍保留 `PTC` 的 browser-local authoring 過渡行為。
+    這不是長期 SoT。
+    canonical contract 是：`PTC` 一旦參與 simulation stage，就必須隨 task 提交、進入 persisted task detail，並在 refresh / reconnect / `Resume Latest Run` 時被 rehydrate。
+
+!!! warning "Local Draft Only is explicit"
+    `Local Draft Only` 只適用於尚未進入 backend authority 的 draft surface。
+    在目前 SoT 中，`Advanced hbsolve Options` 屬於 draft-only；
+    `PTC` 不再屬於長期 draft-only 類別。
 
 ## Runnable Stage Contract
 
@@ -155,6 +160,7 @@ graph TD
 | Simulation result | 必須明確屬於 simulation stage，不與 post-processing result 混成單一 task result 面板 |
 | Post-processing unlock | 只有在 simulation result 已可用時才解鎖 |
 | Downstream relation | post-processing result 必須明確指出其 upstream simulation result / run |
+| `PTC` downstream capability | `PTC` source 是否可選，必須根據 upstream simulation run 的 persisted result / metadata 決定，而不是依賴 page-local draft state |
 | Export / compare | 應附著在對應的 result stage，而不是 task diagnostics 區塊 |
 | Re-entry | refresh / reattach 後，頁面必須能回到正確 stage result，而不是只剩 generic task detail |
 
@@ -164,7 +170,8 @@ graph TD
 |---|---|
 | Setup model | `Post Processing Setup` 應收斂成 step-based process list，而不是單一 generic operation form |
 | Step order | order matters，列表順序就是執行順序 |
-| Source selection | downstream source 應允許 `Raw` 或 `PTC` |
+| Source selection | downstream source 應允許 `Raw` 或 `PTC`；但 `PTC` 只有在 upstream simulation run 真正 persisted / materialized PTC output 時才可選 |
+| Source gating | `PTC` availability 必須來自 upstream persisted run / result metadata，不得只靠目前 UI toggle 或 browser-local draft 推定 |
 | UI density | stage 4 應維持 card-based、低噪音 authoring surface，不應變成 generic field wall |
 | Stage 5 | `Post Processing Result` 仍承接 downstream result，且必須明確連回 upstream simulation result |
 
@@ -195,7 +202,7 @@ graph TD
 === "Recovery"
     | Situation | Expected behavior |
     | :--- | :--- |
-    | **Page refresh** | 根據 persisted run / task context，自動重建目前 stage 狀態與 result handoff。 |
+    | **Page refresh** | 根據 persisted run / task context，自動重建目前 stage 狀態、result handoff 與已提交的 `PTC` setup snapshot。 |
     | **Task detachment** | 透過 `Resume Latest Run` 或 Header `Tasks Queue` 快速連回最新執行任務。 |
 
 !!! warning "PTC applicability"
@@ -239,6 +246,7 @@ graph TD
 | Result ownership | simulation result 與 post-processing result 必須有明確 stage 邊界 |
 | Recovery language | 使用 workflow-oriented wording，不以 infrastructure wording 主導 |
 | Shared boundary | global queue / worker / deep task control 必須回到 `Global Context` |
+| `PTC` contract | `PTC` 必須被視為 persisted `Simulation Setup` 的一部分，不得再被描述成長期 browser-local only |
 
 ## 相關參考
 
