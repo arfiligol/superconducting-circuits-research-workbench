@@ -125,6 +125,7 @@ type WorkflowStageState = Readonly<{
 }>;
 
 const FREQUENCY_WHEEL_STEP_GHZ = 0.001;
+const SOURCE_CURRENT_WHEEL_STEP_AMP = 0.000001;
 
 const spacingSelectOptions: readonly AppSelectOption[] = [
   { value: "linear", label: "Linear" },
@@ -2112,7 +2113,7 @@ export function SimulationWorkbenchShell() {
                             {...form.register(`simulationSources.${index}.currentAmp`, {
                               valueAsNumber: true,
                             })}
-                            step="any"
+                            step={String(SOURCE_CURRENT_WHEEL_STEP_AMP)}
                           />
                         </CompactField>
                         <CompactField label="Source Mode" error={sourceErrors?.sourceMode?.message}>
