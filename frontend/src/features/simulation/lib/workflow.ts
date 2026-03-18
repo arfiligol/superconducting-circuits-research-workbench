@@ -282,6 +282,21 @@ export function resolveContextBoundAttachedTask(
   return normalizeTaskSummary(task);
 }
 
+export function resolveAuthoritativeSimulationTaskSummary(
+  task: TaskSummary | undefined,
+  detail: TaskDetail | undefined,
+): TaskSummary | undefined {
+  if (!detail) {
+    return task;
+  }
+
+  if (!task) {
+    return normalizeTaskSummary(detail);
+  }
+
+  return detail.taskId === task.taskId ? normalizeTaskSummary(detail) : task;
+}
+
 export function filterSimulationTasks(
   tasks: readonly TaskSummary[],
   options: FilterSimulationTasksOptions,
@@ -404,12 +419,19 @@ export function hasSimulationTaskResult(task: TaskDetail | undefined) {
     return false;
   }
 
+  const resultAvailability = task.resultHandoff?.availability ?? null;
+
+  if (resultAvailability === "ready") {
+    return true;
+  }
+
+  if (resultAvailability === "none" || resultAvailability === "pending") {
+    return false;
+  }
+
   return (
-    task.resultRefs.traceBatchId !== null ||
-    task.resultRefs.analysisRunId !== null ||
     task.resultRefs.tracePayload !== null ||
-    task.resultRefs.metadataRecords.length > 0 ||
-    task.resultRefs.resultHandles.length > 0
+    task.resultRefs.resultHandles.some((handle) => handle.status === "materialized")
   );
 }
 

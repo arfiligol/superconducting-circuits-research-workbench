@@ -35,6 +35,7 @@ import {
   filterSimulationTasks,
   formatSimulationTaskStatusLabel,
   hasSimulationTaskResult,
+  resolveAuthoritativeSimulationTaskSummary,
   resolveContextBoundAttachedTask,
   resolveLatestSimulationStageTask,
   resolveLatestSimulationStageTaskInContext,
@@ -647,6 +648,177 @@ describe("simulation task workflow helpers", () => {
     expect(hasSimulationTaskResult(completedPostProcessingTask)).toBe(true);
     expect(resolvePostProcessingUpstreamTaskId(completedPostProcessingTask)).toBe(31);
   });
+
+  it("treats persisted task detail as the stage authority when it is newer than the queue row", () => {
+    const staleQueueTask = {
+      ...tasks[0],
+      status: "running",
+      resultAvailability: "pending",
+    } as const;
+    const completedDetail = {
+      ...staleQueueTask,
+      status: "completed",
+      queueBackend: "in_memory_scaffold",
+      workerTaskName: "simulation_run_task",
+      requestReady: true,
+      submittedFromActiveDataset: true,
+      dispatch: {
+        dispatchKey: "dispatch:31:simulation_run_task",
+        status: "completed",
+        submissionSource: "active_dataset",
+        acceptedAt: "2026-03-12 10:20:00",
+        lastUpdatedAt: "2026-03-12 10:21:00",
+      },
+      events: [],
+      progress: {
+        phase: "completed",
+        percentComplete: 100,
+        summary: "simulation complete",
+        updatedAt: "2026-03-12 10:21:00",
+      },
+      resultHandoff: {
+        availability: "ready",
+        primaryResultHandleId: "task-result:31:primary",
+        resultHandleCount: 1,
+        tracePayloadAvailable: true,
+      },
+      resultRefs: {
+        traceBatchId: 44,
+        analysisRunId: null,
+        metadataRecords: [],
+        tracePayload: null,
+        resultHandles: [
+          {
+            contractVersion: "result-handle/v1",
+            handleId: "handle-44",
+            kind: "simulation_trace",
+            status: "materialized",
+            label: "S11",
+            metadataRecord: {
+              backend: "sqlite_metadata",
+              recordType: "result_handle",
+              recordId: "handle-44",
+              version: 1,
+              schemaVersion: "result-handle/v1",
+            },
+            payloadBackend: "local_zarr",
+            payloadFormat: "zarr",
+            payloadRole: "trace_payload",
+            payloadLocator: "/data/trace-output-44.zarr",
+            provenanceTaskId: 31,
+            provenance: {
+              sourceDatasetId: "fluxonium-2025-031",
+              sourceTaskId: 31,
+              traceBatchRecord: null,
+              analysisRunRecord: null,
+            },
+          },
+        ],
+      },
+    } as const;
+
+    expect(
+      resolveAuthoritativeSimulationTaskSummary(staleQueueTask, completedDetail),
+    ).toMatchObject({
+      taskId: 31,
+      status: "completed",
+      resultAvailability: "pending",
+    });
+    expect(hasSimulationTaskResult(completedDetail)).toBe(true);
+  });
+
+  it("does not treat pending placeholder refs as a completed result", () => {
+    expect(
+      hasSimulationTaskResult({
+        taskId: 374,
+        kind: "simulation",
+        lane: "simulation",
+        executionMode: "smoke",
+        status: "completed",
+        submittedAt: "2026-03-18 14:43:41",
+        ownerUserId: "local-operator",
+        ownerDisplayName: "Local Operator",
+        workspaceId: "local-space",
+        workspaceSlug: "local-space",
+        visibilityScope: "local",
+        datasetId: "local-dataset-001",
+        definitionId: 3,
+        summary: "Codex live execution verification",
+        hasActionAuthority: true,
+        allowedActions: {
+          attach: true,
+          cancel: false,
+          terminate: false,
+          retry: false,
+        },
+        queueBackend: "in_memory_scaffold",
+        workerTaskName: "simulation_smoke_task",
+        requestReady: false,
+        submittedFromActiveDataset: false,
+        dispatch: {
+          dispatchKey: "dispatch:374:simulation_smoke_task",
+          status: "completed",
+          submissionSource: "explicit_dataset",
+          acceptedAt: "2026-03-18 14:43:41",
+          lastUpdatedAt: "2026-03-18 14:43:42",
+        },
+        events: [],
+        progress: {
+          phase: "completed",
+          percentComplete: 100,
+          summary: "Task completed without persisted output.",
+          updatedAt: "2026-03-18 14:43:42",
+        },
+        resultHandoff: {
+          availability: "pending",
+          primaryResultHandleId: "task-result:374:primary",
+          resultHandleCount: 1,
+          tracePayloadAvailable: false,
+        },
+        resultRefs: {
+          traceBatchId: null,
+          analysisRunId: null,
+          metadataRecords: [
+            {
+              backend: "sqlite_metadata",
+              recordType: "result_handle",
+              recordId: "result_handle:pending:374",
+              version: 1,
+              schemaVersion: "sqlite_metadata.v1",
+            },
+          ],
+          tracePayload: null,
+          resultHandles: [
+            {
+              contractVersion: "sc_storage.v1",
+              handleId: "task-result:374:primary",
+              kind: "simulation_trace",
+              status: "pending",
+              label: "Pending simulation trace",
+              metadataRecord: {
+                backend: "sqlite_metadata",
+                recordType: "result_handle",
+                recordId: "result_handle:pending:374",
+                version: 1,
+                schemaVersion: "sqlite_metadata.v1",
+              },
+              payloadBackend: null,
+              payloadFormat: null,
+              payloadRole: null,
+              payloadLocator: null,
+              provenanceTaskId: 374,
+              provenance: {
+                sourceDatasetId: "local-dataset-001",
+                sourceTaskId: 374,
+                traceBatchRecord: null,
+                analysisRunRecord: null,
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("simulation workflow source contract", () => {
@@ -982,6 +1154,10 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkflowHookSource).toContain("resolveLatestSimulationTaskInContext(");
     expect(simulationWorkflowHookSource).toContain("resolveLatestSimulationStageTaskInContext(");
     expect(simulationWorkflowHookSource).toContain("const pageContext = {");
+    expect(simulationWorkbenchSource).toContain("resolveAuthoritativeSimulationTaskSummary");
+    expect(simulationWorkbenchSource).toContain("latestSimulationStageAuthority");
+    expect(simulationWorkbenchSource).toContain("latestPostProcessingStageAuthority");
+    expect(simulationWorkbenchSource).toContain("Persisted result handoff:");
     expect(simulationWorkbenchSource).toContain("summarizeTaskContextBinding");
     expect(simulationWorkbenchSource).toContain("taskContextBinding?.hasMismatch");
     expect(simulationWorkbenchSource).toContain("title={taskContextBinding.title}");
@@ -990,6 +1166,10 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkflowHookSource).toContain("post_processing_setup: postProcessingSetup ?? null");
     expect(simulationWorkflowHookSource).toContain("attachedContextTask");
     expect(simulationWorkflowHookSource).toContain("upstreamSimulationStageTask");
+    expect(simulationWorkbenchSource).toContain("simulation:attached-task:");
+    expect(simulationWorkbenchSource).toContain("autoRestoredTaskIdRef");
+    expect(simulationWorkbenchSource).toContain("readStoredAttachedTaskId(attachedTaskStorageKey)");
+    expect(simulationWorkbenchSource).toContain("window.sessionStorage.setItem(attachedTaskStorageKey");
   });
 });
 

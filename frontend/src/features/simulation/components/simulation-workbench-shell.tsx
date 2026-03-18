@@ -55,6 +55,7 @@ import {
   buildSimulationRequestSummary,
   formatSimulationTaskStatusLabel,
   hasSimulationTaskResult,
+  resolveAuthoritativeSimulationTaskSummary,
   resolvePostProcessingUpstreamTaskId,
   resolveSimulationSelectionRecovery,
   summarizeSimulationTaskResults,
@@ -235,6 +236,25 @@ function parseTaskIdParam(value: string | null): number | null {
 
   const parsedValue = Number.parseInt(value, 10);
   return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+function buildAttachedTaskStorageKey(
+  definitionId: number | null,
+  datasetId: string | null,
+): string | null {
+  if (typeof definitionId !== "number" || !datasetId) {
+    return null;
+  }
+
+  return `simulation:attached-task:${definitionId}:${datasetId}`;
+}
+
+function readStoredAttachedTaskId(storageKey: string | null): number | null {
+  if (typeof window === "undefined" || !storageKey) {
+    return null;
+  }
+
+  return parseTaskIdParam(window.sessionStorage.getItem(storageKey));
 }
 
 function describeApiError(error: Error | undefined) {
@@ -955,6 +975,7 @@ export function SimulationWorkbenchShell() {
   const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
   const [saveSetupNameDraft, setSaveSetupNameDraft] = useState("");
   const [savedSetupFeedback, setSavedSetupFeedback] = useState<string | null>(null);
+  const autoRestoredTaskIdRef = useRef<number | null>(null);
 
   const form = useForm<SimulationRequestValues>({
     resolver: zodResolver(simulationRequestSchema),
@@ -1037,6 +1058,14 @@ export function SimulationWorkbenchShell() {
     activeDatasetId: activeDatasetState.activeDataset?.datasetId ?? null,
     activeDefinitionId: resolvedDefinitionId,
   });
+  const attachedTaskStorageKey = useMemo(
+    () =>
+      buildAttachedTaskStorageKey(
+        resolvedDefinitionId,
+        activeDatasetState.activeDataset?.datasetId ?? null,
+      ),
+    [activeDatasetState.activeDataset?.datasetId, resolvedDefinitionId],
+  );
   const definitionsErrorMessage = describeApiError(definitionsError);
   const activeDefinitionErrorMessage = describeApiError(activeDefinitionError);
   const simulationStageErrorMessage = describeApiError(latestSimulationTaskError);
@@ -1195,9 +1224,18 @@ export function SimulationWorkbenchShell() {
         : !session?.canSubmitTasks
           ? "The current session does not allow submitting simulation tasks."
           : null;
+  const latestSimulationStageAuthority = resolveAuthoritativeSimulationTaskSummary(
+    latestSimulationStageTask,
+    latestSimulationTaskDetail,
+  );
+  const latestPostProcessingStageAuthority = resolveAuthoritativeSimulationTaskSummary(
+    latestPostProcessingTask,
+    latestPostProcessingTaskDetail,
+  );
   const simulationResultReady =
-    latestSimulationStageTask?.resultAvailability === "ready" ||
-    hasSimulationTaskResult(latestSimulationTaskDetail);
+    latestSimulationTaskDetail !== undefined
+      ? hasSimulationTaskResult(latestSimulationTaskDetail)
+      : latestSimulationStageAuthority?.resultAvailability === "ready";
   const postProcessingSourceBlockedReason =
     !simulationResultReady
       ? null
@@ -1212,28 +1250,29 @@ export function SimulationWorkbenchShell() {
   const simulationSetupState = resolveSetupStageState({
     stageLabel: "Simulation",
     blockedReason: simulationSetupBlockedReason,
-    latestTask: latestSimulationStageTask,
+    latestTask: latestSimulationStageAuthority,
   });
   const simulationResultState = resolveResultStageState({
     stageLabel: "Simulation Result",
-    latestTask: latestSimulationStageTask,
+    latestTask: latestSimulationStageAuthority,
     detail: latestSimulationTaskDetail,
     hasResult: simulationResultReady,
   });
   const postProcessingSetupState = resolveSetupStageState({
     stageLabel: "Post Processing",
     blockedReason: postProcessingSetupBlockedReason,
-    latestTask: latestPostProcessingTask,
+    latestTask: latestPostProcessingStageAuthority,
   });
   const postProcessingResultReady =
-    latestPostProcessingTask?.resultAvailability === "ready" ||
-    hasSimulationTaskResult(latestPostProcessingTaskDetail);
+    latestPostProcessingTaskDetail !== undefined
+      ? hasSimulationTaskResult(latestPostProcessingTaskDetail)
+      : latestPostProcessingStageAuthority?.resultAvailability === "ready";
   const postProcessingResultState = resolveResultStageState({
     stageLabel: "Post Processing Result",
     blockedReason: !simulationResultReady
       ? "Post-processing result stays blocked until a simulation result is available."
       : null,
-    latestTask: latestPostProcessingTask,
+    latestTask: latestPostProcessingStageAuthority,
     detail: latestPostProcessingTaskDetail,
     hasResult: postProcessingResultReady,
   });
@@ -1532,6 +1571,14 @@ export function SimulationWorkbenchShell() {
     });
   }
 
+  function rememberAttachedTask(taskId: number) {
+    if (typeof window === "undefined" || attachedTaskStorageKey === null) {
+      return;
+    }
+
+    window.sessionStorage.setItem(attachedTaskStorageKey, String(taskId));
+  }
+
   useEffect(() => {
     if (resolvedDefinitionId === null || resolvedDefinitionId === rawDefinitionId) {
       return;
@@ -1546,6 +1593,83 @@ export function SimulationWorkbenchShell() {
       );
     });
   }, [pathname, rawDefinitionId, resolvedDefinitionId, router, searchParams]);
+
+  useEffect(() => {
+    if (requestedTaskId !== null || attachedTaskStorageKey === null) {
+      return;
+    }
+
+    const storedTaskId = readStoredAttachedTaskId(attachedTaskStorageKey);
+    if (storedTaskId === null) {
+      return;
+    }
+
+    autoRestoredTaskIdRef.current = storedTaskId;
+    startTransition(() => {
+      router.replace(
+        buildSimulationSearchHref(pathname, searchParams.toString(), {
+          definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
+          taskId: String(storedTaskId),
+        }),
+        { scroll: false },
+      );
+    });
+  }, [
+    attachedTaskStorageKey,
+    pathname,
+    requestedTaskId,
+    resolvedDefinitionId,
+    router,
+    searchParams,
+  ]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      attachedTaskStorageKey === null ||
+      !activeTask ||
+      taskContextBinding?.hasMismatch
+    ) {
+      return;
+    }
+
+    window.sessionStorage.setItem(attachedTaskStorageKey, String(activeTask.taskId));
+    if (autoRestoredTaskIdRef.current === activeTask.taskId) {
+      autoRestoredTaskIdRef.current = null;
+    }
+  }, [activeTask, attachedTaskStorageKey, taskContextBinding?.hasMismatch]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      attachedTaskStorageKey === null ||
+      !activeTaskError ||
+      requestedTaskId === null ||
+      autoRestoredTaskIdRef.current !== requestedTaskId
+    ) {
+      return;
+    }
+
+    window.sessionStorage.removeItem(attachedTaskStorageKey);
+    autoRestoredTaskIdRef.current = null;
+    startTransition(() => {
+      router.replace(
+        buildSimulationSearchHref(pathname, searchParams.toString(), {
+          definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
+          taskId: null,
+        }),
+        { scroll: false },
+      );
+    });
+  }, [
+    activeTaskError,
+    attachedTaskStorageKey,
+    pathname,
+    requestedTaskId,
+    resolvedDefinitionId,
+    router,
+    searchParams,
+  ]);
 
   async function handleRefreshWorkflow() {
     setIsRefreshingWorkflow(true);
@@ -1595,6 +1719,7 @@ export function SimulationWorkbenchShell() {
       upstreamTaskId: kind === "post_processing" ? (latestSimulationStageTask?.taskId ?? null) : null,
     });
 
+    rememberAttachedTask(task.taskId);
     replaceSearchState({
       definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
       taskId: String(task.taskId),
@@ -1602,6 +1727,7 @@ export function SimulationWorkbenchShell() {
   }
 
   function attachTask(taskId: number) {
+    rememberAttachedTask(taskId);
     replaceSearchState({
       definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
       taskId: String(taskId),
@@ -2532,7 +2658,7 @@ export function SimulationWorkbenchShell() {
             Run Simulation
           </button>
 
-          {latestSimulationStageTask ? (
+          {latestSimulationStageAuthority ? (
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -2540,28 +2666,30 @@ export function SimulationWorkbenchShell() {
                     Latest Simulation Run
                   </p>
                   <p className="mt-2 text-sm font-semibold text-foreground">
-                    Task #{latestSimulationStageTask.taskId}
+                    Task #{latestSimulationStageAuthority.taskId}
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {latestSimulationTaskDetail?.progress.summary ??
-                      latestSimulationStageTask.summary}
+                      latestSimulationStageAuthority.summary}
                   </p>
                 </div>
-                <SurfaceTag tone={taskStatusTone(latestSimulationStageTask.status)}>
-                  {formatSimulationTaskStatusLabel(latestSimulationStageTask.status)}
+                <SurfaceTag tone={taskStatusTone(latestSimulationStageAuthority.status)}>
+                  {formatSimulationTaskStatusLabel(latestSimulationStageAuthority.status)}
                 </SurfaceTag>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <SummaryCard
                   label="Submitted"
-                  value={latestSimulationStageTask.submittedAt ?? "Pending"}
+                  value={latestSimulationStageAuthority.submittedAt ?? "Pending"}
                 />
                 <SummaryCard
                   label="Result"
                   value={simulationResultReady ? "Ready" : "Pending"}
                   detail={
-                    latestSimulationStageTask.resultAvailability
-                      ? `Backend result availability: ${latestSimulationStageTask.resultAvailability}`
+                    latestSimulationTaskDetail?.resultHandoff?.availability
+                      ? `Persisted result handoff: ${latestSimulationTaskDetail.resultHandoff.availability}`
+                      : latestSimulationStageAuthority.resultAvailability
+                        ? `Backend result availability: ${latestSimulationStageAuthority.resultAvailability}`
                       : "Result status is inferred from persisted task detail."
                   }
                 />
@@ -2570,13 +2698,13 @@ export function SimulationWorkbenchShell() {
                   value={
                     latestSimulationTaskDetail
                       ? `${Math.round(latestSimulationTaskDetail.progress.percentComplete)}%`
-                      : formatSimulationTaskStatusLabel(latestSimulationStageTask.status)
+                      : formatSimulationTaskStatusLabel(latestSimulationStageAuthority.status)
                   }
                 />
               </div>
               <div className="mt-4">
                 <StageTaskActions
-                  task={latestSimulationStageTask}
+                  task={latestSimulationStageAuthority}
                   resolvedTaskId={resolvedTaskId}
                   onViewTask={attachTask}
                   onOpenGlobalContext={openTaskInGlobalContext}
@@ -2602,13 +2730,13 @@ export function SimulationWorkbenchShell() {
             }
           />
 
-          {latestSimulationStageTask ? (
+          {latestSimulationStageAuthority ? (
             <>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <SummaryCard
                   label="Latest Run"
-                  value={`#${latestSimulationStageTask.taskId}`}
-                  detail={latestSimulationStageTask.summary}
+                  value={`#${latestSimulationStageAuthority.taskId}`}
+                  detail={latestSimulationStageAuthority.summary}
                 />
                 <SummaryCard
                   label="Trace Batch"
@@ -2635,12 +2763,12 @@ export function SimulationWorkbenchShell() {
                 title="Result handoff"
                 message={
                   simulationResultReady
-                    ? `Simulation result is ready for downstream work. Post Processing Setup can now use simulation task #${latestSimulationStageTask.taskId} as its upstream result source.`
+                    ? `Simulation result is ready for downstream work. Post Processing Setup can now use simulation task #${latestSimulationStageAuthority.taskId} as its upstream result source.`
                     : "Persisted simulation outputs are not ready yet. Post Processing Setup stays blocked until the simulation result becomes available."
                 }
                 actions={
                   <StageTaskActions
-                    task={latestSimulationStageTask}
+                    task={latestSimulationStageAuthority}
                     resolvedTaskId={resolvedTaskId}
                     onViewTask={attachTask}
                     onOpenGlobalContext={openTaskInGlobalContext}
@@ -2666,8 +2794,8 @@ export function SimulationWorkbenchShell() {
           <SummaryCard
             label="Upstream Simulation"
             value={
-              latestSimulationStageTask
-                ? `Task #${latestSimulationStageTask.taskId}`
+              latestSimulationStageAuthority
+                ? `Task #${latestSimulationStageAuthority.taskId}`
                 : "Simulation required"
             }
             detail={
@@ -2844,7 +2972,7 @@ export function SimulationWorkbenchShell() {
             </button>
           </div>
 
-          {latestPostProcessingTask ? (
+          {latestPostProcessingStageAuthority ? (
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -2852,35 +2980,35 @@ export function SimulationWorkbenchShell() {
                     Latest Post Processing Run
                   </p>
                   <p className="mt-2 text-sm font-semibold text-foreground">
-                    Task #{latestPostProcessingTask.taskId}
+                    Task #{latestPostProcessingStageAuthority.taskId}
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {latestPostProcessingTaskDetail?.progress.summary ??
-                      latestPostProcessingTask.summary}
+                      latestPostProcessingStageAuthority.summary}
                   </p>
                 </div>
-                <SurfaceTag tone={taskStatusTone(latestPostProcessingTask.status)}>
-                  {formatSimulationTaskStatusLabel(latestPostProcessingTask.status)}
+                <SurfaceTag tone={taskStatusTone(latestPostProcessingStageAuthority.status)}>
+                  {formatSimulationTaskStatusLabel(latestPostProcessingStageAuthority.status)}
                 </SurfaceTag>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <SummaryCard
                   label="Submitted"
-                  value={latestPostProcessingTask.submittedAt ?? "Pending"}
+                  value={latestPostProcessingStageAuthority.submittedAt ?? "Pending"}
                 />
                 <SummaryCard
                   label="Upstream"
                   value={
                     explicitUpstreamSimulationTaskId !== null
                       ? `Simulation #${explicitUpstreamSimulationTaskId}`
-                      : latestSimulationStageTask
-                        ? `Simulation #${latestSimulationStageTask.taskId}`
+                      : latestSimulationStageAuthority
+                        ? `Simulation #${latestSimulationStageAuthority.taskId}`
                         : "Pending"
                   }
                   detail={
                     explicitUpstreamSimulationTaskId !== null
                       ? "Recovered from persisted post-processing result provenance."
-                      : latestSimulationStageTask
+                      : latestSimulationStageAuthority
                         ? "Paired with the latest simulation result visible in the current page context."
                         : "Simulation result is still required."
                   }
@@ -2889,15 +3017,17 @@ export function SimulationWorkbenchShell() {
                   label="Result"
                   value={postProcessingResultReady ? "Ready" : "Pending"}
                   detail={
-                    latestPostProcessingTask.resultAvailability
-                      ? `Backend result availability: ${latestPostProcessingTask.resultAvailability}`
+                    latestPostProcessingTaskDetail?.resultHandoff?.availability
+                      ? `Persisted result handoff: ${latestPostProcessingTaskDetail.resultHandoff.availability}`
+                      : latestPostProcessingStageAuthority.resultAvailability
+                        ? `Backend result availability: ${latestPostProcessingStageAuthority.resultAvailability}`
                       : "Result status is inferred from persisted task detail."
                   }
                 />
               </div>
               <div className="mt-4">
                 <StageTaskActions
-                  task={latestPostProcessingTask}
+                  task={latestPostProcessingStageAuthority}
                   resolvedTaskId={resolvedTaskId}
                   onViewTask={attachTask}
                   onOpenGlobalContext={openTaskInGlobalContext}
@@ -2923,13 +3053,13 @@ export function SimulationWorkbenchShell() {
             }
           />
 
-          {latestPostProcessingTask ? (
+          {latestPostProcessingStageAuthority ? (
             <>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <SummaryCard
                   label="Latest Run"
-                  value={`#${latestPostProcessingTask.taskId}`}
-                  detail={latestPostProcessingTask.summary}
+                  value={`#${latestPostProcessingStageAuthority.taskId}`}
+                  detail={latestPostProcessingStageAuthority.summary}
                 />
                 <SummaryCard
                   label="Analysis Run"
@@ -2956,14 +3086,14 @@ export function SimulationWorkbenchShell() {
                 title="Downstream handoff"
                 message={
                   explicitUpstreamSimulationTaskId !== null
-                    ? `This downstream result is attached to post-processing task #${latestPostProcessingTask.taskId} and traces back to simulation task #${explicitUpstreamSimulationTaskId}.`
-                    : latestSimulationStageTask
-                      ? `This downstream result is attached to post-processing task #${latestPostProcessingTask.taskId}. The page can pair it with the latest simulation task #${latestSimulationStageTask.taskId}, but the backend payload does not expose a narrower upstream task id here.`
-                      : `This downstream result is attached to post-processing task #${latestPostProcessingTask.taskId}. Upstream simulation context is not currently available in the page.`
+                    ? `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId} and traces back to simulation task #${explicitUpstreamSimulationTaskId}.`
+                    : latestSimulationStageAuthority
+                      ? `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId}. The page can pair it with the latest simulation task #${latestSimulationStageAuthority.taskId}, but the backend payload does not expose a narrower upstream task id here.`
+                      : `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId}. Upstream simulation context is not currently available in the page.`
                 }
                 actions={
                   <StageTaskActions
-                    task={latestPostProcessingTask}
+                    task={latestPostProcessingStageAuthority}
                     resolvedTaskId={resolvedTaskId}
                     onViewTask={attachTask}
                     onOpenGlobalContext={openTaskInGlobalContext}
