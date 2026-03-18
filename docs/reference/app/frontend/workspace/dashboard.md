@@ -14,7 +14,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/dashboard 的 summary-first landing page 契約，承接目前 dataset context、tagged metrics 摘要與 dedicated workspace/pipeline entry points"
-version: v0.6.0
+version: v0.7.0
 last_updated: 2026-03-18
 updated_by: codex
 ---
@@ -29,7 +29,7 @@ updated_by: codex
 
 - 概覽目前 active dataset context
 - 顯示 tagged core metrics 的唯讀摘要
-- 提供前往 `Dataset`、`Data Ingestion`、`Raw Data Browser` 等 dedicated surfaces 的精簡 entry
+- 提供前往 `Dataset`、`Tasks`、`Data Ingestion`、`Raw Data Browser` 等 dedicated surfaces 的精簡 entry
 
 本頁不負責：
 
@@ -79,7 +79,7 @@ flowchart TD
 | `C1` | Page Header | page identity | 說明這是 overview-first landing page，而不是 management page |
 | `C2` | Overview Stats | summary | 顯示可快速掃讀的 dataset / metrics 狀態 |
 | `C3` | Current Dataset Context | context summary | 顯示 active dataset 的 concise summary，不承接編輯責任 |
-| `C4` | Dedicated Page Entry Cards | next-step navigation | 以少量清楚 entry cards 導向 `Dataset`、`Data Ingestion`、`Raw Data Browser` |
+| `C4` | Dedicated Page Entry Cards | next-step navigation | 以少量清楚 entry cards 導向 `Dataset`、`Tasks`、`Data Ingestion`、`Raw Data Browser` |
 | `C5` | Tagged Core Metrics Summary | read-only result summary | 顯示 active dataset 相關的 tagged metrics 摘要 |
 
 ## Data & State Contract
@@ -105,7 +105,7 @@ flowchart TD
 ## Interaction Flows
 
 1. **Open a dedicated page**
-   - 使用者從 entry card 點進 `Dataset`、`Data Ingestion` 或 `Raw Data Browser`
+   - 使用者從 entry card 點進 `Dataset`、`Tasks`、`Data Ingestion` 或 `Raw Data Browser`
    - Dashboard 不應先再鋪一輪 handoff explanation
 
 2. **Refresh after shell context change**
@@ -136,6 +136,7 @@ flowchart TD
 ## Related
 
 - [Dataset](dataset.md)
+- [Tasks](tasks.md)
 - [Data Ingestion](data-ingestion.md)
 - [Raw Data Browser](raw-data-browser.md)
 - [Header](../shared-shell/header.md)

@@ -138,6 +138,7 @@ nav = [
         { "Workspace" = [
           { "Dashboard" = "reference/app/frontend/workspace/dashboard.md" },
           { "Dataset" = "reference/app/frontend/workspace/dataset.md" },
+          { "Tasks" = "reference/app/frontend/workspace/tasks.md" },
           { "Data Ingestion" = "reference/app/frontend/workspace/data-ingestion.md" },
           { "Raw Data Browser" = "reference/app/frontend/workspace/raw-data-browser.md" },
         ] },

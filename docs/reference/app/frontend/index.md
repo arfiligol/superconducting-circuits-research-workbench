@@ -13,7 +13,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
-version: v0.21.0
+version: v0.22.0
 last_updated: 2026-03-18
 updated_by: codex
 ---
@@ -32,8 +32,8 @@ updated_by: codex
 
 !!! warning "Do Not Rewrite Sidebar Taxonomy In Implementation"
     目前 frontend 的可見 sidebar groups 為 `Dashboard`、`Pipeline`、`Circuit Simulation`。
-    其中 `Dashboard` 承擔 workspace-level overview / operations 語意。
-    若產品要新增 `Tasks` / `Session`，或替 `Pipeline` 新增 overview route，必須先更新 SoT，再改 frontend implementation。
+    其中 `Dashboard` 承擔 workspace-level overview / operations 語意，並包含 standalone `Tasks` entry。
+    若產品要新增 `Session`，或替 `Pipeline` 新增 overview route，必須先更新 SoT，再改 frontend implementation。
 
 !!! warning "Anti-overbuild baseline"
     frontend page specs 除了定義功能，也要定義禁止條件。
@@ -43,7 +43,7 @@ updated_by: codex
 
 | Section | Meaning | Current baseline |
 |---|---|---|
-| `Dashboard` | workspace-level overview / operations / cross-workflow context | 目前由 `/dashboard` 作為 canonical landing page，並包含 `Dataset` entry |
+| `Dashboard` | workspace-level overview / operations / cross-workflow context | 目前由 `/dashboard` 作為 canonical landing page，並包含 `Dataset`、`Tasks` entry |
 | `Pipeline` | data-analysis flow；item order 具有 UX 引導含義 | 放 `Data Ingestion`、`Raw Data`、`Characterization` 等流程節點，不放 system / task infra management page |
 | `CIRCUIT SIMULATION` | definition-driven modeling / simulation flow | 放 schema、schemdraw、simulation 等建模工作頁 |
 
@@ -69,6 +69,7 @@ updated_by: codex
     |---|---|---|---|
     | [Dashboard](workspace/dashboard.md) | `Dashboard` | summary-first landing page；目前 dataset context、tagged core metrics 與 dedicated page entry points | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Characterization Results](../backend/characterization-results.md) |
     | [Dataset](workspace/dataset.md) | `Dashboard` | visible dataset catalog、active dataset switch、profile edit、lifecycle actions | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
+    | [Tasks](workspace/tasks.md) | `Dashboard` | standalone queue browse、worker inspection、history、task detail、control actions | [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md) |
     | [Data Ingestion](workspace/data-ingestion.md) | `Pipeline` | upload-first raw-data intake、validation、preprocess、import handoff | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
     | [Raw Data Browser](workspace/raw-data-browser.md) | `Pipeline` | design list、trace preview、compare readiness、summary-only browse | [Backend / Datasets & Results](../backend/datasets-results.md) |
 
@@ -85,7 +86,7 @@ updated_by: codex
     |---|---|---|
     | [Schemdraw](research-workflow/schemdraw.md) | linked schema context、source editor、SVG live preview、backend-owned diagnostics/render | [Backend / Schemdraw Render](../backend/schemdraw-render.md), [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
     | [Circuit Simulation](research-workflow/circuit-simulation.md) | pipeline-first simulation workflow、stage-local run state、simulation result、post-processing result | [Backend / Circuit Definitions](../backend/circuit-definitions.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
-    | [Characterization](research-workflow/characterization.md) | design scope、run analysis、task attach、run history、result view | [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Characterization Results](../backend/characterization-results.md) |
+    | [Characterization](research-workflow/characterization.md) | design scope、run analysis、latest run summary、run history、result view | [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Characterization Results](../backend/characterization-results.md) |
 
 ## Surface Pairing
 
@@ -95,6 +96,7 @@ updated_by: codex
 | 哪裡切換 active workspace、active dataset、打開 task queue、看 worker 狀態、開 user menu？ | [Header](shared-shell/header.md) | [Identity & Workspace Model](../shared/identity-workspace-model.md), [Session & Workspace](../backend/session-workspace.md), [Tasks & Execution](../backend/tasks-execution.md), [Authentication & Authorization](../shared/authentication-and-authorization.md), [Task Runtime & Processors](../shared/task-runtime-and-processors.md) |
 | 哪裡定義登入 / 登出 / 恢復入口的產品密度，而不是診斷頁？ | [Auth Entry](shared-shell/auth-entry.md) | [Authentication & Authorization](../shared/authentication-and-authorization.md), [Session & Workspace](../backend/session-workspace.md) |
 | 哪裡看 shared task queue 與管理 actions？ | [Task Management](shared-workflow/task-management.md) | [Tasks & Execution](../backend/tasks-execution.md), [Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [Authentication & Authorization](../shared/authentication-and-authorization.md), [Task Runtime & Processors](../shared/task-runtime-and-processors.md), [Audit Logging](../shared/audit-logging.md) |
+| 哪裡看 extended queue history、deeper filters、task detail 與較完整 worker inspection？ | [Tasks](workspace/tasks.md) | [Tasks & Execution](../backend/tasks-execution.md), [Task Runtime & Processors](../shared/task-runtime-and-processors.md) |
 | 哪裡編輯 schema 並取得可讀 hints？ | [Schema Editor](definition/schema-editor.md) | [Circuit Definitions](../backend/circuit-definitions.md), [Circuit Netlist](../../data-formats/circuit-netlist.md) |
 | 哪裡做 schemdraw live preview？ | [Schemdraw](research-workflow/schemdraw.md) | [Schemdraw Render](../backend/schemdraw-render.md) |
 

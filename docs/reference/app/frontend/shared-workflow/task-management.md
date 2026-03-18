@@ -12,15 +12,15 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend runtime-mode-aware shared header task queue、task attachment、worker summary、control actions 與 refresh recovery contract
-version: v0.11.0
+scope: Frontend runtime-mode-aware shared header task queue、task attachment、worker summary、control actions、refresh recovery 與 standalone tasks-page boundary contract
+version: v0.12.0
 last_updated: 2026-03-18
 updated_by: codex
 ---
 
 # Task Management
 
-本頁定義 frontend shared task management surface：Header `Tasks Queue`、attached task、worker summary、control actions、result handoff 與 refresh recovery。
+本頁定義 frontend shared task management surface：Header `Tasks Queue`、attached task、worker summary、control actions、result handoff、refresh recovery 與 standalone `Tasks` page boundary。
 
 !!! info "Surface Boundary"
     這裡定義的是 shared task-centric contract，供 `Circuit Simulation` 與 `Characterization` 共用。
@@ -45,10 +45,22 @@ updated_by: codex
 | Shell-Side Panel | shared shell 的右側 management surface，承接 `Global Context` 與 `Account` 兩大 panel families |
 | Global Context Panel | 先以 summary cards 呈現 runtime mode、workspace、dataset、queue、worker 五個 sections，再顯示 selected section detail |
 | Task Queue Section | `Global Context` 內的一個 selectable section；顯示最近可見的 tasks，支援 filter、attach、cancel、terminate、retry |
+| Standalone Tasks Page | `/tasks`；extended browse / history / detail / audit surface，不取代 Header quick management |
 | Worker Summary | Header 顯示 compact summary；drawer 顯示 lane-level detail |
 | Attached Task | 表示目前 page body 正在關注的單一 persisted task |
 | Lifecycle Summary | 顯示 queued / running / completed / failed / cancelled / terminated 與最近 event 概況 |
 | Result Handoff | terminal task 完成後，將 page context 切到 persisted result surface |
+
+## Two-layer Queue Model
+
+| Surface | Owns | Should not become |
+|---|---|---|
+| `Header -> Global Context -> Tasks Queue` | quick management、recent queue visibility、compact worker summary、cross-page recovery、常見 control actions | 大型 history / audit / full-detail wall |
+| [`/tasks`](../workspace/tasks.md) | extended browse、longer history、deeper filters、master-detail inspection、event timeline、extended worker / lane inspection | workflow page 的替代品，或 page body 裡的 shell context dump |
+
+!!! tip "Canonical entry first"
+    queue 的 canonical shared-shell 入口仍然是 `Header -> Global Context -> Tasks Queue`。
+    `/tasks` 是第二層 extended surface，用來承接較重的 browse / history / audit 需求，而不是讓 workflow pages 自己長出 queue dashboard。
 
 ## Task Queue Section Contract
 
@@ -85,6 +97,10 @@ updated_by: codex
 !!! tip "Drawer, not inline strip"
     `Tasks Queue` 是 shared shell management surface，應集中在右側 `Shell-Side Panel`。
     Header 只保留 trigger / badge / compact worker summary，不應再鋪一條第二層大型 queue strip。
+
+!!! info "Panel first, page second"
+    一般 attach、resume、cancel、terminate、retry 與 recent queue visibility，應可在 panel 內完成。
+    只有當使用者需要更長 history、更細 filter、較深 event timeline 或 extended worker inspection 時，才進入 [`/tasks`](../workspace/tasks.md)。
 
 !!! warning "Workflow pages must not duplicate the global queue"
     workflow page 可以顯示 stage-local execution summary、latest run summary、`View Task` 或 `Open in Global Context`。
@@ -237,8 +253,17 @@ updated_by: codex
     | Aspect | Requirement |
     |---|---|
     | Queue entry | 透過 Header trigger + shell-side panel 觀察 shared task activity 與 worker status |
+    | Page-local task UI | 只允許 latest run summary、compact stage state、`Resume Latest Run`、`View Task`、`Open in Global Context` |
     | Run history relation | `Run History` 是 analysis artifact surface，不取代 shared task semantics |
     | Result handoff | completed task 之後切到 persisted characterization results |
+
+=== "Standalone Tasks Page"
+
+    | Aspect | Requirement |
+    |---|---|
+    | Role | extended queue browse / history / detail / worker inspection，不取代 Header quick management |
+    | Relation to panel | `Global Context` 先承擔 quick actions；需要更長 history / deeper filters / richer detail 時才進入 page |
+    | Workflow impact | workflow page 不得因為有 `/tasks` 就失去最基本的 stage-local task continuity |
 
 !!! tip "Run History 不是 Task Queue"
     `Run History` 回答的是「這個 analysis 曾經跑過什麼」；
@@ -261,6 +286,7 @@ updated_by: codex
 |---|---|
 | [Circuit Simulation](../research-workflow/circuit-simulation.md) | 需要 task submission、attach、recovery、result handoff |
 | [Characterization](../research-workflow/characterization.md) | 需要 live run attach、refresh recovery、result handoff |
+| [Tasks](../workspace/tasks.md) | 需要 extended queue browse、history、detail、worker inspection 與 control actions |
 
 ## Related
 

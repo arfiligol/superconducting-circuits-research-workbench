@@ -13,7 +13,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared sidebar 的導航、route grouping 與 responsive shell contract
-version: v0.7.0
+version: v0.8.0
 last_updated: 2026-03-18
 updated_by: codex
 ---
@@ -67,15 +67,11 @@ updated_by: codex
 | `PIPELINE` overview | 若未新增正式 page spec，不得自行在 sidebar 補一個 pipeline overview route |
 | Route / label changes | route naming、sidebar labels 與 group hierarchy 需要先更新 SoT，再進行 frontend implementation |
 
-!!! warning "No silent IA rewrite in frontend"
-    如果產品想新增 `Tasks`、`Session` 或其他 dedicated pages，必須先更新 frontend reference 與相關 page specs。
-    不得由 sidebar implementation 先行改名、補頁或變更 route taxonomy。
-
 ## Section Semantics
 
 | Section | What it means | What it should contain | What it should not become |
 |---|---|---|---|
-| `Dashboard` | workspace-level overview、operational entry 與跨 workflow context | `Dashboard`、`Dataset` 與未來可能的 workspace-level overview / task entry surfaces | dataset-analysis sequence、definition authoring flow |
+| `Dashboard` | workspace-level overview、operational entry 與跨 workflow context | `Dashboard`、`Dataset`、`Tasks` 與未來可能的 workspace-level overview / task entry surfaces | dataset-analysis sequence、definition authoring flow |
 | `PIPELINE` | data analysis flow；item order 具有 UX 引導意義 | raw data、analysis、結果前後關係明確的 workflow pages | queue / worker / infra management pages |
 | `CIRCUIT SIMULATION` | definition-driven modeling / simulation flow | schema / definition-related pages、schemdraw、simulation workbench | workspace overview 或全域 operations surface |
 
@@ -104,7 +100,7 @@ updated_by: codex
 
     | Group | Purpose |
     |---|---|
-    | `Dashboard` | workspace landing / overview / operations：目前包含 `Dashboard`、`Dataset` |
+    | `Dashboard` | workspace landing / overview / operations：目前包含 `Dashboard`、`Dataset`、`Tasks` |
     | `Pipeline` | data-analysis flow：目前包含 `Data Ingestion`、`Raw Data`、`Characterization`；順序應保持有引導意味 |
     | `Circuit Simulation` | definition-driven modeling flow：目前包含 `Schemas`、`Schemdraw`、`Simulation` |
 
@@ -136,6 +132,7 @@ updated_by: codex
 |---|---|
 | [Dashboard](../workspace/dashboard.md) | 共享 pipeline 導覽入口 |
 | [Dataset](../workspace/dataset.md) | 共享 dataset management 導覽入口 |
+| [Tasks](../workspace/tasks.md) | 共享 standalone queue / worker management 導覽入口 |
 | [Data Ingestion](../workspace/data-ingestion.md) | 共享 pipeline intake 導覽入口 |
 | [Raw Data Browser](../workspace/raw-data-browser.md) | 共享 design browse 導覽入口 |
 | [Schemas](../definition/schemas.md) | 共享 definition workflow entry |

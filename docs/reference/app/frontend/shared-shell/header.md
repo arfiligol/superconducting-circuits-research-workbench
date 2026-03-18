@@ -13,7 +13,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared header 的 shell identity、runtime mode entry、global context entry、account surface、developer mode 與 shell-side panel contract
-version: v0.9.0
+version: v0.10.0
 last_updated: 2026-03-18
 updated_by: codex
 ---
@@ -160,6 +160,7 @@ updated_by: codex
     | worker summary | 在 drawer 內可看到各 lane 的 `healthy / busy / degraded / draining / offline` 摘要；header 只保留 compact summary |
     | row action entry | 每列至少支援 `Attach`，並依權限顯示 `Cancel` / `Terminate` / `Retry` |
     | default ordering | active tasks 優先，之後按 `updated_at desc` 顯示最近 terminal tasks |
+    | extended browse | 若產品提供 standalone [`Tasks`](../workspace/tasks.md) page，queue trigger 仍負責 quick management；較長 history / deeper inspect 應導向該 page，而不是把 panel 變成第二個 full task center |
 
 === "User Menu"
 
