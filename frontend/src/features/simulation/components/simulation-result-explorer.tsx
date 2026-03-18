@@ -292,35 +292,39 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
         </div>
       }
     >
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Result family">
-          {familyOptions.map((family) => {
-            const isSelected = selection.family === family.key;
-            return (
-              <button
-                key={family.key}
-                type="button"
-                role="tab"
-                aria-selected={isSelected}
-                onClick={() => {
-                  explorer.setFamily(family.key);
-                }}
-                className={cx(
-                  "inline-flex min-h-10 items-center rounded-full border px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
-                  isSelected
-                    ? "border-primary/30 bg-primary/12 text-foreground shadow-[0_10px_24px_rgba(37,99,235,0.14)]"
-                    : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:bg-primary/8 hover:text-foreground",
-                )}
-              >
-                {family.label}
-              </button>
-            );
-          })}
-        </div>
-
+      <div className="space-y-3">
         <div className="rounded-[0.95rem] border border-border/80 bg-background px-4 py-4">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="space-y-4">
+            <div
+              className="flex flex-wrap items-center gap-2"
+              role="tablist"
+              aria-label="Result family"
+            >
+              {familyOptions.map((family) => {
+                const isSelected = selection.family === family.key;
+                return (
+                  <button
+                    key={family.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      explorer.setFamily(family.key);
+                    }}
+                    className={cx(
+                      "inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                      isSelected
+                        ? "border-primary/30 bg-primary/12 text-foreground shadow-[0_10px_24px_rgba(37,99,235,0.14)]"
+                        : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:bg-primary/8 hover:text-foreground",
+                    )}
+                  >
+                    {family.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)_minmax(0,0.95fr)_minmax(0,0.95fr)]">
               <ExplorerField label="Source">
                 <AppInlineSelect
                   ariaLabel="Simulation result source"
@@ -335,6 +339,7 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
                   value={selection.metric}
                   onChange={explorer.setMetric}
                   options={metricOptions}
+                  valueClassName="text-[0.84rem] sm:text-[0.9rem]"
                 />
               </ExplorerField>
               <ExplorerField label="Output Port">
@@ -359,79 +364,30 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
               </ExplorerField>
             </div>
 
-            <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Explorer Basis
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Backend explorer authority is attached to the persisted simulation result for
-                    task #{payload.taskId}.
-                  </p>
-                </div>
-                <DatabaseZap className="h-4 w-4 text-muted-foreground" />
+            {showZ0Control ? (
+              <div className="max-w-[17rem]">
+                <ExplorerField label="Z0 (Ohm)">
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.1"
+                    value={z0Input}
+                    onChange={(event) => {
+                      setZ0Input(event.target.value);
+                    }}
+                    onBlur={() => {
+                      const parsed = Number.parseFloat(z0Input);
+                      if (Number.isFinite(parsed) && parsed > 0) {
+                        explorer.setZ0(parsed);
+                      } else {
+                        setZ0Input(String(selection.z0));
+                      }
+                    }}
+                    className="min-h-11 w-full rounded-[1rem] border border-border/85 bg-surface/95 px-4 py-3 text-sm text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_24px_rgba(15,23,42,0.06)] outline-none transition focus:border-primary/45 focus:ring-2 focus:ring-primary/20"
+                  />
+                </ExplorerField>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-                <SurfaceTag tone="primary">{payload.runtimeMode === "local" ? "Local mode" : "Online mode"}</SurfaceTag>
-                <SurfaceTag tone={payload.resultBasis.tracePayloadAvailable ? "success" : "default"}>
-                  {payload.resultBasis.tracePayloadAvailable ? "Trace payload attached" : "Trace payload pending"}
-                </SurfaceTag>
-                <SurfaceTag tone="default">
-                  Trace batch {payload.resultBasis.traceBatchId ?? "--"}
-                </SurfaceTag>
-                {payload.resultBasis.primaryResultHandleId ? (
-                  <SurfaceTag tone="default">
-                    Handle {payload.resultBasis.primaryResultHandleId}
-                  </SurfaceTag>
-                ) : null}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Selection</span>
-                  <span className="ml-2 font-medium text-foreground">
-                    {selection.source.toUpperCase()} ·{" "}
-                    {payload.selection.outputPortLabel ?? `Port ${selection.outputPort}`} to{" "}
-                    {payload.selection.inputPortLabel ?? `Port ${selection.inputPort}`}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Mode</span>
-                  <span className="ml-2 font-medium text-foreground">
-                    {payload.selection.outputMode ?? "mode_0"}
-                  </span>
-                </div>
-                {showZ0Control ? (
-                  <div className="w-full pt-2 md:w-auto md:pt-0">
-                    <label className="flex items-center gap-3 text-sm">
-                      <span className="text-muted-foreground">Z0 (Ohm)</span>
-                      <input
-                        type="number"
-                        min="1"
-                        step="0.1"
-                        value={z0Input}
-                        onChange={(event) => {
-                          setZ0Input(event.target.value);
-                        }}
-                        onBlur={() => {
-                          const parsed = Number.parseFloat(z0Input);
-                          if (Number.isFinite(parsed) && parsed > 0) {
-                            explorer.setZ0(parsed);
-                          } else {
-                            setZ0Input(String(selection.z0));
-                          }
-                        }}
-                        className="min-h-11 w-28 rounded-[0.95rem] border border-border/85 bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/45 focus:ring-2 focus:ring-primary/20"
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Z0 only applies to Y/Z derived explorer families.
-                  </p>
-                )}
-              </div>
-            </div>
+            ) : null}
           </div>
         </div>
 
@@ -453,25 +409,6 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
                 <Rows3 className="h-4 w-4" />
               )}
               {viewMode === "plot" ? "Plot view" : "Table view"}
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-[0.95rem] border border-border/80 bg-card px-4 py-3">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">X Axis</span>
-                <span className="ml-2 font-medium text-foreground">{xAxisTitle}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Y Axis</span>
-                <span className="ml-2 font-medium text-foreground">{yAxisTitle}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Points</span>
-                <span className="ml-2 font-medium text-foreground">
-                  {payload.plot.xAxis.values.length}
-                </span>
-              </div>
             </div>
           </div>
 
@@ -502,7 +439,10 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
                         <tr key={`${xValue}-${index}`}>
                           <td className="px-4 py-3 text-muted-foreground">{xValue}</td>
                           {payload.plot.series.map((series) => (
-                            <td key={`${series.seriesId}-${index}`} className="px-4 py-3 font-medium text-foreground">
+                            <td
+                              key={`${series.seriesId}-${index}`}
+                              className="px-4 py-3 font-medium text-foreground"
+                            >
                               {series.values[index] ?? "--"}
                             </td>
                           ))}
@@ -517,6 +457,75 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
                 The explorer did not return any plottable series for the current result selection.
               </div>
             )}
+          </div>
+
+          <div className="mt-4 rounded-[0.95rem] border border-border/80 bg-card px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">X Axis</span>
+                <span className="ml-2 font-medium text-foreground">{xAxisTitle}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Y Axis</span>
+                <span className="ml-2 font-medium text-foreground">{yAxisTitle}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Points</span>
+                <span className="ml-2 font-medium text-foreground">
+                  {payload.plot.xAxis.values.length}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[0.95rem] border border-border/80 bg-background px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Explorer Basis
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Backend explorer authority is attached to the persisted simulation result for task
+                #{payload.taskId}.
+              </p>
+            </div>
+            <DatabaseZap className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+            <SurfaceTag tone="primary">
+              {payload.runtimeMode === "local" ? "Local mode" : "Online mode"}
+            </SurfaceTag>
+            <SurfaceTag tone={payload.resultBasis.tracePayloadAvailable ? "success" : "default"}>
+              {payload.resultBasis.tracePayloadAvailable
+                ? "Trace payload attached"
+                : "Trace payload pending"}
+            </SurfaceTag>
+            <SurfaceTag tone="default">Trace batch {payload.resultBasis.traceBatchId ?? "--"}</SurfaceTag>
+            {payload.resultBasis.primaryResultHandleId ? (
+              <SurfaceTag tone="default">Handle {payload.resultBasis.primaryResultHandleId}</SurfaceTag>
+            ) : null}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+            <div>
+              <span className="text-muted-foreground">Selection</span>
+              <span className="ml-2 font-medium text-foreground">
+                {selection.source.toUpperCase()} ·{" "}
+                {payload.selection.outputPortLabel ?? `Port ${selection.outputPort}`} to{" "}
+                {payload.selection.inputPortLabel ?? `Port ${selection.inputPort}`}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Mode</span>
+              <span className="ml-2 font-medium text-foreground">
+                {payload.selection.outputMode ?? "mode_0"}
+              </span>
+            </div>
+            {!showZ0Control ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                Z0 only applies to Y/Z derived explorer families.
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

@@ -21,6 +21,7 @@ type AppSelectBaseProps = Readonly<{
   disabled?: boolean;
   triggerClassName?: string;
   menuClassName?: string;
+  valueClassName?: string;
 }>;
 
 type AppSelectFieldProps = AppSelectBaseProps &
@@ -76,6 +77,7 @@ function AppSelectCore({
   disabled = false,
   triggerClassName,
   menuClassName,
+  valueClassName,
   labelId,
   rootRef,
   isOpen,
@@ -124,6 +126,7 @@ function AppSelectCore({
         <span
           className={cx(
             "truncate pr-2 text-[0.95rem]",
+            valueClassName,
             !selectedOption && "text-muted-foreground",
           )}
         >
@@ -212,6 +215,7 @@ export function AppSelectField({
   className,
   triggerClassName,
   menuClassName,
+  valueClassName,
 }: AppSelectFieldProps) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -243,6 +247,7 @@ export function AppSelectField({
         disabled={disabled}
         triggerClassName={triggerClassName}
         menuClassName={menuClassName}
+        valueClassName={valueClassName}
       />
     </div>
   );
@@ -258,6 +263,7 @@ export function AppInlineSelect({
   className,
   triggerClassName,
   menuClassName,
+  valueClassName,
 }: AppInlineSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -280,6 +286,7 @@ export function AppInlineSelect({
         disabled={disabled}
         triggerClassName={triggerClassName}
         menuClassName={menuClassName}
+        valueClassName={valueClassName}
         buttonClassName="bg-surface/95 backdrop-blur-sm"
       />
     </div>
