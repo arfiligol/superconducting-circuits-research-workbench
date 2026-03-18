@@ -80,7 +80,7 @@ export function summarizeSchemdrawEditorNotice(input: Readonly<{
           ]
             .filter(Boolean)
             .join(" · ")
-        : relevantFailure.userMessage,
+        : relevantFailure.technicalMessage ?? relevantFailure.userMessage,
     };
   }
 

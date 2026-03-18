@@ -679,6 +679,34 @@ describe("circuit schemdraw render helpers", () => {
     })).toBeDefined();
   });
 
+  it("surfaces the backend technical error in the editor notice outside developer mode", () => {
+    expect(
+      summarizeSchemdrawEditorNotice({
+        diagnostics: [],
+        failureDetail: {
+          kind: "runtime_error",
+          title: "Backend render hit a runtime failure",
+          userMessage: "The backend could not complete this render. Update the source or mapping and request a new preview.",
+          technicalMessage: "module 'schemdraw.elements' has no attribute 'Note'",
+          source: "render_runtime",
+          statusCode: null,
+          errorCode: "schemdraw_runtime_error",
+          category: "task_execution_failed",
+          retryable: false,
+          debugRef: "req-20",
+          line: 39,
+          column: null,
+        },
+        target: "source",
+        developerModeEnabled: false,
+      }),
+    ).toEqual({
+      tone: "error",
+      title: "Preview request issue",
+      message: "module 'schemdraw.elements' has no attribute 'Note'",
+    });
+  });
+
   it("builds editor state without unsorted decoration crashes", () => {
     const extension = createSchemdrawDiagnosticsExtension({
       diagnostics: [
@@ -867,6 +895,7 @@ describe("circuit schemdraw workspace boundaries", () => {
     expect(workspaceSource).toContain("Stale preview");
     expect(workspaceSource).toContain("showDebugDisclosure");
     expect(workspaceSource).toContain("Transport failure");
+    expect(workspaceSource).toContain("Error message");
     expect(workspaceSource).toContain("Debug detail");
     expect(workspaceSource).toContain("EditorHintNotice");
     expect(workspaceSource).toContain("sourceEditorExtensions");

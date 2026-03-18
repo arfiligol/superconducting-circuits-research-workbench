@@ -193,7 +193,17 @@ function FailureDetailCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.16em]">{detail.title}</p>
-          <p className="mt-2 leading-6">{detail.userMessage}</p>
+          {detail.technicalMessage && detail.technicalMessage !== detail.userMessage ? (
+            <div className="mt-2 rounded-[0.8rem] border border-current/15 bg-background/80 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/76 dark:text-foreground/74">
+                Error message
+              </p>
+              <p className="mt-2 font-mono text-xs leading-5 text-foreground/88 dark:text-foreground/84">
+                {detail.technicalMessage}
+              </p>
+            </div>
+          ) : null}
+          <p className="mt-3 leading-6">{detail.userMessage}</p>
           {detail.source || detail.line || detail.column ? (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
               {detail.source ? (
@@ -230,7 +240,7 @@ function FailureDetailCard({
           <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.16em] text-foreground marker:hidden">
             Debug detail
           </summary>
-          {detail.technicalMessage ? (
+          {detail.technicalMessage && detail.technicalMessage === detail.userMessage ? (
             <p className="mt-3 rounded-[0.8rem] border border-border/80 bg-background px-3 py-3 font-mono text-xs leading-5 text-foreground/86 dark:text-foreground/82">
               {detail.technicalMessage}
             </p>
