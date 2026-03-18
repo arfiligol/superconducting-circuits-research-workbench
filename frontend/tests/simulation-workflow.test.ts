@@ -1136,7 +1136,6 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Task Attachment / Recovery");
     expect(simulationWorkbenchSource).not.toContain("Dispatch / Execution Status");
     expect(simulationWorkbenchSource).not.toContain("Task Event History");
-    expect(simulationWorkbenchSource).not.toContain("Persisted Result Surface");
     expect(simulationWorkbenchSource).not.toContain("Definition Binding");
     expect(simulationWorkbenchSource).not.toContain("Submit Authority");
     expect(simulationWorkbenchSource).not.toContain("Downstream Contract");
@@ -1148,6 +1147,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("deriveSimulationSweepTargetOptions");
     expect(simulationWorkbenchSource).toContain("deriveSimulationPtcPortOptions");
     expect(simulationWorkbenchSource).toContain("No sweep targets are currently available");
+    expect(simulationWorkbenchSource).toContain("TaskResultPanel");
+    expect(simulationWorkbenchSource).toContain("simulationTaskResultSurface");
+    expect(simulationWorkbenchSource).toContain("Live result refresh");
   });
 
   it("binds stage authority to the current definition and dataset context", () => {
@@ -1166,6 +1168,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkflowHookSource).toContain("post_processing_setup: postProcessingSetup ?? null");
     expect(simulationWorkflowHookSource).toContain("attachedContextTask");
     expect(simulationWorkflowHookSource).toContain("upstreamSimulationStageTask");
+    expect(simulationWorkflowHookSource).toContain('return currentData.status === "queued" || currentData.status === "running" ? 2_000 : 0;');
     expect(simulationWorkbenchSource).toContain("simulation:attached-task:");
     expect(simulationWorkbenchSource).toContain("autoRestoredTaskIdRef");
     expect(simulationWorkbenchSource).toContain("readStoredAttachedTaskId(attachedTaskStorageKey)");

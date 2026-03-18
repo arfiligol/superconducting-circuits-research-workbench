@@ -65,6 +65,7 @@ import {
   AppSelectField,
   type AppSelectOption,
 } from "@/features/shared/components/app-select";
+import { TaskResultPanel } from "@/features/shared/components/task-workflow-panels";
 import {
   SurfaceHeader,
   SurfacePanel,
@@ -82,6 +83,7 @@ import {
   resolveTaskConnectionState,
   resolveTaskRecoveryNotice,
   summarizeTaskContextBinding,
+  summarizeTaskResultSurface,
 } from "@/lib/task-surface";
 import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
@@ -1277,6 +1279,7 @@ export function SimulationWorkbenchShell() {
     hasResult: postProcessingResultReady,
   });
   const simulationResultSummary = summarizeSimulationTaskResults(latestSimulationTaskDetail);
+  const simulationTaskResultSurface = summarizeTaskResultSurface(latestSimulationTaskDetail);
   const postProcessingResultSummary = summarizeSimulationTaskResults(
     latestPostProcessingTaskDetail,
   );
@@ -2775,6 +2778,27 @@ export function SimulationWorkbenchShell() {
                   />
                 }
               />
+
+              {latestSimulationTaskDetail &&
+              (latestSimulationTaskDetail.status === "queued" ||
+                latestSimulationTaskDetail.status === "running") ? (
+                <div className="mt-4">
+                  <StageNotice
+                    tone="primary"
+                    title="Live result refresh"
+                    message="This stage refreshes the persisted simulation task every 2 seconds while it is queued or running, then attaches result refs as soon as the backend publishes them."
+                  />
+                </div>
+              ) : null}
+
+              {latestSimulationTaskDetail ? (
+                <div className="mt-4">
+                  <TaskResultPanel
+                    task={latestSimulationTaskDetail}
+                    summary={simulationTaskResultSurface}
+                  />
+                </div>
+              ) : null}
             </>
           ) : null}
         </WorkflowStageSection>
