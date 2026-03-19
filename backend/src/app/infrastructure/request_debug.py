@@ -7,6 +7,10 @@ from secrets import token_urlsafe
 
 logger = logging.getLogger(__name__)
 
+REQUEST_DEBUG_LOG_FORMAT = (
+    "%(levelname)s %(name)s [corr=%(correlation_id)s debug=%(debug_ref)s] %(message)s"
+)
+
 _CORRELATION_ID: ContextVar[str | None] = ContextVar("request_correlation_id", default=None)
 _DEBUG_REF: ContextVar[str | None] = ContextVar("request_debug_ref", default=None)
 
@@ -24,17 +28,36 @@ class RequestDebugFilter(logging.Filter):
         return True
 
 
+class RequestDebugFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        if not hasattr(record, "correlation_id"):
+            record.correlation_id = current_correlation_id()
+        if not hasattr(record, "debug_ref"):
+            record.debug_ref = current_debug_ref()
+        return super().format(record)
+
+
 def configure_backend_logging() -> None:
     root_logger = logging.getLogger()
     if not _has_request_debug_filter(root_logger):
         root_logger.addFilter(RequestDebugFilter())
     if len(root_logger.handlers) == 0:
-        logging.basicConfig(
-            level=logging.INFO,
-            format=(
-                "%(levelname)s %(name)s [corr=%(correlation_id)s debug=%(debug_ref)s] %(message)s"
-            ),
-        )
+        handler = logging.StreamHandler()
+        handler.setFormatter(RequestDebugFormatter(REQUEST_DEBUG_LOG_FORMAT))
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(handler)
+        return
+
+    for handler in root_logger.handlers:
+        formatter = handler.formatter
+        if isinstance(formatter, RequestDebugFormatter):
+            continue
+        if formatter is None:
+            handler.setFormatter(RequestDebugFormatter(REQUEST_DEBUG_LOG_FORMAT))
+            continue
+        format_string = getattr(formatter, "_fmt", "")
+        if "%(correlation_id)" in format_string or "%(debug_ref)" in format_string:
+            handler.setFormatter(RequestDebugFormatter(format_string))
 
 
 def bind_request_debug_context(
