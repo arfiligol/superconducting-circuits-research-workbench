@@ -74,6 +74,7 @@ type PostProcessingOperationResponseShape = Readonly<{
   config: Record<string, unknown>;
 }>;
 type PostProcessingSetupResponseShape = Readonly<{
+  source?: string | null;
   output_view: string;
   selections: readonly PostProcessingTraceSelectionResponseShape[];
   operations: readonly PostProcessingOperationResponseShape[];
@@ -371,6 +372,7 @@ export type PostProcessingOperation = Readonly<{
 }>;
 
 export type PostProcessingSetup = Readonly<{
+  source: string;
   outputView: string;
   selections: readonly PostProcessingTraceSelection[];
   operations: readonly PostProcessingOperation[];
@@ -438,6 +440,7 @@ export type PostProcessingOperationDraft = Readonly<{
 }>;
 
 export type PostProcessingSetupDraft = Readonly<{
+  source?: string | null;
   output_view: string;
   selections: readonly PostProcessingTraceSelectionDraft[];
   operations: readonly PostProcessingOperationDraft[];
@@ -1102,6 +1105,7 @@ function mapPostProcessingSetupResponse(
   }
 
   return {
+    source: payload.source ?? "raw",
     outputView: payload.output_view,
     selections: payload.selections.map((selection) => ({
       traceFamily: selection.trace_family,

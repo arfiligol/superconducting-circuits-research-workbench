@@ -58,12 +58,13 @@ class SimulationResultExplorerService:
     ) -> dict[str, object]:
         task = self._task_service.get_task(task_id)
         self._ensure_task_ready_for_explorer(task)
+        basis_task = _resolve_basis_task(task, task_service=self._task_service)
 
-        port_options = _resolve_port_options(task, task_service=self._task_service)
-        compensated_ports = _compensated_port_indices(task, available_ports=port_options)
-        default_selection = _default_selection(task, port_options)
+        port_options = _resolve_port_options(basis_task, task_service=self._task_service)
+        compensated_ports = _compensated_port_indices(basis_task, available_ports=port_options)
+        default_selection = _default_selection(task, basis_task, port_options)
         selection = _resolve_selection(
-            task,
+            basis_task,
             family=family,
             source=source,
             metric=metric,
@@ -75,6 +76,7 @@ class SimulationResultExplorerService:
         )
         response = _build_explorer_response(
             task,
+            basis_task=basis_task,
             selection=selection,
             port_options=port_options,
             compensated_ports=compensated_ports,
@@ -99,12 +101,14 @@ class SimulationResultExplorerService:
         }
 
     def _ensure_task_ready_for_explorer(self, task: TaskDetail) -> None:
-        if task.kind != "simulation":
+        if task.kind not in {"simulation", "post_processing"}:
             raise service_error(
                 409,
                 code="simulation_result_explorer_task_invalid",
                 category="conflict",
-                message="Simulation result explorer only supports simulation tasks.",
+                message=(
+                    "Simulation result explorer only supports simulation and post-processing tasks."
+                ),
             )
         if task.status in {"failed", "cancelled", "terminated"}:
             raise service_error(
@@ -121,7 +125,7 @@ class SimulationResultExplorerService:
                 category="conflict",
                 message="Simulation results are not available for explorer access yet.",
             )
-        if task.simulation_setup is None:
+        if task.kind == "simulation" and task.simulation_setup is None:
             raise service_error(
                 409,
                 code="simulation_result_explorer_setup_missing",
@@ -133,6 +137,7 @@ class SimulationResultExplorerService:
 def _build_explorer_response(
     task: TaskDetail,
     *,
+    basis_task: TaskDetail,
     selection: dict[str, object],
     port_options: dict[int, str],
     compensated_ports: set[int],
@@ -145,9 +150,9 @@ def _build_explorer_response(
     output_port = int(selection["output_port"])
     input_port = int(selection["input_port"])
 
-    frequencies = _frequency_values(task.simulation_setup)
+    frequencies = _frequency_values(basis_task.simulation_setup)
     family_bundle = _build_family_bundle(
-        task,
+        basis_task,
         port_count=len(port_options),
         compensated_ports=compensated_ports,
         z0_ohm=z0_ohm,
@@ -170,7 +175,7 @@ def _build_explorer_response(
                     "label": _FAMILY_LABELS[family_key],
                     "available_sources": [
                         {"key": source_key, "label": _SOURCE_LABELS[source_key]}
-                        for source_key in _available_sources(task, family_key)
+                        for source_key in _available_sources(basis_task, family_key)
                     ],
                     "available_metrics": [
                         {
@@ -244,8 +249,72 @@ def _build_explorer_response(
     }
 
 
-def _default_selection(task: TaskDetail, port_options: dict[int, str]) -> dict[str, object]:
+def _resolve_basis_task(task: TaskDetail, *, task_service: TaskService) -> TaskDetail:
+    if task.kind == "simulation":
+        if task.simulation_setup is None:
+            raise service_error(
+                409,
+                code="simulation_result_explorer_setup_missing",
+                category="conflict",
+                message="Simulation result explorer requires persisted simulation_setup.",
+            )
+        return task
+
+    if task.upstream_task_id is None:
+        raise service_error(
+            409,
+            code="simulation_result_explorer_upstream_missing",
+            category="conflict",
+            message="Post-processing explorer requires an upstream simulation task.",
+        )
+
+    upstream_task = task_service.get_task(task.upstream_task_id)
+    if upstream_task.kind != "simulation" or upstream_task.simulation_setup is None:
+        raise service_error(
+            409,
+            code="simulation_result_explorer_upstream_invalid",
+            category="conflict",
+            message="Post-processing explorer requires a persisted upstream simulation result.",
+        )
+    return upstream_task
+
+
+def _default_selection(
+    task: TaskDetail,
+    basis_task: TaskDetail,
+    port_options: dict[int, str],
+) -> dict[str, object]:
     default_port = min(port_options) if len(port_options) > 0 else 1
+    if task.kind == "post_processing" and task.post_processing_setup is not None:
+        selection = (
+            task.post_processing_setup.selections[0]
+            if task.post_processing_setup.selections
+            else None
+        )
+        if selection is not None:
+            family = (
+                selection.trace_family
+                if selection.trace_family in _FAMILY_LABELS
+                else "s_matrix"
+            )
+            available_sources = _available_sources(basis_task, family)
+            source = (
+                task.post_processing_setup.source
+                if task.post_processing_setup.source in available_sources
+                else available_sources[0]
+            )
+            return {
+                "family": family,
+                "source": source,
+                "metric": _metric_from_post_processing_representation(
+                    family,
+                    selection.representation,
+                ),
+                "z0_ohm": 50.0,
+                "output_port": default_port,
+                "input_port": default_port,
+            }
+
     return {
         "family": "s_matrix",
         "source": "raw",
@@ -254,6 +323,24 @@ def _default_selection(task: TaskDetail, port_options: dict[int, str]) -> dict[s
         "output_port": default_port,
         "input_port": default_port,
     }
+
+
+def _metric_from_post_processing_representation(family: str, representation: str) -> str:
+    normalized = representation.strip().lower()
+    if normalized in {"imag", "imaginary"}:
+        candidate = "imag"
+    elif normalized == "real":
+        candidate = "real"
+    elif normalized == "phase":
+        candidate = "phase_deg"
+    elif normalized in {"db", "magnitude_db", "magnitude"}:
+        candidate = "magnitude_db" if family == "s_matrix" else "magnitude"
+    else:
+        candidate = "magnitude_db" if family == "s_matrix" else "magnitude"
+
+    if candidate in _FAMILY_METRICS[family]:
+        return candidate
+    return next(iter(_FAMILY_METRICS[family]))
 
 
 def _resolve_selection(

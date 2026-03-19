@@ -351,9 +351,11 @@ class PostProcessingSetup:
     output_view: str
     selections: tuple[PostProcessingTraceSelection, ...]
     operations: tuple[PostProcessingOperation, ...]
+    source: str = "raw"
 
     def to_mapping(self) -> dict[str, object]:
         return {
+            "source": self.source,
             "output_view": self.output_view,
             "selections": [selection.to_mapping() for selection in self.selections],
             "operations": [operation.to_mapping() for operation in self.operations],
@@ -364,6 +366,7 @@ class PostProcessingSetup:
         selections = payload.get("selections", ())
         operations = payload.get("operations", ())
         return cls(
+            source=str(payload.get("source", "raw")),
             output_view=str(payload["output_view"]),
             selections=tuple(
                 PostProcessingTraceSelection.from_mapping(cast(Mapping[str, object], selection))

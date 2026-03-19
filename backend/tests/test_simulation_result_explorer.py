@@ -85,6 +85,65 @@ def _submit_local_simulation(*, ptc_enabled: bool) -> dict[str, object]:
     return response.json()["data"]["task"]
 
 
+def _post_processing_setup_payload(
+    *,
+    source: str = "ptc",
+    trace_family: str = "z_matrix",
+    representation: str = "real",
+) -> dict[str, object]:
+    return {
+        "source": source,
+        "output_view": "matrix",
+        "selections": [
+            {
+                "trace_family": trace_family,
+                "representation": representation,
+                "design_id": "design_local_flux_playground",
+                "trace_ids": ["trace_local_flux_preview"],
+            }
+        ],
+        "operations": [
+            {
+                "operation": "coordinate_transform",
+                "enabled": True,
+                "config": {
+                    "template": "cm_dm",
+                    "weight_mode": "auto",
+                    "alpha": 0.5,
+                    "beta": 0.5,
+                    "port_a": 1,
+                    "port_b": 1,
+                },
+            }
+        ],
+    }
+
+
+def _submit_local_post_processing(
+    *,
+    source: str = "ptc",
+    trace_family: str = "z_matrix",
+    representation: str = "real",
+) -> dict[str, object]:
+    upstream_task = _submit_local_simulation(ptc_enabled=True)
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "post_processing",
+            "dataset_id": "local-dataset-001",
+            "summary": "Explorer downstream task.",
+            "upstream_task_id": upstream_task["task_id"],
+            "post_processing_setup": _post_processing_setup_payload(
+                source=source,
+                trace_family=trace_family,
+                representation=representation,
+            ),
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["data"]["task"]
+
+
 def _login() -> None:
     switched = client.patch(
         "/session/runtime-mode",
@@ -179,6 +238,47 @@ def test_completed_simulation_task_returns_plottable_trace_payload() -> None:
     assert len(payload["plot"]["series"][0]["values"]) == 401
     assert payload["plot"]["y_axis"]["unit"] == "ohm"
     assert any(abs(value) > 0.001 for value in payload["plot"]["series"][0]["values"])
+
+
+def test_completed_post_processing_task_returns_explorer_payload() -> None:
+    task = _submit_local_post_processing(
+        source="ptc",
+        trace_family="z_matrix",
+        representation="real",
+    )
+
+    response = client.get(f"/tasks/{task['task_id']}/simulation-results/explorer")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["task_id"] == task["task_id"]
+    assert payload["task_status"] == "completed"
+    assert payload["bootstrap"]["default_selection"] == {
+        "family": "z_matrix",
+        "source": "ptc",
+        "metric": "real",
+        "z0_ohm": 50.0,
+        "output_port": 1,
+        "input_port": 1,
+    }
+    assert payload["selection"] == {
+        "family": "z_matrix",
+        "source": "ptc",
+        "metric": "real",
+        "z0_ohm": 50.0,
+        "output_port": 1,
+        "input_port": 1,
+        "output_port_label": "Port 1",
+        "input_port_label": "Port 1",
+        "output_mode": "mode_0",
+        "input_mode": "mode_0",
+    }
+    assert payload["result_basis"]["trace_payload_available"] is True
+    assert payload["result_basis"]["primary_result_handle_id"] == (
+        f"task-result:{task['task_id']}:primary"
+    )
+    assert len(payload["plot"]["series"]) == 1
+    assert payload["plot"]["series"][0]["label"].startswith("PTC Z_MATRIX")
 
 
 def test_pending_or_failed_simulation_task_gets_truthful_explorer_error() -> None:

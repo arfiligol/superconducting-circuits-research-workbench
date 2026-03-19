@@ -713,6 +713,12 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
     if payload is None:
         return None
     body = _as_mapping(payload)
+    source = _required_literal(
+        body.get("source"),
+        field_name="post_processing_setup.source",
+        allowed={"raw", "ptc"},
+        default="raw",
+    )
     output_view = _required_string(
         body.get("output_view"),
         field_name="post_processing_setup.output_view",
@@ -734,6 +740,7 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
             message="post_processing_setup.operations must be an array.",
         )
     return PostProcessingSetup(
+        source=source,
         output_view=output_view,
         selections=tuple(_parse_trace_selection(item) for item in raw_selections),
         operations=tuple(_parse_post_processing_operation(item) for item in raw_operations),

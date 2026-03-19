@@ -103,6 +103,7 @@ def _simulation_setup_payload(
 
 def _post_processing_setup_payload() -> dict[str, object]:
     return {
+        "source": "raw",
         "output_view": "fit-report",
         "selections": [
             {

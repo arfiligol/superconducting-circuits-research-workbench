@@ -181,6 +181,14 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
   const [viewMode, setViewMode] = useState<ExplorerViewMode>("plot");
   const [z0Input, setZ0Input] = useState("50");
   const explorer = useSimulationResultExplorer(task.taskId, true);
+  const explorerTitle =
+    task.kind === "post_processing"
+      ? "Post Processing Result Explorer"
+      : "Simulation Result Explorer";
+  const explorerDescription =
+    task.kind === "post_processing"
+      ? "Inspect saved post-processing outputs with family, source, metric, and port selectors."
+      : "Inspect saved simulation outputs with family, source, metric, and port selectors.";
   const viewOptions = useMemo<readonly AppSegmentedOption<ExplorerViewMode>[]>(
     () => [
       { value: "plot", label: "Plot" },
@@ -268,8 +276,12 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
   if (explorer.isLoading || (!payload && !explorer.error)) {
     return (
       <SurfacePanel
-        title="Simulation Result Explorer"
-        description="Loading simulation result controls and plot data."
+        title={explorerTitle}
+        description={
+          task.kind === "post_processing"
+            ? "Loading post-processing result controls and plot data."
+            : "Loading simulation result controls and plot data."
+        }
       >
         <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
           Loading the persisted explorer surface for task #{task.taskId}.
@@ -281,11 +293,15 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
   if (explorer.error || !payload || !selection || !explorer.selectedFamily) {
     return (
       <SurfacePanel
-        title="Simulation Result Explorer"
-        description="The simulation result explorer is unavailable right now."
+        title={explorerTitle}
+        description={
+          task.kind === "post_processing"
+            ? "The post-processing result explorer is unavailable right now."
+            : "The simulation result explorer is unavailable right now."
+        }
       >
         <div className="rounded-[0.95rem] border border-rose-500/35 bg-rose-50/90 px-4 py-4 text-sm text-rose-950 dark:border-rose-500/45 dark:bg-rose-950/40 dark:text-rose-100">
-          Unable to load the simulation result explorer right now.{" "}
+          Unable to load the {task.kind === "post_processing" ? "post-processing" : "simulation"} result explorer right now.{" "}
           {explorer.error instanceof Error ? explorer.error.message : "Unknown explorer error."}
         </div>
       </SurfacePanel>
@@ -294,8 +310,8 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
 
   return (
     <SurfacePanel
-      title="Simulation Result Explorer"
-      description="Inspect saved simulation outputs with family, source, metric, and port selectors."
+      title={explorerTitle}
+      description={explorerDescription}
       actions={
         <AppSegmentedControl
           value={viewMode}

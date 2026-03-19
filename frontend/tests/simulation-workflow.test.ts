@@ -1222,6 +1222,10 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
     expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
+    expect(simulationWorkbenchSource).toContain("source: values.postSourceSelection");
+    expect(simulationWorkbenchSource).toContain(
+      'form.setValue("postSourceSelection", setup.source === "ptc" ? "ptc" : "raw"',
+    );
     expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
     expect(simulationWorkbenchSource).not.toContain('detail="Read-only expanded netlist."');
     expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
@@ -1252,6 +1256,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("deriveSimulationPtcPortOptions");
     expect(simulationWorkbenchSource).toContain("No sweep targets are currently available");
     expect(simulationWorkbenchSource).toContain("SimulationResultExplorer");
+    expect(simulationWorkbenchSource).toContain("task={latestPostProcessingTaskDetail}");
     expect(simulationWorkbenchSource).toContain("Show persisted result support");
     expect(simulationWorkbenchSource).toContain("TaskResultPanel");
     expect(simulationWorkbenchSource).toContain("simulationTaskResultSurface");
@@ -1262,6 +1267,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Result Availability");
     expect(simulationWorkbenchSource).not.toContain("Downstream State");
     expect(simulationResultExplorerSource).toContain("Simulation Result Explorer");
+    expect(simulationResultExplorerSource).toContain("Post Processing Result Explorer");
     expect(simulationResultExplorerSource).toContain("AppSegmentedControl");
     expect(simulationResultExplorerSource).toContain('ariaLabel="Simulation result family"');
     expect(simulationResultExplorerSource).toContain("Simulation result source");

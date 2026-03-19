@@ -488,6 +488,7 @@ function buildPostProcessingSetupDraft(
   const operations = steps.map(buildPostProcessingOperationDraft);
 
   return {
+    source: values.postSourceSelection,
     output_view: values.postOutputView.trim(),
     selections: [
       {
@@ -1766,6 +1767,9 @@ export function SimulationWorkbenchShell() {
     const setup = latestPostProcessingTaskDetail.postProcessingSetup;
     const firstSelection = setup.selections[0];
 
+    form.setValue("postSourceSelection", setup.source === "ptc" ? "ptc" : "raw", {
+      shouldDirty: false,
+    });
     form.setValue("postOutputView", setup.outputView, { shouldDirty: false });
     form.setValue("postSelectionTraceFamily", firstSelection?.traceFamily ?? "", {
       shouldDirty: false,
@@ -3648,6 +3652,10 @@ export function SimulationWorkbenchShell() {
                   : postProcessingResultState.message
               }
             />
+          ) : null}
+
+          {latestPostProcessingTaskDetail && postProcessingResultReady ? (
+            <SimulationResultExplorer task={latestPostProcessingTaskDetail} />
           ) : null}
 
           {latestPostProcessingStageAuthority ? (
