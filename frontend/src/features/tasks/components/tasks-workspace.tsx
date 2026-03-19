@@ -497,7 +497,7 @@ export function TasksWorkspace() {
               />
               <button
                 type="submit"
-                className="inline-flex min-h-11 shrink-0 items-center rounded-[1rem] border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                className="inline-flex min-h-11 shrink-0 cursor-pointer items-center rounded-[1rem] border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
               >
                 Apply
               </button>
