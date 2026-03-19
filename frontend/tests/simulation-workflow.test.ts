@@ -1255,6 +1255,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultExplorerSource).toContain("Simulation result source");
     expect(simulationResultExplorerSource).toContain("Simulation result metric");
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
+    expect(simulationResultExplorerSource).toContain("PTC results appear when you switch to");
     expect(simulationResultExplorerSource).toContain("Z0 only applies to Y/Z derived explorer families.");
     expect(simulationWorkbenchSource).toContain("SimulationResultPublicationCard");
     expect(simulationResultPublicationCardSource).toContain("Save to Dataset");

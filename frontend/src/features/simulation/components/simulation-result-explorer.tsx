@@ -253,6 +253,17 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
       })),
     [familyOptions],
   );
+  const ptcFamilyLabels = useMemo(
+    () =>
+      familyOptions
+        .filter((family) => family.availableSources.some((source) => source.key === "ptc"))
+        .map((family) => family.label),
+    [familyOptions],
+  );
+  const showPtcFamilyHint =
+    selection?.family === "s_matrix" &&
+    !explorer.selectedFamily?.availableSources.some((source) => source.key === "ptc") &&
+    ptcFamilyLabels.length > 0;
 
   if (explorer.isLoading || (!payload && !explorer.error)) {
     return (
@@ -312,12 +323,19 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
               }
             >
               <ExplorerField label="Source">
-                <AppInlineSelect
-                  ariaLabel="Simulation result source"
-                  value={selection.source}
-                  onChange={explorer.setSource}
-                  options={sourceOptions}
-                />
+                <div className="space-y-2">
+                  <AppInlineSelect
+                    ariaLabel="Simulation result source"
+                    value={selection.source}
+                    onChange={explorer.setSource}
+                    options={sourceOptions}
+                  />
+                  {showPtcFamilyHint ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      PTC results appear when you switch to {ptcFamilyLabels.join(" or ")}.
+                    </p>
+                  ) : null}
+                </div>
               </ExplorerField>
               <ExplorerField label="Metric">
                 <AppInlineSelect
