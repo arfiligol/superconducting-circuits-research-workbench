@@ -51,8 +51,26 @@ def enter_online_owner_session() -> None:
     _login()
 
 
+def _characterization_task_payload() -> dict[str, object]:
+    return {
+        "kind": "characterization",
+        "characterization_setup": {
+            "design_id": "design_flux_scan_a",
+            "analysis_id": "admittance_extraction",
+            "selected_trace_ids": [
+                "trace_flux_a_measurement",
+                "trace_flux_a_layout",
+            ],
+            "analysis_config": {
+                "fit_window": [5.7, 5.9],
+                "residual_tolerance": 0.01,
+            },
+        },
+    }
+
+
 def test_audit_list_returns_workspace_scoped_rows_and_meta() -> None:
-    client.post("/tasks", json={"kind": "characterization"})
+    client.post("/tasks", json=_characterization_task_payload())
     client.post("/tasks/301/cancel")
 
     response = client.get("/audit-logs?limit=10")
@@ -76,7 +94,7 @@ def test_audit_list_returns_workspace_scoped_rows_and_meta() -> None:
 
 
 def test_audit_list_supports_filters_and_cursor_navigation() -> None:
-    client.post("/tasks", json={"kind": "characterization"})
+    client.post("/tasks", json=_characterization_task_payload())
     client.post("/tasks/301/cancel")
     client.post("/tasks/301/terminate")
 
@@ -137,7 +155,7 @@ def test_audit_detail_returns_redacted_payload() -> None:
 
 
 def test_audit_export_summary_returns_read_surface() -> None:
-    client.post("/tasks", json={"kind": "characterization"})
+    client.post("/tasks", json=_characterization_task_payload())
 
     response = client.get("/audit-logs/export-summary?action_kind=task.submitted")
 
@@ -175,7 +193,7 @@ def test_audit_query_denies_member_without_governance_permission() -> None:
 
 
 def test_audit_query_denies_cross_workspace_access_for_non_admin() -> None:
-    client.post("/tasks", json={"kind": "characterization"})
+    client.post("/tasks", json=_characterization_task_payload())
 
     response = client.get("/audit-logs?workspace_id=ws-modeling")
 
@@ -201,7 +219,7 @@ def test_audit_query_rejects_invalid_cursor_combination() -> None:
 
 
 def test_audit_store_uses_separate_sqlite_database() -> None:
-    client.post("/tasks", json={"kind": "characterization"})
+    client.post("/tasks", json=_characterization_task_payload())
 
     metadata_tables = inspect(
         create_metadata_engine(get_settings().database_path)

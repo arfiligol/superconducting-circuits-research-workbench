@@ -379,6 +379,39 @@ class PostProcessingSetup:
 
 
 @dataclass(frozen=True)
+class CharacterizationSetup:
+    design_id: str
+    analysis_id: str
+    selected_trace_ids: tuple[str, ...]
+    analysis_config: dict[str, object]
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "design_id": self.design_id,
+            "analysis_id": self.analysis_id,
+            "selected_trace_ids": list(self.selected_trace_ids),
+            "analysis_config": dict(self.analysis_config),
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> CharacterizationSetup:
+        raw_trace_ids = payload.get("selected_trace_ids", ())
+        analysis_config = payload.get("analysis_config")
+        return cls(
+            design_id=str(payload["design_id"]),
+            analysis_id=str(payload["analysis_id"]),
+            selected_trace_ids=tuple(
+                str(trace_id) for trace_id in raw_trace_ids if isinstance(trace_id, str)
+            ),
+            analysis_config=(
+                dict(cast(Mapping[str, object], analysis_config))
+                if isinstance(analysis_config, Mapping)
+                else {}
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class TaskProgress:
     phase: TaskStatus
     percent_complete: int
@@ -594,6 +627,7 @@ class TaskDetail(TaskSummary):
     simulation_setup: SimulationSetup | None = None
     publication_summary: TaskPublicationSummary | None = None
     post_processing_setup: PostProcessingSetup | None = None
+    characterization_setup: CharacterizationSetup | None = None
     upstream_task_id: int | None = None
     downstream_task_ids: tuple[int, ...] = ()
     control_state: TaskControlState = "none"
@@ -637,6 +671,7 @@ class TaskSubmissionDraft:
     summary: str | None
     simulation_setup: SimulationSetup | None = None
     post_processing_setup: PostProcessingSetup | None = None
+    characterization_setup: CharacterizationSetup | None = None
     upstream_task_id: int | None = None
 
 
@@ -659,6 +694,7 @@ class TaskCreateDraft:
     submission_source: TaskSubmissionSource
     simulation_setup: SimulationSetup | None = None
     post_processing_setup: PostProcessingSetup | None = None
+    characterization_setup: CharacterizationSetup | None = None
     upstream_task_id: int | None = None
     retry_of_task_id: int | None = None
 
@@ -884,6 +920,20 @@ def resolve_post_processing_setup(events: Sequence[TaskEvent]) -> PostProcessing
             parsed = _parse_json_payload(payload)
             if isinstance(parsed, Mapping):
                 return PostProcessingSetup.from_mapping(parsed)
+    return None
+
+
+def resolve_characterization_setup(
+    events: Sequence[TaskEvent],
+) -> CharacterizationSetup | None:
+    for event in events:
+        payload = event.metadata.get("characterization_setup")
+        if isinstance(payload, Mapping):
+            return CharacterizationSetup.from_mapping(payload)
+        if isinstance(payload, str):
+            parsed = _parse_json_payload(payload)
+            if isinstance(parsed, Mapping):
+                return CharacterizationSetup.from_mapping(parsed)
     return None
 
 

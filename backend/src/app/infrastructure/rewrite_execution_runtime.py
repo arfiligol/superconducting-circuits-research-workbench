@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Protocol
 
 from sc_core.execution import (
@@ -19,7 +18,12 @@ from sc_core.execution import (
 )
 
 from src.app.domain.audit import AuditRecord
-from src.app.domain.tasks import TaskDetail, TaskLifecycleUpdate, TaskResultRefs, build_task_lifecycle_event
+from src.app.domain.tasks import (
+    TaskDetail,
+    TaskLifecycleUpdate,
+    TaskResultRefs,
+    build_task_lifecycle_event,
+)
 from src.app.infrastructure.rewrite_task_repository import PersistedRewriteTaskRepository
 from src.app.services.service_errors import service_error
 from src.app.services.task_service import TaskService
@@ -660,6 +664,10 @@ def _merge_safe_payload_metadata(
         "crash_requested_at",
         "error_code",
         "stale_before",
+        "characterization_result_id",
+        "characterization_result_summary",
+        "characterization_result_detail",
+        "characterization_run_history_row",
     )
     rename_map = {
         "phase": "execution_phase",

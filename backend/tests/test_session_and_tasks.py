@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from src.app.domain.tasks import TaskLifecycleUpdate, TaskSubmissionDraft
+from src.app.domain.tasks import CharacterizationSetup, TaskLifecycleUpdate, TaskSubmissionDraft
 from src.app.infrastructure.runtime import (
     get_rewrite_app_state_repository,
     get_rewrite_catalog_repository,
@@ -122,6 +122,26 @@ def _post_processing_setup_payload() -> dict[str, object]:
                 },
             }
         ],
+    }
+
+
+def _characterization_setup_payload(
+    *,
+    design_id: str = "design_local_flux_playground",
+    analysis_id: str = "admittance_extraction",
+    selected_trace_ids: tuple[str, ...] = (
+        "trace_local_flux_measurement",
+        "trace_local_flux_preview",
+    ),
+) -> dict[str, object]:
+    return {
+        "design_id": design_id,
+        "analysis_id": analysis_id,
+        "selected_trace_ids": list(selected_trace_ids),
+        "analysis_config": {
+            "fit_window": [4.85, 5.25],
+            "residual_tolerance": 0.015,
+        },
     }
 
 
@@ -626,11 +646,11 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
         },
         {
             "lane": "characterization",
-            "healthy_processors": 0,
+            "healthy_processors": 1,
             "busy_processors": 0,
             "degraded_processors": 0,
             "draining_processors": 0,
-            "offline_processors": 1,
+            "offline_processors": 0,
         },
     ]
     assert payload["data"]["aggregate_summary"] == {
@@ -765,13 +785,13 @@ def test_list_runtime_processors_returns_standalone_worker_detail() -> None:
         {
             "processor_id": "local-characterization-processor",
             "lane": "characterization",
-            "state": "offline",
+            "state": "healthy",
             "current_task_id": None,
             "last_heartbeat_at": payload["data"]["processors"][1]["last_heartbeat_at"],
             "runtime_metadata": {
                 "authority": "local_runtime",
-                "execution_mode": "not_configured",
-                "capacity": 0,
+                "execution_mode": "in_process",
+                "capacity": 1,
             },
         },
     ]
@@ -786,11 +806,11 @@ def test_list_runtime_processors_returns_standalone_worker_detail() -> None:
         },
         {
             "lane": "characterization",
-            "healthy_processors": 0,
+            "healthy_processors": 1,
             "busy_processors": 0,
             "degraded_processors": 0,
             "draining_processors": 0,
-            "offline_processors": 1,
+            "offline_processors": 0,
         },
     ]
     assert payload["meta"]["filter_echo"] == {
@@ -879,7 +899,13 @@ def test_get_task_events_returns_persisted_event_history_readmodel() -> None:
 
 
 def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() -> None:
-    response = client.post("/tasks", json={"kind": "characterization"})
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "characterization_setup": _characterization_setup_payload(),
+        },
+    )
 
     assert response.status_code == 201
     payload = response.json()
@@ -889,17 +915,25 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert task["task_id"] == 306
     assert task["dataset_id"] == "local-dataset-001"
     assert task["visibility_scope"] == "local"
-    assert task["status"] == "failed"
-    assert task["dispatch"]["status"] == "failed"
+    assert task["status"] == "completed"
+    assert task["dispatch"]["status"] == "completed"
+    assert task["characterization_setup"] == _characterization_setup_payload()
     assert task["result_handoff"] == {
-        "availability": "none",
+        "availability": "ready",
         "primary_result_handle_id": "task-result:306:primary",
         "result_handle_count": 1,
-        "trace_payload_available": False,
+        "trace_payload_available": True,
     }
+    assert task["result_refs"]["analysis_run_id"] == 306
     assert task["events"][0]["metadata"]["audit_action"] == "task.submitted"
-    assert task["events"][-1]["event_type"] == "task_failed"
-    assert task["events"][-1]["metadata"]["audit_action"] == "worker.task_failed"
+    assert [event["event_type"] for event in task["events"]] == [
+        "task_submitted",
+        "task_running",
+        "task_running",
+        "task_running",
+        "task_completed",
+    ]
+    assert task["events"][-1]["metadata"]["audit_action"] == "worker.task_completed"
 
     records = get_task_audit_repository().list_records_for_resource(
         resource_kind="task",
@@ -907,7 +941,8 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     )
     assert sorted(record.action_kind for record in records) == [
         "task.submitted",
-        "worker.task_failed",
+        "worker.task_completed",
+        "worker.task_started",
     ]
 
 
@@ -1185,12 +1220,18 @@ def test_runtime_bootstrap_recovers_stranded_local_simulation_task() -> None:
     assert reloaded["events"][-1]["event_type"] == "task_completed"
 
 
-def test_runtime_bootstrap_fails_stranded_local_unsupported_task() -> None:
+def test_runtime_bootstrap_recovers_stranded_local_characterization_task() -> None:
     service = get_task_service()
     original_driver = service._execution_driver
     service.set_execution_driver(None)
     try:
-        created = client.post("/tasks", json={"kind": "characterization"}).json()["data"]["task"]
+        created = client.post(
+            "/tasks",
+            json={
+                "kind": "characterization",
+                "characterization_setup": _characterization_setup_payload(),
+            },
+        ).json()["data"]["task"]
     finally:
         service.set_execution_driver(original_driver)
 
@@ -1205,14 +1246,18 @@ def test_runtime_bootstrap_fails_stranded_local_unsupported_task() -> None:
     detail_response = client.get(f"/tasks/{created['task_id']}")
     assert detail_response.status_code == 200
     detail = detail_response.json()["data"]
-    assert detail["status"] == "failed"
-    assert detail["dispatch"]["status"] == "failed"
-    assert detail["events"][-1]["event_type"] == "task_failed"
+    assert detail["status"] == "completed"
+    assert detail["dispatch"]["status"] == "completed"
+    assert detail["result_refs"]["analysis_run_id"] == created["task_id"]
+    assert detail["events"][-1]["event_type"] == "task_completed"
 
     events_response = client.get(f"/tasks/{created['task_id']}/events?order=asc&limit=10")
     assert [event["event_type"] for event in events_response.json()["data"]["events"]] == [
         "task_submitted",
-        "task_failed",
+        "task_running",
+        "task_running",
+        "task_running",
+        "task_completed",
     ]
 
 
@@ -1315,6 +1360,9 @@ def test_runtime_updates_flow_through_detail_events_and_result_handoff() -> None
                 dataset_id=None,
                 definition_id=None,
                 summary="Execution runtime route proof.",
+                characterization_setup=CharacterizationSetup.from_mapping(
+                    _characterization_setup_payload()
+                ),
             )
         )
     finally:

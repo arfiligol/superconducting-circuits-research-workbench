@@ -9,6 +9,7 @@ from src.app.infrastructure.audit_store import (
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.infrastructure.invitation_delivery import WorkspaceInvitationDeliveryService
 from src.app.infrastructure.local_simulation_execution_driver import (
+    LocalCharacterizationExecutionDriver,
     LocalSimulationExecutionDriver,
     LocalTaskExecutionDriver,
 )
@@ -64,7 +65,8 @@ def get_research_data_publication_repository() -> SqliteResearchDataPublicationR
 @lru_cache(maxsize=1)
 def get_rewrite_catalog_repository() -> InMemoryRewriteCatalogRepository:
     return InMemoryRewriteCatalogRepository(
-        durable_publication_repository=get_research_data_publication_repository()
+        durable_publication_repository=get_research_data_publication_repository(),
+        task_repository=get_rewrite_task_repository(),
     )
 
 
@@ -217,10 +219,16 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
         task_repository=get_rewrite_task_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
+    local_characterization_execution_driver = LocalCharacterizationExecutionDriver(
+        task_repository=get_rewrite_task_repository(),
+        dataset_repository=get_rewrite_catalog_repository(),
+        execution_runtime_factory=lambda: execution_runtime,
+    )
     local_task_execution_driver = LocalTaskExecutionDriver(
         task_repository=get_rewrite_task_repository(),
         execution_runtime_factory=lambda: execution_runtime,
         simulation_driver=local_simulation_execution_driver,
+        characterization_driver=local_characterization_execution_driver,
     )
     task_service.set_execution_driver(local_task_execution_driver)
     local_task_execution_driver.recover_queued_tasks()

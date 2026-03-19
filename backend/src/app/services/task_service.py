@@ -14,14 +14,17 @@ from sc_core.tasking import (
 
 from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import (
+    CharacterizationAnalysisRegistryRow,
     DatasetDetail,
     DesignBrowseRow,
     SimulationResultPublicationDraft,
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
+    TraceMetadataSummary,
 )
 from src.app.domain.session import SessionState
 from src.app.domain.tasks import (
+    CharacterizationSetup,
     PostProcessingSetup,
     SimulationSetup,
     TaskAllowedActions,
@@ -84,6 +87,18 @@ class TaskDatasetRepository(Protocol):
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None: ...
 
     def get_design(self, dataset_id: str, design_id: str) -> DesignBrowseRow | None: ...
+
+    def list_trace_metadata(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> Sequence[TraceMetadataSummary]: ...
+
+    def list_characterization_analysis_registry(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> Sequence[CharacterizationAnalysisRegistryRow]: ...
 
     def get_simulation_result_publication_record(
         self,
@@ -550,6 +565,13 @@ class TaskService:
                 category="validation",
                 message="Post-processing tasks require post_processing_setup.",
             )
+        if draft.kind == "characterization" and draft.characterization_setup is None:
+            raise service_error(
+                422,
+                code="characterization_setup_required",
+                category="validation",
+                message="Characterization tasks require characterization_setup.",
+            )
         if draft.kind == "post_processing" and upstream_task is None:
             raise service_error(
                 422,
@@ -558,15 +580,27 @@ class TaskService:
                 message="Post-processing tasks require upstream_task_id.",
             )
 
-        if (
-            resolved_dataset_id is not None
-            and self._dataset_repository.get_dataset(resolved_dataset_id) is None
-        ):
+        resolved_dataset = (
+            self._dataset_repository.get_dataset(resolved_dataset_id)
+            if resolved_dataset_id is not None
+            else None
+        )
+        if resolved_dataset_id is not None and resolved_dataset is None:
             raise service_error(
                 404,
                 code="dataset_not_found",
                 category="not_found",
                 message=f"Dataset {resolved_dataset_id} was not found.",
+            )
+        if resolved_dataset is not None and not self._authorization_service.is_visible_dataset(
+            resolved_dataset,
+            session,
+        ):
+            raise service_error(
+                403,
+                code="dataset_not_visible_in_workspace",
+                category="permission_denied",
+                message="The selected dataset is not visible in the active workspace.",
             )
 
         if (
@@ -585,6 +619,11 @@ class TaskService:
                 upstream_task=upstream_task,
                 draft=draft,
                 resolved_dataset_id=resolved_dataset_id,
+            )
+        if draft.kind == "characterization":
+            self._validate_characterization_submission(
+                dataset_id=resolved_dataset_id,
+                setup=draft.characterization_setup,
             )
 
         owner_user_id = _session_user_id(session)
@@ -621,6 +660,7 @@ class TaskService:
                 submission_source=submission_source,
                 simulation_setup=draft.simulation_setup,
                 post_processing_setup=draft.post_processing_setup,
+                characterization_setup=draft.characterization_setup,
                 upstream_task_id=draft.upstream_task_id,
             )
         )
@@ -842,6 +882,7 @@ class TaskService:
                 summary=created_detail.summary,
                 simulation_setup=source_task.simulation_setup,
                 post_processing_setup=source_task.post_processing_setup,
+                characterization_setup=source_task.characterization_setup,
                 upstream_task_id=source_task.upstream_task_id,
             ),
             upstream_task=(
@@ -1094,7 +1135,11 @@ class TaskService:
         )
 
     def _normalize_task(self, task: TaskDetail) -> TaskDetail:
-        simulation_setup, post_processing_setup = self._resolve_retry_contract_snapshot(
+        (
+            simulation_setup,
+            post_processing_setup,
+            characterization_setup,
+        ) = self._resolve_retry_contract_snapshot(
             task,
             seen_task_ids={task.task_id},
         )
@@ -1102,6 +1147,7 @@ class TaskService:
             task,
             simulation_setup=simulation_setup,
             post_processing_setup=post_processing_setup,
+            characterization_setup=characterization_setup,
             dispatch=build_task_dispatch(
                 task_id=task.task_id,
                 worker_task_name=task.worker_task_name,
@@ -1125,23 +1171,34 @@ class TaskService:
         task: TaskDetail,
         *,
         seen_task_ids: set[int],
-    ) -> tuple[SimulationSetup | None, PostProcessingSetup | None]:
+    ) -> tuple[
+        SimulationSetup | None,
+        PostProcessingSetup | None,
+        CharacterizationSetup | None,
+    ]:
         simulation_setup = task.simulation_setup
         post_processing_setup = task.post_processing_setup
+        characterization_setup = task.characterization_setup
         if task.retry_of_task_id is None or (
-            simulation_setup is not None and post_processing_setup is not None
+            simulation_setup is not None
+            and post_processing_setup is not None
+            and characterization_setup is not None
         ):
-            return simulation_setup, post_processing_setup
+            return simulation_setup, post_processing_setup, characterization_setup
 
         if task.retry_of_task_id in seen_task_ids:
-            return simulation_setup, post_processing_setup
+            return simulation_setup, post_processing_setup, characterization_setup
 
         retry_source = self._repository.get_task(task.retry_of_task_id)
         if retry_source is None:
-            return simulation_setup, post_processing_setup
+            return simulation_setup, post_processing_setup, characterization_setup
 
         seen_task_ids.add(retry_source.task_id)
-        source_simulation_setup, source_post_processing_setup = (
+        (
+            source_simulation_setup,
+            source_post_processing_setup,
+            source_characterization_setup,
+        ) = (
             self._resolve_retry_contract_snapshot(
                 retry_source,
                 seen_task_ids=seen_task_ids,
@@ -1151,7 +1208,9 @@ class TaskService:
             simulation_setup = source_simulation_setup
         if post_processing_setup is None:
             post_processing_setup = source_post_processing_setup
-        return simulation_setup, post_processing_setup
+        if characterization_setup is None:
+            characterization_setup = source_characterization_setup
+        return simulation_setup, post_processing_setup, characterization_setup
 
     def _merge_submission_metadata(
         self,
@@ -1276,6 +1335,193 @@ class TaskService:
                 message="upstream_task_id must belong to the same dataset context as the new task.",
             )
 
+    def _validate_characterization_submission(
+        self,
+        *,
+        dataset_id: str | None,
+        setup: CharacterizationSetup | None,
+    ) -> None:
+        if dataset_id is None or setup is None:
+            raise service_error(
+                422,
+                code="dataset_context_required",
+                category="validation",
+                message="Characterization tasks require dataset_id or an active dataset.",
+            )
+        design = self._dataset_repository.get_design(dataset_id, setup.design_id)
+        if design is None:
+            raise service_error(
+                404,
+                code="design_not_found",
+                category="not_found",
+                message="The selected design is not available in the target dataset.",
+            )
+        if len(setup.selected_trace_ids) == 0:
+            raise service_error(
+                422,
+                code="characterization_trace_selection_required",
+                category="validation",
+                message="Characterization tasks require at least one selected trace.",
+            )
+        trace_rows = tuple(
+            self._dataset_repository.list_trace_metadata(dataset_id, setup.design_id)
+        )
+        traces_by_id = {trace.trace_id: trace for trace in trace_rows}
+        missing_trace_ids = [
+            trace_id
+            for trace_id in setup.selected_trace_ids
+            if trace_id not in traces_by_id
+        ]
+        if len(missing_trace_ids) > 0:
+            raise service_error(
+                422,
+                code="characterization_trace_selection_invalid",
+                category="validation",
+                message=(
+                    "Selected traces must belong to the chosen design in the current dataset."
+                ),
+                field_errors=(
+                    tuple(
+                        ServiceFieldError(
+                            field=f"characterization_setup.selected_trace_ids[{index}]",
+                            message="Trace is not available in the selected design scope.",
+                        )
+                        for index, trace_id in enumerate(setup.selected_trace_ids)
+                        if trace_id in set(missing_trace_ids)
+                    )
+                ),
+            )
+        registry_rows = tuple(
+            self._dataset_repository.list_characterization_analysis_registry(
+                dataset_id,
+                setup.design_id,
+            )
+        )
+        registry_row = next(
+            (
+                row
+                for row in registry_rows
+                if row.analysis_id.casefold() == setup.analysis_id.casefold()
+            ),
+            None,
+        )
+        if registry_row is None:
+            raise service_error(
+                422,
+                code="characterization_analysis_invalid",
+                category="validation",
+                message="analysis_id is not recognized for the selected design.",
+            )
+        if registry_row.availability_state == "unavailable":
+            raise service_error(
+                409,
+                code="characterization_analysis_unavailable",
+                category="conflict",
+                message=registry_row.trace_compatibility.summary,
+            )
+        if setup.analysis_id != "admittance_extraction":
+            raise service_error(
+                409,
+                code="characterization_analysis_unsupported",
+                category="conflict",
+                message=(
+                    "Local characterization currently supports only "
+                    "the admittance_extraction analysis."
+                ),
+            )
+        self._validate_admittance_characterization(
+            setup=setup,
+            selected_traces=tuple(traces_by_id[trace_id] for trace_id in setup.selected_trace_ids),
+            registry_row=registry_row,
+        )
+
+    def _validate_admittance_characterization(
+        self,
+        *,
+        setup: CharacterizationSetup,
+        selected_traces: tuple[TraceMetadataSummary, ...],
+        registry_row: CharacterizationAnalysisRegistryRow,
+    ) -> None:
+        if len(selected_traces) < 2:
+            raise service_error(
+                422,
+                code="characterization_trace_selection_incompatible",
+                category="validation",
+                message=registry_row.trace_compatibility.summary,
+            )
+        if any(trace.trace_mode_group != "base" for trace in selected_traces):
+            raise service_error(
+                422,
+                code="characterization_trace_selection_incompatible",
+                category="validation",
+                message=(
+                    "Admittance extraction currently requires base-mode traces only."
+                ),
+            )
+        if any(trace.family != "y_matrix" for trace in selected_traces):
+            raise service_error(
+                422,
+                code="characterization_trace_selection_incompatible",
+                category="validation",
+                message="Admittance extraction currently requires Y-matrix traces.",
+            )
+        selected_sources = {trace.source_kind for trace in selected_traces}
+        if "measurement" not in selected_sources or not (
+            {"layout_simulation", "circuit_simulation"} & selected_sources
+        ):
+            raise service_error(
+                422,
+                code="characterization_trace_selection_incompatible",
+                category="validation",
+                message=(
+                    "Admittance extraction requires one measurement trace and "
+                    "one compatible simulation trace."
+                ),
+            )
+        if "fit_window" not in setup.analysis_config:
+            raise service_error(
+                422,
+                code="characterization_config_invalid",
+                category="validation",
+                message="characterization_setup.analysis_config.fit_window is required.",
+            )
+        fit_window = setup.analysis_config.get("fit_window")
+        if (
+            not isinstance(fit_window, list)
+            or len(fit_window) != 2
+            or not all(isinstance(value, int | float) for value in fit_window)
+        ):
+            raise service_error(
+                422,
+                code="characterization_config_invalid",
+                category="validation",
+                message=(
+                    "characterization_setup.analysis_config.fit_window must be "
+                    "an array of two numbers."
+                ),
+            )
+        if float(fit_window[0]) >= float(fit_window[1]):
+            raise service_error(
+                422,
+                code="characterization_config_invalid",
+                category="validation",
+                message=(
+                    "characterization_setup.analysis_config.fit_window must be "
+                    "strictly increasing."
+                ),
+            )
+        residual_tolerance = setup.analysis_config.get("residual_tolerance")
+        if not isinstance(residual_tolerance, int | float) or float(residual_tolerance) <= 0:
+            raise service_error(
+                422,
+                code="characterization_config_invalid",
+                category="validation",
+                message=(
+                    "characterization_setup.analysis_config.residual_tolerance "
+                    "must be a positive number."
+                ),
+            )
+
 
 def _default_task_summary(task_kind: TaskKind, dataset_id: str | None) -> str:
     if dataset_id is None:
@@ -1295,6 +1541,10 @@ def _submission_contract_metadata(
         metadata["post_processing_setup"] = json.dumps(
             _serialize_post_processing_setup(draft.post_processing_setup)
         )
+    if draft.characterization_setup is not None:
+        metadata["characterization_setup"] = json.dumps(
+            _serialize_characterization_setup(draft.characterization_setup)
+        )
     if draft.upstream_task_id is not None:
         metadata["upstream_task_id"] = draft.upstream_task_id
     return metadata
@@ -1305,6 +1555,10 @@ def _serialize_simulation_setup(setup: SimulationSetup) -> dict[str, object]:
 
 
 def _serialize_post_processing_setup(setup: PostProcessingSetup) -> dict[str, object]:
+    return setup.to_mapping()
+
+
+def _serialize_characterization_setup(setup: CharacterizationSetup) -> dict[str, object]:
     return setup.to_mapping()
 
 
@@ -1731,13 +1985,15 @@ def _build_local_processor_details(
             TaskProcessorDetail(
                 processor_id="local-characterization-processor",
                 lane="characterization",
-                state="offline",
-                current_task_id=None,
-                last_heartbeat_at=recorded_at,
+                state="busy" if active_task is not None else "healthy",
+                current_task_id=active_task.task_id if active_task is not None else None,
+                last_heartbeat_at=(
+                    active_task.progress.updated_at if active_task is not None else recorded_at
+                ),
                 runtime_metadata={
                     "authority": "local_runtime",
-                    "execution_mode": "not_configured",
-                    "capacity": 0,
+                    "execution_mode": "in_process",
+                    "capacity": 1,
                 },
             )
         )
@@ -1793,7 +2049,7 @@ def _build_local_worker_summary(
     active_statuses = {"dispatching", "running"}
     draining_statuses = {"cancellation_requested", "cancelling"}
     summaries: list[WorkerLaneSummary] = []
-    lane_capacity = {"simulation": 1, "characterization": 0}
+    lane_capacity = {"simulation": 1, "characterization": 1}
     lane_order = ("simulation", "characterization")
     for lane in lane_order:
         lane_tasks = [task for task in visible_tasks if task.lane == lane]

@@ -14,6 +14,7 @@ from src.app.api.presenters.storage import (
 )
 from src.app.domain.datasets import SimulationResultPublicationDraft
 from src.app.domain.tasks import (
+    CharacterizationSetup,
     PostProcessingOperation,
     PostProcessingSetup,
     PostProcessingTraceSelection,
@@ -412,6 +413,9 @@ def _parse_submission_payload(payload: object) -> TaskSubmissionDraft:
         summary=summary,
         simulation_setup=_parse_simulation_setup(body.get("simulation_setup")),
         post_processing_setup=_parse_post_processing_setup(body.get("post_processing_setup")),
+        characterization_setup=_parse_characterization_setup(
+            body.get("characterization_setup")
+        ),
         upstream_task_id=upstream_task_id,
     )
 
@@ -474,6 +478,11 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
         "post_processing_setup": (
             _serialize_post_processing_setup(task.post_processing_setup)
             if task.post_processing_setup is not None
+            else None
+        ),
+        "characterization_setup": (
+            _serialize_characterization_setup(task.characterization_setup)
+            if task.characterization_setup is not None
             else None
         ),
         "upstream_task_id": task.upstream_task_id,
@@ -728,6 +737,49 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
         output_view=output_view,
         selections=tuple(_parse_trace_selection(item) for item in raw_selections),
         operations=tuple(_parse_post_processing_operation(item) for item in raw_operations),
+    )
+
+
+def _parse_characterization_setup(payload: object) -> CharacterizationSetup | None:
+    if payload is None:
+        return None
+    body = _as_mapping(payload)
+    raw_selected_trace_ids = body.get("selected_trace_ids")
+    raw_analysis_config = body.get("analysis_config")
+    if not isinstance(raw_selected_trace_ids, list):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="characterization_setup.selected_trace_ids must be an array.",
+        )
+    if raw_analysis_config is not None and not isinstance(raw_analysis_config, dict):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="characterization_setup.analysis_config must be an object.",
+        )
+    return CharacterizationSetup(
+        design_id=_required_string(
+            body.get("design_id"),
+            field_name="characterization_setup.design_id",
+        ),
+        analysis_id=_required_string(
+            body.get("analysis_id"),
+            field_name="characterization_setup.analysis_id",
+        ),
+        selected_trace_ids=tuple(
+            _required_string(
+                trace_id,
+                field_name=(
+                    "characterization_setup.selected_trace_ids"
+                    f"[{index}]"
+                ),
+            )
+            for index, trace_id in enumerate(raw_selected_trace_ids)
+        ),
+        analysis_config=dict(raw_analysis_config or {}),
     )
 
 
@@ -993,6 +1045,10 @@ def _serialize_post_processing_setup(setup: PostProcessingSetup) -> dict[str, ob
     return setup.to_mapping()
 
 
+def _serialize_characterization_setup(setup: CharacterizationSetup) -> dict[str, object]:
+    return setup.to_mapping()
+
+
 def _require_mapping(payload: object, *, field_name: str) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise service_error(
@@ -1098,8 +1154,12 @@ def _deserialize_task_event_metadata_value(key: str, value: object) -> object:
     if key not in {
         "simulation_setup",
         "post_processing_setup",
+        "characterization_setup",
         "downstream_task_ids",
         "publication_summary",
+        "characterization_result_summary",
+        "characterization_result_detail",
+        "characterization_run_history_row",
     }:
         return value
     if not isinstance(value, str):

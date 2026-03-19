@@ -5,6 +5,7 @@ import pytest
 from sc_core.execution import TaskExecutionResult, TaskResultHandle
 from sqlalchemy import update
 from src.app.domain.tasks import (
+    CharacterizationSetup,
     TaskEventHistoryQuery,
     TaskLifecycleUpdate,
     TaskListQuery,
@@ -59,6 +60,23 @@ def enter_online_runtime() -> None:
     _reset_runtime_state_online()
 
 
+def _characterization_setup() -> CharacterizationSetup:
+    return CharacterizationSetup.from_mapping(
+        {
+            "design_id": "design_flux_scan_a",
+            "analysis_id": "admittance_extraction",
+            "selected_trace_ids": [
+                "trace_flux_a_measurement",
+                "trace_flux_a_layout",
+            ],
+            "analysis_config": {
+                "fit_window": [5.7, 5.9],
+                "residual_tolerance": 0.01,
+            },
+        }
+    )
+
+
 def test_runtime_task_submission_persists_pending_result_metadata() -> None:
     service = get_task_service()
 
@@ -68,6 +86,7 @@ def test_runtime_task_submission_persists_pending_result_metadata() -> None:
             dataset_id=None,
             definition_id=None,
             summary=None,
+            characterization_setup=_characterization_setup(),
         )
     )
     storage_repository = get_storage_metadata_repository()
@@ -89,9 +108,10 @@ def test_task_service_submit_preserves_explicit_dataset_dispatch_source_across_r
     task = get_task_service().submit_task(
         TaskSubmissionDraft(
             kind="characterization",
-            dataset_id="transmon-coupler-014",
+            dataset_id="fluxonium-2025-031",
             definition_id=None,
             summary=None,
+            characterization_setup=_characterization_setup(),
         )
     )
 
@@ -242,6 +262,7 @@ def test_task_service_lifecycle_update_persists_running_state_across_reset() -> 
             dataset_id=None,
             definition_id=None,
             summary=None,
+            characterization_setup=_characterization_setup(),
         )
     )
 
@@ -307,6 +328,7 @@ def test_execution_runtime_persists_start_heartbeat_and_completion_across_reset(
             dataset_id=None,
             definition_id=None,
             summary="Execution runtime characterization proof.",
+            characterization_setup=_characterization_setup(),
         )
     )
     runtime = get_task_execution_runtime()
@@ -432,6 +454,7 @@ def test_execution_runtime_reconcile_marks_running_task_failed_with_safe_metadat
             dataset_id=None,
             definition_id=None,
             summary=None,
+            characterization_setup=_characterization_setup(),
         )
     )
     runtime = get_task_execution_runtime()
@@ -476,6 +499,7 @@ def test_service_read_reconciles_stale_dispatch_snapshot_to_task_lifecycle() -> 
             dataset_id=None,
             definition_id=None,
             summary=None,
+            characterization_setup=_characterization_setup(),
         )
     )
     get_task_service().update_task_lifecycle(
@@ -547,6 +571,7 @@ def test_task_service_lifecycle_update_persists_completed_result_refs_across_res
             dataset_id=None,
             definition_id=None,
             summary=None,
+            characterization_setup=_characterization_setup(),
         )
     )
     trace_batch_record = build_metadata_record_ref(
@@ -657,6 +682,7 @@ def test_task_service_lifecycle_update_rejects_invalid_completed_progress() -> N
             dataset_id=None,
             definition_id=None,
             summary=None,
+            characterization_setup=_characterization_setup(),
         )
     )
 
@@ -681,6 +707,7 @@ def test_runtime_reset_keeps_submitted_task_row_and_storage_refs() -> None:
             dataset_id=None,
             definition_id=None,
             summary=None,
+            characterization_setup=_characterization_setup(),
         )
     )
 

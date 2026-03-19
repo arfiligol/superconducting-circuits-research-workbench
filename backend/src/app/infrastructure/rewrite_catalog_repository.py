@@ -1,8 +1,10 @@
+import json
 import sys
+from collections.abc import Sequence
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from src.app.domain.circuit_definitions import (
     CircuitDefinitionCloneDraft,
@@ -60,10 +62,15 @@ from src.app.infrastructure.storage_reference_factory import (
 )
 
 
+class CharacterizationTaskRepository(Protocol):
+    def list_tasks(self) -> Sequence[TaskDetail]: ...
+
+
 class InMemoryRewriteCatalogRepository:
     def __init__(
         self,
         durable_publication_repository: SqliteResearchDataPublicationRepository | None = None,
+        task_repository: CharacterizationTaskRepository | None = None,
     ) -> None:
         self._datasets = {dataset.dataset_id: dataset for dataset in _seed_datasets()}
         self._tagged_core_metrics = _seed_tagged_core_metrics()
@@ -78,6 +85,7 @@ class InMemoryRewriteCatalogRepository:
             definition.definition_id: definition for definition in _seed_circuit_definitions()
         }
         self._durable_publication_repository = durable_publication_repository
+        self._task_repository = task_repository
         self._next_dataset_id = 100
         self._next_definition_id = max(self._circuit_definitions) + 1
 
@@ -429,21 +437,30 @@ class InMemoryRewriteCatalogRepository:
         dataset_id: str,
         design_id: str,
     ) -> tuple[CharacterizationResultSummary, ...]:
-        return self._characterization_results.get((dataset_id, design_id), ())
+        return _merge_characterization_result_rows(
+            self._characterization_results.get((dataset_id, design_id), ()),
+            self._task_derived_characterization_result_rows(dataset_id, design_id),
+        )
 
     def list_characterization_analysis_registry(
         self,
         dataset_id: str,
         design_id: str,
     ) -> tuple[CharacterizationAnalysisRegistryRow, ...]:
-        return self._characterization_analysis_registry.get((dataset_id, design_id), ())
+        return _merge_characterization_registry_rows(
+            self._characterization_analysis_registry.get((dataset_id, design_id), ()),
+            self._derive_characterization_registry_rows(dataset_id, design_id),
+        )
 
     def list_characterization_run_history(
         self,
         dataset_id: str,
         design_id: str,
     ) -> tuple[CharacterizationRunHistoryRow, ...]:
-        return self._characterization_run_history.get((dataset_id, design_id), ())
+        return _merge_characterization_run_rows(
+            self._characterization_run_history.get((dataset_id, design_id), ()),
+            self._task_derived_characterization_run_rows(dataset_id, design_id),
+        )
 
     def get_characterization_result(
         self,
@@ -451,7 +468,17 @@ class InMemoryRewriteCatalogRepository:
         design_id: str,
         result_id: str,
     ) -> CharacterizationResultDetail | None:
-        return self._characterization_result_details.get((dataset_id, design_id, result_id))
+        cached = self._characterization_result_details.get((dataset_id, design_id, result_id))
+        if cached is not None:
+            return cached
+        derived = self._task_derived_characterization_result_detail(
+            dataset_id,
+            design_id,
+            result_id,
+        )
+        if derived is not None:
+            self._characterization_result_details[(dataset_id, design_id, result_id)] = derived
+        return derived
 
     def apply_characterization_tagging(
         self,
@@ -525,6 +552,135 @@ class InMemoryRewriteCatalogRepository:
             designated_metric=request.designated_metric,
             tagged_metric=tagged_metric,
         )
+
+    def _derive_characterization_registry_rows(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> tuple[CharacterizationAnalysisRegistryRow, ...]:
+        trace_rows = self.list_trace_metadata(dataset_id, design_id)
+        compatible_traces = tuple(
+            trace
+            for trace in trace_rows
+            if trace.family == "y_matrix" and trace.trace_mode_group == "base"
+        )
+        source_kinds = {trace.source_kind for trace in compatible_traces}
+        if len(compatible_traces) < 2 or "measurement" not in source_kinds or not (
+            {"layout_simulation", "circuit_simulation"} & source_kinds
+        ):
+            return ()
+        return (
+            CharacterizationAnalysisRegistryRow(
+                analysis_id="admittance_extraction",
+                label="Admittance Extraction",
+                availability_state="recommended",
+                required_config_fields=("fit_window", "residual_tolerance"),
+                trace_compatibility=CharacterizationAnalysisTraceCompatibility(
+                    matched_trace_count=len(compatible_traces),
+                    selected_trace_count=0,
+                    recommended_trace_modes=("base",),
+                    summary=(
+                        f"{len(compatible_traces)} compatible base traces are ready for "
+                        "a stable admittance fit."
+                    ),
+                ),
+            ),
+        )
+
+    def _task_derived_characterization_result_rows(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> tuple[CharacterizationResultSummary, ...]:
+        return tuple(
+            summary
+            for summary, _, _ in self._iter_task_derived_characterization_views(
+                dataset_id,
+                design_id,
+            )
+        )
+
+    def _task_derived_characterization_run_rows(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> tuple[CharacterizationRunHistoryRow, ...]:
+        return tuple(
+            run_row
+            for _, run_row, _ in self._iter_task_derived_characterization_views(
+                dataset_id,
+                design_id,
+            )
+        )
+
+    def _task_derived_characterization_result_detail(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+    ) -> CharacterizationResultDetail | None:
+        for summary, _, detail in self._iter_task_derived_characterization_views(
+            dataset_id,
+            design_id,
+        ):
+            if summary.result_id == result_id:
+                return detail
+        return None
+
+    def _iter_task_derived_characterization_views(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> tuple[
+        tuple[
+            CharacterizationResultSummary,
+            CharacterizationRunHistoryRow,
+            CharacterizationResultDetail,
+        ],
+        ...,
+    ]:
+        if self._task_repository is None:
+            return ()
+        derived_rows: list[
+            tuple[
+                CharacterizationResultSummary,
+                CharacterizationRunHistoryRow,
+                CharacterizationResultDetail,
+            ]
+        ] = []
+        for task in self._task_repository.list_tasks():
+            if (
+                task.kind != "characterization"
+                or task.dataset_id != dataset_id
+                or task.status != "completed"
+                or task.characterization_setup is None
+                or task.characterization_setup.design_id != design_id
+            ):
+                continue
+            completion_event = next(
+                (
+                    event
+                    for event in reversed(task.events)
+                    if event.event_type == "task_completed"
+                ),
+                None,
+            )
+            if completion_event is None:
+                continue
+            summary = _parse_characterization_result_summary(
+                completion_event.metadata.get("characterization_result_summary")
+            )
+            run_row = _parse_characterization_run_history_row(
+                completion_event.metadata.get("characterization_run_history_row")
+            )
+            detail = _parse_characterization_result_detail(
+                completion_event.metadata.get("characterization_result_detail")
+            )
+            if summary is None or run_row is None or detail is None:
+                continue
+            derived_rows.append((summary, run_row, detail))
+        derived_rows.sort(key=lambda item: item[0].updated_at, reverse=True)
+        return tuple(derived_rows)
 
     def list_circuit_definitions(self) -> list[CircuitDefinitionRecord]:
         return list(self._circuit_definitions.values())
@@ -750,6 +906,203 @@ def _merge_trace_summaries(
     for durable_row in durable_rows:
         merged[durable_row.trace_id] = durable_row
     return tuple(sorted(merged.values(), key=lambda row: row.trace_id))
+
+
+def _merge_characterization_registry_rows(
+    base_rows: tuple[CharacterizationAnalysisRegistryRow, ...],
+    derived_rows: tuple[CharacterizationAnalysisRegistryRow, ...],
+) -> tuple[CharacterizationAnalysisRegistryRow, ...]:
+    merged = {row.analysis_id: row for row in base_rows}
+    for row in derived_rows:
+        merged.setdefault(row.analysis_id, row)
+    return tuple(merged.values())
+
+
+def _merge_characterization_result_rows(
+    base_rows: tuple[CharacterizationResultSummary, ...],
+    derived_rows: tuple[CharacterizationResultSummary, ...],
+) -> tuple[CharacterizationResultSummary, ...]:
+    merged_rows: list[CharacterizationResultSummary] = []
+    seen_result_ids: set[str] = set()
+    for row in derived_rows:
+        if row.result_id in seen_result_ids:
+            continue
+        merged_rows.append(row)
+        seen_result_ids.add(row.result_id)
+    for row in base_rows:
+        if row.result_id in seen_result_ids:
+            continue
+        merged_rows.append(row)
+        seen_result_ids.add(row.result_id)
+    return tuple(merged_rows)
+
+
+def _merge_characterization_run_rows(
+    base_rows: tuple[CharacterizationRunHistoryRow, ...],
+    derived_rows: tuple[CharacterizationRunHistoryRow, ...],
+) -> tuple[CharacterizationRunHistoryRow, ...]:
+    merged_rows: list[CharacterizationRunHistoryRow] = []
+    seen_run_ids: set[str] = set()
+    for row in derived_rows:
+        if row.run_id in seen_run_ids:
+            continue
+        merged_rows.append(row)
+        seen_run_ids.add(row.run_id)
+    for row in base_rows:
+        if row.run_id in seen_run_ids:
+            continue
+        merged_rows.append(row)
+        seen_run_ids.add(row.run_id)
+    return tuple(merged_rows)
+
+
+def _parse_characterization_result_summary(
+    payload: object,
+) -> CharacterizationResultSummary | None:
+    body = _parse_json_mapping(payload)
+    if body is None:
+        return None
+    return CharacterizationResultSummary(
+        result_id=str(body["result_id"]),
+        dataset_id=str(body["dataset_id"]),
+        design_id=str(body["design_id"]),
+        analysis_id=str(body["analysis_id"]),
+        title=str(body["title"]),
+        status=str(body["status"]),
+        freshness_summary=str(body["freshness_summary"]),
+        provenance_summary=str(body["provenance_summary"]),
+        trace_count=int(body["trace_count"]),
+        artifact_count=int(body["artifact_count"]),
+        updated_at=str(body["updated_at"]),
+    )
+
+
+def _parse_characterization_run_history_row(
+    payload: object,
+) -> CharacterizationRunHistoryRow | None:
+    body = _parse_json_mapping(payload)
+    if body is None:
+        return None
+    result_id = body.get("result_id")
+    return CharacterizationRunHistoryRow(
+        run_id=str(body["run_id"]),
+        dataset_id=str(body["dataset_id"]),
+        design_id=str(body["design_id"]),
+        analysis_id=str(body["analysis_id"]),
+        label=str(body["label"]),
+        status=str(body["status"]),
+        scope=str(body["scope"]),
+        trace_count=int(body["trace_count"]),
+        sources_summary=str(body["sources_summary"]),
+        provenance_summary=str(body["provenance_summary"]),
+        updated_at=str(body["updated_at"]),
+        result_id=str(result_id) if isinstance(result_id, str) else None,
+    )
+
+
+def _parse_characterization_result_detail(
+    payload: object,
+) -> CharacterizationResultDetail | None:
+    body = _parse_json_mapping(payload)
+    if body is None:
+        return None
+    diagnostics = body.get("diagnostics", ())
+    artifact_refs = body.get("artifact_refs", ())
+    identify_surface = body.get("identify_surface", {})
+    source_parameters = identify_surface.get("source_parameters", [])
+    designated_metrics = identify_surface.get("designated_metrics", [])
+    applied_tags = identify_surface.get("applied_tags", [])
+    input_trace_ids = body.get("input_trace_ids", ())
+    return CharacterizationResultDetail(
+        result_id=str(body["result_id"]),
+        dataset_id=str(body["dataset_id"]),
+        design_id=str(body["design_id"]),
+        analysis_id=str(body["analysis_id"]),
+        title=str(body["title"]),
+        status=str(body["status"]),
+        freshness_summary=str(body["freshness_summary"]),
+        provenance_summary=str(body["provenance_summary"]),
+        trace_count=int(body["trace_count"]),
+        updated_at=str(body["updated_at"]),
+        input_trace_ids=tuple(
+            str(trace_id) for trace_id in input_trace_ids if isinstance(trace_id, str)
+        ),
+        payload=dict(body.get("payload", {})),
+        diagnostics=tuple(
+            CharacterizationDiagnostic(
+                severity=str(item["severity"]),
+                code=str(item["code"]),
+                message=str(item["message"]),
+                blocking=bool(item["blocking"]),
+            )
+            for item in diagnostics
+            if isinstance(item, dict)
+        ),
+        artifact_refs=tuple(
+            CharacterizationArtifactRef(
+                artifact_id=str(item["artifact_id"]),
+                category=str(item["category"]),
+                view_kind=str(item["view_kind"]),
+                title=str(item["title"]),
+                payload_format=str(item["payload_format"]),
+                payload_locator=(
+                    str(item["payload_locator"])
+                    if isinstance(item.get("payload_locator"), str)
+                    else None
+                ),
+            )
+            for item in artifact_refs
+            if isinstance(item, dict)
+        ),
+        identify_surface=CharacterizationIdentifySurface(
+            source_parameters=tuple(
+                CharacterizationSourceParameterOption(
+                    artifact_id=str(item["artifact_id"]),
+                    source_parameter=str(item["source_parameter"]),
+                    label=str(item["label"]),
+                    artifact_title=str(item["artifact_title"]),
+                    current_designated_metric=(
+                        str(item["current_designated_metric"])
+                        if isinstance(item.get("current_designated_metric"), str)
+                        else None
+                    ),
+                )
+                for item in source_parameters
+                if isinstance(item, dict)
+            ),
+            designated_metrics=tuple(
+                CharacterizationDesignatedMetricOption(
+                    metric_key=str(item["metric_key"]),
+                    label=str(item["label"]),
+                )
+                for item in designated_metrics
+                if isinstance(item, dict)
+            ),
+            applied_tags=tuple(
+                CharacterizationAppliedTag(
+                    artifact_id=str(item["artifact_id"]),
+                    source_parameter=str(item["source_parameter"]),
+                    designated_metric=str(item["designated_metric"]),
+                    designated_metric_label=str(item["designated_metric_label"]),
+                    tagged_at=str(item["tagged_at"]),
+                )
+                for item in applied_tags
+                if isinstance(item, dict)
+            ),
+        ),
+    )
+
+
+def _parse_json_mapping(payload: object) -> dict[str, object] | None:
+    if isinstance(payload, dict):
+        return payload
+    if not isinstance(payload, str):
+        return None
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _slugify(value: str) -> str:
@@ -1022,9 +1375,9 @@ def _seed_designs() -> dict[str, tuple[DesignBrowseRow, ...]]:
                 design_id="design_local_flux_playground",
                 dataset_id="local-dataset-001",
                 name="Local Flux Playground",
-                source_coverage={"local_runtime": 1},
+                source_coverage={"measurement": 1, "circuit_simulation": 1},
                 compare_readiness="ready",
-                trace_count=1,
+                trace_count=2,
                 updated_at="2026-03-17T08:35:00Z",
             ),
         ),
@@ -1079,6 +1432,18 @@ def _seed_trace_summaries() -> dict[tuple[str, str], tuple[TraceMetadataSummary,
             "local-dataset-001",
             "design_local_flux_playground",
         ): (
+            TraceMetadataSummary(
+                trace_id="trace_local_flux_measurement",
+                dataset_id="local-dataset-001",
+                design_id="design_local_flux_playground",
+                family="y_matrix",
+                parameter="Y11",
+                representation="imaginary",
+                trace_mode_group="base",
+                source_kind="measurement",
+                stage_kind="postprocess",
+                provenance_summary="Local Measurement · Post-Processed · batch #1",
+            ),
             TraceMetadataSummary(
                 trace_id="trace_local_flux_preview",
                 dataset_id="local-dataset-001",
@@ -1201,6 +1566,34 @@ def _seed_trace_summaries() -> dict[tuple[str, str], tuple[TraceMetadataSummary,
 
 def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
     return {
+        (
+            "local-dataset-001",
+            "design_local_flux_playground",
+            "trace_local_flux_measurement",
+        ): TraceDetail(
+            trace_id="trace_local_flux_measurement",
+            dataset_id="local-dataset-001",
+            design_id="design_local_flux_playground",
+            axes=(
+                TraceAxis(name="frequency", unit="GHz", length=51),
+                TraceAxis(name="flux_bias", unit="Phi0", length=9),
+            ),
+            preview_payload={
+                "kind": "sampled_series",
+                "points": [[4.82, 0.13], [5.01, 0.16], [5.19, 0.12]],
+            },
+            payload_ref=build_trace_payload_ref(
+                payload_role="dataset_primary",
+                store_key="datasets/local-dataset-001/designs/design_local_flux_playground/measurement.zarr",
+                store_uri="trace_store/local/local-dataset-001/design_local_flux_playground/measurement.zarr",
+                group_path="/traces/trace_local_flux_measurement",
+                array_path="values",
+                dtype="float64",
+                shape=(51, 9),
+                chunk_shape=(51, 1),
+            ),
+            result_handles=(),
+        ),
         (
             "local-dataset-001",
             "design_local_flux_playground",
