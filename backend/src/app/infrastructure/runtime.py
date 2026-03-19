@@ -13,6 +13,7 @@ from src.app.infrastructure.local_simulation_execution_driver import (
     LocalTaskExecutionDriver,
 )
 from src.app.infrastructure.persistence import (
+    SqliteResearchDataPublicationRepository,
     SqliteRewriteStorageMetadataRepository,
     SqliteRewriteTaskSnapshotRepository,
     bootstrap_metadata_schema,
@@ -51,8 +52,20 @@ class _TaskRuntimeBundle:
 
 
 @lru_cache(maxsize=1)
+def get_research_data_publication_repository() -> SqliteResearchDataPublicationRepository:
+    settings = get_settings()
+    bootstrap_metadata_schema(settings.database_path)
+    return SqliteResearchDataPublicationRepository(
+        create_metadata_session_factory(settings.database_path),
+        get_storage_metadata_repository(),
+    )
+
+
+@lru_cache(maxsize=1)
 def get_rewrite_catalog_repository() -> InMemoryRewriteCatalogRepository:
-    return InMemoryRewriteCatalogRepository()
+    return InMemoryRewriteCatalogRepository(
+        durable_publication_repository=get_research_data_publication_repository()
+    )
 
 
 @lru_cache(maxsize=1)
@@ -241,6 +254,7 @@ def reset_runtime_state() -> None:
     get_rewrite_catalog_repository.cache_clear()
     get_rewrite_app_state_repository.cache_clear()
     get_storage_metadata_repository.cache_clear()
+    get_research_data_publication_repository.cache_clear()
     get_task_snapshot_repository.cache_clear()
     get_rewrite_task_repository.cache_clear()
     get_task_audit_repository.cache_clear()

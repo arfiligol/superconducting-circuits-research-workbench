@@ -135,6 +135,19 @@ class SimulationResultPublicationResult:
 
 
 @dataclass(frozen=True)
+class SimulationResultPublicationRecord:
+    publication_key: str
+    published_at: str
+    source_task_id: int
+    source_dataset_id: str | None
+    source_result_handle_ids: tuple[str, ...]
+    target_dataset_id: str
+    target_design_id: str
+    target_design_name: str
+    published_trace_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class TaggedCoreMetricSummary:
     metric_id: str
     label: str

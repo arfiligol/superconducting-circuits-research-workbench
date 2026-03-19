@@ -16,6 +16,7 @@ from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import (
     DatasetDetail,
     SimulationResultPublicationDraft,
+    SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
 )
 from src.app.domain.session import SessionState
@@ -80,6 +81,11 @@ class TaskRepository(Protocol):
 
 class TaskDatasetRepository(Protocol):
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None: ...
+
+    def get_simulation_result_publication_record(
+        self,
+        source_task_id: int,
+    ) -> SimulationResultPublicationRecord | None: ...
 
     def publish_simulation_result(
         self,
@@ -253,6 +259,22 @@ class TaskService:
 
     def get_task_publication_summary(self, task_id: int) -> TaskPublicationSummary:
         task = self.get_task(task_id)
+        publication_record = self._dataset_repository.get_simulation_result_publication_record(
+            task_id
+        )
+        if publication_record is not None:
+            return TaskPublicationSummary(
+                state="published",
+                publish_allowed=False,
+                publication_key=publication_record.publication_key,
+                target_dataset_id=publication_record.target_dataset_id,
+                target_design_id=publication_record.target_design_id,
+                target_design_name=publication_record.target_design_name,
+                published_trace_ids=publication_record.published_trace_ids,
+                published_at=publication_record.published_at,
+                source_task_id=publication_record.source_task_id,
+                source_result_handle_ids=publication_record.source_result_handle_ids,
+            )
         if task.publication_summary is not None:
             return task.publication_summary
         return self._build_default_publication_summary(task)
@@ -267,7 +289,25 @@ class TaskService:
         task = self.get_task(task_id)
         state = self._session_repository.get_session_state()
         self._ensure_publishable_simulation_task(task)
-        target_dataset_id = dataset_id or task.dataset_id
+        source_dataset_id = task.dataset_id
+        if source_dataset_id is None:
+            raise service_error(
+                422,
+                code="simulation_result_publish_target_required",
+                category="validation",
+                message="Simulation result publication requires a source dataset binding.",
+            )
+        if dataset_id is not None and dataset_id != source_dataset_id:
+            raise service_error(
+                409,
+                code="simulation_result_publish_target_unsupported",
+                category="conflict",
+                message=(
+                    "Simulation result publication currently supports only "
+                    "the source task dataset as the target."
+                ),
+            )
+        target_dataset_id = source_dataset_id
         if target_dataset_id is None:
             raise service_error(
                 422,
@@ -305,9 +345,9 @@ class TaskService:
                 ),
             )
 
-        existing_publication = task.publication_summary
+        existing_publication = self.get_task_publication_summary(task_id)
         requested_design_id = draft.design_id or _build_publication_design_id(draft.design_name)
-        if existing_publication is not None:
+        if existing_publication.state == "published":
             if (
                 existing_publication.target_dataset_id == target_dataset_id
                 and existing_publication.target_design_id == requested_design_id
@@ -315,14 +355,22 @@ class TaskService:
                 resolved_design_name = (
                     existing_publication.target_design_name or draft.design_name
                 )
-                result = self._dataset_repository.publish_simulation_result(
-                    task=task,
-                    dataset_id=target_dataset_id,
-                    draft=SimulationResultPublicationDraft(
-                        design_name=resolved_design_name,
-                        design_id=requested_design_id,
-                    ),
-                )
+                try:
+                    result = self._dataset_repository.publish_simulation_result(
+                        task=task,
+                        dataset_id=target_dataset_id,
+                        draft=SimulationResultPublicationDraft(
+                            design_name=resolved_design_name,
+                            design_id=requested_design_id,
+                        ),
+                    )
+                except Exception as exc:
+                    raise service_error(
+                        500,
+                        code="simulation_result_publication_persistence_failed",
+                        category="persistence_error",
+                        message="Simulation result publication could not be persisted.",
+                    ) from exc
                 if result is None:
                     raise service_error(
                         409,
@@ -341,14 +389,22 @@ class TaskService:
                 ),
             )
 
-        result = self._dataset_repository.publish_simulation_result(
-            task=task,
-            dataset_id=target_dataset_id,
-            draft=SimulationResultPublicationDraft(
-                design_name=draft.design_name,
-                design_id=requested_design_id,
-            ),
-        )
+        try:
+            result = self._dataset_repository.publish_simulation_result(
+                task=replace(task, publication_summary=existing_publication),
+                dataset_id=target_dataset_id,
+                draft=SimulationResultPublicationDraft(
+                    design_name=draft.design_name,
+                    design_id=requested_design_id,
+                ),
+            )
+        except Exception as exc:
+            raise service_error(
+                500,
+                code="simulation_result_publication_persistence_failed",
+                category="persistence_error",
+                message="Simulation result publication could not be persisted.",
+            ) from exc
         if result is None:
             raise service_error(
                 409,

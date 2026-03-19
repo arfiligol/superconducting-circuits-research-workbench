@@ -7,12 +7,17 @@ from src.app.infrastructure.persistence.database import (
 )
 from src.app.infrastructure.persistence.models import (
     RewriteMetadataBase,
+    RewritePublishedSimulationResultRecord,
+    RewritePublishedSimulationTraceRecord,
     RewriteResultHandleRecord,
     RewriteStorageRecord,
     RewriteTaskDispatchRecord,
     RewriteTaskEventRecord,
     RewriteTaskRecord,
     RewriteTracePayloadRecord,
+)
+from src.app.infrastructure.persistence.research_data_publication_repository import (
+    SqliteResearchDataPublicationRepository,
 )
 from src.app.infrastructure.persistence.storage_metadata_repository import (
     SqliteRewriteStorageMetadataRepository,
@@ -23,12 +28,15 @@ from src.app.infrastructure.persistence.task_snapshot_repository import (
 
 __all__ = [
     "RewriteMetadataBase",
+    "RewritePublishedSimulationResultRecord",
+    "RewritePublishedSimulationTraceRecord",
     "RewriteResultHandleRecord",
     "RewriteStorageRecord",
     "RewriteTaskDispatchRecord",
     "RewriteTaskEventRecord",
     "RewriteTaskRecord",
     "RewriteTracePayloadRecord",
+    "SqliteResearchDataPublicationRepository",
     "SqliteRewriteStorageMetadataRepository",
     "SqliteRewriteTaskSnapshotRepository",
     "bootstrap_metadata_schema",

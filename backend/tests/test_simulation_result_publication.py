@@ -173,6 +173,24 @@ def test_completed_simulation_task_can_be_published_and_is_queryable() -> None:
         persisted["publication_summary"]["target_design_id"]
         == "design_fluxonium-simulation-save"
     )
+    durable_designs = client.get("/datasets/local-dataset-001/designs")
+    assert durable_designs.status_code == 200
+    assert any(
+        row["design_id"] == "design_fluxonium-simulation-save"
+        for row in durable_designs.json()["data"]["rows"]
+    )
+    durable_traces = client.get(
+        "/datasets/local-dataset-001/designs/design_fluxonium-simulation-save/traces"
+    )
+    assert durable_traces.status_code == 200
+    assert sorted(
+        row["trace_id"] for row in durable_traces.json()["data"]["rows"]
+    ) == sorted(
+        _published_trace_ids(
+            task["task_id"],
+            include_ptc=True,
+        )
+    )
 
 
 def test_pending_failed_and_wrong_kind_publish_requests_are_rejected_truthfully() -> None:
@@ -243,6 +261,25 @@ def test_repeated_publish_is_idempotent_and_does_not_duplicate_dataset_records()
         include_ptc=False,
     )
 
+    reset_runtime_state()
+    client.cookies.clear()
+
+    third = client.post(
+        f"/tasks/{task['task_id']}/simulation-results/publish",
+        json={"dataset_id": "local-dataset-001", "design_name": "Stable Publish Target"},
+    )
+    assert third.status_code == 200
+    assert third.json()["data"]["operation"] == "already_published"
+
+    post_reset_rows = client.get(
+        "/datasets/local-dataset-001/designs/design_stable-publish-target/traces"
+    ).json()["data"]["rows"]
+    assert len(post_reset_rows) == 3
+    assert [row["trace_id"] for row in post_reset_rows] == _published_trace_ids(
+        task["task_id"],
+        include_ptc=False,
+    )
+
 
 def test_published_trace_records_keep_source_task_provenance_and_are_browse_visible() -> None:
     task = _submit_local_simulation(ptc_enabled=True)
@@ -281,4 +318,22 @@ def test_published_trace_records_keep_source_task_provenance_and_are_browse_visi
     assert detail["result_handles"][0]["provenance"]["source_dataset_id"] == "local-dataset-001"
     assert detail["payload_ref"]["store_key"].startswith(
         "datasets/local-dataset-001/designs/design_published-explorer-design/"
+    )
+
+
+def test_publish_rejects_unsupported_alternate_target_dataset_semantics() -> None:
+    task = _submit_local_simulation(ptc_enabled=False)
+
+    publish = client.post(
+        f"/tasks/{task['task_id']}/simulation-results/publish",
+        json={
+            "dataset_id": "fluxonium-2025-031",
+            "design_name": "Wrong Dataset Target",
+        },
+    )
+
+    assert publish.status_code == 409
+    assert (
+        publish.json()["error"]["code"]
+        == "simulation_result_publish_target_unsupported"
     )

@@ -94,6 +94,88 @@ class RewriteResultHandleRecord(RewriteMetadataBase):
     )
 
 
+class RewritePublishedSimulationResultRecord(RewriteMetadataBase):
+    __tablename__ = "rewrite_published_simulation_results"
+    __table_args__ = (
+        Index(
+            "ix_rewrite_published_simulation_results_publication_key",
+            "publication_key",
+            unique=True,
+        ),
+        Index(
+            "ix_rewrite_published_simulation_results_source_task_id",
+            "source_task_id",
+            unique=True,
+        ),
+        Index("ix_rewrite_published_simulation_results_target_dataset_id", "target_dataset_id"),
+        Index("ix_rewrite_published_simulation_results_target_design_id", "target_design_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    publication_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_task_id: Mapped[int] = mapped_column(nullable=False)
+    source_dataset_id: Mapped[str | None] = mapped_column(String(128))
+    source_result_handle_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    target_dataset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    target_design_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    target_design_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    published_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
+class RewritePublishedSimulationTraceRecord(RewriteMetadataBase):
+    __tablename__ = "rewrite_published_simulation_traces"
+    __table_args__ = (
+        Index(
+            "ix_rewrite_published_simulation_traces_dataset_design_trace",
+            "dataset_id",
+            "design_id",
+            "trace_id",
+            unique=True,
+        ),
+        Index(
+            "ix_rewrite_published_simulation_traces_publication_id",
+            "publication_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    publication_id: Mapped[int] = mapped_column(
+        ForeignKey("rewrite_published_simulation_results.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    dataset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    design_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    trace_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    family: Mapped[str] = mapped_column(String(32), nullable=False)
+    parameter: Mapped[str] = mapped_column(String(64), nullable=False)
+    representation: Mapped[str] = mapped_column(String(64), nullable=False)
+    trace_mode_group: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    stage_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    provenance_summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    axes_json: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    preview_payload_json: Mapped[dict[str, object]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    payload_store_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    result_handle_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    published_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
 class RewriteTaskRecord(RewriteMetadataBase):
     __tablename__ = "rewrite_task_records"
     __table_args__ = (
