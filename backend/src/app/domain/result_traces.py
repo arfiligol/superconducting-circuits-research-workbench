@@ -89,9 +89,28 @@ def build_trace_parameter(selection: ResultTraceSelection) -> str:
     return f"{family_prefix}{selection.output_port}{selection.input_port}"
 
 
-def build_trace_id(*, task_id: int, selection: ResultTraceSelection) -> str:
+def resolve_saved_trace_parameter(
+    selection: ResultTraceSelection,
+    parameter_name: str | None = None,
+) -> str:
+    if parameter_name is None:
+        return build_trace_parameter(selection)
+
+    normalized = " ".join(part for part in parameter_name.strip().split() if len(part) > 0)
+    if len(normalized) == 0:
+        return build_trace_parameter(selection)
+    return normalized
+
+
+def build_trace_id(
+    *,
+    task_id: int,
+    selection: ResultTraceSelection,
+    parameter_name: str | None = None,
+) -> str:
+    saved_parameter = resolve_saved_trace_parameter(selection, parameter_name)
     base = (
-        f"trace_task_{task_id}_{selection.family}_{selection.source}"
+        f"trace_task_{task_id}_{_slugify_token(saved_parameter)}_{selection.family}_{selection.source}"
         f"_o{selection.output_port}_i{selection.input_port}"
         f"_{selection.output_mode}_{selection.input_mode}"
     )
@@ -140,6 +159,18 @@ def _format_z0(value: float) -> str:
     if float(value).is_integer():
         return str(int(value))
     return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def _slugify_token(value: str) -> str:
+    tokens = [
+        token
+        for token in "".join(
+            character.lower() if character.isalnum() else "-"
+            for character in value.strip()
+        ).split("-")
+        if len(token) > 0
+    ]
+    return "-".join(tokens) if len(tokens) > 0 else "trace"
 
 
 def _extract_definition_port_indices(definition: object | None) -> tuple[int, ...]:

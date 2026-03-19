@@ -248,7 +248,7 @@ describe("page-boundary source contracts", () => {
   it("shortens trace-summary table copy without hiding the browsing meaning", () => {
     expect(rawDataWorkspaceSource).toContain(">View<");
     expect(rawDataWorkspaceSource).toContain(">Origin<");
-    expect(rawDataWorkspaceSource).toContain(">History<");
+    expect(rawDataWorkspaceSource).not.toContain(">History<");
     expect(rawDataWorkspaceSource).not.toContain(">Representation<");
     expect(rawDataWorkspaceSource).not.toContain(">Provenance<");
   });
@@ -262,6 +262,12 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("Selected Trace");
     expect(rawDataWorkspaceSource.indexOf("TracePreviewPlot")).toBeLessThan(
       rawDataWorkspaceSource.indexOf("Preview Source"),
+    );
+    expect(rawDataWorkspaceSource).toContain("resolvePreviewHistory");
+    expect(rawDataWorkspaceSource).toContain("overflow-x-auto whitespace-nowrap");
+    expect(rawDataWorkspaceSource).toContain("History");
+    expect(rawDataWorkspaceSource).not.toContain(
+      "Only the selected trace triggers the detail path, so plot and table stay tied to one persisted preview payload at a time.",
     );
     expect(rawDataWorkspaceSource).not.toContain("Result Handles");
     expect(rawDataWorkspaceSource).toContain('hasSampledPreview ? "Preview" : "Point Count"');

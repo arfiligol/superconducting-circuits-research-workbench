@@ -150,6 +150,7 @@ class SimulationResultPublicationResult:
 class ResultTracePublicationDraft:
     design_id: str
     trace_key: str
+    parameter_name: str | None = None
 
 
 @dataclass(frozen=True)

@@ -62,6 +62,22 @@ function resolvePreviewPoints(points: unknown) {
   );
 }
 
+function resolvePreviewHistory(
+  previewPayload: Readonly<Record<string, unknown>> | undefined,
+  fallback: string | null,
+) {
+  const historySteps = Array.isArray(previewPayload?.history_steps)
+    ? previewPayload.history_steps.filter((step): step is string => typeof step === "string")
+    : [];
+  const historySummary =
+    typeof previewPayload?.history_summary === "string" ? previewPayload.history_summary : null;
+
+  return {
+    steps: historySteps,
+    summary: historySummary ?? fallback ?? "No saved history is available for this trace yet.",
+  };
+}
+
 function SearchField({
   label,
   placeholder,
@@ -163,6 +179,14 @@ export function RawDataBrowserWorkspace() {
   const previewPointCountLabel = hasSampledPreview
     ? `${previewPointCount} of ${previewSemantics.xAxisPointCount} points`
     : previewSemantics.xAxisPointCountLabel;
+  const previewHistory = useMemo(
+    () =>
+      resolvePreviewHistory(
+        browser.traceDetail?.preview_payload as Readonly<Record<string, unknown>> | undefined,
+        selectedTraceSummary?.provenance_summary ?? null,
+      ),
+    [browser.traceDetail?.preview_payload, selectedTraceSummary?.provenance_summary],
+  );
 
   return (
     <div className="space-y-8">
@@ -384,11 +408,10 @@ export function RawDataBrowserWorkspace() {
                 <table className="min-w-full table-fixed divide-y divide-border text-sm">
                   <thead className="bg-surface">
                     <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                      <th className="w-[22%] px-4 py-3">Parameter</th>
-                      <th className="w-[18%] px-4 py-3">Family</th>
-                      <th className="w-[16%] px-4 py-3">View</th>
-                      <th className="w-[18%] px-4 py-3">Origin</th>
-                      <th className="px-4 py-3">History</th>
+                      <th className="w-[28%] px-4 py-3">Parameter</th>
+                      <th className="w-[22%] px-4 py-3">Family</th>
+                      <th className="w-[20%] px-4 py-3">View</th>
+                      <th className="px-4 py-3">Origin</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border bg-card">
@@ -413,7 +436,6 @@ export function RawDataBrowserWorkspace() {
                         <td className="px-4 py-3 text-muted-foreground">
                           {formatTraceSource(trace.source_kind)}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{trace.provenance_summary}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -446,7 +468,6 @@ export function RawDataBrowserWorkspace() {
 
         <SurfacePanel
           title="Single Trace Preview"
-          description="Only the selected trace triggers the detail path, so plot and table stay tied to one persisted preview payload at a time."
           className="xl:sticky xl:top-5"
         >
             {browser.traceDetailError ? (
@@ -586,22 +607,35 @@ export function RawDataBrowserWorkspace() {
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Preview Source
                     </p>
-                    <p className="mt-2 break-all text-sm font-medium text-foreground">
-                      {browser.traceDetail.payload_ref?.store_key ?? "No payload ref"}
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {browser.traceDetail.payload_ref?.group_path ?? "No group path"}
-                    </p>
+                    <div className="mt-2 space-y-2 text-sm">
+                      <div className="overflow-x-auto whitespace-nowrap font-medium text-foreground">
+                        {browser.traceDetail.payload_ref?.store_key ?? "No payload ref"}
+                      </div>
+                      <div className="overflow-x-auto whitespace-nowrap text-muted-foreground">
+                        {browser.traceDetail.payload_ref?.group_path ?? "No group path"}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Provenance
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Preview details follow the selected trace and its saved payload reference.
-                  </p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        History
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">{previewHistory.summary}</p>
+                    </div>
+                    {previewHistory.steps.length > 0 ? (
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {previewHistory.steps.map((step, index) => (
+                          <SurfaceTag key={`${step}:${index}`} tone="default">
+                            {index + 1}. {step}
+                          </SurfaceTag>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ) : (

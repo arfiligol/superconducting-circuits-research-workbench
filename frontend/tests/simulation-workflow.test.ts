@@ -1281,12 +1281,15 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultExplorerSource).toContain("CurrentTraceSaveControl");
     expect(simulationWorkbenchSource).not.toContain("SimulationResultPublicationCard");
     expect(currentTraceSaveControlSource).toContain("Save Current Trace");
+    expect(currentTraceSaveControlSource).toContain("Parameter");
     expect(currentTraceSaveControlSource).toContain("New Design");
     expect(currentTraceSaveControlSource).toContain("Open Saved Trace in Raw Data");
     expect(currentTraceSaveControlSource).toContain("createDatasetDesign");
     expect(currentTraceSaveControlSource).toContain("publishSimulationResultTrace");
     expect(currentTraceSaveControlSource).toContain("traceKey");
+    expect(currentTraceSaveControlSource).toContain("parameterName");
     expect(tasksApiSource).toContain("/result-traces/publish");
+    expect(tasksApiSource).toContain("parameter_name: payload.parameterName ?? undefined");
     expect(currentTraceSaveControlSource).toContain("dataset_design_conflict");
     expect(currentTraceSaveControlSource).toContain("design_not_found");
     expect(currentTraceSaveControlSource).not.toContain("Active Dataset");

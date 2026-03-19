@@ -281,6 +281,7 @@ def publish_result_trace(
             ResultTracePublicationDraft(
                 design_id=parsed_payload["design_id"],
                 trace_key=parsed_payload["trace_key"],
+                parameter_name=parsed_payload["parameter_name"],
             ),
         )
         task = task_service.get_task(task_id)
@@ -1092,7 +1093,7 @@ def _parse_simulation_result_publication_payload(payload: object) -> dict[str, s
     }
 
 
-def _parse_result_trace_publication_payload(payload: object) -> dict[str, str]:
+def _parse_result_trace_publication_payload(payload: object) -> dict[str, str | None]:
     body = _require_mapping(payload, field_name="result_trace_publication")
     return {
         "design_id": _required_string(
@@ -1102,6 +1103,10 @@ def _parse_result_trace_publication_payload(payload: object) -> dict[str, str]:
         "trace_key": _required_string(
             body.get("trace_key"),
             field_name="result_trace_publication.trace_key",
+        ),
+        "parameter_name": _optional_string(
+            body.get("parameter_name"),
+            field_name="result_trace_publication.parameter_name",
         ),
     }
 

@@ -428,6 +428,7 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
         json={
             "design_id": design["design_id"],
             "trace_key": trace_key,
+            "parameter_name": "Readout Admittance",
         },
     )
 
@@ -436,7 +437,7 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
     assert payload["operation"] == "published"
     assert payload["trace_key"] == trace_key
     assert payload["trace"]["trace_id"] == (
-        f"trace_task_{task['task_id']}_y_matrix_ptc_o1_i1_mode_0_mode_0_z0_50"
+        f"trace_task_{task['task_id']}_readout-admittance_y_matrix_ptc_o1_i1_mode_0_mode_0_z0_50"
     )
     assert payload["publication_summary"]["published_trace_ids"] == [
         payload["trace"]["trace_id"]
@@ -449,7 +450,7 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
     assert trace_rows.status_code == 200
     rows = trace_rows.json()["data"]["rows"]
     assert [row["trace_id"] for row in rows] == [payload["trace"]["trace_id"]]
-    assert rows[0]["parameter"] == "Y11"
+    assert rows[0]["parameter"] == "Readout Admittance"
 
     trace_detail = client.get(
         f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/{payload['trace']['trace_id']}"
@@ -457,6 +458,9 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
     assert trace_detail.status_code == 200
     trace_payload = trace_detail.json()["data"]
     assert trace_payload["preview_payload"]["kind"] == "series"
+    assert trace_payload["preview_payload"]["parameter"] == "Readout Admittance"
+    assert trace_payload["preview_payload"]["default_parameter"] == "Y11"
+    assert trace_payload["preview_payload"]["history_steps"] == ["PTC"]
     assert len(trace_payload["preview_payload"]["points"]) == trace_payload["axes"][0]["length"]
 
     second = client.post(
@@ -464,6 +468,7 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
         json={
             "design_id": design["design_id"],
             "trace_key": trace_key,
+            "parameter_name": "Readout Admittance",
         },
     )
     assert second.status_code == 200
@@ -517,13 +522,26 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
     trace_key = _trace_key(family="z_matrix", source="raw", z0_ohm=50)
     publish = client.post(
         f"/tasks/{task['task_id']}/result-traces/publish",
-        json={"design_id": design["design_id"], "trace_key": trace_key},
+        json={
+            "design_id": design["design_id"],
+            "trace_key": trace_key,
+            "parameter_name": "Processed Z11",
+        },
     )
 
     assert publish.status_code == 200
     payload = publish.json()["data"]
     assert payload["operation"] == "published"
     assert payload["trace"]["stage_kind"] == "postprocess"
+    assert payload["trace"]["parameter"] == "Processed Z11"
     assert payload["trace"]["trace_id"] == (
-        f"trace_task_{task['task_id']}_z_matrix_raw_o1_i1_mode_0_mode_0_z0_50"
+        f"trace_task_{task['task_id']}_processed-z11_z_matrix_raw_o1_i1_mode_0_mode_0_z0_50"
     )
+    trace_detail = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/{payload['trace']['trace_id']}"
+    )
+    assert trace_detail.status_code == 200
+    assert trace_detail.json()["data"]["preview_payload"]["history_steps"] == [
+        "Raw",
+        "Coordinate Transformation",
+    ]

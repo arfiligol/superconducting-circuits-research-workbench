@@ -49,6 +49,15 @@ function formatAxisTitle(label: string, unit: string) {
   return unit ? `${label} (${unit})` : label;
 }
 
+function resolveDefaultTraceParameter(
+  family: string,
+  outputPort: number,
+  inputPort: number,
+) {
+  const familyPrefix = family === "s_matrix" ? "S" : family === "y_matrix" ? "Y" : "Z";
+  return `${familyPrefix}${outputPort}${inputPort}`;
+}
+
 function ExplorerField({
   label,
   children,
@@ -344,6 +353,11 @@ export function SimulationResultExplorer({
                 activeDatasetId={activeDatasetId}
                 traceKey={payload.selection.traceKey}
                 traceLabel={payload.plot.series[0]?.label ?? null}
+                defaultParameter={resolveDefaultTraceParameter(
+                  selection.family,
+                  selection.outputPort,
+                  selection.inputPort,
+                )}
               />
             </div>
 

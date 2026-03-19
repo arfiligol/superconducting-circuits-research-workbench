@@ -351,7 +351,8 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     assert not hasattr(trace_rows[0], "payload_ref")
 
     assert trace_detail.trace_id == "trace_flux_a_measurement"
-    assert trace_detail.preview_payload["kind"] == "sampled_series"
+    assert trace_detail.preview_payload["kind"] == "series"
+    assert len(trace_detail.preview_payload["points"]) == trace_detail.axes[0].length
     assert trace_detail.payload_ref is not None
     assert trace_detail.payload_ref.store_key.endswith("batch_4.zarr")
     assert trace_detail.result_handles[0].handle_id == "result:fluxonium-2025-031:fit-summary"

@@ -31,6 +31,7 @@ type CurrentTraceSaveControlProps = Readonly<{
   activeDatasetId: string | null;
   traceKey: string | null;
   traceLabel: string | null;
+  defaultParameter: string | null;
 }>;
 
 type MutationState = Readonly<{
@@ -119,6 +120,7 @@ function describeCreateDesignError(error: unknown) {
 function SaveDialog({
   open,
   traceLabel,
+  parameterValue,
   designValue,
   designOptions,
   mutationState,
@@ -127,6 +129,7 @@ function SaveDialog({
   canSave,
   onClose,
   onDesignChange,
+  onParameterChange,
   onCreateNameChange,
   onCreateToggle,
   onCreate,
@@ -135,6 +138,7 @@ function SaveDialog({
 }: Readonly<{
   open: boolean;
   traceLabel: string | null;
+  parameterValue: string;
   designValue: string;
   designOptions: readonly AppSelectOption[];
   mutationState: MutationState;
@@ -143,6 +147,7 @@ function SaveDialog({
   canSave: boolean;
   onClose: () => void;
   onDesignChange: (value: string) => void;
+  onParameterChange: (value: string) => void;
   onCreateNameChange: (value: string) => void;
   onCreateToggle: () => void;
   onCreate: () => void;
@@ -198,6 +203,20 @@ function SaveDialog({
             options={designOptions}
             placeholder="Select a design"
           />
+
+          <label className="block">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              Parameter
+            </p>
+            <input
+              value={parameterValue}
+              onChange={(event) => {
+                onParameterChange(event.target.value);
+              }}
+              placeholder="Enter the saved parameter name"
+              className="w-full rounded-[0.95rem] border border-border/85 bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+            />
+          </label>
 
           <div className="flex flex-wrap gap-2">
             <button
@@ -287,12 +306,14 @@ export function CurrentTraceSaveControl({
   activeDatasetId,
   traceKey,
   traceLabel,
+  defaultParameter,
 }: CurrentTraceSaveControlProps) {
   const { mutate } = useSWRConfig();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDesignId, setSelectedDesignId] = useState("");
   const [showCreateDesign, setShowCreateDesign] = useState(false);
   const [newDesignName, setNewDesignName] = useState("");
+  const [parameterName, setParameterName] = useState("");
   const [mutationState, setMutationState] = useState<MutationState>({
     state: "idle",
     message: null,
@@ -335,6 +356,14 @@ export function CurrentTraceSaveControl({
     });
   }, [savedTraceState]);
   const saveDisabled = !activeDatasetId || !traceKey;
+
+  useEffect(() => {
+    if (!isDialogOpen) {
+      return;
+    }
+
+    setParameterName(defaultParameter ?? "");
+  }, [defaultParameter, isDialogOpen]);
 
   async function handleCreateDesign() {
     if (!activeDatasetId) {
@@ -384,12 +413,22 @@ export function CurrentTraceSaveControl({
       return;
     }
 
+    const normalizedParameterName = parameterName.trim();
+    if (!normalizedParameterName) {
+      setMutationState({
+        state: "error",
+        message: "Enter the saved parameter name before saving this trace.",
+      });
+      return;
+    }
+
     setMutationState({ state: "saving", message: null });
 
     try {
       const result = await publishSimulationResultTrace(task.taskId, {
         traceKey,
         designId: selectedDesignId,
+        parameterName: normalizedParameterName,
       });
       await mutate(taskDetailKey(task.taskId), result.task, { revalidate: false });
       setSavedTraceState({
@@ -416,6 +455,7 @@ export function CurrentTraceSaveControl({
             setMutationState({ state: "idle", message: null });
             setCreateDesignState({ state: "idle", message: null });
             setShowCreateDesign(false);
+            setParameterName(defaultParameter ?? "");
             setIsDialogOpen(true);
           }}
           disabled={saveDisabled}
@@ -444,6 +484,7 @@ export function CurrentTraceSaveControl({
       <SaveDialog
         open={isDialogOpen}
         traceLabel={traceLabel}
+        parameterValue={parameterName}
         designValue={selectedDesignId}
         designOptions={designOptions}
         mutationState={mutationState}
@@ -454,6 +495,7 @@ export function CurrentTraceSaveControl({
           setIsDialogOpen(false);
         }}
         onDesignChange={setSelectedDesignId}
+        onParameterChange={setParameterName}
         onCreateNameChange={setNewDesignName}
         onCreateToggle={() => {
           setCreateDesignState({ state: "idle", message: null });

@@ -735,6 +735,7 @@ export type SimulationResultExplorerQuery = Readonly<{
 }>;
 export type SimulationResultTracePublicationDraft = Readonly<{
   traceKey: string;
+  parameterName?: string | null;
   designName?: string | null;
   designId?: string | null;
 }>;
@@ -1616,6 +1617,7 @@ export async function publishSimulationResultTrace(
       body: {
         trace_key: payload.traceKey,
         design_id: payload.designId,
+        parameter_name: payload.parameterName ?? undefined,
       },
     },
   );

@@ -9,6 +9,7 @@ from src.app.domain.result_traces import (
     build_trace_id,
     build_trace_parameter,
     ptc_available,
+    resolve_saved_trace_parameter,
 )
 from src.app.domain.tasks import TaskDetail
 from src.app.infrastructure.storage_reference_factory import (
@@ -165,13 +166,19 @@ def build_result_trace_publication_detail(
     dataset_id: str,
     design_id: str,
     selection: ResultTraceSelection,
+    parameter_name: str | None = None,
 ) -> TraceDetail:
     point_count = (
         basis_task.simulation_setup.frequency_sweep.point_count
         if basis_task.simulation_setup is not None
         else 1
     )
-    trace_id = build_trace_id(task_id=task.task_id, selection=selection)
+    saved_parameter = resolve_saved_trace_parameter(selection, parameter_name)
+    trace_id = build_trace_id(
+        task_id=task.task_id,
+        selection=selection,
+        parameter_name=saved_parameter,
+    )
     trace_batch_record = build_metadata_record_ref(
         "trace_batch",
         f"trace_batch:published:{task.task_id}:{dataset_id}:{design_id}",
@@ -192,13 +199,16 @@ def build_result_trace_publication_detail(
             "kind": "series",
             "family": selection.family,
             "source": selection.source,
-            "parameter": build_trace_parameter(selection),
+            "parameter": saved_parameter,
+            "default_parameter": build_trace_parameter(selection),
             "output_port": selection.output_port,
             "input_port": selection.input_port,
             "trace_mode_group": selection.trace_mode_group,
             "output_mode": selection.output_mode,
             "input_mode": selection.input_mode,
             "trace_key": selection.to_trace_key(),
+            "history_steps": _build_trace_history_steps(task=task, selection=selection),
+            "history_summary": _build_trace_history_summary(task=task, selection=selection),
             "points": preview_points,
         },
         payload_ref=build_trace_payload_ref(
@@ -224,7 +234,7 @@ def build_result_trace_publication_detail(
                 status="materialized",
                 label=(
                     "Published "
-                    f"{build_trace_parameter(selection)} "
+                    f"{saved_parameter} "
                     f"{selection.source.upper()} trace"
                 ),
                 metadata_record=result_handle_record,
@@ -251,13 +261,15 @@ def build_result_trace_publication_summary(
     task: TaskDetail,
     detail: TraceDetail,
     selection: ResultTraceSelection,
+    parameter_name: str | None = None,
 ) -> TraceMetadataSummary:
+    saved_parameter = resolve_saved_trace_parameter(selection, parameter_name)
     return TraceMetadataSummary(
         trace_id=detail.trace_id,
         dataset_id=detail.dataset_id,
         design_id=detail.design_id,
         family=selection.family,
-        parameter=build_trace_parameter(selection),
+        parameter=saved_parameter,
         representation="complex",
         trace_mode_group=selection.trace_mode_group,
         source_kind="circuit_simulation",
@@ -320,6 +332,38 @@ def _provenance_summary_for_trace(
             f"({selection.source.upper()} {build_trace_parameter(selection)})"
         )
     return f"Published from simulation task {task.task_id}"
+
+
+def _build_trace_history_steps(
+    *,
+    task: TaskDetail,
+    selection: ResultTraceSelection,
+) -> list[str]:
+    history = ["PTC" if selection.source == "ptc" else "Raw"]
+    if task.kind != "post_processing" or task.post_processing_setup is None:
+      return history
+
+    for operation in task.post_processing_setup.operations:
+        if not operation.enabled:
+            continue
+        history.append(_humanize_post_processing_operation(operation.operation))
+    return history
+
+
+def _build_trace_history_summary(
+    *,
+    task: TaskDetail,
+    selection: ResultTraceSelection,
+) -> str:
+    return " -> ".join(_build_trace_history_steps(task=task, selection=selection))
+
+
+def _humanize_post_processing_operation(operation: str) -> str:
+    if operation == "coordinate_transform":
+        return "Coordinate Transformation"
+    if operation == "kron_reduction":
+        return "Kron Reduction"
+    return operation.replace("_", " ").title()
 
 
 def _setup_port_indices(task: TaskDetail) -> tuple[int, ...]:

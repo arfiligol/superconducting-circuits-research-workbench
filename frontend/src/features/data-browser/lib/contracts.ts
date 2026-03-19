@@ -187,6 +187,11 @@ export type TraceDetail = Readonly<{
   axes: TraceAxis[];
   preview_payload: Readonly<{
     kind: string;
+    parameter?: string;
+    default_parameter?: string;
+    history_steps?: readonly string[];
+    history_summary?: string;
+    source?: string;
     points?: number[][] | number;
   }>;
   payload_ref: TracePayloadRef | null;

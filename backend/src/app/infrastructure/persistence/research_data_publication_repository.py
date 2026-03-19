@@ -244,11 +244,13 @@ class SqliteResearchDataPublicationRepository:
             dataset_id=dataset.dataset_id,
             design_id=design.design_id,
             selection=selection,
+            parameter_name=draft.parameter_name,
         )
         summary = build_result_trace_publication_summary(
             task=task,
             detail=detail,
             selection=selection,
+            parameter_name=draft.parameter_name,
         )
         payload_ref = detail.payload_ref
         result_handle = detail.result_handles[0]

@@ -383,11 +383,13 @@ class InMemoryRewriteCatalogRepository:
             dataset_id=dataset.dataset_id,
             design_id=design.design_id,
             selection=selection,
+            parameter_name=draft.parameter_name,
         )
         summary = build_result_trace_publication_summary(
             task=task,
             detail=detail,
             selection=selection,
+            parameter_name=draft.parameter_name,
         )
         trace_rows = list(self._trace_summaries.get((dataset.dataset_id, design.design_id), ()))
         already_published = any(row.trace_id == detail.trace_id for row in trace_rows)
@@ -1652,13 +1654,24 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             trace_id="trace_local_flux_measurement",
             dataset_id="local-dataset-001",
             design_id="design_local_flux_playground",
-            axes=(
-                TraceAxis(name="frequency", unit="GHz", length=51),
-                TraceAxis(name="flux_bias", unit="Phi0", length=9),
-            ),
+            axes=(TraceAxis(name="frequency", unit="GHz", length=51),),
             preview_payload={
-                "kind": "sampled_series",
-                "points": [[4.82, 0.13], [5.01, 0.16], [5.19, 0.12]],
+                "kind": "series",
+                "parameter": "Y11",
+                "default_parameter": "Y11",
+                "history_steps": [
+                    "Measurement",
+                    "PTC",
+                    "Coordinate Transformation",
+                    "Kron Reduction",
+                ],
+                "history_summary": (
+                    "Measurement -> PTC -> Coordinate Transformation -> Kron Reduction"
+                ),
+                "points": _build_interpolated_series_points(
+                    anchors=((4.82, 0.13), (5.01, 0.16), (5.19, 0.12)),
+                    length=51,
+                ),
             },
             payload_ref=build_trace_payload_ref(
                 payload_role="dataset_primary",
@@ -1667,8 +1680,8 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
                 group_path="/traces/trace_local_flux_measurement",
                 array_path="values",
                 dtype="float64",
-                shape=(51, 9),
-                chunk_shape=(51, 1),
+                shape=(51,),
+                chunk_shape=(51,),
             ),
             result_handles=(),
         ),
@@ -1683,6 +1696,10 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             axes=(TraceAxis(name="frequency", unit="GHz", length=51),),
             preview_payload={
                 "kind": "series",
+                "parameter": "Y11",
+                "default_parameter": "Y11",
+                "history_steps": ["Raw"],
+                "history_summary": "Raw",
                 "points": _build_interpolated_series_points(
                     anchors=((4.8, 0.11), (5.0, 0.13), (5.2, 0.1)),
                     length=51,
@@ -1708,17 +1725,17 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             trace_id="trace_flux_a_measurement",
             dataset_id="fluxonium-2025-031",
             design_id="design_flux_scan_a",
-            axes=(
-                TraceAxis(name="frequency", unit="GHz", length=401),
-                TraceAxis(name="flux_bias", unit="Phi0", length=11),
-            ),
+            axes=(TraceAxis(name="frequency", unit="GHz", length=401),),
             preview_payload={
-                "kind": "sampled_series",
-                "points": [
-                    [5.71, 0.013],
-                    [5.78, 0.018],
-                    [5.84, 0.015],
-                ],
+                "kind": "series",
+                "parameter": "Y11",
+                "default_parameter": "Y11",
+                "history_steps": ["Measurement", "Post-Processed"],
+                "history_summary": "Measurement -> Post-Processed",
+                "points": _build_interpolated_series_points(
+                    anchors=((5.71, 0.013), (5.78, 0.018), (5.84, 0.015)),
+                    length=401,
+                ),
             },
             payload_ref=build_trace_payload_ref(
                 payload_role="dataset_primary",
@@ -1727,8 +1744,8 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
                 group_path="/traces/trace_flux_a_measurement",
                 array_path="values",
                 dtype="float64",
-                shape=(401, 11),
-                chunk_shape=(401, 1),
+                shape=(401,),
+                chunk_shape=(401,),
             ),
             result_handles=(
                 build_result_handle_ref(
@@ -1769,6 +1786,10 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             axes=(TraceAxis(name="frequency", unit="GHz", length=401),),
             preview_payload={
                 "kind": "series",
+                "parameter": "Y11",
+                "default_parameter": "Y11",
+                "history_steps": ["Layout Simulation", "Raw"],
+                "history_summary": "Layout Simulation -> Raw",
                 "points": _build_interpolated_series_points(
                     anchors=((5.71, 0.011), (5.78, 0.017), (5.84, 0.014)),
                     length=401,
@@ -1797,6 +1818,10 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             axes=(TraceAxis(name="frequency", unit="GHz", length=201),),
             preview_payload={
                 "kind": "series",
+                "parameter": "S21",
+                "default_parameter": "S21",
+                "history_steps": ["Measurement", "Raw"],
+                "history_summary": "Measurement -> Raw",
                 "points": _build_interpolated_series_points(
                     anchors=((6.1, 0.42), (6.18, 0.51), (6.24, 0.47)),
                     length=201,
