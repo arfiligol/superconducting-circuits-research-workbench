@@ -181,6 +181,7 @@ def get_simulation_result_explorer(
     family: Annotated[str | None, Query()] = None,
     source: Annotated[str | None, Query()] = None,
     metric: Annotated[str | None, Query()] = None,
+    sweep_index: Annotated[int | None, Query(ge=0)] = None,
     z0: Annotated[float | None, Query(gt=0, alias="z0")] = None,
     output_port: Annotated[int | None, Query(ge=1)] = None,
     input_port: Annotated[int | None, Query(ge=1)] = None,
@@ -191,6 +192,7 @@ def get_simulation_result_explorer(
             family=family,
             source=source,
             metric=metric,
+            sweep_index=sweep_index,
             z0_ohm=z0,
             output_port=output_port,
             input_port=input_port,
@@ -205,6 +207,7 @@ def get_simulation_result_explorer(
                 "family": family,
                 "source": source,
                 "metric": metric,
+                "sweep_index": sweep_index,
                 "z0": z0,
                 "output_port": output_port,
                 "input_port": input_port,
@@ -784,11 +787,15 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
             allowed={"raw", "ptc"},
             default="raw",
         )
-    output_view = _required_string(
-        body.get("output_view"),
-        field_name="post_processing_setup.output_view",
+    output_view = (
+        _required_string(
+            body.get("output_view"),
+            field_name="post_processing_setup.output_view",
+        )
+        if body.get("output_view") is not None
+        else "matrix"
     )
-    raw_selections = body.get("selections")
+    raw_selections = body.get("selections", [])
     raw_operations = body.get("operations")
     if not isinstance(raw_selections, list):
         raise service_error(

@@ -19,6 +19,7 @@ type AppSelectBaseProps = Readonly<{
   options: readonly AppSelectOption[];
   placeholder?: string;
   disabled?: boolean;
+  testId?: string;
   triggerClassName?: string;
   menuClassName?: string;
   valueClassName?: string;
@@ -83,6 +84,7 @@ function AppSelectCore({
   isOpen,
   onOpenChange,
   buttonClassName,
+  testId,
 }: AppSelectCoreProps) {
   const selectedOption = options.find((option) => option.value === value) ?? null;
   const optionGroups = useMemo(() => groupSelectOptions(options), [options]);
@@ -108,6 +110,7 @@ function AppSelectCore({
     <>
       <button
         type="button"
+        data-testid={testId}
         aria-labelledby={labelId}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -216,6 +219,7 @@ export function AppSelectField({
   triggerClassName,
   menuClassName,
   valueClassName,
+  testId,
 }: AppSelectFieldProps) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -245,6 +249,7 @@ export function AppSelectField({
         options={options}
         placeholder={placeholder}
         disabled={disabled}
+        testId={testId}
         triggerClassName={triggerClassName}
         menuClassName={menuClassName}
         valueClassName={valueClassName}
@@ -264,6 +269,7 @@ export function AppInlineSelect({
   triggerClassName,
   menuClassName,
   valueClassName,
+  testId,
 }: AppInlineSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -284,6 +290,7 @@ export function AppInlineSelect({
         options={options}
         placeholder={placeholder}
         disabled={disabled}
+        testId={testId}
         triggerClassName={triggerClassName}
         menuClassName={menuClassName}
         valueClassName={valueClassName}

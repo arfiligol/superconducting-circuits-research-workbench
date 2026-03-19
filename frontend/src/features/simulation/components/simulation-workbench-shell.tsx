@@ -29,6 +29,15 @@ import { SimulationResultExplorer } from "@/features/simulation/components/simul
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import { resolveOfficialSimulationExamplePreset } from "@/features/simulation/lib/official-example";
 import {
+  createPostProcessingStep,
+  derivePostProcessingStepContext,
+  isPostProcessingStepTypeAvailable,
+  parsePostProcessingPortNumber,
+  sanitizePostProcessingStep,
+  type PostProcessingStepDraft,
+  type PostProcessingStepType,
+} from "@/features/simulation/lib/post-processing-basis";
+import {
   buildSimulationSetupDraft,
   buildSimulationSetupFormValuesFromPersistedSetup,
   cloneSimulationSetupFormValues,
@@ -74,6 +83,7 @@ import {
   resolveSurfaceInsetToneClass,
 } from "@/features/shared/components/surface-kit";
 import { ApiError } from "@/lib/api/client";
+import { useAppToasts } from "@/lib/app-state";
 import type {
   PostProcessingSetup,
   TaskDetail,
@@ -102,23 +112,6 @@ const defaultRequestValues: SimulationRequestValues = {
   simulationNote: "",
   postProcessingNote: "",
 };
-
-type PostProcessingStepType = "coordinate_transform" | "kron_reduction";
-
-type CoordinateTransformStepDraft = Readonly<{
-  id: string;
-  type: "coordinate_transform";
-  portA: string;
-  portB: string;
-}>;
-
-type KronReductionStepDraft = Readonly<{
-  id: string;
-  type: "kron_reduction";
-  keepLabels: readonly string[];
-}>;
-
-type PostProcessingStepDraft = CoordinateTransformStepDraft | KronReductionStepDraft;
 
 type StageTone = "default" | "primary" | "success" | "warning" | "error";
 
@@ -268,78 +261,6 @@ function formatCodeValue(value: string | null | undefined, fallback: string) {
   }
 }
 
-function parsePostProcessingPortNumber(portValue: string) {
-  const matchedPort = /port_(\d+)/i.exec(portValue.trim());
-  if (!matchedPort) {
-    return null;
-  }
-
-  const parsedPort = Number.parseInt(matchedPort[1] ?? "", 10);
-  return Number.isFinite(parsedPort) ? parsedPort : null;
-}
-
-function listPostProcessingBasisLabels(portOptions: readonly AppSelectOption[]) {
-  return portOptions
-    .map((option) => {
-      const portNumber = parsePostProcessingPortNumber(option.value);
-      return portNumber !== null ? String(portNumber) : null;
-    })
-    .filter((value): value is string => value !== null);
-}
-
-function createCoordinateTransformStep(
-  portOptions: readonly AppSelectOption[],
-): CoordinateTransformStepDraft {
-  const firstPort = portOptions[0]?.value ?? "port_1";
-  const secondPort = portOptions[1]?.value ?? firstPort;
-
-  return {
-    id: `post-step:${crypto.randomUUID()}`,
-    type: "coordinate_transform",
-    portA: firstPort,
-    portB: secondPort,
-  };
-}
-
-function createKronReductionStep(
-  portOptions: readonly AppSelectOption[],
-): KronReductionStepDraft {
-  return {
-    id: `post-step:${crypto.randomUUID()}`,
-    type: "kron_reduction",
-    keepLabels: listPostProcessingBasisLabels(portOptions),
-  };
-}
-
-function isPostProcessingStepTypeAvailable(
-  stepType: PostProcessingStepType,
-  portOptions: readonly AppSelectOption[],
-) {
-  if (stepType === "coordinate_transform") {
-    return portOptions.length >= 2;
-  }
-
-  return listPostProcessingBasisLabels(portOptions).length > 0;
-}
-
-function createPostProcessingStep(
-  stepType: PostProcessingStepType,
-  portOptions: readonly AppSelectOption[],
-  stepId = `post-step:${crypto.randomUUID()}`,
-): PostProcessingStepDraft {
-  if (stepType === "coordinate_transform") {
-    return {
-      ...createCoordinateTransformStep(portOptions),
-      id: stepId,
-    };
-  }
-
-  return {
-    ...createKronReductionStep(portOptions),
-    id: stepId,
-  };
-}
-
 function formatPostProcessingStepLabel(stepType: PostProcessingStepType) {
   return stepType === "coordinate_transform" ? "Coordinate Transformation" : "Kron Reduction";
 }
@@ -397,7 +318,6 @@ function hydratePostProcessingSteps(
   setup: PostProcessingSetup,
   portOptions: readonly AppSelectOption[],
 ): readonly PostProcessingStepDraft[] {
-  const availableBasisLabels = new Set(listPostProcessingBasisLabels(portOptions));
   const hydratedSteps: PostProcessingStepDraft[] = [];
 
   setup.operations.forEach((operation, index) => {
@@ -405,7 +325,6 @@ function hydratePostProcessingSteps(
       const keepLabels = Array.isArray(operation.config.keep_labels)
         ? operation.config.keep_labels
             .map((label) => String(label))
-            .filter((label) => availableBasisLabels.has(label))
         : [];
       hydratedSteps.push({
         id: `post-step:hydrated-kron-${index}`,
@@ -988,6 +907,7 @@ export function SimulationWorkbenchShell() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+  const { pushToast } = useAppToasts();
   const searchParamsString = searchParams.toString();
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
   const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
@@ -1008,6 +928,10 @@ export function SimulationWorkbenchShell() {
   const [saveSetupNameDraft, setSaveSetupNameDraft] = useState("");
   const [savedSetupFeedback, setSavedSetupFeedback] = useState<string | null>(null);
   const autoRestoredTaskIdRef = useRef<number | null>(null);
+  const hasObservedSimulationTaskToastRef = useRef(false);
+  const hasObservedPostProcessingTaskToastRef = useRef(false);
+  const lastSimulationTaskToastKeyRef = useRef<string | null>(null);
+  const lastPostProcessingTaskToastKeyRef = useRef<string | null>(null);
 
   const form = useForm<SimulationRequestValues>({
     resolver: zodResolver(simulationRequestSchema),
@@ -1205,16 +1129,23 @@ export function SimulationWorkbenchShell() {
       })),
     [ptcPortOptions],
   );
-  const postProcessingBasisOptions = useMemo(
-    () =>
-      sourcePortSelectOptions.map((option) => {
-        const portNumber = parsePostProcessingPortNumber(option.value);
-        return {
-          value: portNumber !== null ? String(portNumber) : option.value,
-          label: option.label,
-        };
-      }),
+  const initialPostProcessingStepContext = useMemo(
+    () => derivePostProcessingStepContext(sourcePortSelectOptions, []),
     [sourcePortSelectOptions],
+  );
+  const postProcessingPipelineContext = useMemo(
+    () => derivePostProcessingStepContext(sourcePortSelectOptions, postProcessingSteps),
+    [postProcessingSteps, sourcePortSelectOptions],
+  );
+  const postProcessingStepContexts = useMemo(
+    () =>
+      new Map(
+        postProcessingSteps.map((step) => [
+          step.id,
+          derivePostProcessingStepContext(sourcePortSelectOptions, postProcessingSteps, step.id),
+        ]),
+      ),
+    [postProcessingSteps, sourcePortSelectOptions],
   );
   const postProcessingStepTypeOptions = useMemo<readonly AppSelectOption[]>(
     () => [
@@ -1223,16 +1154,19 @@ export function SimulationWorkbenchShell() {
         label: "Coordinate Transformation",
         disabled: !isPostProcessingStepTypeAvailable(
           "coordinate_transform",
-          sourcePortSelectOptions,
+          postProcessingPipelineContext,
         ),
       },
       {
         value: "kron_reduction",
         label: "Kron Reduction",
-        disabled: !isPostProcessingStepTypeAvailable("kron_reduction", sourcePortSelectOptions),
+        disabled: !isPostProcessingStepTypeAvailable(
+          "kron_reduction",
+          postProcessingPipelineContext,
+        ),
       },
     ],
-    [sourcePortSelectOptions],
+    [postProcessingPipelineContext],
   );
   const selectedPtcPorts = useMemo(
     () => new Set(parseCommaSeparatedStringValues(selectedPtcPortsValue)),
@@ -1322,14 +1256,14 @@ export function SimulationWorkbenchShell() {
     latestPostProcessingTaskDetail?.postProcessingSetup?.operations.length ?? postProcessingSteps.length;
 
   function appendPostProcessingStep(stepType: PostProcessingStepType) {
-    if (!isPostProcessingStepTypeAvailable(stepType, sourcePortSelectOptions)) {
+    if (!isPostProcessingStepTypeAvailable(stepType, postProcessingPipelineContext)) {
       return;
     }
 
     setPostProcessingBuildError(null);
     setPostProcessingSteps((current) => [
       ...current,
-      createPostProcessingStep(stepType, sourcePortSelectOptions),
+      createPostProcessingStep(stepType, postProcessingPipelineContext),
     ]);
   }
 
@@ -1361,6 +1295,8 @@ export function SimulationWorkbenchShell() {
           return step;
         }
 
+        const context =
+          postProcessingStepContexts.get(stepId) ?? initialPostProcessingStepContext;
         const selected = new Set(step.keepLabels);
         if (selected.has(label)) {
           selected.delete(label);
@@ -1370,7 +1306,7 @@ export function SimulationWorkbenchShell() {
 
         return {
           ...step,
-          keepLabels: postProcessingBasisOptions
+          keepLabels: context.basisOptions
             .map((option) => option.value)
             .filter((value) => selected.has(value)),
         };
@@ -1379,7 +1315,9 @@ export function SimulationWorkbenchShell() {
   }
 
   function updatePostProcessingStepType(stepId: string, nextType: PostProcessingStepType) {
-    if (!isPostProcessingStepTypeAvailable(nextType, sourcePortSelectOptions)) {
+    const context =
+      postProcessingStepContexts.get(stepId) ?? initialPostProcessingStepContext;
+    if (!isPostProcessingStepTypeAvailable(nextType, context)) {
       return;
     }
 
@@ -1387,7 +1325,7 @@ export function SimulationWorkbenchShell() {
     setPostProcessingSteps((current) =>
       current.map((step) =>
         step.id === stepId
-          ? createPostProcessingStep(nextType, sourcePortSelectOptions, step.id)
+          ? createPostProcessingStep(nextType, context, step.id)
           : step,
       ),
     );
@@ -1567,29 +1505,13 @@ export function SimulationWorkbenchShell() {
       return;
     }
 
-    const availableTokens = new Set(sourcePortSelectOptions.map((option) => option.value));
-    const availableLabels = new Set(listPostProcessingBasisLabels(sourcePortSelectOptions));
-
     setPostProcessingSteps((current) =>
-      current.map((step) => {
-        if (step.type === "coordinate_transform") {
-          const fallbackPort = sourcePortSelectOptions[0]?.value ?? "port_1";
-          return {
-            ...step,
-            portA: availableTokens.has(step.portA) ? step.portA : fallbackPort,
-            portB:
-              availableTokens.has(step.portB)
-                ? step.portB
-                : sourcePortSelectOptions[1]?.value ?? fallbackPort,
-          };
-        }
-
-        const keepLabels = step.keepLabels.filter((label) => availableLabels.has(label));
-        return {
-          ...step,
-          keepLabels,
-        };
-      }),
+      current.map((step) =>
+        sanitizePostProcessingStep(
+          step,
+          derivePostProcessingStepContext(sourcePortSelectOptions, current, step.id),
+        ),
+      ),
     );
   }, [sourcePortSelectOptions]);
 
@@ -1948,6 +1870,10 @@ export function SimulationWorkbenchShell() {
     );
     setHydratedPostTaskId(null);
     autoRestoredTaskIdRef.current = null;
+    hasObservedSimulationTaskToastRef.current = false;
+    hasObservedPostProcessingTaskToastRef.current = false;
+    lastSimulationTaskToastKeyRef.current = null;
+    lastPostProcessingTaskToastKeyRef.current = null;
 
     if (requestedTaskId !== null) {
       startTransition(() => {
@@ -1970,6 +1896,90 @@ export function SimulationWorkbenchShell() {
     searchParamsString,
     workflowContextResetKey,
   ]);
+
+  useEffect(() => {
+    if (!taskMutationStatus.message) {
+      return;
+    }
+
+    if (taskMutationStatus.state !== "error" && taskMutationStatus.state !== "success") {
+      return;
+    }
+
+    pushToast({
+      tone: taskMutationStatus.state === "error" ? "error" : "success",
+      title:
+        taskMutationStatus.state === "error"
+          ? "Run submission failed"
+          : "Run submission accepted",
+      message: taskMutationStatus.message,
+    });
+    clearTaskMutationStatus();
+  }, [clearTaskMutationStatus, pushToast, taskMutationStatus]);
+
+  useEffect(() => {
+    const currentKey = latestSimulationTaskDetail
+      ? `${latestSimulationTaskDetail.taskId}:${latestSimulationTaskDetail.status}`
+      : null;
+    if (!hasObservedSimulationTaskToastRef.current) {
+      hasObservedSimulationTaskToastRef.current = true;
+      lastSimulationTaskToastKeyRef.current = currentKey;
+      return;
+    }
+    if (!currentKey || currentKey === lastSimulationTaskToastKeyRef.current) {
+      return;
+    }
+    lastSimulationTaskToastKeyRef.current = currentKey;
+    if (latestSimulationTaskDetail?.status === "completed") {
+      pushToast({
+        tone: "success",
+        title: "Simulation completed",
+        message:
+          latestSimulationTaskDetail.progress.summary ??
+          `Simulation task #${latestSimulationTaskDetail.taskId} completed.`,
+      });
+    } else if (latestSimulationTaskDetail?.status === "failed") {
+      pushToast({
+        tone: "error",
+        title: "Simulation failed",
+        message:
+          latestSimulationTaskDetail.progress.summary ??
+          `Simulation task #${latestSimulationTaskDetail.taskId} failed.`,
+      });
+    }
+  }, [latestSimulationTaskDetail, pushToast]);
+
+  useEffect(() => {
+    const currentKey = latestPostProcessingTaskDetail
+      ? `${latestPostProcessingTaskDetail.taskId}:${latestPostProcessingTaskDetail.status}`
+      : null;
+    if (!hasObservedPostProcessingTaskToastRef.current) {
+      hasObservedPostProcessingTaskToastRef.current = true;
+      lastPostProcessingTaskToastKeyRef.current = currentKey;
+      return;
+    }
+    if (!currentKey || currentKey === lastPostProcessingTaskToastKeyRef.current) {
+      return;
+    }
+    lastPostProcessingTaskToastKeyRef.current = currentKey;
+    if (latestPostProcessingTaskDetail?.status === "completed") {
+      pushToast({
+        tone: "success",
+        title: "Post-processing completed",
+        message:
+          latestPostProcessingTaskDetail.progress.summary ??
+          `Post-processing task #${latestPostProcessingTaskDetail.taskId} completed.`,
+      });
+    } else if (latestPostProcessingTaskDetail?.status === "failed") {
+      pushToast({
+        tone: "error",
+        title: "Post-processing failed",
+        message:
+          latestPostProcessingTaskDetail.progress.summary ??
+          `Post-processing task #${latestPostProcessingTaskDetail.taskId} failed.`,
+      });
+    }
+  }, [latestPostProcessingTaskDetail, pushToast]);
 
   useEffect(() => {
     if (
@@ -2094,18 +2104,6 @@ export function SimulationWorkbenchShell() {
           tone="error"
           title="Definition catalog unavailable"
           message={`Unable to load visible definitions. ${definitionsErrorMessage}`}
-        />
-      ) : null}
-
-      {taskMutationStatus.message ? (
-        <StageNotice
-          tone={taskMutationStatus.state === "error" ? "error" : "success"}
-          title={
-            taskMutationStatus.state === "error"
-              ? "Run submission failed"
-              : "Run submission accepted"
-          }
-          message={taskMutationStatus.message}
         />
       ) : null}
 
@@ -2256,14 +2254,6 @@ export function SimulationWorkbenchShell() {
             </div>
           }
         >
-          {simulationSetupState.label !== "Not started" ? (
-            <StageNotice
-              tone={simulationSetupState.tone}
-              title={`Simulation Setup · ${simulationSetupState.label}`}
-              message={simulationSetupState.message}
-            />
-          ) : null}
-
           <div className="flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-border bg-surface px-4 py-3 text-xs">
             <SurfaceTag tone={simulationSetupAuthorityPresentation.primaryTag.tone}>
               {simulationSetupAuthorityPresentation.primaryTag.label}
@@ -3160,7 +3150,12 @@ export function SimulationWorkbenchShell() {
                   onClick={() => {
                     appendPostProcessingStep(newPostProcessingStepType);
                   }}
-                  disabled={!isPostProcessingStepTypeAvailable(newPostProcessingStepType, sourcePortSelectOptions)}
+                  disabled={
+                    !isPostProcessingStepTypeAvailable(
+                      newPostProcessingStepType,
+                      postProcessingPipelineContext,
+                    )
+                  }
                   className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -3175,105 +3170,125 @@ export function SimulationWorkbenchShell() {
               </div>
             ) : (
               <div className="mt-4 space-y-3">
-                {postProcessingSteps.map((step, index) => (
-                  <div
-                    key={step.id}
-                    className="rounded-[0.95rem] border border-border bg-surface px-4 py-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-foreground">Step {index + 1}</p>
-                          <SurfaceTag tone="default">Step {index + 1}</SurfaceTag>
-                        </div>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          {step.type === "coordinate_transform"
-                            ? "Build a common/differential transform from two ports."
-                            : "Reduce the basis to the ports you want to keep."}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          removePostProcessingStep(step.id);
-                        }}
-                        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-rose-300 hover:bg-rose-50 dark:hover:border-rose-400/40 dark:hover:bg-rose-500/10"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Remove
-                      </button>
-                    </div>
+                {postProcessingSteps.map((step, index) => {
+                  const stepContext =
+                    postProcessingStepContexts.get(step.id) ?? initialPostProcessingStepContext;
+                  const stepTypeOptions: readonly AppSelectOption[] = [
+                    {
+                      value: "coordinate_transform",
+                      label: "Coordinate Transformation",
+                      disabled: !isPostProcessingStepTypeAvailable(
+                        "coordinate_transform",
+                        stepContext,
+                      ),
+                    },
+                    {
+                      value: "kron_reduction",
+                      label: "Kron Reduction",
+                      disabled: !isPostProcessingStepTypeAvailable("kron_reduction", stepContext),
+                    },
+                  ];
 
-                    <div className="mt-4">
-                      <CompactField label="Step Type">
-                        <AppInlineSelect
-                          ariaLabel={`Post-processing step ${index + 1} type`}
-                          value={step.type}
-                          onChange={(nextValue) => {
-                            updatePostProcessingStepType(
-                              step.id,
-                              nextValue as PostProcessingStepType,
-                            );
+                  return (
+                    <div
+                      key={step.id}
+                      className="rounded-[0.95rem] border border-border bg-surface px-4 py-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-foreground">Step {index + 1}</p>
+                            <SurfaceTag tone="default">Step {index + 1}</SurfaceTag>
+                          </div>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {step.type === "coordinate_transform"
+                              ? "Build a common/differential transform from two ports."
+                              : "Reduce the basis to the ports you want to keep."}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            removePostProcessingStep(step.id);
                           }}
-                          options={postProcessingStepTypeOptions}
-                        />
-                      </CompactField>
-                    </div>
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-rose-300 hover:bg-rose-50 dark:hover:border-rose-400/40 dark:hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remove
+                        </button>
+                      </div>
 
-                    {step.type === "coordinate_transform" ? (
-                      <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        <CompactField label="Port A">
+                      <div className="mt-4">
+                        <CompactField label="Step Type">
                           <AppInlineSelect
-                            ariaLabel={`Coordinate transform step ${index + 1} port A`}
-                            value={step.portA}
+                            ariaLabel={`Post-processing step ${index + 1} type`}
+                            value={step.type}
                             onChange={(nextValue) => {
-                              updateCoordinateTransformStep(step.id, "portA", nextValue);
+                              updatePostProcessingStepType(
+                                step.id,
+                                nextValue as PostProcessingStepType,
+                              );
                             }}
-                            options={sourcePortSelectOptions}
-                          />
-                        </CompactField>
-                        <CompactField label="Port B">
-                          <AppInlineSelect
-                            ariaLabel={`Coordinate transform step ${index + 1} port B`}
-                            value={step.portB}
-                            onChange={(nextValue) => {
-                              updateCoordinateTransformStep(step.id, "portB", nextValue);
-                            }}
-                            options={sourcePortSelectOptions}
+                            options={stepTypeOptions}
                           />
                         </CompactField>
                       </div>
-                    ) : (
-                      <div className="mt-4 space-y-3">
-                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Keep Ports
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {postProcessingBasisOptions.map((option) => {
-                            const isSelected = step.keepLabels.includes(option.value);
-                            return (
-                              <button
-                                key={`${step.id}:${option.value}`}
-                                type="button"
-                                onClick={() => {
-                                  toggleKronReductionKeepLabel(step.id, option.value);
-                                }}
-                                className={cx(
-                                  "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition",
-                                  isSelected
-                                    ? "border-primary/35 bg-primary text-primary-foreground"
-                                    : "border-border bg-background text-foreground hover:border-primary/35 hover:bg-primary/10",
-                                )}
-                              >
-                                {option.label}
-                              </button>
-                            );
-                          })}
+
+                      {step.type === "coordinate_transform" ? (
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          <CompactField label="Port A">
+                            <AppInlineSelect
+                              ariaLabel={`Coordinate transform step ${index + 1} port A`}
+                              value={step.portA}
+                              onChange={(nextValue) => {
+                                updateCoordinateTransformStep(step.id, "portA", nextValue);
+                              }}
+                              options={stepContext.coordinatePortOptions}
+                            />
+                          </CompactField>
+                          <CompactField label="Port B">
+                            <AppInlineSelect
+                              ariaLabel={`Coordinate transform step ${index + 1} port B`}
+                              value={step.portB}
+                              onChange={(nextValue) => {
+                                updateCoordinateTransformStep(step.id, "portB", nextValue);
+                              }}
+                              options={stepContext.coordinatePortOptions}
+                            />
+                          </CompactField>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      ) : (
+                        <div className="mt-4 space-y-3">
+                          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                            Keep Ports
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {stepContext.basisOptions.map((option) => {
+                              const isSelected = step.keepLabels.includes(option.value);
+                              return (
+                                <button
+                                  key={`${step.id}:${option.value}`}
+                                  type="button"
+                                  onClick={() => {
+                                    toggleKronReductionKeepLabel(step.id, option.value);
+                                  }}
+                                  className={cx(
+                                    "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition",
+                                    isSelected
+                                      ? "border-primary/35 bg-primary text-primary-foreground"
+                                      : "border-border bg-background text-foreground hover:border-primary/35 hover:bg-primary/10",
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

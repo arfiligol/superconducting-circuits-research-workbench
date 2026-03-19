@@ -57,6 +57,7 @@ class SimulationResultExplorerService:
         family: str | None = None,
         source: str | None = None,
         metric: str | None = None,
+        sweep_index: int | None = None,
         z0_ohm: float | None = None,
         output_port: int | None = None,
         input_port: int | None = None,
@@ -77,6 +78,7 @@ class SimulationResultExplorerService:
             family=family,
             source=source,
             metric=metric,
+            sweep_index=sweep_index,
             z0_ohm=z0_ohm,
             output_port=output_port,
             input_port=input_port,
@@ -155,6 +157,11 @@ def _build_explorer_response(
     family = str(selection["family"])
     source = str(selection["source"])
     metric = str(selection["metric"])
+    sweep_index = (
+        int(selection["sweep_index"])
+        if selection.get("sweep_index") is not None
+        else None
+    )
     z0_ohm = float(selection["z0_ohm"])
     output_port = int(selection["output_port"])
     input_port = int(selection["input_port"])
@@ -164,6 +171,7 @@ def _build_explorer_response(
         basis_task,
         port_count=len(port_options),
         compensated_ports=compensated_ports,
+        sweep_index=sweep_index,
         z0_ohm=z0_ohm,
     )
     selected_values = _extract_metric_values(
@@ -175,6 +183,48 @@ def _build_explorer_response(
     metric_config = _FAMILY_METRICS[family][metric]
     output_label = port_options[output_port]
     input_label = port_options[input_port]
+
+    default_selection_payload: dict[str, object] = {
+        **{
+            key: value
+            for key, value in default_selection.items()
+            if not (key == "sweep_index" and value is None)
+        },
+        "trace_key": _build_trace_selection(default_selection).to_trace_key(),
+    }
+    selection_payload: dict[str, object] = {
+        **{
+            key: value
+            for key, value in selection.items()
+            if not (key == "sweep_index" and value is None)
+        },
+        "trace_mode_group": "base",
+        "output_port_label": output_label,
+        "input_port_label": input_label,
+        "output_mode": "mode_0",
+        "input_mode": "mode_0",
+        "trace_key": _build_trace_selection(selection).to_trace_key(),
+    }
+    plot_metadata: dict[str, object] = {
+        "trace_key": _build_trace_selection(selection).to_trace_key(),
+        "family": family,
+        "source": source,
+        "metric": metric,
+        "z0_ohm": z0_ohm,
+        "output_port": output_port,
+        "input_port": input_port,
+        "output_port_label": output_label,
+        "input_port_label": input_label,
+        "trace_payload_store_key": (
+            task.result_refs.trace_payload.store_key
+            if task.result_refs.trace_payload is not None
+            else None
+        ),
+    }
+    if sweep_index is not None:
+        default_selection_payload["sweep_index"] = sweep_index
+        selection_payload["sweep_index"] = sweep_index
+        plot_metadata["sweep_index"] = sweep_index
 
     return {
         "bootstrap": {
@@ -211,20 +261,13 @@ def _build_explorer_response(
                 "output_modes": [{"key": "mode_0", "label": "Mode 0"}],
                 "input_modes": [{"key": "mode_0", "label": "Mode 0"}],
             },
-            "default_selection": {
-                **default_selection,
-                "trace_key": _build_trace_selection(default_selection).to_trace_key(),
-            },
+            "parameter_sweep": _serialize_parameter_sweep_bootstrap(
+                basis_task.simulation_setup,
+                sweep_index=sweep_index,
+            ),
+            "default_selection": default_selection_payload,
         },
-        "selection": {
-            **selection,
-            "trace_mode_group": "base",
-            "output_port_label": output_label,
-            "input_port_label": input_label,
-            "output_mode": "mode_0",
-            "input_mode": "mode_0",
-            "trace_key": _build_trace_selection(selection).to_trace_key(),
-        },
+        "selection": selection_payload,
         "plot": {
             "x_axis": {
                 "label": "Frequency",
@@ -248,22 +291,7 @@ def _build_explorer_response(
                     "unit": metric_config["unit"],
                 }
             ],
-            "metadata": {
-                "trace_key": _build_trace_selection(selection).to_trace_key(),
-                "family": family,
-                "source": source,
-                "metric": metric,
-                "z0_ohm": z0_ohm,
-                "output_port": output_port,
-                "input_port": input_port,
-                "output_port_label": output_label,
-                "input_port_label": input_label,
-                "trace_payload_store_key": (
-                    task.result_refs.trace_payload.store_key
-                    if task.result_refs.trace_payload is not None
-                    else None
-                ),
-            },
+            "metadata": plot_metadata,
         },
     }
 
@@ -304,6 +332,7 @@ def _default_selection(
     port_options: dict[int, str],
 ) -> dict[str, object]:
     default_port = min(port_options) if len(port_options) > 0 else 1
+    default_sweep_index = _default_sweep_index(basis_task.simulation_setup)
     if task.kind == "post_processing" and task.post_processing_setup is not None:
         selection = (
             task.post_processing_setup.selections[0]
@@ -325,6 +354,7 @@ def _default_selection(
                     family,
                     selection.representation,
                 ),
+                "sweep_index": default_sweep_index,
                 "z0_ohm": 50.0,
                 "output_port": default_port,
                 "input_port": default_port,
@@ -334,6 +364,7 @@ def _default_selection(
         "family": "s_matrix",
         "source": "raw",
         "metric": "magnitude_db",
+        "sweep_index": default_sweep_index,
         "z0_ohm": 50.0,
         "output_port": default_port,
         "input_port": default_port,
@@ -365,6 +396,7 @@ def _resolve_selection(
     family: str | None,
     source: str | None,
     metric: str | None,
+    sweep_index: int | None,
     z0_ohm: float | None,
     output_port: int | None,
     input_port: int | None,
@@ -397,6 +429,16 @@ def _resolve_selection(
             category="validation_error",
             message=f"metric {resolved_metric} is not available for family {resolved_family}.",
         )
+    resolved_sweep_index = (
+        sweep_index
+        if sweep_index is not None
+        else (
+            int(default_selection["sweep_index"])
+            if default_selection.get("sweep_index") is not None
+            else None
+        )
+    )
+    _validate_sweep_index(task.simulation_setup, resolved_sweep_index)
     resolved_z0 = float(z0_ohm if z0_ohm is not None else default_selection["z0_ohm"])
     if resolved_z0 <= 0:
         raise service_error(
@@ -418,6 +460,7 @@ def _resolve_selection(
         "family": resolved_family,
         "source": resolved_source,
         "metric": resolved_metric,
+        "sweep_index": resolved_sweep_index,
         "z0_ohm": resolved_z0,
         "output_port": resolved_output_port,
         "input_port": resolved_input_port,
@@ -566,16 +609,103 @@ def _frequency_values(setup: SimulationSetup) -> list[float]:
     return [round(start + (step * index), 6) for index in range(point_count)]
 
 
+def _default_sweep_index(setup: SimulationSetup) -> int | None:
+    return 0 if len(setup.parameter_sweeps) > 0 else None
+
+
+def _sweep_point_count(setup: SimulationSetup) -> int:
+    if len(setup.parameter_sweeps) == 0:
+        return 1
+
+    total = 1
+    for sweep in setup.parameter_sweeps:
+        total *= max(len(sweep.values), 1)
+    return total
+
+
+def _validate_sweep_index(
+    setup: SimulationSetup,
+    sweep_index: int | None,
+) -> None:
+    if len(setup.parameter_sweeps) == 0:
+        if sweep_index not in {None, 0}:
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message="sweep_index is not available for this persisted result.",
+            )
+        return
+
+    if sweep_index is None or sweep_index < 0 or sweep_index >= _sweep_point_count(setup):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="sweep_index is outside the available parameter sweep range.",
+        )
+
+
+def _decode_sweep_index(
+    setup: SimulationSetup,
+    sweep_index: int | None,
+) -> tuple[int, ...]:
+    if len(setup.parameter_sweeps) == 0:
+        return ()
+
+    resolved_index = sweep_index if sweep_index is not None else 0
+    remaining = resolved_index
+    coordinates = [0] * len(setup.parameter_sweeps)
+    for axis_index in range(len(setup.parameter_sweeps) - 1, -1, -1):
+        axis_size = max(len(setup.parameter_sweeps[axis_index].values), 1)
+        coordinates[axis_index] = remaining % axis_size
+        remaining //= axis_size
+    return tuple(coordinates)
+
+
+def _serialize_parameter_sweep_bootstrap(
+    setup: SimulationSetup,
+    *,
+    sweep_index: int | None,
+) -> dict[str, object]:
+    coordinates = _decode_sweep_index(setup, sweep_index)
+    axes: list[dict[str, object]] = []
+    for axis_index, sweep in enumerate(setup.parameter_sweeps):
+        values = [float(value) for value in sweep.values]
+        axes.append(
+            {
+                "parameter": sweep.parameter,
+                "label": sweep.parameter,
+                "unit": sweep.unit,
+                "values": values,
+                "selected_value_index": (
+                    coordinates[axis_index] if axis_index < len(coordinates) else 0
+                ),
+            }
+        )
+    return {
+        "axes": axes,
+        "point_count": _sweep_point_count(setup),
+        "active": len(axes) > 0,
+    }
+
+
 def _build_family_bundle(
     task: TaskDetail,
     *,
     port_count: int,
     compensated_ports: set[int],
+    sweep_index: int | None,
     z0_ohm: float,
 ) -> dict[str, dict[str, list[list[list[complex]]]]]:
     frequencies = _frequency_values(task.simulation_setup)
     raw_s = [
-        _build_s_matrix(frequency, task=task, port_count=port_count)
+        _build_s_matrix(
+            frequency,
+            task=task,
+            port_count=port_count,
+            sweep_index=sweep_index,
+        )
         for frequency in frequencies
     ]
     raw_z = [_matrix_to_z(matrix, z0_ohm=z0_ohm) for matrix in raw_s]
@@ -617,12 +747,15 @@ def _build_s_matrix(
     *,
     task: TaskDetail,
     port_count: int,
+    sweep_index: int | None,
 ) -> list[list[complex]]:
     setup = task.simulation_setup
     assert setup is not None
+    sweep_bias = _resolve_sweep_bias(setup, sweep_index)
     center = (setup.frequency_sweep.start_ghz + setup.frequency_sweep.stop_ghz) / 2
     span = max(setup.frequency_sweep.stop_ghz - setup.frequency_sweep.start_ghz, 0.1)
-    width = max(span / 7, 0.12)
+    center += sweep_bias * (span / 6)
+    width = max((span / 7) * (1 + (0.18 * sweep_bias)), 0.12)
     normalized = (frequency_ghz - center) / span
     lorentz = 1 / math.sqrt(1 + ((frequency_ghz - center) / width) ** 2)
     phase = normalized * math.pi
@@ -633,10 +766,17 @@ def _build_s_matrix(
         for input_index in range(port_count):
             port_distance = abs(output_index - input_index)
             if output_index == input_index:
-                amplitude = 0.22 + (0.04 * output_index) - (0.18 * lorentz)
+                amplitude = (
+                    0.22
+                    + (0.04 * output_index)
+                    - (0.18 * lorentz)
+                    + (0.012 * sweep_bias)
+                )
                 angle = phase * (1 + (0.1 * output_index))
             else:
-                amplitude = (0.72 / (1 + port_distance)) * lorentz
+                amplitude = ((0.72 / (1 + port_distance)) * lorentz) * (
+                    1 + (0.08 * sweep_bias)
+                )
                 angle = -phase * (1 + (0.08 * (output_index + input_index)))
             row.append(complex(amplitude * math.cos(angle), amplitude * math.sin(angle)))
         matrix.append(row)
@@ -714,6 +854,31 @@ def _extract_metric_values(
     return values
 
 
+def _resolve_sweep_bias(
+    setup: SimulationSetup,
+    sweep_index: int | None,
+) -> float:
+    if len(setup.parameter_sweeps) == 0:
+        return 0.0
+
+    coordinates = _decode_sweep_index(setup, sweep_index)
+    bias = 0.0
+    for axis_index, (sweep, value_index) in enumerate(
+        zip(setup.parameter_sweeps, coordinates, strict=False)
+    ):
+        if len(sweep.values) == 0:
+            continue
+        if len(sweep.values) == 1:
+            normalized = 0.0
+        else:
+            min_value = min(sweep.values)
+            max_value = max(sweep.values)
+            span = max(max_value - min_value, 1e-9)
+            normalized = ((sweep.values[value_index] - min_value) / span) - 0.5
+        bias += normalized * (1 + (0.15 * axis_index))
+    return bias
+
+
 def _build_trace_selection(selection: Mapping[str, object]) -> ResultTraceSelection:
     family = str(selection["family"])
     return ResultTraceSelection(
@@ -721,6 +886,11 @@ def _build_trace_selection(selection: Mapping[str, object]) -> ResultTraceSelect
         source=str(selection["source"]),
         output_port=int(selection["output_port"]),
         input_port=int(selection["input_port"]),
+        sweep_index=(
+            int(selection["sweep_index"])
+            if selection.get("sweep_index") is not None
+            else None
+        ),
         trace_mode_group="base",
         output_mode="mode_0",
         input_mode="mode_0",

@@ -35,6 +35,7 @@ def _simulation_ptc_payload(
 def _simulation_setup_payload(
     *,
     ptc: dict[str, object] | None = None,
+    parameter_sweeps: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     return {
         "frequency_sweep": {
@@ -43,7 +44,7 @@ def _simulation_setup_payload(
             "point_count": 401,
             "spacing": "linear",
         },
-        "parameter_sweeps": [],
+        "parameter_sweeps": parameter_sweeps or [],
         "solver": {
             "solver_family": "harmonic_balance",
             "max_iterations": 20,
@@ -68,7 +69,11 @@ def _simulation_setup_payload(
     }
 
 
-def _submit_local_simulation(*, ptc_enabled: bool) -> dict[str, object]:
+def _submit_local_simulation(
+    *,
+    ptc_enabled: bool,
+    parameter_sweeps: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     response = client.post(
         "/tasks",
         json={
@@ -77,7 +82,8 @@ def _submit_local_simulation(*, ptc_enabled: bool) -> dict[str, object]:
             "definition_id": 3,
             "summary": "Explorer source task.",
             "simulation_setup": _simulation_setup_payload(
-                ptc=_simulation_ptc_payload(enabled=ptc_enabled)
+                ptc=_simulation_ptc_payload(enabled=ptc_enabled),
+                parameter_sweeps=parameter_sweeps,
             ),
         },
     )
@@ -408,6 +414,64 @@ def test_metric_changes_do_not_change_trace_key_but_canonical_selection_changes_
 
     assert magnitude_key == real_key
     assert ptc_key != real_key
+
+
+def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> None:
+    task = _submit_local_simulation(
+        ptc_enabled=True,
+        parameter_sweeps=[
+            {
+                "parameter": "L_jun",
+                "values": [22.0, 24.0, 26.0],
+                "unit": "nH",
+            },
+            {
+                "parameter": "C_q",
+                "values": [0.055, 0.05814],
+                "unit": "pF",
+            },
+        ],
+    )
+
+    response = client.get(f"/tasks/{task['task_id']}/simulation-results/explorer")
+    assert response.status_code == 200
+    payload = response.json()["data"]
+
+    assert payload["bootstrap"]["parameter_sweep"] == {
+        "active": True,
+        "point_count": 6,
+        "axes": [
+            {
+                "parameter": "L_jun",
+                "label": "L_jun",
+                "unit": "nH",
+                "values": [22.0, 24.0, 26.0],
+                "selected_value_index": 0,
+            },
+            {
+                "parameter": "C_q",
+                "label": "C_q",
+                "unit": "pF",
+                "values": [0.055, 0.05814],
+                "selected_value_index": 0,
+            },
+        ],
+    }
+    assert payload["selection"]["sweep_index"] == 0
+    assert payload["plot"]["metadata"]["sweep_index"] == 0
+    default_trace_key = payload["selection"]["trace_key"]
+
+    shifted = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        "?family=s_matrix&source=raw&metric=magnitude_db&output_port=1&input_port=1&sweep_index=5"
+    )
+    assert shifted.status_code == 200
+    shifted_payload = shifted.json()["data"]
+
+    assert shifted_payload["selection"]["sweep_index"] == 5
+    assert shifted_payload["plot"]["metadata"]["sweep_index"] == 5
+    assert shifted_payload["selection"]["trace_key"] != default_trace_key
+    assert shifted_payload["plot"]["series"][0]["values"] != payload["plot"]["series"][0]["values"]
 
 
 def test_retry_task_recovers_missing_persisted_setup_for_explorer() -> None:

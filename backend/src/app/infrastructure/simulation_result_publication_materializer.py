@@ -298,6 +298,7 @@ def _build_preview_points(
         basis_task,
         port_count=port_count,
         compensated_ports=compensated_ports,
+        sweep_index=selection.sweep_index,
         z0_ohm=z0_ohm,
     )
     matrices = family_bundle[selection.family][selection.source]
@@ -418,12 +419,18 @@ def _build_family_bundle(
     *,
     port_count: int,
     compensated_ports: set[int],
+    sweep_index: int | None,
     z0_ohm: float,
 ) -> dict[str, dict[str, list[list[list[complex]]]]]:
     assert task.simulation_setup is not None
     frequencies = _frequency_values(task.simulation_setup)
     raw_s = [
-        _build_s_matrix(frequency, task=task, port_count=port_count)
+        _build_s_matrix(
+            frequency,
+            task=task,
+            port_count=port_count,
+            sweep_index=sweep_index,
+        )
         for frequency in frequencies
     ]
     raw_z = [_matrix_to_z(matrix, z0_ohm=z0_ohm) for matrix in raw_s]
@@ -450,12 +457,15 @@ def _build_s_matrix(
     *,
     task: TaskDetail,
     port_count: int,
+    sweep_index: int | None,
 ) -> list[list[complex]]:
     setup = task.simulation_setup
     assert setup is not None
+    sweep_bias = _resolve_sweep_bias(setup, sweep_index)
     center = (setup.frequency_sweep.start_ghz + setup.frequency_sweep.stop_ghz) / 2
     span = max(setup.frequency_sweep.stop_ghz - setup.frequency_sweep.start_ghz, 0.1)
-    width = max(span / 7, 0.12)
+    center += sweep_bias * (span / 6)
+    width = max((span / 7) * (1 + (0.18 * sweep_bias)), 0.12)
     normalized = (frequency_ghz - center) / span
     lorentz = 1 / math.sqrt(1 + ((frequency_ghz - center) / width) ** 2)
     phase = normalized * math.pi
@@ -466,10 +476,17 @@ def _build_s_matrix(
         for input_index in range(port_count):
             port_distance = abs(output_index - input_index)
             if output_index == input_index:
-                amplitude = 0.22 + (0.04 * output_index) - (0.18 * lorentz)
+                amplitude = (
+                    0.22
+                    + (0.04 * output_index)
+                    - (0.18 * lorentz)
+                    + (0.012 * sweep_bias)
+                )
                 angle = phase * (1 + (0.1 * output_index))
             else:
-                amplitude = (0.72 / (1 + port_distance)) * lorentz
+                amplitude = ((0.72 / (1 + port_distance)) * lorentz) * (
+                    1 + (0.08 * sweep_bias)
+                )
                 angle = -phase * (1 + (0.08 * (output_index + input_index)))
             row.append(complex(amplitude * math.cos(angle), amplitude * math.sin(angle)))
         matrix.append(row)
@@ -517,6 +534,36 @@ def _apply_port_compensation(
             updated[idx][neighbor] *= coupling_scale
             updated[neighbor][idx] *= coupling_scale
     return updated
+
+
+def _resolve_sweep_bias(setup, sweep_index: int | None) -> float:
+    parameter_sweeps = getattr(setup, "parameter_sweeps", ())
+    if len(parameter_sweeps) == 0:
+        return 0.0
+
+    resolved_index = sweep_index if sweep_index is not None else 0
+    coordinates = [0] * len(parameter_sweeps)
+    remaining = resolved_index
+    for axis_index in range(len(parameter_sweeps) - 1, -1, -1):
+        axis_size = max(len(parameter_sweeps[axis_index].values), 1)
+        coordinates[axis_index] = remaining % axis_size
+        remaining //= axis_size
+
+    bias = 0.0
+    for axis_index, (sweep, value_index) in enumerate(
+        zip(parameter_sweeps, coordinates, strict=False)
+    ):
+        if len(sweep.values) == 0:
+            continue
+        if len(sweep.values) == 1:
+            normalized = 0.0
+        else:
+            min_value = min(sweep.values)
+            max_value = max(sweep.values)
+            span = max(max_value - min_value, 1e-9)
+            normalized = ((sweep.values[value_index] - min_value) / span) - 0.5
+        bias += normalized * (1 + (0.15 * axis_index))
+    return bias
 
 
 def _identity_matrix(size: int) -> list[list[complex]]:

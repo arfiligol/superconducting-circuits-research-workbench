@@ -185,6 +185,7 @@ type SimulationResultExplorerSelectionResponseShape = Readonly<{
   family: string;
   source: string;
   metric: string;
+  sweep_index?: number | null;
   trace_key?: string | null;
   z0_ohm: number;
   output_port: number;
@@ -193,6 +194,18 @@ type SimulationResultExplorerSelectionResponseShape = Readonly<{
   input_port_label?: string;
   output_mode?: string;
   input_mode?: string;
+}>;
+type SimulationResultExplorerSweepAxisResponseShape = Readonly<{
+  parameter: string;
+  label: string;
+  unit?: string | null;
+  values: readonly number[];
+  selected_value_index: number;
+}>;
+type SimulationResultExplorerParameterSweepBootstrapResponseShape = Readonly<{
+  axes: readonly SimulationResultExplorerSweepAxisResponseShape[];
+  point_count: number;
+  active: boolean;
 }>;
 type SimulationResultExplorerPlotAxisResponseShape = Readonly<{
   label: string;
@@ -213,6 +226,7 @@ type SimulationResultExplorerPlotResponseShape = Readonly<{
     family: string;
     source: string;
     metric: string;
+    sweep_index?: number | null;
     trace_key?: string | null;
     z0_ohm: number;
     output_port: number;
@@ -230,6 +244,7 @@ type SimulationResultExplorerBootstrapResponseShape = Readonly<{
     output_modes: readonly SimulationResultExplorerModeResponseShape[];
     input_modes: readonly SimulationResultExplorerModeResponseShape[];
   }>;
+  parameter_sweep: SimulationResultExplorerParameterSweepBootstrapResponseShape;
   default_selection: SimulationResultExplorerSelectionResponseShape;
 }>;
 type SimulationResultExplorerResultBasisResponseShape = Readonly<{
@@ -666,6 +681,7 @@ export type SimulationResultExplorerSelection = Readonly<{
   family: string;
   source: string;
   metric: string;
+  sweepIndex: number | null;
   traceKey: string | null;
   z0Ohm: number;
   outputPort: number;
@@ -694,6 +710,7 @@ export type SimulationResultExplorerPlot = Readonly<{
     family: string;
     source: string;
     metric: string;
+    sweepIndex: number | null;
     traceKey: string | null;
     z0Ohm: number;
     outputPort: number;
@@ -715,6 +732,17 @@ export type SimulationResultExplorerPayload = Readonly<{
       outputModes: readonly SimulationResultExplorerMode[];
       inputModes: readonly SimulationResultExplorerMode[];
     }>;
+    parameterSweep: Readonly<{
+      active: boolean;
+      pointCount: number;
+      axes: readonly Readonly<{
+        parameter: string;
+        label: string;
+        unit: string | null;
+        values: readonly number[];
+        selectedValueIndex: number;
+      }>[];
+    }>;
     defaultSelection: SimulationResultExplorerSelection;
   }>;
   selection: SimulationResultExplorerSelection;
@@ -729,6 +757,7 @@ export type SimulationResultExplorerQuery = Readonly<{
   family?: string;
   source?: string;
   metric?: string;
+  sweepIndex?: number;
   z0?: number;
   outputPort?: number;
   inputPort?: number;
@@ -909,6 +938,9 @@ export function simulationResultExplorerKey(
   }
   if (query?.metric) {
     params.set("metric", query.metric);
+  }
+  if (typeof query?.sweepIndex === "number") {
+    params.set("sweep_index", String(query.sweepIndex));
   }
   if (typeof query?.z0 === "number") {
     params.set("z0", String(query.z0));
@@ -1301,6 +1333,7 @@ function mapSimulationResultExplorerSelection(
     family: payload.family,
     source: payload.source,
     metric: payload.metric,
+    sweepIndex: payload.sweep_index ?? null,
     traceKey: payload.trace_key ?? null,
     z0Ohm: payload.z0_ohm,
     outputPort: payload.output_port,
@@ -1367,6 +1400,17 @@ export function mapSimulationResultExplorerResponse(
           label: mode.label,
         })),
       },
+      parameterSweep: {
+        active: payload.bootstrap.parameter_sweep.active,
+        pointCount: payload.bootstrap.parameter_sweep.point_count,
+        axes: payload.bootstrap.parameter_sweep.axes.map((axis) => ({
+          parameter: axis.parameter,
+          label: axis.label,
+          unit: axis.unit ?? null,
+          values: [...axis.values],
+          selectedValueIndex: axis.selected_value_index,
+        })),
+      },
       defaultSelection: mapSimulationResultExplorerSelection(
         payload.bootstrap.default_selection,
       ),
@@ -1393,6 +1437,7 @@ export function mapSimulationResultExplorerResponse(
         family: payload.plot.metadata.family,
         source: payload.plot.metadata.source,
         metric: payload.plot.metadata.metric,
+        sweepIndex: payload.plot.metadata.sweep_index ?? null,
         traceKey: payload.plot.metadata.trace_key ?? null,
         z0Ohm: payload.plot.metadata.z0_ohm,
         outputPort: payload.plot.metadata.output_port,

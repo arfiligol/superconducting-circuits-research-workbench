@@ -348,9 +348,9 @@ class PostProcessingOperation:
 
 @dataclass(frozen=True)
 class PostProcessingSetup:
-    output_view: str
-    selections: tuple[PostProcessingTraceSelection, ...]
-    operations: tuple[PostProcessingOperation, ...]
+    output_view: str = "matrix"
+    selections: tuple[PostProcessingTraceSelection, ...] = ()
+    operations: tuple[PostProcessingOperation, ...] = ()
     source: str | None = None
 
     def to_mapping(self) -> dict[str, object]:
@@ -369,7 +369,11 @@ class PostProcessingSetup:
         operations = payload.get("operations", ())
         return cls(
             source=str(payload["source"]) if isinstance(payload.get("source"), str) else None,
-            output_view=str(payload["output_view"]),
+            output_view=(
+                str(payload["output_view"])
+                if isinstance(payload.get("output_view"), str)
+                else "matrix"
+            ),
             selections=tuple(
                 PostProcessingTraceSelection.from_mapping(cast(Mapping[str, object], selection))
                 for selection in selections

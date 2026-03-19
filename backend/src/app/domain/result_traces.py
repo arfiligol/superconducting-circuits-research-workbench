@@ -18,6 +18,7 @@ class ResultTraceSelection:
     source: str
     output_port: int
     input_port: int
+    sweep_index: int | None = None
     trace_mode_group: str = "base"
     output_mode: str = _DEFAULT_MODE
     input_mode: str = _DEFAULT_MODE
@@ -33,6 +34,8 @@ class ResultTraceSelection:
             f"output_mode={self.output_mode}",
             f"input_mode={self.input_mode}",
         ]
+        if self.sweep_index is not None:
+            parts.append(f"sweep_index={self.sweep_index}")
         if self.z0_ohm is not None:
             parts.append(f"z0_ohm={_format_z0(self.z0_ohm)}")
         return "|".join(parts)
@@ -52,6 +55,7 @@ class ResultTraceSelection:
         trace_mode_group = payload.get("trace_mode_group", "base")
         output_mode = payload.get("output_mode", _DEFAULT_MODE)
         input_mode = payload.get("input_mode", _DEFAULT_MODE)
+        raw_sweep_index = payload.get("sweep_index")
         if family not in _FAMILIES:
             raise ValueError("trace_key family is invalid")
         if source not in _SOURCES:
@@ -60,6 +64,11 @@ class ResultTraceSelection:
             raise ValueError("trace_key trace_mode_group is invalid")
         output_port = _parse_positive_int(payload.get("output_port"), field="output_port")
         input_port = _parse_positive_int(payload.get("input_port"), field="input_port")
+        sweep_index = None
+        if raw_sweep_index is not None:
+            sweep_index = int(raw_sweep_index)
+            if sweep_index < 0:
+                raise ValueError("trace_key sweep_index must be non-negative")
         raw_z0 = payload.get("z0_ohm")
         z0_ohm = None
         if raw_z0 is not None:
@@ -73,6 +82,7 @@ class ResultTraceSelection:
             source=source,
             output_port=output_port,
             input_port=input_port,
+            sweep_index=sweep_index,
             trace_mode_group=trace_mode_group,
             output_mode=output_mode,
             input_mode=input_mode,
@@ -114,6 +124,8 @@ def build_trace_id(
         f"_o{selection.output_port}_i{selection.input_port}"
         f"_{selection.output_mode}_{selection.input_mode}"
     )
+    if selection.sweep_index is not None:
+        base = f"{base}_sweep_{selection.sweep_index}"
     if selection.z0_ohm is not None:
         return f"{base}_z0_{_format_z0(selection.z0_ohm).replace('.', '_')}"
     return base

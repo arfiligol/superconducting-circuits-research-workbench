@@ -1256,6 +1256,10 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Live result refresh");
     expect(simulationWorkbenchSource).toContain("Attach Run");
     expect(simulationWorkbenchSource).toContain("Attached to Page");
+    expect(simulationWorkbenchSource).toContain("useAppToasts");
+    expect(simulationWorkbenchSource).toContain('"Run submission failed"');
+    expect(simulationWorkbenchSource).toContain("pushToast({");
+    expect(simulationWorkbenchSource).not.toContain("Simulation Setup · ${simulationSetupState.label}");
     expect(simulationWorkbenchSource).toContain("Author the processing steps, keep their order intentional");
     expect(simulationWorkbenchSource).toContain("switch between available result sources");
     expect(simulationWorkbenchSource).not.toContain("Choose Raw or PTC");
@@ -1268,6 +1272,8 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Downstream State");
     expect(simulationResultExplorerSource).toContain("Simulation Result Explorer");
     expect(simulationResultExplorerSource).toContain("Post Processing Result Explorer");
+    expect(simulationResultExplorerSource).toContain("Parameter Sweep Point");
+    expect(simulationResultExplorerSource).toContain("Choose the parameter-space point");
     expect(simulationResultExplorerSource).toContain(
       'task.kind === "post_processing" && sourceOptions.length <= 1',
     );
@@ -1654,12 +1660,13 @@ describe("task api detail mapping", () => {
         family: "z_matrix",
         source: "ptc",
         metric: "real",
+        sweepIndex: 3,
         z0: 75,
         outputPort: 2,
         inputPort: 1,
       }),
     ).toBe(
-      "/api/backend/tasks/31/simulation-results/explorer?family=z_matrix&source=ptc&metric=real&z0=75&output_port=2&input_port=1",
+      "/api/backend/tasks/31/simulation-results/explorer?family=z_matrix&source=ptc&metric=real&sweep_index=3&z0=75&output_port=2&input_port=1",
     );
 
     const explorer = mapSimulationResultExplorerResponse({
@@ -1698,10 +1705,31 @@ describe("task api detail mapping", () => {
           output_modes: [{ key: "mode_0", label: "Mode 0" }],
           input_modes: [{ key: "mode_0", label: "Mode 0" }],
         },
+        parameter_sweep: {
+          active: true,
+          point_count: 6,
+          axes: [
+            {
+              parameter: "L_jun",
+              label: "L_jun",
+              unit: "nH",
+              values: [22, 24, 26],
+              selected_value_index: 1,
+            },
+            {
+              parameter: "C_q",
+              label: "C_q",
+              unit: "pF",
+              values: [0.05, 0.06],
+              selected_value_index: 0,
+            },
+          ],
+        },
         default_selection: {
           family: "s_matrix",
           source: "raw",
           metric: "magnitude_db",
+          sweep_index: 2,
           trace_key: "raw:s_matrix:1:1",
           z0_ohm: 50,
           output_port: 1,
@@ -1712,6 +1740,7 @@ describe("task api detail mapping", () => {
         family: "z_matrix",
         source: "ptc",
         metric: "real",
+        sweep_index: 3,
         trace_key: "ptc:z_matrix:2:1",
         z0_ohm: 75,
         output_port: 2,
@@ -1743,6 +1772,7 @@ describe("task api detail mapping", () => {
           family: "z_matrix",
           source: "ptc",
           metric: "real",
+          sweep_index: 3,
           trace_key: "ptc:z_matrix:2:1",
           z0_ohm: 75,
           output_port: 2,
@@ -1763,6 +1793,7 @@ describe("task api detail mapping", () => {
       family: "z_matrix",
       source: "ptc",
       metric: "real",
+      sweepIndex: 3,
       traceKey: "ptc:z_matrix:2:1",
       z0Ohm: 75,
       outputPort: 2,
@@ -1781,8 +1812,12 @@ describe("task api detail mapping", () => {
       "ptc",
     ]);
     expect(explorer.bootstrap.defaultSelection.traceKey).toBe("raw:s_matrix:1:1");
+    expect(explorer.bootstrap.defaultSelection.sweepIndex).toBe(2);
+    expect(explorer.bootstrap.parameterSweep.pointCount).toBe(6);
+    expect(explorer.bootstrap.parameterSweep.axes[0]?.selectedValueIndex).toBe(1);
     expect(explorer.plot.metadata.outputPortLabel).toBe("Port 2");
     expect(explorer.plot.metadata.inputPortLabel).toBe("Port 1");
+    expect(explorer.plot.metadata.sweepIndex).toBe(3);
     expect(explorer.plot.metadata.traceKey).toBe("ptc:z_matrix:2:1");
     expect(explorer.plot.metadata.tracePayloadStoreKey).toBe("trace-output-44");
     expect(explorer.resultBasis.primaryResultHandleId).toBe("handle-44");

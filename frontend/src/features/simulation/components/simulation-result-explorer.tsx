@@ -16,7 +16,7 @@ import {
   AppInlineSelect,
   type AppSelectOption,
 } from "@/features/shared/components/app-select";
-import { SurfacePanel, SurfaceTag } from "@/features/shared/components/surface-kit";
+import { SurfacePanel, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
 import type { TaskDetail } from "@/lib/api/tasks";
 
 type PlotComponentProps = Readonly<{
@@ -56,6 +56,13 @@ function resolveDefaultTraceParameter(
 ) {
   const familyPrefix = family === "s_matrix" ? "S" : family === "y_matrix" ? "Y" : "Z";
   return `${familyPrefix}${outputPort}${inputPort}`;
+}
+
+function formatSweepValueLabel(value: number, unit: string | null) {
+  const compactValue = Number.isInteger(value)
+    ? String(value)
+    : value.toFixed(6).replace(/0+$/u, "").replace(/\.$/u, "");
+  return unit ? `${compactValue} ${unit}` : compactValue;
 }
 
 function ExplorerField({
@@ -203,6 +210,7 @@ export function SimulationResultExplorer({
     task.kind === "post_processing"
       ? "Inspect saved post-processing outputs with family, source, metric, and port selectors."
       : "Inspect saved simulation outputs with family, source, metric, and port selectors.";
+  const explorerTestPrefix = task.kind === "post_processing" ? "post-processing" : "simulation";
   const viewOptions = useMemo<readonly AppSegmentedOption<ExplorerViewMode>[]>(
     () => [
       { value: "plot", label: "Plot" },
@@ -287,7 +295,6 @@ export function SimulationResultExplorer({
     selection?.family === "s_matrix" &&
     !explorer.selectedFamily?.availableSources.some((source) => source.key === "ptc") &&
     ptcFamilyLabels.length > 0;
-
   if (explorer.isLoading || (!payload && !explorer.error)) {
     return (
       <SurfacePanel
@@ -322,6 +329,9 @@ export function SimulationResultExplorer({
       </SurfacePanel>
     );
   }
+
+  const parameterSweep = payload.bootstrap.parameterSweep;
+  const activeSweepPoint = (selection.sweepIndex ?? 0) + 1;
 
   return (
     <SurfacePanel
@@ -443,6 +453,56 @@ export function SimulationResultExplorer({
             </div>
           </div>
         </div>
+
+        {parameterSweep.active && parameterSweep.axes.length > 0 ? (
+          <div className="rounded-[0.95rem] border border-border/80 bg-background px-4 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Parameter Sweep Point
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Choose the parameter-space point that this result view should inspect.
+                </p>
+              </div>
+              <SurfaceTag tone="default">
+                Point {activeSweepPoint} of {parameterSweep.pointCount}
+              </SurfaceTag>
+            </div>
+
+            <div
+              className={cx(
+                "mt-4 grid gap-4",
+                parameterSweep.axes.length === 1
+                  ? "md:grid-cols-1"
+                  : parameterSweep.axes.length === 2
+                    ? "md:grid-cols-2"
+                    : "md:grid-cols-2 xl:grid-cols-3",
+              )}
+            >
+              {parameterSweep.axes.map((axis, axisIndex) => (
+                <ExplorerField
+                  key={`${axis.parameter}-${axisIndex}`}
+                  label={axis.label}
+                  detail={axis.unit ? `Unit · ${axis.unit}` : undefined}
+                >
+                  <AppInlineSelect
+                    ariaLabel={`${axis.label} sweep selection`}
+                    testId={`${explorerTestPrefix}-result-sweep-axis-${axisIndex}`}
+                    value={String(axis.selectedValueIndex)}
+                    onChange={(nextValue) => {
+                      explorer.setSweepValue(axisIndex, Number.parseInt(nextValue, 10));
+                    }}
+                    options={axis.values.map((value, valueIndex) => ({
+                      value: String(valueIndex),
+                      label: formatSweepValueLabel(value, axis.unit),
+                    }))}
+                  />
+                </ExplorerField>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="rounded-[0.95rem] border border-border/80 bg-background px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">

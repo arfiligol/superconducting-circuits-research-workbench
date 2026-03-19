@@ -16,6 +16,7 @@ type EditableExplorerSelection = Readonly<{
   family: string;
   source: string;
   metric: string;
+  sweepIndex: number | null;
   traceKey: string | null;
   z0: number;
   outputPort: number;
@@ -29,11 +30,34 @@ function buildEditableSelection(
     family: selection.family,
     source: selection.source,
     metric: selection.metric,
+    sweepIndex: selection.sweepIndex,
     traceKey: selection.traceKey,
     z0: selection.z0Ohm,
     outputPort: selection.outputPort,
     inputPort: selection.inputPort,
   };
+}
+
+function encodeSweepIndex(
+  axes: readonly Readonly<{
+    values: readonly number[];
+  }>[],
+  coordinates: readonly number[],
+) {
+  if (axes.length === 0) {
+    return null;
+  }
+
+  let encoded = 0;
+  for (let axisIndex = 0; axisIndex < axes.length; axisIndex += 1) {
+    const axisSize = Math.max(axes[axisIndex]?.values.length ?? 0, 1);
+    const coordinate = Math.min(
+      Math.max(coordinates[axisIndex] ?? 0, 0),
+      Math.max(axisSize - 1, 0),
+    );
+    encoded = encoded * axisSize + coordinate;
+  }
+  return encoded;
 }
 
 function resolveAvailableFamily(
@@ -63,6 +87,7 @@ function buildExplorerQuery(
     family: selection.family,
     source: selection.source,
     metric: selection.metric,
+    sweepIndex: selection.sweepIndex ?? undefined,
     z0: selection.z0,
     outputPort: selection.outputPort,
     inputPort: selection.inputPort,
@@ -98,6 +123,7 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
       current
         ? {
             ...current,
+            sweepIndex: explorerData.selection.sweepIndex,
             traceKey: explorerData.selection.traceKey,
           }
         : buildEditableSelection(explorerData.selection),
@@ -184,6 +210,32 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
         return {
           ...current,
           metric: nextMetric,
+        };
+      });
+    },
+    setSweepValue(axisIndex: number, nextValueIndex: number) {
+      updateSelection((current, nextPayload) => {
+        const sweepAxes = nextPayload.bootstrap.parameterSweep.axes;
+        if (
+          !nextPayload.bootstrap.parameterSweep.active ||
+          axisIndex < 0 ||
+          axisIndex >= sweepAxes.length
+        ) {
+          return current;
+        }
+
+        const coordinates = sweepAxes.map((axis) => axis.selectedValueIndex);
+        const axisSize = sweepAxes[axisIndex]?.values.length ?? 0;
+        if (axisSize <= 0) {
+          return current;
+        }
+
+        coordinates[axisIndex] = Math.min(Math.max(nextValueIndex, 0), axisSize - 1);
+        const encoded = encodeSweepIndex(sweepAxes, coordinates);
+
+        return {
+          ...current,
+          sweepIndex: encoded,
         };
       });
     },

@@ -1360,6 +1360,28 @@ class TaskService:
                 category="validation_error",
                 message="Only mode_0 trace selections are supported.",
             )
+        sweep_count = 1
+        for axis in basis_task.simulation_setup.parameter_sweeps:
+            sweep_count *= max(len(axis.values), 1)
+        if len(basis_task.simulation_setup.parameter_sweeps) == 0:
+            if selection.sweep_index is not None:
+                raise service_error(
+                    400,
+                    code="request_validation_failed",
+                    category="validation_error",
+                    message="Requested trace selection does not expose parameter sweep points.",
+                )
+        elif (
+            selection.sweep_index is None
+            or selection.sweep_index < 0
+            or selection.sweep_index >= sweep_count
+        ):
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message="Requested trace selection parameter sweep point is invalid.",
+            )
 
     def _build_default_publication_summary(self, task: TaskDetail) -> TaskPublicationSummary:
         default_dataset = (
