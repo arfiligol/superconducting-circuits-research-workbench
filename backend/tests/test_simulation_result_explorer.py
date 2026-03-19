@@ -251,8 +251,11 @@ def test_completed_post_processing_task_returns_explorer_payload() -> None:
 
     assert response.status_code == 200
     payload = response.json()["data"]
+    families = {family["key"]: family for family in payload["bootstrap"]["families"]}
     assert payload["task_id"] == task["task_id"]
     assert payload["task_status"] == "completed"
+    assert tuple(families) == ("y_matrix", "z_matrix")
+    assert [source["key"] for source in families["z_matrix"]["available_sources"]] == ["ptc"]
     assert payload["bootstrap"]["default_selection"] == {
         "family": "z_matrix",
         "source": "ptc",

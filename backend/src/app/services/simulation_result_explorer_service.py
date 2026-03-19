@@ -64,6 +64,7 @@ class SimulationResultExplorerService:
         compensated_ports = _compensated_port_indices(basis_task, available_ports=port_options)
         default_selection = _default_selection(task, basis_task, port_options)
         selection = _resolve_selection(
+            task,
             basis_task,
             family=family,
             source=source,
@@ -175,7 +176,11 @@ def _build_explorer_response(
                     "label": _FAMILY_LABELS[family_key],
                     "available_sources": [
                         {"key": source_key, "label": _SOURCE_LABELS[source_key]}
-                        for source_key in _available_sources(basis_task, family_key)
+                        for source_key in _available_sources_for_task(
+                            task,
+                            basis_task,
+                            family_key,
+                        )
                     ],
                     "available_metrics": [
                         {
@@ -186,7 +191,7 @@ def _build_explorer_response(
                         for metric_key, config in _FAMILY_METRICS[family_key].items()
                     ],
                 }
-                for family_key in ("s_matrix", "y_matrix", "z_matrix")
+                for family_key in _available_families_for_task(task, basis_task)
             ],
             "trace_selector": {
                 "output_ports": [
@@ -344,6 +349,7 @@ def _metric_from_post_processing_representation(family: str, representation: str
 
 
 def _resolve_selection(
+    explorer_task: TaskDetail,
     task: TaskDetail,
     *,
     family: str | None,
@@ -356,14 +362,14 @@ def _resolve_selection(
     default_selection: Mapping[str, object],
 ) -> dict[str, object]:
     resolved_family = family or str(default_selection["family"])
-    if resolved_family not in _FAMILY_LABELS:
+    if resolved_family not in _available_families_for_task(explorer_task, task):
         raise service_error(
             400,
             code="request_validation_failed",
             category="validation_error",
-            message="family must be one of s_matrix, y_matrix, z_matrix.",
+            message="family is not available for this persisted result.",
         )
-    sources = _available_sources(task, resolved_family)
+    sources = _available_sources_for_task(explorer_task, task, resolved_family)
     resolved_source = source or str(default_selection["source"])
     if resolved_source not in sources:
         raise service_error(
@@ -406,6 +412,38 @@ def _resolve_selection(
         "output_port": resolved_output_port,
         "input_port": resolved_input_port,
     }
+
+
+def _available_families_for_task(
+    task: TaskDetail,
+    basis_task: TaskDetail,
+) -> tuple[str, ...]:
+    family_keys = ("s_matrix", "y_matrix", "z_matrix")
+    if task.kind != "post_processing" or task.post_processing_setup is None:
+        return family_keys
+
+    required_source = task.post_processing_setup.source
+    allowed = tuple(
+        family_key
+        for family_key in family_keys
+        if required_source in _available_sources(basis_task, family_key)
+    )
+    return allowed if len(allowed) > 0 else family_keys
+
+
+def _available_sources_for_task(
+    task: TaskDetail,
+    basis_task: TaskDetail,
+    family: str,
+) -> tuple[str, ...]:
+    available_sources = _available_sources(basis_task, family)
+    if task.kind != "post_processing" or task.post_processing_setup is None:
+        return available_sources
+
+    required_source = task.post_processing_setup.source
+    if required_source in available_sources:
+        return (required_source,)
+    return available_sources
 
 
 def _available_sources(task: TaskDetail, family: str) -> tuple[str, ...]:

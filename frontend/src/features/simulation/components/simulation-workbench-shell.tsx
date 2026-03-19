@@ -3629,7 +3629,11 @@ export function SimulationWorkbenchShell() {
           description="Review the processed matrix result while keeping its simulation relation visible."
           status={postProcessingResultState}
           actions={
-            explicitUpstreamSimulationTaskId !== null ? (
+            latestPostProcessingStageAuthority ? (
+              <SurfaceTag tone="default">
+                Task #{latestPostProcessingStageAuthority.taskId}
+              </SurfaceTag>
+            ) : explicitUpstreamSimulationTaskId !== null ? (
               <SurfaceTag tone="default">
                 Simulation #{explicitUpstreamSimulationTaskId}
               </SurfaceTag>

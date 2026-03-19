@@ -1268,6 +1268,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Downstream State");
     expect(simulationResultExplorerSource).toContain("Simulation Result Explorer");
     expect(simulationResultExplorerSource).toContain("Post Processing Result Explorer");
+    expect(simulationResultExplorerSource).toContain(
+      'task.kind === "post_processing" && sourceOptions.length <= 1',
+    );
     expect(simulationResultExplorerSource).toContain("AppSegmentedControl");
     expect(simulationResultExplorerSource).toContain('ariaLabel="Simulation result family"');
     expect(simulationResultExplorerSource).toContain("Simulation result source");

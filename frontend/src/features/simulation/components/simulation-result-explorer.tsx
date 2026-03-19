@@ -229,6 +229,7 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
       })) ?? [],
     [explorer.selectedFamily],
   );
+  const sourceIsLocked = task.kind === "post_processing" && sourceOptions.length <= 1;
   const outputPortOptions = useMemo<readonly AppSelectOption[]>(
     () =>
       payload?.bootstrap.traceSelector.outputPorts.map((port) => ({
@@ -340,12 +341,18 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
             >
               <ExplorerField label="Source">
                 <div className="space-y-2">
-                  <AppInlineSelect
-                    ariaLabel="Simulation result source"
-                    value={selection.source}
-                    onChange={explorer.setSource}
-                    options={sourceOptions}
-                  />
+                  {sourceIsLocked ? (
+                    <div className="min-h-11 rounded-[1rem] border border-border/85 bg-surface/95 px-4 py-3 text-sm font-medium text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_24px_rgba(15,23,42,0.06)]">
+                      {sourceOptions[0]?.label ?? selection.source.toUpperCase()}
+                    </div>
+                  ) : (
+                    <AppInlineSelect
+                      ariaLabel="Simulation result source"
+                      value={selection.source}
+                      onChange={explorer.setSource}
+                      options={sourceOptions}
+                    />
+                  )}
                   {showPtcFamilyHint ? (
                     <p className="text-xs leading-5 text-muted-foreground">
                       PTC results appear when you switch to {ptcFamilyLabels.join(" or ")}.
