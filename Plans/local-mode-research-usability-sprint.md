@@ -17,10 +17,15 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - simulation publication support for explicit `design_id` targets
   - frontend `Save to Design` adoption with design dropdown + `New Design` dialog
   - simulation-result task-surface cleanup that removes the misleading task-heavy wall
+  - backend characterization submit parsing, local runner, and persisted result reconstruction
+  - frontend characterization run workbench for the first Local Mode runnable analysis path
+  - characterization attach/recovery state restoration for explicit attached-task flows
 - Immediate consequence:
   - `LM1` is now effectively merged on `main` across backend and frontend
   - `LM2` is merged far enough to materially clean the page and remove misleading task wording
-  - the next active needs shift to `LM3` raw-data continuity/copy truthfulness and `LM4` characterization runnable workflow
+  - `LM4` is now merged for the first runnable path
+  - `LM5` is partially merged via `admittance_extraction`
+  - the next active needs shift to `LM3` raw-data continuity/copy truthfulness and `LM6` live end-to-end Local Mode verification
 
 ## 1) Goal
 
@@ -91,21 +96,17 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - the new placeholder suggests search by `source` and `trace ID`
   - backend search still filters by `parameter` and `provenance_summary` only
 
-#### 4. Characterization is still browse-first, not run-first
+#### 4. Characterization is now runnable, but the first shipped path is intentionally narrow
 
-- The SoT page for Characterization defines a full flow:
+- The rewrite implementation now supports the first complete Local Mode flow:
   - `Choose Design -> Select Traces -> Run Analysis -> Review Latest Run -> Review Persisted Result`
-- Current rewrite implementation does not meet that flow yet.
-- `frontend/src/features/characterization/components/characterization-workspace.tsx` explicitly says:
-  - `This registry does not submit or attach analyses.`
-- Current source-contract tests also explicitly assert the absence of a run CTA and submit hook.
-- Current frontend task submission typing has no characterization-specific payload.
-- Current backend task submission parsing/domain model also has no characterization-specific setup contract.
-- Current Local Mode processor summary in `backend/src/app/services/task_service.py` still reports the characterization lane as:
-  - `offline`
-  - `execution_mode: not_configured`
-  - `capacity: 0`
-- Result: the page can inspect persisted characterization output, but it cannot yet drive new characterization work from Local Mode.
+- The shipped runnable analysis path is currently:
+  - `Admittance Extraction`
+- The characterization processor is now configured in Local Mode and no longer reports `offline/not_configured/capacity 0`.
+- Remaining gaps are narrower and more concrete:
+  - only `admittance_extraction` is runnable today
+  - live browser verification against a real backend still needs an end-to-end pass
+  - newly generated local characterization results can be tagged in-session, but durable tagging continuity for those generated results still needs follow-up validation
 
 ## 4) Planning Judgement
 
@@ -183,6 +184,14 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - add characterization submission contract to frontend typing
   - add characterization submission parsing/domain contract on the backend
   - keep latest-run state compact and shell-compatible
+- Backend status:
+  - delivered on `main`
+- Frontend status:
+  - delivered on `main`
+- Mainline result:
+  - Characterization is now run-first in Local Mode
+  - the page can choose a saved design, select traces, choose an analysis, run it, and reopen the completed result
+  - attach/recovery state now restores the characterization setup from task detail
 
 ### LM5 Characterization minimum analysis set
 
@@ -199,6 +208,10 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 - Rule:
   - do not try to port every legacy analysis in one slice
   - ship one stable analysis path first, then add the next most research-useful path
+- Status on `main`:
+  - partially delivered
+  - `admittance_extraction` is runnable
+  - remaining characterization analyses must stay truthful about unavailable or unsupported status
 
 ### LM6 Local Mode research verification
 
@@ -208,26 +221,27 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - raw data design -> characterization selection
   - characterization run -> persisted result detail -> identify tagging
   - refresh recovery for saved design and persisted characterization result
+  - live browser verification against the real backend contract, not only route-mocked UI smoke
 
 ## 7) Recommended Execution Order
 
 1. `LM3` raw-data continuity + copy truthfulness
-2. `LM4` characterization submission contract and runnable workflow
-3. `LM5` first basic analysis path
-4. `LM6` Local Mode end-to-end verification
+2. `LM6` Local Mode end-to-end verification on the live backend
+3. characterization follow-up for durable tagging continuity on newly generated local results
+4. `LM5` expansion to the next research-useful runnable analysis path
 
 ## 8) Immediate Next Implementation Recommendation
 
-- The next implementation should move to `LM4`, with `LM3` handled just before it or alongside it as a small cleanup slice.
+- The next implementation should move to `LM3` and `LM6`.
 - Reason:
   - the simulation save-target model is now in place on `main`
   - `Simulation Result` is already materially cleaner than before
-  - the real remaining Local Mode blocker is that `Characterization` still cannot drive new runnable analysis work
+  - the first runnable characterization path is now in place
+  - the highest remaining Local Mode risk is no longer missing workflow scaffolding, but end-to-end truthfulness on the real backend path
 - Concrete target:
-  - characterization submission contract
-  - trace selection + analysis selection
-  - compact latest-run state
-  - first basic runnable analysis path
+  - raw-data continuity/copy cleanup on `main`
+  - simulation -> save -> raw data -> characterization -> persisted result live-browser verification
+  - explicit follow-up for durable tagging continuity on newly generated local characterization results
 
 ## 9) Notes On Existing Reviewed Frontend Delivery
 
