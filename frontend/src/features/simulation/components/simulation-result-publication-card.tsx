@@ -143,7 +143,6 @@ function publicationTone(summary: TaskPublicationSummary) {
 
 function CreateDesignDialog({
   open,
-  datasetId,
   value,
   state,
   onValueChange,
@@ -151,7 +150,6 @@ function CreateDesignDialog({
   onSubmit,
 }: Readonly<{
   open: boolean;
-  datasetId: string | null;
   value: string;
   state: CreateDesignState;
   onValueChange: (value: string) => void;
@@ -189,13 +187,6 @@ function CreateDesignDialog({
         </div>
 
         <div className="space-y-4 px-5 py-5">
-          <div className="rounded-[0.9rem] border border-border/80 bg-background px-4 py-3">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              Active Dataset
-            </p>
-            <p className="mt-2 text-sm font-medium text-foreground">{datasetId ?? "--"}</p>
-          </div>
-
           <label className="block">
             <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
               Design Name
@@ -440,8 +431,8 @@ export function SimulationResultPublicationCard({
               Save to Design
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Keep the explorer in focus, then save the published traces into a design inside the
-              active dataset.
+              Keep the explorer in focus, then save the published traces into the design that
+              should own them.
             </p>
           </div>
           <SurfaceTag tone={publicationTone(publicationSummary)}>
@@ -451,17 +442,6 @@ export function SimulationResultPublicationCard({
                 ? "Ready to save"
                 : "Task Result only"}
           </SurfaceTag>
-        </div>
-
-        <div className="mt-4 rounded-[0.95rem] border border-border bg-card px-4 py-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <SurfaceTag tone="default">Active Dataset</SurfaceTag>
-            <p className="text-xs text-muted-foreground">Shell context</p>
-          </div>
-          <p className="mt-3 text-sm font-medium text-foreground">{targetDatasetId ?? "--"}</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Dataset context is fixed here. Choose the design that should own this saved result.
-          </p>
         </div>
 
         {publicationSummary.state === "published" ? (
@@ -488,8 +468,8 @@ export function SimulationResultPublicationCard({
             </div>
 
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              This result is already saved to the selected design. Open the saved design in Raw Data
-              when you want to inspect the published traces directly.
+              This result is already saved to the selected design. Open it in Raw Data when you
+              want to inspect the published traces directly.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -552,8 +532,7 @@ export function SimulationResultPublicationCard({
 
             {!designsQuery.isLoading && designOptions.length === 0 ? (
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                No designs are available in the active dataset yet. Create one, then save this
-                result into it.
+                No designs are available yet. Create one, then save this result into it.
               </p>
             ) : null}
 
@@ -605,7 +584,6 @@ export function SimulationResultPublicationCard({
 
       <CreateDesignDialog
         open={isCreateDialogOpen}
-        datasetId={targetDatasetId}
         value={newDesignName}
         state={createDesignState}
         onValueChange={setNewDesignName}

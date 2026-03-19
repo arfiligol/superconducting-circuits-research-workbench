@@ -1203,6 +1203,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("postSourceSelection");
     expect(simulationWorkbenchSource).toContain("downstreamSourceCapabilities");
     expect(simulationWorkbenchSource).toContain("PTC source");
+    expect(simulationWorkbenchSource).toContain("Add Coordinate Transformation");
+    expect(simulationWorkbenchSource).toContain("Add Kron Reduction");
+    expect(simulationWorkbenchSource).toContain("formatPostProcessingOutputView");
     expect(simulationWorkbenchSource).toContain("Load Official Example");
     expect(simulationWorkbenchSource).toContain("Task-backed · #");
     expect(simulationWorkbenchSource).toContain("Edited from task #");
@@ -1218,7 +1221,6 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
     expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
-    expect(simulationWorkbenchSource).toContain("Operation Config JSON");
     expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
     expect(simulationWorkbenchSource).not.toContain('detail="Read-only expanded netlist."');
     expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
@@ -1236,6 +1238,10 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Definition Binding");
     expect(simulationWorkbenchSource).not.toContain("Submit Authority");
     expect(simulationWorkbenchSource).not.toContain("Downstream Contract");
+    expect(simulationWorkbenchSource).not.toContain("Operation Config JSON");
+    expect(simulationWorkbenchSource).not.toContain("Operation Name");
+    expect(simulationWorkbenchSource).not.toContain("Selection Design Id");
+    expect(simulationWorkbenchSource).not.toContain("Submission Preview");
     expect(simulationWorkbenchSource).not.toContain("Dataset not attached");
     expect(simulationWorkbenchSource).not.toContain("Sweep Parameter (optional)");
     expect(simulationWorkbenchSource).not.toContain("Phase (deg)");
@@ -1270,6 +1276,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultPublicationCardSource).toContain("Open Saved Design in Raw Data");
     expect(simulationResultPublicationCardSource).toContain("dataset_design_conflict");
     expect(simulationResultPublicationCardSource).toContain("design_not_found");
+    expect(simulationResultPublicationCardSource).not.toContain("Active Dataset");
     expect(simulationResultPublicationCardSource).not.toContain("Save to Dataset");
     expect(simulationResultPublicationCardSource).not.toContain("Target Dataset");
     expect(simulationResultPublicationCardSource).not.toContain("Dataset Design Name");

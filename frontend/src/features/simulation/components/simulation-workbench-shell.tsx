@@ -54,7 +54,6 @@ import {
   type SavedSimulationSetupRecord,
 } from "@/features/simulation/lib/saved-setups";
 import {
-  buildSimulationRequestSummary,
   formatSimulationTaskStatusLabel,
   hasSimulationTaskResult,
   resolveAuthoritativeSimulationTaskSummary,
@@ -77,7 +76,12 @@ import {
   resolveSurfaceInsetToneClass,
 } from "@/features/shared/components/surface-kit";
 import { ApiError } from "@/lib/api/client";
-import type { TaskDetail, TaskExecutionStatus, TaskSummary } from "@/lib/api/tasks";
+import type {
+  PostProcessingSetup,
+  TaskDetail,
+  TaskExecutionStatus,
+  TaskSummary,
+} from "@/lib/api/tasks";
 import {
   resolveTaskConnectionState,
   resolveTaskRecoveryNotice,
@@ -99,9 +103,6 @@ const simulationRequestSchema = simulationSetupFormSchema
     postSelectionRepresentation: z.string().trim().min(1, "Representation is required."),
     postSelectionDesignId: z.string().trim(),
     postSelectionTraceIds: z.string().trim(),
-    postOperationName: z.string().trim().min(1, "Operation name is required."),
-    postOperationEnabled: z.boolean(),
-    postOperationConfigJson: z.string().trim().min(1, "Operation config JSON is required."),
   })
   .superRefine((values, context) => {
     if (
@@ -123,15 +124,29 @@ const defaultRequestValues: SimulationRequestValues = {
   simulationNote: "",
   postProcessingNote: "",
   postSourceSelection: "raw",
-  postOutputView: "table",
+  postOutputView: "matrix",
   postSelectionTraceFamily: "y_matrix",
   postSelectionRepresentation: "imaginary",
   postSelectionDesignId: "",
   postSelectionTraceIds: "",
-  postOperationName: "normalize",
-  postOperationEnabled: true,
-  postOperationConfigJson: "{}",
 };
+
+type PostProcessingStepType = "coordinate_transform" | "kron_reduction";
+
+type CoordinateTransformStepDraft = Readonly<{
+  id: string;
+  type: "coordinate_transform";
+  portA: string;
+  portB: string;
+}>;
+
+type KronReductionStepDraft = Readonly<{
+  id: string;
+  type: "kron_reduction";
+  keepLabels: readonly string[];
+}>;
+
+type PostProcessingStepDraft = CoordinateTransformStepDraft | KronReductionStepDraft;
 
 type StageTone = "default" | "primary" | "success" | "warning" | "error";
 
@@ -169,10 +184,6 @@ const postProcessingSourceOptions: readonly AppSelectOption[] = [
     label: "PTC",
     description: "Use the PTC-capable upstream output when it was persisted.",
   },
-];
-const postProcessingOutputViewOptions: readonly AppSelectOption[] = [
-  { value: "table", label: "Table" },
-  { value: "fit-report", label: "Fit report" },
 ];
 const rawTraceFamilyOptions: readonly AppSelectOption[] = [
   { value: "s_matrix", label: "S Matrix" },
@@ -314,18 +325,138 @@ function formatCodeValue(value: string | null | undefined, fallback: string) {
   }
 }
 
-function buildPostProcessingSetupDraft(values: SimulationRequestValues) {
-  let config: Record<string, unknown> = {};
-  try {
-    const parsed = JSON.parse(values.postOperationConfigJson);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      config = parsed as Record<string, unknown>;
-    } else {
-      throw new Error("Operation config must be a JSON object.");
-    }
-  } catch {
-    throw new Error("Operation config must be valid JSON object text.");
+function parsePostProcessingPortNumber(portValue: string) {
+  const matchedPort = /port_(\d+)/i.exec(portValue.trim());
+  if (!matchedPort) {
+    return null;
   }
+
+  const parsedPort = Number.parseInt(matchedPort[1] ?? "", 10);
+  return Number.isFinite(parsedPort) ? parsedPort : null;
+}
+
+function listPostProcessingBasisLabels(portOptions: readonly AppSelectOption[]) {
+  return portOptions
+    .map((option) => {
+      const portNumber = parsePostProcessingPortNumber(option.value);
+      return portNumber !== null ? String(portNumber) : null;
+    })
+    .filter((value): value is string => value !== null);
+}
+
+function createCoordinateTransformStep(
+  portOptions: readonly AppSelectOption[],
+): CoordinateTransformStepDraft {
+  const firstPort = portOptions[0]?.value ?? "port_1";
+  const secondPort = portOptions[1]?.value ?? firstPort;
+
+  return {
+    id: `post-step:${crypto.randomUUID()}`,
+    type: "coordinate_transform",
+    portA: firstPort,
+    portB: secondPort,
+  };
+}
+
+function createKronReductionStep(
+  portOptions: readonly AppSelectOption[],
+): KronReductionStepDraft {
+  return {
+    id: `post-step:${crypto.randomUUID()}`,
+    type: "kron_reduction",
+    keepLabels: listPostProcessingBasisLabels(portOptions),
+  };
+}
+
+function formatPostProcessingOutputView(value: string) {
+  switch (value) {
+    case "fit-report":
+      return "Report";
+    case "matrix":
+    case "table":
+    default:
+      return "Matrix";
+  }
+}
+
+function formatPostProcessingRepresentationLabel(value: string) {
+  switch (value) {
+    case "db":
+      return "dB";
+    case "imaginary":
+      return "Imaginary";
+    case "magnitude":
+      return "Magnitude";
+    case "phase":
+      return "Phase";
+    case "real":
+      return "Real";
+    default:
+      return value;
+  }
+}
+
+function formatPostProcessingFamilyLabel(value: string) {
+  switch (value) {
+    case "s_matrix":
+      return "S Matrix";
+    case "y_matrix":
+      return "Y Matrix";
+    case "z_matrix":
+      return "Z Matrix";
+    default:
+      return value;
+  }
+}
+
+function formatPostProcessingStepLabel(stepType: PostProcessingStepType) {
+  return stepType === "coordinate_transform" ? "Coordinate Transformation" : "Kron Reduction";
+}
+
+function buildPostProcessingOperationDraft(step: PostProcessingStepDraft) {
+  if (step.type === "kron_reduction") {
+    const keepLabels = [...step.keepLabels];
+    if (keepLabels.length === 0) {
+      throw new Error("Kron Reduction requires at least one kept port.");
+    }
+
+    return {
+      operation: "kron_reduction",
+      enabled: true,
+      config: {
+        keep_labels: keepLabels,
+      },
+    };
+  }
+
+  const portA = parsePostProcessingPortNumber(step.portA);
+  const portB = parsePostProcessingPortNumber(step.portB);
+  if (portA === null || portB === null) {
+    throw new Error("Coordinate Transformation requires two valid ports.");
+  }
+  if (portA === portB) {
+    throw new Error("Coordinate Transformation requires two different ports.");
+  }
+
+  return {
+    operation: "coordinate_transform",
+    enabled: true,
+    config: {
+      template: "cm_dm",
+      weight_mode: "auto",
+      alpha: 0.5,
+      beta: 0.5,
+      port_a: portA,
+      port_b: portB,
+    },
+  };
+}
+
+function buildPostProcessingSetupDraft(
+  values: SimulationRequestValues,
+  steps: readonly PostProcessingStepDraft[],
+) {
+  const operations = steps.map(buildPostProcessingOperationDraft);
 
   return {
     output_view: values.postOutputView.trim(),
@@ -337,14 +468,51 @@ function buildPostProcessingSetupDraft(values: SimulationRequestValues) {
         trace_ids: parseCommaSeparatedStringValues(values.postSelectionTraceIds),
       },
     ],
-    operations: [
-      {
-        operation: values.postOperationName.trim(),
-        enabled: values.postOperationEnabled,
-        config,
-      },
-    ],
+    operations,
   };
+}
+
+function hydratePostProcessingSteps(
+  setup: PostProcessingSetup,
+  portOptions: readonly AppSelectOption[],
+): readonly PostProcessingStepDraft[] {
+  const availableBasisLabels = new Set(listPostProcessingBasisLabels(portOptions));
+  const hydratedSteps: PostProcessingStepDraft[] = [];
+
+  setup.operations.forEach((operation, index) => {
+    if (operation.operation === "kron_reduction") {
+      const keepLabels = Array.isArray(operation.config.keep_labels)
+        ? operation.config.keep_labels
+            .map((label) => String(label))
+            .filter((label) => availableBasisLabels.has(label))
+        : [];
+      hydratedSteps.push({
+        id: `post-step:hydrated-kron-${index}`,
+        type: "kron_reduction",
+        keepLabels,
+      });
+      return;
+    }
+
+    if (operation.operation === "coordinate_transform") {
+      const rawPortA =
+        typeof operation.config.port_a === "number"
+          ? `port_${operation.config.port_a}`
+          : portOptions[0]?.value ?? "port_1";
+      const rawPortB =
+        typeof operation.config.port_b === "number"
+          ? `port_${operation.config.port_b}`
+          : portOptions[1]?.value ?? rawPortA;
+      hydratedSteps.push({
+        id: `post-step:hydrated-transform-${index}`,
+        type: "coordinate_transform",
+        portA: rawPortA,
+        portB: rawPortB,
+      });
+    }
+  });
+
+  return hydratedSteps;
 }
 
 function resolveSetupStageState(input: Readonly<{
@@ -903,6 +1071,10 @@ export function SimulationWorkbenchShell() {
   const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
   const [isSimulationResultSupportOpen, setIsSimulationResultSupportOpen] = useState(false);
   const [simulationSetupBuildError, setSimulationSetupBuildError] = useState<string | null>(null);
+  const [postProcessingBuildError, setPostProcessingBuildError] = useState<string | null>(null);
+  const [postProcessingSteps, setPostProcessingSteps] = useState<readonly PostProcessingStepDraft[]>(
+    [],
+  );
   const [savedSimulationSetups, setSavedSimulationSetups] = useState<
     readonly SavedSimulationSetupRecord[]
   >([]);
@@ -943,6 +1115,9 @@ export function SimulationWorkbenchShell() {
   const harmonicBalanceEnabled = form.watch("simulationHarmonicBalanceEnabled");
   const ptcEnabled = form.watch("simulationPtcEnabled");
   const postSourceSelection = form.watch("postSourceSelection");
+  const postOutputView = form.watch("postOutputView");
+  const postSelectionTraceFamily = form.watch("postSelectionTraceFamily");
+  const postSelectionRepresentation = form.watch("postSelectionRepresentation");
   const watchedSimulationSources = form.watch("simulationSources");
   const selectedPtcPortsValue = form.watch("simulationPtcCompensatePorts");
 
@@ -1066,14 +1241,6 @@ export function SimulationWorkbenchShell() {
       return normalizedOutput;
     }
   }, [activeDefinition]);
-  const postProcessingRequestPreview = buildSimulationRequestSummary({
-    kind: "post_processing",
-    definitionId: resolvedDefinitionId,
-    definitionName: selectedDefinitionDisplay?.name ?? null,
-    datasetId: activeDatasetState.activeDataset?.datasetId ?? null,
-    datasetName: activeDatasetState.activeDataset?.name ?? null,
-    note: form.watch("postProcessingNote"),
-  });
   const visibleSavedSetups = useMemo(
     () => filterSavedSimulationSetupsByDefinition(savedSimulationSetups, resolvedDefinitionId),
     [resolvedDefinitionId, savedSimulationSetups],
@@ -1120,6 +1287,17 @@ export function SimulationWorkbenchShell() {
         label: port.label,
       })),
     [ptcPortOptions],
+  );
+  const postProcessingBasisOptions = useMemo(
+    () =>
+      sourcePortSelectOptions.map((option) => {
+        const portNumber = parsePostProcessingPortNumber(option.value);
+        return {
+          value: portNumber !== null ? String(portNumber) : option.value,
+          label: option.label,
+        };
+      }),
+    [sourcePortSelectOptions],
   );
   const selectedPtcPorts = useMemo(
     () => new Set(parseCommaSeparatedStringValues(selectedPtcPortsValue)),
@@ -1262,6 +1440,72 @@ export function SimulationWorkbenchShell() {
   const explicitUpstreamSimulationTaskId = resolvePostProcessingUpstreamTaskId(
     latestPostProcessingTaskDetail,
   );
+  const postProcessingOutputViewLabel = formatPostProcessingOutputView(
+    latestPostProcessingTaskDetail?.postProcessingSetup?.outputView ?? postOutputView,
+  );
+  const postProcessingSelectionFamily =
+    latestPostProcessingTaskDetail?.postProcessingSetup?.selections[0]?.traceFamily ??
+    postSelectionTraceFamily;
+  const postProcessingSelectionRepresentation =
+    latestPostProcessingTaskDetail?.postProcessingSetup?.selections[0]?.representation ??
+    postSelectionRepresentation;
+  const postProcessingStepCount =
+    latestPostProcessingTaskDetail?.postProcessingSetup?.operations.length ?? postProcessingSteps.length;
+
+  function appendPostProcessingStep(stepType: PostProcessingStepType) {
+    setPostProcessingBuildError(null);
+    setPostProcessingSteps((current) => [
+      ...current,
+      stepType === "coordinate_transform"
+        ? createCoordinateTransformStep(sourcePortSelectOptions)
+        : createKronReductionStep(sourcePortSelectOptions),
+    ]);
+  }
+
+  function removePostProcessingStep(stepId: string) {
+    setPostProcessingBuildError(null);
+    setPostProcessingSteps((current) => current.filter((step) => step.id !== stepId));
+  }
+
+  function updateCoordinateTransformStep(
+    stepId: string,
+    field: "portA" | "portB",
+    value: string,
+  ) {
+    setPostProcessingBuildError(null);
+    setPostProcessingSteps((current) =>
+      current.map((step) =>
+        step.id === stepId && step.type === "coordinate_transform"
+          ? { ...step, [field]: value }
+          : step,
+      ),
+    );
+  }
+
+  function toggleKronReductionKeepLabel(stepId: string, label: string) {
+    setPostProcessingBuildError(null);
+    setPostProcessingSteps((current) =>
+      current.map((step) => {
+        if (step.id !== stepId || step.type !== "kron_reduction") {
+          return step;
+        }
+
+        const selected = new Set(step.keepLabels);
+        if (selected.has(label)) {
+          selected.delete(label);
+        } else {
+          selected.add(label);
+        }
+
+        return {
+          ...step,
+          keepLabels: postProcessingBasisOptions
+            .map((option) => option.value)
+            .filter((value) => selected.has(value)),
+        };
+      }),
+    );
+  }
 
   function applySimulationSetupValues(
     nextValues: Readonly<SimulationSetupFormValues>,
@@ -1455,7 +1699,6 @@ export function SimulationWorkbenchShell() {
 
     const setup = latestPostProcessingTaskDetail.postProcessingSetup;
     const firstSelection = setup.selections[0];
-    const firstOperation = setup.operations[0];
 
     form.setValue("postOutputView", setup.outputView, { shouldDirty: false });
     form.setValue("postSelectionTraceFamily", firstSelection?.traceFamily ?? "", {
@@ -1470,17 +1713,41 @@ export function SimulationWorkbenchShell() {
     form.setValue("postSelectionTraceIds", firstSelection ? firstSelection.traceIds.join(", ") : "", {
       shouldDirty: false,
     });
-    form.setValue("postOperationName", firstOperation?.operation ?? "", { shouldDirty: false });
-    form.setValue("postOperationEnabled", firstOperation?.enabled ?? true, {
-      shouldDirty: false,
-    });
-    form.setValue(
-      "postOperationConfigJson",
-      firstOperation ? JSON.stringify(firstOperation.config, null, 2) : "{}",
-      { shouldDirty: false },
-    );
+    setPostProcessingSteps(hydratePostProcessingSteps(setup, sourcePortSelectOptions));
     setHydratedPostTaskId(latestPostProcessingTaskDetail.taskId);
-  }, [form, hydratedPostTaskId, latestPostProcessingTaskDetail]);
+  }, [form, hydratedPostTaskId, latestPostProcessingTaskDetail, sourcePortSelectOptions]);
+
+  useEffect(() => {
+    if (sourcePortSelectOptions.length === 0) {
+      setPostProcessingSteps([]);
+      return;
+    }
+
+    const availableTokens = new Set(sourcePortSelectOptions.map((option) => option.value));
+    const availableLabels = new Set(listPostProcessingBasisLabels(sourcePortSelectOptions));
+
+    setPostProcessingSteps((current) =>
+      current.map((step) => {
+        if (step.type === "coordinate_transform") {
+          const fallbackPort = sourcePortSelectOptions[0]?.value ?? "port_1";
+          return {
+            ...step,
+            portA: availableTokens.has(step.portA) ? step.portA : fallbackPort,
+            portB:
+              availableTokens.has(step.portB)
+                ? step.portB
+                : sourcePortSelectOptions[1]?.value ?? fallbackPort,
+          };
+        }
+
+        const keepLabels = step.keepLabels.filter((label) => availableLabels.has(label));
+        return {
+          ...step,
+          keepLabels,
+        };
+      }),
+    );
+  }, [sourcePortSelectOptions]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1816,6 +2083,7 @@ export function SimulationWorkbenchShell() {
     }
 
     setSimulationSetupBuildError(null);
+    setPostProcessingBuildError(null);
     const values = form.getValues();
     let simulationSetup = null;
     let postProcessingSetup = null;
@@ -1825,14 +2093,14 @@ export function SimulationWorkbenchShell() {
           ? buildSimulationSetupDraft(values)
           : null;
       postProcessingSetup =
-        kind === "post_processing" ? buildPostProcessingSetupDraft(values) : null;
+        kind === "post_processing" ? buildPostProcessingSetupDraft(values, postProcessingSteps) : null;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to build and submit workflow setup.";
       if (kind === "simulation") {
         setSimulationSetupBuildError(message);
       } else {
-        form.setError("postOperationConfigJson", { type: "manual", message });
+        setPostProcessingBuildError(message);
       }
       return;
     }
@@ -2850,15 +3118,19 @@ export function SimulationWorkbenchShell() {
           description="Inspect the latest simulation output and keep useful results close to the next step."
           status={simulationResultState}
         >
-          <StageNotice
-            tone={simulationResultState.tone}
-            title={`Simulation Result · ${simulationResultState.label}`}
-            message={
-              simulationStageErrorMessage
-                ? `${simulationResultState.message} ${simulationStageErrorMessage}`
-                : simulationResultState.message
-            }
-          />
+          {(simulationStageErrorMessage ||
+            (simulationResultState.label !== "Completed" &&
+              simulationResultState.label !== "Not started")) ? (
+            <StageNotice
+              tone={simulationResultState.tone}
+              title={`Simulation Result · ${simulationResultState.label}`}
+              message={
+                simulationStageErrorMessage
+                  ? `${simulationResultState.message} ${simulationStageErrorMessage}`
+                  : simulationResultState.message
+              }
+            />
+          ) : null}
 
           {displayedSimulationStageAuthority ? (
             <>
@@ -2868,18 +3140,7 @@ export function SimulationWorkbenchShell() {
                     <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
                       {attachedSimulationStageTask ? "Attached Run" : "Latest Run"}
                     </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-foreground">
-                        Task #{displayedSimulationStageAuthority.taskId}
-                      </p>
-                      <SurfaceTag tone={taskStatusTone(displayedSimulationStageAuthority.status)}>
-                        {formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)}
-                      </SurfaceTag>
-                      <SurfaceTag tone={simulationResultReady ? "success" : "default"}>
-                        {simulationResultReady ? "Explorer ready" : "Preparing result"}
-                      </SurfaceTag>
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {displayedSimulationTaskDetail?.progress.summary ??
                         displayedSimulationStageAuthority.summary}
                     </p>
@@ -2889,11 +3150,22 @@ export function SimulationWorkbenchShell() {
                         : "The explorer and save target appear as soon as the backend publishes the persisted result handoff."}
                     </p>
                   </div>
-                  <StageTaskActions
-                    task={displayedSimulationStageAuthority}
-                    resolvedTaskId={resolvedTaskId}
-                    onViewTask={attachTask}
-                  />
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <SurfaceTag tone="default">
+                      Task #{displayedSimulationStageAuthority.taskId}
+                    </SurfaceTag>
+                    <SurfaceTag tone={taskStatusTone(displayedSimulationStageAuthority.status)}>
+                      {formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)}
+                    </SurfaceTag>
+                    <SurfaceTag tone={simulationResultReady ? "success" : "default"}>
+                      {simulationResultReady ? "Explorer ready" : "Preparing result"}
+                    </SurfaceTag>
+                    <StageTaskActions
+                      task={displayedSimulationStageAuthority}
+                      resolvedTaskId={resolvedTaskId}
+                      onViewTask={attachTask}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2962,36 +3234,32 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={4}
           title="Post Processing Setup"
-          description="Author output view, trace selection, and operation config, then submit a structured post-processing setup payload."
+          description="Choose Raw or PTC, then add the processing steps for the next matrix result."
           status={postProcessingSetupState}
+          actions={
+            displayedSimulationStageAuthority ? (
+              <SurfaceTag tone="default">
+                Simulation #{displayedSimulationStageAuthority.taskId}
+              </SurfaceTag>
+            ) : null
+          }
         >
-          <StageNotice
-            tone={postProcessingSetupState.tone}
-            title={`Post Processing Setup · ${postProcessingSetupState.label}`}
-            message={postProcessingSetupState.message}
-          />
-
-          <SummaryCard
-            label="Upstream Simulation"
-            value={
-              displayedSimulationStageAuthority
-                ? `Task #${displayedSimulationStageAuthority.taskId}`
-                : "Simulation required"
-            }
-            detail={
-              simulationResultReady
-                ? "A persisted simulation result is available for downstream work."
-                : "Post-processing stays blocked until simulation materializes a persisted result."
-            }
-          />
+          {postProcessingSetupBlockedReason ? (
+            <StageNotice
+              tone={postProcessingSetupState.tone}
+              title={`Post Processing Setup · ${postProcessingSetupState.label}`}
+              message={postProcessingSetupState.message}
+            />
+          ) : null}
 
           <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
             <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-              <CompactField label="Source Selection">
+              <CompactField label="Source">
                 <AppInlineSelect
                   ariaLabel="Post-processing source selection"
                   value={postSourceSelection}
                   onChange={(nextValue) => {
+                    setPostProcessingBuildError(null);
                     form.setValue("postSourceSelection", nextValue as "raw" | "ptc", {
                       shouldDirty: true,
                     });
@@ -3008,24 +3276,13 @@ export function SimulationWorkbenchShell() {
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-4">
-            <CompactField label="Output View">
-              <AppInlineSelect
-                ariaLabel="Post-processing output view"
-                value={form.watch("postOutputView")}
-                onChange={(nextValue) => {
-                  form.setValue("postOutputView", nextValue, {
-                    shouldDirty: true,
-                  });
-                }}
-                options={postProcessingOutputViewOptions}
-              />
-            </CompactField>
+          <div className="grid gap-4 lg:grid-cols-3">
             <CompactField label="Trace Family" error={form.formState.errors.postSelectionTraceFamily?.message}>
               <AppInlineSelect
                 ariaLabel="Post-processing trace family"
-                value={form.watch("postSelectionTraceFamily")}
+                value={postSelectionTraceFamily}
                 onChange={(nextValue) => {
+                  setPostProcessingBuildError(null);
                   form.setValue("postSelectionTraceFamily", nextValue, {
                     shouldDirty: true,
                   });
@@ -3034,13 +3291,14 @@ export function SimulationWorkbenchShell() {
               />
             </CompactField>
             <CompactField
-              label="Representation"
+              label="View"
               error={form.formState.errors.postSelectionRepresentation?.message}
             >
               <AppInlineSelect
                 ariaLabel="Post-processing representation"
-                value={form.watch("postSelectionRepresentation")}
+                value={postSelectionRepresentation}
                 onChange={(nextValue) => {
+                  setPostProcessingBuildError(null);
                   form.setValue("postSelectionRepresentation", nextValue, {
                     shouldDirty: true,
                   });
@@ -3048,64 +3306,156 @@ export function SimulationWorkbenchShell() {
                 options={postProcessingRepresentationOptions}
               />
             </CompactField>
-            <CompactField label="Selection Design Id">
-              <SetupTextInput
-                {...form.register("postSelectionDesignId")}
-                placeholder="design_flux_scan_a"
-              />
-            </CompactField>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
             <CompactField
-              label="Trace Ids"
-              detail="Comma-separated trace ids included in the downstream selection."
-              className="md:col-span-2"
+              label="Trace IDs"
+              detail="Optional. Limit post-processing to specific upstream traces."
             >
               <SetupTextInput
                 {...form.register("postSelectionTraceIds")}
                 placeholder="trace_001, trace_002"
               />
             </CompactField>
-            <CompactField label="Operation Name" error={form.formState.errors.postOperationName?.message}>
-              <SetupTextInput
-                {...form.register("postOperationName")}
-                placeholder="normalize"
-              />
-            </CompactField>
           </div>
 
-          <SetupSlideToggle
-            checked={form.watch("postOperationEnabled")}
-            label="Enable operation"
-            description="Controls whether this post-processing operation is included in the downstream payload."
-            onCheckedChange={(nextChecked) => {
-              form.setValue("postOperationEnabled", nextChecked, {
-                shouldDirty: true,
-              });
-            }}
-          />
+          <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Steps
+                </p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Add Coordinate Transformation or Kron Reduction in the order they should run.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    appendPostProcessingStep("coordinate_transform");
+                  }}
+                  disabled={sourcePortSelectOptions.length < 2}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Coordinate Transformation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    appendPostProcessingStep("kron_reduction");
+                  }}
+                  disabled={postProcessingBasisOptions.length === 0}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Kron Reduction
+                </button>
+              </div>
+            </div>
+
+            {postProcessingSteps.length === 0 ? (
+              <div className="mt-4 rounded-[0.95rem] border border-dashed border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
+                No steps yet. Add the transformations you want to apply after the simulation result.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {postProcessingSteps.map((step, index) => (
+                  <div
+                    key={step.id}
+                    className="rounded-[0.95rem] border border-border bg-surface px-4 py-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            Step {index + 1} · {formatPostProcessingStepLabel(step.type)}
+                          </p>
+                          <SurfaceTag tone="default">Step {index + 1}</SurfaceTag>
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {step.type === "coordinate_transform"
+                            ? "Build a common/differential transform from two ports."
+                            : "Reduce the basis to the ports you want to keep."}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          removePostProcessingStep(step.id);
+                        }}
+                        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-rose-300 hover:bg-rose-50 dark:hover:border-rose-400/40 dark:hover:bg-rose-500/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remove
+                      </button>
+                    </div>
+
+                    {step.type === "coordinate_transform" ? (
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <CompactField label="Port A">
+                          <AppInlineSelect
+                            ariaLabel={`Coordinate transform step ${index + 1} port A`}
+                            value={step.portA}
+                            onChange={(nextValue) => {
+                              updateCoordinateTransformStep(step.id, "portA", nextValue);
+                            }}
+                            options={sourcePortSelectOptions}
+                          />
+                        </CompactField>
+                        <CompactField label="Port B">
+                          <AppInlineSelect
+                            ariaLabel={`Coordinate transform step ${index + 1} port B`}
+                            value={step.portB}
+                            onChange={(nextValue) => {
+                              updateCoordinateTransformStep(step.id, "portB", nextValue);
+                            }}
+                            options={sourcePortSelectOptions}
+                          />
+                        </CompactField>
+                      </div>
+                    ) : (
+                      <div className="mt-4 space-y-3">
+                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                          Keep Ports
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {postProcessingBasisOptions.map((option) => {
+                            const isSelected = step.keepLabels.includes(option.value);
+                            return (
+                              <button
+                                key={`${step.id}:${option.value}`}
+                                type="button"
+                                onClick={() => {
+                                  toggleKronReductionKeepLabel(step.id, option.value);
+                                }}
+                                className={cx(
+                                  "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition",
+                                  isSelected
+                                    ? "border-primary/35 bg-primary text-primary-foreground"
+                                    : "border-border bg-background text-foreground hover:border-primary/35 hover:bg-primary/10",
+                                )}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
             <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Operation Config JSON
-            </span>
-            <textarea
-              {...form.register("postOperationConfigJson")}
-              rows={4}
-              placeholder='{"mode":"strict"}'
-              className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
-            />
-          </label>
-
-          <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-            <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Post Processing Note
+              Note
             </span>
             <textarea
               {...form.register("postProcessingNote")}
               rows={4}
-              placeholder="Optional context for the downstream stage, for example export bundle or analysis handoff."
+              placeholder="Optional context for this post-processing run."
               className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
             />
           </label>
@@ -3115,104 +3465,63 @@ export function SimulationWorkbenchShell() {
               {form.formState.errors.postProcessingNote.message}
             </p>
           ) : null}
-          {form.formState.errors.postOperationConfigJson ? (
+          {postProcessingBuildError ? (
             <p className="text-sm text-rose-700 dark:text-rose-300">
-              {form.formState.errors.postOperationConfigJson.message}
+              {postProcessingBuildError}
             </p>
           ) : null}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Submission Preview
-              </p>
-              <p className="mt-2 text-foreground">{postProcessingRequestPreview}</p>
-              {latestPostProcessingTaskDetail?.postProcessingSetup ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Latest post-processing setup was rehydrated from task #{latestPostProcessingTaskDetail.taskId}.
-                </p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void handleSubmit("post_processing");
-              }}
-              disabled={
-                taskMutationStatus.state === "submitting" || postProcessingSetupBlockedReason !== null
-              }
-              className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {taskMutationStatus.state === "submitting" ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <WandSparkles className="h-4 w-4" />
-              )}
-              Run Post Processing
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void handleSubmit("post_processing");
+            }}
+            disabled={
+              taskMutationStatus.state === "submitting" || postProcessingSetupBlockedReason !== null
+            }
+            className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {taskMutationStatus.state === "submitting" ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <WandSparkles className="h-4 w-4" />
+            )}
+            Run Post Processing
+          </button>
 
           {latestPostProcessingStageAuthority ? (
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
                     Latest Post Processing Run
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">
-                    Task #{latestPostProcessingStageAuthority.taskId}
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {latestPostProcessingTaskDetail?.progress.summary ??
                       latestPostProcessingStageAuthority.summary}
                   </p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {postProcessingResultReady
+                      ? "The processed result is attached and ready to review below."
+                      : "The processed result appears below as soon as the downstream run finishes."}
+                  </p>
                 </div>
-                <SurfaceTag tone={taskStatusTone(latestPostProcessingStageAuthority.status)}>
-                  {formatSimulationTaskStatusLabel(latestPostProcessingStageAuthority.status)}
-                </SurfaceTag>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <SummaryCard
-                  label="Submitted"
-                  value={latestPostProcessingStageAuthority.submittedAt ?? "Pending"}
-                />
-                <SummaryCard
-                  label="Upstream"
-                  value={
-                    explicitUpstreamSimulationTaskId !== null
-                      ? `Simulation #${explicitUpstreamSimulationTaskId}`
-                      : displayedSimulationStageAuthority
-                        ? `Simulation #${displayedSimulationStageAuthority.taskId}`
-                        : "Pending"
-                  }
-                  detail={
-                    explicitUpstreamSimulationTaskId !== null
-                      ? "Recovered from persisted post-processing result provenance."
-                      : displayedSimulationStageAuthority
-                        ? attachedSimulationStageTask
-                          ? "Paired with the attached simulation result visible in the current page context."
-                          : "Paired with the latest simulation result visible in the current page context."
-                        : "Simulation result is still required."
-                  }
-                />
-                <SummaryCard
-                  label="Result"
-                  value={postProcessingResultReady ? "Ready" : "Pending"}
-                  detail={
-                    latestPostProcessingTaskDetail?.resultHandoff?.availability
-                      ? `Persisted result handoff: ${latestPostProcessingTaskDetail.resultHandoff.availability}`
-                      : latestPostProcessingStageAuthority.resultAvailability
-                        ? `Backend result availability: ${latestPostProcessingStageAuthority.resultAvailability}`
-                      : "Result status is inferred from persisted task detail."
-                  }
-                />
-              </div>
-              <div className="mt-4">
-                <StageTaskActions
-                  task={latestPostProcessingStageAuthority}
-                  resolvedTaskId={resolvedTaskId}
-                  onViewTask={attachTask}
-                />
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <SurfaceTag tone="default">
+                    Task #{latestPostProcessingStageAuthority.taskId}
+                  </SurfaceTag>
+                  <SurfaceTag tone={taskStatusTone(latestPostProcessingStageAuthority.status)}>
+                    {formatSimulationTaskStatusLabel(latestPostProcessingStageAuthority.status)}
+                  </SurfaceTag>
+                  <SurfaceTag tone={postProcessingResultReady ? "success" : "default"}>
+                    {postProcessingResultReady ? "Result ready" : "Processing"}
+                  </SurfaceTag>
+                  <StageTaskActions
+                    task={latestPostProcessingStageAuthority}
+                    resolvedTaskId={resolvedTaskId}
+                    onViewTask={attachTask}
+                  />
+                </div>
               </div>
             </div>
           ) : null}
@@ -3221,68 +3530,96 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={5}
           title="Post Processing Result"
-          description="Keep the downstream result tied to its post-processing stage and make the upstream simulation relation explicit."
+          description="Review the processed matrix result while keeping its simulation relation visible."
           status={postProcessingResultState}
+          actions={
+            explicitUpstreamSimulationTaskId !== null ? (
+              <SurfaceTag tone="default">
+                Simulation #{explicitUpstreamSimulationTaskId}
+              </SurfaceTag>
+            ) : displayedSimulationStageAuthority ? (
+              <SurfaceTag tone="default">
+                Simulation #{displayedSimulationStageAuthority.taskId}
+              </SurfaceTag>
+            ) : null
+          }
         >
-          <StageNotice
-            tone={postProcessingResultState.tone}
-            title={`Post Processing Result · ${postProcessingResultState.label}`}
-            message={
-              postProcessingStageErrorMessage
-                ? `${postProcessingResultState.message} ${postProcessingStageErrorMessage}`
-                : postProcessingResultState.message
-            }
-          />
+          {(postProcessingStageErrorMessage ||
+            (postProcessingResultState.label !== "Completed" &&
+              postProcessingResultState.label !== "Not started")) ? (
+            <StageNotice
+              tone={postProcessingResultState.tone}
+              title={`Post Processing Result · ${postProcessingResultState.label}`}
+              message={
+                postProcessingStageErrorMessage
+                  ? `${postProcessingResultState.message} ${postProcessingStageErrorMessage}`
+                  : postProcessingResultState.message
+              }
+            />
+          ) : null}
 
           {latestPostProcessingStageAuthority ? (
-            <>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <SummaryCard
-                  label="Latest Run"
-                  value={`#${latestPostProcessingStageAuthority.taskId}`}
-                  detail={latestPostProcessingStageAuthority.summary}
-                />
-                <SummaryCard
-                  label="Analysis Run"
-                  value={
-                    postProcessingResultSummary.analysisRunId !== null
-                      ? String(postProcessingResultSummary.analysisRunId)
-                      : "Pending"
-                  }
-                />
-                <SummaryCard
-                  label="Result Handles"
-                  value={String(postProcessingResultSummary.resultHandleCount)}
-                  detail={`${postProcessingResultSummary.materializedHandleCount} materialized`}
-                />
-                <SummaryCard
-                  label="Trace Payload"
-                  value={postProcessingResultSummary.hasTracePayload ? "Attached" : "Pending"}
-                  detail={`${postProcessingResultSummary.metadataRecordCount} metadata records`}
-                />
-              </div>
-
-              <StageNotice
-                tone={postProcessingResultReady ? "success" : postProcessingResultState.tone}
-                title="Downstream handoff"
-                message={
-                  explicitUpstreamSimulationTaskId !== null
-                    ? `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId} and traces back to simulation task #${explicitUpstreamSimulationTaskId}.`
-                    : displayedSimulationStageAuthority
-                      ? `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId}. The page can pair it with ${
-                          attachedSimulationStageTask ? "the attached" : "the latest"
-                        } simulation task #${displayedSimulationStageAuthority.taskId}, but the backend payload does not expose a narrower upstream task id here.`
-                      : `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId}. Upstream simulation context is not currently available in the page.`
-                }
-                actions={
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Latest Result
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {latestPostProcessingTaskDetail?.progress.summary ??
+                      latestPostProcessingStageAuthority.summary}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {explicitUpstreamSimulationTaskId !== null
+                      ? `This processed result stays tied to simulation task #${explicitUpstreamSimulationTaskId}.`
+                      : displayedSimulationStageAuthority
+                        ? `This processed result stays tied to simulation task #${displayedSimulationStageAuthority.taskId}.`
+                        : "Upstream simulation context is not currently available in the page."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <SurfaceTag tone="default">
+                    Task #{latestPostProcessingStageAuthority.taskId}
+                  </SurfaceTag>
+                  <SurfaceTag tone={taskStatusTone(latestPostProcessingStageAuthority.status)}>
+                    {formatSimulationTaskStatusLabel(latestPostProcessingStageAuthority.status)}
+                  </SurfaceTag>
+                  <SurfaceTag tone={postProcessingResultReady ? "success" : "default"}>
+                    {postProcessingResultReady ? "Ready" : "Pending"}
+                  </SurfaceTag>
                   <StageTaskActions
                     task={latestPostProcessingStageAuthority}
                     resolvedTaskId={resolvedTaskId}
                     onViewTask={attachTask}
                   />
-                }
-              />
-            </>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <SurfaceTag tone="default">{postProcessingOutputViewLabel}</SurfaceTag>
+                <SurfaceTag tone="default">
+                  {formatPostProcessingFamilyLabel(postProcessingSelectionFamily)}
+                </SurfaceTag>
+                <SurfaceTag tone="default">
+                  {formatPostProcessingRepresentationLabel(postProcessingSelectionRepresentation)}
+                </SurfaceTag>
+                <SurfaceTag tone="default">
+                  {postProcessingStepCount} step{postProcessingStepCount === 1 ? "" : "s"}
+                </SurfaceTag>
+                {postProcessingResultSummary.analysisRunId !== null ? (
+                  <SurfaceTag tone="success">
+                    Analysis Run {postProcessingResultSummary.analysisRunId}
+                  </SurfaceTag>
+                ) : null}
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                {postProcessingResultSummary.resultHandleCount} result handle
+                {postProcessingResultSummary.resultHandleCount === 1 ? "" : "s"} ·{" "}
+                {postProcessingResultSummary.materializedHandleCount} materialized ·{" "}
+                {postProcessingResultSummary.hasTracePayload ? "trace payload attached" : "trace payload pending"}
+              </p>
+            </div>
           ) : null}
         </WorkflowStageSection>
       </div>
