@@ -71,9 +71,16 @@ class CharacterizationTaskRepository(Protocol):
     def list_tasks(self) -> Sequence[TaskDetail]: ...
 
 
+class DurableCircuitDefinitionRepository(Protocol):
+    def list_all_circuit_definitions(self) -> Sequence[CircuitDefinitionRecord]: ...
+
+    def save_circuit_definition(self, record: CircuitDefinitionRecord) -> None: ...
+
+
 class InMemoryRewriteCatalogRepository:
     def __init__(
         self,
+        durable_definition_repository: DurableCircuitDefinitionRepository | None = None,
         durable_publication_repository: SqliteResearchDataPublicationRepository | None = None,
         task_repository: CharacterizationTaskRepository | None = None,
     ) -> None:
@@ -86,13 +93,28 @@ class InMemoryRewriteCatalogRepository:
         self._characterization_run_history = _seed_characterization_run_history()
         self._characterization_results = _seed_characterization_results()
         self._characterization_result_details = _seed_characterization_result_details()
+        self._durable_definition_repository = durable_definition_repository
         self._circuit_definitions = {
             definition.definition_id: definition for definition in _seed_circuit_definitions()
         }
+        durable_definitions = tuple(
+            self._durable_definition_repository.list_all_circuit_definitions()
+            if self._durable_definition_repository is not None
+            else ()
+        )
+        for definition in durable_definitions:
+            if definition.lifecycle_state == "deleted":
+                self._circuit_definitions.pop(definition.definition_id, None)
+                continue
+            self._circuit_definitions[definition.definition_id] = definition
         self._durable_publication_repository = durable_publication_repository
         self._task_repository = task_repository
         self._next_dataset_id = 100
-        self._next_definition_id = max(self._circuit_definitions) + 1
+        all_definition_ids = {
+            *self._circuit_definitions.keys(),
+            *(definition.definition_id for definition in durable_definitions),
+        }
+        self._next_definition_id = (max(all_definition_ids) + 1) if all_definition_ids else 1
 
     def list_dataset_details(self) -> list[DatasetDetail]:
         return list(self._datasets.values())
@@ -789,6 +811,7 @@ class InMemoryRewriteCatalogRepository:
             source_text=draft.source_text,
         )
         self._circuit_definitions[definition.definition_id] = definition
+        self._persist_circuit_definition(definition)
         self._next_definition_id += 1
         return definition
 
@@ -819,6 +842,7 @@ class InMemoryRewriteCatalogRepository:
             validation_summary=inspection.validation_summary,
         )
         self._circuit_definitions[definition_id] = updated_definition
+        self._persist_circuit_definition(updated_definition)
         return updated_definition
 
     def publish_circuit_definition(
@@ -835,6 +859,7 @@ class InMemoryRewriteCatalogRepository:
             concurrency_token=_next_concurrency_token(definition.concurrency_token),
         )
         self._circuit_definitions[definition_id] = published_definition
+        self._persist_circuit_definition(published_definition)
         return published_definition
 
     def clone_circuit_definition(
@@ -863,12 +888,26 @@ class InMemoryRewriteCatalogRepository:
             lineage_parent_id=source_definition.definition_id,
         )
         self._circuit_definitions[cloned_definition.definition_id] = cloned_definition
+        self._persist_circuit_definition(cloned_definition)
         self._next_definition_id += 1
         return cloned_definition
 
     def delete_circuit_definition(self, definition_id: int) -> bool:
         existing = self._circuit_definitions.pop(definition_id, None)
+        if existing is not None:
+            deleted_definition = replace(
+                existing,
+                lifecycle_state="deleted",
+                updated_at=_timestamp_for_definition(existing.definition_id + 300),
+                concurrency_token=_next_concurrency_token(existing.concurrency_token),
+            )
+            self._persist_circuit_definition(deleted_definition)
         return existing is not None
+
+    def _persist_circuit_definition(self, definition: CircuitDefinitionRecord) -> None:
+        if self._durable_definition_repository is None:
+            return
+        self._durable_definition_repository.save_circuit_definition(definition)
 
 
 def _build_circuit_definition_record(

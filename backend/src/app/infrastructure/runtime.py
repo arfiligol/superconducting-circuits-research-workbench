@@ -15,6 +15,7 @@ from src.app.infrastructure.local_simulation_execution_driver import (
     LocalTaskExecutionDriver,
 )
 from src.app.infrastructure.persistence import (
+    SqliteCircuitDefinitionRepository,
     SqliteResearchDataPublicationRepository,
     SqliteRewriteStorageMetadataRepository,
     SqliteRewriteTaskSnapshotRepository,
@@ -64,8 +65,18 @@ def get_research_data_publication_repository() -> SqliteResearchDataPublicationR
 
 
 @lru_cache(maxsize=1)
+def get_circuit_definition_persistence_repository() -> SqliteCircuitDefinitionRepository:
+    settings = get_settings()
+    bootstrap_metadata_schema(settings.database_path)
+    return SqliteCircuitDefinitionRepository(
+        create_metadata_session_factory(settings.database_path)
+    )
+
+
+@lru_cache(maxsize=1)
 def get_rewrite_catalog_repository() -> InMemoryRewriteCatalogRepository:
     return InMemoryRewriteCatalogRepository(
+        durable_definition_repository=get_circuit_definition_persistence_repository(),
         durable_publication_repository=get_research_data_publication_repository(),
         task_repository=get_rewrite_task_repository(),
     )
@@ -265,6 +276,7 @@ def get_task_execution_runtime() -> RewriteExecutionRuntime:
 
 def reset_runtime_state() -> None:
     get_settings.cache_clear()
+    get_circuit_definition_persistence_repository.cache_clear()
     get_rewrite_catalog_repository.cache_clear()
     get_rewrite_app_state_repository.cache_clear()
     get_storage_metadata_repository.cache_clear()

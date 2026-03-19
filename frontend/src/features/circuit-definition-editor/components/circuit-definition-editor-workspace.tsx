@@ -22,6 +22,7 @@ import {
 import {
   buildCircuitDefinitionDraft,
   formatCircuitNetlistSource,
+  parseCircuitNetlistSource,
 } from "@/features/circuit-definition-editor/lib/netlist";
 import {
   buildCircuitDefinitionDraftSurface,
@@ -189,20 +190,31 @@ export function CircuitDefinitionEditorWorkspace() {
     }
 
     if (activeDefinition) {
-      const parsedSource = formatCircuitNetlistSource(activeDefinition.source_text, {
-        canonicalName: activeDefinition.name,
-      });
+      const parsedSource = formatCircuitNetlistSource(activeDefinition.source_text);
       form.reset({
-        name: activeDefinition.name,
+        name: parsedSource.document?.name?.trim() || "",
         source_text: parsedSource.formattedSource || activeDefinition.source_text,
       });
     }
   }, [activeDefinition, form, selectedDefinitionId]);
 
-  async function handleFormat() {
-    const formatted = formatCircuitNetlistSource(form.getValues("source_text"), {
-      canonicalName: form.getValues("name"),
+  const sourceText = form.watch("source_text");
+  const parsedSourceDraft = useMemo(() => parseCircuitNetlistSource(sourceText), [sourceText]);
+  const definitionName = parsedSourceDraft.document?.name?.trim() || "";
+
+  useEffect(() => {
+    if (form.getValues("name") === definitionName) {
+      return;
+    }
+    form.setValue("name", definitionName, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: false,
     });
+  }, [definitionName, form]);
+
+  async function handleFormat() {
+    const formatted = formatCircuitNetlistSource(form.getValues("source_text"));
     form.setValue("source_text", formatted.formattedSource, {
       shouldDirty: true,
       shouldTouch: true,
@@ -232,8 +244,6 @@ export function CircuitDefinitionEditorWorkspace() {
     };
   }, [form]);
 
-  const definitionName = form.watch("name");
-  const sourceText = form.watch("source_text");
   const draftSurface = useMemo(
     () =>
       buildCircuitDefinitionDraftSurface({
@@ -347,9 +357,10 @@ export function CircuitDefinitionEditorWorkspace() {
       activeDefinition,
     });
     replaceDefinitionId(String(detail.definition_id));
+    const persistedSource = formatCircuitNetlistSource(nextDraft.formattedSource);
     form.reset({
-      name: detail.name,
-      source_text: nextDraft.formattedSource,
+      name: persistedSource.document?.name?.trim() || "",
+      source_text: persistedSource.formattedSource,
     });
   }
 
@@ -376,11 +387,9 @@ export function CircuitDefinitionEditorWorkspace() {
     }
 
     if (activeDefinition) {
-      const parsedSource = formatCircuitNetlistSource(activeDefinition.source_text, {
-        canonicalName: activeDefinition.name,
-      });
+      const parsedSource = formatCircuitNetlistSource(activeDefinition.source_text);
       form.reset({
-        name: activeDefinition.name,
+        name: parsedSource.document?.name?.trim() || "",
         source_text: parsedSource.formattedSource || activeDefinition.source_text,
       });
     }
@@ -392,11 +401,10 @@ export function CircuitDefinitionEditorWorkspace() {
     }
 
     const detail = await publishDefinition(activeDefinition.definition_id);
+    const parsedSource = formatCircuitNetlistSource(detail.source_text);
     form.reset({
-      name: detail.name,
-      source_text: formatCircuitNetlistSource(detail.source_text, {
-        canonicalName: detail.name,
-      }).formattedSource,
+      name: parsedSource.document?.name?.trim() || "",
+      source_text: parsedSource.formattedSource,
     });
   }
 
@@ -407,11 +415,10 @@ export function CircuitDefinitionEditorWorkspace() {
 
     const detail = await cloneDefinition(activeDefinition.definition_id);
     replaceDefinitionId(String(detail.definition_id));
+    const parsedSource = formatCircuitNetlistSource(detail.source_text);
     form.reset({
-      name: detail.name,
-      source_text: formatCircuitNetlistSource(detail.source_text, {
-        canonicalName: detail.name,
-      }).formattedSource,
+      name: parsedSource.document?.name?.trim() || "",
+      source_text: parsedSource.formattedSource,
     });
   }
 
@@ -675,7 +682,7 @@ export function CircuitDefinitionEditorWorkspace() {
                 ) : null}
               </h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Edit the definition name and JSON source here. Saving refreshes the preview and notices below.
+                Edit the JSON source here. Saving refreshes the preview and notices below.
               </p>
             </div>
 
@@ -690,6 +697,7 @@ export function CircuitDefinitionEditorWorkspace() {
 
             <div className="mt-4 grid gap-4">
               <label className="grid gap-2 text-sm">
+                <input type="hidden" {...form.register("name")} />
                 <span className="flex items-center justify-between gap-3">
                   <span className="font-medium text-foreground">Canonical Source Name</span>
                   <button
@@ -707,8 +715,10 @@ export function CircuitDefinitionEditorWorkspace() {
                 </span>
                 <input
                   type="text"
-                  className="rounded-[0.8rem] border border-border bg-background px-4 py-3 text-sm text-foreground outline-none"
-                  {...form.register("name")}
+                  value={definitionName}
+                  disabled
+                  readOnly
+                  className="rounded-[0.8rem] border border-border bg-surface px-4 py-3 text-sm text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-100"
                 />
                 {form.formState.errors.name ? (
                   <span className="text-xs text-rose-700 dark:text-rose-300">

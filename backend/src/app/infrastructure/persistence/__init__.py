@@ -1,3 +1,6 @@
+from src.app.infrastructure.persistence.circuit_definition_repository import (
+    SqliteCircuitDefinitionRepository,
+)
 from src.app.infrastructure.persistence.database import (
     bootstrap_metadata_schema,
     build_sqlite_database_url,
@@ -6,6 +9,7 @@ from src.app.infrastructure.persistence.database import (
     resolve_metadata_database_path,
 )
 from src.app.infrastructure.persistence.models import (
+    RewriteCircuitDefinitionRecord,
     RewriteDatasetDesignRecord,
     RewriteMetadataBase,
     RewritePublishedSimulationResultRecord,
@@ -28,6 +32,7 @@ from src.app.infrastructure.persistence.task_snapshot_repository import (
 )
 
 __all__ = [
+    "RewriteCircuitDefinitionRecord",
     "RewriteDatasetDesignRecord",
     "RewriteMetadataBase",
     "RewritePublishedSimulationResultRecord",
@@ -38,6 +43,7 @@ __all__ = [
     "RewriteTaskEventRecord",
     "RewriteTaskRecord",
     "RewriteTracePayloadRecord",
+    "SqliteCircuitDefinitionRepository",
     "SqliteResearchDataPublicationRepository",
     "SqliteRewriteStorageMetadataRepository",
     "SqliteRewriteTaskSnapshotRepository",

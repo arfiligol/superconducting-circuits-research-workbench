@@ -826,6 +826,9 @@ describe("circuit definition workspace boundaries", () => {
     expect(editorWorkspaceSource).toContain("Active Schema");
     expect(editorWorkspaceSource).toContain("Canonical Source");
     expect(editorWorkspaceSource).toContain("Canonical Source Name");
+    expect(editorWorkspaceSource).toContain("parseCircuitNetlistSource");
+    expect(editorWorkspaceSource).toContain("value={definitionName}");
+    expect(editorWorkspaceSource).toContain("disabled");
     expect(editorWorkspaceSource).toContain("Validation & Preview");
     expect(editorWorkspaceSource).toContain("Circuit Netlist Quick Reference");
     expect(editorWorkspaceSource).toContain("Back to Schemas");
@@ -842,6 +845,7 @@ describe("circuit definition workspace boundaries", () => {
     expect(editorWorkspaceSource).not.toContain("Catalog Rail");
     expect(editorWorkspaceSource).not.toContain("Open another schema without leaving the editor workflow.");
     expect(editorWorkspaceSource).not.toContain("Local Contract Diagnostics");
+    expect(editorWorkspaceSource).not.toContain("Edit the definition name and JSON source here.");
     expect(editorWorkspaceSource).toContain("extensions={[json()]}");
     expect(editorWorkspaceSource).toContain("normalized JSON");
   });

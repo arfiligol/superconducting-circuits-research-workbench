@@ -44,6 +44,44 @@ def _sample_definition_source(circuit_name: str) -> str:
     )
 
 
+def _simulation_setup_payload() -> dict[str, object]:
+    return {
+        "frequency_sweep": {
+            "start_ghz": 4.0,
+            "stop_ghz": 8.0,
+            "point_count": 401,
+            "spacing": "linear",
+        },
+        "parameter_sweeps": [
+            {
+                "parameter": "junction.inductance_lj",
+                "values": [8.4, 8.6, 8.8],
+                "unit": "nH",
+            }
+        ],
+        "solver": {
+            "solver_family": "hfss-hb",
+            "max_iterations": 40,
+            "convergence_tolerance": 1e-6,
+            "harmonic_balance": {
+                "enabled": True,
+                "harmonic_count": 7,
+                "oversample_factor": 3,
+            },
+        },
+        "sources": [
+            {
+                "source_id": "drive-port-a",
+                "kind": "port_drive",
+                "target": "port_A",
+                "amplitude": -35.0,
+                "frequency_ghz": 6.45,
+                "phase_deg": 0.0,
+            }
+        ],
+    }
+
+
 def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None:
     catalog_response = client.get("/circuit-definitions")
 
@@ -136,3 +174,46 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     assert refreshed_catalog_rows[0]["name"] == "RewriteDefinitionAuthoringSmokeV2"
     assert "source_text" not in refreshed_catalog_rows[0]
     assert "normalized_output" not in refreshed_catalog_rows[0]
+
+
+def test_local_definition_persists_across_runtime_reset_and_can_submit_simulation_task() -> None:
+    switch_response = client.patch("/session/runtime-mode", json={"runtime_mode": "local"})
+    assert switch_response.status_code == 200
+
+    create_response = client.post(
+        "/circuit-definitions",
+        json={
+            "name": "PersistedLocalDefinition",
+            "source_text": _sample_definition_source("PersistedLocalDefinition"),
+        },
+    )
+
+    assert create_response.status_code == 201
+    created_detail = create_response.json()["data"]["definition"]
+    definition_id = int(created_detail["definition_id"])
+
+    reset_runtime_state()
+    client.cookies.clear()
+
+    switched_local = client.patch("/session/runtime-mode", json={"runtime_mode": "local"})
+    assert switched_local.status_code == 200
+
+    detail_response = client.get(f"/circuit-definitions/{definition_id}")
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()["data"]
+    assert detail_payload["definition_id"] == definition_id
+    assert detail_payload["name"] == "PersistedLocalDefinition"
+
+    submit_response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "definition_id": definition_id,
+            "simulation_setup": _simulation_setup_payload(),
+        },
+    )
+
+    assert submit_response.status_code == 201
+    task = submit_response.json()["data"]["task"]
+    assert task["definition_id"] == definition_id
+    assert task["status"] == "completed"

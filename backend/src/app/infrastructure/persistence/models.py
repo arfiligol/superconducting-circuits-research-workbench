@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, ForeignKey, Index, String, func
+from sqlalchemy import JSON, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -149,6 +149,61 @@ class RewriteDatasetDesignRecord(RewriteMetadataBase):
     normalized_name: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     updated_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
+class RewriteCircuitDefinitionRecord(RewriteMetadataBase):
+    __tablename__ = "rewrite_circuit_definitions"
+    __table_args__ = (
+        Index(
+            "ix_rewrite_circuit_definitions_definition_id",
+            "definition_id",
+            unique=True,
+        ),
+        Index(
+            "ix_rewrite_circuit_definitions_workspace_visibility",
+            "workspace_id",
+            "visibility_scope",
+        ),
+        Index(
+            "ix_rewrite_circuit_definitions_lifecycle_state",
+            "lifecycle_state",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    definition_id: Mapped[int] = mapped_column(nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    visibility_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    owner_display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at_iso: Mapped[str] = mapped_column(String(32), nullable=False)
+    updated_at_iso: Mapped[str] = mapped_column(String(32), nullable=False)
+    concurrency_token: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_text: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_output: Mapped[str] = mapped_column(Text, nullable=False)
+    validation_notices_json: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    validation_summary_json: Mapped[dict[str, object]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    preview_artifacts_json: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    lineage_parent_id: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(
         nullable=False,
         server_default=func.current_timestamp(),
