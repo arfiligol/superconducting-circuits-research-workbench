@@ -19,15 +19,6 @@ import {
   cx,
 } from "@/features/shared/components/surface-kit";
 import { ApiError } from "@/lib/api/client";
-import type { TaskExecutionStatus } from "@/lib/api/tasks";
-import { requestOpenGlobalContext } from "@/components/layout/workspace-shell-contract";
-import {
-  resolveTaskRecoveryNotice,
-  summarizeTaskContextBinding,
-  summarizeTaskLifecycle,
-  summarizeTaskResultHandoff,
-  summarizeTaskResultSurface,
-} from "@/lib/task-surface";
 
 const statusOptions = [
   { label: "All persisted results", value: "all" },
@@ -125,28 +116,6 @@ function buildCharacterizationSearchHref(
   return nextSearch ? `${pathname}?${nextSearch}` : pathname;
 }
 
-function taskStatusTone(status: TaskExecutionStatus) {
-  if (status === "completed") {
-    return "success" as const;
-  }
-
-  if (
-    status === "running" ||
-    status === "dispatching" ||
-    status === "cancellation_requested" ||
-    status === "cancelling" ||
-    status === "termination_requested"
-  ) {
-    return "primary" as const;
-  }
-
-  if (status === "failed" || status === "cancelled" || status === "terminated") {
-    return "warning" as const;
-  }
-
-  return "default" as const;
-}
-
 function WorkbenchSummaryItem({
   label,
   value,
@@ -204,12 +173,6 @@ export function CharacterizationWorkspace() {
     requestedResultId,
     selectedResultId,
     setSelectedResultId,
-    characterizationTasks,
-    latestCharacterizationTask,
-    resolvedTaskId,
-    activeTask,
-    activeTaskError,
-    isTaskTransitioning,
     resultDetail,
     resultDetailError,
     isResultDetailLoading,
@@ -229,23 +192,10 @@ export function CharacterizationWorkspace() {
     resolvedResultId: selectedResultId,
   });
   const resultSummary = summarizeCharacterizationResults(results);
-  const taskRecovery = resolveTaskRecoveryNotice(
-    parseTaskIdParam(searchParams.get("taskId")),
-    latestCharacterizationTask?.taskId ?? null,
-    activeTaskError,
-  );
-  const taskLifecycleSummary = summarizeTaskLifecycle(activeTask);
-  const taskResultSummary = summarizeTaskResultSurface(activeTask);
-  const taskContextBinding = summarizeTaskContextBinding({
-    task: activeTask,
-    activeDatasetId: activeDatasetState.activeDataset?.datasetId ?? null,
-  });
-  const taskResultHandoff = summarizeTaskResultHandoff(activeTask, taskResultSummary);
   const selectedAnalysisLabel =
     analysisRegistry.find((analysis) => analysis.analysisId === selectedAnalysisId)?.label ??
     selectedAnalysisId;
   const activeDatasetErrorMessage = describeApiError(activeDatasetState.activeDatasetError);
-  const activeTaskErrorMessage = describeApiError(activeTaskError);
   const designsErrorMessage = describeApiError(designsError);
   const analysisRegistryErrorMessage = describeApiError(analysisRegistryError);
   const runHistoryErrorMessage = describeApiError(runHistoryError);
@@ -313,7 +263,7 @@ export function CharacterizationWorkspace() {
       <SurfaceHeader
         eyebrow="Research Workflow"
         title="Characterization"
-        description="Stay inside the characterization workbench: design scope, analysis registry, run history, and persisted results. Queue browse and worker management stay in Global Context."
+        description="Choose a design, review saved analyses, inspect result details, and tag metrics in one place."
         actions={
           <button
             type="button"
@@ -323,7 +273,7 @@ export function CharacterizationWorkspace() {
             disabled={isRefreshingWorkflow}
             className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Refresh Workbench
+            Refresh
           </button>
         }
       />
@@ -344,19 +294,19 @@ export function CharacterizationWorkspace() {
 
       {!activeDatasetState.activeDataset ? (
         <SurfacePanel
-          title="Attach Active Dataset"
-          description="Characterization surfaces always read from the shared shell active dataset before any design-scoped browse state is applied."
+          title="Select Active Dataset"
+          description="Choose a dataset before browsing designs, saved analyses, and result details."
         >
           <p className="text-sm leading-6 text-muted-foreground">
             {activeDatasetErrorMessage ??
-              "This page keeps only page-local design, analysis, and result browse state. Dataset authority continues to come from the shared shell context."}
+              "Pick a dataset in the shell to start browsing characterization data."}
           </p>
         </SurfacePanel>
       ) : (
         <div className="space-y-6">
           <SurfacePanel
-            title="Characterization Workbench Summary"
-            description="One summary surface for the current workbench context. Queue browsing and task management stay in Global Context."
+            title="Overview"
+            description="Keep the selected design, saved results, and visible history in view while you work."
           >
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,0.45fr))]">
               <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
@@ -367,146 +317,33 @@ export function CharacterizationWorkspace() {
                   ) : (
                     <SurfaceTag tone="default">All analyses</SurfaceTag>
                   )}
-                  <SurfaceTag tone={taskLifecycleSummary.tone}>{taskLifecycleSummary.statusLabel}</SurfaceTag>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Characterization stays focused on design-scoped registry, run history, and persisted result detail. Task awareness is kept compact so the workbench remains the primary surface.
+                  Narrow the page by design and analysis, then inspect saved results and details below.
                 </p>
               </div>
               <WorkbenchSummaryItem
                 label="Visible Designs"
                 value={String(designs.length)}
-                detail="Dataset-local design scopes available for characterization."
+                detail="Designs available in the active dataset."
               />
               <WorkbenchSummaryItem
-                label="Persisted Results"
+                label="Saved Results"
                 value={String(resultSummary.total)}
-                detail="Persisted characterization results in the current scope."
+                detail="Characterization results in the current view."
               />
               <WorkbenchSummaryItem
                 label="Run History"
                 value={String(runHistory.length)}
-                detail="Visible run-history rows on the current page."
+                detail="History rows visible on this page."
               />
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel
-            title="Current Run"
-            description="Compact task awareness only. Attach, queue browse, and deeper recovery stay in Global Context."
-            actions={
-              <button
-                type="button"
-                onClick={() => {
-                  requestOpenGlobalContext("tasks");
-                }}
-                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-              >
-                Open in Global Context
-              </button>
-            }
-          >
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(240px,0.8fr)]">
-              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Current Characterization Run
-                    </p>
-                    <p className="mt-2 text-sm font-semibold text-foreground">
-                      {activeTask
-                        ? `Task #${activeTask.taskId}`
-                        : latestCharacterizationTask
-                          ? `Latest task #${latestCharacterizationTask.taskId}`
-                          : "No attached characterization task"}
-                    </p>
-                  </div>
-                  <SurfaceTag tone={taskLifecycleSummary.tone}>{taskLifecycleSummary.statusLabel}</SurfaceTag>
-                </div>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  {activeTask?.summary ??
-                    latestCharacterizationTask?.summary ??
-                    "Persisted run awareness appears here after you attach a characterization task from Global Context."}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {activeTask ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        replaceSearchState({ taskId: String(activeTask.taskId) });
-                      }}
-                      className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                    >
-                      View Task
-                    </button>
-                  ) : null}
-                  {latestCharacterizationTask &&
-                  latestCharacterizationTask.taskId !== activeTask?.taskId ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        replaceSearchState({ taskId: String(latestCharacterizationTask.taskId) });
-                      }}
-                      className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                    >
-                      Resume Latest
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div
-                  className={cx(
-                    "rounded-[0.95rem] border px-4 py-4 text-sm",
-                    taskResultHandoff.tone === "success"
-                      ? "border-emerald-500/25 bg-emerald-500/10 text-foreground"
-                      : taskResultHandoff.tone === "warning"
-                        ? "border-amber-500/30 bg-amber-500/8 text-foreground"
-                        : taskResultHandoff.tone === "primary"
-                          ? "border-primary/30 bg-primary/8 text-foreground"
-                          : "border-border bg-surface text-muted-foreground",
-                  )}
-                >
-                  <p className="font-medium">{taskResultHandoff.title}</p>
-                  <p className="mt-2">{taskResultHandoff.message}</p>
-                </div>
-
-                {taskRecovery ? (
-                  <div className="rounded-[0.95rem] border border-amber-500/30 bg-amber-500/8 px-4 py-4 text-sm text-foreground">
-                    <p className="font-medium">{taskRecovery.title}</p>
-                    <p className="mt-2">{taskRecovery.message}</p>
-                  </div>
-                ) : null}
-
-                {!taskRecovery && taskContextBinding ? (
-                  <div
-                    className={cx(
-                      "rounded-[0.95rem] border px-4 py-4 text-sm",
-                      taskContextBinding.tone === "warning"
-                        ? "border-amber-500/30 bg-amber-500/8 text-foreground"
-                        : "border-emerald-500/25 bg-emerald-500/10 text-foreground",
-                    )}
-                  >
-                    <p className="font-medium">{taskContextBinding.title}</p>
-                    <p className="mt-2">{taskContextBinding.message}</p>
-                  </div>
-                ) : null}
-
-                {activeTaskErrorMessage ? (
-                  <div className="rounded-[0.95rem] border border-amber-500/30 bg-amber-500/8 px-4 py-4 text-sm text-foreground">
-                    <p className="font-medium">Task detail unavailable</p>
-                    <p className="mt-2">{activeTaskErrorMessage}</p>
-                  </div>
-                ) : null}
-              </div>
             </div>
           </SurfacePanel>
 
           <div className="grid gap-6 xl:grid-cols-[0.95fr_1fr_1fr]">
             <SurfacePanel
               title="Design Scope"
-              description="Pick one dataset-local design scope, then browse characterization registry, run history, and persisted result summaries within that scope."
+              description="Pick one design, then narrow the saved analyses and result details shown on this page."
             >
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
