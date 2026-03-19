@@ -15,9 +15,12 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 - Merged on `main`:
   - backend explicit dataset-scoped design creation
   - simulation publication support for explicit `design_id` targets
+  - frontend `Save to Design` adoption with design dropdown + `New Design` dialog
+  - simulation-result task-surface cleanup that removes the misleading task-heavy wall
 - Immediate consequence:
-  - the backend side of `LM1` is now available on `main`
-  - the next active implementation need is frontend adoption of the new create-and-select design flow plus simulation-result task-surface cleanup
+  - `LM1` is now effectively merged on `main` across backend and frontend
+  - `LM2` is merged far enough to materially clean the page and remove misleading task wording
+  - the next active needs shift to `LM3` raw-data continuity/copy truthfulness and `LM4` characterization runnable workflow
 
 ## 1) Goal
 
@@ -63,40 +66,32 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 
 ### Current main-branch gaps
 
-#### 1. `Save to Design` is not finished on the frontend
+#### 1. `Save to Design` is now merged for `Simulation Result`
 
-- `frontend/src/features/simulation/components/simulation-result-publication-card.tsx` on `main` still presents `Save to Dataset` and uses free-text `designName`.
-- The reviewed frontend slice `7e815bac29e6de513e17fe525419a6954232a767` improves the model, but it still uses `Existing design / New design` with free-text entry on the new-design path.
-- The latest product direction is stricter:
-  - design must be chosen from a dropdown
-  - creating a new design must happen through a button + dialog flow
-  - once created, the new design must immediately appear in the dropdown
-  - avoid typo-prone free-text naming in the main save surface
+- `main` now supports the approved simulation publication model:
+  - design dropdown
+  - `New Design` dialog
+  - create-then-select behavior
+  - publish by explicit `design_id`
+- The active remaining concern is no longer the save-target model itself.
+- The next continuity concern is how clearly the saved design flows into `Raw Data` and then into `Characterization`.
 
-#### 2. Explicit create-design backend support is now present, but not yet adopted by the frontend
+#### 2. Simulation task presentation is improved, but global task-selection work remains open
 
-- `main` now includes a dataset-scoped create-design mutation.
-- `main` now also supports simulation-result publication targeted by explicit `design_id`.
+- `main` no longer shows the previous task-heavy summary wall in `Simulation Result`.
+- Misleading `View Task` wording has been removed in favor of truth-based attach wording.
 - Remaining gap:
-  - the frontend simulation save flow still needs to adopt this contract and move away from the free-text target model
+  - page-level task presentation is cleaner, but `Global Context` still does not yet own the broader task selection / inspection flow the user wants
+  - compatible task switching across workflow pages remains a later shell-and-workflow integration slice
 
-#### 3. Simulation task presentation is still too heavy
-
-- `frontend/src/features/simulation/components/simulation-workbench-shell.tsx` still renders a task-dense block in `Simulation Result`, including:
-  - `Attached Run`
-  - `Result Availability`
-  - `Downstream State`
-  - extra task support disclosure
-- `View Task` is also misleading there because it only re-attaches the task instead of opening a distinct task surface.
-
-#### 4. Raw Data continuity is partially present, but the cleanup slice is not final on `main`
+#### 3. Raw Data continuity is partially present, but the cleanup slice is not final on `main`
 
 - Main already has the improved top-down layout, but trace-summary filter copy and density cleanup are still unfinished on `main`.
 - The reviewed frontend slice improves this area, but one copy mismatch remains:
   - the new placeholder suggests search by `source` and `trace ID`
   - backend search still filters by `parameter` and `provenance_summary` only
 
-#### 5. Characterization is still browse-first, not run-first
+#### 4. Characterization is still browse-first, not run-first
 
 - The SoT page for Characterization defines a full flow:
   - `Choose Design -> Select Traces -> Run Analysis -> Review Latest Run -> Review Persisted Result`
@@ -144,12 +139,12 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - the main save action publishes by `design_id`, not by guessed slug
 - Backend status:
   - delivered on `main`
-- Remaining frontend follow-up:
-  - adopt the create-design mutation in the `New Design` dialog
-  - publish by explicit `design_id`
-  - stop treating implicit name-to-slug creation as the primary UX contract
-- Notes:
-  - the already-reviewed frontend slice is a useful reference, but it is not the final implementation target
+- Frontend status:
+  - delivered on `main`
+- Mainline result:
+  - the simulation publication flow now uses a design dropdown
+  - `New Design` uses a dialog-backed explicit create flow
+  - publish-by-`design_id` is the primary user path
 
 ### LM2 Simulation task-surface cleanup
 
@@ -159,6 +154,10 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - shrink page-local task state to concise tags or short inline metadata
   - move task switching and deeper task inspection into `Global Context`
   - keep `SimulationResultExplorer` as the visual primary surface
+- Status on `main`:
+  - partially merged
+  - the page is materially cleaner and the misleading task-heavy wall is removed
+  - deeper `Global Context` ownership of task switching still remains for a later slice
 
 ### LM3 Raw Data continuity and density cleanup
 
@@ -212,23 +211,23 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 
 ## 7) Recommended Execution Order
 
-1. frontend `LM1` adoption of the explicit create-and-select design flow
-2. `LM2` simulation task-surface cleanup in the same area
-3. `LM3` raw-data continuity + copy truthfulness
-4. `LM4` characterization submission contract and runnable workflow
-5. `LM5` first basic analysis path
-6. `LM6` Local Mode end-to-end verification
+1. `LM3` raw-data continuity + copy truthfulness
+2. `LM4` characterization submission contract and runnable workflow
+3. `LM5` first basic analysis path
+4. `LM6` Local Mode end-to-end verification
 
 ## 8) Immediate Next Implementation Recommendation
 
-- The next implementation should be frontend `LM1 + LM2` together.
+- The next implementation should move to `LM4`, with `LM3` handled just before it or alongside it as a small cleanup slice.
 - Reason:
-  - the backend dependency is now already merged on `main`
-  - they complete the simulation-to-design ownership model on the user-facing side
-  - they reduce page noise immediately
-  - they avoid merging a half-correct save UX that the user already rejected
+  - the simulation save-target model is now in place on `main`
+  - `Simulation Result` is already materially cleaner than before
+  - the real remaining Local Mode blocker is that `Characterization` still cannot drive new runnable analysis work
 - Concrete target:
-  - frontend simulation: dropdown + `New Design` dialog + lighter task presentation
+  - characterization submission contract
+  - trace selection + analysis selection
+  - compact latest-run state
+  - first basic runnable analysis path
 
 ## 9) Notes On Existing Reviewed Frontend Delivery
 
@@ -236,8 +235,8 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - `7e815bac29e6de513e17fe525419a6954232a767`
 - Current judgement:
   - useful reference for trace-summary cleanup
-  - useful reference for moving away from `Save to Dataset`
-  - not ready to merge as the final save-target solution because it still leaves new-design creation on a free-text path
+  - no longer the active reference for simulation save-target UX now that `L8` is merged on `main`
+  - its remaining planning value is mainly the Raw Data cleanup direction, not the final `Save to Design` implementation
 
 ## 10) Verification Commands
 
