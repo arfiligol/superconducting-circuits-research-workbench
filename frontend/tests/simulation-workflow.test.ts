@@ -1203,8 +1203,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("postSourceSelection");
     expect(simulationWorkbenchSource).toContain("downstreamSourceCapabilities");
     expect(simulationWorkbenchSource).toContain("PTC source");
-    expect(simulationWorkbenchSource).toContain("Add Coordinate Transformation");
-    expect(simulationWorkbenchSource).toContain("Add Kron Reduction");
+    expect(simulationWorkbenchSource).toContain("Add Step");
+    expect(simulationWorkbenchSource).toContain("Step Type");
+    expect(simulationWorkbenchSource).toContain("updatePostProcessingStepType");
     expect(simulationWorkbenchSource).toContain("formatPostProcessingOutputView");
     expect(simulationWorkbenchSource).toContain("Load Official Example");
     expect(simulationWorkbenchSource).toContain("Task-backed · #");

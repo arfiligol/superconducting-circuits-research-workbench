@@ -368,6 +368,35 @@ function createKronReductionStep(
   };
 }
 
+function isPostProcessingStepTypeAvailable(
+  stepType: PostProcessingStepType,
+  portOptions: readonly AppSelectOption[],
+) {
+  if (stepType === "coordinate_transform") {
+    return portOptions.length >= 2;
+  }
+
+  return listPostProcessingBasisLabels(portOptions).length > 0;
+}
+
+function createPostProcessingStep(
+  stepType: PostProcessingStepType,
+  portOptions: readonly AppSelectOption[],
+  stepId = `post-step:${crypto.randomUUID()}`,
+): PostProcessingStepDraft {
+  if (stepType === "coordinate_transform") {
+    return {
+      ...createCoordinateTransformStep(portOptions),
+      id: stepId,
+    };
+  }
+
+  return {
+    ...createKronReductionStep(portOptions),
+    id: stepId,
+  };
+}
+
 function formatPostProcessingOutputView(value: string) {
   switch (value) {
     case "fit-report":
@@ -1075,6 +1104,8 @@ export function SimulationWorkbenchShell() {
   const [postProcessingSteps, setPostProcessingSteps] = useState<readonly PostProcessingStepDraft[]>(
     [],
   );
+  const [newPostProcessingStepType, setNewPostProcessingStepType] =
+    useState<PostProcessingStepType>("coordinate_transform");
   const [savedSimulationSetups, setSavedSimulationSetups] = useState<
     readonly SavedSimulationSetupRecord[]
   >([]);
@@ -1299,6 +1330,24 @@ export function SimulationWorkbenchShell() {
       }),
     [sourcePortSelectOptions],
   );
+  const postProcessingStepTypeOptions = useMemo<readonly AppSelectOption[]>(
+    () => [
+      {
+        value: "coordinate_transform",
+        label: "Coordinate Transformation",
+        disabled: !isPostProcessingStepTypeAvailable(
+          "coordinate_transform",
+          sourcePortSelectOptions,
+        ),
+      },
+      {
+        value: "kron_reduction",
+        label: "Kron Reduction",
+        disabled: !isPostProcessingStepTypeAvailable("kron_reduction", sourcePortSelectOptions),
+      },
+    ],
+    [sourcePortSelectOptions],
+  );
   const selectedPtcPorts = useMemo(
     () => new Set(parseCommaSeparatedStringValues(selectedPtcPortsValue)),
     [selectedPtcPortsValue],
@@ -1453,12 +1502,14 @@ export function SimulationWorkbenchShell() {
     latestPostProcessingTaskDetail?.postProcessingSetup?.operations.length ?? postProcessingSteps.length;
 
   function appendPostProcessingStep(stepType: PostProcessingStepType) {
+    if (!isPostProcessingStepTypeAvailable(stepType, sourcePortSelectOptions)) {
+      return;
+    }
+
     setPostProcessingBuildError(null);
     setPostProcessingSteps((current) => [
       ...current,
-      stepType === "coordinate_transform"
-        ? createCoordinateTransformStep(sourcePortSelectOptions)
-        : createKronReductionStep(sourcePortSelectOptions),
+      createPostProcessingStep(stepType, sourcePortSelectOptions),
     ]);
   }
 
@@ -1504,6 +1555,21 @@ export function SimulationWorkbenchShell() {
             .filter((value) => selected.has(value)),
         };
       }),
+    );
+  }
+
+  function updatePostProcessingStepType(stepId: string, nextType: PostProcessingStepType) {
+    if (!isPostProcessingStepTypeAvailable(nextType, sourcePortSelectOptions)) {
+      return;
+    }
+
+    setPostProcessingBuildError(null);
+    setPostProcessingSteps((current) =>
+      current.map((step) =>
+        step.id === stepId
+          ? createPostProcessingStep(nextType, sourcePortSelectOptions, step.id)
+          : step,
+      ),
     );
   }
 
@@ -1748,6 +1814,20 @@ export function SimulationWorkbenchShell() {
       }),
     );
   }, [sourcePortSelectOptions]);
+
+  useEffect(() => {
+    const preferredOption = postProcessingStepTypeOptions.find(
+      (option) => option.value === newPostProcessingStepType,
+    );
+    if (preferredOption && !preferredOption.disabled) {
+      return;
+    }
+
+    const firstAvailableOption = postProcessingStepTypeOptions.find((option) => !option.disabled);
+    if (firstAvailableOption) {
+      setNewPostProcessingStepType(firstAvailableOption.value as PostProcessingStepType);
+    }
+  }, [newPostProcessingStepType, postProcessingStepTypeOptions]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -3324,31 +3404,29 @@ export function SimulationWorkbenchShell() {
                   Steps
                 </p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Add Coordinate Transformation or Kron Reduction in the order they should run.
+                  Choose a step type, then add it in the order it should run.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <AppInlineSelect
+                  ariaLabel="Post-processing step type to add"
+                  value={newPostProcessingStepType}
+                  onChange={(nextValue) => {
+                    setNewPostProcessingStepType(nextValue as PostProcessingStepType);
+                  }}
+                  options={postProcessingStepTypeOptions}
+                  className="sm:min-w-[280px]"
+                />
                 <button
                   type="button"
                   onClick={() => {
-                    appendPostProcessingStep("coordinate_transform");
+                    appendPostProcessingStep(newPostProcessingStepType);
                   }}
-                  disabled={sourcePortSelectOptions.length < 2}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!isPostProcessingStepTypeAvailable(newPostProcessingStepType, sourcePortSelectOptions)}
+                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Add Coordinate Transformation
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    appendPostProcessingStep("kron_reduction");
-                  }}
-                  disabled={postProcessingBasisOptions.length === 0}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Kron Reduction
+                  Add Step
                 </button>
               </div>
             </div>
@@ -3367,9 +3445,7 @@ export function SimulationWorkbenchShell() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-foreground">
-                            Step {index + 1} · {formatPostProcessingStepLabel(step.type)}
-                          </p>
+                          <p className="text-sm font-semibold text-foreground">Step {index + 1}</p>
                           <SurfaceTag tone="default">Step {index + 1}</SurfaceTag>
                         </div>
                         <p className="mt-2 text-sm text-muted-foreground">
@@ -3388,6 +3464,22 @@ export function SimulationWorkbenchShell() {
                         <Trash2 className="h-3.5 w-3.5" />
                         Remove
                       </button>
+                    </div>
+
+                    <div className="mt-4">
+                      <CompactField label="Step Type">
+                        <AppInlineSelect
+                          ariaLabel={`Post-processing step ${index + 1} type`}
+                          value={step.type}
+                          onChange={(nextValue) => {
+                            updatePostProcessingStepType(
+                              step.id,
+                              nextValue as PostProcessingStepType,
+                            );
+                          }}
+                          options={postProcessingStepTypeOptions}
+                        />
+                      </CompactField>
                     </div>
 
                     {step.type === "coordinate_transform" ? (
