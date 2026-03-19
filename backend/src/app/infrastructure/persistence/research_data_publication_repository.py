@@ -4,12 +4,13 @@ from collections import defaultdict
 from dataclasses import replace
 from typing import cast
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.app.domain.datasets import (
     DatasetDetail,
     DesignBrowseRow,
+    DesignCreateDraft,
     SimulationResultPublicationDraft,
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
@@ -19,6 +20,7 @@ from src.app.domain.datasets import (
 )
 from src.app.domain.tasks import TaskDetail
 from src.app.infrastructure.persistence.models import (
+    RewriteDatasetDesignRecord,
     RewritePublishedSimulationResultRecord,
     RewritePublishedSimulationTraceRecord,
 )
@@ -59,6 +61,47 @@ class SqliteResearchDataPublicationRepository:
                 .order_by(RewritePublishedSimulationTraceRecord.id.asc())
             ).all()
             return _to_publication_record(row, trace_rows)
+
+    def create_design(
+        self,
+        *,
+        dataset_id: str,
+        draft: DesignCreateDraft,
+    ) -> DesignBrowseRow:
+        design_id = _build_design_id(draft.name)
+        updated_at = _timestamp_now()
+        normalized_name = _normalize_design_name(draft.name)
+        with self._session_factory() as session:
+            design_row = session.scalar(
+                select(RewriteDatasetDesignRecord).where(
+                    RewriteDatasetDesignRecord.dataset_id == dataset_id,
+                    or_(
+                        RewriteDatasetDesignRecord.design_id == design_id,
+                        RewriteDatasetDesignRecord.normalized_name == normalized_name,
+                    ),
+                )
+            )
+            if design_row is not None:
+                raise ValueError("dataset design already exists")
+            session.add(
+                RewriteDatasetDesignRecord(
+                    dataset_id=dataset_id,
+                    design_id=design_id,
+                    normalized_name=normalized_name,
+                    name=draft.name,
+                    updated_at=updated_at,
+                )
+            )
+            session.commit()
+        return DesignBrowseRow(
+            design_id=design_id,
+            dataset_id=dataset_id,
+            name=draft.name,
+            source_coverage=_empty_source_coverage(),
+            compare_readiness="blocked",
+            trace_count=0,
+            updated_at=updated_at,
+        )
 
     def publish_simulation_result(
         self,
@@ -179,13 +222,30 @@ class SqliteResearchDataPublicationRepository:
         dataset_id: str,
     ) -> tuple[DesignBrowseRow, ...]:
         with self._session_factory() as session:
+            created_design_rows = session.scalars(
+                select(RewriteDatasetDesignRecord)
+                .where(RewriteDatasetDesignRecord.dataset_id == dataset_id)
+                .order_by(RewriteDatasetDesignRecord.design_id.asc())
+            ).all()
             publication_rows = session.scalars(
                 select(RewritePublishedSimulationResultRecord)
                 .where(RewritePublishedSimulationResultRecord.target_dataset_id == dataset_id)
                 .order_by(RewritePublishedSimulationResultRecord.target_design_id.asc())
             ).all()
+            rows_by_design: dict[str, DesignBrowseRow] = {
+                row.design_id: DesignBrowseRow(
+                    design_id=row.design_id,
+                    dataset_id=row.dataset_id,
+                    name=row.name,
+                    source_coverage=_empty_source_coverage(),
+                    compare_readiness="blocked",
+                    trace_count=0,
+                    updated_at=row.updated_at,
+                )
+                for row in created_design_rows
+            }
             if not publication_rows:
-                return ()
+                return tuple(sorted(rows_by_design.values(), key=lambda row: row.design_id))
             publication_ids = [row.id for row in publication_rows]
             trace_rows = session.scalars(
                 select(RewritePublishedSimulationTraceRecord)
@@ -200,7 +260,6 @@ class SqliteResearchDataPublicationRepository:
             ] = defaultdict(list)
             for trace_row in trace_rows:
                 traces_by_design[trace_row.design_id].append(trace_row)
-            rows_by_design: dict[str, DesignBrowseRow] = {}
             for publication_row in publication_rows:
                 design_trace_rows = traces_by_design.get(publication_row.target_design_id, [])
                 design_row = DesignBrowseRow(
@@ -231,13 +290,23 @@ class SqliteResearchDataPublicationRepository:
                 rows_by_design[design_row.design_id] = DesignBrowseRow(
                     design_id=design_row.design_id,
                     dataset_id=dataset_id,
-                    name=design_row.name,
+                    name=existing.name or design_row.name,
                     source_coverage=combined_coverage,
                     compare_readiness=_compare_readiness_for(combined_coverage),
                     trace_count=existing.trace_count + design_row.trace_count,
                     updated_at=max(existing.updated_at, design_row.updated_at),
                 )
             return tuple(sorted(rows_by_design.values(), key=lambda row: row.design_id))
+
+    def get_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> DesignBrowseRow | None:
+        return next(
+            (row for row in self.list_designs(dataset_id) if row.design_id == design_id),
+            None,
+        )
 
     def list_trace_metadata(
         self,
@@ -384,11 +453,7 @@ def _slugify(value: str) -> str:
 def _build_source_coverage(
     traces: tuple[TraceMetadataSummary, ...],
 ) -> dict[str, int]:
-    coverage = {
-        "measurement": 0,
-        "layout_simulation": 0,
-        "circuit_simulation": 0,
-    }
+    coverage = _empty_source_coverage()
     for trace in traces:
         coverage[trace.source_kind] = coverage.get(trace.source_kind, 0) + 1
     return coverage
@@ -397,11 +462,7 @@ def _build_source_coverage(
 def _build_source_coverage_from_trace_rows(
     trace_rows: list[RewritePublishedSimulationTraceRecord],
 ) -> dict[str, int]:
-    coverage = {
-        "measurement": 0,
-        "layout_simulation": 0,
-        "circuit_simulation": 0,
-    }
+    coverage = _empty_source_coverage()
     for trace in trace_rows:
         coverage[trace.source_kind] = coverage.get(trace.source_kind, 0) + 1
     return coverage
@@ -424,3 +485,21 @@ def _compare_readiness_for_trace_rows(
     trace_rows: list[RewritePublishedSimulationTraceRecord],
 ) -> str:
     return _compare_readiness_for(_build_source_coverage_from_trace_rows(trace_rows))
+
+
+def _empty_source_coverage() -> dict[str, int]:
+    return {
+        "measurement": 0,
+        "layout_simulation": 0,
+        "circuit_simulation": 0,
+    }
+
+
+def _normalize_design_name(value: str) -> str:
+    return value.strip().casefold()
+
+
+def _timestamp_now() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")

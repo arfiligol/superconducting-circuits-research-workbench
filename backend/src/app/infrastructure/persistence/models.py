@@ -126,6 +126,35 @@ class RewritePublishedSimulationResultRecord(RewriteMetadataBase):
     )
 
 
+class RewriteDatasetDesignRecord(RewriteMetadataBase):
+    __tablename__ = "rewrite_dataset_designs"
+    __table_args__ = (
+        Index(
+            "ix_rewrite_dataset_designs_dataset_design",
+            "dataset_id",
+            "design_id",
+            unique=True,
+        ),
+        Index(
+            "ix_rewrite_dataset_designs_dataset_normalized_name",
+            "dataset_id",
+            "normalized_name",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    design_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
 class RewritePublishedSimulationTraceRecord(RewriteMetadataBase):
     __tablename__ = "rewrite_published_simulation_traces"
     __table_args__ = (

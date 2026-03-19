@@ -6,6 +6,7 @@ from src.app.infrastructure.persistence.database import (
     resolve_metadata_database_path,
 )
 from src.app.infrastructure.persistence.models import (
+    RewriteDatasetDesignRecord,
     RewriteMetadataBase,
     RewritePublishedSimulationResultRecord,
     RewritePublishedSimulationTraceRecord,
@@ -27,6 +28,7 @@ from src.app.infrastructure.persistence.task_snapshot_repository import (
 )
 
 __all__ = [
+    "RewriteDatasetDesignRecord",
     "RewriteMetadataBase",
     "RewritePublishedSimulationResultRecord",
     "RewritePublishedSimulationTraceRecord",

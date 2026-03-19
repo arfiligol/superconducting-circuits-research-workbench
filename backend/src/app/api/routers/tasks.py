@@ -954,10 +954,19 @@ def _parse_post_processing_operation(payload: object) -> PostProcessingOperation
 
 def _parse_simulation_result_publication_payload(payload: object) -> dict[str, str | None]:
     body = _as_mapping(payload)
+    design_id = _optional_string(body.get("design_id"), field_name="design_id")
+    design_name = _optional_string(body.get("design_name"), field_name="design_name")
+    if design_id is None and design_name is None:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="design_id or design_name is required.",
+        )
     return {
         "dataset_id": _optional_string(body.get("dataset_id"), field_name="dataset_id"),
-        "design_id": _optional_string(body.get("design_id"), field_name="design_id"),
-        "design_name": _required_string(body.get("design_name"), field_name="design_name"),
+        "design_id": design_id,
+        "design_name": design_name,
     }
 
 

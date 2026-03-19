@@ -321,6 +321,57 @@ def test_published_trace_records_keep_source_task_provenance_and_are_browse_visi
     )
 
 
+def test_publish_can_target_an_explicitly_created_design_by_design_id() -> None:
+    created_design = client.post(
+        "/datasets/local-dataset-001/designs",
+        json={"name": "Explicit Local Save Target"},
+    )
+    assert created_design.status_code == 201
+    design = created_design.json()["data"]["design"]
+
+    task = _submit_local_simulation(ptc_enabled=False)
+    publish = client.post(
+        f"/tasks/{task['task_id']}/simulation-results/publish",
+        json={
+            "dataset_id": "local-dataset-001",
+            "design_id": design["design_id"],
+        },
+    )
+
+    assert publish.status_code == 200
+    payload = publish.json()["data"]
+    assert payload["operation"] == "published"
+    assert payload["publication_summary"]["target_design_id"] == design["design_id"]
+    assert payload["publication_summary"]["target_design_name"] == design["name"]
+    assert payload["design"]["design_id"] == design["design_id"]
+    assert payload["design"]["name"] == design["name"]
+    assert payload["design"]["trace_count"] == 3
+    assert payload["design"]["source_coverage"] == {
+        "measurement": 0,
+        "layout_simulation": 0,
+        "circuit_simulation": 3,
+    }
+
+    browsed_designs = client.get("/datasets/local-dataset-001/designs")
+    assert browsed_designs.status_code == 200
+    published_design = next(
+        row
+        for row in browsed_designs.json()["data"]["rows"]
+        if row["design_id"] == design["design_id"]
+    )
+    assert published_design["name"] == design["name"]
+    assert published_design["trace_count"] == 3
+
+    trace_rows = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
+    )
+    assert trace_rows.status_code == 200
+    assert [row["trace_id"] for row in trace_rows.json()["data"]["rows"]] == _published_trace_ids(
+        task["task_id"],
+        include_ptc=False,
+    )
+
+
 def test_publish_rejects_unsupported_alternate_target_dataset_semantics() -> None:
     task = _submit_local_simulation(ptc_enabled=False)
 

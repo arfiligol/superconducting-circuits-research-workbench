@@ -15,6 +15,7 @@ from sc_core.tasking import (
 from src.app.domain.audit import AuditRecord
 from src.app.domain.datasets import (
     DatasetDetail,
+    DesignBrowseRow,
     SimulationResultPublicationDraft,
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
@@ -81,6 +82,8 @@ class TaskRepository(Protocol):
 
 class TaskDatasetRepository(Protocol):
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None: ...
+
+    def get_design(self, dataset_id: str, design_id: str) -> DesignBrowseRow | None: ...
 
     def get_simulation_result_publication_record(
         self,
@@ -351,21 +354,24 @@ class TaskService:
             )
 
         existing_publication = self.get_task_publication_summary(task_id)
-        requested_design_id = draft.design_id or _build_publication_design_id(draft.design_name)
+        resolved_design = self._resolve_publication_design_target(
+            target_dataset_id=target_dataset_id,
+            draft=draft,
+        )
+        requested_design_id = resolved_design.design_id
+        requested_design_name = resolved_design.name
         if existing_publication.state == "published":
             if (
                 existing_publication.target_dataset_id == target_dataset_id
                 and existing_publication.target_design_id == requested_design_id
             ):
-                resolved_design_name = (
-                    existing_publication.target_design_name or draft.design_name
-                )
                 try:
                     result = self._dataset_repository.publish_simulation_result(
                         task=task,
                         dataset_id=target_dataset_id,
                         draft=SimulationResultPublicationDraft(
-                            design_name=resolved_design_name,
+                            design_name=existing_publication.target_design_name
+                            or requested_design_name,
                             design_id=requested_design_id,
                         ),
                     )
@@ -399,7 +405,7 @@ class TaskService:
                 task=replace(task, publication_summary=existing_publication),
                 dataset_id=target_dataset_id,
                 draft=SimulationResultPublicationDraft(
-                    design_name=draft.design_name,
+                    design_name=requested_design_name,
                     design_id=requested_design_id,
                 ),
             )
@@ -458,6 +464,42 @@ class TaskService:
             },
         )
         return result
+
+    def _resolve_publication_design_target(
+        self,
+        *,
+        target_dataset_id: str,
+        draft: SimulationResultPublicationDraft,
+    ) -> DesignBrowseRow:
+        if draft.design_id is not None:
+            design = self._dataset_repository.get_design(target_dataset_id, draft.design_id)
+            if design is None:
+                raise service_error(
+                    404,
+                    code="design_not_found",
+                    category="not_found",
+                    message=(
+                        "The selected design is not available in the target dataset. "
+                        "Create it first or choose an existing design."
+                    ),
+                )
+            return design
+        if draft.design_name is None:
+            raise service_error(
+                422,
+                code="simulation_result_publish_target_required",
+                category="validation",
+                message="Simulation result publication requires design_id or design_name.",
+            )
+        return DesignBrowseRow(
+            design_id=_build_publication_design_id(draft.design_name),
+            dataset_id=target_dataset_id,
+            name=draft.design_name,
+            source_coverage={},
+            compare_readiness="blocked",
+            trace_count=0,
+            updated_at="",
+        )
 
     def submit_task(self, draft: TaskSubmissionDraft) -> TaskDetail:
         session = self._session_repository.get_session_state()

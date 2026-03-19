@@ -17,6 +17,7 @@ from src.app.domain.datasets import (
     DatasetAllowedActions,
     DatasetCatalogRow,
     DatasetCreateDraft,
+    DatasetDesignMutationResult,
     DatasetDetail,
     DatasetLifecycleMutationResult,
     DatasetProfileField,
@@ -24,6 +25,7 @@ from src.app.domain.datasets import (
     DatasetProfileUpdateResult,
     DesignBrowseQuery,
     DesignBrowseRow,
+    DesignCreateDraft,
     RawDataIngestionDraft,
     RawDataIngestionResult,
     TaggedCoreMetricSummary,
@@ -72,6 +74,12 @@ class DatasetRepository(Protocol):
         dataset_id: str,
         draft: RawDataIngestionDraft,
     ) -> RawDataIngestionResult | None: ...
+
+    def create_design(
+        self,
+        dataset_id: str,
+        draft: DesignCreateDraft,
+    ) -> DatasetDesignMutationResult | None: ...
 
     def list_tagged_core_metrics(
         self,
@@ -364,6 +372,79 @@ class DatasetService:
             dataset=materialized_dataset,
             design=result.design,
             traces=result.traces,
+        )
+
+    def create_design(
+        self,
+        dataset_id: str,
+        draft: DesignCreateDraft,
+    ) -> DatasetDesignMutationResult:
+        dataset = self._require_visible_dataset(dataset_id)
+        state = self._session_repository.get_session_state()
+        allowed_actions = self._allowed_actions(dataset, state)
+        if not allowed_actions.ingest_raw_data:
+            raise service_error(
+                403,
+                code="dataset_design_create_denied",
+                category="permission_denied",
+                message="The active session cannot create designs in this dataset.",
+            )
+
+        requested_design_id = _build_design_id(draft.name)
+        conflict = next(
+            (
+                row
+                for row in self._repository.list_designs(dataset_id)
+                if row.design_id == requested_design_id
+                or row.name.casefold() == draft.name.casefold()
+            ),
+            None,
+        )
+        if conflict is not None:
+            raise service_error(
+                409,
+                code="dataset_design_conflict",
+                category="conflict",
+                message=(
+                    "A design with this name already exists in the selected dataset. "
+                    "Select the existing design instead of creating a duplicate."
+                ),
+            )
+
+        try:
+            result = self._repository.create_design(dataset_id, draft)
+        except ValueError as exc:
+            raise service_error(
+                409,
+                code="dataset_design_conflict",
+                category="conflict",
+                message=(
+                    "A design with this name already exists in the selected dataset. "
+                    "Select the existing design instead of creating a duplicate."
+                ),
+            ) from exc
+        if result is None:
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {dataset_id} was not found.",
+            )
+
+        updated_dataset = self._with_allowed_actions(result.dataset, state)
+        self._append_audit_record(
+            state=state,
+            action_kind="dataset.design_created",
+            dataset=updated_dataset,
+            payload={
+                "dataset_id": dataset_id,
+                "design_id": result.design.design_id,
+                "design_name": result.design.name,
+            },
+        )
+        return DatasetDesignMutationResult(
+            dataset=updated_dataset,
+            design=result.design,
         )
 
     def list_tagged_core_metrics(self, dataset_id: str) -> list[TaggedCoreMetricSummary]:
@@ -760,3 +841,18 @@ class DatasetService:
                 workspace_id=dataset.workspace_id,
             )
         )
+
+
+def _build_design_id(name: str) -> str:
+    return f"design_{_slugify(name)}"
+
+
+def _slugify(value: str) -> str:
+    return "-".join(
+        token
+        for token in "".join(
+            character.lower() if character.isalnum() else "-"
+            for character in value.strip()
+        ).split("-")
+        if token
+    )

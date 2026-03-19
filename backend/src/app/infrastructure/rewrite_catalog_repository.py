@@ -28,9 +28,11 @@ from src.app.domain.datasets import (
     CharacterizationTaggingResult,
     DatasetAllowedActions,
     DatasetCreateDraft,
+    DatasetDesignMutationResult,
     DatasetDetail,
     DatasetProfileUpdate,
     DesignBrowseRow,
+    DesignCreateDraft,
     RawDataIngestionDraft,
     RawDataIngestionResult,
     SimulationResultPublicationDraft,
@@ -224,6 +226,47 @@ class InMemoryRewriteCatalogRepository:
             traces=tuple(ingested_trace_rows),
         )
 
+    def create_design(
+        self,
+        dataset_id: str,
+        draft: DesignCreateDraft,
+    ) -> DatasetDesignMutationResult | None:
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None:
+            return None
+        design_id = _build_design_id(draft.name)
+        if any(
+            row.design_id == design_id or row.name.casefold() == draft.name.casefold()
+            for row in self.list_designs(dataset_id)
+        ):
+            raise ValueError("dataset design already exists")
+        if self._durable_publication_repository is not None:
+            design_row = self._durable_publication_repository.create_design(
+                dataset_id=dataset_id,
+                draft=draft,
+            )
+        else:
+            source_coverage = _build_source_coverage(())
+            design_row = DesignBrowseRow(
+                design_id=design_id,
+                dataset_id=dataset_id,
+                name=draft.name,
+                source_coverage=source_coverage,
+                compare_readiness=_compare_readiness_for(source_coverage),
+                trace_count=0,
+                updated_at="2026-03-19T11:20:00Z",
+            )
+        design_rows = list(self._designs.get(dataset_id, ()))
+        design_rows = [row for row in design_rows if row.design_id != design_row.design_id]
+        design_rows.append(design_row)
+        self._designs[dataset_id] = tuple(sorted(design_rows, key=lambda row: row.design_id))
+        updated_dataset = replace(dataset, updated_at=design_row.updated_at)
+        self._datasets[dataset_id] = updated_dataset
+        return DatasetDesignMutationResult(
+            dataset=updated_dataset,
+            design=design_row,
+        )
+
     def publish_simulation_result(
         self,
         *,
@@ -333,6 +376,16 @@ class InMemoryRewriteCatalogRepository:
         return _merge_design_rows(
             in_memory_rows,
             self._durable_publication_repository.list_designs(dataset_id),
+        )
+
+    def get_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> DesignBrowseRow | None:
+        return next(
+            (row for row in self.list_designs(dataset_id) if row.design_id == design_id),
+            None,
         )
 
     def list_trace_metadata(

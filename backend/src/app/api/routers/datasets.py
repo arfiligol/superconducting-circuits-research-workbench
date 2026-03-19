@@ -16,6 +16,7 @@ from src.app.domain.datasets import (
     DatasetDetail,
     DatasetProfileUpdate,
     DesignBrowseQuery,
+    DesignCreateDraft,
     RawDataIngestionDraft,
     RawDataTraceDraft,
     TraceAxis,
@@ -216,6 +217,33 @@ def list_designs(
         },
     )
     return _success_response(data={"rows": page_rows}, meta=meta)
+
+
+@router.post("/{dataset_id}/designs")
+def create_design(
+    dataset_id: str,
+    payload: Annotated[object, Body(...)],
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        draft = _parse_design_create_payload(payload)
+        result = dataset_service.create_design(dataset_id, draft)
+        design_rows = [
+            _serialize_design_browse_row(row)
+            for row in dataset_service.list_designs(dataset_id, DesignBrowseQuery())
+        ]
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "created",
+            "dataset": _serialize_dataset_profile(result.dataset),
+            "design": _serialize_design_browse_row(result.design),
+            "design_rows": design_rows,
+        },
+        status_code=201,
+        meta={"generated_at": _generated_at()},
+    )
 
 
 @router.get("/{dataset_id}/designs/{design_id}/traces")
@@ -503,6 +531,10 @@ def _serialize_catalog_row(row: object) -> dict[str, object]:
     return asdict(row)
 
 
+def _serialize_design_browse_row(row: object) -> dict[str, object]:
+    return asdict(row)
+
+
 def _parse_dataset_create_payload(payload: object) -> DatasetCreateDraft:
     body = _as_mapping(payload)
     return DatasetCreateDraft(
@@ -510,6 +542,13 @@ def _parse_dataset_create_payload(payload: object) -> DatasetCreateDraft:
         family=_require_text(body.get("family"), field="family"),
         device_type=_require_text(body.get("device_type"), field="device_type"),
         source=_require_text(body.get("source"), field="source"),
+    )
+
+
+def _parse_design_create_payload(payload: object) -> DesignCreateDraft:
+    body = _as_mapping(payload)
+    return DesignCreateDraft(
+        name=_require_text(body.get("name"), field="name"),
     )
 
 

@@ -249,6 +249,74 @@ def test_dataset_ingestion_materializes_design_and_trace_browse_surfaces() -> No
     assert trace_detail["preview_payload"]["kind"] == "sampled_series"
 
 
+def test_dataset_design_creation_materializes_empty_browse_row() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Fluxonium Explicit Design Demo",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+
+    design_create = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "Simulation Save Target"},
+    )
+
+    assert design_create.status_code == 201
+    payload = design_create.json()["data"]
+    assert payload["operation"] == "created"
+    assert payload["design"] == {
+        "design_id": "design_simulation-save-target",
+        "dataset_id": dataset_id,
+        "name": "Simulation Save Target",
+        "source_coverage": {
+            "measurement": 0,
+            "layout_simulation": 0,
+            "circuit_simulation": 0,
+        },
+        "compare_readiness": "blocked",
+        "trace_count": 0,
+        "updated_at": payload["design"]["updated_at"],
+    }
+    assert payload["design_rows"] == [payload["design"]]
+
+    browse = client.get(f"/datasets/{dataset_id}/designs")
+    assert browse.status_code == 200
+    assert browse.json()["data"]["rows"] == [payload["design"]]
+
+
+def test_dataset_design_creation_rejects_duplicate_name_conflicts() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Fluxonium Design Conflict Demo",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+
+    first = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "Conflict Target"},
+    )
+    assert first.status_code == 201
+
+    second = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "Conflict Target"},
+    )
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "dataset_design_conflict"
+
+
 def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contract(
     dataset_service: DatasetService,
 ) -> None:

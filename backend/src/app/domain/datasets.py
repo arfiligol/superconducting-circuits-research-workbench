@@ -119,8 +119,19 @@ class RawDataIngestionResult:
 
 
 @dataclass(frozen=True)
+class DesignCreateDraft:
+    name: str
+
+
+@dataclass(frozen=True)
+class DatasetDesignMutationResult:
+    dataset: DatasetDetail
+    design: DesignBrowseRow
+
+
+@dataclass(frozen=True)
 class SimulationResultPublicationDraft:
-    design_name: str
+    design_name: str | None = None
     design_id: str | None = None
 
 
