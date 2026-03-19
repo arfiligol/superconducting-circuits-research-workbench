@@ -863,16 +863,9 @@ function StageTaskActions({
 
   return (
     <div className="flex flex-wrap gap-2">
-      <button
-        type="button"
-        onClick={() => {
-          onViewTask(task.taskId);
-        }}
-        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-      >
-        View Task
-      </button>
-      {!isAttached ? (
+      {isAttached ? (
+        <SurfaceTag tone="primary">Attached to Page</SurfaceTag>
+      ) : (
         <button
           type="button"
           onClick={() => {
@@ -880,9 +873,9 @@ function StageTaskActions({
           }}
           className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
         >
-          Resume Latest Run
+          Attach Run
         </button>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -2865,45 +2858,43 @@ export function SimulationWorkbenchShell() {
                 ? `${simulationResultState.message} ${simulationStageErrorMessage}`
                 : simulationResultState.message
             }
-            actions={
-              displayedSimulationStageAuthority ? (
-                <StageTaskActions
-                  task={displayedSimulationStageAuthority}
-                  resolvedTaskId={resolvedTaskId}
-                  onViewTask={attachTask}
-                />
-              ) : undefined
-            }
           />
 
           {displayedSimulationStageAuthority ? (
             <>
-              <div className="grid gap-3 md:grid-cols-3">
-                <SummaryCard
-                  label={attachedSimulationStageTask ? "Attached Run" : "Latest Run"}
-                  value={`#${displayedSimulationStageAuthority.taskId}`}
-                  detail={displayedSimulationStageAuthority.summary}
-                />
-                <SummaryCard
-                  label="Result Availability"
-                  value={simulationResultReady ? "Explorer ready" : "Pending"}
-                  detail={
-                    displayedSimulationTaskDetail?.resultHandoff?.availability
-                      ? `Persisted handoff · ${displayedSimulationTaskDetail.resultHandoff.availability}`
-                      : displayedSimulationStageAuthority.resultAvailability
-                        ? `Queue summary · ${displayedSimulationStageAuthority.resultAvailability}`
-                        : "Waiting for persisted result handoff."
-                  }
-                />
-                <SummaryCard
-                  label="Downstream State"
-                  value={simulationResultReady ? "Post Processing unblocked" : "Post Processing blocked"}
-                  detail={
-                    simulationResultReady
-                      ? `Simulation task #${displayedSimulationStageAuthority.taskId} can now act as the upstream result source.`
-                      : "Persisted simulation outputs are not ready yet."
-                  }
-                />
+              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      {attachedSimulationStageTask ? "Attached Run" : "Latest Run"}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-foreground">
+                        Task #{displayedSimulationStageAuthority.taskId}
+                      </p>
+                      <SurfaceTag tone={taskStatusTone(displayedSimulationStageAuthority.status)}>
+                        {formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)}
+                      </SurfaceTag>
+                      <SurfaceTag tone={simulationResultReady ? "success" : "default"}>
+                        {simulationResultReady ? "Explorer ready" : "Preparing result"}
+                      </SurfaceTag>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                      {displayedSimulationTaskDetail?.progress.summary ??
+                        displayedSimulationStageAuthority.summary}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {simulationResultReady
+                        ? "This persisted result stays attached to the current page context and is ready for Post Processing."
+                        : "The explorer and save target appear as soon as the backend publishes the persisted result handoff."}
+                    </p>
+                  </div>
+                  <StageTaskActions
+                    task={displayedSimulationStageAuthority}
+                    resolvedTaskId={resolvedTaskId}
+                    onViewTask={attachTask}
+                  />
+                </div>
               </div>
 
               {displayedSimulationTaskDetail &&

@@ -709,7 +709,7 @@ export type SimulationResultExplorerQuery = Readonly<{
 }>;
 export type SimulationResultPublicationDraft = Readonly<{
   datasetId?: string | null;
-  designName: string;
+  designName?: string | null;
   designId?: string | null;
 }>;
 export type PublishedSimulationResultDataset = Readonly<{
@@ -1563,7 +1563,7 @@ export async function publishSimulationResult(
       method: "POST",
       body: {
         dataset_id: payload.datasetId ?? null,
-        design_name: payload.designName,
+        design_name: payload.designName ?? null,
         design_id: payload.designId ?? null,
       },
     },
