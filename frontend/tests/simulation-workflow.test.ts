@@ -98,6 +98,10 @@ const currentTraceSaveControlSource = readFileSync(
   ),
   "utf8",
 );
+const tasksApiSource = readFileSync(
+  fileURLToPath(new URL("../src/lib/api/tasks.ts", import.meta.url)),
+  "utf8",
+);
 
 describe("simulation definition routing helpers", () => {
   const definitions = [
@@ -1282,6 +1286,7 @@ describe("simulation workflow source contract", () => {
     expect(currentTraceSaveControlSource).toContain("createDatasetDesign");
     expect(currentTraceSaveControlSource).toContain("publishSimulationResultTrace");
     expect(currentTraceSaveControlSource).toContain("traceKey");
+    expect(tasksApiSource).toContain("/result-traces/publish");
     expect(currentTraceSaveControlSource).toContain("dataset_design_conflict");
     expect(currentTraceSaveControlSource).toContain("design_not_found");
     expect(currentTraceSaveControlSource).not.toContain("Active Dataset");

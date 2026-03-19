@@ -1610,13 +1610,12 @@ export async function publishSimulationResultTrace(
   payload: SimulationResultTracePublicationDraft,
 ): Promise<SimulationResultTracePublicationResult> {
   const response = await apiRequest<SimulationResultPublicationResponseShape>(
-    `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/publish`,
+    `/api/backend/tasks/${encodeURIComponent(taskId)}/result-traces/publish`,
     {
       method: "POST",
       body: {
         trace_key: payload.traceKey,
-        design_name: payload.designName ?? null,
-        design_id: payload.designId ?? null,
+        design_id: payload.designId,
       },
     },
   );
