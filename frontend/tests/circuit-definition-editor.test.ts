@@ -544,6 +544,12 @@ describe("circuit definition preview helpers", () => {
         willRewriteSourceName: false,
       },
     });
+
+    expect(formatted.formattedSource).toContain(
+      '    { "name": "R1", "unit": "Ohm", "default": 50 },',
+    );
+    expect(formatted.formattedSource).toContain('    ["P1", "1", "0", 1],');
+    expect(formatted.formattedSource).toContain('    ["C1", "1", "2", "C1"]');
   });
 
   it("describes serializer rewrite, persisted preview state, validation grouping, and normalized output", () => {

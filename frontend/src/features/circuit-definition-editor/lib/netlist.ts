@@ -43,6 +43,7 @@ export type CircuitDefinitionSerializerBoundary = Readonly<{
 }>;
 
 const nodeTokenPattern = /^\d+$/;
+const MAX_INLINE_LINE_LENGTH = 100;
 
 function normalizePythonLikeSource(sourceText: string) {
   return sourceText
@@ -72,27 +73,141 @@ function toFiniteNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function serializeCircuitNetlist(document: CircuitNetlistDocument) {
-  const serialized: Record<string, unknown> = {
-    name: document.name,
-    components: document.components.map((component) => ({
-      name: component.name,
-      unit: component.unit,
-      ...(component.default !== undefined ? { default: component.default } : {}),
-      ...(component.value_ref !== undefined ? { value_ref: component.value_ref } : {}),
-    })),
-    topology: document.topology.map((row) => [...row]),
-  };
+function indent(level: number) {
+  return "  ".repeat(level);
+}
 
-  if ((document.parameters?.length ?? 0) > 0) {
-    serialized.parameters = document.parameters?.map((parameter) => ({
-      name: parameter.name,
-      default: parameter.default,
-      unit: parameter.unit,
-    }));
+function fitsInline(text: string, indentLevel: number) {
+  return indent(indentLevel).length + text.length <= MAX_INLINE_LINE_LENGTH;
+}
+
+function serializePrimitiveJson(value: string | number | boolean | null) {
+  return JSON.stringify(value);
+}
+
+function serializeInlineJsonArray(values: readonly (string | number | boolean | null)[]) {
+  return `[${values.map((value) => serializePrimitiveJson(value)).join(", ")}]`;
+}
+
+function serializeInlineJsonObject(
+  entries: readonly (readonly [string, string | number | boolean | null])[],
+) {
+  const parts = entries.map(
+    ([key, value]) => `${JSON.stringify(key)}: ${serializePrimitiveJson(value)}`,
+  );
+  return `{ ${parts.join(", ")} }`;
+}
+
+function serializeComponentLine(component: CircuitNetlistComponent, indentLevel: number) {
+  const entries: [string, string | number | boolean | null][] = [
+    ["name", component.name],
+    ["unit", component.unit],
+  ];
+  if (component.default !== undefined) {
+    entries.push(["default", component.default]);
+  }
+  if (component.value_ref !== undefined) {
+    entries.push(["value_ref", component.value_ref]);
   }
 
-  return JSON.stringify(serialized, null, 2);
+  const inline = serializeInlineJsonObject(entries);
+  if (fitsInline(inline, indentLevel)) {
+    return inline;
+  }
+
+  const lines = entries.map(
+    ([key, value], index) =>
+      `${indent(indentLevel + 1)}${JSON.stringify(key)}: ${serializePrimitiveJson(value)}${
+        index < entries.length - 1 ? "," : ""
+      }`,
+  );
+  return `{\n${lines.join("\n")}\n${indent(indentLevel)}}`;
+}
+
+function serializeParameterLine(parameter: CircuitNetlistParameter, indentLevel: number) {
+  const entries: [string, string | number | boolean | null][] = [
+    ["name", parameter.name],
+    ["default", parameter.default],
+    ["unit", parameter.unit],
+  ];
+
+  const inline = serializeInlineJsonObject(entries);
+  if (fitsInline(inline, indentLevel)) {
+    return inline;
+  }
+
+  const lines = entries.map(
+    ([key, value], index) =>
+      `${indent(indentLevel + 1)}${JSON.stringify(key)}: ${serializePrimitiveJson(value)}${
+        index < entries.length - 1 ? "," : ""
+      }`,
+  );
+  return `{\n${lines.join("\n")}\n${indent(indentLevel)}}`;
+}
+
+function serializeTopologyRowLine(row: CircuitNetlistTopologyRow, indentLevel: number) {
+  const inline = serializeInlineJsonArray(row);
+  if (fitsInline(inline, indentLevel)) {
+    return inline;
+  }
+
+  const lines = row.map(
+    (value, index) =>
+      `${indent(indentLevel + 1)}${serializePrimitiveJson(value)}${
+        index < row.length - 1 ? "," : ""
+      }`,
+  );
+  return `[\n${lines.join("\n")}\n${indent(indentLevel)}]`;
+}
+
+function serializeCircuitNetlist(document: CircuitNetlistDocument) {
+  const parameters = document.parameters ?? [];
+  const lines: string[] = ["{"];
+
+  lines.push(`${indent(1)}"name": ${serializePrimitiveJson(document.name)},`);
+
+  if (document.components.length === 0) {
+    lines.push(`${indent(1)}"components": [],`);
+  } else {
+    lines.push(`${indent(1)}"components": [`);
+    for (const [index, component] of document.components.entries()) {
+      lines.push(
+        `${indent(2)}${serializeComponentLine(component, 2)}${
+          index < document.components.length - 1 ? "," : ""
+        }`,
+      );
+    }
+    lines.push(`${indent(1)}],`);
+  }
+
+  if (document.topology.length === 0) {
+    lines.push(`${indent(1)}"topology": []${parameters.length ? "," : ""}`);
+  } else {
+    lines.push(`${indent(1)}"topology": [`);
+    for (const [index, row] of document.topology.entries()) {
+      lines.push(
+        `${indent(2)}${serializeTopologyRowLine(row, 2)}${
+          index < document.topology.length - 1 ? "," : ""
+        }`,
+      );
+    }
+    lines.push(`${indent(1)}]${parameters.length ? "," : ""}`);
+  }
+
+  if (parameters.length > 0) {
+    lines.push(`${indent(1)}"parameters": [`);
+    for (const [index, parameter] of parameters.entries()) {
+      lines.push(
+        `${indent(2)}${serializeParameterLine(parameter, 2)}${
+          index < parameters.length - 1 ? "," : ""
+        }`,
+      );
+    }
+    lines.push(`${indent(1)}]`);
+  }
+
+  lines.push("}");
+  return lines.join("\n");
 }
 
 type ParseCircuitNetlistOptions = Readonly<{
