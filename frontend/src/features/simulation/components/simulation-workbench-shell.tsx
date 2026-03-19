@@ -6,7 +6,6 @@ import { EditorState } from "@codemirror/state";
 import { json } from "@codemirror/lang-json";
 import { EditorView } from "@codemirror/view";
 import {
-  ArrowUpRight,
   ChevronDown,
   ChevronRight,
   FileCode2,
@@ -18,7 +17,6 @@ import {
   Settings2,
   Trash2,
   WandSparkles,
-  Workflow,
   X,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -78,10 +76,6 @@ import {
   cx,
   resolveSurfaceInsetToneClass,
 } from "@/features/shared/components/surface-kit";
-import {
-  requestOpenGlobalContext,
-  resolveShellTaskHref,
-} from "@/components/layout/workspace-shell-contract";
 import { ApiError } from "@/lib/api/client";
 import type { TaskDetail, TaskExecutionStatus, TaskSummary } from "@/lib/api/tasks";
 import {
@@ -699,7 +693,7 @@ function resolveSimulationSetupAuthorityPresentation(
         secondaryTag: isDirty ? { label: "Local draft", tone: "default" } : null,
         message: isDirty
           ? "Current Stage 2 edits differ from this task's persisted simulation setup."
-          : "Viewing the persisted simulation setup from the current simulation task authority.",
+          : "Viewing the saved simulation setup from the current run.",
         restoreLabel: isDirty ? "Reapply task setup" : null,
       };
     case "official-example":
@@ -856,12 +850,10 @@ function StageTaskActions({
   task,
   resolvedTaskId,
   onViewTask,
-  onOpenGlobalContext,
 }: Readonly<{
   task: TaskSummary | undefined;
   resolvedTaskId: number | null;
   onViewTask: (taskId: number) => void;
-  onOpenGlobalContext: (taskId: number) => void;
 }>) {
   if (!task) {
     return null;
@@ -891,15 +883,6 @@ function StageTaskActions({
           Resume Latest Run
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={() => {
-          onOpenGlobalContext(task.taskId);
-        }}
-        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-      >
-        Open in Global Context
-      </button>
     </div>
   );
 }
@@ -1885,17 +1868,12 @@ export function SimulationWorkbenchShell() {
     });
   }
 
-  function openTaskInGlobalContext(taskId: number) {
-    attachTask(taskId);
-    requestOpenGlobalContext("tasks");
-  }
-
   return (
     <div className="space-y-6">
       <SurfaceHeader
         eyebrow="Research Workflow"
         title="Circuit Simulation"
-        description="Run simulation and post-processing as a five-stage pipeline. Queue browse, worker health, cancel, terminate, retry, and deep diagnostics stay in Global Context."
+        description="Set up the run, inspect the result, and carry useful outputs forward into post processing."
         actions={
           <button
             type="button"
@@ -1970,15 +1948,6 @@ export function SimulationWorkbenchShell() {
                   Resume Latest Run
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  requestOpenGlobalContext("tasks");
-                }}
-                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-              >
-                Open in Global Context
-              </button>
             </>
           }
         />
@@ -2876,7 +2845,6 @@ export function SimulationWorkbenchShell() {
                   task={displayedSimulationStageAuthority}
                   resolvedTaskId={resolvedTaskId}
                   onViewTask={attachTask}
-                  onOpenGlobalContext={openTaskInGlobalContext}
                 />
               </div>
             </div>
@@ -2886,7 +2854,7 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={3}
           title="Simulation Result"
-          description="Inspect the latest simulation output without turning the page into a queue or worker dashboard."
+          description="Inspect the latest simulation output and keep useful results close to the next step."
           status={simulationResultState}
         >
           <StageNotice
@@ -2903,7 +2871,6 @@ export function SimulationWorkbenchShell() {
                   task={displayedSimulationStageAuthority}
                   resolvedTaskId={resolvedTaskId}
                   onViewTask={attachTask}
-                  onOpenGlobalContext={openTaskInGlobalContext}
                 />
               ) : undefined
             }
@@ -2946,7 +2913,7 @@ export function SimulationWorkbenchShell() {
                   <StageNotice
                     tone="primary"
                     title="Live result refresh"
-                    message="This stage refreshes the persisted simulation task every 2 seconds while it is queued or running, then attaches result refs as soon as the backend materializes them."
+                    message="This stage refreshes every 2 seconds while the run is active, then attaches the saved result as soon as it is ready."
                   />
                 </div>
               ) : null}
@@ -3254,7 +3221,6 @@ export function SimulationWorkbenchShell() {
                   task={latestPostProcessingStageAuthority}
                   resolvedTaskId={resolvedTaskId}
                   onViewTask={attachTask}
-                  onOpenGlobalContext={openTaskInGlobalContext}
                 />
               </div>
             </div>
@@ -3322,39 +3288,12 @@ export function SimulationWorkbenchShell() {
                     task={latestPostProcessingStageAuthority}
                     resolvedTaskId={resolvedTaskId}
                     onViewTask={attachTask}
-                    onOpenGlobalContext={openTaskInGlobalContext}
                   />
                 }
               />
             </>
           ) : null}
         </WorkflowStageSection>
-      </div>
-
-      <div className="rounded-[1rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-        <div className="flex flex-wrap items-center gap-2">
-          <Workflow className="h-4 w-4 text-primary" />
-          <p className="font-medium text-foreground">Global Context owns the infrastructure.</p>
-        </div>
-        <p className="mt-2 leading-6">
-          Queue browsing, worker lane health, attach / cancel / terminate / retry, and deeper task
-          diagnostics stay in Global Context. This page only keeps the stage-local execution state
-          needed to finish the simulation workflow.
-        </p>
-        {latestSimulationTask ? (
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => {
-                openTaskInGlobalContext(latestSimulationTask.taskId);
-              }}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-            >
-              <ArrowUpRight className="h-3.5 w-3.5" />
-              Open Latest Pipeline Task in Global Context
-            </button>
-          </div>
-        ) : null}
       </div>
 
       <OverlayDialog

@@ -258,7 +258,7 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
     return (
       <SurfacePanel
         title="Simulation Result Explorer"
-        description="Loading backend-authoritative simulation result controls and plot data."
+        description="Loading simulation result controls and plot data."
       >
         <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
           Loading the persisted explorer surface for task #{task.taskId}.
@@ -271,7 +271,7 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
     return (
       <SurfacePanel
         title="Simulation Result Explorer"
-        description="Stage 3 uses the backend explorer API as the authority for families, sources, metrics, and plotted result data."
+        description="The simulation result explorer is unavailable right now."
       >
         <div className="rounded-[0.95rem] border border-rose-500/35 bg-rose-50/90 px-4 py-4 text-sm text-rose-950 dark:border-rose-500/45 dark:bg-rose-950/40 dark:text-rose-100">
           Unable to load the simulation result explorer right now.{" "}
@@ -284,7 +284,7 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
   return (
     <SurfacePanel
       title="Simulation Result Explorer"
-      description="Inspect persisted simulation outputs with backend-owned family, source, metric, and port selectors."
+      description="Inspect saved simulation outputs with family, source, metric, and port selectors."
       actions={
         <AppSegmentedControl
           value={viewMode}
@@ -466,11 +466,10 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                Explorer Basis
+                Result Source
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Backend explorer authority is attached to the persisted simulation result for task
-                #{payload.taskId}.
+                This view is attached to the saved result for task #{payload.taskId}.
               </p>
             </div>
             <DatabaseZap className="h-4 w-4 text-muted-foreground" />

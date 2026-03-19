@@ -675,7 +675,7 @@ export function CircuitDefinitionEditorWorkspace() {
                 ) : null}
               </h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Focus on the definition name and canonical netlist source. Canonical JSON format stays explicit, and save remains the only mutation that refreshes persisted preview authority.
+                Edit the definition name and JSON source here. Saving refreshes the preview and notices below.
               </p>
             </div>
 
@@ -741,7 +741,7 @@ export function CircuitDefinitionEditorWorkspace() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  `Cmd/Ctrl + Shift + F` rewrites the local draft into canonical circuit-netlist JSON. It does not save.
+                  `Cmd/Ctrl + Shift + F` rewrites the local draft into normalized JSON. It does not save.
                 </p>
                 {form.formState.errors.source_text ? (
                   <span className="text-xs text-rose-700 dark:text-rose-300">
@@ -759,8 +759,7 @@ export function CircuitDefinitionEditorWorkspace() {
               Validation & Preview
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Persisted backend notices stay signal-first. The canonical source already lives in the
-              editor, so this card only focuses on validation state and normalized output.
+              Checks and normalized output appear here after save.
             </p>
           </div>
 
@@ -824,7 +823,7 @@ export function CircuitDefinitionEditorWorkspace() {
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Normalized Output</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Backend-derived canonical preview, kept expanded for authoring inspection.
+                  Latest saved preview, kept expanded for inspection.
                 </p>
               </div>
               <span className="rounded-full border border-border bg-background px-3 py-1 text-[11px] text-muted-foreground">
@@ -876,7 +875,7 @@ export function CircuitDefinitionEditorWorkspace() {
             Circuit Netlist Quick Reference
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Keep the canonical component, unit, and topology rules nearby while authoring.
+            Keep the component, unit, and topology rules nearby while you edit.
           </p>
         </div>
 

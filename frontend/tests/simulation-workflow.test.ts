@@ -1200,7 +1200,6 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Pump Source");
     expect(simulationWorkbenchSource).toContain("Run Simulation");
     expect(simulationWorkbenchSource).toContain("Run Post Processing");
-    expect(simulationWorkbenchSource).toContain("Open in Global Context");
     expect(simulationWorkbenchSource).toContain("postSourceSelection");
     expect(simulationWorkbenchSource).toContain("downstreamSourceCapabilities");
     expect(simulationWorkbenchSource).toContain("PTC source");
@@ -1258,7 +1257,6 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
     expect(simulationResultExplorerSource).toContain("Z0 only applies to Y/Z derived explorer families.");
     expect(simulationWorkbenchSource).toContain("SimulationResultPublicationCard");
-    expect(simulationResultPublicationCardSource).toContain("Task Result to Dataset");
     expect(simulationResultPublicationCardSource).toContain("Save to Dataset");
     expect(simulationResultPublicationCardSource).toContain("publishSimulationResult");
     expect(simulationResultPublicationCardSource).toContain("Open in Raw Data Browser");

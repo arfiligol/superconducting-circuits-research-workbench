@@ -368,7 +368,7 @@ export function CircuitSchemdrawWorkspace() {
             Circuit Schemdraw
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Edit source in a request/response authoring assist surface, then inspect the latest SVG preview plus diagnostics.
+            Edit source, render again, and inspect the latest SVG preview plus diagnostics.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -404,7 +404,7 @@ export function CircuitSchemdrawWorkspace() {
               Linked Schema Context
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Attach one persisted schema as reference context for the current render request.
+              Choose the saved schema you want to keep beside this preview.
             </p>
           </div>
           <SurfaceTag tone={previewTone}>{renderSurface.statusLabel}</SurfaceTag>
@@ -496,7 +496,7 @@ export function CircuitSchemdrawWorkspace() {
             {activeDefinition?.preview_artifact_count ?? 0} preview artifacts
           </span>
           <span className="rounded-full border border-border px-3 py-1">
-            backend render authority
+            latest render
           </span>
         </div>
 
@@ -548,7 +548,7 @@ export function CircuitSchemdrawWorkspace() {
                 Schemdraw Source Editor
               </h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Editing marks the preview stale until a newer backend response is accepted.
+                Editing makes the preview stale until you render again.
               </p>
             </div>
             <button
@@ -597,7 +597,7 @@ export function CircuitSchemdrawWorkspace() {
                 SVG Live Preview
               </h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                The latest successful backend render stays visible until a newer valid response replaces it.
+                The latest successful render stays visible until a newer valid one replaces it.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[11px]">
@@ -683,10 +683,10 @@ export function CircuitSchemdrawWorkspace() {
       <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
         <div className="border-b border-border/80 pb-4">
           <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Backend Diagnostics
+            Render Diagnostics
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Diagnostics come from the latest backend render response or request error.
+            Diagnostics come from the latest render or request error.
           </p>
         </div>
 

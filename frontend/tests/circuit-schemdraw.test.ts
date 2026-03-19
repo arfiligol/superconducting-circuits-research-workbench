@@ -842,7 +842,7 @@ describe("circuit schemdraw workspace source contracts", () => {
     const linkedIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Context");
     const editorIndex = schemdrawWorkspaceSource.indexOf("Schemdraw Source Editor");
     const previewIndex = schemdrawWorkspaceSource.indexOf("SVG Live Preview");
-    const diagnosticsIndex = schemdrawWorkspaceSource.indexOf("Backend Diagnostics");
+    const diagnosticsIndex = schemdrawWorkspaceSource.indexOf("Render Diagnostics");
     const snapshotIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Snapshot");
 
     expect(linkedIndex).toBeGreaterThan(-1);
@@ -889,9 +889,9 @@ describe("circuit schemdraw workspace boundaries", () => {
     "utf8",
   );
 
-  it("keeps schemdraw as a request-response assist surface with a clear linked-schema path", () => {
+  it("keeps schemdraw focused on editing, rendering, and a clear linked-schema path", () => {
     expect(workspaceSource).toContain("No linked schema");
-    expect(workspaceSource).toContain("request/response authoring assist surface");
+    expect(workspaceSource).toContain("Edit source, render again");
     expect(workspaceSource).toContain("Stale preview");
     expect(workspaceSource).toContain("showDebugDisclosure");
     expect(workspaceSource).toContain("Transport failure");

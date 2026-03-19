@@ -163,9 +163,9 @@ export function DataIngestionWorkspace() {
   const submitBlockedReason = !activeDataset
     ? "Attach an active dataset in the shell before importing raw data."
     : profileQuery.isLoading
-      ? "Checking dataset ingestion authority..."
+      ? "Checking whether this dataset can accept imports..."
       : !canIngest
-        ? "The current dataset authority does not allow raw-data ingestion."
+        ? "Raw-data import is unavailable for the current dataset."
         : !selectedFile
           ? "Choose a CSV file to validate and preprocess."
           : !validation
@@ -253,13 +253,13 @@ export function DataIngestionWorkspace() {
       <SurfaceHeader
         eyebrow="Raw-Data Intake"
         title="Data Ingestion"
-        description="Upload a CSV file, validate the intake contract, preprocess it into the current backend ingestion payload, and import it into the active dataset."
+        description="Upload a CSV file, review the parsed result, and import it into the active dataset."
         actions={<SurfaceTag tone="primary">{selectedScopeSummary.title}</SurfaceTag>}
       />
 
       <SurfacePanel
         title="Upload-first intake"
-        description="Choose the intake type, confirm the target dataset, upload a CSV file, and review the validation result before import."
+        description="Choose the trace type, confirm the target dataset, upload a CSV file, and review the validation result before import."
       >
         <div className="space-y-5">
           <div className="grid gap-4 md:grid-cols-2">

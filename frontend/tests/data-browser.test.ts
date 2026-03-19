@@ -208,7 +208,7 @@ describe("page-boundary source contracts", () => {
   });
 
   it("keeps raw-data summary-first and metadata-read-only", () => {
-    expect(rawDataWorkspaceSource).toContain("dataset-scoped");
+    expect(rawDataWorkspaceSource).toContain("Choose a design");
     expect(rawDataWorkspaceSource).toContain("metadata-only until one row is selected for preview");
     expect(rawDataWorkspaceSource).toContain("Single Trace Preview");
     expect(rawDataWorkspaceSource).not.toContain('title="Selected Design Summary"');

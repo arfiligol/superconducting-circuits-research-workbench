@@ -837,6 +837,6 @@ describe("circuit definition workspace boundaries", () => {
     expect(editorWorkspaceSource).not.toContain("Open another schema without leaving the editor workflow.");
     expect(editorWorkspaceSource).not.toContain("Local Contract Diagnostics");
     expect(editorWorkspaceSource).toContain("extensions={[json()]}");
-    expect(editorWorkspaceSource).toContain("canonical circuit-netlist JSON");
+    expect(editorWorkspaceSource).toContain("normalized JSON");
   });
 });

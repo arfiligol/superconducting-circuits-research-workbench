@@ -128,12 +128,12 @@ export function RawDataBrowserWorkspace() {
       <SurfaceHeader
         eyebrow="Raw Data Browser"
         title="Raw Data"
-        description="Browse dataset-local design scopes, filter trace metadata, inspect compare readiness, and open one trace preview at a time without mixing metadata writes into this page."
+        description="Choose a design, narrow the trace list, and open one preview at a time."
       />
 
       <SurfacePanel
         title="Design Scopes"
-        description="Design selection stays page-local and dataset-scoped. Coverage and compare readiness stay attached here so the page can move quickly into trace selection and preview."
+        description="Start with a design here, then move straight into trace selection and preview."
       >
         {browser.designsError ? (
           <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
@@ -551,7 +551,7 @@ export function RawDataBrowserWorkspace() {
                     Provenance
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Trace preview authority stays tied to the selected trace detail payload and its persisted payload ref.
+                    Preview details follow the selected trace and its saved payload reference.
                   </p>
                 </div>
               </div>

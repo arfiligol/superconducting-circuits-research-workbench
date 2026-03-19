@@ -68,8 +68,8 @@ function describePublicationError(error: unknown) {
       case "persistence_error":
       case "trace_store_error":
         return error.retryable
-          ? "The save failed while writing dataset-owned research data. Retry is available."
-          : "The save failed while writing dataset-owned research data.";
+          ? "The save failed while writing the dataset copy. Retry is available."
+          : "The save failed while writing the dataset copy.";
       default:
         break;
     }
@@ -175,7 +175,7 @@ export function SimulationResultPublicationCard({
         message:
           result.operation === "already_published"
             ? "This task result was already saved to the same dataset destination."
-            : "Saved this task result into durable dataset-owned research data.",
+            : "Saved this task result to the dataset.",
       });
     } catch (error) {
       setMutationState({
@@ -190,11 +190,10 @@ export function SimulationResultPublicationCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            Task Result to Dataset
+            Save to Dataset
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            The explorer is task-scoped. Save to Dataset stores this output as durable
-            dataset-owned research data.
+            Review this run first. Save to Dataset stores a durable copy under a dataset and design.
           </p>
         </div>
         <SurfaceTag tone={publicationTone(publicationSummary)}>
@@ -226,9 +225,9 @@ export function SimulationResultPublicationCard({
         <div className="rounded-[0.95rem] border border-border bg-card px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <SurfaceTag tone={publicationSummary.state === "published" ? "success" : "default"}>
-              Research Data
+              Saved Result
             </SurfaceTag>
-            <p className="text-xs text-muted-foreground">Dataset / design owned</p>
+            <p className="text-xs text-muted-foreground">Stored in dataset</p>
           </div>
 
           {publicationSummary.state === "published" ? (
@@ -312,8 +311,8 @@ export function SimulationResultPublicationCard({
               </div>
 
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Save to Dataset creates durable dataset-owned traces from this task result
-                without changing the task-backed explorer itself.
+                Save to Dataset stores these traces under the current dataset and design without
+                changing the run itself.
               </p>
 
               <div className="mt-4">
