@@ -189,7 +189,7 @@ def build_result_trace_publication_detail(
         design_id=design_id,
         axes=(TraceAxis(name="frequency", unit="GHz", length=point_count),),
         preview_payload={
-            "kind": "sampled_series",
+            "kind": "series",
             "family": selection.family,
             "source": selection.source,
             "parameter": build_trace_parameter(selection),
@@ -291,14 +291,13 @@ def _build_preview_points(
     matrices = family_bundle[selection.family][selection.source]
     row_index = selection.output_port - 1
     column_index = selection.input_port - 1
-    sampled_indices = _sample_indices(len(frequencies))
     return [
         [
-            round(frequencies[index], 6),
-            round(matrices[index][row_index][column_index].real, 6),
-            round(matrices[index][row_index][column_index].imag, 6),
+            round(frequency, 6),
+            round(matrix[row_index][column_index].real, 6),
+            round(matrix[row_index][column_index].imag, 6),
         ]
-        for index in sampled_indices
+        for frequency, matrix in zip(frequencies, matrices, strict=True)
     ]
 
 
@@ -321,13 +320,6 @@ def _provenance_summary_for_trace(
             f"({selection.source.upper()} {build_trace_parameter(selection)})"
         )
     return f"Published from simulation task {task.task_id}"
-
-
-def _sample_indices(length: int) -> list[int]:
-    if length <= 3:
-        return list(range(length))
-    middle = length // 2
-    return [0, middle, length - 1]
 
 
 def _setup_port_indices(task: TaskDetail) -> tuple[int, ...]:

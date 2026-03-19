@@ -5,7 +5,10 @@ import { Search } from "lucide-react";
 
 import { TracePreviewPlot } from "@/features/data-browser/components/trace-preview-plot";
 import { useRawDataBrowserData } from "@/features/data-browser/hooks/use-raw-data-browser-data";
-import { resolveTracePreviewSemantics } from "@/features/data-browser/lib/trace-preview";
+import {
+  humanizeTraceLabel,
+  resolveTracePreviewSemantics,
+} from "@/features/data-browser/lib/trace-preview";
 import { AppInlineSelect } from "@/features/shared/components/app-select";
 import { AppSegmentedControl } from "@/features/shared/components/app-segmented-control";
 import { SurfaceHeader, SurfacePanel, SurfaceTag, cx } from "@/features/shared/components/surface-kit";
@@ -26,6 +29,37 @@ function formatCoverage(coverage: Record<string, number>) {
     return "No source coverage";
   }
   return entries.map(([key, value]) => `${key}: ${value}`).join(" · ");
+}
+
+function formatTraceValue(value: string) {
+  return humanizeTraceLabel(value) || value;
+}
+
+function formatTraceSource(value: string) {
+  switch (value) {
+    case "layout_simulation":
+      return "Layout sim";
+    case "circuit_simulation":
+      return "Circuit sim";
+    default:
+      return formatTraceValue(value);
+  }
+}
+
+function resolvePreviewPoints(points: unknown) {
+  if (!Array.isArray(points)) {
+    return [];
+  }
+
+  return points.filter(
+    (point): point is number[] =>
+      Array.isArray(point) &&
+      point.length >= 2 &&
+      typeof point[0] === "number" &&
+      Number.isFinite(point[0]) &&
+      typeof point[1] === "number" &&
+      Number.isFinite(point[1]),
+  );
 }
 
 function SearchField({
@@ -98,21 +132,20 @@ export function RawDataBrowserWorkspace() {
   const selectedDesign = browser.designs.find((row) => row.design_id === browser.selectedDesignId) ?? null;
   const selectedTraceSummary =
     browser.traces.find((row) => row.trace_id === browser.selectedTraceId) ?? null;
+  const previewPoints = useMemo(
+    () => resolvePreviewPoints(browser.traceDetail?.preview_payload.points),
+    [browser.traceDetail?.preview_payload.points],
+  );
   const previewSeries = useMemo(() => {
-    const points = browser.traceDetail?.preview_payload.points ?? [];
-    const x = points
-      .map((point) => point[0])
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-    const y = points
-      .map((point) => point[1])
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const x = previewPoints.map((point) => point[0]);
+    const y = previewPoints.map((point) => point[1]);
 
     return {
       x,
       y,
       isPlotReady: x.length > 0 && x.length === y.length,
     };
-  }, [browser.traceDetail?.preview_payload.points]);
+  }, [previewPoints]);
   const previewSemantics = useMemo(
     () =>
       resolveTracePreviewSemantics({
@@ -122,6 +155,14 @@ export function RawDataBrowserWorkspace() {
       }),
     [browser.traceDetail?.axes, browser.traceDetail?.trace_id, selectedTraceSummary],
   );
+  const previewPointCount = previewPoints.length;
+  const hasSampledPreview =
+    typeof previewSemantics.xAxisPointCount === "number" &&
+    previewPointCount > 0 &&
+    previewPointCount < previewSemantics.xAxisPointCount;
+  const previewPointCountLabel = hasSampledPreview
+    ? `${previewPointCount} of ${previewSemantics.xAxisPointCount} points`
+    : previewSemantics.xAxisPointCountLabel;
 
   return (
     <div className="space-y-8">
@@ -290,7 +331,7 @@ export function RawDataBrowserWorkspace() {
                 <div className="min-w-0">
                   <p className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                     <Search className="h-3.5 w-3.5" />
-                    Search Trace Summaries
+                    Search
                   </p>
                   <div className="flex items-center gap-3 rounded-[0.95rem] border border-border/80 bg-background px-3 py-3">
                     <Search className="h-4 w-4 text-muted-foreground" />
@@ -302,7 +343,7 @@ export function RawDataBrowserWorkspace() {
                           search: event.target.value,
                         }));
                       }}
-                      placeholder="Search parameter, provenance, or trace id"
+                      placeholder="Parameter or history"
                       className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                     />
                   </div>
@@ -316,7 +357,7 @@ export function RawDataBrowserWorkspace() {
                   options={["", "s_matrix", "y_matrix", "z_matrix"]}
                 />
                 <TraceFilterSelect
-                  label="Representation"
+                  label="View"
                   value={browser.filters.representation}
                   onChange={(value) => {
                     browser.setFilters((current) => ({ ...current, representation: value }));
@@ -340,14 +381,14 @@ export function RawDataBrowserWorkspace() {
               </div>
             ) : browser.traces.length > 0 ? (
               <div className="mt-4 overflow-hidden rounded-xl border border-border/80">
-                <table className="min-w-full divide-y divide-border text-sm">
+                <table className="min-w-full table-fixed divide-y divide-border text-sm">
                   <thead className="bg-surface">
                     <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                      <th className="px-4 py-3">Parameter</th>
-                      <th className="px-4 py-3">Family</th>
-                      <th className="px-4 py-3">Representation</th>
-                      <th className="px-4 py-3">Source</th>
-                      <th className="px-4 py-3">Provenance</th>
+                      <th className="w-[22%] px-4 py-3">Parameter</th>
+                      <th className="w-[18%] px-4 py-3">Family</th>
+                      <th className="w-[16%] px-4 py-3">View</th>
+                      <th className="w-[18%] px-4 py-3">Origin</th>
+                      <th className="px-4 py-3">History</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border bg-card">
@@ -363,9 +404,15 @@ export function RawDataBrowserWorkspace() {
                         }}
                       >
                         <td className="px-4 py-3 font-medium text-foreground">{trace.parameter}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{trace.family}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{trace.representation}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{trace.source_kind}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {formatTraceValue(trace.family)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {formatTraceValue(trace.representation)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {formatTraceSource(trace.source_kind)}
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground">{trace.provenance_summary}</td>
                       </tr>
                     ))}
@@ -445,9 +492,11 @@ export function RawDataBrowserWorkspace() {
                       </span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Point Count</span>
+                      <span className="text-muted-foreground">
+                        {hasSampledPreview ? "Preview" : "Point Count"}
+                      </span>
                       <span className="ml-2 font-medium text-foreground">
-                        {previewSemantics.xAxisPointCountLabel}
+                        {previewPointCountLabel}
                       </span>
                     </div>
                     <div>
@@ -483,7 +532,7 @@ export function RawDataBrowserWorkspace() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border bg-surface">
-                        {(browser.traceDetail.preview_payload.points ?? []).map((point, index) => (
+                        {previewPoints.map((point, index) => (
                           <tr key={`${point[0]}-${index}`}>
                             <td className="px-4 py-3 text-muted-foreground">{point[0]}</td>
                             <td className="px-4 py-3 font-medium text-foreground">{point[1]}</td>

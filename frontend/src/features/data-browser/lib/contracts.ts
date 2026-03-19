@@ -187,7 +187,7 @@ export type TraceDetail = Readonly<{
   axes: TraceAxis[];
   preview_payload: Readonly<{
     kind: string;
-    points?: number[][];
+    points?: number[][] | number;
   }>;
   payload_ref: TracePayloadRef | null;
   result_handles: ResultHandleRef[];

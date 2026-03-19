@@ -1682,8 +1682,11 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             design_id="design_local_flux_playground",
             axes=(TraceAxis(name="frequency", unit="GHz", length=51),),
             preview_payload={
-                "kind": "sampled_series",
-                "points": [[4.8, 0.11], [5.0, 0.13], [5.2, 0.1]],
+                "kind": "series",
+                "points": _build_interpolated_series_points(
+                    anchors=((4.8, 0.11), (5.0, 0.13), (5.2, 0.1)),
+                    length=51,
+                ),
             },
             payload_ref=build_trace_payload_ref(
                 payload_role="dataset_primary",
@@ -1765,12 +1768,11 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             design_id="design_flux_scan_a",
             axes=(TraceAxis(name="frequency", unit="GHz", length=401),),
             preview_payload={
-                "kind": "sampled_series",
-                "points": [
-                    [5.71, 0.011],
-                    [5.78, 0.017],
-                    [5.84, 0.014],
-                ],
+                "kind": "series",
+                "points": _build_interpolated_series_points(
+                    anchors=((5.71, 0.011), (5.78, 0.017), (5.84, 0.014)),
+                    length=401,
+                ),
             },
             payload_ref=build_trace_payload_ref(
                 payload_role="dataset_primary",
@@ -1794,8 +1796,11 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             design_id="design_flux_scan_b",
             axes=(TraceAxis(name="frequency", unit="GHz", length=201),),
             preview_payload={
-                "kind": "sampled_series",
-                "points": [[6.1, 0.42], [6.18, 0.51], [6.24, 0.47]],
+                "kind": "series",
+                "points": _build_interpolated_series_points(
+                    anchors=((6.1, 0.42), (6.18, 0.51), (6.24, 0.47)),
+                    length=201,
+                ),
             },
             payload_ref=build_trace_payload_ref(
                 payload_role="dataset_primary",
@@ -1819,8 +1824,11 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             design_id="design_resonator_temp",
             axes=(TraceAxis(name="temperature", unit="mK", length=31),),
             preview_payload={
-                "kind": "sampled_series",
-                "points": [[10, 0.91], [20, 0.88], [30, 0.81]],
+                "kind": "series",
+                "points": _build_interpolated_series_points(
+                    anchors=((10, 0.91), (20, 0.88), (30, 0.81)),
+                    length=31,
+                ),
             },
             payload_ref=build_trace_payload_ref(
                 payload_role="dataset_primary",
@@ -1844,8 +1852,11 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             design_id="design_coupler_detuning",
             axes=(TraceAxis(name="bias", unit="V", length=76),),
             preview_payload={
-                "kind": "sampled_series",
-                "points": [[-0.28, 11.2], [-0.265, 10.8], [-0.25, 10.4]],
+                "kind": "series",
+                "points": _build_interpolated_series_points(
+                    anchors=((-0.28, 11.2), (-0.265, 10.8), (-0.25, 10.4)),
+                    length=76,
+                ),
             },
             payload_ref=build_trace_payload_ref(
                 payload_role="dataset_primary",
@@ -1895,8 +1906,11 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             design_id="design_coupler_detuning",
             axes=(TraceAxis(name="bias", unit="V", length=76),),
             preview_payload={
-                "kind": "sampled_series",
-                "points": [[-0.28, 11.0], [-0.265, 10.7], [-0.25, 10.3]],
+                "kind": "series",
+                "points": _build_interpolated_series_points(
+                    anchors=((-0.28, 11.0), (-0.265, 10.7), (-0.25, 10.3)),
+                    length=76,
+                ),
             },
             payload_ref=build_trace_payload_ref(
                 payload_role="dataset_primary",
@@ -1911,6 +1925,38 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
             result_handles=(),
         ),
     }
+
+
+def _build_interpolated_series_points(
+    *,
+    anchors: tuple[tuple[float, float], tuple[float, float], tuple[float, float]],
+    length: int,
+) -> list[list[float]]:
+    if length <= 1:
+        return [[round(anchors[0][0], 6), round(anchors[0][1], 6)]]
+
+    start, middle, end = anchors
+    middle_index = length // 2
+    last_index = length - 1
+
+    def _interpolate(
+        left: tuple[float, float],
+        right: tuple[float, float],
+        ratio: float,
+    ) -> list[float]:
+        x = left[0] + ((right[0] - left[0]) * ratio)
+        y = left[1] + ((right[1] - left[1]) * ratio)
+        return [round(x, 6), round(y, 6)]
+
+    points: list[list[float]] = []
+    for index in range(length):
+        if index <= middle_index:
+            ratio = 0.0 if middle_index == 0 else index / middle_index
+            points.append(_interpolate(start, middle, ratio))
+            continue
+        ratio = (index - middle_index) / max(last_index - middle_index, 1)
+        points.append(_interpolate(middle, end, ratio))
+    return points
 
 
 def _seed_characterization_analysis_registry() -> dict[

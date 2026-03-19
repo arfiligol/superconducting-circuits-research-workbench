@@ -357,6 +357,20 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     assert trace_detail.result_handles[0].handle_id == "result:fluxonium-2025-031:fit-summary"
 
 
+def test_local_seed_single_trace_preview_uses_full_series_for_one_dimensional_preview(
+    catalog_repository: InMemoryRewriteCatalogRepository,
+) -> None:
+    trace_detail = catalog_repository.get_trace_detail(
+        "local-dataset-001",
+        "design_local_flux_playground",
+        "trace_local_flux_preview",
+    )
+
+    assert trace_detail is not None
+    assert trace_detail.preview_payload["kind"] == "series"
+    assert len(trace_detail.preview_payload["points"]) == trace_detail.axes[0].length
+
+
 def test_dataset_service_exposes_characterization_result_summary_and_detail_surfaces(
     dataset_service: DatasetService,
 ) -> None:

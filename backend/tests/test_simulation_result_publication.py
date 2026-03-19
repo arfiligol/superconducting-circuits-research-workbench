@@ -451,6 +451,14 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
     assert [row["trace_id"] for row in rows] == [payload["trace"]["trace_id"]]
     assert rows[0]["parameter"] == "Y11"
 
+    trace_detail = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/{payload['trace']['trace_id']}"
+    )
+    assert trace_detail.status_code == 200
+    trace_payload = trace_detail.json()["data"]
+    assert trace_payload["preview_payload"]["kind"] == "series"
+    assert len(trace_payload["preview_payload"]["points"]) == trace_payload["axes"][0]["length"]
+
     second = client.post(
         f"/tasks/{task['task_id']}/result-traces/publish",
         json={

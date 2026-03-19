@@ -229,7 +229,7 @@ describe("page-boundary source contracts", () => {
   it("strengthens raw-data search affordance and keeps the wording consistent", () => {
     expect(rawDataWorkspaceSource).toContain("function SearchField");
     expect(rawDataWorkspaceSource).toContain('label="Search Design"');
-    expect(rawDataWorkspaceSource).toContain("Search Trace Summaries");
+    expect(rawDataWorkspaceSource).toContain("Parameter or history");
     expect(rawDataWorkspaceSource).toContain("<Search className=");
   });
 
@@ -239,10 +239,18 @@ describe("page-boundary source contracts", () => {
       'grid gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.95fr)]',
     );
     expect(rawDataWorkspaceSource).toContain('label="Family"');
-    expect(rawDataWorkspaceSource).toContain('label="Representation"');
+    expect(rawDataWorkspaceSource).toContain('label="View"');
     expect(rawDataWorkspaceSource).toContain('label="Source"');
     expect(rawDataWorkspaceSource).toContain("AppInlineSelect");
     expect(rawDataWorkspaceSource).not.toContain("function FilterSelect");
+  });
+
+  it("shortens trace-summary table copy without hiding the browsing meaning", () => {
+    expect(rawDataWorkspaceSource).toContain(">View<");
+    expect(rawDataWorkspaceSource).toContain(">Origin<");
+    expect(rawDataWorkspaceSource).toContain(">History<");
+    expect(rawDataWorkspaceSource).not.toContain(">Representation<");
+    expect(rawDataWorkspaceSource).not.toContain(">Provenance<");
   });
 
   it("rebuilds single trace preview as plot and table views over one payload", () => {
@@ -256,6 +264,7 @@ describe("page-boundary source contracts", () => {
       rawDataWorkspaceSource.indexOf("Preview Source"),
     );
     expect(rawDataWorkspaceSource).not.toContain("Result Handles");
+    expect(rawDataWorkspaceSource).toContain('hasSampledPreview ? "Preview" : "Point Count"');
   });
 
   it("makes axis semantics explicit instead of mixing point count with units", () => {
