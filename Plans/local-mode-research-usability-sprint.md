@@ -10,6 +10,15 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 - Task ID / Topic: `L8-Local-Mode-Research-Usability`
 - Status: `Active planning checkpoint 2026-03-19`
 
+## 0.1) Execution Checkpoint (2026-03-19)
+
+- Merged on `main`:
+  - backend explicit dataset-scoped design creation
+  - simulation publication support for explicit `design_id` targets
+- Immediate consequence:
+  - the backend side of `LM1` is now available on `main`
+  - the next active implementation need is frontend adoption of the new create-and-select design flow plus simulation-result task-surface cleanup
+
 ## 1) Goal
 
 - Reach a Local Mode workflow where a researcher can:
@@ -54,7 +63,7 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 
 ### Current main-branch gaps
 
-#### 1. `Save to Design` is not finished
+#### 1. `Save to Design` is not finished on the frontend
 
 - `frontend/src/features/simulation/components/simulation-result-publication-card.tsx` on `main` still presents `Save to Dataset` and uses free-text `designName`.
 - The reviewed frontend slice `7e815bac29e6de513e17fe525419a6954232a767` improves the model, but it still uses `Existing design / New design` with free-text entry on the new-design path.
@@ -64,11 +73,12 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - once created, the new design must immediately appear in the dropdown
   - avoid typo-prone free-text naming in the main save surface
 
-#### 2. There is no standalone create-design contract yet
+#### 2. Explicit create-design backend support is now present, but not yet adopted by the frontend
 
-- Current dataset router exposes `GET /datasets/{dataset_id}/designs` but not a dataset-scoped create-design mutation.
-- Current simulation publication can still materialize a new design implicitly from `design_name` plus slug derivation.
-- That implicit behavior is not enough for the desired UX because it does not provide an explicit create-select-confirm loop.
+- `main` now includes a dataset-scoped create-design mutation.
+- `main` now also supports simulation-result publication targeted by explicit `design_id`.
+- Remaining gap:
+  - the frontend simulation save flow still needs to adopt this contract and move away from the free-text target model
 
 #### 3. Simulation task presentation is still too heavy
 
@@ -132,9 +142,12 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - `New Design` opens a small dialog
   - dialog creation returns a real design row that becomes selectable immediately
   - the main save action publishes by `design_id`, not by guessed slug
-- Required backend follow-up:
-  - add a dataset-scoped create-design mutation or equivalent explicit creation authority
-  - do not keep relying on implicit name-to-slug creation as the primary UX contract
+- Backend status:
+  - delivered on `main`
+- Remaining frontend follow-up:
+  - adopt the create-design mutation in the `New Design` dialog
+  - publish by explicit `design_id`
+  - stop treating implicit name-to-slug creation as the primary UX contract
 - Notes:
   - the already-reviewed frontend slice is a useful reference, but it is not the final implementation target
 
@@ -199,7 +212,7 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 
 ## 7) Recommended Execution Order
 
-1. `LM1` final `Save to Design` model
+1. frontend `LM1` adoption of the explicit create-and-select design flow
 2. `LM2` simulation task-surface cleanup in the same area
 3. `LM3` raw-data continuity + copy truthfulness
 4. `LM4` characterization submission contract and runnable workflow
@@ -208,13 +221,13 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 
 ## 8) Immediate Next Implementation Recommendation
 
-- The next implementation should be `LM1 + LM2` together.
+- The next implementation should be frontend `LM1 + LM2` together.
 - Reason:
-  - they unblock the simulation-to-design ownership model
+  - the backend dependency is now already merged on `main`
+  - they complete the simulation-to-design ownership model on the user-facing side
   - they reduce page noise immediately
   - they avoid merging a half-correct save UX that the user already rejected
-- Concrete target for the next frontend/backend pair:
-  - backend: explicit create-design contract
+- Concrete target:
   - frontend simulation: dropdown + `New Design` dialog + lighter task presentation
 
 ## 9) Notes On Existing Reviewed Frontend Delivery
