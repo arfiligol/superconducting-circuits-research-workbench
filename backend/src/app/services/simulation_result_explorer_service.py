@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import math
+import re
 from collections.abc import Mapping, Sequence
 
 from src.app.domain.tasks import SimulationSetup, TaskDetail
@@ -17,6 +19,8 @@ _SOURCE_LABELS = {
     "ptc": "PTC",
 }
 _PTC_COMPATIBLE_FAMILIES = {"y_matrix", "z_matrix"}
+_DEFINITION_PORT_PATTERN = re.compile(r"^P(\d+)$", re.IGNORECASE)
+_SETUP_PORT_PATTERN = re.compile(r"^(?:port_|P)(\d+)$", re.IGNORECASE)
 _FAMILY_METRICS = {
     "s_matrix": {
         "magnitude_db": {"label": "Magnitude (dB)", "unit": "dB"},
@@ -55,7 +59,8 @@ class SimulationResultExplorerService:
         task = self._task_service.get_task(task_id)
         self._ensure_task_ready_for_explorer(task)
 
-        port_options = _resolve_port_options(task)
+        port_options = _resolve_port_options(task, task_service=self._task_service)
+        compensated_ports = _compensated_port_indices(task, available_ports=port_options)
         default_selection = _default_selection(task, port_options)
         selection = _resolve_selection(
             task,
@@ -72,6 +77,7 @@ class SimulationResultExplorerService:
             task,
             selection=selection,
             port_options=port_options,
+            compensated_ports=compensated_ports,
             default_selection=default_selection,
         )
         return {
@@ -129,6 +135,7 @@ def _build_explorer_response(
     *,
     selection: dict[str, object],
     port_options: dict[int, str],
+    compensated_ports: set[int],
     default_selection: dict[str, object],
 ) -> dict[str, object]:
     family = str(selection["family"])
@@ -142,6 +149,7 @@ def _build_explorer_response(
     family_bundle = _build_family_bundle(
         task,
         port_count=len(port_options),
+        compensated_ports=compensated_ports,
         z0_ohm=z0_ohm,
     )
     selected_values = _extract_metric_values(
@@ -327,21 +335,126 @@ def _ptc_available(task: TaskDetail) -> bool:
     )
 
 
-def _resolve_port_options(task: TaskDetail) -> dict[int, str]:
-    labels: list[str] = []
-    if task.simulation_setup is not None:
-        for source in task.simulation_setup.sources:
-            target = source.target.strip()
-            if len(target) > 0 and target not in labels:
-                labels.append(target)
-        if task.simulation_setup.ptc is not None:
-            for port in task.simulation_setup.ptc.compensate_ports:
-                token = port.strip()
-                if len(token) > 0 and token not in labels:
-                    labels.append(token)
-    while len(labels) < 2:
-        labels.append(f"port_{len(labels) + 1}")
-    return {index + 1: label for index, label in enumerate(labels)}
+def _resolve_port_options(
+    task: TaskDetail,
+    *,
+    task_service: TaskService,
+) -> dict[int, str]:
+    port_indices = _resolve_port_indices(task, task_service=task_service)
+    return {index: _format_port_label(index) for index in port_indices}
+
+
+def _resolve_port_indices(
+    task: TaskDetail,
+    *,
+    task_service: TaskService,
+) -> tuple[int, ...]:
+    definition = task_service.get_circuit_definition(task.definition_id)
+    definition_indices = _extract_definition_port_indices(definition)
+    if len(definition_indices) > 0:
+        return definition_indices
+
+    setup_indices = _extract_setup_port_indices(task)
+    if len(setup_indices) > 0:
+        return setup_indices
+
+    return (1,)
+
+
+def _extract_definition_port_indices(definition: object | None) -> tuple[int, ...]:
+    if definition is None:
+        return ()
+
+    normalized_output = _parse_mapping_literal(getattr(definition, "normalized_output", None))
+    if normalized_output is not None:
+        expanded_payload = normalized_output.get("expanded")
+        expanded_mapping = (
+            expanded_payload
+            if isinstance(expanded_payload, Mapping)
+            else _parse_mapping_literal(expanded_payload)
+        )
+        expanded_indices = _extract_topology_port_indices(
+            None if expanded_mapping is None else expanded_mapping.get("topology")
+        )
+        if len(expanded_indices) > 0:
+            return expanded_indices
+
+    source_payload = _parse_mapping_literal(getattr(definition, "source_text", None))
+    if source_payload is None:
+        return ()
+    return _extract_topology_port_indices(source_payload.get("topology"))
+
+
+def _parse_mapping_literal(value: object) -> Mapping[str, object] | None:
+    if isinstance(value, Mapping):
+        return value
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if len(stripped) == 0:
+        return None
+    try:
+        parsed = ast.literal_eval(stripped)
+    except (SyntaxError, ValueError):
+        return None
+    return parsed if isinstance(parsed, Mapping) else None
+
+
+def _extract_topology_port_indices(topology: object) -> tuple[int, ...]:
+    if not isinstance(topology, Sequence) or isinstance(topology, (str, bytes)):
+        return ()
+
+    indices: set[int] = set()
+    for row in topology:
+        port_index = _extract_port_index_from_topology_row(row)
+        if port_index is not None:
+            indices.add(port_index)
+    return tuple(sorted(indices))
+
+
+def _extract_port_index_from_topology_row(row: object) -> int | None:
+    if not isinstance(row, Sequence) or isinstance(row, (str, bytes)) or len(row) < 4:
+        return None
+    element_name = row[0]
+    if not isinstance(element_name, str):
+        return None
+    match = _DEFINITION_PORT_PATTERN.fullmatch(element_name.strip())
+    if match is None:
+        return None
+    value_ref = row[3]
+    if isinstance(value_ref, int) and value_ref >= 1:
+        return value_ref
+    return int(match.group(1))
+
+
+def _extract_setup_port_indices(task: TaskDetail) -> tuple[int, ...]:
+    if task.simulation_setup is None:
+        return ()
+
+    indices: set[int] = set()
+    for source in task.simulation_setup.sources:
+        port_index = _extract_port_index_from_token(source.target)
+        if port_index is not None:
+            indices.add(port_index)
+    if task.simulation_setup.ptc is not None:
+        for port in task.simulation_setup.ptc.compensate_ports:
+            port_index = _extract_port_index_from_token(port)
+            if port_index is not None:
+                indices.add(port_index)
+    return tuple(sorted(indices))
+
+
+def _extract_port_index_from_token(token: object) -> int | None:
+    if not isinstance(token, str):
+        return None
+    match = _SETUP_PORT_PATTERN.fullmatch(token.strip())
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def _format_port_label(index: int) -> str:
+    return f"Port {index}"
 
 
 def _frequency_values(setup: SimulationSetup) -> list[float]:
@@ -358,6 +471,7 @@ def _build_family_bundle(
     task: TaskDetail,
     *,
     port_count: int,
+    compensated_ports: set[int],
     z0_ohm: float,
 ) -> dict[str, dict[str, list[list[list[complex]]]]]:
     frequencies = _frequency_values(task.simulation_setup)
@@ -373,7 +487,6 @@ def _build_family_bundle(
         "z_matrix": {"raw": raw_z},
     }
     if _ptc_available(task):
-        compensated_ports = _compensated_port_indices(task)
         family_bundle["y_matrix"]["ptc"] = [
             _apply_port_compensation(matrix, compensated_ports, scale=0.94)
             for matrix in raw_y
@@ -385,15 +498,18 @@ def _build_family_bundle(
     return family_bundle
 
 
-def _compensated_port_indices(task: TaskDetail) -> set[int]:
+def _compensated_port_indices(
+    task: TaskDetail,
+    *,
+    available_ports: Mapping[int, str],
+) -> set[int]:
     if task.simulation_setup is None or task.simulation_setup.ptc is None:
         return set()
-    port_options = _resolve_port_options(task)
-    reverse = {label: port for port, label in port_options.items()}
     return {
-        reverse[label]
+        port_index
         for label in task.simulation_setup.ptc.compensate_ports
-        if label in reverse
+        if (port_index := _extract_port_index_from_token(label)) is not None
+        and port_index in available_ports
     }
 
 

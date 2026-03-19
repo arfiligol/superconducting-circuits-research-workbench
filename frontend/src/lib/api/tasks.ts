@@ -1261,11 +1261,27 @@ function mapSimulationResultExplorerSelection(
     z0Ohm: payload.z0_ohm,
     outputPort: payload.output_port,
     inputPort: payload.input_port,
-    outputPortLabel: payload.output_port_label ?? null,
-    inputPortLabel: payload.input_port_label ?? null,
+    outputPortLabel: normalizeSimulationExplorerPortLabel(
+      payload.output_port_label,
+      payload.output_port,
+    ),
+    inputPortLabel: normalizeSimulationExplorerPortLabel(
+      payload.input_port_label,
+      payload.input_port,
+    ),
     outputMode: payload.output_mode ?? null,
     inputMode: payload.input_mode ?? null,
   };
+}
+
+function normalizeSimulationExplorerPortLabel(label: string | undefined, port: number) {
+  const normalized = label?.trim();
+  if (!normalized) {
+    return `Port ${port}`;
+  }
+  return normalized
+    .replace(/^port_(\d+)$/i, "Port $1")
+    .replace(/^P(\d+)$/i, "Port $1");
 }
 
 export function mapSimulationResultExplorerResponse(
@@ -1292,11 +1308,11 @@ export function mapSimulationResultExplorerResponse(
       traceSelector: {
         outputPorts: payload.bootstrap.trace_selector.output_ports.map((port) => ({
           port: port.port,
-          label: port.label,
+          label: normalizeSimulationExplorerPortLabel(port.label, port.port),
         })),
         inputPorts: payload.bootstrap.trace_selector.input_ports.map((port) => ({
           port: port.port,
-          label: port.label,
+          label: normalizeSimulationExplorerPortLabel(port.label, port.port),
         })),
         outputModes: payload.bootstrap.trace_selector.output_modes.map((mode) => ({
           key: mode.key,
@@ -1336,8 +1352,14 @@ export function mapSimulationResultExplorerResponse(
         z0Ohm: payload.plot.metadata.z0_ohm,
         outputPort: payload.plot.metadata.output_port,
         inputPort: payload.plot.metadata.input_port,
-        outputPortLabel: payload.plot.metadata.output_port_label ?? null,
-        inputPortLabel: payload.plot.metadata.input_port_label ?? null,
+        outputPortLabel: normalizeSimulationExplorerPortLabel(
+          payload.plot.metadata.output_port_label,
+          payload.plot.metadata.output_port,
+        ),
+        inputPortLabel: normalizeSimulationExplorerPortLabel(
+          payload.plot.metadata.input_port_label,
+          payload.plot.metadata.input_port,
+        ),
         tracePayloadStoreKey: payload.plot.metadata.trace_payload_store_key ?? null,
       },
     },

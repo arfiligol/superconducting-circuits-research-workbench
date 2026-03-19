@@ -135,6 +135,12 @@ def test_completed_simulation_task_returns_explorer_bootstrap_data() -> None:
         "output_port": 1,
         "input_port": 1,
     }
+    assert payload["bootstrap"]["trace_selector"]["output_ports"] == [
+        {"port": 1, "label": "Port 1"}
+    ]
+    assert payload["bootstrap"]["trace_selector"]["input_ports"] == [
+        {"port": 1, "label": "Port 1"}
+    ]
     assert [source["key"] for source in families["s_matrix"]["available_sources"]] == ["raw"]
     assert [source["key"] for source in families["y_matrix"]["available_sources"]] == [
         "raw",
@@ -163,8 +169,8 @@ def test_completed_simulation_task_returns_plottable_trace_payload() -> None:
         "z0_ohm": 75.0,
         "output_port": 1,
         "input_port": 1,
-        "output_port_label": "port_1",
-        "input_port_label": "port_1",
+        "output_port_label": "Port 1",
+        "input_port_label": "Port 1",
         "output_mode": "mode_0",
         "input_mode": "mode_0",
     }
@@ -274,3 +280,15 @@ def test_retry_task_recovers_missing_persisted_setup_for_explorer() -> None:
 
     explorer = client.get(f"/tasks/{retried['task_id']}/simulation-results/explorer")
     assert explorer.status_code == 200
+
+
+def test_explorer_rejects_ports_not_declared_by_definition() -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+
+    response = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        "?family=s_matrix&metric=magnitude_db&output_port=2&input_port=1"
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "request_validation_failed"

@@ -249,6 +249,11 @@ class TaskService:
             ),
         )
 
+    def get_circuit_definition(self, definition_id: int | None) -> object | None:
+        if definition_id is None:
+            return None
+        return self._circuit_definition_repository.get_circuit_definition(definition_id)
+
     def get_task_result_handoff(self, task_id: int) -> TaskResultHandoff:
         return _build_result_handoff(self.get_task(task_id))
 

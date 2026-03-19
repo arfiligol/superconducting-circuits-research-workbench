@@ -1725,15 +1725,21 @@ describe("task api detail mapping", () => {
       z0Ohm: 75,
       outputPort: 2,
       inputPort: 1,
-      outputPortLabel: "port_2",
-      inputPortLabel: "port_1",
+      outputPortLabel: "Port 2",
+      inputPortLabel: "Port 1",
       outputMode: "mode_0",
       inputMode: "mode_0",
     });
+    expect(explorer.bootstrap.traceSelector.outputPorts).toEqual([
+      { port: 1, label: "Port 1" },
+      { port: 2, label: "Port 2" },
+    ]);
     expect(explorer.bootstrap.families[1]?.availableSources.map((source) => source.key)).toEqual([
       "raw",
       "ptc",
     ]);
+    expect(explorer.plot.metadata.outputPortLabel).toBe("Port 2");
+    expect(explorer.plot.metadata.inputPortLabel).toBe("Port 1");
     expect(explorer.plot.metadata.tracePayloadStoreKey).toBe("trace-output-44");
     expect(explorer.resultBasis.primaryResultHandleId).toBe("handle-44");
   });
