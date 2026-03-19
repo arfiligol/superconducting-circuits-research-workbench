@@ -169,6 +169,16 @@ export function cloneSimulationSetupFormValues(
   };
 }
 
+export function serializeSimulationSetupFormValues(
+  values: Readonly<SimulationSetupFormValues>,
+) {
+  const normalized = cloneSimulationSetupFormValues(values);
+  if (!normalized.simulationParameterSweepEnabled) {
+    normalized.simulationParameterSweepAxes = [];
+  }
+  return JSON.stringify(normalized);
+}
+
 export function createDefaultSimulationParameterSweepAxis(
   input?: Readonly<{ parameter?: string; unit?: string | null }>,
 ): SimulationParameterSweepAxisForm {

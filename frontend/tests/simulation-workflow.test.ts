@@ -10,7 +10,12 @@ import {
   defaultSimulationSetupFormValues,
   deriveSimulationPtcPortOptions,
   deriveSimulationSweepTargetOptions,
+  serializeSimulationSetupFormValues,
 } from "../src/features/simulation/lib/setup-form";
+import {
+  JOSEPHSON_EXAMPLE_PREFIX,
+  resolveOfficialSimulationExamplePreset,
+} from "../src/features/simulation/lib/official-example";
 import {
   createSavedSimulationSetupRecord,
   filterSavedSimulationSetupsByDefinition,
@@ -842,6 +847,67 @@ describe("simulation task workflow helpers", () => {
 });
 
 describe("simulation workflow source contract", () => {
+  it("exposes official example presets only for compatible josephson example definitions", () => {
+    const jpaPreset = resolveOfficialSimulationExamplePreset(
+      `${JOSEPHSON_EXAMPLE_PREFIX}Josephson Parametric Amplifier (JPA)`,
+    );
+
+    expect(jpaPreset).toMatchObject({
+      name: "Official Example",
+      exampleName: "Josephson Parametric Amplifier (JPA)",
+    });
+    expect(jpaPreset?.values).toMatchObject({
+      simulationStartGhz: 4.5,
+      simulationStopGhz: 5,
+      simulationPointCount: 501,
+      simulationHarmonicCount: 8,
+      simulationOversampleFactor: 16,
+      simulationPtcEnabled: false,
+    });
+    expect(jpaPreset?.values.simulationSources).toHaveLength(1);
+    expect(jpaPreset?.values.simulationSources[0]).toMatchObject({
+      port: "port_1",
+      pumpFreqGhz: 4.75001,
+      sourceMode: "1",
+    });
+    expect(resolveOfficialSimulationExamplePreset("FloatingQubitWithXYLine")).toBeNull();
+  });
+
+  it("serializes task-backed setup snapshots stably for anti-thrash resets", () => {
+    const baseline = cloneSimulationSetupFormValues(defaultSimulationSetupFormValues);
+    const baselineClone = cloneSimulationSetupFormValues(defaultSimulationSetupFormValues);
+    const changed = cloneSimulationSetupFormValues({
+      ...defaultSimulationSetupFormValues,
+      simulationStartGhz: defaultSimulationSetupFormValues.simulationStartGhz + 0.5,
+    });
+
+    expect(serializeSimulationSetupFormValues(baseline)).toBe(
+      serializeSimulationSetupFormValues(baselineClone),
+    );
+    expect(serializeSimulationSetupFormValues(baseline)).not.toBe(
+      serializeSimulationSetupFormValues(changed),
+    );
+  });
+
+  it("ignores disabled parameter sweep axis noise when serializing setup snapshots", () => {
+    const baseline = cloneSimulationSetupFormValues(defaultSimulationSetupFormValues);
+    const normalizedAxisNoise = cloneSimulationSetupFormValues({
+      ...defaultSimulationSetupFormValues,
+      simulationParameterSweepEnabled: false,
+      simulationParameterSweepAxes: [
+        {
+          ...defaultSimulationSetupFormValues.simulationParameterSweepAxes[0],
+          parameter: "source:port_1:current_amp",
+          unit: "A",
+        },
+      ],
+    });
+
+    expect(serializeSimulationSetupFormValues(normalizedAxisNoise)).toBe(
+      serializeSimulationSetupFormValues(baseline),
+    );
+  });
+
   it("stores saved simulation setups as definition-scoped local browser drafts", () => {
     const baselineRecord = createSavedSimulationSetupRecord({
       id: "setup-local-1",
@@ -1129,7 +1195,11 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("postSourceSelection");
     expect(simulationWorkbenchSource).toContain("downstreamSourceCapabilities");
     expect(simulationWorkbenchSource).toContain("PTC source");
-    expect(simulationWorkbenchSource).toContain("Browser-saved per selected definition");
+    expect(simulationWorkbenchSource).toContain("Load Official Example");
+    expect(simulationWorkbenchSource).toContain("Task-backed · #");
+    expect(simulationWorkbenchSource).toContain("Edited from task #");
+    expect(simulationWorkbenchSource).toContain("Official Example");
+    expect(simulationWorkbenchSource).toContain("Browser-saved convenience draft for this definition.");
     expect(simulationWorkbenchSource).toContain("Manage");
     expect(simulationWorkbenchSource).toContain("Save");
     expect(simulationWorkbenchSource).toContain('role="switch"');
@@ -1141,7 +1211,6 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
     expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
     expect(simulationWorkbenchSource).toContain("Operation Config JSON");
-    expect(simulationWorkbenchSource).toContain("Rehydrated from task #");
     expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
     expect(simulationWorkbenchSource).not.toContain('detail="Read-only expanded netlist."');
     expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
@@ -1186,7 +1255,16 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkflowHookSource).toContain("resolveLatestSimulationStageTaskInContext(");
     expect(simulationWorkflowHookSource).toContain("const pageContext = {");
     expect(simulationWorkbenchSource).toContain("resolveAuthoritativeSimulationTaskSummary");
-    expect(simulationWorkbenchSource).toContain("latestSimulationStageAuthority");
+    expect(simulationWorkbenchSource).toContain(
+      "const displayedSimulationStageTask = attachedSimulationStageTask ?? latestSimulationStageTask;",
+    );
+    expect(simulationWorkbenchSource).toContain(
+      "const displayedSimulationTaskDetail =",
+    );
+    expect(simulationWorkbenchSource).toContain("displayedSimulationStageAuthority");
+    expect(simulationWorkbenchSource).toContain("displayedSimulationSetupAuthorityKey");
+    expect(simulationWorkbenchSource).toContain("hydratedSimulationSetupAuthorityKey");
+    expect(simulationWorkbenchSource).toContain("displayedSimulationSetupAuthorityKey === hydratedSimulationSetupAuthorityKey");
     expect(simulationWorkbenchSource).toContain("latestPostProcessingStageAuthority");
     expect(simulationWorkbenchSource).toContain("Persisted result handoff:");
     expect(simulationWorkbenchSource).toContain("summarizeTaskContextBinding");
@@ -1196,6 +1274,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkflowHookSource).toContain("simulation_setup: simulationSetup ?? null");
     expect(simulationWorkflowHookSource).toContain("post_processing_setup: postProcessingSetup ?? null");
     expect(simulationWorkflowHookSource).toContain("attachedContextTask");
+    expect(simulationWorkflowHookSource).toContain("attachedSimulationTaskDetail");
     expect(simulationWorkflowHookSource).toContain("upstreamSimulationStageTask");
     expect(simulationWorkflowHookSource).toContain("shouldRefreshTaskDetail");
     expect(simulationWorkflowHookSource).toContain('task.status === "completed" && !hasSimulationTaskResult(task)');

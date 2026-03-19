@@ -139,6 +139,8 @@ export function useSimulationWorkflowData(
     pageContext,
     "simulation",
   );
+  const attachedSimulationTaskDetail =
+    activeTask?.kind === "simulation" && attachedSimulationStageTask ? activeTask : undefined;
   const attachedPostProcessingStageTask = resolveContextBoundAttachedTask(
     activeTask,
     pageContext,
@@ -337,6 +339,8 @@ export function useSimulationWorkflowData(
     latestSimulationTask,
     latestSimulationStageTask,
     latestSimulationTaskDetail,
+    attachedSimulationStageTask,
+    attachedSimulationTaskDetail,
     latestSimulationTaskError:
       (simulationStageTaskQuery.error as Error | undefined) ??
       (upstreamSimulationTaskQuery.error as Error | undefined),

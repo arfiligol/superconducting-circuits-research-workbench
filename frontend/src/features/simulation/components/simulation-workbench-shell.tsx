@@ -23,12 +23,13 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CodeMirror from "@uiw/react-codemirror";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
 import { SimulationResultExplorer } from "@/features/simulation/components/simulation-result-explorer";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
+import { resolveOfficialSimulationExamplePreset } from "@/features/simulation/lib/official-example";
 import {
   buildSimulationSetupDraft,
   buildSimulationSetupFormValuesFromPersistedSetup,
@@ -39,6 +40,7 @@ import {
   deriveSimulationPtcPortOptions,
   deriveSimulationSweepTargetOptions,
   parseCommaSeparatedStringValues,
+  serializeSimulationSetupFormValues,
   simulationSetupFormSchema,
   type SimulationSetupFormValues,
 } from "@/features/simulation/lib/setup-form";
@@ -212,6 +214,12 @@ const simulationStageFieldNames = [
   "simulationPtcEnabled",
   "simulationPtcMode",
   "simulationPtcCompensatePorts",
+  "simulationPtcManualNotes",
+  "simulationAdvancedDampingStrategy",
+  "simulationAdvancedLineSearchEnabled",
+  "simulationAdvancedResidualClamp",
+  "simulationAdvancedNewtonRelaxation",
+  "simulationAdvancedNotes",
 ] as const;
 
 function buildSimulationSearchHref(
@@ -663,6 +671,75 @@ function DraftOnlyBadge() {
   return <SurfaceTag>Local draft only</SurfaceTag>;
 }
 
+type SimulationSetupSource =
+  | Readonly<{ kind: "default" }>
+  | Readonly<{ kind: "task"; taskId: number }>
+  | Readonly<{ kind: "saved"; recordId: string; name: string }>
+  | Readonly<{ kind: "official-example"; presetId: string }>;
+
+type SimulationSetupAuthorityPresentation = Readonly<{
+  primaryTag: Readonly<{ label: string; tone: StageTone }>;
+  secondaryTag?: Readonly<{ label: string; tone: StageTone }> | null;
+  message: string;
+  restoreLabel: string | null;
+}>;
+
+function resolveSimulationSetupAuthorityPresentation(
+  source: SimulationSetupSource,
+  isDirty: boolean,
+): SimulationSetupAuthorityPresentation {
+  switch (source.kind) {
+    case "task":
+      return {
+        primaryTag: {
+          label: isDirty ? `Edited from task #${source.taskId}` : `Task-backed · #${source.taskId}`,
+          tone: isDirty ? "warning" : "primary",
+        },
+        secondaryTag: isDirty ? { label: "Local draft", tone: "default" } : null,
+        message: isDirty
+          ? "Current Stage 2 edits differ from this task's persisted simulation setup."
+          : "Viewing the persisted simulation setup from the current simulation task authority.",
+        restoreLabel: isDirty ? "Reapply task setup" : null,
+      };
+    case "official-example":
+      return {
+        primaryTag: {
+          label: isDirty ? "Edited from Official Example" : "Official Example",
+          tone: isDirty ? "warning" : "primary",
+        },
+        secondaryTag: isDirty ? { label: "Local draft", tone: "default" } : null,
+        message: isDirty
+          ? "Current Stage 2 edits diverge from the Josephson official example preset."
+          : "Loaded from the Josephson official example seed for this definition.",
+        restoreLabel: isDirty ? "Reload Official Example" : null,
+      };
+    case "saved":
+      return {
+        primaryTag: {
+          label: isDirty ? "Edited from saved draft" : `Saved draft · ${source.name}`,
+          tone: isDirty ? "warning" : "success",
+        },
+        secondaryTag: isDirty ? { label: "Browser-local", tone: "default" } : null,
+        message: isDirty
+          ? "Current Stage 2 edits differ from the browser-saved draft."
+          : "Browser-saved convenience draft for this definition.",
+        restoreLabel: isDirty ? "Reload saved draft" : null,
+      };
+    case "default":
+    default:
+      return {
+        primaryTag: {
+          label: isDirty ? "Unsaved draft" : "Generic default",
+          tone: "default",
+        },
+        message: isDirty
+          ? "Current Stage 2 edits are browser-local until you save them or submit a task."
+          : "Using the generic fallback setup for the selected definition.",
+        restoreLabel: null,
+      };
+  }
+}
+
 function SetupSlideToggle({
   checked,
   onCheckedChange,
@@ -872,7 +949,18 @@ export function SimulationWorkbenchShell() {
     control: form.control,
     name: "simulationSources",
   });
-  const [hydratedSimulationTaskId, setHydratedSimulationTaskId] = useState<number | null>(null);
+  const watchedSimulationStageValues = useWatch({
+    control: form.control,
+    name: simulationStageFieldNames,
+  });
+  const [simulationSetupSource, setSimulationSetupSource] = useState<SimulationSetupSource>({
+    kind: "default",
+  });
+  const [hydratedSimulationSetupAuthorityKey, setHydratedSimulationSetupAuthorityKey] =
+    useState<string | null>(null);
+  const [appliedSimulationSetupSnapshotKey, setAppliedSimulationSetupSnapshotKey] = useState(
+    serializeSimulationSetupFormValues(defaultSimulationSetupFormValues),
+  );
   const [hydratedPostTaskId, setHydratedPostTaskId] = useState<number | null>(null);
   const parameterSweepEnabled = form.watch("simulationParameterSweepEnabled");
   const harmonicBalanceEnabled = form.watch("simulationHarmonicBalanceEnabled");
@@ -898,6 +986,8 @@ export function SimulationWorkbenchShell() {
     latestSimulationTask,
     latestSimulationStageTask,
     latestSimulationTaskDetail,
+    attachedSimulationStageTask,
+    attachedSimulationTaskDetail,
     latestSimulationTaskError,
     latestPostProcessingTask,
     latestPostProcessingTaskDetail,
@@ -1013,6 +1103,13 @@ export function SimulationWorkbenchShell() {
   );
   const activeSavedSetup =
     visibleSavedSetups.find((setup) => setup.id === selectedSavedSetupId) ?? null;
+  const officialExamplePreset = useMemo(
+    () =>
+      resolveOfficialSimulationExamplePreset(
+        activeDefinition?.name ?? selectedDefinitionDisplay?.name ?? null,
+      ),
+    [activeDefinition?.name, selectedDefinitionDisplay?.name],
+  );
   const sweepTargetOptions = useMemo(
     () =>
       deriveSimulationSweepTargetOptions(
@@ -1051,8 +1148,11 @@ export function SimulationWorkbenchShell() {
     () => new Set(parseCommaSeparatedStringValues(selectedPtcPortsValue)),
     [selectedPtcPortsValue],
   );
+  const displayedSimulationStageTask = attachedSimulationStageTask ?? latestSimulationStageTask;
+  const displayedSimulationTaskDetail =
+    attachedSimulationTaskDetail ?? latestSimulationTaskDetail;
   const downstreamSourceCapabilities =
-    latestSimulationTaskDetail?.downstreamSourceCapabilities ?? null;
+    displayedSimulationTaskDetail?.downstreamSourceCapabilities ?? null;
   const postProcessingSourceSelectOptions = useMemo<readonly AppSelectOption[]>(
     () =>
       postProcessingSourceOptions.map((option) => {
@@ -1107,18 +1207,37 @@ export function SimulationWorkbenchShell() {
         : !session?.canSubmitTasks
           ? "The current session does not allow submitting simulation tasks."
           : null;
-  const latestSimulationStageAuthority = resolveAuthoritativeSimulationTaskSummary(
-    latestSimulationStageTask,
-    latestSimulationTaskDetail,
+  const displayedSimulationStageAuthority = resolveAuthoritativeSimulationTaskSummary(
+    displayedSimulationStageTask,
+    displayedSimulationTaskDetail,
   );
   const latestPostProcessingStageAuthority = resolveAuthoritativeSimulationTaskSummary(
     latestPostProcessingTask,
     latestPostProcessingTaskDetail,
   );
+  const displayedSimulationSetupAuthorityKey = useMemo(() => {
+    if (!displayedSimulationTaskDetail?.simulationSetup) {
+      return null;
+    }
+
+    return `task:${displayedSimulationTaskDetail.taskId}:${JSON.stringify(
+      displayedSimulationTaskDetail.simulationSetup,
+    )}`;
+  }, [displayedSimulationTaskDetail]);
+  const currentSimulationSetupSnapshotKey = useMemo(
+    () => serializeSimulationSetupFormValues(snapshotCurrentSimulationSetup()),
+    [watchedSimulationStageValues],
+  );
+  const isSimulationSetupDirtyToSource =
+    currentSimulationSetupSnapshotKey !== appliedSimulationSetupSnapshotKey;
+  const simulationSetupAuthorityPresentation = resolveSimulationSetupAuthorityPresentation(
+    simulationSetupSource,
+    isSimulationSetupDirtyToSource,
+  );
   const simulationResultReady =
-    latestSimulationTaskDetail !== undefined
-      ? hasSimulationTaskResult(latestSimulationTaskDetail)
-      : latestSimulationStageAuthority?.resultAvailability === "ready";
+    displayedSimulationTaskDetail !== undefined
+      ? hasSimulationTaskResult(displayedSimulationTaskDetail)
+      : displayedSimulationStageAuthority?.resultAvailability === "ready";
   const postProcessingSourceBlockedReason =
     !simulationResultReady
       ? null
@@ -1133,12 +1252,12 @@ export function SimulationWorkbenchShell() {
   const simulationSetupState = resolveSetupStageState({
     stageLabel: "Simulation",
     blockedReason: simulationSetupBlockedReason,
-    latestTask: latestSimulationStageAuthority,
+    latestTask: displayedSimulationStageAuthority,
   });
   const simulationResultState = resolveResultStageState({
     stageLabel: "Simulation Result",
-    latestTask: latestSimulationStageAuthority,
-    detail: latestSimulationTaskDetail,
+    latestTask: displayedSimulationStageAuthority,
+    detail: displayedSimulationTaskDetail,
     hasResult: simulationResultReady,
   });
   const postProcessingSetupState = resolveSetupStageState({
@@ -1159,13 +1278,81 @@ export function SimulationWorkbenchShell() {
     detail: latestPostProcessingTaskDetail,
     hasResult: postProcessingResultReady,
   });
-  const simulationTaskResultSurface = summarizeTaskResultSurface(latestSimulationTaskDetail);
+  const simulationTaskResultSurface = summarizeTaskResultSurface(displayedSimulationTaskDetail);
   const postProcessingResultSummary = summarizeSimulationTaskResults(
     latestPostProcessingTaskDetail,
   );
   const explicitUpstreamSimulationTaskId = resolvePostProcessingUpstreamTaskId(
     latestPostProcessingTaskDetail,
   );
+
+  function applySimulationSetupValues(
+    nextValues: Readonly<SimulationSetupFormValues>,
+    source: SimulationSetupSource,
+    input?: Readonly<{
+      keepSavedSelection?: boolean;
+      feedback?: string | null;
+      hydratedAuthorityKey?: string | null;
+    }>,
+  ) {
+    const normalizedValues = cloneSimulationSetupFormValues(nextValues);
+    form.reset(
+      {
+        ...form.getValues(),
+        ...normalizedValues,
+      },
+      { keepDefaultValues: true },
+    );
+    const nextHydratedAuthorityKey =
+      input?.hydratedAuthorityKey !== undefined
+        ? input.hydratedAuthorityKey
+        : source.kind === "task"
+          ? displayedSimulationSetupAuthorityKey
+          : displayedSimulationSetupAuthorityKey ?? null;
+    setAppliedSimulationSetupSnapshotKey(serializeSimulationSetupFormValues(normalizedValues));
+    setSimulationSetupSource(source);
+    setHydratedSimulationSetupAuthorityKey(nextHydratedAuthorityKey);
+    if (!input?.keepSavedSelection) {
+      setSelectedSavedSetupId(null);
+    }
+    setSavedSetupFeedback(input?.feedback ?? null);
+    setSimulationSetupBuildError(null);
+  }
+
+  function restoreSimulationSetupFromCurrentSource() {
+    if (simulationSetupSource.kind === "task" && displayedSimulationTaskDetail?.simulationSetup) {
+      applySimulationSetupValues(
+        buildSimulationSetupFormValuesFromPersistedSetup(
+          snapshotCurrentSimulationSetup(),
+          displayedSimulationTaskDetail.simulationSetup,
+        ),
+        simulationSetupSource,
+        {
+          hydratedAuthorityKey: displayedSimulationSetupAuthorityKey,
+          feedback: `Reloaded task-backed setup from task #${simulationSetupSource.taskId}.`,
+        },
+      );
+      return;
+    }
+
+    if (simulationSetupSource.kind === "saved" && activeSavedSetup) {
+      applySimulationSetupValues(activeSavedSetup.values, simulationSetupSource, {
+        keepSavedSelection: true,
+        feedback: `Reloaded saved draft “${activeSavedSetup.name}”.`,
+      });
+      return;
+    }
+
+    if (
+      simulationSetupSource.kind === "official-example" &&
+      officialExamplePreset &&
+      officialExamplePreset.id === simulationSetupSource.presetId
+    ) {
+      applySimulationSetupValues(officialExamplePreset.values, simulationSetupSource, {
+        feedback: "Reloaded the Official Example preset.",
+      });
+    }
+  }
 
   useEffect(() => {
     if (sweepTargetOptions.length === 0) {
@@ -1251,26 +1438,35 @@ export function SimulationWorkbenchShell() {
 
   useEffect(() => {
     if (
-      !latestSimulationTaskDetail?.simulationSetup ||
-      latestSimulationTaskDetail.taskId === hydratedSimulationTaskId
+      !displayedSimulationTaskDetail?.simulationSetup ||
+      displayedSimulationSetupAuthorityKey === null ||
+      displayedSimulationSetupAuthorityKey === hydratedSimulationSetupAuthorityKey
     ) {
       return;
     }
 
-    form.reset(
+    applySimulationSetupValues(
       buildSimulationSetupFormValuesFromPersistedSetup(
-        form.getValues(),
-        latestSimulationTaskDetail.simulationSetup,
+        snapshotCurrentSimulationSetup(),
+        displayedSimulationTaskDetail.simulationSetup,
       ),
-      { keepDefaultValues: true },
+      {
+        kind: "task",
+        taskId: displayedSimulationTaskDetail.taskId,
+      },
+      {
+        hydratedAuthorityKey: displayedSimulationSetupAuthorityKey,
+      },
     );
-    setSimulationSetupBuildError(null);
-    setHydratedSimulationTaskId(latestSimulationTaskDetail.taskId);
-  }, [form, hydratedSimulationTaskId, latestSimulationTaskDetail]);
+  }, [
+    displayedSimulationSetupAuthorityKey,
+    displayedSimulationTaskDetail,
+    hydratedSimulationSetupAuthorityKey,
+  ]);
 
   useEffect(() => {
     setIsSimulationResultSupportOpen(false);
-  }, [latestSimulationTaskDetail?.taskId]);
+  }, [displayedSimulationTaskDetail?.taskId]);
 
   useEffect(() => {
     if (
@@ -1343,6 +1539,51 @@ export function SimulationWorkbenchShell() {
     }
   }, [selectedSavedSetupId, visibleSavedSetups]);
 
+  useEffect(() => {
+    const fallbackToAuthoritativeSource = () => {
+      if (displayedSimulationTaskDetail?.simulationSetup) {
+        applySimulationSetupValues(
+          buildSimulationSetupFormValuesFromPersistedSetup(
+            snapshotCurrentSimulationSetup(),
+            displayedSimulationTaskDetail.simulationSetup,
+          ),
+          {
+            kind: "task",
+            taskId: displayedSimulationTaskDetail.taskId,
+          },
+          {
+            hydratedAuthorityKey: displayedSimulationSetupAuthorityKey,
+          },
+        );
+        return;
+      }
+
+      applySimulationSetupValues(defaultSimulationSetupFormValues, { kind: "default" }, {
+        hydratedAuthorityKey: null,
+      });
+    };
+
+    if (simulationSetupSource.kind === "saved") {
+      if (!visibleSavedSetups.some((setup) => setup.id === simulationSetupSource.recordId)) {
+        fallbackToAuthoritativeSource();
+      }
+      return;
+    }
+
+    if (
+      simulationSetupSource.kind === "official-example" &&
+      (!officialExamplePreset || officialExamplePreset.id !== simulationSetupSource.presetId)
+    ) {
+      fallbackToAuthoritativeSource();
+    }
+  }, [
+    displayedSimulationSetupAuthorityKey,
+    displayedSimulationTaskDetail,
+    officialExamplePreset,
+    simulationSetupSource,
+    visibleSavedSetups,
+  ]);
+
   function snapshotCurrentSimulationSetup(): SimulationSetupFormValues {
     const values = form.getValues();
     return cloneSimulationSetupFormValues({
@@ -1378,16 +1619,30 @@ export function SimulationWorkbenchShell() {
   }
 
   function applySavedSetup(record: SavedSimulationSetupRecord) {
-    form.reset(
-      {
-        ...form.getValues(),
-        ...cloneSimulationSetupFormValues(record.values),
-      },
-      { keepDefaultValues: true },
-    );
+    applySimulationSetupValues(record.values, {
+      kind: "saved",
+      recordId: record.id,
+      name: record.name,
+    }, {
+      keepSavedSelection: true,
+      feedback: `Loaded saved setup “${record.name}”.`,
+    });
     setSelectedSavedSetupId(record.id);
-    setSavedSetupFeedback(`Loaded saved setup “${record.name}”.`);
-    setSimulationSetupBuildError(null);
+    setIsSaveDialogOpen(false);
+    setIsManageDialogOpen(false);
+  }
+
+  function applyOfficialExamplePreset() {
+    if (!officialExamplePreset) {
+      return;
+    }
+
+    applySimulationSetupValues(officialExamplePreset.values, {
+      kind: "official-example",
+      presetId: officialExamplePreset.id,
+    }, {
+      feedback: `Loaded the Official Example preset for ${officialExamplePreset.exampleName}.`,
+    });
     setIsSaveDialogOpen(false);
     setIsManageDialogOpen(false);
   }
@@ -1425,6 +1680,13 @@ export function SimulationWorkbenchShell() {
         ? `Updated saved setup “${nextRecord.name}”.`
         : `Saved “${nextRecord.name}” in this browser.`,
     );
+    if (simulationSetupSource.kind === "saved" && simulationSetupSource.recordId === nextRecord.id) {
+      setSimulationSetupSource({
+        kind: "saved",
+        recordId: nextRecord.id,
+        name: nextRecord.name,
+      });
+    }
     setSaveSetupNameDraft(nextRecord.name);
     setIsSaveDialogOpen(false);
   }
@@ -1603,7 +1865,8 @@ export function SimulationWorkbenchShell() {
       note: values[fieldName],
       simulationSetup,
       postProcessingSetup,
-      upstreamTaskId: kind === "post_processing" ? (latestSimulationStageTask?.taskId ?? null) : null,
+      upstreamTaskId:
+        kind === "post_processing" ? (displayedSimulationStageTask?.taskId ?? null) : null,
     });
 
     rememberAttachedTask(task.taskId);
@@ -1814,6 +2077,16 @@ export function SimulationWorkbenchShell() {
           status={simulationSetupState}
           actions={
             <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+              {officialExamplePreset ? (
+                <button
+                  type="button"
+                  onClick={applyOfficialExamplePreset}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15"
+                >
+                  <WandSparkles className="h-3.5 w-3.5" />
+                  Load Official Example
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
@@ -1846,18 +2119,26 @@ export function SimulationWorkbenchShell() {
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-border bg-surface px-4 py-3 text-xs">
-            {activeSavedSetup ? (
-              <SurfaceTag tone="success">Saved · {activeSavedSetup.name}</SurfaceTag>
-            ) : (
-              <SurfaceTag tone="default">Unsaved draft</SurfaceTag>
-            )}
+            <SurfaceTag tone={simulationSetupAuthorityPresentation.primaryTag.tone}>
+              {simulationSetupAuthorityPresentation.primaryTag.label}
+            </SurfaceTag>
+            {simulationSetupAuthorityPresentation.secondaryTag ? (
+              <SurfaceTag tone={simulationSetupAuthorityPresentation.secondaryTag.tone}>
+                {simulationSetupAuthorityPresentation.secondaryTag.label}
+              </SurfaceTag>
+            ) : null}
             <span className="leading-5 text-muted-foreground">
-              Browser-saved per selected definition.
+              {simulationSetupAuthorityPresentation.message}
             </span>
-            {latestSimulationTaskDetail?.simulationSetup ? (
-              <span className="leading-5 text-muted-foreground">
-                Rehydrated from task #{latestSimulationTaskDetail.taskId}.
-              </span>
+            {simulationSetupAuthorityPresentation.restoreLabel ? (
+              <button
+                type="button"
+                onClick={restoreSimulationSetupFromCurrentSource}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+              >
+                <RefreshCcw className="h-3 w-3" />
+                {simulationSetupAuthorityPresentation.restoreLabel}
+              </button>
             ) : null}
             {savedSetupFeedback ? (
               <span className="leading-5 text-foreground/80">{savedSetupFeedback}</span>
@@ -2545,53 +2826,53 @@ export function SimulationWorkbenchShell() {
             Run Simulation
           </button>
 
-          {latestSimulationStageAuthority ? (
+          {displayedSimulationStageAuthority ? (
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Latest Simulation Run
+                    {attachedSimulationStageTask ? "Attached Simulation Run" : "Latest Simulation Run"}
                   </p>
                   <p className="mt-2 text-sm font-semibold text-foreground">
-                    Task #{latestSimulationStageAuthority.taskId}
+                    Task #{displayedSimulationStageAuthority.taskId}
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {latestSimulationTaskDetail?.progress.summary ??
-                      latestSimulationStageAuthority.summary}
+                    {displayedSimulationTaskDetail?.progress.summary ??
+                      displayedSimulationStageAuthority.summary}
                   </p>
                 </div>
-                <SurfaceTag tone={taskStatusTone(latestSimulationStageAuthority.status)}>
-                  {formatSimulationTaskStatusLabel(latestSimulationStageAuthority.status)}
+                <SurfaceTag tone={taskStatusTone(displayedSimulationStageAuthority.status)}>
+                  {formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)}
                 </SurfaceTag>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <SummaryCard
                   label="Submitted"
-                  value={latestSimulationStageAuthority.submittedAt ?? "Pending"}
+                  value={displayedSimulationStageAuthority.submittedAt ?? "Pending"}
                 />
                 <SummaryCard
                   label="Result"
                   value={simulationResultReady ? "Ready" : "Pending"}
                   detail={
-                    latestSimulationTaskDetail?.resultHandoff?.availability
-                      ? `Persisted result handoff: ${latestSimulationTaskDetail.resultHandoff.availability}`
-                      : latestSimulationStageAuthority.resultAvailability
-                        ? `Backend result availability: ${latestSimulationStageAuthority.resultAvailability}`
-                      : "Result status is inferred from persisted task detail."
+                    displayedSimulationTaskDetail?.resultHandoff?.availability
+                      ? `Persisted result handoff: ${displayedSimulationTaskDetail.resultHandoff.availability}`
+                      : displayedSimulationStageAuthority.resultAvailability
+                        ? `Backend result availability: ${displayedSimulationStageAuthority.resultAvailability}`
+                        : "Result status is inferred from persisted task detail."
                   }
                 />
                 <SummaryCard
                   label="Progress"
                   value={
-                    latestSimulationTaskDetail
-                      ? `${Math.round(latestSimulationTaskDetail.progress.percentComplete)}%`
-                      : formatSimulationTaskStatusLabel(latestSimulationStageAuthority.status)
+                    displayedSimulationTaskDetail
+                      ? `${Math.round(displayedSimulationTaskDetail.progress.percentComplete)}%`
+                      : formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)
                   }
                 />
               </div>
               <div className="mt-4">
                 <StageTaskActions
-                  task={latestSimulationStageAuthority}
+                  task={displayedSimulationStageAuthority}
                   resolvedTaskId={resolvedTaskId}
                   onViewTask={attachTask}
                   onOpenGlobalContext={openTaskInGlobalContext}
@@ -2616,9 +2897,9 @@ export function SimulationWorkbenchShell() {
                 : simulationResultState.message
             }
             actions={
-              latestSimulationStageAuthority ? (
+              displayedSimulationStageAuthority ? (
                 <StageTaskActions
-                  task={latestSimulationStageAuthority}
+                  task={displayedSimulationStageAuthority}
                   resolvedTaskId={resolvedTaskId}
                   onViewTask={attachTask}
                   onOpenGlobalContext={openTaskInGlobalContext}
@@ -2627,22 +2908,22 @@ export function SimulationWorkbenchShell() {
             }
           />
 
-          {latestSimulationStageAuthority ? (
+          {displayedSimulationStageAuthority ? (
             <>
               <div className="grid gap-3 md:grid-cols-3">
                 <SummaryCard
-                  label="Latest Run"
-                  value={`#${latestSimulationStageAuthority.taskId}`}
-                  detail={latestSimulationStageAuthority.summary}
+                  label={attachedSimulationStageTask ? "Attached Run" : "Latest Run"}
+                  value={`#${displayedSimulationStageAuthority.taskId}`}
+                  detail={displayedSimulationStageAuthority.summary}
                 />
                 <SummaryCard
                   label="Result Availability"
                   value={simulationResultReady ? "Explorer ready" : "Pending"}
                   detail={
-                    latestSimulationTaskDetail?.resultHandoff?.availability
-                      ? `Persisted handoff · ${latestSimulationTaskDetail.resultHandoff.availability}`
-                      : latestSimulationStageAuthority.resultAvailability
-                        ? `Queue summary · ${latestSimulationStageAuthority.resultAvailability}`
+                    displayedSimulationTaskDetail?.resultHandoff?.availability
+                      ? `Persisted handoff · ${displayedSimulationTaskDetail.resultHandoff.availability}`
+                      : displayedSimulationStageAuthority.resultAvailability
+                        ? `Queue summary · ${displayedSimulationStageAuthority.resultAvailability}`
                         : "Waiting for persisted result handoff."
                   }
                 />
@@ -2651,15 +2932,15 @@ export function SimulationWorkbenchShell() {
                   value={simulationResultReady ? "Post Processing unblocked" : "Post Processing blocked"}
                   detail={
                     simulationResultReady
-                      ? `Simulation task #${latestSimulationStageAuthority.taskId} can now act as the upstream result source.`
+                      ? `Simulation task #${displayedSimulationStageAuthority.taskId} can now act as the upstream result source.`
                       : "Persisted simulation outputs are not ready yet."
                   }
                 />
               </div>
 
-              {latestSimulationTaskDetail &&
-              (latestSimulationTaskDetail.status === "queued" ||
-                latestSimulationTaskDetail.status === "running") ? (
+              {displayedSimulationTaskDetail &&
+              (displayedSimulationTaskDetail.status === "queued" ||
+                displayedSimulationTaskDetail.status === "running") ? (
                 <div className="mt-4">
                   <StageNotice
                     tone="primary"
@@ -2669,13 +2950,13 @@ export function SimulationWorkbenchShell() {
                 </div>
               ) : null}
 
-              {latestSimulationTaskDetail && simulationResultReady ? (
+              {displayedSimulationTaskDetail && simulationResultReady ? (
                 <div className="mt-4">
-                  <SimulationResultExplorer task={latestSimulationTaskDetail} />
+                  <SimulationResultExplorer task={displayedSimulationTaskDetail} />
                 </div>
               ) : null}
 
-              {latestSimulationTaskDetail ? (
+              {displayedSimulationTaskDetail ? (
                 <div className="mt-4 space-y-3">
                   <button
                     type="button"
@@ -2697,7 +2978,7 @@ export function SimulationWorkbenchShell() {
 
                   {isSimulationResultSupportOpen ? (
                     <TaskResultPanel
-                      task={latestSimulationTaskDetail}
+                      task={displayedSimulationTaskDetail}
                       summary={simulationTaskResultSurface}
                     />
                   ) : (
@@ -2727,8 +3008,8 @@ export function SimulationWorkbenchShell() {
           <SummaryCard
             label="Upstream Simulation"
             value={
-              latestSimulationStageAuthority
-                ? `Task #${latestSimulationStageAuthority.taskId}`
+              displayedSimulationStageAuthority
+                ? `Task #${displayedSimulationStageAuthority.taskId}`
                 : "Simulation required"
             }
             detail={
@@ -2934,15 +3215,17 @@ export function SimulationWorkbenchShell() {
                   value={
                     explicitUpstreamSimulationTaskId !== null
                       ? `Simulation #${explicitUpstreamSimulationTaskId}`
-                      : latestSimulationStageAuthority
-                        ? `Simulation #${latestSimulationStageAuthority.taskId}`
+                      : displayedSimulationStageAuthority
+                        ? `Simulation #${displayedSimulationStageAuthority.taskId}`
                         : "Pending"
                   }
                   detail={
                     explicitUpstreamSimulationTaskId !== null
                       ? "Recovered from persisted post-processing result provenance."
-                      : latestSimulationStageAuthority
-                        ? "Paired with the latest simulation result visible in the current page context."
+                      : displayedSimulationStageAuthority
+                        ? attachedSimulationStageTask
+                          ? "Paired with the attached simulation result visible in the current page context."
+                          : "Paired with the latest simulation result visible in the current page context."
                         : "Simulation result is still required."
                   }
                 />
@@ -3020,8 +3303,10 @@ export function SimulationWorkbenchShell() {
                 message={
                   explicitUpstreamSimulationTaskId !== null
                     ? `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId} and traces back to simulation task #${explicitUpstreamSimulationTaskId}.`
-                    : latestSimulationStageAuthority
-                      ? `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId}. The page can pair it with the latest simulation task #${latestSimulationStageAuthority.taskId}, but the backend payload does not expose a narrower upstream task id here.`
+                    : displayedSimulationStageAuthority
+                      ? `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId}. The page can pair it with ${
+                          attachedSimulationStageTask ? "the attached" : "the latest"
+                        } simulation task #${displayedSimulationStageAuthority.taskId}, but the backend payload does not expose a narrower upstream task id here.`
                       : `This downstream result is attached to post-processing task #${latestPostProcessingStageAuthority.taskId}. Upstream simulation context is not currently available in the page.`
                 }
                 actions={
@@ -3109,7 +3394,7 @@ export function SimulationWorkbenchShell() {
       <OverlayDialog
         open={isManageDialogOpen}
         title="Manage Saved Setups"
-        description="Review saved Simulation Setup drafts for the current definition, load one into Stage 2, or remove old drafts."
+        description="Review browser-saved Simulation Setup drafts for the current definition, load one into Stage 2, or remove old drafts."
         onClose={() => {
           setIsManageDialogOpen(false);
         }}
