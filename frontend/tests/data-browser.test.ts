@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildRawDataBrowseHref,
+  parseRawDataBrowseState,
   datasetCatalogKey,
   datasetDesignsKey,
   datasetMetricsKey,
@@ -145,6 +147,24 @@ describe("raw-data selection helpers", () => {
     expect(resolveSelectedDesignId("missing", [])).toBeNull();
     expect(resolveSelectedTraceId("missing", [])).toBeNull();
   });
+
+  it("builds and parses raw-data browse hrefs for published research-data destinations", () => {
+    const href = buildRawDataBrowseHref({
+      designId: "design_published-explorer-design",
+      traceId: "trace_701_y_raw",
+      designQuery: "design_published-explorer-design",
+    });
+    const parsed = parseRawDataBrowseState(new URL(href, "http://localhost").searchParams);
+
+    expect(href).toBe(
+      "/raw-data?designId=design_published-explorer-design&traceId=trace_701_y_raw&designQuery=design_published-explorer-design",
+    );
+    expect(parsed).toEqual({
+      designId: "design_published-explorer-design",
+      traceId: "trace_701_y_raw",
+      designQuery: "design_published-explorer-design",
+    });
+  });
 });
 
 describe("page-boundary source contracts", () => {
@@ -238,9 +258,10 @@ describe("page-boundary source contracts", () => {
     expect(dashboardDataHookSource).toContain("activeDatasetId ? datasetProfileKey(activeDatasetId) : null");
     expect(dashboardDataHookSource).toContain("activeDatasetId ? datasetMetricsKey(activeDatasetId) : null");
     expect(rawDataHookSource).toContain("const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null");
-    expect(rawDataHookSource).toContain("setSelectedDesignId(null);");
-    expect(rawDataHookSource).toContain("setSelectedTraceId(null);");
-    expect(rawDataHookSource).toContain("}, [activeDatasetId]);");
+    expect(rawDataHookSource).toContain("parseRawDataBrowseState(searchParams)");
+    expect(rawDataHookSource).toContain("setSelectedDesignId(browseState.designId);");
+    expect(rawDataHookSource).toContain("setSelectedTraceId(browseState.traceId);");
+    expect(rawDataHookSource).toContain("setDesignSearch(browseState.designQuery ?? \"\");");
   });
 });
 

@@ -89,6 +89,15 @@ const simulationResultExplorerSource = readFileSync(
   ),
   "utf8",
 );
+const simulationResultPublicationCardSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-result-publication-card.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 
 describe("simulation definition routing helpers", () => {
   const definitions = [
@@ -1248,6 +1257,13 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultExplorerSource).toContain("Simulation result metric");
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
     expect(simulationResultExplorerSource).toContain("Z0 only applies to Y/Z derived explorer families.");
+    expect(simulationWorkbenchSource).toContain("SimulationResultPublicationCard");
+    expect(simulationResultPublicationCardSource).toContain("Task Result to Research Data");
+    expect(simulationResultPublicationCardSource).toContain("Save Result");
+    expect(simulationResultPublicationCardSource).toContain("publishSimulationResult");
+    expect(simulationResultPublicationCardSource).toContain("Open in Raw Data Browser");
+    expect(simulationResultPublicationCardSource).toContain("publicationSummary.state === \"published\"");
+    expect(simulationResultPublicationCardSource).toContain("error.errorCode");
   });
 
   it("binds stage authority to the current definition and dataset context", () => {
@@ -1345,6 +1361,18 @@ describe("task api detail mapping", () => {
           mode: "manual",
           compensate_ports: ["port_1", "port_2"],
         },
+      },
+      publication_summary: {
+        state: "published",
+        publish_allowed: false,
+        publication_key: "simulation-publication:31:fluxonium-2025-031:design_fluxonium-save",
+        target_dataset_id: "fluxonium-2025-031",
+        target_design_id: "design_fluxonium-save",
+        target_design_name: "Fluxonium Save",
+        published_trace_ids: ["trace_31_s11_raw", "trace_31_y11_ptc"],
+        published_at: "2026-03-19T12:32:00Z",
+        source_task_id: 31,
+        source_result_handle_ids: ["handle-44"],
       },
       downstream_source_capabilities: {
         raw: {
@@ -1453,6 +1481,18 @@ describe("task api detail mapping", () => {
 
     expect(detail.resultRefs.traceBatchId).toBe(44);
     expect(detail.resultRefs.resultHandles[0]?.handleId).toBe("handle-44");
+    expect(detail.publicationSummary).toEqual({
+      state: "published",
+      publishAllowed: false,
+      publicationKey: "simulation-publication:31:fluxonium-2025-031:design_fluxonium-save",
+      targetDatasetId: "fluxonium-2025-031",
+      targetDesignId: "design_fluxonium-save",
+      targetDesignName: "Fluxonium Save",
+      publishedTraceIds: ["trace_31_s11_raw", "trace_31_y11_ptc"],
+      publishedAt: "2026-03-19T12:32:00Z",
+      sourceTaskId: 31,
+      sourceResultHandleIds: ["handle-44"],
+    });
     expect(detail.simulationSetup?.ptc).toEqual({
       enabled: true,
       mode: "manual",

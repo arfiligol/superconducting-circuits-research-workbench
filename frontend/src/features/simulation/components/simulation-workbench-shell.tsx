@@ -28,6 +28,7 @@ import { z } from "zod";
 
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
 import { SimulationResultExplorer } from "@/features/simulation/components/simulation-result-explorer";
+import { SimulationResultPublicationCard } from "@/features/simulation/components/simulation-result-publication-card";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import { resolveOfficialSimulationExamplePreset } from "@/features/simulation/lib/official-example";
 import {
@@ -2945,14 +2946,21 @@ export function SimulationWorkbenchShell() {
                   <StageNotice
                     tone="primary"
                     title="Live result refresh"
-                    message="This stage refreshes the persisted simulation task every 2 seconds while it is queued or running, then attaches result refs as soon as the backend publishes them."
+                    message="This stage refreshes the persisted simulation task every 2 seconds while it is queued or running, then attaches result refs as soon as the backend materializes them."
                   />
                 </div>
               ) : null}
 
               {displayedSimulationTaskDetail && simulationResultReady ? (
-                <div className="mt-4">
+                <div className="mt-4 space-y-4">
                   <SimulationResultExplorer task={displayedSimulationTaskDetail} />
+                  <SimulationResultPublicationCard
+                    task={displayedSimulationTaskDetail}
+                    definitionName={
+                      activeDefinition?.name ?? selectedDefinitionDisplay?.name ?? null
+                    }
+                    activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
+                  />
                 </div>
               ) : null}
 
@@ -3015,7 +3023,7 @@ export function SimulationWorkbenchShell() {
             detail={
               simulationResultReady
                 ? "A persisted simulation result is available for downstream work."
-                : "Post-processing stays blocked until simulation publishes a persisted result."
+                : "Post-processing stays blocked until simulation materializes a persisted result."
             }
           />
 

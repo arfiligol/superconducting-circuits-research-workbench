@@ -84,9 +84,22 @@ type TaskResultHandoffResponseShape = Readonly<{
   result_handle_count: number;
   trace_payload_available: boolean;
 }>;
+type TaskPublicationSummaryResponseShape = Readonly<{
+  state: "not_published" | "published";
+  publish_allowed: boolean;
+  publication_key?: string | null;
+  target_dataset_id?: string | null;
+  target_design_id?: string | null;
+  target_design_name?: string | null;
+  published_trace_ids?: readonly string[];
+  published_at?: string | null;
+  source_task_id: number;
+  source_result_handle_ids?: readonly string[];
+}>;
 type TaskDetailResponseShape = components["schemas"]["TaskDetailResponse"] &
   Readonly<{
     simulation_setup?: SimulationSetupResponseShape | null;
+    publication_summary?: TaskPublicationSummaryResponseShape | null;
     downstream_source_capabilities?: DownstreamSourceCapabilitiesResponseShape | null;
     post_processing_setup?: PostProcessingSetupResponseShape | null;
     upstream_task_id?: number | null;
@@ -222,6 +235,41 @@ type SimulationResultExplorerResponseShape = Readonly<{
   selection: SimulationResultExplorerSelectionResponseShape;
   plot: SimulationResultExplorerPlotResponseShape;
   result_basis: SimulationResultExplorerResultBasisResponseShape;
+}>;
+type PublishedSimulationResultDatasetResponseShape = Readonly<{
+  dataset_id: string;
+  name: string;
+  visibility_scope: TaskVisibilityScope;
+  lifecycle_state: string;
+}>;
+type PublishedSimulationResultDesignResponseShape = Readonly<{
+  design_id: string;
+  dataset_id: string;
+  name: string;
+  source_coverage: Record<string, number>;
+  compare_readiness: string;
+  trace_count: number;
+  updated_at: string;
+}>;
+type PublishedSimulationTraceResponseShape = Readonly<{
+  trace_id: string;
+  dataset_id: string;
+  design_id: string;
+  family: string;
+  parameter: string;
+  representation: string;
+  trace_mode_group: string;
+  source_kind: string;
+  stage_kind: string;
+  provenance_summary: string;
+}>;
+type SimulationResultPublicationResponseShape = Readonly<{
+  operation: "published" | "already_published";
+  publication_summary: TaskPublicationSummaryResponseShape;
+  task: TaskDetailResponseShape;
+  dataset: PublishedSimulationResultDatasetResponseShape;
+  design: PublishedSimulationResultDesignResponseShape;
+  traces: readonly PublishedSimulationTraceResponseShape[];
 }>;
 
 export type TaskKind = "simulation" | "post_processing" | "characterization";
@@ -458,6 +506,19 @@ export type TaskResultHandoff = Readonly<{
   resultHandleCount: number;
   tracePayloadAvailable: boolean;
 }>;
+export type TaskPublicationState = "not_published" | "published";
+export type TaskPublicationSummary = Readonly<{
+  state: TaskPublicationState;
+  publishAllowed: boolean;
+  publicationKey: string | null;
+  targetDatasetId: string | null;
+  targetDesignId: string | null;
+  targetDesignName: string | null;
+  publishedTraceIds: readonly string[];
+  publishedAt: string | null;
+  sourceTaskId: number;
+  sourceResultHandleIds: readonly string[];
+}>;
 
 export type TaskAllowedActions = Readonly<{
   attach: boolean;
@@ -520,6 +581,7 @@ export type TaskDetail = TaskSummary &
       updatedAt: string;
     }>;
     resultHandoff?: TaskResultHandoff;
+    publicationSummary?: TaskPublicationSummary;
     resultRefs: Readonly<{
       traceBatchId: number | null;
       analysisRunId: number | null;
@@ -645,6 +707,46 @@ export type SimulationResultExplorerQuery = Readonly<{
   outputPort?: number;
   inputPort?: number;
 }>;
+export type SimulationResultPublicationDraft = Readonly<{
+  datasetId?: string | null;
+  designName: string;
+  designId?: string | null;
+}>;
+export type PublishedSimulationResultDataset = Readonly<{
+  datasetId: string;
+  name: string;
+  visibilityScope: TaskVisibilityScope;
+  lifecycleState: string;
+}>;
+export type PublishedSimulationResultDesign = Readonly<{
+  designId: string;
+  datasetId: string;
+  name: string;
+  sourceCoverage: Record<string, number>;
+  compareReadiness: string;
+  traceCount: number;
+  updatedAt: string;
+}>;
+export type PublishedSimulationTrace = Readonly<{
+  traceId: string;
+  datasetId: string;
+  designId: string;
+  family: string;
+  parameter: string;
+  representation: string;
+  traceModeGroup: string;
+  sourceKind: string;
+  stageKind: string;
+  provenanceSummary: string;
+}>;
+export type SimulationResultPublicationResult = Readonly<{
+  operation: "published" | "already_published";
+  publicationSummary: TaskPublicationSummary;
+  task: TaskDetail;
+  dataset: PublishedSimulationResultDataset;
+  design: PublishedSimulationResultDesign;
+  traces: readonly PublishedSimulationTrace[];
+}>;
 export type TaskQueueReadModel = Readonly<{
   rows: readonly TaskSummary[];
   workerSummary: readonly WorkerLaneSummary[];
@@ -689,6 +791,21 @@ const defaultTaskResultHandoff: TaskResultHandoff = {
   resultHandleCount: 0,
   tracePayloadAvailable: false,
 };
+const defaultTaskPublicationSummary = (
+  taskId: number,
+  sourceResultHandleIds: readonly string[] = [],
+): TaskPublicationSummary => ({
+  state: "not_published",
+  publishAllowed: false,
+  publicationKey: null,
+  targetDatasetId: null,
+  targetDesignId: null,
+  targetDesignName: null,
+  publishedTraceIds: [],
+  publishedAt: null,
+  sourceTaskId: taskId,
+  sourceResultHandleIds,
+});
 const defaultDownstreamSourceCapability: DownstreamSourceCapability = {
   available: false,
   enabled: false,
@@ -997,6 +1114,31 @@ function mapTaskResultHandoff(
   };
 }
 
+function mapTaskPublicationSummary(
+  payload: TaskPublicationSummaryResponseShape | null | undefined,
+  input: Readonly<{
+    taskId: number;
+    sourceResultHandleIds?: readonly string[];
+  }>,
+): TaskPublicationSummary {
+  if (!payload) {
+    return defaultTaskPublicationSummary(input.taskId, input.sourceResultHandleIds ?? []);
+  }
+
+  return {
+    state: payload.state,
+    publishAllowed: payload.publish_allowed,
+    publicationKey: payload.publication_key ?? null,
+    targetDatasetId: payload.target_dataset_id ?? null,
+    targetDesignId: payload.target_design_id ?? null,
+    targetDesignName: payload.target_design_name ?? null,
+    publishedTraceIds: [...(payload.published_trace_ids ?? [])],
+    publishedAt: payload.published_at ?? null,
+    sourceTaskId: payload.source_task_id,
+    sourceResultHandleIds: [...(payload.source_result_handle_ids ?? [])],
+  };
+}
+
 function mapTaskAllowedActions(
   payload: TaskAllowedActionsResponse | undefined,
 ): Readonly<{
@@ -1261,6 +1403,15 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
       : payload.status === "failed"
         ? "failed"
         : "running";
+  const mappedResultRefs = {
+    traceBatchId: payload.result_refs.trace_batch_id,
+    analysisRunId: payload.result_refs.analysis_run_id,
+    metadataRecords: payload.result_refs.metadata_records.map(mapMetadataRecordRef),
+    tracePayload: payload.result_refs.trace_payload
+      ? mapTracePayloadRef(payload.result_refs.trace_payload)
+      : null,
+    resultHandles: payload.result_refs.result_handles.map(mapResultHandleRef),
+  };
 
   return {
     ...mapTaskSummaryResponse(payload),
@@ -1293,15 +1444,11 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
       updatedAt: payload.progress.updated_at,
     },
     resultHandoff: mapTaskResultHandoff(payload.result_handoff),
-    resultRefs: {
-      traceBatchId: payload.result_refs.trace_batch_id,
-      analysisRunId: payload.result_refs.analysis_run_id,
-      metadataRecords: payload.result_refs.metadata_records.map(mapMetadataRecordRef),
-      tracePayload: payload.result_refs.trace_payload
-        ? mapTracePayloadRef(payload.result_refs.trace_payload)
-        : null,
-      resultHandles: payload.result_refs.result_handles.map(mapResultHandleRef),
-    },
+    publicationSummary: mapTaskPublicationSummary(payload.publication_summary, {
+      taskId: payload.task_id,
+      sourceResultHandleIds: mappedResultRefs.resultHandles.map((handle) => handle.handleId),
+    }),
+    resultRefs: mappedResultRefs,
   };
 }
 
@@ -1325,6 +1472,82 @@ export async function getSimulationResultExplorer(
     simulationResultExplorerKey(taskId, query),
   );
   return mapSimulationResultExplorerResponse(response);
+}
+
+function mapPublishedSimulationResultDataset(
+  payload: PublishedSimulationResultDatasetResponseShape,
+): PublishedSimulationResultDataset {
+  return {
+    datasetId: payload.dataset_id,
+    name: payload.name,
+    visibilityScope: payload.visibility_scope,
+    lifecycleState: payload.lifecycle_state,
+  };
+}
+
+function mapPublishedSimulationResultDesign(
+  payload: PublishedSimulationResultDesignResponseShape,
+): PublishedSimulationResultDesign {
+  return {
+    designId: payload.design_id,
+    datasetId: payload.dataset_id,
+    name: payload.name,
+    sourceCoverage: { ...payload.source_coverage },
+    compareReadiness: payload.compare_readiness,
+    traceCount: payload.trace_count,
+    updatedAt: payload.updated_at,
+  };
+}
+
+function mapPublishedSimulationTrace(
+  payload: PublishedSimulationTraceResponseShape,
+): PublishedSimulationTrace {
+  return {
+    traceId: payload.trace_id,
+    datasetId: payload.dataset_id,
+    designId: payload.design_id,
+    family: payload.family,
+    parameter: payload.parameter,
+    representation: payload.representation,
+    traceModeGroup: payload.trace_mode_group,
+    sourceKind: payload.source_kind,
+    stageKind: payload.stage_kind,
+    provenanceSummary: payload.provenance_summary,
+  };
+}
+
+function mapSimulationResultPublicationResponse(
+  payload: SimulationResultPublicationResponseShape,
+): SimulationResultPublicationResult {
+  return {
+    operation: payload.operation,
+    publicationSummary: mapTaskPublicationSummary(payload.publication_summary, {
+      taskId: payload.task.task_id,
+    }),
+    task: mapTaskDetailResponse(payload.task),
+    dataset: mapPublishedSimulationResultDataset(payload.dataset),
+    design: mapPublishedSimulationResultDesign(payload.design),
+    traces: payload.traces.map(mapPublishedSimulationTrace),
+  };
+}
+
+export async function publishSimulationResult(
+  taskId: number,
+  payload: SimulationResultPublicationDraft,
+) {
+  const response = await apiRequest<SimulationResultPublicationResponseShape>(
+    `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/publish`,
+    {
+      method: "POST",
+      body: {
+        dataset_id: payload.datasetId ?? null,
+        design_name: payload.designName,
+        design_id: payload.designId ?? null,
+      },
+    },
+  );
+
+  return mapSimulationResultPublicationResponse(response);
 }
 
 export function unwrapTaskMutation(response: TaskMutationResponse): TaskDetail {

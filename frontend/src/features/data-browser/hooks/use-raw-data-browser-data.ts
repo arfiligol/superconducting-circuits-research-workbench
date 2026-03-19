@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 
 import {
@@ -9,6 +10,7 @@ import {
   listTraceMetadata,
 } from "@/lib/api/datasets";
 import { useActiveDataset } from "@/lib/app-state/active-dataset";
+import { parseRawDataBrowseState } from "@/features/data-browser/lib/browse-state";
 import { resolveSelectedDesignId, resolveSelectedTraceId } from "@/features/data-browser/lib/selection";
 
 type TraceFilters = Readonly<{
@@ -28,13 +30,18 @@ const defaultFilters: TraceFilters = {
 };
 
 export function useRawDataBrowserData() {
+  const searchParams = useSearchParams();
   const activeDatasetState = useActiveDataset();
   const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null;
-  const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
-  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+  const browseState = useMemo(
+    () => parseRawDataBrowseState(searchParams),
+    [searchParams],
+  );
+  const [selectedDesignId, setSelectedDesignId] = useState<string | null>(browseState.designId);
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(browseState.traceId);
   const [designCursor, setDesignCursor] = useState<string | null>(null);
   const [traceCursor, setTraceCursor] = useState<string | null>(null);
-  const [designSearch, setDesignSearch] = useState("");
+  const [designSearch, setDesignSearch] = useState(browseState.designQuery ?? "");
   const [filters, setFilters] = useState<TraceFilters>(defaultFilters);
 
   const designsQuery = useSWR(
@@ -104,13 +111,13 @@ export function useRawDataBrowserData() {
   }, [tracesQuery.data?.rows]);
 
   useEffect(() => {
-    setSelectedDesignId(null);
-    setSelectedTraceId(null);
+    setSelectedDesignId(browseState.designId);
+    setSelectedTraceId(browseState.traceId);
     setDesignCursor(null);
     setTraceCursor(null);
-    setDesignSearch("");
+    setDesignSearch(browseState.designQuery ?? "");
     setFilters(defaultFilters);
-  }, [activeDatasetId]);
+  }, [activeDatasetId, browseState.designId, browseState.designQuery, browseState.traceId]);
 
   useEffect(() => {
     setTraceCursor(null);

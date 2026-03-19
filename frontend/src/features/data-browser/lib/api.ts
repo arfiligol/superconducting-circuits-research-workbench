@@ -15,6 +15,11 @@ import type {
   TraceDetail,
   TraceMetadataRow,
 } from "@/features/data-browser/lib/contracts";
+export {
+  buildRawDataBrowseHref,
+  parseRawDataBrowseState,
+  type RawDataBrowseState,
+} from "@/features/data-browser/lib/browse-state";
 
 export const datasetCatalogKey = "/api/backend/datasets";
 
