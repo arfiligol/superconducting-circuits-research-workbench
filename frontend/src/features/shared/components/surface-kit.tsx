@@ -104,7 +104,7 @@ export function SurfacePanel({
   return (
     <section
       className={cx(
-        "rounded-[1.1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]",
+        "min-w-0 rounded-[1.1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]",
         className,
       )}
     >

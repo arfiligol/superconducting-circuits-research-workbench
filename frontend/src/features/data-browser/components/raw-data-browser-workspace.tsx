@@ -28,7 +28,7 @@ function formatCoverage(coverage: Record<string, number>) {
   if (entries.length === 0) {
     return "No source coverage";
   }
-  return entries.map(([key, value]) => `${key}: ${value}`).join(" · ");
+  return entries.map(([key, value]) => `${formatTraceSource(key)}: ${value}`).join(" · ");
 }
 
 function formatTraceValue(value: string) {
@@ -211,7 +211,7 @@ export function RawDataBrowserWorkspace() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="font-semibold text-foreground">{design.name}</h3>
-                      <p className="mt-1 truncate text-sm text-muted-foreground">
+                      <p className="mt-1 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
                         {formatCoverage(design.source_coverage)}
                       </p>
                     </div>
@@ -246,19 +246,19 @@ export function RawDataBrowserWorkspace() {
                   </SurfaceTag>
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                  <div className="min-w-0 rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Source Coverage
                     </p>
-                    <p className="mt-2 text-sm font-medium text-foreground">
+                    <p className="mt-2 break-words text-sm font-medium text-foreground [overflow-wrap:anywhere]">
                       {formatCoverage(selectedDesign.source_coverage)}
                     </p>
                   </div>
-                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                  <div className="min-w-0 rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Browse State
                     </p>
-                    <p className="mt-2 text-sm font-medium text-foreground">
+                    <p className="mt-2 break-words text-sm font-medium text-foreground [overflow-wrap:anywhere]">
                       {selectedDesign.compare_readiness === "ready"
                         ? "Ready for compare-aware browsing"
                         : selectedDesign.compare_readiness === "inspect_only"
@@ -266,19 +266,19 @@ export function RawDataBrowserWorkspace() {
                           : "Blocked until more traces arrive"}
                     </p>
                   </div>
-                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                  <div className="min-w-0 rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Trace Count
                     </p>
-                    <p className="mt-2 text-sm font-medium text-foreground">
+                    <p className="mt-2 break-words text-sm font-medium text-foreground [overflow-wrap:anywhere]">
                       {selectedDesign.trace_count}
                     </p>
                   </div>
-                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                  <div className="min-w-0 rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Updated
                     </p>
-                    <p className="mt-2 text-sm font-medium text-foreground">
+                    <p className="mt-2 break-words text-sm font-medium text-foreground [overflow-wrap:anywhere]">
                       {selectedDesign.updated_at}
                     </p>
                   </div>

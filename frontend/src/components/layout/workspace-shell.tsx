@@ -19,7 +19,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
   }
 
   return (
-    <div className="min-h-screen bg-app text-foreground">
+    <div className="min-h-screen overflow-x-hidden bg-app text-foreground">
       {mobileSidebarOpen ? (
         <button
           type="button"
@@ -62,7 +62,7 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
           <WorkspaceNav onNavigate={closeSidebar} />
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col bg-background">
+        <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
           <main className="flex-1 px-4 py-5 md:px-6 md:py-5">
             <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">{children}</div>
           </main>
