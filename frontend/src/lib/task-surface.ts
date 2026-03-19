@@ -491,7 +491,7 @@ export function summarizeTaskResultHandoff(
     tone: "primary",
     title: "Execution still active",
     message:
-      "Stay on the attached task surface until the task reaches a terminal state and publishes persisted outputs.",
+      "Stay on the attached task surface until the task reaches a terminal state and materializes persisted outputs.",
     isReady: false,
   };
 }

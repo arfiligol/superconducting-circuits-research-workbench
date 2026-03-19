@@ -51,31 +51,31 @@ function describePublicationError(error: unknown) {
   if (error instanceof ApiError) {
     switch (error.errorCode) {
       case "simulation_result_publish_not_ready":
-        return "This task result is not publishable yet. Wait for a completed task with ready persisted results.";
+        return "This task result is not ready to save to the dataset yet. Wait for a completed task with ready persisted results.";
       case "simulation_result_publish_task_invalid":
-        return "Only completed simulation runs can be promoted into research data from this stage.";
+        return "Only completed simulation runs can be saved to the dataset from this stage.";
       default:
         break;
     }
 
     switch (error.category) {
       case "validation_error":
-        return "Review the research-data target before saving this result.";
+        return "Review the dataset target before saving this result.";
       case "not_found":
-        return "The research-data destination is no longer available in the current dataset context.";
+        return "The dataset destination is no longer available in the current dataset context.";
       case "conflict":
-        return "This task result cannot be published in its current lifecycle state.";
+        return "This task result cannot be saved to the dataset in its current lifecycle state.";
       case "persistence_error":
       case "trace_store_error":
         return error.retryable
-          ? "The save failed while writing research data. Retry is available."
-          : "The save failed while writing research data.";
+          ? "The save failed while writing dataset-owned research data. Retry is available."
+          : "The save failed while writing dataset-owned research data.";
       default:
         break;
     }
   }
 
-  return "Unable to save this task result as research data right now.";
+  return "Unable to save this task result to the dataset right now.";
 }
 
 function publicationTone(summary: TaskPublicationSummary) {
@@ -174,8 +174,8 @@ export function SimulationResultPublicationCard({
         state: "success",
         message:
           result.operation === "already_published"
-            ? "This task result was already published to the same research-data destination."
-            : "Saved this task result into durable research data.",
+            ? "This task result was already saved to the same dataset destination."
+            : "Saved this task result into durable dataset-owned research data.",
       });
     } catch (error) {
       setMutationState({
@@ -190,16 +190,16 @@ export function SimulationResultPublicationCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-            Task Result to Research Data
+            Task Result to Dataset
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            The explorer is task-scoped. Save Result promotes this output into durable
+            The explorer is task-scoped. Save to Dataset stores this output as durable
             dataset-owned research data.
           </p>
         </div>
         <SurfaceTag tone={publicationTone(publicationSummary)}>
           {publicationSummary.state === "published"
-            ? "Research Data published"
+            ? "Saved to Dataset"
             : publicationSummary.publishAllowed
               ? "Ready to save"
               : "Task Result only"}
@@ -263,8 +263,8 @@ export function SimulationResultPublicationCard({
               </div>
 
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                This task result is already durable research data. Browse the target design in
-                Raw Data when you want to inspect the published traces directly.
+                This task result is already saved to the dataset. Browse the target design in
+                Raw Data when you want to inspect the saved traces directly.
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2">
@@ -280,7 +280,7 @@ export function SimulationResultPublicationCard({
                 {!canOpenRawDataBrowser && publicationSummary.targetDatasetId ? (
                   <p className="text-xs leading-5 text-muted-foreground">
                     Activate dataset {publicationSummary.targetDatasetId} in the shell before
-                    opening the published destination in Raw Data Browser.
+                    opening the saved dataset destination in Raw Data Browser.
                   </p>
                 ) : null}
               </div>
@@ -290,14 +290,14 @@ export function SimulationResultPublicationCard({
               <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_200px]">
                 <label className="min-w-0">
                   <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Research Design Name
+                    Dataset Design Name
                   </p>
                   <input
                     value={designNameDraft}
                     onChange={(event) => {
                       setDesignNameDraft(event.target.value);
                     }}
-                    placeholder="Published design name"
+                    placeholder="Dataset design name"
                     className="w-full rounded-[0.9rem] border border-border/85 bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
                   />
                 </label>
@@ -312,8 +312,8 @@ export function SimulationResultPublicationCard({
               </div>
 
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Save Result creates durable research-data traces from this task result without
-                changing the task-backed explorer itself.
+                Save to Dataset creates durable dataset-owned traces from this task result
+                without changing the task-backed explorer itself.
               </p>
 
               <div className="mt-4">
@@ -324,14 +324,14 @@ export function SimulationResultPublicationCard({
                   className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Save className="h-3.5 w-3.5" />
-                  {mutationState.state === "saving" ? "Saving Result..." : "Save Result"}
+                  {mutationState.state === "saving" ? "Saving to Dataset..." : "Save to Dataset"}
                 </button>
               </div>
             </>
           ) : (
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              This output is still only a task result. Save Result appears once the backend marks
-              the current simulation result publishable.
+              This output is still only a task result. Save to Dataset appears once the backend
+              marks the current simulation result ready for dataset save.
             </p>
           )}
         </div>

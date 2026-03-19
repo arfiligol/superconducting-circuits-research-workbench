@@ -166,7 +166,7 @@ function summarizeResultState(
     label: "Results",
     value: "Awaiting outputs",
     detail: resultSummary.hasTracePayload
-      ? "Trace payload authority is present, but no result handles have been published yet."
+      ? "Trace payload authority is present, but no result handles are materialized yet."
       : "No persisted trace payload or result handles are attached yet.",
     tone: "default",
   };

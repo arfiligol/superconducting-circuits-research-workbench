@@ -1258,8 +1258,8 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
     expect(simulationResultExplorerSource).toContain("Z0 only applies to Y/Z derived explorer families.");
     expect(simulationWorkbenchSource).toContain("SimulationResultPublicationCard");
-    expect(simulationResultPublicationCardSource).toContain("Task Result to Research Data");
-    expect(simulationResultPublicationCardSource).toContain("Save Result");
+    expect(simulationResultPublicationCardSource).toContain("Task Result to Dataset");
+    expect(simulationResultPublicationCardSource).toContain("Save to Dataset");
     expect(simulationResultPublicationCardSource).toContain("publishSimulationResult");
     expect(simulationResultPublicationCardSource).toContain("Open in Raw Data Browser");
     expect(simulationResultPublicationCardSource).toContain("publicationSummary.state === \"published\"");

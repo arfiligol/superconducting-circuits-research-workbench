@@ -396,13 +396,13 @@ export function TaskResultPanel({
             <p className="font-medium text-foreground">
               {summary.materializedHandleCount > 0
                 ? "Persisted task outputs are available for reattachment."
-                : "This task has not published materialized outputs yet."}
+                : "This task has not materialized outputs yet."}
             </p>
             <p className="mt-2">
               Trace payload authority:{" "}
               {summary.hasTracePayload
                 ? "present and linked from task result refs"
-                : "not yet published in the task result refs"}
+                : "not yet materialized in the task result refs"}
               .
             </p>
             {summary.handleKindCounts.length > 0 ? (
