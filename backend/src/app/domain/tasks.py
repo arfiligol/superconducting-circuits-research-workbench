@@ -65,6 +65,7 @@ TaskEventLevel = TaskExecutionHistoryLevel
 TaskEventMetadataValue = TaskExecutionHistoryMetadataValue
 TaskEventOrder = Literal["asc", "desc"]
 TaskBrowseStatusFilter = Literal["active", "recent", "all"]
+TaskPublicationState = Literal["not_published", "published"]
 TaskDispatchStatus = _TaskDispatchStatus
 task_submission_source_for = _task_submission_source_for
 
@@ -444,6 +445,79 @@ class TaskResultHandoff:
 
 
 @dataclass(frozen=True)
+class TaskPublicationSummary:
+    state: TaskPublicationState
+    publish_allowed: bool
+    publication_key: str | None = None
+    target_dataset_id: str | None = None
+    target_design_id: str | None = None
+    target_design_name: str | None = None
+    published_trace_ids: tuple[str, ...] = ()
+    published_at: str | None = None
+    source_task_id: int | None = None
+    source_result_handle_ids: tuple[str, ...] = ()
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "state": self.state,
+            "publish_allowed": self.publish_allowed,
+            "publication_key": self.publication_key,
+            "target_dataset_id": self.target_dataset_id,
+            "target_design_id": self.target_design_id,
+            "target_design_name": self.target_design_name,
+            "published_trace_ids": list(self.published_trace_ids),
+            "published_at": self.published_at,
+            "source_task_id": self.source_task_id,
+            "source_result_handle_ids": list(self.source_result_handle_ids),
+        }
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> TaskPublicationSummary:
+        raw_trace_ids = payload.get("published_trace_ids", ())
+        raw_handle_ids = payload.get("source_result_handle_ids", ())
+        return cls(
+            state=cast(TaskPublicationState, payload["state"]),
+            publish_allowed=bool(payload.get("publish_allowed", False)),
+            publication_key=(
+                str(payload["publication_key"])
+                if isinstance(payload.get("publication_key"), str)
+                else None
+            ),
+            target_dataset_id=(
+                str(payload["target_dataset_id"])
+                if isinstance(payload.get("target_dataset_id"), str)
+                else None
+            ),
+            target_design_id=(
+                str(payload["target_design_id"])
+                if isinstance(payload.get("target_design_id"), str)
+                else None
+            ),
+            target_design_name=(
+                str(payload["target_design_name"])
+                if isinstance(payload.get("target_design_name"), str)
+                else None
+            ),
+            published_trace_ids=tuple(
+                str(trace_id) for trace_id in raw_trace_ids if isinstance(trace_id, str)
+            ),
+            published_at=(
+                str(payload["published_at"])
+                if isinstance(payload.get("published_at"), str)
+                else None
+            ),
+            source_task_id=(
+                int(payload["source_task_id"])
+                if isinstance(payload.get("source_task_id"), int)
+                else None
+            ),
+            source_result_handle_ids=tuple(
+                str(handle_id) for handle_id in raw_handle_ids if isinstance(handle_id, str)
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class WorkerLaneSummary:
     lane: TaskLane
     healthy_processors: int
@@ -518,6 +592,7 @@ class TaskDetail(TaskSummary):
     progress: TaskProgress
     result_refs: TaskResultRefs
     simulation_setup: SimulationSetup | None = None
+    publication_summary: TaskPublicationSummary | None = None
     post_processing_setup: PostProcessingSetup | None = None
     upstream_task_id: int | None = None
     downstream_task_ids: tuple[int, ...] = ()
@@ -785,6 +860,18 @@ def resolve_simulation_setup(events: Sequence[TaskEvent]) -> SimulationSetup | N
             parsed = _parse_json_payload(payload)
             if isinstance(parsed, Mapping):
                 return SimulationSetup.from_mapping(parsed)
+    return None
+
+
+def resolve_publication_summary(events: Sequence[TaskEvent]) -> TaskPublicationSummary | None:
+    for event in events:
+        payload = event.metadata.get("publication_summary")
+        if isinstance(payload, Mapping):
+            return TaskPublicationSummary.from_mapping(payload)
+        if isinstance(payload, str):
+            parsed = _parse_json_payload(payload)
+            if isinstance(parsed, Mapping):
+                return TaskPublicationSummary.from_mapping(parsed)
     return None
 
 

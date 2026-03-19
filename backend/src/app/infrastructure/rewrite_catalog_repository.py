@@ -33,11 +33,14 @@ from src.app.domain.datasets import (
     DesignBrowseRow,
     RawDataIngestionDraft,
     RawDataIngestionResult,
+    SimulationResultPublicationDraft,
+    SimulationResultPublicationResult,
     TaggedCoreMetricSummary,
     TraceAxis,
     TraceDetail,
     TraceMetadataSummary,
 )
+from src.app.domain.tasks import TaskDetail
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
     build_result_handle_ref,
@@ -206,6 +209,74 @@ class InMemoryRewriteCatalogRepository:
             dataset=updated_dataset,
             design=design_row,
             traces=tuple(ingested_trace_rows),
+        )
+
+    def publish_simulation_result(
+        self,
+        *,
+        task: TaskDetail,
+        dataset_id: str,
+        draft: SimulationResultPublicationDraft,
+    ) -> SimulationResultPublicationResult | None:
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None:
+            return None
+        design_id = draft.design_id or _build_design_id(draft.design_name)
+        publication_key = _build_simulation_publication_key(
+            task_id=task.task_id,
+            dataset_id=dataset_id,
+            design_id=design_id,
+        )
+        trace_rows = list(self._trace_summaries.get((dataset_id, design_id), ()))
+        published_trace_rows: list[TraceMetadataSummary] = []
+        published_trace_details = _build_simulation_publication_trace_details(
+            task=task,
+            dataset_id=dataset_id,
+            design_id=design_id,
+        )
+        already_published = all(
+            any(existing.trace_id == detail.trace_id for existing in trace_rows)
+            for _, _, detail in published_trace_details
+        )
+        for family, source, detail in published_trace_details:
+            summary = _build_simulation_publication_trace_summary(
+                detail=detail,
+                task=task,
+                family=family,
+                source=source,
+            )
+            self._trace_details[(dataset_id, design_id, detail.trace_id)] = detail
+            trace_rows = [row for row in trace_rows if row.trace_id != detail.trace_id]
+            trace_rows.append(summary)
+            published_trace_rows.append(summary)
+        self._trace_summaries[(dataset_id, design_id)] = tuple(
+            sorted(trace_rows, key=lambda row: row.trace_id)
+        )
+
+        design_rows = list(self._designs.get(dataset_id, ()))
+        source_coverage = _build_source_coverage(self._trace_summaries[(dataset_id, design_id)])
+        design_row = DesignBrowseRow(
+            design_id=design_id,
+            dataset_id=dataset_id,
+            name=draft.design_name,
+            source_coverage=source_coverage,
+            compare_readiness=_compare_readiness_for(source_coverage),
+            trace_count=len(self._trace_summaries[(dataset_id, design_id)]),
+            updated_at="2026-03-19T11:30:00Z",
+        )
+        design_rows = [row for row in design_rows if row.design_id != design_id]
+        design_rows.append(design_row)
+        self._designs[dataset_id] = tuple(sorted(design_rows, key=lambda row: row.design_id))
+
+        updated_dataset = replace(dataset, updated_at="2026-03-19T11:30:00Z")
+        self._datasets[dataset_id] = updated_dataset
+        return SimulationResultPublicationResult(
+            state="already_published" if already_published else "published",
+            publication_key=publication_key,
+            published_at="2026-03-19T11:30:00Z",
+            dataset=updated_dataset,
+            design=design_row,
+            traces=tuple(published_trace_rows),
         )
 
     def update_dataset_profile(
@@ -518,6 +589,145 @@ def _build_design_id(name: str) -> str:
 
 def _build_trace_id(*, kind: str, parameter: str, index: int) -> str:
     return f"trace_{_slugify(kind)}_{_slugify(parameter)}_{index}"
+
+
+def _build_simulation_publication_key(
+    *,
+    task_id: int,
+    dataset_id: str,
+    design_id: str,
+) -> str:
+    return f"simulation-publication:{task_id}:{dataset_id}:{design_id}"
+
+
+def _build_simulation_publication_trace_details(
+    *,
+    task: TaskDetail,
+    dataset_id: str,
+    design_id: str,
+) -> tuple[tuple[str, str, TraceDetail], ...]:
+    point_count = (
+        task.simulation_setup.frequency_sweep.point_count
+        if task.simulation_setup is not None
+        else 1
+    )
+    published_families: list[tuple[str, str, str]] = [
+        ("s_matrix", "raw", "raw"),
+        ("y_matrix", "raw", "postprocess"),
+        ("z_matrix", "raw", "postprocess"),
+    ]
+    if (
+        task.simulation_setup is not None
+        and task.simulation_setup.ptc is not None
+        and task.simulation_setup.ptc.enabled
+    ):
+        published_families.extend(
+            [
+                ("y_matrix", "ptc", "postprocess"),
+                ("z_matrix", "ptc", "postprocess"),
+            ]
+        )
+    trace_batch_record = build_metadata_record_ref(
+        "trace_batch",
+        f"trace_batch:published:{task.task_id}:{dataset_id}:{design_id}",
+        version=1,
+    )
+    details: list[tuple[str, str, TraceDetail]] = []
+    for family, source, _stage_kind in published_families:
+        trace_id = f"trace_simulation_task_{task.task_id}_{family}_{source}"
+        result_handle_record = build_metadata_record_ref(
+            "result_handle",
+            f"result_handle:published:{task.task_id}:{family}:{source}",
+            version=2,
+        )
+        details.append(
+            (
+                family,
+                source,
+                TraceDetail(
+                    trace_id=trace_id,
+                    dataset_id=dataset_id,
+                    design_id=design_id,
+                    axes=(TraceAxis(name="frequency", unit="GHz", length=point_count),),
+                    preview_payload={
+                        "kind": "sampled_series",
+                        "source": source,
+                        "family": family,
+                        "points": [
+                            [1.0, 0.11],
+                            [2.0, 0.18],
+                            [3.0, 0.15],
+                        ],
+                    },
+                    payload_ref=build_trace_payload_ref(
+                        payload_role="dataset_primary",
+                        store_key=(
+                            f"datasets/{dataset_id}/designs/{design_id}/simulation-results/"
+                            f"task_{task.task_id}/{trace_id}.zarr"
+                        ),
+                        store_uri=(
+                            f"trace_store/datasets/{dataset_id}/designs/{design_id}/"
+                            f"simulation-results/task_{task.task_id}/{trace_id}.zarr"
+                        ),
+                        group_path=(
+                            f"/datasets/{dataset_id}/designs/{design_id}/simulation_results"
+                        ),
+                        array_path=trace_id,
+                        dtype="complex64",
+                        shape=(point_count, 2),
+                        chunk_shape=(min(point_count, 64), 2),
+                    ),
+                    result_handles=(
+                        build_result_handle_ref(
+                            handle_id=f"published-result:{task.task_id}:{family}:{source}",
+                            kind="simulation_trace",
+                            status="materialized",
+                            label=f"Published {family.upper()} {source.upper()} result",
+                            metadata_record=result_handle_record,
+                            payload_backend="local_zarr",
+                            payload_format="zarr",
+                            payload_role="trace_payload",
+                            payload_locator=(
+                                f"trace_store/datasets/{dataset_id}/designs/{design_id}/"
+                                f"simulation-results/task_{task.task_id}/{trace_id}.zarr"
+                            ),
+                            provenance_task_id=task.task_id,
+                            provenance=build_result_provenance_ref(
+                                source_dataset_id=task.dataset_id,
+                                source_task_id=task.task_id,
+                                trace_batch_record=trace_batch_record,
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        )
+    return tuple(details)
+
+
+def _build_simulation_publication_trace_summary(
+    *,
+    detail: TraceDetail,
+    task: TaskDetail,
+    family: str,
+    source: str,
+) -> TraceMetadataSummary:
+    return TraceMetadataSummary(
+        trace_id=detail.trace_id,
+        dataset_id=detail.dataset_id,
+        design_id=detail.design_id,
+        family=family,
+        parameter=source,
+        representation="complex_matrix",
+        trace_mode_group="base",
+        source_kind="circuit_simulation",
+        stage_kind=(
+            "postprocess"
+            if source == "ptc" or family in {"y_matrix", "z_matrix"}
+            else "raw"
+        ),
+        provenance_summary=f"Published from simulation task {task.task_id}",
+    )
 
 
 def _build_source_coverage(

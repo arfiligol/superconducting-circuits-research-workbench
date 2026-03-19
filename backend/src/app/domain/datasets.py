@@ -18,6 +18,7 @@ CharacterizationResultStatus = Literal["completed", "failed", "blocked"]
 CharacterizationTaggingStatus = Literal["applied", "already_applied"]
 CharacterizationAvailabilityState = Literal["recommended", "available", "unavailable"]
 RawDataIngestionKind = Literal["measurement", "layout_simulation"]
+SimulationResultPublicationState = Literal["published", "already_published"]
 
 
 @dataclass(frozen=True)
@@ -112,6 +113,22 @@ class RawDataIngestionDraft:
 
 @dataclass(frozen=True)
 class RawDataIngestionResult:
+    dataset: DatasetDetail
+    design: DesignBrowseRow
+    traces: tuple[TraceMetadataSummary, ...]
+
+
+@dataclass(frozen=True)
+class SimulationResultPublicationDraft:
+    design_name: str
+    design_id: str | None = None
+
+
+@dataclass(frozen=True)
+class SimulationResultPublicationResult:
+    state: SimulationResultPublicationState
+    publication_key: str
+    published_at: str
     dataset: DatasetDetail
     design: DesignBrowseRow
     traces: tuple[TraceMetadataSummary, ...]

@@ -13,7 +13,11 @@ from sc_core.tasking import (
 )
 
 from src.app.domain.audit import AuditRecord
-from src.app.domain.datasets import DatasetDetail
+from src.app.domain.datasets import (
+    DatasetDetail,
+    SimulationResultPublicationDraft,
+    SimulationResultPublicationResult,
+)
 from src.app.domain.session import SessionState
 from src.app.domain.tasks import (
     PostProcessingSetup,
@@ -29,6 +33,7 @@ from src.app.domain.tasks import (
     TaskListQuery,
     TaskProcessorDetail,
     TaskProcessorRuntimeView,
+    TaskPublicationSummary,
     TaskQueueAggregateSummary,
     TaskQueueRow,
     TaskQueueView,
@@ -75,6 +80,14 @@ class TaskRepository(Protocol):
 
 class TaskDatasetRepository(Protocol):
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None: ...
+
+    def publish_simulation_result(
+        self,
+        *,
+        task: TaskDetail,
+        dataset_id: str,
+        draft: SimulationResultPublicationDraft,
+    ) -> SimulationResultPublicationResult | None: ...
 
 
 class TaskCircuitDefinitionRepository(Protocol):
@@ -237,6 +250,153 @@ class TaskService:
         task = self.get_task(task_id)
         session = self._session_repository.get_session_state()
         return self._build_allowed_actions(task, session)
+
+    def get_task_publication_summary(self, task_id: int) -> TaskPublicationSummary:
+        task = self.get_task(task_id)
+        if task.publication_summary is not None:
+            return task.publication_summary
+        return self._build_default_publication_summary(task)
+
+    def publish_simulation_result(
+        self,
+        task_id: int,
+        draft: SimulationResultPublicationDraft,
+        *,
+        dataset_id: str | None = None,
+    ) -> SimulationResultPublicationResult:
+        task = self.get_task(task_id)
+        state = self._session_repository.get_session_state()
+        self._ensure_publishable_simulation_task(task)
+        target_dataset_id = dataset_id or task.dataset_id
+        if target_dataset_id is None:
+            raise service_error(
+                422,
+                code="simulation_result_publish_target_required",
+                category="validation",
+                message="dataset_id is required when the source task has no dataset binding.",
+            )
+        target_dataset = self._dataset_repository.get_dataset(target_dataset_id)
+        if target_dataset is None:
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {target_dataset_id} was not found.",
+            )
+        if not self._authorization_service.is_visible_dataset(target_dataset, state):
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {target_dataset_id} was not found.",
+            )
+        dataset_actions = self._authorization_service.build_dataset_allowed_actions(
+            target_dataset,
+            state,
+        )
+        if not dataset_actions.ingest_raw_data:
+            raise service_error(
+                403,
+                code="simulation_result_publish_denied",
+                category="permission_denied",
+                message=(
+                    "The active session cannot save simulation results "
+                    "into the target dataset."
+                ),
+            )
+
+        existing_publication = task.publication_summary
+        requested_design_id = draft.design_id or _build_publication_design_id(draft.design_name)
+        if existing_publication is not None:
+            if (
+                existing_publication.target_dataset_id == target_dataset_id
+                and existing_publication.target_design_id == requested_design_id
+            ):
+                resolved_design_name = (
+                    existing_publication.target_design_name or draft.design_name
+                )
+                result = self._dataset_repository.publish_simulation_result(
+                    task=task,
+                    dataset_id=target_dataset_id,
+                    draft=SimulationResultPublicationDraft(
+                        design_name=resolved_design_name,
+                        design_id=requested_design_id,
+                    ),
+                )
+                if result is None:
+                    raise service_error(
+                        409,
+                        code="simulation_result_publish_unavailable",
+                        category="conflict",
+                        message="Simulation result publish target could not be materialized.",
+                    )
+                return result
+            raise service_error(
+                409,
+                code="simulation_result_already_published",
+                category="conflict",
+                message=(
+                    "This simulation result was already published "
+                    "to a different dataset/design target."
+                ),
+            )
+
+        result = self._dataset_repository.publish_simulation_result(
+            task=task,
+            dataset_id=target_dataset_id,
+            draft=SimulationResultPublicationDraft(
+                design_name=draft.design_name,
+                design_id=requested_design_id,
+            ),
+        )
+        if result is None:
+            raise service_error(
+                409,
+                code="simulation_result_publish_unavailable",
+                category="conflict",
+                message="Simulation result publish target could not be materialized.",
+            )
+        if len(task.events) > 0:
+            self._repository.merge_task_event_metadata(
+                task.task_id,
+                task.events[0].event_key,
+                {
+                    "publication_summary": json.dumps(
+                        _serialize_publication_summary(
+                            TaskPublicationSummary(
+                                state="published",
+                                publish_allowed=False,
+                                publication_key=result.publication_key,
+                                target_dataset_id=result.dataset.dataset_id,
+                                target_design_id=result.design.design_id,
+                                target_design_name=result.design.name,
+                                published_trace_ids=tuple(
+                                    trace.trace_id for trace in result.traces
+                                ),
+                                published_at=result.published_at,
+                                source_task_id=task.task_id,
+                                source_result_handle_ids=tuple(
+                                    handle.handle_id
+                                    for handle in task.result_refs.result_handles
+                                ),
+                            )
+                        )
+                    ),
+                },
+            )
+        self._append_audit_record(
+            action_kind="task.result_published",
+            resource_id=str(task.task_id),
+            outcome="completed",
+            payload={
+                "dataset_id": result.dataset.dataset_id,
+                "design_id": result.design.design_id,
+                "trace_ids": [trace.trace_id for trace in result.traces],
+                "publication_key": result.publication_key,
+                "state": result.state,
+            },
+        )
+        return result
 
     def submit_task(self, draft: TaskSubmissionDraft) -> TaskDetail:
         session = self._session_repository.get_session_state()
@@ -768,6 +928,68 @@ class TaskService:
             denied_message=denied_message,
         )
 
+    def _ensure_publishable_simulation_task(self, task: TaskDetail) -> None:
+        if task.kind != "simulation":
+            raise service_error(
+                409,
+                code="simulation_result_publish_task_invalid",
+                category="conflict",
+                message="Only simulation tasks can publish simulation results.",
+            )
+        if task.status != "completed":
+            raise service_error(
+                409,
+                code="simulation_result_publish_not_ready",
+                category="conflict",
+                message="Only completed simulation tasks with ready results can be published.",
+            )
+        handoff = _build_result_handoff(task)
+        if handoff.availability != "ready":
+            raise service_error(
+                409,
+                code="simulation_result_publish_not_ready",
+                category="conflict",
+                message="Only completed simulation tasks with ready results can be published.",
+            )
+        if task.simulation_setup is None:
+            raise service_error(
+                409,
+                code="simulation_result_publish_not_ready",
+                category="conflict",
+                message="Only completed simulation tasks with persisted setup can be published.",
+            )
+
+    def _build_default_publication_summary(self, task: TaskDetail) -> TaskPublicationSummary:
+        default_dataset = (
+            self._dataset_repository.get_dataset(task.dataset_id)
+            if task.dataset_id is not None
+            else None
+        )
+        state = self._session_repository.get_session_state()
+        publish_allowed = False
+        if default_dataset is not None and self._authorization_service.is_visible_dataset(
+            default_dataset, state
+        ):
+            dataset_actions = self._authorization_service.build_dataset_allowed_actions(
+                default_dataset,
+                state,
+            )
+            publish_allowed = (
+                dataset_actions.ingest_raw_data
+                and task.kind == "simulation"
+                and task.status == "completed"
+                and task.simulation_setup is not None
+                and _build_result_handoff(task).availability == "ready"
+            )
+        return TaskPublicationSummary(
+            state="not_published",
+            publish_allowed=publish_allowed,
+            source_task_id=task.task_id,
+            source_result_handle_ids=tuple(
+                handle.handle_id for handle in task.result_refs.result_handles
+            ),
+        )
+
     def _normalize_task(self, task: TaskDetail) -> TaskDetail:
         simulation_setup, post_processing_setup = self._resolve_retry_contract_snapshot(
             task,
@@ -981,6 +1203,10 @@ def _serialize_simulation_setup(setup: SimulationSetup) -> dict[str, object]:
 
 def _serialize_post_processing_setup(setup: PostProcessingSetup) -> dict[str, object]:
     return setup.to_mapping()
+
+
+def _serialize_publication_summary(summary: TaskPublicationSummary) -> dict[str, object]:
+    return summary.to_mapping()
 
 
 def _session_user_id(session: SessionState) -> str:
@@ -1444,6 +1670,18 @@ def _summaries_for_processor_details(
             )
         )
     return tuple(summaries)
+
+
+def _build_publication_design_id(design_name: str) -> str:
+    slug = "-".join(
+        token
+        for token in "".join(
+            character.lower() if character.isalnum() else " "
+            for character in design_name
+        ).split()
+        if len(token) > 0
+    )
+    return f"design_{slug}" if len(slug) > 0 else "design_simulation_result"
 
 
 def _build_local_worker_summary(

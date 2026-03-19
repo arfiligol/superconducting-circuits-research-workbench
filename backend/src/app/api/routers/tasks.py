@@ -12,6 +12,7 @@ from src.app.api.presenters.storage import (
     build_result_handle_ref_response,
     build_trace_payload_ref_response,
 )
+from src.app.domain.datasets import SimulationResultPublicationDraft
 from src.app.domain.tasks import (
     PostProcessingOperation,
     PostProcessingSetup,
@@ -205,6 +206,61 @@ def get_simulation_result_explorer(
                 "input_port": input_port,
             },
         },
+    )
+
+
+@router.post("/{task_id}/simulation-results/publish")
+def publish_simulation_result(
+    task_id: int,
+    payload: Annotated[object, Body(...)],
+    task_service: Annotated[TaskService, Depends(get_task_service)],
+) -> JSONResponse:
+    try:
+        parsed_payload = _parse_simulation_result_publication_payload(payload)
+        result = task_service.publish_simulation_result(
+            task_id,
+            SimulationResultPublicationDraft(
+                design_name=parsed_payload["design_name"],
+                design_id=parsed_payload["design_id"],
+            ),
+            dataset_id=parsed_payload["dataset_id"],
+        )
+        task = task_service.get_task(task_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": result.state,
+            "publication_summary": _serialize_publication_summary(
+                task_service.get_task_publication_summary(task_id)
+            ),
+            "task": _serialize_task_detail(task, task_service),
+            "dataset": {
+                "dataset_id": result.dataset.dataset_id,
+                "name": result.dataset.name,
+                "visibility_scope": result.dataset.visibility_scope,
+                "lifecycle_state": result.dataset.lifecycle_state,
+                "allowed_actions": {
+                    "select": result.dataset.allowed_actions.select,
+                    "update_profile": result.dataset.allowed_actions.update_profile,
+                    "publish": result.dataset.allowed_actions.publish,
+                    "archive": result.dataset.allowed_actions.archive,
+                    "delete": result.dataset.allowed_actions.delete,
+                    "ingest_raw_data": result.dataset.allowed_actions.ingest_raw_data,
+                },
+            },
+            "design": {
+                "design_id": result.design.design_id,
+                "dataset_id": result.design.dataset_id,
+                "name": result.design.name,
+                "source_coverage": result.design.source_coverage,
+                "compare_readiness": result.design.compare_readiness,
+                "trace_count": result.design.trace_count,
+                "updated_at": result.design.updated_at,
+            },
+            "traces": [_serialize_published_trace(trace) for trace in result.traces],
+        },
+        meta={"generated_at": _generated_at()},
     )
 
 
@@ -411,6 +467,9 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
             if task.simulation_setup is not None
             else None
         ),
+        "publication_summary": _serialize_publication_summary(
+            task_service.get_task_publication_summary(task.task_id)
+        ),
         "downstream_source_capabilities": _serialize_downstream_source_capabilities(task),
         "post_processing_setup": (
             _serialize_post_processing_setup(task.post_processing_setup)
@@ -505,6 +564,36 @@ def _serialize_task_event(event: TaskEvent) -> dict[str, object]:
             key: _deserialize_task_event_metadata_value(key, value)
             for key, value in dict(event.metadata).items()
         },
+    }
+
+
+def _serialize_publication_summary(summary) -> dict[str, object]:
+    return {
+        "state": summary.state,
+        "publish_allowed": summary.publish_allowed,
+        "publication_key": summary.publication_key,
+        "target_dataset_id": summary.target_dataset_id,
+        "target_design_id": summary.target_design_id,
+        "target_design_name": summary.target_design_name,
+        "published_trace_ids": list(summary.published_trace_ids),
+        "published_at": summary.published_at,
+        "source_task_id": summary.source_task_id,
+        "source_result_handle_ids": list(summary.source_result_handle_ids),
+    }
+
+
+def _serialize_published_trace(trace) -> dict[str, object]:
+    return {
+        "trace_id": trace.trace_id,
+        "dataset_id": trace.dataset_id,
+        "design_id": trace.design_id,
+        "family": trace.family,
+        "parameter": trace.parameter,
+        "representation": trace.representation,
+        "trace_mode_group": trace.trace_mode_group,
+        "source_kind": trace.source_kind,
+        "stage_kind": trace.stage_kind,
+        "provenance_summary": trace.provenance_summary,
     }
 
 
@@ -863,6 +952,15 @@ def _parse_post_processing_operation(payload: object) -> PostProcessingOperation
     )
 
 
+def _parse_simulation_result_publication_payload(payload: object) -> dict[str, str | None]:
+    body = _as_mapping(payload)
+    return {
+        "dataset_id": _optional_string(body.get("dataset_id"), field_name="dataset_id"),
+        "design_id": _optional_string(body.get("design_id"), field_name="design_id"),
+        "design_name": _required_string(body.get("design_name"), field_name="design_name"),
+    }
+
+
 def _serialize_simulation_setup(setup: SimulationSetup) -> dict[str, object]:
     return setup.to_mapping()
 
@@ -988,7 +1086,12 @@ def _required_literal(
 
 
 def _deserialize_task_event_metadata_value(key: str, value: object) -> object:
-    if key not in {"simulation_setup", "post_processing_setup", "downstream_task_ids"}:
+    if key not in {
+        "simulation_setup",
+        "post_processing_setup",
+        "downstream_task_ids",
+        "publication_summary",
+    }:
         return value
     if not isinstance(value, str):
         return value
