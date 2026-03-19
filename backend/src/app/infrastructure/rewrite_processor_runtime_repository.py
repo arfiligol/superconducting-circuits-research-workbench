@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from sc_core.tasking import (
     LaneName,
@@ -20,7 +20,7 @@ class TaskListingRepository(Protocol):
 
 
 class InMemoryProcessorRuntimeRepository:
-    _BASELINE_PROCESSORS: dict[TaskLane, tuple[str, ...]] = {
+    _BASELINE_PROCESSORS: ClassVar[dict[TaskLane, tuple[str, ...]]] = {
         "simulation": ("simulation-processor-1", "simulation-processor-2"),
         "characterization": ("characterization-processor-1",),
     }
@@ -143,7 +143,7 @@ class InMemoryProcessorRuntimeRepository:
             processor_id = self._first_processor_for_lane(task.workspace_id, task.lane)
         self._heartbeats[processor_id] = build_processor_heartbeat(
             processor_id=_display_processor_id(processor_id),
-            lane=task.lane,
+            lane=_normalize_lane(task.lane),
             state="healthy",
             current_task_id=None,
             last_heartbeat_at=recorded_at,
@@ -205,7 +205,7 @@ class InMemoryProcessorRuntimeRepository:
             self._task_assignments[task.task_id] = processor_id
             self._heartbeats[processor_id] = build_processor_heartbeat(
                 processor_id=_display_processor_id(processor_id),
-                lane=task.lane,
+                lane=_normalize_lane(task.lane),
                 state=state,
                 current_task_id=task.task_id,
                 last_heartbeat_at=recorded_at,
@@ -229,15 +229,16 @@ class InMemoryProcessorRuntimeRepository:
             self._task_assignments[task.task_id] = processor_id
         self._heartbeats[processor_id] = build_processor_heartbeat(
             processor_id=_display_processor_id(processor_id),
-            lane=task.lane,
+            lane=_normalize_lane(task.lane),
             state=state,
             current_task_id=task.task_id,
             last_heartbeat_at=recorded_at,
             runtime_metadata=runtime_metadata,
         )
 
-    def _choose_processor_for_lane(self, workspace_id: str, lane: TaskLane) -> str:
-        for processor_id in self._BASELINE_PROCESSORS[lane]:
+    def _choose_processor_for_lane(self, workspace_id: str, lane: TaskLane | str) -> str:
+        canonical_lane = _normalize_lane(lane)
+        for processor_id in self._BASELINE_PROCESSORS[canonical_lane]:
             key = _processor_key(workspace_id, processor_id)
             heartbeat = self._heartbeats.get(key)
             if heartbeat is None or heartbeat.current_task_id is None:
@@ -245,13 +246,13 @@ class InMemoryProcessorRuntimeRepository:
         overflow_count = sum(
             1
             for key in self._heartbeats
-            if key.startswith(f"{workspace_id}:{lane}-processor-overflow-")
+            if key.startswith(f"{workspace_id}:{canonical_lane}-processor-overflow-")
         )
-        processor_id = f"{lane}-processor-overflow-{overflow_count + 1}"
+        processor_id = f"{canonical_lane}-processor-overflow-{overflow_count + 1}"
         key = _processor_key(workspace_id, processor_id)
         self._heartbeats[key] = build_processor_heartbeat(
             processor_id=processor_id,
-            lane=lane,
+            lane=canonical_lane,
             state="healthy",
             current_task_id=None,
             last_heartbeat_at=self._latest_workspace_recorded_at(workspace_id),
@@ -262,8 +263,9 @@ class InMemoryProcessorRuntimeRepository:
         )
         return key
 
-    def _first_processor_for_lane(self, workspace_id: str, lane: TaskLane) -> str:
-        return _processor_key(workspace_id, self._BASELINE_PROCESSORS[lane][0])
+    def _first_processor_for_lane(self, workspace_id: str, lane: TaskLane | str) -> str:
+        canonical_lane = _normalize_lane(lane)
+        return _processor_key(workspace_id, self._BASELINE_PROCESSORS[canonical_lane][0])
 
     def _latest_workspace_recorded_at(self, workspace_id: str) -> datetime:
         return max(
@@ -304,6 +306,12 @@ def _runtime_metadata(
     if stale_after_seconds is not None:
         metadata["stale_after_seconds"] = stale_after_seconds
     return metadata
+
+
+def _normalize_lane(lane: TaskLane | str) -> TaskLane:
+    if lane == "post_processing":
+        return "simulation"
+    return lane
 
 
 def _processor_key(workspace_id: str, processor_id: str) -> str:

@@ -1011,9 +1011,18 @@ def test_post_processing_task_persists_upstream_lineage_and_downstream_reference
 
     assert post_processing_response.status_code == 201
     task = post_processing_response.json()["data"]["task"]
+    assert task["status"] == "completed"
+    assert task["dispatch"]["status"] == "completed"
     assert task["upstream_task_id"] == upstream_task_id
     assert task["post_processing_setup"] == _post_processing_setup_payload()
+    assert task["result_handoff"] == {
+        "availability": "ready",
+        "primary_result_handle_id": f"task-result:{task['task_id']}:primary",
+        "result_handle_count": 1,
+        "trace_payload_available": True,
+    }
     assert task["events"][0]["metadata"]["upstream_task_id"] == upstream_task_id
+    assert task["events"][-1]["event_type"] == "task_completed"
 
     upstream = client.get(f"/tasks/{upstream_task_id}").json()["data"]
     assert upstream["downstream_task_ids"] == [task["task_id"]]
@@ -1021,8 +1030,11 @@ def test_post_processing_task_persists_upstream_lineage_and_downstream_reference
     reset_runtime_state()
 
     reloaded = client.get(f"/tasks/{task['task_id']}").json()["data"]
+    assert reloaded["status"] == "completed"
+    assert reloaded["dispatch"]["status"] == "completed"
     assert reloaded["upstream_task_id"] == upstream_task_id
     assert reloaded["post_processing_setup"] == _post_processing_setup_payload()
+    assert reloaded["result_handoff"]["availability"] == "ready"
 
 
 def test_submit_simulation_task_rejects_invalid_ptc_payload() -> None:
@@ -1259,6 +1271,50 @@ def test_runtime_bootstrap_recovers_stranded_local_characterization_task() -> No
         "task_running",
         "task_completed",
     ]
+
+
+def test_runtime_bootstrap_recovers_stranded_local_post_processing_task() -> None:
+    service = get_task_service()
+    original_driver = service._execution_driver
+    service.set_execution_driver(None)
+    try:
+        upstream = client.post(
+            "/tasks",
+            json={
+                "kind": "simulation",
+                "dataset_id": "local-dataset-001",
+                "definition_id": 3,
+                "summary": "Upstream simulation for post-processing recovery.",
+                "simulation_setup": _simulation_setup_payload(
+                    ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+                ),
+            },
+        ).json()["data"]["task"]
+        created = client.post(
+            "/tasks",
+            json={
+                "kind": "post_processing",
+                "dataset_id": "local-dataset-001",
+                "summary": "Bootstrap post-processing recovery proof.",
+                "upstream_task_id": upstream["task_id"],
+                "post_processing_setup": _post_processing_setup_payload(),
+            },
+        ).json()["data"]["task"]
+    finally:
+        service.set_execution_driver(original_driver)
+
+    assert created["status"] == "queued"
+    assert created["dispatch"]["status"] == "accepted"
+
+    reset_runtime_state()
+
+    detail_response = client.get(f"/tasks/{created['task_id']}")
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["status"] == "completed"
+    assert detail["dispatch"]["status"] == "completed"
+    assert detail["result_handoff"]["availability"] == "ready"
+    assert detail["events"][-1]["event_type"] == "task_completed"
 
 
 def test_cancel_task_persists_control_state_and_emits_audit() -> None:

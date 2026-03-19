@@ -640,7 +640,7 @@ class TaskService:
         created_task = self._repository.create_task(
             TaskCreateDraft(
                 kind=draft.kind,
-                lane=worker_route.lane,
+                lane=_normalize_runtime_lane(worker_route.lane),
                 execution_mode=worker_route.execution_mode,
                 owner_user_id=owner_user_id,
                 owner_display_name=owner_display_name,
@@ -823,7 +823,7 @@ class TaskService:
         created = self._repository.create_task(
             TaskCreateDraft(
                 kind=source_task.kind,
-                lane=source_task.lane,
+                lane=_normalize_runtime_lane(source_task.lane),
                 execution_mode=source_task.execution_mode,
                 owner_user_id=source_task.owner_user_id,
                 owner_display_name=source_task.owner_display_name,
@@ -1897,7 +1897,9 @@ def _build_worker_summary(
         return tuple(processor_summaries)
     summaries: list[WorkerLaneSummary] = []
     for lane in ("simulation", "characterization"):
-        lane_tasks = [task for task in visible_tasks if task.lane == lane]
+        lane_tasks = [
+            task for task in visible_tasks if _normalize_runtime_lane(task.lane) == lane
+        ]
         busy_processors = sum(1 for task in lane_tasks if task.status in {"dispatching", "running"})
         degraded_processors = sum(
             1 for task in lane_tasks if task.status == "termination_requested"
@@ -1951,7 +1953,7 @@ def _build_local_processor_details(
             (
                 task
                 for task in visible_tasks
-                if task.lane == lane_name
+                if _normalize_runtime_lane(task.lane) == lane_name
                 and task.status
                 in {
                     "dispatching",
@@ -2052,7 +2054,9 @@ def _build_local_worker_summary(
     lane_capacity = {"simulation": 1, "characterization": 1}
     lane_order = ("simulation", "characterization")
     for lane in lane_order:
-        lane_tasks = [task for task in visible_tasks if task.lane == lane]
+        lane_tasks = [
+            task for task in visible_tasks if _normalize_runtime_lane(task.lane) == lane
+        ]
         busy_processors = min(
             sum(1 for task in lane_tasks if task.status in active_statuses),
             lane_capacity[lane],
@@ -2093,6 +2097,10 @@ def _workspace_resource(workspace_id: str):
         visibility_scope="workspace",
         lifecycle_state="active",
     )
+
+
+def _normalize_runtime_lane(lane: str) -> str:
+    return "simulation" if lane == "post_processing" else lane
 
 
 def _task_resource(task: TaskDetail | str):

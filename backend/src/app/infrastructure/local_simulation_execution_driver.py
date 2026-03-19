@@ -282,6 +282,147 @@ class LocalCharacterizationExecutionDriver:
         )
 
 
+class LocalPostProcessingExecutionDriver:
+    def __init__(
+        self,
+        *,
+        task_repository: TaskDetailRepository,
+        execution_runtime_factory: Callable[[], TaskExecutionRuntime],
+    ) -> None:
+        self._task_repository = task_repository
+        self._execution_runtime_factory = execution_runtime_factory
+
+    def execute_submitted_task(self, task_id: int) -> None:
+        task = self._task_repository.get_task(task_id)
+        if task is None:
+            return
+        if (
+            task.kind != "post_processing"
+            or task.visibility_scope != "local"
+            or task.status != "queued"
+        ):
+            return
+        if task.post_processing_setup is None:
+            self._fail_task(
+                task,
+                exc_type="InvalidTaskPayload",
+                message="Post-processing setup is missing.",
+            )
+            return
+        if task.upstream_task_id is None:
+            self._fail_task(
+                task,
+                exc_type="UpstreamTaskMissing",
+                message="Post-processing requires an upstream simulation task.",
+            )
+            return
+        upstream_task = self._task_repository.get_task(task.upstream_task_id)
+        if upstream_task is None:
+            self._fail_task(
+                task,
+                exc_type="UpstreamTaskNotFound",
+                message="The upstream simulation task is no longer available.",
+            )
+            return
+        if upstream_task.kind != "simulation":
+            self._fail_task(
+                task,
+                exc_type="UpstreamTaskInvalid",
+                message="Post-processing requires an upstream simulation task.",
+            )
+            return
+        if upstream_task.status != "completed":
+            self._fail_task(
+                task,
+                exc_type="UpstreamResultNotReady",
+                message="The upstream simulation result is not ready for post-processing.",
+            )
+            return
+        if (
+            upstream_task.result_refs.trace_payload is None
+            and len(upstream_task.result_refs.result_handles) == 0
+        ):
+            self._fail_task(
+                task,
+                exc_type="UpstreamResultNotReady",
+                message=(
+                    "The upstream simulation result has not materialized "
+                    "a downstream source yet."
+                ),
+            )
+            return
+
+        worker_pid = os.getpid()
+        started_at = datetime.now(UTC)
+        runtime = self._execution_runtime_factory()
+
+        try:
+            runtime.start_task(
+                task.task_id,
+                recorded_at=started_at,
+                worker_pid=worker_pid,
+                stale_after_seconds=180,
+            )
+            runtime.heartbeat_task(
+                task.task_id,
+                recorded_at=started_at + timedelta(seconds=1),
+                summary="Post-processing worker is preparing the selected upstream traces.",
+                percent_complete=38,
+                stage_label=task.worker_task_name,
+                current_step=1,
+                total_steps=3,
+                stale_after_seconds=180,
+                details=_post_processing_heartbeat_details(task, upstream_task),
+            )
+            runtime.heartbeat_task(
+                task.task_id,
+                recorded_at=started_at + timedelta(seconds=2),
+                summary="Post-processing worker is applying the configured processing steps.",
+                percent_complete=82,
+                stage_label=task.worker_task_name,
+                current_step=2,
+                total_steps=3,
+                stale_after_seconds=180,
+                details=_post_processing_operation_details(task),
+            )
+            runtime.complete_task(
+                task.task_id,
+                recorded_at=started_at + timedelta(seconds=3),
+                result=TaskExecutionResult(
+                    result_summary_payload=_post_processing_result_summary_payload(
+                        task=task,
+                        upstream_task=upstream_task,
+                    ),
+                    trace_batch_id=task.task_id,
+                ),
+                result_refs=_build_post_processing_result_refs(
+                    task=task,
+                    upstream_task=upstream_task,
+                ),
+            )
+        except Exception as exc:
+            current_task = self._task_repository.get_task(task_id)
+            if current_task is None or current_task.status not in {"queued", "running"}:
+                return
+            runtime.fail_task(
+                task.task_id,
+                recorded_at=datetime.now(UTC),
+                exc_type=type(exc).__name__,
+                message=str(exc),
+                worker_pid=worker_pid,
+            )
+
+    def _fail_task(self, task: TaskDetail, *, exc_type: str, message: str) -> None:
+        runtime = self._execution_runtime_factory()
+        runtime.fail_task(
+            task.task_id,
+            recorded_at=datetime.now(UTC),
+            exc_type=exc_type,
+            message=message,
+            worker_pid=os.getpid(),
+        )
+
+
 class LocalTaskExecutionDriver:
     def __init__(
         self,
@@ -289,11 +430,13 @@ class LocalTaskExecutionDriver:
         task_repository: TaskListingRepository,
         execution_runtime_factory: Callable[[], TaskExecutionRuntime],
         simulation_driver: LocalSimulationExecutionDriver,
+        post_processing_driver: LocalPostProcessingExecutionDriver,
         characterization_driver: LocalCharacterizationExecutionDriver,
     ) -> None:
         self._task_repository = task_repository
         self._execution_runtime_factory = execution_runtime_factory
         self._simulation_driver = simulation_driver
+        self._post_processing_driver = post_processing_driver
         self._characterization_driver = characterization_driver
 
     def recover_queued_tasks(self) -> None:
@@ -314,6 +457,9 @@ class LocalTaskExecutionDriver:
             return
         if task.kind == "simulation":
             self._simulation_driver.execute_submitted_task(task.task_id)
+            return
+        if task.kind == "post_processing":
+            self._post_processing_driver.execute_submitted_task(task.task_id)
             return
         if task.kind == "characterization":
             self._characterization_driver.execute_submitted_task(task.task_id)
@@ -403,6 +549,129 @@ def _build_simulation_result_refs(task: TaskDetail) -> TaskResultRefs:
                 provenance=build_result_provenance_ref(
                     source_dataset_id=task.dataset_id,
                     source_task_id=task.task_id,
+                    trace_batch_record=trace_batch_record,
+                ),
+            ),
+        ),
+    )
+
+
+def _post_processing_heartbeat_details(
+    task: TaskDetail,
+    upstream_task: TaskDetail,
+) -> dict[str, object]:
+    setup = task.post_processing_setup
+    first_selection = (
+        setup.selections[0]
+        if setup is not None and len(setup.selections) > 0
+        else None
+    )
+    return {
+        "dataset_id": task.dataset_id,
+        "upstream_task_id": upstream_task.task_id,
+        "source_task_kind": upstream_task.kind,
+        "output_view": setup.output_view if setup is not None else None,
+        "trace_family": first_selection.trace_family if first_selection is not None else None,
+        "representation": first_selection.representation if first_selection is not None else None,
+        "selected_trace_count": (
+            len(first_selection.trace_ids) if first_selection is not None else 0
+        ),
+    }
+
+
+def _post_processing_operation_details(task: TaskDetail) -> dict[str, object]:
+    setup = task.post_processing_setup
+    operations = setup.operations if setup is not None else ()
+    return {
+        "operation_count": len(operations),
+        "operations": [operation.operation for operation in operations if operation.enabled],
+    }
+
+
+def _post_processing_result_summary_payload(
+    *,
+    task: TaskDetail,
+    upstream_task: TaskDetail,
+) -> dict[str, object]:
+    setup = task.post_processing_setup
+    first_selection = (
+        setup.selections[0]
+        if setup is not None and len(setup.selections) > 0
+        else None
+    )
+    return {
+        "artifact_label": "post-processing-matrix",
+        "task_kind": task.kind,
+        "dataset_id": task.dataset_id,
+        "upstream_task_id": upstream_task.task_id,
+        "output_view": setup.output_view if setup is not None else None,
+        "trace_family": first_selection.trace_family if first_selection is not None else None,
+        "representation": first_selection.representation if first_selection is not None else None,
+        "selected_trace_ids": (
+            list(first_selection.trace_ids) if first_selection is not None else []
+        ),
+        "operation_count": len(setup.operations) if setup is not None else 0,
+        "operations": [
+            {
+                "operation": operation.operation,
+                "enabled": operation.enabled,
+                "config": dict(operation.config),
+            }
+            for operation in (setup.operations if setup is not None else ())
+        ],
+    }
+
+
+def _build_post_processing_result_refs(
+    *,
+    task: TaskDetail,
+    upstream_task: TaskDetail,
+) -> TaskResultRefs:
+    setup = task.post_processing_setup
+    first_selection = (
+        setup.selections[0]
+        if setup is not None and len(setup.selections) > 0
+        else None
+    )
+    trace_count = max(len(first_selection.trace_ids) if first_selection is not None else 0, 1)
+    trace_batch_record = build_metadata_record_ref(
+        "trace_batch",
+        f"trace_batch:{task.task_id}",
+        version=1,
+    )
+    result_handle_record = build_metadata_record_ref(
+        "result_handle",
+        f"result_handle:{task.task_id}:post-processing",
+        version=2,
+    )
+    return TaskResultRefs(
+        result_handle=TaskResultHandle(trace_batch_id=task.task_id),
+        metadata_records=(trace_batch_record, result_handle_record),
+        trace_payload=build_trace_payload_ref(
+            payload_role="task_output",
+            store_key=f"tasks/{task.task_id}/post-processing-matrix.zarr",
+            store_uri=f"trace_store/tasks/{task.task_id}/post-processing-matrix.zarr",
+            group_path=f"tasks/{task.task_id}/trace_batch",
+            array_path="signals/post_processed_matrix",
+            dtype="float64",
+            shape=(64, trace_count),
+            chunk_shape=(16, max(min(trace_count, 4), 1)),
+        ),
+        result_handles=(
+            build_result_handle_ref(
+                handle_id=f"task-result:{task.task_id}:primary",
+                kind="simulation_trace",
+                status="materialized",
+                label="Materialized post-processing matrix",
+                metadata_record=result_handle_record,
+                payload_backend="local_zarr",
+                payload_format="zarr",
+                payload_role="trace_payload",
+                payload_locator=f"trace_store/tasks/{task.task_id}/post-processing-matrix.zarr",
+                provenance_task_id=task.task_id,
+                provenance=build_result_provenance_ref(
+                    source_dataset_id=task.dataset_id,
+                    source_task_id=upstream_task.task_id,
                     trace_batch_record=trace_batch_record,
                 ),
             ),

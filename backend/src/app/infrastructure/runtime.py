@@ -10,6 +10,7 @@ from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapt
 from src.app.infrastructure.invitation_delivery import WorkspaceInvitationDeliveryService
 from src.app.infrastructure.local_simulation_execution_driver import (
     LocalCharacterizationExecutionDriver,
+    LocalPostProcessingExecutionDriver,
     LocalSimulationExecutionDriver,
     LocalTaskExecutionDriver,
 )
@@ -224,10 +225,15 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
         dataset_repository=get_rewrite_catalog_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
+    local_post_processing_execution_driver = LocalPostProcessingExecutionDriver(
+        task_repository=get_rewrite_task_repository(),
+        execution_runtime_factory=lambda: execution_runtime,
+    )
     local_task_execution_driver = LocalTaskExecutionDriver(
         task_repository=get_rewrite_task_repository(),
         execution_runtime_factory=lambda: execution_runtime,
         simulation_driver=local_simulation_execution_driver,
+        post_processing_driver=local_post_processing_execution_driver,
         characterization_driver=local_characterization_execution_driver,
     )
     task_service.set_execution_driver(local_task_execution_driver)
