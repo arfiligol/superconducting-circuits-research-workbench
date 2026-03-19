@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
 import {
@@ -79,9 +79,6 @@ export function useSimulationWorkflowData(
       typeof resolvedDefinitionId === "number"
         ? getCircuitDefinition(resolvedDefinitionId)
         : Promise.resolve(undefined),
-    {
-      keepPreviousData: true,
-    },
   );
   const activeDefinition = definitionDetailQuery.data;
   const hasAttachedDefinition =
@@ -120,7 +117,6 @@ export function useSimulationWorkflowData(
     taskKey,
     () => (resolvedTaskId ? getTask(resolvedTaskId) : Promise.resolve(undefined)),
     {
-      keepPreviousData: true,
       refreshInterval(currentData) {
         if (!currentData) {
           return 5_000;
@@ -160,7 +156,6 @@ export function useSimulationWorkflowData(
         ? getTask(upstreamSimulationTaskId)
         : Promise.resolve(undefined),
     {
-      keepPreviousData: true,
       refreshInterval(currentData) {
         if (!currentData) {
           return 5_000;
@@ -193,7 +188,6 @@ export function useSimulationWorkflowData(
         ? getTask(latestSimulationStageTask.taskId)
         : Promise.resolve(undefined),
     {
-      keepPreviousData: true,
       refreshInterval(currentData) {
         if (!currentData) {
           return 5_000;
@@ -219,7 +213,6 @@ export function useSimulationWorkflowData(
         ? getTask(latestPostProcessingTask.taskId)
         : Promise.resolve(undefined),
     {
-      keepPreviousData: true,
       refreshInterval(currentData) {
         if (!currentData) {
           return 5_000;
@@ -233,6 +226,29 @@ export function useSimulationWorkflowData(
     activeTask?.taskId === latestPostProcessingTask?.taskId
       ? activeTask
       : postProcessingStageTaskQuery.data;
+
+  async function verifySelectedDefinition(nextDefinitionId: number) {
+    const refreshedDefinitions = await listCircuitDefinitions();
+    await mutate(circuitDefinitionsListKey, refreshedDefinitions, { revalidate: false });
+
+    if (!refreshedDefinitions.some((definition) => definition.definition_id === nextDefinitionId)) {
+      throw new Error(
+        `Definition #${nextDefinitionId} is no longer available. Refresh the workflow and choose a visible definition before submitting a run.`,
+      );
+    }
+
+    try {
+      const refreshedDefinition = await getCircuitDefinition(nextDefinitionId);
+      await mutate(circuitDefinitionDetailKey(nextDefinitionId), refreshedDefinition, {
+        revalidate: false,
+      });
+      return refreshedDefinition;
+    } catch {
+      throw new Error(
+        `Definition #${nextDefinitionId} is unavailable right now. Refresh the workflow and choose a visible definition before submitting a run.`,
+      );
+    }
+  }
 
   async function submitSimulationTask({
     kind,
@@ -260,6 +276,17 @@ export function useSimulationWorkflowData(
       throw error;
     }
 
+    let verifiedDefinitionName = selectedDefinitionSummary?.name ?? activeDefinition?.name ?? null;
+    try {
+      const verifiedDefinition = await verifySelectedDefinition(resolvedDefinitionId);
+      verifiedDefinitionName = verifiedDefinition.name;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to verify the selected definition.";
+      setTaskMutationStatus({ state: "error", message });
+      throw error;
+    }
+
     setTaskMutationStatus({ state: "submitting", message: null });
 
     try {
@@ -270,7 +297,7 @@ export function useSimulationWorkflowData(
         summary: buildSimulationRequestSummary({
           kind,
           definitionId: resolvedDefinitionId,
-          definitionName: selectedDefinitionSummary?.name ?? null,
+          definitionName: verifiedDefinitionName,
           datasetId,
           datasetName: activeDatasetState.activeDataset?.name ?? null,
           note,
@@ -303,9 +330,9 @@ export function useSimulationWorkflowData(
     }
   }
 
-  function clearTaskMutationStatus() {
+  const clearTaskMutationStatus = useCallback(() => {
     setTaskMutationStatus({ state: "idle", message: null });
-  }
+  }, []);
 
   async function refreshSimulationWorkflow() {
     await Promise.all([

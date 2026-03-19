@@ -83,7 +83,6 @@ import type {
 import {
   resolveTaskConnectionState,
   resolveTaskRecoveryNotice,
-  summarizeTaskContextBinding,
 } from "@/lib/task-surface";
 import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
@@ -989,6 +988,7 @@ export function SimulationWorkbenchShell() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+  const searchParamsString = searchParams.toString();
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
   const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
   const [simulationSetupBuildError, setSimulationSetupBuildError] = useState<string | null>(null);
@@ -1097,19 +1097,17 @@ export function SimulationWorkbenchShell() {
     latestSimulationTask?.taskId ?? null,
     activeTaskError,
   );
-  const taskContextBinding = summarizeTaskContextBinding({
-    task: activeTask,
-    activeDatasetId: activeDatasetState.activeDataset?.datasetId ?? null,
-    activeDefinitionId: resolvedDefinitionId,
-  });
+  const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null;
   const attachedTaskStorageKey = useMemo(
     () =>
       buildAttachedTaskStorageKey(
         resolvedDefinitionId,
-        activeDatasetState.activeDataset?.datasetId ?? null,
+        activeDatasetId,
       ),
-    [activeDatasetState.activeDataset?.datasetId, resolvedDefinitionId],
+    [activeDatasetId, resolvedDefinitionId],
   );
+  const workflowContextResetKey = `${resolvedDefinitionId ?? "none"}:${activeDatasetId ?? "none"}`;
+  const lastWorkflowContextResetKeyRef = useRef<string | null>(null);
   const definitionsErrorMessage = describeApiError(definitionsError);
   const activeDefinitionErrorMessage = describeApiError(activeDefinitionError);
   const simulationStageErrorMessage = describeApiError(latestSimulationTaskError);
@@ -1818,7 +1816,7 @@ export function SimulationWorkbenchShell() {
 
   function replaceSearchState(updates: Readonly<Record<string, string | null>>) {
     startTransition(() => {
-      router.replace(buildSimulationSearchHref(pathname, searchParams.toString(), updates), {
+      router.replace(buildSimulationSearchHref(pathname, searchParamsString, updates), {
         scroll: false,
       });
     });
@@ -1839,13 +1837,13 @@ export function SimulationWorkbenchShell() {
 
     startTransition(() => {
       router.replace(
-        buildSimulationSearchHref(pathname, searchParams.toString(), {
+        buildSimulationSearchHref(pathname, searchParamsString, {
           definitionId: String(resolvedDefinitionId),
         }),
         { scroll: false },
       );
     });
-  }, [pathname, rawDefinitionId, resolvedDefinitionId, router, searchParams]);
+  }, [pathname, rawDefinitionId, resolvedDefinitionId, router, searchParamsString]);
 
   useEffect(() => {
     if (requestedTaskId !== null || attachedTaskStorageKey === null) {
@@ -1860,7 +1858,7 @@ export function SimulationWorkbenchShell() {
     autoRestoredTaskIdRef.current = storedTaskId;
     startTransition(() => {
       router.replace(
-        buildSimulationSearchHref(pathname, searchParams.toString(), {
+        buildSimulationSearchHref(pathname, searchParamsString, {
           definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
           taskId: String(storedTaskId),
         }),
@@ -1873,7 +1871,7 @@ export function SimulationWorkbenchShell() {
     requestedTaskId,
     resolvedDefinitionId,
     router,
-    searchParams,
+    searchParamsString,
   ]);
 
   useEffect(() => {
@@ -1881,7 +1879,7 @@ export function SimulationWorkbenchShell() {
       typeof window === "undefined" ||
       attachedTaskStorageKey === null ||
       !activeTask ||
-      taskContextBinding?.hasMismatch
+      resolvedTaskId !== activeTask.taskId
     ) {
       return;
     }
@@ -1890,7 +1888,7 @@ export function SimulationWorkbenchShell() {
     if (autoRestoredTaskIdRef.current === activeTask.taskId) {
       autoRestoredTaskIdRef.current = null;
     }
-  }, [activeTask, attachedTaskStorageKey, taskContextBinding?.hasMismatch]);
+  }, [activeTask, attachedTaskStorageKey, resolvedTaskId]);
 
   useEffect(() => {
     if (
@@ -1907,7 +1905,7 @@ export function SimulationWorkbenchShell() {
     autoRestoredTaskIdRef.current = null;
     startTransition(() => {
       router.replace(
-        buildSimulationSearchHref(pathname, searchParams.toString(), {
+        buildSimulationSearchHref(pathname, searchParamsString, {
           definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
           taskId: null,
         }),
@@ -1921,7 +1919,88 @@ export function SimulationWorkbenchShell() {
     requestedTaskId,
     resolvedDefinitionId,
     router,
-    searchParams,
+    searchParamsString,
+  ]);
+
+  useEffect(() => {
+    const previousContextKey = lastWorkflowContextResetKeyRef.current;
+    lastWorkflowContextResetKeyRef.current = workflowContextResetKey;
+    if (previousContextKey === null || previousContextKey === workflowContextResetKey) {
+      return;
+    }
+
+    clearTaskMutationStatus();
+    form.reset(defaultRequestValues, { keepDefaultValues: true });
+    setIsAdvancedHbsolveExpanded(false);
+    setSimulationSetupBuildError(null);
+    setPostProcessingBuildError(null);
+    setPostProcessingSteps([]);
+    setNewPostProcessingStepType("coordinate_transform");
+    setSelectedSavedSetupId(null);
+    setIsSaveDialogOpen(false);
+    setIsManageDialogOpen(false);
+    setSaveSetupNameDraft("");
+    setSavedSetupFeedback(null);
+    setSimulationSetupSource({ kind: "default" });
+    setHydratedSimulationSetupAuthorityKey(null);
+    setAppliedSimulationSetupSnapshotKey(
+      serializeSimulationSetupFormValues(defaultSimulationSetupFormValues),
+    );
+    setHydratedPostTaskId(null);
+    autoRestoredTaskIdRef.current = null;
+
+    if (requestedTaskId !== null) {
+      startTransition(() => {
+        router.replace(
+          buildSimulationSearchHref(pathname, searchParamsString, {
+            definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
+            taskId: null,
+          }),
+          { scroll: false },
+        );
+      });
+    }
+  }, [
+    clearTaskMutationStatus,
+    form,
+    pathname,
+    requestedTaskId,
+    resolvedDefinitionId,
+    router,
+    searchParamsString,
+    workflowContextResetKey,
+  ]);
+
+  useEffect(() => {
+    if (
+      requestedTaskId === null ||
+      !activeTask ||
+      resolvedDefinitionId === null ||
+      activeDatasetId === null ||
+      (activeTask.definitionId === resolvedDefinitionId &&
+        activeTask.datasetId === activeDatasetId)
+    ) {
+      return;
+    }
+
+    autoRestoredTaskIdRef.current = null;
+    startTransition(() => {
+      router.replace(
+        buildSimulationSearchHref(pathname, searchParamsString, {
+          definitionId: String(resolvedDefinitionId),
+          taskId: null,
+        }),
+        { scroll: false },
+      );
+    });
+  }, [
+    activeDatasetId,
+    activeTask,
+    pathname,
+    requestedTaskId,
+    resolvedDefinitionId,
+    router,
+    searchParamsString,
   ]);
 
   async function handleRefreshWorkflow() {
@@ -2051,31 +2130,7 @@ export function SimulationWorkbenchShell() {
         />
       ) : null}
 
-      {!taskRecovery && taskContextBinding?.hasMismatch ? (
-        <StageNotice
-          tone="warning"
-          title={taskContextBinding.title}
-          message={taskContextBinding.message}
-          actions={
-            <>
-              {latestSimulationTask && latestSimulationTask.taskId !== activeTask?.taskId ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    attachTask(latestSimulationTask.taskId);
-                  }}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                >
-                  Resume Latest Run
-                </button>
-              ) : null}
-            </>
-          }
-        />
-      ) : null}
-
       {!taskRecovery &&
-      !taskContextBinding?.hasMismatch &&
       taskConnectionState.hasNewerLatestTask &&
       latestSimulationTask ? (
         <StageNotice
