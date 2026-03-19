@@ -131,28 +131,28 @@ export function RawDataBrowserWorkspace() {
         description="Browse dataset-local design scopes, filter trace metadata, inspect compare readiness, and open one trace preview at a time without mixing metadata writes into this page."
       />
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
-        <SurfacePanel
-          title="Design Scopes"
-          description="Design selection stays page-local and is always scoped by the session-owned active dataset."
-        >
-          {browser.designsError ? (
-            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
-              Unable to load design scopes. {browser.designsError.message}
-            </div>
-          ) : null}
-          <SearchField
-            label="Search Design"
-            placeholder="Search design name or id"
-            value={browser.designSearch}
-            onChange={browser.setDesignSearch}
-          />
-          {browser.isDesignsLoading ? (
-            <div className="mt-4 rounded-xl border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-              Loading designs for {deferredDesignSearch || "the active dataset"}...
-            </div>
-          ) : browser.designs.length > 0 ? (
-            <div className="mt-4 space-y-3">
+      <SurfacePanel
+        title="Design Scopes"
+        description="Design selection stays page-local and dataset-scoped. Coverage and compare readiness stay attached here so the page can move quickly into trace selection and preview."
+      >
+        {browser.designsError ? (
+          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+            Unable to load design scopes. {browser.designsError.message}
+          </div>
+        ) : null}
+        <SearchField
+          label="Search Design"
+          placeholder="Search design name or id"
+          value={browser.designSearch}
+          onChange={browser.setDesignSearch}
+        />
+        {browser.isDesignsLoading ? (
+          <div className="mt-4 rounded-xl border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
+            Loading designs for {deferredDesignSearch || "the active dataset"}...
+          </div>
+        ) : browser.designs.length > 0 ? (
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-3 xl:grid-cols-2">
               {browser.designs.map((design) => (
                 <button
                   key={design.design_id}
@@ -168,9 +168,9 @@ export function RawDataBrowserWorkspace() {
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-semibold text-foreground">{design.name}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
+                      <p className="mt-1 truncate text-sm text-muted-foreground">
                         {formatCoverage(design.source_coverage)}
                       </p>
                     </div>
@@ -178,72 +178,69 @@ export function RawDataBrowserWorkspace() {
                       {design.compare_readiness}
                     </SurfaceTag>
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  <div className="mt-3 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.14em] text-muted-foreground">
                     <span>{design.trace_count} traces</span>
-                    <span>{design.updated_at}</span>
+                    <span className="truncate">{design.updated_at}</span>
                   </div>
                 </button>
               ))}
-              <div className="flex items-center justify-between gap-3 pt-1 text-sm">
-                <button
-                  type="button"
-                  onClick={browser.goToPrevDesignPage}
-                  disabled={!browser.designsMeta?.prev_cursor}
-                  className="rounded-md border border-border px-3 py-2 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={browser.goToNextDesignPage}
-                  disabled={!browser.designsMeta?.next_cursor}
-                  className="rounded-md border border-border px-3 py-2 disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
             </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-              No design scopes are available for the active dataset.
-            </div>
-          )}
-        </SurfacePanel>
 
-        <div className="space-y-5">
-          <SurfacePanel
-            title="Selected Design Summary"
-            description="Compare readiness and source coverage stay read-only here so raw-data browsing remains summary-first."
-          >
             {selectedDesign ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Compare Readiness
-                  </p>
-                  <div className="mt-3">
-                    <SurfaceTag tone={readinessTone(selectedDesign.compare_readiness)}>
-                      {selectedDesign.compare_readiness}
-                    </SurfaceTag>
+              <div className="rounded-[1rem] border border-border/80 bg-surface px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/80 pb-4">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      Selected Design
+                    </p>
+                    <h3 className="mt-2 text-base font-semibold text-foreground">
+                      {selectedDesign.name}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selectedDesign.design_id}
+                    </p>
                   </div>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    {selectedDesign.compare_readiness === "ready"
-                      ? "The design has enough source coverage for cross-source comparison."
-                      : selectedDesign.compare_readiness === "inspect_only"
-                        ? "The design is suitable for single-source inspection but not comparison."
-                        : "The design is blocked until additional traces arrive."}
-                  </p>
+                  <SurfaceTag tone={readinessTone(selectedDesign.compare_readiness)}>
+                    {selectedDesign.compare_readiness}
+                  </SurfaceTag>
                 </div>
-                <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Source Coverage
-                  </p>
-                  <p className="mt-3 font-medium text-foreground">
-                    {formatCoverage(selectedDesign.source_coverage)}
-                  </p>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    Active dataset: {selectedDesign.dataset_id}
-                  </p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Source Coverage
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-foreground">
+                      {formatCoverage(selectedDesign.source_coverage)}
+                    </p>
+                  </div>
+                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Browse State
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-foreground">
+                      {selectedDesign.compare_readiness === "ready"
+                        ? "Ready for compare-aware browsing"
+                        : selectedDesign.compare_readiness === "inspect_only"
+                          ? "Single-source inspection only"
+                          : "Blocked until more traces arrive"}
+                    </p>
+                  </div>
+                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Trace Count
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-foreground">
+                      {selectedDesign.trace_count}
+                    </p>
+                  </div>
+                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Updated
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-foreground">
+                      {selectedDesign.updated_at}
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -251,12 +248,38 @@ export function RawDataBrowserWorkspace() {
                 Select a design scope to browse its trace summaries.
               </div>
             )}
-          </SurfacePanel>
 
-          <SurfacePanel
-            title="Trace Summaries"
-            description="Trace browsing stays metadata-only until one row is selected for preview."
-          >
+            <div className="flex items-center justify-between gap-3 pt-1 text-sm">
+              <button
+                type="button"
+                onClick={browser.goToPrevDesignPage}
+                disabled={!browser.designsMeta?.prev_cursor}
+                className="rounded-md border border-border px-3 py-2 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={browser.goToNextDesignPage}
+                disabled={!browser.designsMeta?.next_cursor}
+                className="rounded-md border border-border px-3 py-2 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
+            No design scopes are available for the active dataset.
+          </div>
+        )}
+      </SurfacePanel>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.1fr)] xl:items-start">
+        <SurfacePanel
+          title="Trace Summaries"
+          description="Trace browsing stays metadata-only until one row is selected for preview."
+        >
             {browser.tracesError ? (
               <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
                 Unable to load trace summaries. {browser.tracesError.message}
@@ -372,12 +395,13 @@ export function RawDataBrowserWorkspace() {
                 No trace summaries match the current filters.
               </div>
             )}
-          </SurfacePanel>
+        </SurfacePanel>
 
-          <SurfacePanel
-            title="Single Trace Preview"
-            description="Only the selected trace triggers the detail path. Switch between Plot and Table views without changing the underlying preview authority."
-          >
+        <SurfacePanel
+          title="Single Trace Preview"
+          description="Only the selected trace triggers the detail path, so plot and table stay tied to one persisted preview payload at a time."
+          className="xl:sticky xl:top-5"
+        >
             {browser.traceDetailError ? (
               <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
                 Unable to load trace preview. {browser.traceDetailError.message}
@@ -389,12 +413,93 @@ export function RawDataBrowserWorkspace() {
               </div>
             ) : browser.traceDetail ? (
               <div className="space-y-4">
-                <div className="grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      Selected Trace
+                    </p>
+                    <h4 className="mt-2 break-all text-base font-semibold text-foreground">
+                      {browser.traceDetail.trace_id}
+                    </h4>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selectedTraceSummary?.provenance_summary ?? previewSemantics.previewSeriesDetail}
+                    </p>
+                  </div>
+                  <AppSegmentedControl
+                    value={previewMode}
+                    onChange={setPreviewMode}
+                    options={[
+                      { value: "plot", label: "Plot" },
+                      { value: "table", label: "Table" },
+                    ]}
+                    ariaLabel="Single trace preview view"
+                  />
+                </div>
+
+                <div className="rounded-[0.95rem] border border-border/80 bg-background px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">X Axis</span>
+                      <span className="ml-2 font-medium text-foreground">
+                        {previewSemantics.xAxisTitle}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Point Count</span>
+                      <span className="ml-2 font-medium text-foreground">
+                        {previewSemantics.xAxisPointCountLabel}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Y Axis</span>
+                      <span className="ml-2 font-medium text-foreground">
+                        {previewSemantics.yAxisTitle}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {previewMode === "plot" ? (
+                  previewSeries.isPlotReady ? (
+                    <TracePreviewPlot
+                      x={previewSeries.x}
+                      y={previewSeries.y}
+                      xLabel={previewSemantics.xAxisTitle}
+                      yLabel={previewSemantics.yAxisTitle}
+                      title={browser.traceDetail.trace_id}
+                    />
+                  ) : (
+                    <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
+                      Plot view is unavailable because the preview payload does not expose a numeric x/y series.
+                    </div>
+                  )
+                ) : (
+                  <div className="overflow-hidden rounded-lg border border-border/80">
+                    <table className="min-w-full divide-y divide-border text-sm">
+                      <thead className="bg-card">
+                        <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                          <th className="px-4 py-3">{previewSemantics.tableXAxisLabel}</th>
+                          <th className="px-4 py-3">{previewSemantics.tableYAxisLabel}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border bg-surface">
+                        {(browser.traceDetail.preview_payload.points ?? []).map((point, index) => (
+                          <tr key={`${point[0]}-${index}`}>
+                            <td className="px-4 py-3 text-muted-foreground">{point[0]}</td>
+                            <td className="px-4 py-3 font-medium text-foreground">{point[1]}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       X Axis
                     </p>
-                    <div className="mt-3 space-y-3 text-sm">
+                    <div className="mt-2 space-y-2 text-sm">
                       <div className="flex items-start justify-between gap-4">
                         <span className="text-muted-foreground">Axis</span>
                         <span className="text-right font-medium text-foreground">
@@ -407,29 +512,17 @@ export function RawDataBrowserWorkspace() {
                           {previewSemantics.xAxisUnitLabel}
                         </span>
                       </div>
-                      <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground">Point Count</span>
-                        <span className="text-right font-medium text-foreground">
-                          {previewSemantics.xAxisPointCountLabel}
-                        </span>
-                      </div>
                     </div>
                   </div>
-                  <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Preview Series
                     </p>
-                    <div className="mt-3 space-y-3 text-sm">
+                    <div className="mt-2 space-y-2 text-sm">
                       <div className="flex items-start justify-between gap-4">
                         <span className="text-muted-foreground">Y Axis</span>
                         <span className="text-right font-medium text-foreground">
                           {previewSemantics.previewSeriesLabel}
-                        </span>
-                      </div>
-                      <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground">Series Family</span>
-                        <span className="text-right font-medium text-foreground">
-                          {previewSemantics.previewSeriesDetail}
                         </span>
                       </div>
                       <div className="flex items-start justify-between gap-4">
@@ -440,107 +533,26 @@ export function RawDataBrowserWorkspace() {
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3 md:col-span-2 xl:col-span-1">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Preview Source
                     </p>
-                    <p className="mt-3 break-all text-sm font-medium text-foreground">
+                    <p className="mt-2 break-all text-sm font-medium text-foreground">
                       {browser.traceDetail.payload_ref?.store_key ?? "No payload ref"}
                     </p>
-                    <p className="mt-3 text-sm text-muted-foreground">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       {browser.traceDetail.payload_ref?.group_path ?? "No group path"}
                     </p>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                        Preview
-                      </p>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Plot and table are two views over the same preview payload.
-                      </p>
-                    </div>
-                    <AppSegmentedControl
-                      value={previewMode}
-                      onChange={setPreviewMode}
-                      options={[
-                        { value: "plot", label: "Plot" },
-                        { value: "table", label: "Table" },
-                      ]}
-                      ariaLabel="Single trace preview view"
-                    />
-                  </div>
-
-                  <div className="mt-4">
-                    <div className="mb-4 rounded-[0.95rem] border border-border/80 bg-background px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">X Axis</span>
-                          <span className="ml-2 font-medium text-foreground">
-                            {previewSemantics.xAxisTitle}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Points</span>
-                          <span className="ml-2 font-medium text-foreground">
-                            {previewSemantics.xAxisPointCountLabel}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Y Axis</span>
-                          <span className="ml-2 font-medium text-foreground">
-                            {previewSemantics.yAxisTitle}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {previewMode === "plot" ? (
-                      previewSeries.isPlotReady ? (
-                        <TracePreviewPlot
-                          x={previewSeries.x}
-                          y={previewSeries.y}
-                          xLabel={previewSemantics.xAxisTitle}
-                          yLabel={previewSemantics.yAxisTitle}
-                          title={browser.traceDetail.trace_id}
-                        />
-                      ) : (
-                        <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
-                          Plot view is unavailable because the preview payload does not expose a numeric x/y series.
-                        </div>
-                      )
-                    ) : (
-                      <div className="overflow-hidden rounded-lg border border-border/80">
-                        <table className="min-w-full divide-y divide-border text-sm">
-                          <thead className="bg-card">
-                            <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                              <th className="px-4 py-3">{previewSemantics.tableXAxisLabel}</th>
-                              <th className="px-4 py-3">{previewSemantics.tableYAxisLabel}</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border bg-surface">
-                            {(browser.traceDetail.preview_payload.points ?? []).map((point, index) => (
-                              <tr key={`${point[0]}-${index}`}>
-                                <td className="px-4 py-3 text-muted-foreground">{point[0]}</td>
-                                <td className="px-4 py-3 font-medium text-foreground">{point[1]}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Provenance
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Trace preview authority stays tied to the selected trace detail payload and its persisted payload ref.
-                    </p>
-                  </div>
+                <div className="rounded-[0.85rem] border border-border/80 bg-background px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Provenance
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Trace preview authority stays tied to the selected trace detail payload and its persisted payload ref.
+                  </p>
                 </div>
               </div>
             ) : (
@@ -548,8 +560,7 @@ export function RawDataBrowserWorkspace() {
                 Select one trace summary to load the single-trace preview path.
               </div>
             )}
-          </SurfacePanel>
-        </div>
+        </SurfacePanel>
       </section>
     </div>
   );

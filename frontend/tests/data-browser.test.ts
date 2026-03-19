@@ -208,10 +208,22 @@ describe("page-boundary source contracts", () => {
   });
 
   it("keeps raw-data summary-first and metadata-read-only", () => {
-    expect(rawDataWorkspaceSource).toContain("summary-first");
+    expect(rawDataWorkspaceSource).toContain("dataset-scoped");
     expect(rawDataWorkspaceSource).toContain("metadata-only until one row is selected for preview");
     expect(rawDataWorkspaceSource).toContain("Single Trace Preview");
+    expect(rawDataWorkspaceSource).not.toContain('title="Selected Design Summary"');
+    expect(rawDataWorkspaceSource).not.toContain("Active Dataset");
     expect(rawDataWorkspaceSource).not.toContain("setActiveDataset(");
+  });
+
+  it("reflows raw-data around a top design owner and lower master-detail preview", () => {
+    expect(rawDataWorkspaceSource).toContain('title="Design Scopes"');
+    expect(rawDataWorkspaceSource).toContain("Selected Design");
+    expect(rawDataWorkspaceSource).toContain("Browse State");
+    expect(rawDataWorkspaceSource).toContain(
+      'grid gap-5 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.1fr)] xl:items-start',
+    );
+    expect(rawDataWorkspaceSource).toContain('className="xl:sticky xl:top-5"');
   });
 
   it("strengthens raw-data search affordance and keeps the wording consistent", () => {
@@ -239,7 +251,10 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("AppSegmentedControl");
     expect(rawDataWorkspaceSource).toContain('ariaLabel="Single trace preview view"');
     expect(rawDataWorkspaceSource).toContain('{ value: "plot", label: "Plot" }');
-    expect(rawDataWorkspaceSource).toContain("same preview payload");
+    expect(rawDataWorkspaceSource).toContain("Selected Trace");
+    expect(rawDataWorkspaceSource.indexOf("TracePreviewPlot")).toBeLessThan(
+      rawDataWorkspaceSource.indexOf("Preview Source"),
+    );
     expect(rawDataWorkspaceSource).not.toContain("Result Handles");
   });
 
@@ -262,6 +277,8 @@ describe("page-boundary source contracts", () => {
     expect(rawDataHookSource).toContain("setSelectedDesignId(browseState.designId);");
     expect(rawDataHookSource).toContain("setSelectedTraceId(browseState.traceId);");
     expect(rawDataHookSource).toContain("setDesignSearch(browseState.designQuery ?? \"\");");
+    expect(rawDataHookSource).toContain('activeDatasetId && resolvedDesignId && resolvedTraceId');
+    expect(rawDataHookSource).toContain("getTraceDetail(activeDatasetId, resolvedDesignId, resolvedTraceId)");
   });
 });
 
