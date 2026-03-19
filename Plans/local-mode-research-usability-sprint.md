@@ -38,6 +38,20 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - the next active execution slice is now the result-browse/current-trace-save correction
   - see `Plans/result-browse-current-trace-save-model.md`
 
+## 0.3) Execution Checkpoint (2026-03-20 merge-pass)
+
+- Merged on `main`:
+  - backend trace-scoped result publication via explorer `trace_key`
+  - frontend explorer-local `Save Current Trace` for `Simulation Result`
+  - frontend explorer-local `Save Current Trace` for `Post Processing Result`
+  - `Post Processing Setup` re-scoped to process authoring only
+  - `Post Processing Result` re-scoped to authoritative `Raw / PTC` result browsing
+  - merge-pass frontend client fix to use the new trace-scoped publish route
+- Immediate consequence:
+  - the result-browse/current-trace-save correction is now merged on `main`
+  - `Simulation Result` and `Post Processing Result` now follow the same trace-first save model
+  - the next active needs shift back to `LM3` raw-data continuity/copy truthfulness and `LM6` live end-to-end Local Mode verification
+
 ## 1) Goal
 
 - Reach a Local Mode workflow where a researcher can:
@@ -82,15 +96,17 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 
 ### Current main-branch gaps
 
-#### 1. `Save to Design` is now merged for `Simulation Result`
+#### 1. Explorer-local current-trace save is now merged for `Simulation Result` and `Post Processing Result`
 
-- `main` now supports the approved simulation publication model:
-  - design dropdown
-  - `New Design` dialog
-  - create-then-select behavior
+- `main` now supports the corrected result-save model:
+  - explorer-local `Save Current Trace`
+  - existing design selection + `New Design`
   - publish by explicit `design_id`
-- The active remaining concern is no longer the save-target model itself.
-- The next continuity concern is how clearly the saved design flows into `Raw Data` and then into `Characterization`.
+  - trace-scoped backend publication via stable explorer `trace_key`
+- `Post Processing Setup` no longer owns `Raw / PTC`; Stage 5 now owns result-source browsing.
+- The active remaining concern is continuity:
+  - saved traces should feel obvious and truthful when opened in `Raw Data`
+  - live integrated verification still needs to prove the full loop against the real backend
 
 #### 2. Simulation task presentation is improved, but global task-selection work remains open
 
@@ -243,16 +259,19 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 
 ## 8) Immediate Next Implementation Recommendation
 
-- The next implementation should move to the result-browse/current-trace-save correction before `LM3` and `LM6`.
+- The result-browse/current-trace-save correction is now merged on `main`.
+- The next implementation should move to `LM3` and `LM6`.
 - Reason:
-  - the currently merged `Save to Design` model is still task-level and too coarse
-  - `Post Processing Setup` currently owns browsing state that should belong to `Post Processing Result`
-  - researchers need trace-level save behavior before the Local Mode loop can be considered trustworthy
+  - researchers can now save the current selected trace, but the saved-trace continuity in `Raw Data` still needs a cleaner, more truthful surface
+  - the Local Mode loop still needs one real browser pass against the live backend rather than mocked route smoke
 - Concrete target:
-  - move `Raw / PTC` out of `Post Processing Setup`
-  - make `Post Processing Result` browse all valid result sources
-  - change save from bundle publication to current-trace save
-  - then continue with raw-data continuity cleanup and live end-to-end verification
+  - clean up raw-data trace summary wording and saved-trace continuity
+  - run a live end-to-end verification:
+    - simulation run
+    - current-trace save
+    - raw-data open
+    - characterization run
+    - persisted result recovery after refresh
 
 ## 9) Notes On Existing Reviewed Frontend Delivery
 
