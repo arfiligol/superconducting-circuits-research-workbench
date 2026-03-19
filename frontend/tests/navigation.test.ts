@@ -9,10 +9,11 @@ import {
 
 describe("workspaceNavigation", () => {
   it("covers the canonical shell route families", () => {
-    expect(workspaceNavigation).toHaveLength(8);
+    expect(workspaceNavigation).toHaveLength(9);
     expect(workspaceNavigation.map((item) => item.label)).toEqual([
       "Dashboard",
       "Dataset",
+      "Tasks",
       "Data Ingestion",
       "Raw Data",
       "Schemas",
@@ -31,11 +32,11 @@ describe("workspaceNavigation", () => {
 
   it("keeps the NiceGUI-style drawer grouping stable", () => {
     expect(workspaceNavigationGroups.map((group) => group.label)).toEqual([
-      "Dashboard",
+      "Workspace",
       "Pipeline",
       "Circuit Simulation",
     ]);
-    expect(workspaceNavigationGroups.map((group) => group.items.length)).toEqual([2, 3, 3]);
+    expect(workspaceNavigationGroups.map((group) => group.items.length)).toEqual([3, 3, 3]);
   });
 
   it("keeps the shell navigation title-only while preserving icons", () => {
@@ -45,7 +46,7 @@ describe("workspaceNavigation", () => {
 
   it("realigns route family and page identity for header consumers", () => {
     expect(resolveWorkspacePageIdentity("/")).toEqual({
-      sectionLabel: "Dashboard",
+      sectionLabel: "Workspace",
       pageTitle: "Dashboard",
     });
     expect(resolveWorkspacePageIdentity("/schemas")).toEqual({
@@ -53,7 +54,7 @@ describe("workspaceNavigation", () => {
       pageTitle: "Schemas",
     });
     expect(resolveWorkspacePageIdentity("/dataset")).toEqual({
-      sectionLabel: "Dashboard",
+      sectionLabel: "Workspace",
       pageTitle: "Dataset",
     });
     expect(resolveWorkspacePageIdentity("/data-ingestion")).toEqual({
@@ -87,5 +88,12 @@ describe("workspaceNavigation", () => {
     expect(isWorkspaceNavigationItemActive(schemasNavItem!, "/circuit-definition-editor")).toBe(
       false,
     );
+  });
+
+  it("treats /tasks as a primary workspace navigation item", () => {
+    const tasksNavItem = workspaceNavigation.find((item) => item.href === "/tasks");
+
+    expect(tasksNavItem).toBeDefined();
+    expect(isWorkspaceNavigationItemActive(tasksNavItem!, "/tasks")).toBe(true);
   });
 });

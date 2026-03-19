@@ -6,13 +6,14 @@ import {
   Database,
   FilePenLine,
   LayoutDashboard,
+  Workflow,
   Upload,
 } from "lucide-react";
 
 export type WorkspaceNavigationItem = Readonly<{
   href: string;
   label: string;
-  group: "dashboard" | "pipeline" | "circuit-workbench";
+  group: "workspace" | "pipeline" | "circuit-workbench";
   pageTitle?: string;
   icon: LucideIcon;
   aliases?: readonly string[];
@@ -23,7 +24,7 @@ export const workspaceNavigation: readonly WorkspaceNavigationItem[] = [
     href: "/dashboard",
     label: "Dashboard",
     pageTitle: "Dashboard",
-    group: "dashboard",
+    group: "workspace",
     icon: LayoutDashboard,
     aliases: ["/"],
   },
@@ -31,8 +32,15 @@ export const workspaceNavigation: readonly WorkspaceNavigationItem[] = [
     href: "/dataset",
     label: "Dataset",
     pageTitle: "Dataset",
-    group: "dashboard",
+    group: "workspace",
     icon: Database,
+  },
+  {
+    href: "/tasks",
+    label: "Tasks",
+    pageTitle: "Tasks",
+    group: "workspace",
+    icon: Workflow,
   },
   {
     href: "/data-ingestion",
@@ -85,9 +93,9 @@ export type WorkspaceNavigationGroup = Readonly<{
 
 export const workspaceNavigationGroups: readonly WorkspaceNavigationGroup[] = [
   {
-    id: "dashboard",
-    label: "Dashboard",
-    items: workspaceNavigation.filter((item) => item.group === "dashboard"),
+    id: "workspace",
+    label: "Workspace",
+    items: workspaceNavigation.filter((item) => item.group === "workspace"),
   },
   {
     id: "pipeline",
@@ -115,12 +123,12 @@ type WorkspacePageIdentity = Readonly<{
 const workspacePageIdentities: readonly WorkspacePageIdentity[] = [
   {
     href: "/dashboard",
-    sectionLabel: "Dashboard",
+    sectionLabel: "Workspace",
     pageTitle: "Dashboard",
   },
   {
     href: "/dataset",
-    sectionLabel: "Dashboard",
+    sectionLabel: "Workspace",
     pageTitle: "Dataset",
   },
   {
