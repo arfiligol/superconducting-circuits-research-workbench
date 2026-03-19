@@ -27,6 +27,17 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
   - `LM5` is partially merged via `admittance_extraction`
   - the next active needs shift to `LM3` raw-data continuity/copy truthfulness and `LM6` live end-to-end Local Mode verification
 
+## 0.2) Execution Checkpoint (2026-03-20)
+
+- New product correction recorded:
+  - `Simulation Result` and `Post Processing Result` should save the current selected trace, not bulk-publish the whole task bundle
+  - `Post Processing Setup` should no longer own `Raw / PTC` source selection
+  - `Post Processing Result` should own result-source browsing and expose `Raw` and `PTC` truthfully
+- Planning consequence:
+  - previous `Save to Design` completion on `main` is no longer the final product model
+  - the next active execution slice is now the result-browse/current-trace-save correction
+  - see `Plans/result-browse-current-trace-save-model.md`
+
 ## 1) Goal
 
 - Reach a Local Mode workflow where a researcher can:
@@ -232,16 +243,16 @@ Its purpose is narrower: drive the rewrite to a Local Mode state where one resea
 
 ## 8) Immediate Next Implementation Recommendation
 
-- The next implementation should move to `LM3` and `LM6`.
+- The next implementation should move to the result-browse/current-trace-save correction before `LM3` and `LM6`.
 - Reason:
-  - the simulation save-target model is now in place on `main`
-  - `Simulation Result` is already materially cleaner than before
-  - the first runnable characterization path is now in place
-  - the highest remaining Local Mode risk is no longer missing workflow scaffolding, but end-to-end truthfulness on the real backend path
+  - the currently merged `Save to Design` model is still task-level and too coarse
+  - `Post Processing Setup` currently owns browsing state that should belong to `Post Processing Result`
+  - researchers need trace-level save behavior before the Local Mode loop can be considered trustworthy
 - Concrete target:
-  - raw-data continuity/copy cleanup on `main`
-  - simulation -> save -> raw data -> characterization -> persisted result live-browser verification
-  - explicit follow-up for durable tagging continuity on newly generated local characterization results
+  - move `Raw / PTC` out of `Post Processing Setup`
+  - make `Post Processing Result` browse all valid result sources
+  - change save from bundle publication to current-trace save
+  - then continue with raw-data continuity cleanup and live end-to-end verification
 
 ## 9) Notes On Existing Reviewed Frontend Delivery
 
