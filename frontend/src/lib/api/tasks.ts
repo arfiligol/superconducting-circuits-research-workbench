@@ -436,6 +436,15 @@ export type PostProcessingSetupDraft = Readonly<{
   operations: readonly PostProcessingOperationDraft[];
 }>;
 
+export type CharacterizationAnalysisConfigDraft = Readonly<Record<string, unknown>>;
+
+export type CharacterizationSetupDraft = Readonly<{
+  design_id: string;
+  analysis_id: string;
+  selected_trace_ids: readonly string[];
+  analysis_config?: CharacterizationAnalysisConfigDraft | null;
+}>;
+
 export type TaskMetadataRecordRef = Readonly<{
   backend: "sqlite_metadata";
   recordType: "dataset" | "trace_batch" | "analysis_run" | "result_handle";
@@ -598,6 +607,7 @@ export type TaskSubmissionDraft = Readonly<{
   summary?: string | null;
   simulation_setup?: SimulationSetupDraft | null;
   post_processing_setup?: PostProcessingSetupDraft | null;
+  characterization_setup?: CharacterizationSetupDraft | null;
   upstream_task_id?: number | null;
 }>;
 export type TaskMutationResponse = components["schemas"]["TaskMutationResponse"];

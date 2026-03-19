@@ -38,6 +38,10 @@ const characterizationHookSource = readFileSync(
   ),
   "utf8",
 );
+const taskApiSource = readFileSync(
+  fileURLToPath(new URL("../src/lib/api/tasks.ts", import.meta.url)),
+  "utf8",
+);
 
 describe("characterization api keys", () => {
   it("builds stable dataset, result detail, and nested tagging paths", () => {
@@ -311,38 +315,36 @@ describe("characterization task helpers", () => {
 });
 
 describe("characterization source contracts", () => {
-  it("keeps characterization focused on design, saved results, and tagging without duplicating task surfaces", () => {
-    expect(characterizationWorkspaceSource).toContain("Analysis Registry");
+  it("keeps characterization run-first without duplicating task-management walls", () => {
+    expect(characterizationWorkspaceSource).toContain("Run Analysis");
+    expect(characterizationWorkspaceSource).toContain("Trace Selection");
+    expect(characterizationWorkspaceSource).toContain("Latest Run");
     expect(characterizationWorkspaceSource).toContain("Run History");
-    expect(characterizationWorkspaceSource).toContain("Result Summary List");
-    expect(characterizationWorkspaceSource).toContain("Persisted Result Detail");
+    expect(characterizationWorkspaceSource).toContain("Results");
+    expect(characterizationWorkspaceSource).toContain("Result Detail");
     expect(characterizationWorkspaceSource).toContain("Payload Preview");
     expect(characterizationWorkspaceSource).toContain("Identify & Tag");
-    expect(characterizationWorkspaceSource).toContain('title="Overview"');
-    expect(characterizationWorkspaceSource).not.toContain("Current Run");
-    expect(characterizationWorkspaceSource).not.toContain("Open in Global Context");
-    expect(characterizationWorkspaceSource).not.toContain("Queue browsing and task management stay in Global Context.");
-    expect(characterizationWorkspaceSource).not.toContain("design-scoped registry");
+    expect(characterizationWorkspaceSource).toContain("Focus Result");
+    expect(characterizationWorkspaceSource).not.toContain("This registry does not submit or attach analyses.");
     expect(characterizationWorkspaceSource).not.toContain("Characterization Task Queue");
     expect(characterizationWorkspaceSource).not.toContain("TaskLifecyclePanel");
-    expect(characterizationWorkspaceSource).not.toContain("Task Controls / Result Handoff");
     expect(characterizationWorkspaceSource).not.toContain("ResearchTaskQueuePanel");
     expect(characterizationWorkspaceSource).not.toContain("ResearchWorkflowHero");
-    expect(characterizationWorkspaceSource).not.toContain("Run Analysis");
-    expect(characterizationWorkspaceSource).not.toContain("submitCharacterizationTask");
+    expect(characterizationWorkspaceSource).not.toContain("Queue browsing and task management stay in Global Context.");
   });
 
-  it("binds queue attachment plus registry, run history, and result detail to shared app authority", () => {
+  it("binds trace browse, characterization submit, and result continuity to shared app authority", () => {
     expect(characterizationHookSource).toContain(
       "const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null",
     );
+    expect(characterizationHookSource).toContain("const { session } = useAppSession();");
     expect(characterizationHookSource).toContain("const taskQueueState = useTaskQueue();");
     expect(characterizationHookSource).toContain("const characterizationTasks = taskQueueState.tasks");
     expect(characterizationHookSource).toContain(".map(normalizeTaskSummary)");
-    expect(characterizationHookSource).toContain("const resolvedTaskId = selectedTaskId ?? latestCharacterizationTask?.taskId ?? null;");
+    expect(characterizationHookSource).toContain("listTraceMetadata(activeDatasetId, resolvedDesignId)");
     expect(characterizationHookSource).toContain("const taskKey = resolvedTaskId ? taskDetailKey(resolvedTaskId) : null;");
     expect(characterizationHookSource).toContain("() => (resolvedTaskId ? getTask(resolvedTaskId) : Promise.resolve(undefined))");
-    expect(characterizationHookSource).toContain("listDesignBrowseRows(activeDatasetId");
+    expect(characterizationHookSource).toContain("listDesignBrowseRows(activeDatasetId)");
     expect(characterizationHookSource).toContain(
       "listCharacterizationAnalysisRegistry(activeDatasetId, resolvedDesignId",
     );
@@ -355,10 +357,17 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain(
       "getCharacterizationResult(activeDatasetId, resolvedDesignId, resolvedResultId)",
     );
-    expect(characterizationHookSource).toContain("setSelectedAnalysisId(null);");
+    expect(characterizationHookSource).toContain("const characterization_setup: CharacterizationSetupDraft");
+    expect(characterizationHookSource).toContain('kind: "characterization"');
+    expect(characterizationHookSource).toContain("selected_trace_ids: selectedTraceIds");
+    expect(characterizationHookSource).toContain("submitCharacterizationTask()");
+    expect(characterizationHookSource).toContain("setCompletedRunSync({");
+    expect(characterizationHookSource).toContain("selectBaseTraces()");
+    expect(characterizationHookSource).toContain("toggleTraceSelection(traceId");
     expect(characterizationHookSource).toContain("setRunHistoryCursor(null);");
     expect(characterizationHookSource).toContain("focusRunHistoryResult(resultId");
     expect(characterizationHookSource).toContain("applyCharacterizationTagging(");
-    expect(characterizationHookSource).not.toContain("submitCharacterizationTask");
+    expect(taskApiSource).toContain("export type CharacterizationSetupDraft");
+    expect(taskApiSource).toContain("characterization_setup?: CharacterizationSetupDraft");
   });
 });
