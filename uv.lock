@@ -2472,6 +2472,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "pydantic-settings" },
     { name = "sc-core" },
+    { name = "schemdraw" },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -2483,6 +2484,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.133.0" },
     { name = "pydantic-settings", specifier = ">=2.11.0" },
     { name = "sc-core", editable = "src/core" },
+    { name = "schemdraw", specifier = ">=0.22" },
     { name = "sqlalchemy", specifier = ">=2.0.44" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },
 ]

@@ -1,7 +1,9 @@
 using LinearAlgebra
 using JosephsonCircuits
 using PlotlyJS
-using CSV, DataFrames
+
+include(joinpath(@__DIR__, "Reusable Component", "ReusableComponents.jl"))
+using .ReusableComponents
 
 # =============================================================================
 # 1. Basic Setup
@@ -9,13 +11,28 @@ using CSV, DataFrames
 
 const nH = 1e-9
 const GHz = 1e9
-const fF = 1e-15
 
-const CAP_MATRIX_PATH = "/Users/arfiligol/Github/Lab/Quantum-Chip-Design-Julia/circuit_model_analysis/PF6FQ_Q3D_C_Matrix.csv"
-const TARGET_QUBIT = "q0"
+# Reusable distributed builders live under:
+#   sandbox/legacy_circuit_model_analysis/Reusable Component/
+# Other sandbox circuits can `include(...)` the same module and reuse:
+# - add_quarter_wave_resonator!
+# - add_half_wave_purcell_filter!
+# - add_readout_line!
 
 # =============================================================================
-# 2. Plot Helper
+# 2. Circuit Symbols
+# =============================================================================
+
+@variables R50
+@variables C_01 C_02 C_12 L_12
+@variables C_13 C_23
+@variables C_r L_r
+@variables L_rp L_pr K_rp_pr
+@variables C_p1 C_p2
+@variables L_tl_top L_tl_bot
+
+# =============================================================================
+# 3. Plot Helpers
 # =============================================================================
 # 取代原本 utils.jl 裡的 ili_plot
 
@@ -32,7 +49,7 @@ function build_plot(traces, title, xaxis_title, yaxis_title; legend_title="Legen
 end
 
 # =============================================================================
-# 3A. Manual Component Values
+# 4. Manual Component Values
 # =============================================================================
 
 component_values = Dict(
@@ -44,51 +61,25 @@ component_values = Dict(
 )
 
 # =============================================================================
-# 3B. Load Q3D Component Values
-# =============================================================================
-
-qubit_cap_table = load_qubit_capacitance_table(CAP_MATRIX_PATH, TARGET_QUBIT)
-component_values = build_component_values(qubit_cap_table)
-
-# =============================================================================
-# 4. Circuit Symbols
-# =============================================================================
-
-@variables R_Big R50
-@variables C_01 C_02 C_12 L_12
-@variables C_13 C_23
-@variables C_r L_r
-@variables L_03 L_04 K_34
-
-# =============================================================================
 # 5. Build Circuit Definitions
 # =============================================================================
-
-function build_component_values(sub::DataFrame)
-    return Dict(
-        C_01 => get_component_value(sub, "C_01"),
-        C_02 => get_component_value(sub, "C_02"),
-        C_12 => get_component_value(sub, "C_12"),
-        C_13 => get_component_value(sub, "C_13"),
-        C_23 => get_component_value(sub, "C_23"),
-    )
-end
-
-component_values = build_component_values(qubit_cap_table)
 
 base_circuitdefs = merge(
     component_values,
     Dict(
-        R_Big => 1e100,
         R50 => 50.0,
         L_12 => 12.34e-9,
 
         # TODO: 換成你已驗證過的 readout resonator / RTL 參數
         C_r => 100.0e-15,
         L_r => 8.0e-9,
-        L_03 => 0.2e-9,
-        L_04 => 0.2e-9,
-        K_34 => 0.02,
+        L_rp => 0.2e-9,
+        L_pr => 0.2e-9,
+        K_rp_pr => 0.02,
+        C_p1 => 10.0e-15,
+        C_p2 => 10.0e-15,
+        L_tl_top => 0.2e-9,
+        L_tl_bot => 0.2e-9,
     ),
 )
 
@@ -121,19 +112,26 @@ function build_floating_qubit_with_readout_circuit(; include_qubit_inductor::Boo
     # ---------------------------
     push!(circuit, ("C_r", "3", "0", C_r))
     push!(circuit, ("L_r", "3", "0", L_r))
-    push!(circuit, ("L_03", "3", "0", L_03))
+    push!(circuit, ("L_rp", "3", "0", L_rp))
 
     # ---------------------------
-    # Readout transmission line
+    # Pickup coil + capacitive coupling to the two readout-line branches
     # ---------------------------
-    push!(circuit, ("L_04", "4", "0", L_04))
-    push!(circuit, ("R_04_1", "4", "0", R50))
-    push!(circuit, ("R_04_2", "4", "0", R50))
+    push!(circuit, ("L_pr", "4", "5", L_pr))
+    push!(circuit, ("C_p1", "4", "6", C_p1))
+    push!(circuit, ("C_p2", "5", "8", C_p2))
+
+    # ---------------------------
+    # Simplified transmission-line branches
+    # ---------------------------
+    # 先用 lumped series inductors 當作 TL placeholder，保留圖上的拓樸與兩個外部 50 Ohm 環境。
+    push!(circuit, ("L_tl_top", "6", "7", L_tl_top))
+    push!(circuit, ("L_tl_bot", "8", "9", L_tl_bot))
 
     # ---------------------------
     # Mutual inductive coupling
     # ---------------------------
-    push!(circuit, ("K_34", "L_03", "L_04", K_34))
+    push!(circuit, ("K_rp_pr", "L_rp", "L_pr", K_rp_pr))
 
     # ---------------------------
     # Ports
@@ -145,43 +143,17 @@ function build_floating_qubit_with_readout_circuit(; include_qubit_inductor::Boo
     push!(circuit, ("P2", "2", "0", 2))
     push!(circuit, ("R_P2", "2", "0", R50))
 
-    # P3: high-Z probe at resonator node
-    push!(circuit, ("P3", "3", "0", 3))
-    push!(circuit, ("R_P3", "3", "0", R_Big))
+    # P3 / P4: two physical readout-line environments
+    push!(circuit, ("P3", "7", "0", 3))
+    push!(circuit, ("R_P3", "7", "0", R50))
 
-    # P4: physical readout line environment
-    push!(circuit, ("P4", "4", "0", 4))
-
-    return circuit
-end
-
-function build_capacitance_reference_circuit()
-    circuit = Tuple{String,String,String,Num}[]
-
-    # Qubit capacitive body
-    push!(circuit, ("C_01", "1", "0", C_01))
-    push!(circuit, ("C_02", "2", "0", C_02))
-    push!(circuit, ("C_12", "1", "2", C_12))
-
-    # Coupling to readout node
-    push!(circuit, ("C_13", "1", "3", C_13))
-    push!(circuit, ("C_23", "2", "3", C_23))
-
-    # Ports
-    push!(circuit, ("P1", "1", "0", 1))
-    push!(circuit, ("R_P1", "1", "0", R_Big))
-
-    push!(circuit, ("P2", "2", "0", 2))
-    push!(circuit, ("R_P2", "2", "0", R_Big))
-
-    push!(circuit, ("P3", "3", "0", 3))
-    push!(circuit, ("R_P3", "3", "0", R_Big))
+    push!(circuit, ("P4", "9", "0", 4))
+    push!(circuit, ("R_P4", "9", "0", R50))
 
     return circuit
 end
 
 full_circuit = build_floating_qubit_with_readout_circuit(include_qubit_inductor=true)
-cap_reference_circuit = build_capacitance_reference_circuit()
 
 # =============================================================================
 # 7. Solver
@@ -258,8 +230,8 @@ end
 # =============================================================================
 # 10. Coordinate Transformation
 # =============================================================================
-# port basis: (P1, P2, P3, P4)
-# modal basis: (CM, DM, P3, P4)
+# port basis: (P1, P2, ReadoutTop, ReadoutBottom)
+# modal basis: (CM, DM, ReadoutTop, ReadoutBottom)
 
 function differential_mode_weights(component_values)
     w_1 = component_values[C_01] + component_values[C_13]
@@ -411,15 +383,6 @@ function extract_resonance_from_yin(freqs_ghz, yin_dm)
 end
 
 # =============================================================================
-# 14. Effective Capacitance Extraction
-# =============================================================================
-
-function extract_ceff_from_cap_reference(freqs_ghz, yin_dm_cap)
-    ω = 2π .* freqs_ghz .* GHz
-    return imag.(yin_dm_cap) ./ ω
-end
-
-# =============================================================================
 # 15. Run Full Simulation
 # =============================================================================
 
@@ -448,38 +411,16 @@ yin_dm = dm_result.Yin_dm
 resonance = extract_resonance_from_yin(freqs, yin_dm)
 
 # =============================================================================
-# 16. Run Capacitive Reference for Ceff
-# =============================================================================
-
-cap_solution = solve_circuit(
-    cap_reference_circuit,
-    base_circuitdefs;
-    f_start=1.0,
-    f_stop=10.0,
-    f_step=0.001,
-)
-
-y_cube_cap_raw = z_to_y_cube(cap_solution)
-
-transform_matrix_cap = build_cm_dm_coordinate_transform(component_values)
-y_modal_cap = apply_coordinate_transformation(y_cube_cap_raw, transform_matrix_cap)
-y_dm_cap = kron_reduce_y_cube(
-    y_modal_cap;
-    keep_ports=(2,),
-    drop_ports=(1, 3),
-)
-
-yin_dm_cap = vec(y_dm_cap[1, 1, :])
-ceff_dm = extract_ceff_from_cap_reference(freqs, yin_dm_cap)
-
-# =============================================================================
-# 17. Compute Physical Quantities
+# 16. Compute Physical Quantities
 # =============================================================================
 
 idx = resonance.idx
 qubit_frequency_ghz = resonance.frequency_ghz
 G0 = resonance.re_y
-Ceff0 = ceff_dm[idx]
+Ceff0 =
+    component_values[C_12] +
+    (component_values[C_01] * component_values[C_02]) / (component_values[C_01] + component_values[C_02]) +
+    (component_values[C_13] * component_values[C_23]) / (component_values[C_13] + component_values[C_23])
 
 if G0 <= 0
     @warn "Re(Yin_dm) <= 0 at f ≈ $qubit_frequency_ghz GHz -> T1 is not finite or model should be checked."
@@ -500,23 +441,8 @@ else
 end
 
 # =============================================================================
-# 18. Plots
+# 17. Plots
 # =============================================================================
-
-ceff_plot = build_plot(
-    [
-        scatter(
-            mode="lines",
-            x=freqs,
-            y=ceff_dm,
-            name="Ceff_dm",
-        ),
-    ],
-    "Differential-Mode Effective Capacitance",
-    "Frequency (GHz)",
-    "Capacitance (F)";
-    legend_title="Legend",
-)
 
 yin_plot = build_plot(
     [
@@ -539,5 +465,4 @@ yin_plot = build_plot(
     legend_title="Legend",
 )
 
-display(ceff_plot)
 display(yin_plot)
