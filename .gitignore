@@ -141,6 +141,8 @@ src/core/**/*.egg-info/
 # Local Playwright runtime outputs/logs
 output/
 output/playwright/
+.next/
+test-results/
 tmp/
 tmp/rewrite_logs/
 tmp/rewrite_pids/
