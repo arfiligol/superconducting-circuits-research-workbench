@@ -75,8 +75,8 @@ type PostProcessingOperationResponseShape = Readonly<{
 }>;
 type PostProcessingSetupResponseShape = Readonly<{
   source?: string | null;
-  output_view: string;
-  selections: readonly PostProcessingTraceSelectionResponseShape[];
+  output_view?: string | null;
+  selections?: readonly PostProcessingTraceSelectionResponseShape[];
   operations: readonly PostProcessingOperationResponseShape[];
 }>;
 type CharacterizationSetupResponseShape = Readonly<{
@@ -185,6 +185,7 @@ type SimulationResultExplorerSelectionResponseShape = Readonly<{
   family: string;
   source: string;
   metric: string;
+  trace_key?: string | null;
   z0_ohm: number;
   output_port: number;
   input_port: number;
@@ -212,6 +213,7 @@ type SimulationResultExplorerPlotResponseShape = Readonly<{
     family: string;
     source: string;
     metric: string;
+    trace_key?: string | null;
     z0_ohm: number;
     output_port: number;
     input_port: number;
@@ -273,11 +275,12 @@ type PublishedSimulationTraceResponseShape = Readonly<{
 }>;
 type SimulationResultPublicationResponseShape = Readonly<{
   operation: "published" | "already_published";
-  publication_summary: TaskPublicationSummaryResponseShape;
+  publication_summary?: TaskPublicationSummaryResponseShape | null;
   task: TaskDetailResponseShape;
   dataset: PublishedSimulationResultDatasetResponseShape;
   design: PublishedSimulationResultDesignResponseShape;
-  traces: readonly PublishedSimulationTraceResponseShape[];
+  trace?: PublishedSimulationTraceResponseShape | null;
+  traces?: readonly PublishedSimulationTraceResponseShape[];
 }>;
 
 export type TaskKind = "simulation" | "post_processing" | "characterization";
@@ -372,8 +375,8 @@ export type PostProcessingOperation = Readonly<{
 }>;
 
 export type PostProcessingSetup = Readonly<{
-  source: string;
-  outputView: string;
+  source: string | null;
+  outputView: string | null;
   selections: readonly PostProcessingTraceSelection[];
   operations: readonly PostProcessingOperation[];
 }>;
@@ -441,8 +444,8 @@ export type PostProcessingOperationDraft = Readonly<{
 
 export type PostProcessingSetupDraft = Readonly<{
   source?: string | null;
-  output_view: string;
-  selections: readonly PostProcessingTraceSelectionDraft[];
+  output_view?: string | null;
+  selections?: readonly PostProcessingTraceSelectionDraft[];
   operations: readonly PostProcessingOperationDraft[];
 }>;
 
@@ -663,6 +666,7 @@ export type SimulationResultExplorerSelection = Readonly<{
   family: string;
   source: string;
   metric: string;
+  traceKey: string | null;
   z0Ohm: number;
   outputPort: number;
   inputPort: number;
@@ -690,6 +694,7 @@ export type SimulationResultExplorerPlot = Readonly<{
     family: string;
     source: string;
     metric: string;
+    traceKey: string | null;
     z0Ohm: number;
     outputPort: number;
     inputPort: number;
@@ -728,8 +733,8 @@ export type SimulationResultExplorerQuery = Readonly<{
   outputPort?: number;
   inputPort?: number;
 }>;
-export type SimulationResultPublicationDraft = Readonly<{
-  datasetId?: string | null;
+export type SimulationResultTracePublicationDraft = Readonly<{
+  traceKey: string;
   designName?: string | null;
   designId?: string | null;
 }>;
@@ -760,13 +765,13 @@ export type PublishedSimulationTrace = Readonly<{
   stageKind: string;
   provenanceSummary: string;
 }>;
-export type SimulationResultPublicationResult = Readonly<{
+export type SimulationResultTracePublicationResult = Readonly<{
   operation: "published" | "already_published";
-  publicationSummary: TaskPublicationSummary;
+  publicationSummary: TaskPublicationSummary | null;
   task: TaskDetail;
   dataset: PublishedSimulationResultDataset;
   design: PublishedSimulationResultDesign;
-  traces: readonly PublishedSimulationTrace[];
+  trace: PublishedSimulationTrace;
 }>;
 export type TaskQueueReadModel = Readonly<{
   rows: readonly TaskSummary[];
@@ -1105,9 +1110,9 @@ function mapPostProcessingSetupResponse(
   }
 
   return {
-    source: payload.source ?? "raw",
-    outputView: payload.output_view,
-    selections: payload.selections.map((selection) => ({
+    source: payload.source ?? null,
+    outputView: payload.output_view ?? null,
+    selections: (payload.selections ?? []).map((selection) => ({
       traceFamily: selection.trace_family,
       representation: selection.representation,
       designId: selection.design_id ?? null,
@@ -1295,6 +1300,7 @@ function mapSimulationResultExplorerSelection(
     family: payload.family,
     source: payload.source,
     metric: payload.metric,
+    traceKey: payload.trace_key ?? null,
     z0Ohm: payload.z0_ohm,
     outputPort: payload.output_port,
     inputPort: payload.input_port,
@@ -1386,6 +1392,7 @@ export function mapSimulationResultExplorerResponse(
         family: payload.plot.metadata.family,
         source: payload.plot.metadata.source,
         metric: payload.plot.metadata.metric,
+        traceKey: payload.plot.metadata.trace_key ?? null,
         z0Ohm: payload.plot.metadata.z0_ohm,
         outputPort: payload.plot.metadata.output_port,
         inputPort: payload.plot.metadata.input_port,
@@ -1578,29 +1585,36 @@ function mapPublishedSimulationTrace(
 
 function mapSimulationResultPublicationResponse(
   payload: SimulationResultPublicationResponseShape,
-): SimulationResultPublicationResult {
+) {
+  const trace = payload.trace ?? payload.traces?.[0];
+  if (!trace) {
+    throw new Error("The publish response did not include a saved trace.");
+  }
+
   return {
     operation: payload.operation,
-    publicationSummary: mapTaskPublicationSummary(payload.publication_summary, {
-      taskId: payload.task.task_id,
-    }),
+    publicationSummary: payload.publication_summary
+      ? mapTaskPublicationSummary(payload.publication_summary, {
+          taskId: payload.task.task_id,
+        })
+      : null,
     task: mapTaskDetailResponse(payload.task),
     dataset: mapPublishedSimulationResultDataset(payload.dataset),
     design: mapPublishedSimulationResultDesign(payload.design),
-    traces: payload.traces.map(mapPublishedSimulationTrace),
+    trace: mapPublishedSimulationTrace(trace),
   };
 }
 
-export async function publishSimulationResult(
+export async function publishSimulationResultTrace(
   taskId: number,
-  payload: SimulationResultPublicationDraft,
-) {
+  payload: SimulationResultTracePublicationDraft,
+): Promise<SimulationResultTracePublicationResult> {
   const response = await apiRequest<SimulationResultPublicationResponseShape>(
     `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/publish`,
     {
       method: "POST",
       body: {
-        dataset_id: payload.datasetId ?? null,
+        trace_key: payload.traceKey,
         design_name: payload.designName ?? null,
         design_id: payload.designId ?? null,
       },

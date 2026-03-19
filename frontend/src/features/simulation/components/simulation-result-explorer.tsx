@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { DatabaseZap, LineChart, Rows3 } from "lucide-react";
 import { useTheme } from "next-themes";
 
+import { CurrentTraceSaveControl } from "@/features/simulation/components/current-trace-save-control";
 import { useSimulationResultExplorer } from "@/features/simulation/hooks/use-simulation-result-explorer";
 import { AppNumberInput } from "@/features/shared/components/app-number-input";
 import {
@@ -39,6 +40,7 @@ const Plot = dynamic<PlotComponentProps>(
 
 type SimulationResultExplorerProps = Readonly<{
   task: TaskDetail;
+  activeDatasetId: string | null;
 }>;
 
 type ExplorerViewMode = "plot" | "table";
@@ -177,7 +179,10 @@ function SimulationResultPlot({
   );
 }
 
-export function SimulationResultExplorer({ task }: SimulationResultExplorerProps) {
+export function SimulationResultExplorer({
+  task,
+  activeDatasetId,
+}: SimulationResultExplorerProps) {
   const [viewMode, setViewMode] = useState<ExplorerViewMode>("plot");
   const [z0Input, setZ0Input] = useState("50");
   const explorer = useSimulationResultExplorer(task.taskId, true);
@@ -325,12 +330,22 @@ export function SimulationResultExplorer({ task }: SimulationResultExplorerProps
       <div className="space-y-3">
         <div className="rounded-[0.95rem] border border-border/80 bg-background px-4 py-4">
           <div className="space-y-4">
-            <AppSegmentedControl
-              value={selection.family}
-              onChange={explorer.setFamily}
-              options={familySegmentOptions}
-              ariaLabel="Simulation result family"
-            />
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0 xl:flex-1">
+                <AppSegmentedControl
+                  value={selection.family}
+                  onChange={explorer.setFamily}
+                  options={familySegmentOptions}
+                  ariaLabel="Simulation result family"
+                />
+              </div>
+              <CurrentTraceSaveControl
+                task={task}
+                activeDatasetId={activeDatasetId}
+                traceKey={payload.selection.traceKey}
+                traceLabel={payload.plot.series[0]?.label ?? null}
+              />
+            </div>
 
             <div
               className={

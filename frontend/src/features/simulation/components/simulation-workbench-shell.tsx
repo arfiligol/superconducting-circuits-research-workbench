@@ -26,7 +26,6 @@ import { z } from "zod";
 
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
 import { SimulationResultExplorer } from "@/features/simulation/components/simulation-result-explorer";
-import { SimulationResultPublicationCard } from "@/features/simulation/components/simulation-result-publication-card";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import { resolveOfficialSimulationExamplePreset } from "@/features/simulation/lib/official-example";
 import {
@@ -67,7 +66,6 @@ import {
   type AppSelectOption,
 } from "@/features/shared/components/app-select";
 import { AppNumberInput } from "@/features/shared/components/app-number-input";
-import { TaskResultPanel } from "@/features/shared/components/task-workflow-panels";
 import {
   SurfaceHeader,
   SurfacePanel,
@@ -86,7 +84,6 @@ import {
   resolveTaskConnectionState,
   resolveTaskRecoveryNotice,
   summarizeTaskContextBinding,
-  summarizeTaskResultSurface,
 } from "@/lib/task-surface";
 import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
@@ -97,24 +94,6 @@ const simulationRequestSchema = simulationSetupFormSchema
       .string()
       .trim()
       .max(180, "Keep the request note within 180 characters."),
-    postSourceSelection: z.enum(["raw", "ptc"]),
-    postOutputView: z.string().trim().min(1, "Output view is required."),
-    postSelectionTraceFamily: z.string().trim().min(1, "Trace family is required."),
-    postSelectionRepresentation: z.string().trim().min(1, "Representation is required."),
-    postSelectionDesignId: z.string().trim(),
-    postSelectionTraceIds: z.string().trim(),
-  })
-  .superRefine((values, context) => {
-    if (
-      values.postSourceSelection === "ptc" &&
-      !["y_matrix", "z_matrix"].includes(values.postSelectionTraceFamily.trim())
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["postSelectionTraceFamily"],
-        message: "PTC source is only available for Y/Z trace families.",
-      });
-    }
   });
 
 type SimulationRequestValues = z.infer<typeof simulationRequestSchema>;
@@ -123,12 +102,6 @@ const defaultRequestValues: SimulationRequestValues = {
   ...defaultSimulationSetupFormValues,
   simulationNote: "",
   postProcessingNote: "",
-  postSourceSelection: "raw",
-  postOutputView: "matrix",
-  postSelectionTraceFamily: "y_matrix",
-  postSelectionRepresentation: "imaginary",
-  postSelectionDesignId: "",
-  postSelectionTraceIds: "",
 };
 
 type PostProcessingStepType = "coordinate_transform" | "kron_reduction";
@@ -173,35 +146,6 @@ const ptcModeOptions: readonly AppSelectOption[] = [
   { value: "auto", label: "Auto compensate" },
   { value: "manual", label: "Manual notes" },
 ];
-const postProcessingSourceOptions: readonly AppSelectOption[] = [
-  {
-    value: "raw",
-    label: "Raw",
-    description: "Use the solver-native upstream simulation result.",
-  },
-  {
-    value: "ptc",
-    label: "PTC",
-    description: "Use the PTC-capable upstream output when it was persisted.",
-  },
-];
-const rawTraceFamilyOptions: readonly AppSelectOption[] = [
-  { value: "s_matrix", label: "S Matrix" },
-  { value: "y_matrix", label: "Y Matrix" },
-  { value: "z_matrix", label: "Z Matrix" },
-];
-const ptcTraceFamilyOptions: readonly AppSelectOption[] = [
-  { value: "y_matrix", label: "Y Matrix" },
-  { value: "z_matrix", label: "Z Matrix" },
-];
-const postProcessingRepresentationOptions: readonly AppSelectOption[] = [
-  { value: "real", label: "Real" },
-  { value: "imaginary", label: "Imaginary" },
-  { value: "magnitude", label: "Magnitude" },
-  { value: "phase", label: "Phase" },
-  { value: "db", label: "dB" },
-];
-
 const simulationStageFieldNames = [
   "simulationNote",
   "simulationStartGhz",
@@ -397,47 +341,6 @@ function createPostProcessingStep(
   };
 }
 
-function formatPostProcessingOutputView(value: string) {
-  switch (value) {
-    case "fit-report":
-      return "Report";
-    case "matrix":
-    case "table":
-    default:
-      return "Matrix";
-  }
-}
-
-function formatPostProcessingRepresentationLabel(value: string) {
-  switch (value) {
-    case "db":
-      return "dB";
-    case "imaginary":
-      return "Imaginary";
-    case "magnitude":
-      return "Magnitude";
-    case "phase":
-      return "Phase";
-    case "real":
-      return "Real";
-    default:
-      return value;
-  }
-}
-
-function formatPostProcessingFamilyLabel(value: string) {
-  switch (value) {
-    case "s_matrix":
-      return "S Matrix";
-    case "y_matrix":
-      return "Y Matrix";
-    case "z_matrix":
-      return "Z Matrix";
-    default:
-      return value;
-  }
-}
-
 function formatPostProcessingStepLabel(stepType: PostProcessingStepType) {
   return stepType === "coordinate_transform" ? "Coordinate Transformation" : "Kron Reduction";
 }
@@ -482,22 +385,11 @@ function buildPostProcessingOperationDraft(step: PostProcessingStepDraft) {
 }
 
 function buildPostProcessingSetupDraft(
-  values: SimulationRequestValues,
   steps: readonly PostProcessingStepDraft[],
 ) {
   const operations = steps.map(buildPostProcessingOperationDraft);
 
   return {
-    source: values.postSourceSelection,
-    output_view: values.postOutputView.trim(),
-    selections: [
-      {
-        trace_family: values.postSelectionTraceFamily.trim(),
-        representation: values.postSelectionRepresentation.trim(),
-        design_id: values.postSelectionDesignId.trim() || null,
-        trace_ids: parseCommaSeparatedStringValues(values.postSelectionTraceIds),
-      },
-    ],
     operations,
   };
 }
@@ -1099,7 +991,6 @@ export function SimulationWorkbenchShell() {
   const [, startTransition] = useTransition();
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
   const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
-  const [isSimulationResultSupportOpen, setIsSimulationResultSupportOpen] = useState(false);
   const [simulationSetupBuildError, setSimulationSetupBuildError] = useState<string | null>(null);
   const [postProcessingBuildError, setPostProcessingBuildError] = useState<string | null>(null);
   const [postProcessingSteps, setPostProcessingSteps] = useState<readonly PostProcessingStepDraft[]>(
@@ -1146,10 +1037,6 @@ export function SimulationWorkbenchShell() {
   const parameterSweepEnabled = form.watch("simulationParameterSweepEnabled");
   const harmonicBalanceEnabled = form.watch("simulationHarmonicBalanceEnabled");
   const ptcEnabled = form.watch("simulationPtcEnabled");
-  const postSourceSelection = form.watch("postSourceSelection");
-  const postOutputView = form.watch("postOutputView");
-  const postSelectionTraceFamily = form.watch("postSelectionTraceFamily");
-  const postSelectionRepresentation = form.watch("postSelectionRepresentation");
   const watchedSimulationSources = form.watch("simulationSources");
   const selectedPtcPortsValue = form.watch("simulationPtcCompensatePorts");
 
@@ -1356,54 +1243,6 @@ export function SimulationWorkbenchShell() {
   const displayedSimulationStageTask = attachedSimulationStageTask ?? latestSimulationStageTask;
   const displayedSimulationTaskDetail =
     attachedSimulationTaskDetail ?? latestSimulationTaskDetail;
-  const downstreamSourceCapabilities =
-    displayedSimulationTaskDetail?.downstreamSourceCapabilities ?? null;
-  const postProcessingSourceSelectOptions = useMemo<readonly AppSelectOption[]>(
-    () =>
-      postProcessingSourceOptions.map((option) => {
-        if (option.value === "raw") {
-          const available = downstreamSourceCapabilities?.raw.available ?? false;
-          return {
-            ...option,
-            description: available
-              ? "Use the solver-native upstream simulation result."
-              : "Raw output becomes available after the upstream simulation persists a result.",
-            disabled: !available,
-          };
-        }
-
-        const ptcCapability = downstreamSourceCapabilities?.ptc;
-        return {
-          ...option,
-          description:
-            ptcCapability?.available
-              ? ptcCapability.compensatePorts.length > 0
-                ? `Available from ${ptcCapability.compensatePorts.join(", ")}.`
-                : "Available from the upstream persisted PTC output."
-              : ptcCapability?.enabled
-                ? "PTC was enabled upstream, but no persisted PTC-capable output is available yet."
-                : "PTC is unavailable because the upstream simulation run did not persist PTC output.",
-          disabled: !(ptcCapability?.available ?? false),
-        };
-      }),
-    [downstreamSourceCapabilities],
-  );
-  const selectedPostProcessingSourceCapability =
-    postSourceSelection === "ptc"
-      ? downstreamSourceCapabilities?.ptc ?? null
-      : downstreamSourceCapabilities?.raw ?? null;
-  const postProcessingTraceFamilySelectOptions =
-    postSourceSelection === "ptc" ? ptcTraceFamilyOptions : rawTraceFamilyOptions;
-  const selectedPostProcessingSourceSummary =
-    postSourceSelection === "ptc"
-      ? selectedPostProcessingSourceCapability?.available
-        ? "PTC-capable upstream output is available for this simulation run."
-        : postProcessingSourceSelectOptions.find((option) => option.value === "ptc")?.description ??
-          "PTC output is not available from the upstream simulation run."
-      : selectedPostProcessingSourceCapability?.available
-        ? "Raw solver-native output is available for downstream post-processing."
-        : postProcessingSourceSelectOptions.find((option) => option.value === "raw")?.description ??
-          "Raw output is not available from the upstream simulation run.";
   const simulationSetupBlockedReason =
     resolvedDefinitionId === null
       ? "Select a definition before submitting a simulation run."
@@ -1443,17 +1282,9 @@ export function SimulationWorkbenchShell() {
     displayedSimulationTaskDetail !== undefined
       ? hasSimulationTaskResult(displayedSimulationTaskDetail)
       : displayedSimulationStageAuthority?.resultAvailability === "ready";
-  const postProcessingSourceBlockedReason =
-    !simulationResultReady
-      ? null
-      : !selectedPostProcessingSourceCapability?.available
-        ? selectedPostProcessingSourceSummary
-        : null;
   const postProcessingSetupBlockedReason =
     simulationSetupBlockedReason ??
-    (!simulationResultReady
-      ? "Simulation result required before post-processing can start."
-      : postProcessingSourceBlockedReason);
+    (!simulationResultReady ? "Simulation result required before post-processing can start." : null);
   const simulationSetupState = resolveSetupStageState({
     stageLabel: "Simulation",
     blockedReason: simulationSetupBlockedReason,
@@ -1483,22 +1314,12 @@ export function SimulationWorkbenchShell() {
     detail: latestPostProcessingTaskDetail,
     hasResult: postProcessingResultReady,
   });
-  const simulationTaskResultSurface = summarizeTaskResultSurface(displayedSimulationTaskDetail);
   const postProcessingResultSummary = summarizeSimulationTaskResults(
     latestPostProcessingTaskDetail,
   );
   const explicitUpstreamSimulationTaskId = resolvePostProcessingUpstreamTaskId(
     latestPostProcessingTaskDetail,
   );
-  const postProcessingOutputViewLabel = formatPostProcessingOutputView(
-    latestPostProcessingTaskDetail?.postProcessingSetup?.outputView ?? postOutputView,
-  );
-  const postProcessingSelectionFamily =
-    latestPostProcessingTaskDetail?.postProcessingSetup?.selections[0]?.traceFamily ??
-    postSelectionTraceFamily;
-  const postProcessingSelectionRepresentation =
-    latestPostProcessingTaskDetail?.postProcessingSetup?.selections[0]?.representation ??
-    postSelectionRepresentation;
   const postProcessingStepCount =
     latestPostProcessingTaskDetail?.postProcessingSetup?.operations.length ?? postProcessingSteps.length;
 
@@ -1698,33 +1519,6 @@ export function SimulationWorkbenchShell() {
   }, [form, ptcEnabled, ptcPortOptions, selectedPtcPortsValue]);
 
   useEffect(() => {
-    const rawAvailable = downstreamSourceCapabilities?.raw.available ?? false;
-    const ptcAvailable = downstreamSourceCapabilities?.ptc.available ?? false;
-
-    if (postSourceSelection === "ptc" && !ptcAvailable && rawAvailable) {
-      form.setValue("postSourceSelection", "raw", { shouldDirty: false });
-      return;
-    }
-
-    if (postSourceSelection === "raw" && !rawAvailable && ptcAvailable) {
-      form.setValue("postSourceSelection", "ptc", { shouldDirty: false });
-    }
-  }, [downstreamSourceCapabilities, form, postSourceSelection]);
-
-  useEffect(() => {
-    const allowedTraceFamilies = new Set(
-      postProcessingTraceFamilySelectOptions.map((option) => option.value),
-    );
-    const currentTraceFamily = form.getValues("postSelectionTraceFamily");
-    if (allowedTraceFamilies.has(currentTraceFamily)) {
-      return;
-    }
-
-    const fallbackTraceFamily = postProcessingTraceFamilySelectOptions[0]?.value ?? "y_matrix";
-    form.setValue("postSelectionTraceFamily", fallbackTraceFamily, { shouldDirty: false });
-  }, [form, postProcessingTraceFamilySelectOptions]);
-
-  useEffect(() => {
     if (
       !displayedSimulationTaskDetail?.simulationSetup ||
       displayedSimulationSetupAuthorityKey === null ||
@@ -1753,10 +1547,6 @@ export function SimulationWorkbenchShell() {
   ]);
 
   useEffect(() => {
-    setIsSimulationResultSupportOpen(false);
-  }, [displayedSimulationTaskDetail?.taskId]);
-
-  useEffect(() => {
     if (
       !latestPostProcessingTaskDetail?.postProcessingSetup ||
       latestPostProcessingTaskDetail.taskId === hydratedPostTaskId
@@ -1764,26 +1554,12 @@ export function SimulationWorkbenchShell() {
       return;
     }
 
-    const setup = latestPostProcessingTaskDetail.postProcessingSetup;
-    const firstSelection = setup.selections[0];
-
-    form.setValue("postSourceSelection", setup.source === "ptc" ? "ptc" : "raw", {
-      shouldDirty: false,
-    });
-    form.setValue("postOutputView", setup.outputView, { shouldDirty: false });
-    form.setValue("postSelectionTraceFamily", firstSelection?.traceFamily ?? "", {
-      shouldDirty: false,
-    });
-    form.setValue("postSelectionRepresentation", firstSelection?.representation ?? "", {
-      shouldDirty: false,
-    });
-    form.setValue("postSelectionDesignId", firstSelection?.designId ?? "", {
-      shouldDirty: false,
-    });
-    form.setValue("postSelectionTraceIds", firstSelection ? firstSelection.traceIds.join(", ") : "", {
-      shouldDirty: false,
-    });
-    setPostProcessingSteps(hydratePostProcessingSteps(setup, sourcePortSelectOptions));
+    setPostProcessingSteps(
+      hydratePostProcessingSteps(
+        latestPostProcessingTaskDetail.postProcessingSetup,
+        sourcePortSelectOptions,
+      ),
+    );
     setHydratedPostTaskId(latestPostProcessingTaskDetail.taskId);
   }, [form, hydratedPostTaskId, latestPostProcessingTaskDetail, sourcePortSelectOptions]);
 
@@ -2177,7 +1953,7 @@ export function SimulationWorkbenchShell() {
           ? buildSimulationSetupDraft(values)
           : null;
       postProcessingSetup =
-        kind === "post_processing" ? buildPostProcessingSetupDraft(values, postProcessingSteps) : null;
+        kind === "post_processing" ? buildPostProcessingSetupDraft(postProcessingSteps) : null;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to build and submit workflow setup.";
@@ -3199,7 +2975,7 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={3}
           title="Simulation Result"
-          description="Inspect the latest simulation output and keep useful results close to the next step."
+          description="Browse the latest simulation result, inspect the current trace, and save it when you want to carry it forward."
           status={simulationResultState}
         >
           {(simulationStageErrorMessage ||
@@ -3266,49 +3042,17 @@ export function SimulationWorkbenchShell() {
               ) : null}
 
               {displayedSimulationTaskDetail && simulationResultReady ? (
-                <div className="mt-4 space-y-4">
-                  <SimulationResultExplorer task={displayedSimulationTaskDetail} />
-                  <SimulationResultPublicationCard
+                <div className="mt-4">
+                  <SimulationResultExplorer
                     task={displayedSimulationTaskDetail}
-                    definitionName={
-                      activeDefinition?.name ?? selectedDefinitionDisplay?.name ?? null
-                    }
                     activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
                   />
                 </div>
               ) : null}
 
-              {displayedSimulationTaskDetail ? (
-                <div className="mt-4 space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSimulationResultSupportOpen((current) => !current);
-                    }}
-                    aria-expanded={isSimulationResultSupportOpen}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-                  >
-                    {isSimulationResultSupportOpen ? (
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    )}
-                    {isSimulationResultSupportOpen
-                      ? "Hide persisted result support"
-                      : "Show persisted result support"}
-                  </button>
-
-                  {isSimulationResultSupportOpen ? (
-                    <TaskResultPanel
-                      task={displayedSimulationTaskDetail}
-                      summary={simulationTaskResultSurface}
-                    />
-                  ) : (
-                    <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                      Persisted refs, trace payload metadata, and result handles remain available
-                      as secondary support when you need to inspect the task contract directly.
-                    </div>
-                  )}
+              {displayedSimulationTaskDetail && !simulationResultReady ? (
+                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+                  Persisted refs and task result handles stay available after the result handoff is ready.
                 </div>
               ) : null}
             </>
@@ -3318,7 +3062,7 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={4}
           title="Post Processing Setup"
-          description="Choose Raw or PTC, then add the processing steps for the next matrix result."
+          description="Author the processing steps, keep their order intentional, and launch the next run."
           status={postProcessingSetupState}
           actions={
             displayedSimulationStageAuthority ? (
@@ -3335,71 +3079,6 @@ export function SimulationWorkbenchShell() {
               message={postProcessingSetupState.message}
             />
           ) : null}
-
-          <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-            <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-              <CompactField label="Source">
-                <AppInlineSelect
-                  ariaLabel="Post-processing source selection"
-                  value={postSourceSelection}
-                  onChange={(nextValue) => {
-                    setPostProcessingBuildError(null);
-                    form.setValue("postSourceSelection", nextValue as "raw" | "ptc", {
-                      shouldDirty: true,
-                    });
-                  }}
-                  options={postProcessingSourceSelectOptions}
-                />
-              </CompactField>
-              <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">
-                  {postSourceSelection === "ptc" ? "PTC source" : "Raw source"}
-                </p>
-                <p className="mt-2 leading-6">{selectedPostProcessingSourceSummary}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <CompactField label="Trace Family" error={form.formState.errors.postSelectionTraceFamily?.message}>
-              <AppInlineSelect
-                ariaLabel="Post-processing trace family"
-                value={postSelectionTraceFamily}
-                onChange={(nextValue) => {
-                  setPostProcessingBuildError(null);
-                  form.setValue("postSelectionTraceFamily", nextValue, {
-                    shouldDirty: true,
-                  });
-                }}
-                options={postProcessingTraceFamilySelectOptions}
-              />
-            </CompactField>
-            <CompactField
-              label="View"
-              error={form.formState.errors.postSelectionRepresentation?.message}
-            >
-              <AppInlineSelect
-                ariaLabel="Post-processing representation"
-                value={postSelectionRepresentation}
-                onChange={(nextValue) => {
-                  setPostProcessingBuildError(null);
-                  form.setValue("postSelectionRepresentation", nextValue, {
-                    shouldDirty: true,
-                  });
-                }}
-                options={postProcessingRepresentationOptions}
-              />
-            </CompactField>
-            <CompactField
-              label="Trace IDs"
-              detail="Optional. Limit post-processing to specific upstream traces."
-            >
-              <SetupTextInput
-                {...form.register("postSelectionTraceIds")}
-                placeholder="trace_001, trace_002"
-              />
-            </CompactField>
-          </div>
 
           <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3626,7 +3305,7 @@ export function SimulationWorkbenchShell() {
         <WorkflowStageSection
           step={5}
           title="Post Processing Result"
-          description="Review the processed matrix result while keeping its simulation relation visible."
+          description="Browse the processed result, switch between available result sources, and save the current trace from here too."
           status={postProcessingResultState}
           actions={
             latestPostProcessingStageAuthority ? (
@@ -3659,7 +3338,10 @@ export function SimulationWorkbenchShell() {
           ) : null}
 
           {latestPostProcessingTaskDetail && postProcessingResultReady ? (
-            <SimulationResultExplorer task={latestPostProcessingTaskDetail} />
+            <SimulationResultExplorer
+              task={latestPostProcessingTaskDetail}
+              activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
+            />
           ) : null}
 
           {latestPostProcessingStageAuthority ? (
@@ -3700,13 +3382,6 @@ export function SimulationWorkbenchShell() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <SurfaceTag tone="default">{postProcessingOutputViewLabel}</SurfaceTag>
-                <SurfaceTag tone="default">
-                  {formatPostProcessingFamilyLabel(postProcessingSelectionFamily)}
-                </SurfaceTag>
-                <SurfaceTag tone="default">
-                  {formatPostProcessingRepresentationLabel(postProcessingSelectionRepresentation)}
-                </SurfaceTag>
                 <SurfaceTag tone="default">
                   {postProcessingStepCount} step{postProcessingStepCount === 1 ? "" : "s"}
                 </SurfaceTag>

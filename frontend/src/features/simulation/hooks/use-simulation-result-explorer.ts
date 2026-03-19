@@ -16,6 +16,7 @@ type EditableExplorerSelection = Readonly<{
   family: string;
   source: string;
   metric: string;
+  traceKey: string | null;
   z0: number;
   outputPort: number;
   inputPort: number;
@@ -28,6 +29,7 @@ function buildEditableSelection(
     family: selection.family,
     source: selection.source,
     metric: selection.metric,
+    traceKey: selection.traceKey,
     z0: selection.z0Ohm,
     outputPort: selection.outputPort,
     inputPort: selection.inputPort,
@@ -92,7 +94,14 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
       return;
     }
 
-    setSelection((current) => current ?? buildEditableSelection(explorerData.selection));
+    setSelection((current) =>
+      current
+        ? {
+            ...current,
+            traceKey: explorerData.selection.traceKey,
+          }
+        : buildEditableSelection(explorerData.selection),
+    );
   }, [explorerQuery.data]);
 
   const payload = explorerQuery.data;

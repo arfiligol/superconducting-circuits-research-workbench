@@ -89,10 +89,10 @@ const simulationResultExplorerSource = readFileSync(
   ),
   "utf8",
 );
-const simulationResultPublicationCardSource = readFileSync(
+const currentTraceSaveControlSource = readFileSync(
   fileURLToPath(
     new URL(
-      "../src/features/simulation/components/simulation-result-publication-card.tsx",
+      "../src/features/simulation/components/current-trace-save-control.tsx",
       import.meta.url,
     ),
   ),
@@ -1200,13 +1200,9 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Pump Source");
     expect(simulationWorkbenchSource).toContain("Run Simulation");
     expect(simulationWorkbenchSource).toContain("Run Post Processing");
-    expect(simulationWorkbenchSource).toContain("postSourceSelection");
-    expect(simulationWorkbenchSource).toContain("downstreamSourceCapabilities");
-    expect(simulationWorkbenchSource).toContain("PTC source");
     expect(simulationWorkbenchSource).toContain("Add Step");
     expect(simulationWorkbenchSource).toContain("Step Type");
     expect(simulationWorkbenchSource).toContain("updatePostProcessingStepType");
-    expect(simulationWorkbenchSource).toContain("formatPostProcessingOutputView");
     expect(simulationWorkbenchSource).toContain("Load Official Example");
     expect(simulationWorkbenchSource).toContain("Task-backed · #");
     expect(simulationWorkbenchSource).toContain("Edited from task #");
@@ -1222,10 +1218,6 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
     expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
     expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
-    expect(simulationWorkbenchSource).toContain("source: values.postSourceSelection");
-    expect(simulationWorkbenchSource).toContain(
-      'form.setValue("postSourceSelection", setup.source === "ptc" ? "ptc" : "raw"',
-    );
     expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
     expect(simulationWorkbenchSource).not.toContain('detail="Read-only expanded netlist."');
     expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
@@ -1257,12 +1249,16 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("No sweep targets are currently available");
     expect(simulationWorkbenchSource).toContain("SimulationResultExplorer");
     expect(simulationWorkbenchSource).toContain("task={latestPostProcessingTaskDetail}");
-    expect(simulationWorkbenchSource).toContain("Show persisted result support");
-    expect(simulationWorkbenchSource).toContain("TaskResultPanel");
-    expect(simulationWorkbenchSource).toContain("simulationTaskResultSurface");
     expect(simulationWorkbenchSource).toContain("Live result refresh");
     expect(simulationWorkbenchSource).toContain("Attach Run");
     expect(simulationWorkbenchSource).toContain("Attached to Page");
+    expect(simulationWorkbenchSource).toContain("Author the processing steps, keep their order intentional");
+    expect(simulationWorkbenchSource).toContain("switch between available result sources");
+    expect(simulationWorkbenchSource).not.toContain("Choose Raw or PTC");
+    expect(simulationWorkbenchSource).not.toContain("postSourceSelection");
+    expect(simulationWorkbenchSource).not.toContain("PTC source");
+    expect(simulationWorkbenchSource).not.toContain("Trace Family");
+    expect(simulationWorkbenchSource).not.toContain("Trace IDs");
     expect(simulationWorkbenchSource).not.toContain("View Task");
     expect(simulationWorkbenchSource).not.toContain("Result Availability");
     expect(simulationWorkbenchSource).not.toContain("Downstream State");
@@ -1278,21 +1274,19 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
     expect(simulationResultExplorerSource).toContain("PTC results appear when you switch to");
     expect(simulationResultExplorerSource).toContain("Z0 only applies to Y/Z derived explorer families.");
-    expect(simulationWorkbenchSource).toContain("SimulationResultPublicationCard");
-    expect(simulationResultPublicationCardSource).toContain("Save to Design");
-    expect(simulationResultPublicationCardSource).toContain("Saved to Design");
-    expect(simulationResultPublicationCardSource).toContain("createDatasetDesign");
-    expect(simulationResultPublicationCardSource).toContain("New Design");
-    expect(simulationResultPublicationCardSource).toContain("Open Saved Design in Raw Data");
-    expect(simulationResultPublicationCardSource).toContain("dataset_design_conflict");
-    expect(simulationResultPublicationCardSource).toContain("design_not_found");
-    expect(simulationResultPublicationCardSource).not.toContain("Active Dataset");
-    expect(simulationResultPublicationCardSource).not.toContain("Save to Dataset");
-    expect(simulationResultPublicationCardSource).not.toContain("Target Dataset");
-    expect(simulationResultPublicationCardSource).not.toContain("Dataset Design Name");
-    expect(simulationResultPublicationCardSource).toContain("publishSimulationResult");
-    expect(simulationResultPublicationCardSource).toContain("publicationSummary.state === \"published\"");
-    expect(simulationResultPublicationCardSource).toContain("error.errorCode");
+    expect(simulationResultExplorerSource).toContain("CurrentTraceSaveControl");
+    expect(simulationWorkbenchSource).not.toContain("SimulationResultPublicationCard");
+    expect(currentTraceSaveControlSource).toContain("Save Current Trace");
+    expect(currentTraceSaveControlSource).toContain("New Design");
+    expect(currentTraceSaveControlSource).toContain("Open Saved Trace in Raw Data");
+    expect(currentTraceSaveControlSource).toContain("createDatasetDesign");
+    expect(currentTraceSaveControlSource).toContain("publishSimulationResultTrace");
+    expect(currentTraceSaveControlSource).toContain("traceKey");
+    expect(currentTraceSaveControlSource).toContain("dataset_design_conflict");
+    expect(currentTraceSaveControlSource).toContain("design_not_found");
+    expect(currentTraceSaveControlSource).not.toContain("Active Dataset");
+    expect(currentTraceSaveControlSource).not.toContain("Save to Dataset");
+    expect(currentTraceSaveControlSource).not.toContain("Target Dataset");
   });
 
   it("binds stage authority to the current definition and dataset context", () => {
@@ -1694,6 +1688,7 @@ describe("task api detail mapping", () => {
           family: "s_matrix",
           source: "raw",
           metric: "magnitude_db",
+          trace_key: "raw:s_matrix:1:1",
           z0_ohm: 50,
           output_port: 1,
           input_port: 1,
@@ -1703,6 +1698,7 @@ describe("task api detail mapping", () => {
         family: "z_matrix",
         source: "ptc",
         metric: "real",
+        trace_key: "ptc:z_matrix:2:1",
         z0_ohm: 75,
         output_port: 2,
         input_port: 1,
@@ -1733,6 +1729,7 @@ describe("task api detail mapping", () => {
           family: "z_matrix",
           source: "ptc",
           metric: "real",
+          trace_key: "ptc:z_matrix:2:1",
           z0_ohm: 75,
           output_port: 2,
           input_port: 1,
@@ -1752,6 +1749,7 @@ describe("task api detail mapping", () => {
       family: "z_matrix",
       source: "ptc",
       metric: "real",
+      traceKey: "ptc:z_matrix:2:1",
       z0Ohm: 75,
       outputPort: 2,
       inputPort: 1,
@@ -1768,8 +1766,10 @@ describe("task api detail mapping", () => {
       "raw",
       "ptc",
     ]);
+    expect(explorer.bootstrap.defaultSelection.traceKey).toBe("raw:s_matrix:1:1");
     expect(explorer.plot.metadata.outputPortLabel).toBe("Port 2");
     expect(explorer.plot.metadata.inputPortLabel).toBe("Port 1");
+    expect(explorer.plot.metadata.traceKey).toBe("ptc:z_matrix:2:1");
     expect(explorer.plot.metadata.tracePayloadStoreKey).toBe("trace-output-44");
     expect(explorer.resultBasis.primaryResultHandleId).toBe("handle-44");
   });
