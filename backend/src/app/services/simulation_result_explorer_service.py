@@ -5,6 +5,12 @@ import math
 import re
 from collections.abc import Mapping, Sequence
 
+from src.app.domain.result_traces import (
+    ResultTraceSelection,
+    available_sources_for_family,
+    ptc_available,
+    resolve_port_options,
+)
 from src.app.domain.tasks import SimulationSetup, TaskDetail
 from src.app.services.service_errors import service_error
 from src.app.services.task_service import TaskService
@@ -18,7 +24,6 @@ _SOURCE_LABELS = {
     "raw": "Raw",
     "ptc": "PTC",
 }
-_PTC_COMPATIBLE_FAMILIES = {"y_matrix", "z_matrix"}
 _DEFINITION_PORT_PATTERN = re.compile(r"^P(\d+)$", re.IGNORECASE)
 _SETUP_PORT_PATTERN = re.compile(r"^(?:port_|P)(\d+)$", re.IGNORECASE)
 _FAMILY_METRICS = {
@@ -60,7 +65,10 @@ class SimulationResultExplorerService:
         self._ensure_task_ready_for_explorer(task)
         basis_task = _resolve_basis_task(task, task_service=self._task_service)
 
-        port_options = _resolve_port_options(basis_task, task_service=self._task_service)
+        port_options = resolve_port_options(
+            basis_task,
+            definition=self._task_service.get_circuit_definition(basis_task.definition_id),
+        )
         compensated_ports = _compensated_port_indices(basis_task, available_ports=port_options)
         default_selection = _default_selection(task, basis_task, port_options)
         selection = _resolve_selection(
@@ -203,14 +211,19 @@ def _build_explorer_response(
                 "output_modes": [{"key": "mode_0", "label": "Mode 0"}],
                 "input_modes": [{"key": "mode_0", "label": "Mode 0"}],
             },
-            "default_selection": default_selection,
+            "default_selection": {
+                **default_selection,
+                "trace_key": _build_trace_selection(default_selection).to_trace_key(),
+            },
         },
         "selection": {
             **selection,
+            "trace_mode_group": "base",
             "output_port_label": output_label,
             "input_port_label": input_label,
             "output_mode": "mode_0",
             "input_mode": "mode_0",
+            "trace_key": _build_trace_selection(selection).to_trace_key(),
         },
         "plot": {
             "x_axis": {
@@ -236,6 +249,7 @@ def _build_explorer_response(
                 }
             ],
             "metadata": {
+                "trace_key": _build_trace_selection(selection).to_trace_key(),
                 "family": family,
                 "source": source,
                 "metric": metric,
@@ -303,11 +317,7 @@ def _default_selection(
                 else "s_matrix"
             )
             available_sources = _available_sources(basis_task, family)
-            source = (
-                task.post_processing_setup.source
-                if task.post_processing_setup.source in available_sources
-                else available_sources[0]
-            )
+            source = available_sources[0]
             return {
                 "family": family,
                 "source": source,
@@ -418,17 +428,7 @@ def _available_families_for_task(
     task: TaskDetail,
     basis_task: TaskDetail,
 ) -> tuple[str, ...]:
-    family_keys = ("s_matrix", "y_matrix", "z_matrix")
-    if task.kind != "post_processing" or task.post_processing_setup is None:
-        return family_keys
-
-    required_source = task.post_processing_setup.source
-    allowed = tuple(
-        family_key
-        for family_key in family_keys
-        if required_source in _available_sources(basis_task, family_key)
-    )
-    return allowed if len(allowed) > 0 else family_keys
+    return ("s_matrix", "y_matrix", "z_matrix")
 
 
 def _available_sources_for_task(
@@ -436,37 +436,11 @@ def _available_sources_for_task(
     basis_task: TaskDetail,
     family: str,
 ) -> tuple[str, ...]:
-    available_sources = _available_sources(basis_task, family)
-    if task.kind != "post_processing" or task.post_processing_setup is None:
-        return available_sources
-
-    required_source = task.post_processing_setup.source
-    if required_source in available_sources:
-        return (required_source,)
-    return available_sources
+    return _available_sources(basis_task, family)
 
 
 def _available_sources(task: TaskDetail, family: str) -> tuple[str, ...]:
-    if family in _PTC_COMPATIBLE_FAMILIES and _ptc_available(task):
-        return ("raw", "ptc")
-    return ("raw",)
-
-
-def _ptc_available(task: TaskDetail) -> bool:
-    return (
-        task.simulation_setup is not None
-        and task.simulation_setup.ptc is not None
-        and task.simulation_setup.ptc.enabled
-    )
-
-
-def _resolve_port_options(
-    task: TaskDetail,
-    *,
-    task_service: TaskService,
-) -> dict[int, str]:
-    port_indices = _resolve_port_indices(task, task_service=task_service)
-    return {index: _format_port_label(index) for index in port_indices}
+    return available_sources_for_family(task, family)
 
 
 def _resolve_port_indices(
@@ -611,7 +585,7 @@ def _build_family_bundle(
         "y_matrix": {"raw": raw_y},
         "z_matrix": {"raw": raw_z},
     }
-    if _ptc_available(task):
+    if ptc_available(task):
         family_bundle["y_matrix"]["ptc"] = [
             _apply_port_compensation(matrix, compensated_ports, scale=0.94)
             for matrix in raw_y
@@ -738,6 +712,24 @@ def _extract_metric_values(
         else:
             values.append(round(complex_value.imag, 6))
     return values
+
+
+def _build_trace_selection(selection: Mapping[str, object]) -> ResultTraceSelection:
+    family = str(selection["family"])
+    return ResultTraceSelection(
+        family=family,
+        source=str(selection["source"]),
+        output_port=int(selection["output_port"]),
+        input_port=int(selection["input_port"]),
+        trace_mode_group="base",
+        output_mode="mode_0",
+        input_mode="mode_0",
+        z0_ohm=(
+            float(selection["z0_ohm"])
+            if family in {"y_matrix", "z_matrix"}
+            else None
+        ),
+    )
 
 
 def _identity_matrix(size: int) -> list[list[complex]]:

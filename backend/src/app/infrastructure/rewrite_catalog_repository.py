@@ -37,6 +37,8 @@ from src.app.domain.datasets import (
     DesignCreateDraft,
     RawDataIngestionDraft,
     RawDataIngestionResult,
+    ResultTracePublicationDraft,
+    ResultTracePublicationResult,
     SimulationResultPublicationDraft,
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
@@ -45,11 +47,14 @@ from src.app.domain.datasets import (
     TraceDetail,
     TraceMetadataSummary,
 )
+from src.app.domain.result_traces import ResultTraceSelection
 from src.app.domain.tasks import TaskDetail
 from src.app.infrastructure.persistence.research_data_publication_repository import (
     SqliteResearchDataPublicationRepository,
 )
 from src.app.infrastructure.simulation_result_publication_materializer import (
+    build_result_trace_publication_detail,
+    build_result_trace_publication_summary,
     build_simulation_publication_key,
     build_simulation_publication_trace_details,
     build_simulation_publication_trace_summary,
@@ -347,6 +352,79 @@ class InMemoryRewriteCatalogRepository:
             dataset=updated_dataset,
             design=design_row,
             traces=tuple(published_trace_rows),
+        )
+
+    def publish_result_trace(
+        self,
+        *,
+        task: TaskDetail,
+        basis_task: TaskDetail,
+        dataset: DatasetDetail,
+        design: DesignBrowseRow,
+        draft: ResultTracePublicationDraft,
+    ) -> ResultTracePublicationResult | None:
+        if self._durable_publication_repository is not None:
+            return self._durable_publication_repository.publish_result_trace(
+                task=task,
+                basis_task=basis_task,
+                dataset=dataset,
+                design=design,
+                draft=draft,
+            )
+        selection = ResultTraceSelection.from_trace_key(draft.trace_key)
+        publication_key = build_simulation_publication_key(
+            task_id=task.task_id,
+            dataset_id=dataset.dataset_id,
+            design_id=design.design_id,
+        )
+        detail = build_result_trace_publication_detail(
+            task=task,
+            basis_task=basis_task,
+            dataset_id=dataset.dataset_id,
+            design_id=design.design_id,
+            selection=selection,
+        )
+        summary = build_result_trace_publication_summary(
+            task=task,
+            detail=detail,
+            selection=selection,
+        )
+        trace_rows = list(self._trace_summaries.get((dataset.dataset_id, design.design_id), ()))
+        already_published = any(row.trace_id == detail.trace_id for row in trace_rows)
+        self._trace_details[(dataset.dataset_id, design.design_id, detail.trace_id)] = detail
+        trace_rows = [row for row in trace_rows if row.trace_id != detail.trace_id]
+        trace_rows.append(summary)
+        self._trace_summaries[(dataset.dataset_id, design.design_id)] = tuple(
+            sorted(trace_rows, key=lambda row: row.trace_id)
+        )
+        design_rows = list(self._designs.get(dataset.dataset_id, ()))
+        source_coverage = _build_source_coverage(
+            self._trace_summaries[(dataset.dataset_id, design.design_id)]
+        )
+        design_row = DesignBrowseRow(
+            design_id=design.design_id,
+            dataset_id=dataset.dataset_id,
+            name=design.name,
+            source_coverage=source_coverage,
+            compare_readiness=_compare_readiness_for(source_coverage),
+            trace_count=len(self._trace_summaries[(dataset.dataset_id, design.design_id)]),
+            updated_at="2026-03-20T00:00:00Z",
+        )
+        design_rows = [row for row in design_rows if row.design_id != design.design_id]
+        design_rows.append(design_row)
+        self._designs[dataset.dataset_id] = tuple(
+            sorted(design_rows, key=lambda row: row.design_id)
+        )
+        updated_dataset = replace(dataset, updated_at="2026-03-20T00:00:00Z")
+        self._datasets[dataset.dataset_id] = updated_dataset
+        return ResultTracePublicationResult(
+            state="already_published" if already_published else "published",
+            publication_key=publication_key,
+            published_at="2026-03-20T00:00:00Z",
+            dataset=updated_dataset,
+            design=design_row,
+            trace_key=draft.trace_key,
+            trace=summary,
         )
 
     def update_dataset_profile(

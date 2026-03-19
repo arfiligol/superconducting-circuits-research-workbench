@@ -11,6 +11,8 @@ from src.app.domain.datasets import (
     DatasetDetail,
     DesignBrowseRow,
     DesignCreateDraft,
+    ResultTracePublicationDraft,
+    ResultTracePublicationResult,
     SimulationResultPublicationDraft,
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
@@ -18,6 +20,7 @@ from src.app.domain.datasets import (
     TraceDetail,
     TraceMetadataSummary,
 )
+from src.app.domain.result_traces import ResultTraceSelection
 from src.app.domain.tasks import TaskDetail
 from src.app.infrastructure.persistence.models import (
     RewriteDatasetDesignRecord,
@@ -28,6 +31,8 @@ from src.app.infrastructure.persistence.storage_metadata_repository import (
     SqliteRewriteStorageMetadataRepository,
 )
 from src.app.infrastructure.simulation_result_publication_materializer import (
+    build_result_trace_publication_detail,
+    build_result_trace_publication_summary,
     build_simulation_publication_key,
     build_simulation_publication_trace_details,
     build_simulation_publication_trace_summary,
@@ -217,6 +222,123 @@ class SqliteResearchDataPublicationRepository:
             state="published",
         )
 
+    def publish_result_trace(
+        self,
+        *,
+        task: TaskDetail,
+        basis_task: TaskDetail,
+        dataset: DatasetDetail,
+        design: DesignBrowseRow,
+        draft: ResultTracePublicationDraft,
+    ) -> ResultTracePublicationResult:
+        selection = ResultTraceSelection.from_trace_key(draft.trace_key)
+        publication_key = build_simulation_publication_key(
+            task_id=task.task_id,
+            dataset_id=dataset.dataset_id,
+            design_id=design.design_id,
+        )
+        published_at = _timestamp_now()
+        detail = build_result_trace_publication_detail(
+            task=task,
+            basis_task=basis_task,
+            dataset_id=dataset.dataset_id,
+            design_id=design.design_id,
+            selection=selection,
+        )
+        summary = build_result_trace_publication_summary(
+            task=task,
+            detail=detail,
+            selection=selection,
+        )
+        payload_ref = detail.payload_ref
+        result_handle = detail.result_handles[0]
+        trace_batch_record = result_handle.provenance.trace_batch_record
+        if payload_ref is None or trace_batch_record is None:
+            raise ValueError("published result trace is missing storage metadata")
+        self._storage_metadata_repository.save_trace_payload(trace_batch_record, payload_ref)
+        self._storage_metadata_repository.save_result_handle(result_handle)
+
+        with self._session_factory() as session:
+            publication_row = session.scalar(
+                select(RewritePublishedSimulationResultRecord).where(
+                    RewritePublishedSimulationResultRecord.source_task_id == task.task_id
+                )
+            )
+            if publication_row is not None and (
+                publication_row.target_dataset_id != dataset.dataset_id
+                or publication_row.target_design_id != design.design_id
+            ):
+                raise ValueError("simulation result already published elsewhere")
+            if publication_row is None:
+                publication_row = RewritePublishedSimulationResultRecord(
+                    publication_key=publication_key,
+                    source_task_id=task.task_id,
+                    source_dataset_id=task.dataset_id,
+                    source_result_handle_ids=[
+                        handle.handle_id for handle in task.result_refs.result_handles
+                    ],
+                    target_dataset_id=dataset.dataset_id,
+                    target_design_id=design.design_id,
+                    target_design_name=design.name,
+                    published_at=published_at,
+                )
+                session.add(publication_row)
+                session.flush()
+
+            existing_trace_row = session.scalar(
+                select(RewritePublishedSimulationTraceRecord).where(
+                    RewritePublishedSimulationTraceRecord.publication_id == publication_row.id,
+                    RewritePublishedSimulationTraceRecord.trace_id == detail.trace_id,
+                )
+            )
+            if existing_trace_row is not None:
+                return self._load_result_trace_publication(
+                    dataset=dataset,
+                    design=design,
+                    publication_key=publication_key,
+                    state="already_published",
+                    trace_key=draft.trace_key,
+                    trace_id=existing_trace_row.trace_id,
+                )
+            publication_row.published_at = published_at
+            publication_row.target_design_name = design.name
+            session.add(
+                RewritePublishedSimulationTraceRecord(
+                    publication_id=publication_row.id,
+                    dataset_id=dataset.dataset_id,
+                    design_id=design.design_id,
+                    trace_id=detail.trace_id,
+                    family=summary.family,
+                    parameter=summary.parameter,
+                    representation=summary.representation,
+                    trace_mode_group=summary.trace_mode_group,
+                    source_kind=summary.source_kind,
+                    stage_kind=summary.stage_kind,
+                    provenance_summary=summary.provenance_summary,
+                    axes_json=[
+                        {
+                            "name": axis.name,
+                            "unit": axis.unit,
+                            "length": axis.length,
+                        }
+                        for axis in detail.axes
+                    ],
+                    preview_payload_json=detail.preview_payload,
+                    payload_store_key=cast(str, detail.payload_ref.store_key),
+                    result_handle_id=detail.result_handles[0].handle_id,
+                    published_at=published_at,
+                )
+            )
+            session.commit()
+        return self._load_result_trace_publication(
+            dataset=dataset,
+            design=design,
+            publication_key=publication_key,
+            state="published",
+            trace_key=draft.trace_key,
+            trace_id=detail.trace_id,
+        )
+
     def list_designs(
         self,
         dataset_id: str,
@@ -400,6 +522,61 @@ class SqliteResearchDataPublicationRepository:
                     updated_at=publication_row.published_at,
                 ),
                 traces=trace_summaries,
+            )
+
+    def _load_result_trace_publication(
+        self,
+        *,
+        dataset: DatasetDetail,
+        design: DesignBrowseRow,
+        publication_key: str,
+        state: str,
+        trace_key: str,
+        trace_id: str,
+    ) -> ResultTracePublicationResult:
+        with self._session_factory() as session:
+            publication_row = session.scalar(
+                select(RewritePublishedSimulationResultRecord).where(
+                    RewritePublishedSimulationResultRecord.publication_key == publication_key
+                )
+            )
+            if publication_row is None:
+                raise ValueError("published simulation result record was not found")
+            trace_row = session.scalar(
+                select(RewritePublishedSimulationTraceRecord).where(
+                    RewritePublishedSimulationTraceRecord.publication_id == publication_row.id,
+                    RewritePublishedSimulationTraceRecord.trace_id == trace_id,
+                )
+            )
+            if trace_row is None:
+                raise ValueError("published result trace record was not found")
+            trace_summaries = tuple(
+                _to_trace_summary(row)
+                for row in session.scalars(
+                    select(RewritePublishedSimulationTraceRecord)
+                    .where(
+                        RewritePublishedSimulationTraceRecord.publication_id
+                        == publication_row.id
+                    )
+                    .order_by(RewritePublishedSimulationTraceRecord.id.asc())
+                ).all()
+            )
+            return ResultTracePublicationResult(
+                state=cast(str, state),
+                publication_key=publication_row.publication_key,
+                published_at=publication_row.published_at,
+                dataset=replace(dataset, updated_at=publication_row.published_at),
+                design=DesignBrowseRow(
+                    design_id=design.design_id,
+                    dataset_id=design.dataset_id,
+                    name=design.name,
+                    source_coverage=_build_source_coverage(trace_summaries),
+                    compare_readiness=_compare_readiness_for(_build_source_coverage(trace_summaries)),
+                    trace_count=len(trace_summaries),
+                    updated_at=publication_row.published_at,
+                ),
+                trace_key=trace_key,
+                trace=_to_trace_summary(trace_row),
             )
 
 

@@ -87,12 +87,10 @@ def _submit_local_simulation(*, ptc_enabled: bool) -> dict[str, object]:
 
 def _post_processing_setup_payload(
     *,
-    source: str = "ptc",
     trace_family: str = "z_matrix",
     representation: str = "real",
 ) -> dict[str, object]:
     return {
-        "source": source,
         "output_view": "matrix",
         "selections": [
             {
@@ -121,7 +119,6 @@ def _post_processing_setup_payload(
 
 def _submit_local_post_processing(
     *,
-    source: str = "ptc",
     trace_family: str = "z_matrix",
     representation: str = "real",
 ) -> dict[str, object]:
@@ -134,7 +131,6 @@ def _submit_local_post_processing(
             "summary": "Explorer downstream task.",
             "upstream_task_id": upstream_task["task_id"],
             "post_processing_setup": _post_processing_setup_payload(
-                source=source,
                 trace_family=trace_family,
                 representation=representation,
             ),
@@ -193,6 +189,10 @@ def test_completed_simulation_task_returns_explorer_bootstrap_data() -> None:
         "z0_ohm": 50.0,
         "output_port": 1,
         "input_port": 1,
+        "trace_key": (
+            "family=s_matrix|source=raw|trace_mode_group=base|output_port=1|"
+            "input_port=1|output_mode=mode_0|input_mode=mode_0"
+        ),
     }
     assert payload["bootstrap"]["trace_selector"]["output_ports"] == [
         {"port": 1, "label": "Port 1"}
@@ -228,10 +228,15 @@ def test_completed_simulation_task_returns_plottable_trace_payload() -> None:
         "z0_ohm": 75.0,
         "output_port": 1,
         "input_port": 1,
+        "trace_mode_group": "base",
         "output_port_label": "Port 1",
         "input_port_label": "Port 1",
         "output_mode": "mode_0",
         "input_mode": "mode_0",
+        "trace_key": (
+            "family=z_matrix|source=ptc|trace_mode_group=base|output_port=1|"
+            "input_port=1|output_mode=mode_0|input_mode=mode_0|z0_ohm=75"
+        ),
     }
     assert len(payload["plot"]["x_axis"]["values"]) == 401
     assert len(payload["plot"]["series"]) == 1
@@ -241,11 +246,7 @@ def test_completed_simulation_task_returns_plottable_trace_payload() -> None:
 
 
 def test_completed_post_processing_task_returns_explorer_payload() -> None:
-    task = _submit_local_post_processing(
-        source="ptc",
-        trace_family="z_matrix",
-        representation="real",
-    )
+    task = _submit_local_post_processing(trace_family="z_matrix", representation="real")
 
     response = client.get(f"/tasks/{task['task_id']}/simulation-results/explorer")
 
@@ -254,34 +255,51 @@ def test_completed_post_processing_task_returns_explorer_payload() -> None:
     families = {family["key"]: family for family in payload["bootstrap"]["families"]}
     assert payload["task_id"] == task["task_id"]
     assert payload["task_status"] == "completed"
-    assert tuple(families) == ("y_matrix", "z_matrix")
-    assert [source["key"] for source in families["z_matrix"]["available_sources"]] == ["ptc"]
+    assert tuple(families) == ("s_matrix", "y_matrix", "z_matrix")
+    assert [source["key"] for source in families["s_matrix"]["available_sources"]] == ["raw"]
+    assert [source["key"] for source in families["y_matrix"]["available_sources"]] == [
+        "raw",
+        "ptc",
+    ]
+    assert [source["key"] for source in families["z_matrix"]["available_sources"]] == [
+        "raw",
+        "ptc",
+    ]
     assert payload["bootstrap"]["default_selection"] == {
         "family": "z_matrix",
-        "source": "ptc",
+        "source": "raw",
         "metric": "real",
         "z0_ohm": 50.0,
         "output_port": 1,
         "input_port": 1,
+        "trace_key": (
+            "family=z_matrix|source=raw|trace_mode_group=base|output_port=1|"
+            "input_port=1|output_mode=mode_0|input_mode=mode_0|z0_ohm=50"
+        ),
     }
     assert payload["selection"] == {
         "family": "z_matrix",
-        "source": "ptc",
+        "source": "raw",
         "metric": "real",
         "z0_ohm": 50.0,
         "output_port": 1,
         "input_port": 1,
+        "trace_mode_group": "base",
         "output_port_label": "Port 1",
         "input_port_label": "Port 1",
         "output_mode": "mode_0",
         "input_mode": "mode_0",
+        "trace_key": (
+            "family=z_matrix|source=raw|trace_mode_group=base|output_port=1|"
+            "input_port=1|output_mode=mode_0|input_mode=mode_0|z0_ohm=50"
+        ),
     }
     assert payload["result_basis"]["trace_payload_available"] is True
     assert payload["result_basis"]["primary_result_handle_id"] == (
         f"task-result:{task['task_id']}:primary"
     )
     assert len(payload["plot"]["series"]) == 1
-    assert payload["plot"]["series"][0]["label"].startswith("PTC Z_MATRIX")
+    assert payload["plot"]["series"][0]["label"].startswith("Raw Z_MATRIX")
 
 
 def test_pending_or_failed_simulation_task_gets_truthful_explorer_error() -> None:
@@ -363,6 +381,33 @@ def test_ptc_source_is_gated_to_y_and_z_families_only() -> None:
         "raw",
         "ptc",
     ]
+
+
+def test_metric_changes_do_not_change_trace_key_but_canonical_selection_changes_do() -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+
+    magnitude = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        "?family=y_matrix&source=raw&metric=magnitude&output_port=1&input_port=1"
+    )
+    assert magnitude.status_code == 200
+    real = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        "?family=y_matrix&source=raw&metric=real&output_port=1&input_port=1"
+    )
+    assert real.status_code == 200
+    ptc = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        "?family=y_matrix&source=ptc&metric=real&output_port=1&input_port=1"
+    )
+    assert ptc.status_code == 200
+
+    magnitude_key = magnitude.json()["data"]["selection"]["trace_key"]
+    real_key = real.json()["data"]["selection"]["trace_key"]
+    ptc_key = ptc.json()["data"]["selection"]["trace_key"]
+
+    assert magnitude_key == real_key
+    assert ptc_key != real_key
 
 
 def test_retry_task_recovers_missing_persisted_setup_for_explorer() -> None:

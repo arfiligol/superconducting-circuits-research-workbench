@@ -107,6 +107,28 @@ def _published_trace_ids(task_id: int, *, include_ptc: bool) -> list[str]:
     return trace_ids
 
 
+def _trace_key(
+    *,
+    family: str,
+    source: str,
+    output_port: int = 1,
+    input_port: int = 1,
+    z0_ohm: int | None = None,
+) -> str:
+    parts = [
+        f"family={family}",
+        f"source={source}",
+        "trace_mode_group=base",
+        f"output_port={output_port}",
+        f"input_port={input_port}",
+        "output_mode=mode_0",
+        "input_mode=mode_0",
+    ]
+    if z0_ohm is not None:
+        parts.append(f"z0_ohm={z0_ohm}")
+    return "|".join(parts)
+
+
 @contextmanager
 def _bind_client_app_context(test_client: TestClient):
     app_context_id = test_client.cookies.get("sc_app_context")
@@ -387,4 +409,113 @@ def test_publish_rejects_unsupported_alternate_target_dataset_semantics() -> Non
     assert (
         publish.json()["error"]["code"]
         == "simulation_result_publish_target_unsupported"
+    )
+
+
+def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() -> None:
+    created_design = client.post(
+        "/datasets/local-dataset-001/designs",
+        json={"name": "Current Trace Save Target"},
+    )
+    assert created_design.status_code == 201
+    design = created_design.json()["data"]["design"]
+
+    task = _submit_local_simulation(ptc_enabled=True)
+    trace_key = _trace_key(family="y_matrix", source="ptc", z0_ohm=50)
+
+    first = client.post(
+        f"/tasks/{task['task_id']}/result-traces/publish",
+        json={
+            "design_id": design["design_id"],
+            "trace_key": trace_key,
+        },
+    )
+
+    assert first.status_code == 200
+    payload = first.json()["data"]
+    assert payload["operation"] == "published"
+    assert payload["trace_key"] == trace_key
+    assert payload["trace"]["trace_id"] == (
+        f"trace_task_{task['task_id']}_y_matrix_ptc_o1_i1_mode_0_mode_0_z0_50"
+    )
+    assert payload["publication_summary"]["published_trace_ids"] == [
+        payload["trace"]["trace_id"]
+    ]
+    assert payload["design"]["trace_count"] == 1
+
+    trace_rows = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
+    )
+    assert trace_rows.status_code == 200
+    rows = trace_rows.json()["data"]["rows"]
+    assert [row["trace_id"] for row in rows] == [payload["trace"]["trace_id"]]
+    assert rows[0]["parameter"] == "Y11"
+
+    second = client.post(
+        f"/tasks/{task['task_id']}/result-traces/publish",
+        json={
+            "design_id": design["design_id"],
+            "trace_key": trace_key,
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["data"]["operation"] == "already_published"
+
+    repeated_rows = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
+    ).json()["data"]["rows"]
+    assert [row["trace_id"] for row in repeated_rows] == [payload["trace"]["trace_id"]]
+
+
+def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
+    upstream = _submit_local_simulation(ptc_enabled=True)
+    post_processing = client.post(
+        "/tasks",
+        json={
+            "kind": "post_processing",
+            "dataset_id": "local-dataset-001",
+            "summary": "Post-processing result save source.",
+            "upstream_task_id": upstream["task_id"],
+            "post_processing_setup": {
+                "output_view": "matrix",
+                "selections": [
+                    {
+                        "trace_family": "z_matrix",
+                        "representation": "real",
+                        "design_id": "design_local_flux_playground",
+                        "trace_ids": ["trace_local_flux_preview"],
+                    }
+                ],
+                "operations": [
+                    {
+                        "operation": "coordinate_transform",
+                        "enabled": True,
+                        "config": {"template": "cm_dm"},
+                    }
+                ],
+            },
+        },
+    )
+    assert post_processing.status_code == 201
+    task = post_processing.json()["data"]["task"]
+
+    created_design = client.post(
+        "/datasets/local-dataset-001/designs",
+        json={"name": "Processed Trace Save Target"},
+    )
+    assert created_design.status_code == 201
+    design = created_design.json()["data"]["design"]
+
+    trace_key = _trace_key(family="z_matrix", source="raw", z0_ohm=50)
+    publish = client.post(
+        f"/tasks/{task['task_id']}/result-traces/publish",
+        json={"design_id": design["design_id"], "trace_key": trace_key},
+    )
+
+    assert publish.status_code == 200
+    payload = publish.json()["data"]
+    assert payload["operation"] == "published"
+    assert payload["trace"]["stage_kind"] == "postprocess"
+    assert payload["trace"]["trace_id"] == (
+        f"trace_task_{task['task_id']}_z_matrix_raw_o1_i1_mode_0_mode_0_z0_50"
     )

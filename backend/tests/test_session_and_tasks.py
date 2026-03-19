@@ -103,7 +103,6 @@ def _simulation_setup_payload(
 
 def _post_processing_setup_payload() -> dict[str, object]:
     return {
-        "source": "raw",
         "output_view": "fit-report",
         "selections": [
             {
@@ -1016,6 +1015,7 @@ def test_post_processing_task_persists_upstream_lineage_and_downstream_reference
     assert task["dispatch"]["status"] == "completed"
     assert task["upstream_task_id"] == upstream_task_id
     assert task["post_processing_setup"] == _post_processing_setup_payload()
+    assert "source" not in task["post_processing_setup"]
     assert task["result_handoff"] == {
         "availability": "ready",
         "primary_result_handle_id": f"task-result:{task['task_id']}:primary",
@@ -1035,6 +1035,7 @@ def test_post_processing_task_persists_upstream_lineage_and_downstream_reference
     assert reloaded["dispatch"]["status"] == "completed"
     assert reloaded["upstream_task_id"] == upstream_task_id
     assert reloaded["post_processing_setup"] == _post_processing_setup_payload()
+    assert "source" not in reloaded["post_processing_setup"]
     assert reloaded["result_handoff"]["availability"] == "ready"
 
 

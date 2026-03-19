@@ -17,10 +17,17 @@ from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     DatasetDetail,
     DesignBrowseRow,
+    ResultTracePublicationDraft,
+    ResultTracePublicationResult,
     SimulationResultPublicationDraft,
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
     TraceMetadataSummary,
+)
+from src.app.domain.result_traces import (
+    ResultTraceSelection,
+    available_sources_for_family,
+    resolve_port_options,
 )
 from src.app.domain.session import SessionState
 from src.app.domain.tasks import (
@@ -112,6 +119,16 @@ class TaskDatasetRepository(Protocol):
         dataset_id: str,
         draft: SimulationResultPublicationDraft,
     ) -> SimulationResultPublicationResult | None: ...
+
+    def publish_result_trace(
+        self,
+        *,
+        task: TaskDetail,
+        basis_task: TaskDetail,
+        dataset: DatasetDetail,
+        design: DesignBrowseRow,
+        draft: ResultTracePublicationDraft,
+    ) -> ResultTracePublicationResult | None: ...
 
 
 class TaskCircuitDefinitionRepository(Protocol):
@@ -474,6 +491,126 @@ class TaskService:
                 "dataset_id": result.dataset.dataset_id,
                 "design_id": result.design.design_id,
                 "trace_ids": [trace.trace_id for trace in result.traces],
+                "publication_key": result.publication_key,
+                "state": result.state,
+            },
+        )
+        return result
+
+    def publish_result_trace(
+        self,
+        task_id: int,
+        draft: ResultTracePublicationDraft,
+    ) -> ResultTracePublicationResult:
+        task = self.get_task(task_id)
+        state = self._session_repository.get_session_state()
+        self._ensure_publishable_result_task(task)
+        basis_task = self._resolve_result_trace_basis_task(task)
+        source_dataset_id = task.dataset_id
+        if source_dataset_id is None:
+            raise service_error(
+                422,
+                code="result_trace_publish_target_required",
+                category="validation",
+                message="Result trace publication requires a source dataset binding.",
+            )
+        target_dataset = self._dataset_repository.get_dataset(source_dataset_id)
+        if target_dataset is None:
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {source_dataset_id} was not found.",
+            )
+        if not self._authorization_service.is_visible_dataset(target_dataset, state):
+            raise service_error(
+                404,
+                code="dataset_not_found",
+                category="not_found",
+                message=f"Dataset {source_dataset_id} was not found.",
+            )
+        dataset_actions = self._authorization_service.build_dataset_allowed_actions(
+            target_dataset,
+            state,
+        )
+        if not dataset_actions.ingest_raw_data:
+            raise service_error(
+                403,
+                code="result_trace_publish_denied",
+                category="permission_denied",
+                message="The active session cannot save result traces into the target dataset.",
+            )
+        resolved_design = self._resolve_publication_design_target(
+            target_dataset_id=source_dataset_id,
+            draft=SimulationResultPublicationDraft(design_id=draft.design_id),
+        )
+        existing_publication = self.get_task_publication_summary(task_id)
+        if existing_publication.state == "published" and (
+            existing_publication.target_dataset_id != source_dataset_id
+            or existing_publication.target_design_id != resolved_design.design_id
+        ):
+            raise service_error(
+                409,
+                code="result_trace_publish_target_conflict",
+                category="conflict",
+                message=(
+                    "This task already published traces to a different design target. "
+                    "Choose the existing design or start from a different task."
+                ),
+            )
+        self._validate_result_trace_selection(
+            basis_task=basis_task,
+            trace_key=draft.trace_key,
+        )
+        try:
+            result = self._dataset_repository.publish_result_trace(
+                task=task,
+                basis_task=basis_task,
+                dataset=target_dataset,
+                design=resolved_design,
+                draft=draft,
+            )
+        except ValueError as exc:
+            raise service_error(
+                409,
+                code="result_trace_publish_unavailable",
+                category="conflict",
+                message="Result trace publish target could not be materialized.",
+            ) from exc
+        except Exception as exc:
+            raise service_error(
+                500,
+                code="result_trace_publication_persistence_failed",
+                category="persistence_error",
+                message="Result trace publication could not be persisted.",
+            ) from exc
+        if result is None:
+            raise service_error(
+                409,
+                code="result_trace_publish_unavailable",
+                category="conflict",
+                message="Result trace publish target could not be materialized.",
+            )
+        publication_summary = self.get_task_publication_summary(task_id)
+        if len(task.events) > 0:
+            self._repository.merge_task_event_metadata(
+                task.task_id,
+                task.events[0].event_key,
+                {
+                    "publication_summary": json.dumps(
+                        _serialize_publication_summary(publication_summary)
+                    ),
+                },
+            )
+        self._append_audit_record(
+            action_kind="task.result_trace_published",
+            resource_id=str(task.task_id),
+            outcome="completed",
+            payload={
+                "dataset_id": result.dataset.dataset_id,
+                "design_id": result.design.design_id,
+                "trace_id": result.trace.trace_id,
+                "trace_key": result.trace_key,
                 "publication_key": result.publication_key,
                 "state": result.state,
             },
@@ -1103,6 +1240,127 @@ class TaskService:
                 message="Only completed simulation tasks with persisted setup can be published.",
             )
 
+    def _ensure_publishable_result_task(self, task: TaskDetail) -> None:
+        if task.kind not in {"simulation", "post_processing"}:
+            raise service_error(
+                409,
+                code="result_trace_publish_task_invalid",
+                category="conflict",
+                message=(
+                    "Only simulation and post-processing tasks can publish "
+                    "result traces."
+                ),
+            )
+        if task.status != "completed":
+            raise service_error(
+                409,
+                code="result_trace_publish_not_ready",
+                category="conflict",
+                message="Only completed tasks with ready results can be published.",
+            )
+        handoff = _build_result_handoff(task)
+        if handoff.availability != "ready":
+            raise service_error(
+                409,
+                code="result_trace_publish_not_ready",
+                category="conflict",
+                message="Only completed tasks with ready results can be published.",
+            )
+        if task.kind == "simulation" and task.simulation_setup is None:
+            raise service_error(
+                409,
+                code="result_trace_publish_not_ready",
+                category="conflict",
+                message="Only completed simulation tasks with persisted setup can be published.",
+            )
+
+    def _resolve_result_trace_basis_task(self, task: TaskDetail) -> TaskDetail:
+        if task.kind == "simulation":
+            if task.simulation_setup is None:
+                raise service_error(
+                    409,
+                    code="result_trace_publish_not_ready",
+                    category="conflict",
+                    message="Simulation result publication requires persisted setup.",
+                )
+            return task
+        if task.kind != "post_processing" or task.upstream_task_id is None:
+            raise service_error(
+                409,
+                code="result_trace_publish_task_invalid",
+                category="conflict",
+                message=(
+                    "Only simulation and post-processing tasks can publish "
+                    "result traces."
+                ),
+            )
+        upstream_task = self.get_task(task.upstream_task_id)
+        if upstream_task.kind != "simulation" or upstream_task.simulation_setup is None:
+            raise service_error(
+                409,
+                code="result_trace_publish_upstream_invalid",
+                category="conflict",
+                message=(
+                    "Post-processing result publication requires an upstream "
+                    "simulation task with persisted setup."
+                ),
+            )
+        return upstream_task
+
+    def _validate_result_trace_selection(
+        self,
+        *,
+        basis_task: TaskDetail,
+        trace_key: str,
+    ) -> None:
+        try:
+            selection = ResultTraceSelection.from_trace_key(trace_key)
+        except ValueError as exc:
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message=str(exc),
+            ) from exc
+        if selection.source not in available_sources_for_family(basis_task, selection.family):
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message=(
+                    f"source {selection.source} is not available for family "
+                    f"{selection.family}."
+                ),
+            )
+        port_options = resolve_port_options(
+            basis_task,
+            definition=self.get_circuit_definition(basis_task.definition_id),
+        )
+        if (
+            selection.output_port not in port_options
+            or selection.input_port not in port_options
+        ):
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message="Requested trace selection ports are not available for this result.",
+            )
+        if selection.trace_mode_group != "base":
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message="Only base trace selections are supported.",
+            )
+        if selection.output_mode != "mode_0" or selection.input_mode != "mode_0":
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message="Only mode_0 trace selections are supported.",
+            )
+
     def _build_default_publication_summary(self, task: TaskDetail) -> TaskPublicationSummary:
         default_dataset = (
             self._dataset_repository.get_dataset(task.dataset_id)
@@ -1120,10 +1378,12 @@ class TaskService:
             )
             publish_allowed = (
                 dataset_actions.ingest_raw_data
-                and task.kind == "simulation"
+                and task.kind in {"simulation", "post_processing"}
                 and task.status == "completed"
-                and task.simulation_setup is not None
                 and _build_result_handoff(task).availability == "ready"
+                and (
+                    task.kind != "simulation" or task.simulation_setup is not None
+                )
             )
         return TaskPublicationSummary(
             state="not_published",

@@ -12,7 +12,10 @@ from src.app.api.presenters.storage import (
     build_result_handle_ref_response,
     build_trace_payload_ref_response,
 )
-from src.app.domain.datasets import SimulationResultPublicationDraft
+from src.app.domain.datasets import (
+    ResultTracePublicationDraft,
+    SimulationResultPublicationDraft,
+)
 from src.app.domain.tasks import (
     CharacterizationSetup,
     PostProcessingOperation,
@@ -260,6 +263,66 @@ def publish_simulation_result(
                 "updated_at": result.design.updated_at,
             },
             "traces": [_serialize_published_trace(trace) for trace in result.traces],
+        },
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/{task_id}/result-traces/publish")
+def publish_result_trace(
+    task_id: int,
+    payload: Annotated[object, Body(...)],
+    task_service: Annotated[TaskService, Depends(get_task_service)],
+) -> JSONResponse:
+    try:
+        parsed_payload = _parse_result_trace_publication_payload(payload)
+        result = task_service.publish_result_trace(
+            task_id,
+            ResultTracePublicationDraft(
+                design_id=parsed_payload["design_id"],
+                trace_key=parsed_payload["trace_key"],
+            ),
+        )
+        task = task_service.get_task(task_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": result.state,
+            "publication_summary": _serialize_publication_summary(
+                task_service.get_task_publication_summary(task_id)
+            ),
+            "task": _serialize_task_detail(task, task_service),
+            "dataset": {
+                "dataset_id": result.dataset.dataset_id,
+                "name": result.dataset.name,
+                "visibility_scope": result.dataset.visibility_scope,
+                "lifecycle_state": result.dataset.lifecycle_state,
+                "allowed_actions": {
+                    "select": result.dataset.allowed_actions.select,
+                    "update_profile": result.dataset.allowed_actions.update_profile,
+                    "publish": result.dataset.allowed_actions.publish,
+                    "archive": result.dataset.allowed_actions.archive,
+                    "delete": result.dataset.allowed_actions.delete,
+                    "ingest_raw_data": result.dataset.allowed_actions.ingest_raw_data,
+                },
+            },
+            "design": {
+                "design_id": result.design.design_id,
+                "dataset_id": result.design.dataset_id,
+                "name": result.design.name,
+                "source_coverage": result.design.source_coverage,
+                "compare_readiness": result.design.compare_readiness,
+                "trace_count": result.design.trace_count,
+                "updated_at": result.design.updated_at,
+            },
+            "trace_key": result.trace_key,
+            "trace": _serialize_published_trace(result.trace),
+            "raw_data": {
+                "dataset_id": result.trace.dataset_id,
+                "design_id": result.trace.design_id,
+                "trace_id": result.trace.trace_id,
+            },
         },
         meta={"generated_at": _generated_at()},
     )
@@ -713,12 +776,13 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
     if payload is None:
         return None
     body = _as_mapping(payload)
-    source = _required_literal(
-        body.get("source"),
-        field_name="post_processing_setup.source",
-        allowed={"raw", "ptc"},
-        default="raw",
-    )
+    if body.get("source") is not None:
+        _required_literal(
+            body.get("source"),
+            field_name="post_processing_setup.source",
+            allowed={"raw", "ptc"},
+            default="raw",
+        )
     output_view = _required_string(
         body.get("output_view"),
         field_name="post_processing_setup.output_view",
@@ -740,7 +804,6 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
             message="post_processing_setup.operations must be an array.",
         )
     return PostProcessingSetup(
-        source=source,
         output_view=output_view,
         selections=tuple(_parse_trace_selection(item) for item in raw_selections),
         operations=tuple(_parse_post_processing_operation(item) for item in raw_operations),
@@ -1026,6 +1089,20 @@ def _parse_simulation_result_publication_payload(payload: object) -> dict[str, s
         "dataset_id": _optional_string(body.get("dataset_id"), field_name="dataset_id"),
         "design_id": design_id,
         "design_name": design_name,
+    }
+
+
+def _parse_result_trace_publication_payload(payload: object) -> dict[str, str]:
+    body = _require_mapping(payload, field_name="result_trace_publication")
+    return {
+        "design_id": _required_string(
+            body.get("design_id"),
+            field_name="result_trace_publication.design_id",
+        ),
+        "trace_key": _required_string(
+            body.get("trace_key"),
+            field_name="result_trace_publication.trace_key",
+        ),
     }
 
 
