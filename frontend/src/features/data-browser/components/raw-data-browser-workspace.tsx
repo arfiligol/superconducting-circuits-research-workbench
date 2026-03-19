@@ -263,7 +263,7 @@ export function RawDataBrowserWorkspace() {
               </div>
             ) : null}
             <div className="rounded-[1rem] border border-border bg-surface px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_220px_220px_240px]">
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.95fr)]">
                 <div className="min-w-0">
                   <p className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                     <Search className="h-3.5 w-3.5" />

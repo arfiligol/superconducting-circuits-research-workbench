@@ -224,7 +224,7 @@ describe("page-boundary source contracts", () => {
   it("keeps trace-summary filters in one dense unified block instead of fragmented mini cards", () => {
     expect(rawDataWorkspaceSource).toContain("function TraceFilterSelect");
     expect(rawDataWorkspaceSource).toContain(
-      'grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_220px_220px_240px]',
+      'grid gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.95fr)]',
     );
     expect(rawDataWorkspaceSource).toContain('label="Family"');
     expect(rawDataWorkspaceSource).toContain('label="Representation"');
