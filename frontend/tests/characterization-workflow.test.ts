@@ -361,6 +361,8 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain('kind: "characterization"');
     expect(characterizationHookSource).toContain("selected_trace_ids: selectedTraceIds");
     expect(characterizationHookSource).toContain("submitCharacterizationTask()");
+    expect(characterizationHookSource).toContain("activeTask?.characterizationSetup");
+    expect(characterizationHookSource).toContain("setSelectedTraceIds([...activeTask.characterizationSetup.selected_trace_ids]);");
     expect(characterizationHookSource).toContain("setCompletedRunSync({");
     expect(characterizationHookSource).toContain("selectBaseTraces()");
     expect(characterizationHookSource).toContain("toggleTraceSelection(traceId");
@@ -368,6 +370,7 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain("focusRunHistoryResult(resultId");
     expect(characterizationHookSource).toContain("applyCharacterizationTagging(");
     expect(taskApiSource).toContain("export type CharacterizationSetupDraft");
+    expect(taskApiSource).toContain("characterizationSetup?: CharacterizationSetupDraft | null");
     expect(taskApiSource).toContain("characterization_setup?: CharacterizationSetupDraft");
   });
 });

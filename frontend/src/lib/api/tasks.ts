@@ -78,6 +78,12 @@ type PostProcessingSetupResponseShape = Readonly<{
   selections: readonly PostProcessingTraceSelectionResponseShape[];
   operations: readonly PostProcessingOperationResponseShape[];
 }>;
+type CharacterizationSetupResponseShape = Readonly<{
+  design_id: string;
+  analysis_id: string;
+  selected_trace_ids: readonly string[];
+  analysis_config?: Record<string, unknown> | null;
+}>;
 type TaskResultHandoffResponseShape = Readonly<{
   availability: TaskResultAvailability;
   primary_result_handle_id: string | null;
@@ -102,6 +108,7 @@ type TaskDetailResponseShape = components["schemas"]["TaskDetailResponse"] &
     publication_summary?: TaskPublicationSummaryResponseShape | null;
     downstream_source_capabilities?: DownstreamSourceCapabilitiesResponseShape | null;
     post_processing_setup?: PostProcessingSetupResponseShape | null;
+    characterization_setup?: CharacterizationSetupResponseShape | null;
     upstream_task_id?: number | null;
     downstream_task_ids?: readonly number[];
     retry_of_task_id?: number | null;
@@ -578,6 +585,7 @@ export type TaskDetail = TaskSummary &
     simulationSetup?: SimulationSetup | null;
     downstreamSourceCapabilities?: DownstreamSourceCapabilities | null;
     postProcessingSetup?: PostProcessingSetup | null;
+    characterizationSetup?: CharacterizationSetupDraft | null;
     upstreamTaskId?: number | null;
     downstreamTaskIds?: readonly number[];
     retryOfTaskId?: number | null;
@@ -1109,6 +1117,21 @@ function mapPostProcessingSetupResponse(
   };
 }
 
+function mapCharacterizationSetupResponse(
+  payload: CharacterizationSetupResponseShape | null | undefined,
+): CharacterizationSetupDraft | null {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    design_id: payload.design_id,
+    analysis_id: payload.analysis_id,
+    selected_trace_ids: [...payload.selected_trace_ids],
+    analysis_config: payload.analysis_config ?? null,
+  };
+}
+
 function mapTaskResultHandoff(
   payload: TaskResultHandoffResponseShape | undefined,
 ): TaskResultHandoff {
@@ -1456,6 +1479,7 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
       ? mapDownstreamSourceCapabilities(payload.downstream_source_capabilities)
       : null,
     postProcessingSetup: mapPostProcessingSetupResponse(payload.post_processing_setup),
+    characterizationSetup: mapCharacterizationSetupResponse(payload.characterization_setup),
     upstreamTaskId: payload.upstream_task_id ?? null,
     downstreamTaskIds: [...(payload.downstream_task_ids ?? [])],
     retryOfTaskId: payload.retry_of_task_id ?? null,

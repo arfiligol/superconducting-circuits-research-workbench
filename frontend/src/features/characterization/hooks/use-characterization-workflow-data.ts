@@ -124,6 +124,18 @@ function buildCharacterizationConfigDraft(
   return draft;
 }
 
+function stringifyCharacterizationConfigValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+
+  return value == null ? "" : String(value);
+}
+
 function buildCharacterizationSummary(input: Readonly<{
   analysisLabel: string;
   designId: string;
@@ -206,6 +218,27 @@ export function useCharacterizationWorkflowData({
   const activeTask = taskDetailQuery.data;
   const hasAttachedTask =
     typeof resolvedTaskId === "number" && activeTask?.taskId === resolvedTaskId;
+
+  useEffect(() => {
+    if ((attachedTaskId === null && selectedTaskId === null) || !activeTask?.characterizationSetup) {
+      return;
+    }
+
+    setSelectedDesignId(activeTask.characterizationSetup.design_id);
+    setSelectedAnalysisId(activeTask.characterizationSetup.analysis_id);
+    setSelectedTraceIds([...activeTask.characterizationSetup.selected_trace_ids]);
+    setAnalysisConfigValues(
+      Object.fromEntries(
+        Object.entries(activeTask.characterizationSetup.analysis_config ?? {}).map(
+          ([field, value]) => [field, stringifyCharacterizationConfigValue(value)],
+        ),
+      ),
+    );
+  }, [
+    activeTask?.characterizationSetup,
+    attachedTaskId,
+    selectedTaskId,
+  ]);
 
   const designsQuery = useSWR(
     activeDatasetId ? ["characterization-designs", activeDatasetId] : null,
