@@ -49,7 +49,7 @@ TaskStatus = Literal[
     "failed",
 ]
 TaskControlState = Literal["none", "cancellation_requested", "termination_requested"]
-TaskQueueBackend = Literal["in_memory_scaffold"]
+TaskQueueBackend = Literal["local_runtime"]
 TaskVisibilityScope = Literal["local", "workspace", "owned"]
 TaskResultAvailability = Literal["pending", "ready", "none"]
 TaskEventType = Literal[
@@ -348,32 +348,20 @@ class PostProcessingOperation:
 
 @dataclass(frozen=True)
 class PostProcessingSetup:
-    output_view: str = "matrix"
     selections: tuple[PostProcessingTraceSelection, ...] = ()
     operations: tuple[PostProcessingOperation, ...] = ()
-    source: str | None = None
 
     def to_mapping(self) -> dict[str, object]:
-        payload: dict[str, object] = {
-            "output_view": self.output_view,
+        return {
             "selections": [selection.to_mapping() for selection in self.selections],
             "operations": [operation.to_mapping() for operation in self.operations],
         }
-        if self.source is not None:
-            payload["source"] = self.source
-        return payload
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> PostProcessingSetup:
         selections = payload.get("selections", ())
         operations = payload.get("operations", ())
         return cls(
-            source=str(payload["source"]) if isinstance(payload.get("source"), str) else None,
-            output_view=(
-                str(payload["output_view"])
-                if isinstance(payload.get("output_view"), str)
-                else "matrix"
-            ),
             selections=tuple(
                 PostProcessingTraceSelection.from_mapping(cast(Mapping[str, object], selection))
                 for selection in selections

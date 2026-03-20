@@ -668,6 +668,10 @@ def _merge_safe_payload_metadata(
         "characterization_result_summary",
         "characterization_result_detail",
         "characterization_run_history_row",
+        "simulation_raw_bundle",
+        "simulation_ptc_bundle",
+        "post_processing_raw_bundle",
+        "post_processing_ptc_bundle",
     )
     rename_map = {
         "phase": "execution_phase",

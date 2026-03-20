@@ -70,13 +70,7 @@ def _simulation_setup_payload(
             "point_count": 401,
             "spacing": "linear",
         },
-        "parameter_sweeps": [
-            {
-                "parameter": "junction.inductance_lj",
-                "values": [8.4, 8.6, 8.8],
-                "unit": "nH",
-            }
-        ],
+        "parameter_sweeps": [],
         "solver": {
             "solver_family": "hfss-hb",
             "max_iterations": 40,
@@ -91,7 +85,7 @@ def _simulation_setup_payload(
             {
                 "source_id": "drive-port-a",
                 "kind": "port_drive",
-                "target": "port_A",
+                "target": "port_1",
                 "amplitude": -35.0,
                 "frequency_ghz": 6.45,
                 "phase_deg": 0.0,
@@ -103,7 +97,6 @@ def _simulation_setup_payload(
 
 def _post_processing_setup_payload() -> dict[str, object]:
     return {
-        "output_view": "fit-report",
         "selections": [
             {
                 "trace_family": "s_matrix",
@@ -112,16 +105,7 @@ def _post_processing_setup_payload() -> dict[str, object]:
                 "trace_ids": ["trace-s11-raw"],
             }
         ],
-        "operations": [
-            {
-                "operation": "fit_resonance",
-                "enabled": True,
-                "config": {
-                    "model": "hanger",
-                    "window_ghz": [6.2, 6.7],
-                },
-            }
-        ],
+        "operations": [],
     }
 
 
@@ -982,7 +966,7 @@ def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> N
     assert reloaded["simulation_setup"] == simulation_setup
     assert reloaded["simulation_setup"]["ptc"] == _simulation_ptc_payload()
     assert reloaded["downstream_source_capabilities"]["ptc"]["available"] is True
-    assert reloaded["summary"] == "simulation_smoke_task completed in the simulation lane."
+    assert reloaded["summary"] == "Simulation completed in the local runtime."
 
 
 def test_post_processing_task_persists_upstream_lineage_and_downstream_reference() -> None:

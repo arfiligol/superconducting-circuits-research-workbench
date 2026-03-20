@@ -60,7 +60,6 @@ class TaskSummaryResponse(BaseModel):
 
 
 class TaskDetailResponse(TaskSummaryResponse):
-    queue_backend: Literal["in_memory_scaffold"]
     worker_task_name: WorkerTaskName
     request_ready: bool
     submitted_from_active_dataset: bool

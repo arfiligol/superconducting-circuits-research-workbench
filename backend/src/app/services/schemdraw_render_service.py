@@ -315,6 +315,12 @@ def _render_schemdraw_svg(
     relation_config: Mapping[str, object],
     linked_schema: CircuitDefinitionRecord | None,
 ) -> str:
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg", force=True)
+    except Exception:
+        pass
     code = compile(source_text, filename="<schemdraw-preview>", mode="exec")
     namespace: dict[str, object] = {
         "__builtins__": _safe_builtins(),

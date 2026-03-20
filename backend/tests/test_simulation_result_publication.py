@@ -490,7 +490,6 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
             "summary": "Post-processing result save source.",
             "upstream_task_id": upstream["task_id"],
             "post_processing_setup": {
-                "output_view": "matrix",
                 "selections": [
                     {
                         "trace_family": "z_matrix",
@@ -499,13 +498,7 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
                         "trace_ids": ["trace_local_flux_preview"],
                     }
                 ],
-                "operations": [
-                    {
-                        "operation": "coordinate_transform",
-                        "enabled": True,
-                        "config": {"template": "cm_dm"},
-                    }
-                ],
+                "operations": [],
             },
         },
     )

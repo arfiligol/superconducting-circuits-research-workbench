@@ -417,7 +417,12 @@ def _to_task_detail(
         dataset_id=row.dataset_id,
         definition_id=row.definition_id,
         summary=row.summary,
-        queue_backend=cast(TaskQueueBackend, row.queue_backend),
+        queue_backend=cast(
+            TaskQueueBackend,
+            "local_runtime"
+            if row.queue_backend == "in_memory_scaffold"
+            else row.queue_backend,
+        ),
         worker_task_name=cast(WorkerTaskName, row.worker_task_name),
         request_ready=row.request_ready,
         submitted_from_active_dataset=row.submitted_from_active_dataset,

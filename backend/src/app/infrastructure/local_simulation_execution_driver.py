@@ -11,7 +11,7 @@ from sc_core.execution import TaskExecutionResult, TaskResultHandle
 
 from src.app.domain.datasets import DesignBrowseRow, TraceMetadataSummary
 from src.app.domain.tasks import CharacterizationSetup, TaskDetail, TaskResultRefs
-from src.app.infrastructure.persisted_simulation_runtime import (
+from src.app.infrastructure.persisted_runtime import (
     run_real_post_processing_task,
     run_real_simulation_task,
 )
@@ -21,19 +21,18 @@ from src.app.infrastructure.storage_reference_factory import (
     build_result_provenance_ref,
     build_trace_payload_ref,
 )
-from src.app.services.service_errors import ServiceError
 
 
 class TaskDetailRepository(Protocol):
     def get_task(self, task_id: int) -> TaskDetail | None: ...
 
 
-class CircuitDefinitionRepository(Protocol):
-    def get_circuit_definition(self, definition_id: int) -> object | None: ...
-
-
 class TaskListingRepository(TaskDetailRepository, Protocol):
     def list_tasks(self) -> Sequence[TaskDetail]: ...
+
+
+class CircuitDefinitionRepository(Protocol):
+    def get_circuit_definition(self, definition_id: int) -> object | None: ...
 
 
 class CharacterizationDatasetRepository(Protocol):
@@ -91,14 +90,6 @@ class TaskExecutionRuntime(Protocol):
         worker_pid: int | None = None,
     ) -> TaskDetail: ...
 
-    def finalize_bootstrap_terminated(
-        self,
-        task_id: int,
-        *,
-        recorded_at: datetime,
-        summary: str | None = None,
-    ) -> TaskDetail: ...
-
 
 class LocalSimulationExecutionDriver:
     def __init__(
@@ -118,58 +109,47 @@ class LocalSimulationExecutionDriver:
             return
         if task.kind != "simulation" or task.visibility_scope != "local" or task.status != "queued":
             return
-        if task.definition_id is None:
-            runtime = self._execution_runtime_factory()
-            runtime.fail_task(
-                task.task_id,
-                recorded_at=datetime.now(UTC),
-                exc_type="InvalidTaskPayload",
-                message="Simulation definition is missing.",
-                worker_pid=os.getpid(),
-            )
-            return
-        definition = self._circuit_definition_repository.get_circuit_definition(task.definition_id)
-        source_text = getattr(definition, "source_text", None)
-        if not isinstance(source_text, str) or not source_text.strip():
-            runtime = self._execution_runtime_factory()
-            runtime.fail_task(
-                task.task_id,
-                recorded_at=datetime.now(UTC),
-                exc_type="DefinitionNotFound",
-                message="The selected circuit definition is not available.",
-                worker_pid=os.getpid(),
-            )
-            return
 
         worker_pid = os.getpid()
         started_at = datetime.now(UTC)
         runtime = self._execution_runtime_factory()
 
         try:
+            if task.definition_id is None:
+                raise ValueError("Simulation definition_id is missing.")
+            definition = self._circuit_definition_repository.get_circuit_definition(
+                task.definition_id
+            )
+            definition_source_text = getattr(definition, "source_text", None)
+            if not isinstance(definition_source_text, str) or len(
+                definition_source_text.strip()
+            ) == 0:
+                raise ValueError("Simulation definition source is unavailable.")
             runtime.start_task(
                 task.task_id,
                 recorded_at=started_at,
                 worker_pid=worker_pid,
                 stale_after_seconds=180,
             )
+            heartbeat_at = started_at + timedelta(seconds=1)
             runtime.heartbeat_task(
                 task.task_id,
-                recorded_at=started_at + timedelta(seconds=1),
-                summary="Simulation runtime is executing the persisted solver request.",
-                percent_complete=24,
+                recorded_at=heartbeat_at,
+                summary="Simulation worker is running the persisted solver path.",
+                percent_complete=35,
                 stage_label=task.worker_task_name,
                 current_step=1,
-                total_steps=3,
+                total_steps=2,
                 stale_after_seconds=180,
                 details=_heartbeat_details(task),
             )
             result_summary_payload, result_refs = run_real_simulation_task(
                 task,
-                definition_source_text=source_text,
+                definition_source_text=definition_source_text,
             )
             runtime.complete_task(
                 task.task_id,
-                recorded_at=datetime.now(UTC),
+                recorded_at=heartbeat_at + timedelta(seconds=1),
                 result=TaskExecutionResult(
                     result_summary_payload=result_summary_payload,
                     trace_batch_id=result_refs.trace_batch_id,
@@ -397,24 +377,6 @@ class LocalPostProcessingExecutionDriver:
                 ),
             )
             return
-        if upstream_task.definition_id is None:
-            self._fail_task(
-                task,
-                exc_type="UpstreamTaskInvalid",
-                message="The upstream simulation task is missing its circuit definition.",
-            )
-            return
-        definition = self._circuit_definition_repository.get_circuit_definition(
-            upstream_task.definition_id
-        )
-        source_text = getattr(definition, "source_text", None)
-        if not isinstance(source_text, str) or not source_text.strip():
-            self._fail_task(
-                task,
-                exc_type="DefinitionNotFound",
-                message="The upstream circuit definition is not available.",
-            )
-            return
 
         worker_pid = os.getpid()
         started_at = datetime.now(UTC)
@@ -430,22 +392,21 @@ class LocalPostProcessingExecutionDriver:
             runtime.heartbeat_task(
                 task.task_id,
                 recorded_at=started_at + timedelta(seconds=1),
-                summary="Post-processing runtime is preparing the persisted upstream traces.",
-                percent_complete=26,
+                summary="Post-processing worker is loading persisted upstream traces.",
+                percent_complete=35,
                 stage_label=task.worker_task_name,
                 current_step=1,
-                total_steps=3,
+                total_steps=2,
                 stale_after_seconds=180,
                 details=_post_processing_heartbeat_details(task, upstream_task),
             )
             result_summary_payload, result_refs = run_real_post_processing_task(
                 task,
                 upstream_task=upstream_task,
-                definition_source_text=source_text,
             )
             runtime.complete_task(
                 task.task_id,
-                recorded_at=datetime.now(UTC),
+                recorded_at=started_at + timedelta(seconds=2),
                 result=TaskExecutionResult(
                     result_summary_payload=result_summary_payload,
                     trace_batch_id=result_refs.trace_batch_id,
@@ -492,37 +453,16 @@ class LocalTaskExecutionDriver:
         self._characterization_driver = characterization_driver
 
     def recover_queued_tasks(self) -> None:
-        active_local_tasks = sorted(
+        queued_local_tasks = sorted(
             (
                 task
                 for task in self._task_repository.list_tasks()
-                if task.visibility_scope == "local"
-                and task.status
-                in {
-                    "queued",
-                    "dispatching",
-                    "running",
-                    "cancellation_requested",
-                    "cancelling",
-                    "termination_requested",
-                }
+                if task.visibility_scope == "local" and task.status == "queued"
             ),
             key=lambda task: (task.submitted_at, task.task_id),
         )
-        runtime = self._execution_runtime_factory()
-        for task in active_local_tasks:
-            try:
-                runtime.finalize_bootstrap_terminated(
-                    task.task_id,
-                    recorded_at=datetime.now(UTC),
-                    summary=(
-                        "Local runtime restarted before the task completed. "
-                        "Re-submit the task to run it again."
-                    ),
-                )
-            except ServiceError as exc:
-                if exc.code != "task_not_found":
-                    raise
+        for task in queued_local_tasks:
+            self.execute_submitted_task(task.task_id)
 
     def execute_submitted_task(self, task_id: int) -> None:
         task = self._task_repository.get_task(task_id)

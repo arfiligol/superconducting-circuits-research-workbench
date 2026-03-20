@@ -26,8 +26,6 @@ from src.app.domain.datasets import (
 )
 from src.app.domain.result_traces import (
     ResultTraceSelection,
-    available_sources_for_family,
-    resolve_port_options,
 )
 from src.app.domain.session import SessionState
 from src.app.domain.tasks import (
@@ -59,6 +57,10 @@ from src.app.domain.tasks import (
 )
 from src.app.infrastructure.audit_records import build_audit_record
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
+from src.app.infrastructure.persisted_runtime import (
+    available_sources_for_task_family,
+    port_options_for_task,
+)
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import ServiceFieldError, service_error
 
@@ -559,6 +561,7 @@ class TaskService:
                 ),
             )
         self._validate_result_trace_selection(
+            task=task,
             basis_task=basis_task,
             trace_key=draft.trace_key,
         )
@@ -1310,6 +1313,7 @@ class TaskService:
     def _validate_result_trace_selection(
         self,
         *,
+        task: TaskDetail,
         basis_task: TaskDetail,
         trace_key: str,
     ) -> None:
@@ -1322,7 +1326,7 @@ class TaskService:
                 category="validation_error",
                 message=str(exc),
             ) from exc
-        if selection.source not in available_sources_for_family(basis_task, selection.family):
+        if selection.source not in available_sources_for_task_family(task, selection.family):
             raise service_error(
                 400,
                 code="request_validation_failed",
@@ -1332,8 +1336,9 @@ class TaskService:
                     f"{selection.family}."
                 ),
             )
-        port_options = resolve_port_options(
-            basis_task,
+        port_options = port_options_for_task(
+            task,
+            basis_task=basis_task,
             definition=self.get_circuit_definition(basis_task.definition_id),
         )
         if (
@@ -1807,7 +1812,7 @@ class TaskService:
 
 def _default_task_summary(task_kind: TaskKind, dataset_id: str | None) -> str:
     if dataset_id is None:
-        return f"{task_kind.replace('_', ' ')} task accepted by rewrite scaffold."
+        return f"{task_kind.replace('_', ' ')} task accepted by the local runtime."
     return f"{task_kind.replace('_', ' ')} task accepted for dataset {dataset_id}."
 
 

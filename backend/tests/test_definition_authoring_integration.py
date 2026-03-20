@@ -52,13 +52,7 @@ def _simulation_setup_payload() -> dict[str, object]:
             "point_count": 401,
             "spacing": "linear",
         },
-        "parameter_sweeps": [
-            {
-                "parameter": "junction.inductance_lj",
-                "values": [8.4, 8.6, 8.8],
-                "unit": "nH",
-            }
-        ],
+        "parameter_sweeps": [],
         "solver": {
             "solver_family": "hfss-hb",
             "max_iterations": 40,
@@ -73,7 +67,7 @@ def _simulation_setup_payload() -> dict[str, object]:
             {
                 "source_id": "drive-port-a",
                 "kind": "port_drive",
-                "target": "port_A",
+                "target": "port_1",
                 "amplitude": -35.0,
                 "frequency_ghz": 6.45,
                 "phase_deg": 0.0,

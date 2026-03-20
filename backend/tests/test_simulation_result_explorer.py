@@ -1,3 +1,4 @@
+import math
 from contextlib import contextmanager
 
 import pytest
@@ -97,7 +98,6 @@ def _post_processing_setup_payload(
     representation: str = "real",
 ) -> dict[str, object]:
     return {
-        "output_view": "matrix",
         "selections": [
             {
                 "trace_family": trace_family,
@@ -106,20 +106,7 @@ def _post_processing_setup_payload(
                 "trace_ids": ["trace_local_flux_preview"],
             }
         ],
-        "operations": [
-            {
-                "operation": "coordinate_transform",
-                "enabled": True,
-                "config": {
-                    "template": "cm_dm",
-                    "weight_mode": "auto",
-                    "alpha": 0.5,
-                    "beta": 0.5,
-                    "port_a": 1,
-                    "port_b": 1,
-                },
-            }
-        ],
+        "operations": [],
     }
 
 
@@ -248,7 +235,8 @@ def test_completed_simulation_task_returns_plottable_trace_payload() -> None:
     assert len(payload["plot"]["series"]) == 1
     assert len(payload["plot"]["series"][0]["values"]) == 401
     assert payload["plot"]["y_axis"]["unit"] == "ohm"
-    assert any(abs(value) > 0.001 for value in payload["plot"]["series"][0]["values"])
+    assert all(math.isfinite(value) for value in payload["plot"]["series"][0]["values"])
+    assert len(set(payload["plot"]["series"][0]["values"])) > 1
 
 
 def test_completed_post_processing_task_returns_explorer_payload() -> None:

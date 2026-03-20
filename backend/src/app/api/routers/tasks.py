@@ -529,7 +529,6 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
         "dataset_id": task.dataset_id,
         "definition_id": task.definition_id,
         "summary": task.summary,
-        "queue_backend": task.queue_backend,
         "worker_task_name": task.worker_task_name,
         "request_ready": task.request_ready,
         "submitted_from_active_dataset": task.submitted_from_active_dataset,
@@ -780,21 +779,6 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
     if payload is None:
         return None
     body = _as_mapping(payload)
-    if body.get("source") is not None:
-        _required_literal(
-            body.get("source"),
-            field_name="post_processing_setup.source",
-            allowed={"raw", "ptc"},
-            default="raw",
-        )
-    output_view = (
-        _required_string(
-            body.get("output_view"),
-            field_name="post_processing_setup.output_view",
-        )
-        if body.get("output_view") is not None
-        else "matrix"
-    )
     raw_selections = body.get("selections", [])
     raw_operations = body.get("operations")
     if not isinstance(raw_selections, list):
@@ -812,7 +796,6 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
             message="post_processing_setup.operations must be an array.",
         )
     return PostProcessingSetup(
-        output_view=output_view,
         selections=tuple(_parse_trace_selection(item) for item in raw_selections),
         operations=tuple(_parse_post_processing_operation(item) for item in raw_operations),
     )
@@ -1256,6 +1239,10 @@ def _deserialize_task_event_metadata_value(key: str, value: object) -> object:
         "characterization_result_summary",
         "characterization_result_detail",
         "characterization_run_history_row",
+        "simulation_raw_bundle",
+        "simulation_ptc_bundle",
+        "post_processing_raw_bundle",
+        "post_processing_ptc_bundle",
     }:
         return value
     if not isinstance(value, str):
