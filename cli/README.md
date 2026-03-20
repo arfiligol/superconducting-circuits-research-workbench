@@ -1,6 +1,6 @@
 # sc-cli
 
-`sc-cli` is the rewrite CLI adapter package for this repository.
+`sc-cli` is the standalone CLI package for this repository.
 
 It owns the `sc` entrypoint and delegates real workflow logic to installable shared packages such as `sc-core`.
 
@@ -37,4 +37,4 @@ cli/
 
 - Commands stay thin: parse input, render output, delegate to shared packages.
 - Shared scientific or workflow logic belongs in `src/core/sc_core`, not in `sc_cli`.
-- Legacy `src/scripts` remains migration reference only and should not receive new rewrite workflows.
+- Legacy `src/scripts` remains migration reference only and should not receive new workflow logic.

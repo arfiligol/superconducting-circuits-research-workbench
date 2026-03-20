@@ -1,1 +1,1 @@
-"""Typer subcommands for the rewrite CLI package."""
+"""Typer subcommands for the standalone CLI package."""

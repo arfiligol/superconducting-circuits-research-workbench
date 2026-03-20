@@ -1,11 +1,10 @@
 [project]
 name = "sc-cli"
 version = "0.1.0"
-description = "Rewrite CLI adapter package for superconducting circuits workflows."
+description = "Standalone CLI package for superconducting circuits workflows."
 requires-python = ">=3.12"
 dependencies = [
     "sc-core",
-    "superconducting-circuits-backend",
     "typer>=0.12.0",
 ]
 
@@ -49,12 +48,11 @@ indent-style = "space"
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
 include = ["src", "tests"]
-extraPaths = ["src", "../backend"]
+extraPaths = ["src"]
 reportMissingTypeStubs = "none"
 
 [tool.uv.sources]
 sc-core = { path = "../src/core", editable = true }
-superconducting-circuits-backend = { path = "../backend", editable = true }
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]

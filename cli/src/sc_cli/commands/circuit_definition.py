@@ -1,6 +1,6 @@
 """Thin adapters for canonical circuit-definition workflows."""
 
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -47,13 +47,13 @@ app = typer.Typer(
 )
 
 
-class CircuitDefinitionSortOption(str, Enum):
+class CircuitDefinitionSortOption(StrEnum):
     CREATED_AT = "created_at"
     NAME = "name"
     ELEMENT_COUNT = "element_count"
 
 
-class SortOrderOption(str, Enum):
+class SortOrderOption(StrEnum):
     ASC = "asc"
     DESC = "desc"
 
@@ -108,7 +108,7 @@ def inspect_command(
         typer.Option(
             "--definition-id",
             min=1,
-            help="Inspect one persisted rewrite circuit definition by id.",
+            help="Inspect one persisted local circuit definition by id.",
         ),
     ] = None,
     output: OutputOption = OutputMode.TEXT,

@@ -1,1 +1,1 @@
-"""Typer-based rewrite CLI adapter package."""
+"""Typer-based standalone CLI package."""

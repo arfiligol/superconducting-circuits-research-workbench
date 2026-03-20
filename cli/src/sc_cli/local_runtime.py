@@ -242,7 +242,7 @@ def _task_summary(task: LocalTaskDetail) -> LocalTaskSummary:
 def _session_with_active_dataset(dataset_id: str | None) -> LocalSession:
     active_dataset = None if dataset_id is None else _get_session_dataset(dataset_id)
     return LocalSession(
-        session_id="rewrite-local-session",
+        session_id="local-session",
         auth=LocalSessionAuth(
             state="authenticated",
             mode="local",

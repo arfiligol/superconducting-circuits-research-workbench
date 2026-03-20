@@ -267,7 +267,7 @@ def test_circuit_definition_inspect_command_supports_definition_id() -> None:
     assert "inspection_status: valid" in result.stdout
 
 
-def test_circuit_definition_list_command_reads_rewrite_state() -> None:
+def test_circuit_definition_list_command_reads_local_state() -> None:
     runner = CliRunner()
 
     result = runner.invoke(app, ["circuit-definition", "list"])
@@ -550,13 +550,13 @@ def test_circuit_definition_import_bundle_command_round_trips_into_local_catalog
     assert f'"imported_from_bundle_id": "{expected_bundle_id}"' in show_result.stdout
 
 
-def test_session_show_command_reads_rewrite_session_state() -> None:
+def test_session_show_command_reads_local_session_state() -> None:
     runner = CliRunner()
 
     result = runner.invoke(app, ["session", "show"])
 
     assert result.exit_code == 0
-    assert "session_id: rewrite-local-session" in result.stdout
+    assert "session_id: local-session" in result.stdout
     assert "workspace_id: ws-device-lab" in result.stdout
     assert "default_task_scope: workspace" in result.stdout
 
@@ -567,7 +567,7 @@ def test_session_show_command_supports_json_output() -> None:
     result = runner.invoke(app, ["session", "show", "--output", "json"])
 
     assert result.exit_code == 0
-    assert '"session_id": "rewrite-local-session"' in result.stdout
+    assert '"session_id": "local-session"' in result.stdout
     assert '"workspace_id": "ws-device-lab"' in result.stdout
 
 
@@ -588,7 +588,7 @@ def test_session_whoami_command_supports_json_output() -> None:
     result = runner.invoke(app, ["session", "whoami", "--output", "json"])
 
     assert result.exit_code == 0
-    assert '"session_id": "rewrite-local-session"' in result.stdout
+    assert '"session_id": "local-session"' in result.stdout
     assert '"user_id": "researcher-01"' in result.stdout
     assert '"can_manage_datasets": true' in result.stdout
 
@@ -681,7 +681,7 @@ def test_session_active_dataset_command_reports_cleared_context() -> None:
     assert "active_dataset: none" in result.stdout
 
 
-def test_datasets_list_command_reads_rewrite_dataset_state() -> None:
+def test_datasets_list_command_reads_local_dataset_state() -> None:
     runner = CliRunner()
 
     result = runner.invoke(app, ["datasets", "list"])
@@ -885,7 +885,7 @@ def test_datasets_import_bundle_command_preserves_lineage(tmp_path: Path) -> Non
     )
 
 
-def test_tasks_list_command_reads_rewrite_task_state() -> None:
+def test_tasks_list_command_reads_local_task_state() -> None:
     runner = CliRunner()
     workspace_task_ids = _workspace_task_ids(limit=20)
     owned_only_task_ids = _owned_only_task_ids(limit=20)

@@ -49,7 +49,7 @@ def _canonical_definition_source(name: str) -> str:
     )
 
 
-def test_cli_local_runtime_modules_do_not_import_sc_backend() -> None:
+def test_cli_local_runtime_modules_do_not_import_backend_internals() -> None:
     checked_paths = [
         "runtime.py",
         "errors.py",
@@ -64,8 +64,10 @@ def test_cli_local_runtime_modules_do_not_import_sc_backend() -> None:
 
     for relative_path in checked_paths:
         source = files("sc_cli").joinpath(relative_path).read_text(encoding="utf-8")
-        assert "from sc_backend import" not in source
-        assert "import sc_backend" not in source
+        assert "from src.app" not in source
+        assert "import src.app" not in source
+        assert "from backend" not in source
+        assert "import backend" not in source
 
 
 def test_local_task_registry_persists_across_restart_reload() -> None:

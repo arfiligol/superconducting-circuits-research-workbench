@@ -10,15 +10,15 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 rewrite backend 的責任邊界、模組分層與對 sc_core 的依賴方向。
-version: v1.2.0
-last_updated: 2026-03-14
+scope: 定義 backend 的責任邊界、模組分層與對 sc_core 的依賴方向。
+version: v1.3.0
+last_updated: 2026-03-21
 updated_by: codex
 ---
 
 # Backend Architecture
 
-rewrite backend 的目標不是單純 CRUD API，而是可獨立運作的 headless application backend。
+backend 的目標不是單純 CRUD API，而是可獨立運作的 headless application backend。
 即使 frontend 尚未完成，backend 也應能提供穩定的 auth、CRUD、TraceStore、task、result 與 execution contracts。
 
 !!! info "Use this page for boundary decisions"
@@ -101,17 +101,6 @@ backend/src/app/
     - API contract exposure
     - persistence / auth / task / workspace semantics
     - adapter state mapping to `sc_core` canonical surfaces
-
-## CLI Facade Boundary
-
-`backend/sc_backend/` 是 backend 對 `cli/` 暴露的穩定 facade package。
-
-| Facade rule | Meaning |
-| --- | --- |
-| package-safe reuse | CLI 重用 backend service/runtime contract，但不直接 import `backend/src/app/*` |
-| stable validation boundary | 對 CLI 暴露穩定 request validation 與 structured error translation |
-| no new business ownership | 不在 facade 重新發明 workflow owner |
-| no CLI parsing inside facade | command parsing 與呈現格式仍屬於 CLI 本身 |
 
 ## Agent Rule { #agent-rule }
 

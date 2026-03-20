@@ -62,7 +62,7 @@ package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*", "sc_backend*"]
+include = ["src*"]
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]
