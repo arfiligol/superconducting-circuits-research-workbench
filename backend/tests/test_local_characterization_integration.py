@@ -177,8 +177,12 @@ def test_local_characterization_submit_completes_with_analysis_run_and_result_ha
     assert task["characterization_setup"] == _characterization_payload()[
         "characterization_setup"
     ]
-    assert task["result_refs"]["analysis_run_id"] == task["task_id"]
+    assert isinstance(task["result_refs"]["analysis_run_id"], int)
+    assert task["result_refs"]["analysis_run_id"] > 0
     assert task["result_refs"]["trace_payload"]["payload_role"] == "analysis_projection"
+    assert task["result_refs"]["result_handles"][0]["handle_id"] == (
+        f"analysis-run:{task['result_refs']['analysis_run_id']}:report"
+    )
     assert task["result_refs"]["result_handles"][0]["kind"] == "characterization_report"
     assert task["result_refs"]["result_handles"][0]["status"] == "materialized"
 
@@ -214,9 +218,12 @@ def test_local_characterization_result_surfaces_survive_refresh() -> None:
         "trace_local_flux_measurement",
         "trace_local_flux_preview",
     ]
+    assert detail["payload"]["analysis_run_id"] == submit_response.json()["data"]["task"][
+        "result_refs"
+    ]["analysis_run_id"]
     assert detail["payload"]["fit_table"][0]["parameter"] == "f01"
     assert detail["artifact_refs"][0]["payload_locator"] == (
-        f"artifacts/tasks/{submit_response.json()['data']['task']['task_id']}/admittance-fit-table.json"
+        f"characterization/{result_row['result_id']}/fit-table.json"
     )
 
     reset_runtime_state()
@@ -233,3 +240,68 @@ def test_local_characterization_result_surfaces_survive_refresh() -> None:
     )
     assert refreshed_detail.status_code == 200
     assert refreshed_detail.json()["data"]["result_id"] == result_row["result_id"]
+
+
+def test_local_characterization_taggings_survive_refresh() -> None:
+    submit_response = client.post("/tasks", json=_characterization_payload())
+    assert submit_response.status_code == 201
+
+    results_response = client.get(
+        "/datasets/local-dataset-001/designs/design_local_flux_playground/characterization-results"
+    )
+    assert results_response.status_code == 200
+    result_row = results_response.json()["data"]["rows"][0]
+
+    tagging_response = client.post(
+        "/datasets/local-dataset-001/designs/design_local_flux_playground/"
+        f"characterization-results/{result_row['result_id']}/taggings",
+        json={
+            "artifact_id": f"{result_row['result_id']}:fit-table",
+            "source_parameter": "residual_rms",
+            "designated_metric": "residual_rms",
+        },
+    )
+    assert tagging_response.status_code == 200
+    tagged_metric = tagging_response.json()["data"]["tagged_metric"]
+
+    detail_response = client.get(
+        "/datasets/local-dataset-001/designs/design_local_flux_playground/"
+        f"characterization-results/{result_row['result_id']}"
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["data"]["identify_surface"]["applied_tags"] == [
+        {
+            "artifact_id": f"{result_row['result_id']}:fit-table",
+            "source_parameter": "residual_rms",
+            "designated_metric": "residual_rms",
+            "designated_metric_label": "Residual RMS",
+            "tagged_at": tagged_metric["tagged_at"],
+        }
+    ]
+
+    metrics_response = client.get("/datasets/local-dataset-001/metrics-summary")
+    assert metrics_response.status_code == 200
+    assert {
+        "metric_id": "metric-local-dataset-001-residual-rms",
+        "label": "Residual RMS",
+        "source_parameter": "residual_rms",
+        "designated_metric": "residual_rms",
+        "tagged_at": tagged_metric["tagged_at"],
+    } in metrics_response.json()["data"]["rows"]
+
+    reset_runtime_state()
+
+    refreshed_detail = client.get(
+        "/datasets/local-dataset-001/designs/design_local_flux_playground/"
+        f"characterization-results/{result_row['result_id']}"
+    )
+    assert refreshed_detail.status_code == 200
+    assert refreshed_detail.json()["data"]["identify_surface"]["applied_tags"] == [
+        {
+            "artifact_id": f"{result_row['result_id']}:fit-table",
+            "source_parameter": "residual_rms",
+            "designated_metric": "residual_rms",
+            "designated_metric_label": "Residual RMS",
+            "tagged_at": tagged_metric["tagged_at"],
+        }
+    ]

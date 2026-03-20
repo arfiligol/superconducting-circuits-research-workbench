@@ -14,6 +14,9 @@ from src.app.infrastructure.local_simulation_execution_driver import (
     LocalSimulationExecutionDriver,
     LocalTaskExecutionDriver,
 )
+from src.app.infrastructure.persisted_characterization_runtime import (
+    PersistedCharacterizationRepository,
+)
 from src.app.infrastructure.persistence import (
     SqliteCircuitDefinitionRepository,
     SqliteResearchDataPublicationRepository,
@@ -78,6 +81,7 @@ def get_rewrite_catalog_repository() -> InMemoryRewriteCatalogRepository:
     return InMemoryRewriteCatalogRepository(
         durable_definition_repository=get_circuit_definition_persistence_repository(),
         durable_publication_repository=get_research_data_publication_repository(),
+        durable_characterization_repository=get_persisted_characterization_repository(),
         task_repository=get_rewrite_task_repository(),
     )
 
@@ -96,6 +100,11 @@ def get_storage_metadata_repository() -> SqliteRewriteStorageMetadataRepository:
     return SqliteRewriteStorageMetadataRepository(
         create_metadata_session_factory(settings.database_path)
     )
+
+
+@lru_cache(maxsize=1)
+def get_persisted_characterization_repository() -> PersistedCharacterizationRepository:
+    return PersistedCharacterizationRepository(get_storage_metadata_repository())
 
 
 @lru_cache(maxsize=1)
@@ -235,6 +244,7 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
     local_characterization_execution_driver = LocalCharacterizationExecutionDriver(
         task_repository=get_rewrite_task_repository(),
         dataset_repository=get_rewrite_catalog_repository(),
+        characterization_repository=get_persisted_characterization_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
     local_post_processing_execution_driver = LocalPostProcessingExecutionDriver(
@@ -282,6 +292,7 @@ def reset_runtime_state() -> None:
     get_rewrite_catalog_repository.cache_clear()
     get_rewrite_app_state_repository.cache_clear()
     get_storage_metadata_repository.cache_clear()
+    get_persisted_characterization_repository.cache_clear()
     get_research_data_publication_repository.cache_clear()
     get_task_snapshot_repository.cache_clear()
     get_rewrite_task_repository.cache_clear()

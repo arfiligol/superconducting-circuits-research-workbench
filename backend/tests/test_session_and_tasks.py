@@ -904,11 +904,14 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert task["characterization_setup"] == _characterization_setup_payload()
     assert task["result_handoff"] == {
         "availability": "ready",
-        "primary_result_handle_id": "task-result:306:primary",
+        "primary_result_handle_id": (
+            f"analysis-run:{task['result_refs']['analysis_run_id']}:report"
+        ),
         "result_handle_count": 1,
         "trace_payload_available": True,
     }
-    assert task["result_refs"]["analysis_run_id"] == 306
+    assert isinstance(task["result_refs"]["analysis_run_id"], int)
+    assert task["result_refs"]["analysis_run_id"] > 0
     assert task["events"][0]["metadata"]["audit_action"] == "task.submitted"
     assert [event["event_type"] for event in task["events"]] == [
         "task_submitted",
@@ -1109,7 +1112,7 @@ def test_submit_local_simulation_task_executes_to_terminal_with_materialized_res
     }
     assert task["result_refs"]["trace_batch_id"] == task["task_id"]
     assert task["result_refs"]["trace_payload"]["store_key"] == (
-        f"tasks/{task['task_id']}/simulation-trace.zarr"
+        f"designs/{task['task_id']}/batches/{task['task_id']}.zarr"
     )
     assert task["result_refs"]["result_handles"][0]["status"] == "materialized"
     assert [event["event_type"] for event in task["events"]] == [
@@ -1127,7 +1130,7 @@ def test_submit_local_simulation_task_executes_to_terminal_with_materialized_res
     assert reloaded["status"] == "completed"
     assert reloaded["result_handoff"]["availability"] == "ready"
     assert reloaded["result_refs"]["trace_payload"]["store_key"] == (
-        f"tasks/{task['task_id']}/simulation-trace.zarr"
+        f"designs/{task['task_id']}/batches/{task['task_id']}.zarr"
     )
     assert reloaded["events"][-1]["event_type"] == "task_completed"
 
@@ -1246,7 +1249,8 @@ def test_runtime_bootstrap_recovers_stranded_local_characterization_task() -> No
     detail = detail_response.json()["data"]
     assert detail["status"] == "completed"
     assert detail["dispatch"]["status"] == "completed"
-    assert detail["result_refs"]["analysis_run_id"] == created["task_id"]
+    assert isinstance(detail["result_refs"]["analysis_run_id"], int)
+    assert detail["result_refs"]["analysis_run_id"] > 0
     assert detail["events"][-1]["event_type"] == "task_completed"
 
     events_response = client.get(f"/tasks/{created['task_id']}/events?order=asc&limit=10")

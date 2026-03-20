@@ -227,7 +227,9 @@ class PersistedRewriteTaskRepository:
         if len(persisted_result_handles) == 0:
             return task
 
-        primary_result_handle = persisted_result_handles[0]
+        primary_result_handle, ordered_result_handles = _resolve_primary_result_handles(
+            persisted_result_handles
+        )
         owner_record = (
             primary_result_handle.provenance.trace_batch_record
             or primary_result_handle.provenance.analysis_run_record
@@ -253,7 +255,7 @@ class PersistedRewriteTaskRepository:
                 ),
                 metadata_records=metadata_records,
                 trace_payload=trace_payload,
-                result_handles=persisted_result_handles,
+                result_handles=ordered_result_handles,
             ),
         )
 
@@ -276,9 +278,15 @@ def _build_storage_linkage_handle(
     if owner_record is None:
         return current_handle
     if owner_record.record_type == "trace_batch":
-        return TaskResultHandle(trace_batch_id=_parse_record_suffix(owner_record.record_id))
+        trace_batch_id = _try_parse_record_suffix(owner_record.record_id)
+        if trace_batch_id is not None:
+            return TaskResultHandle(trace_batch_id=trace_batch_id)
+        return current_handle
     if owner_record.record_type == "analysis_run":
-        return TaskResultHandle(analysis_run_id=_parse_record_suffix(owner_record.record_id))
+        analysis_run_id = _try_parse_record_suffix(owner_record.record_id)
+        if analysis_run_id is not None:
+            return TaskResultHandle(analysis_run_id=analysis_run_id)
+        return current_handle
     return current_handle
 
 
@@ -303,6 +311,35 @@ def _dedupe_metadata_records(
     return list(deduped.values())
 
 
-def _parse_record_suffix(record_id: str) -> int:
+def _resolve_primary_result_handles(
+    persisted_result_handles: tuple[ResultHandleRef, ...],
+) -> tuple[ResultHandleRef, tuple[ResultHandleRef, ...]]:
+    ordered_handles = tuple(
+        sorted(
+            persisted_result_handles,
+            key=lambda handle: (
+                not _is_owner_backed_materialized_handle(handle),
+                handle.status != "materialized",
+                handle.handle_id,
+            ),
+        )
+    )
+    if any(handle.status == "materialized" for handle in ordered_handles):
+        ordered_handles = tuple(handle for handle in ordered_handles if handle.status != "pending")
+    return ordered_handles[0], ordered_handles
+
+
+def _is_owner_backed_materialized_handle(handle: ResultHandleRef) -> bool:
+    if handle.status != "materialized":
+        return False
+    return (
+        handle.provenance.trace_batch_record is not None
+        or handle.provenance.analysis_run_record is not None
+    )
+
+
+def _try_parse_record_suffix(record_id: str) -> int | None:
     _, _, suffix = record_id.partition(":")
+    if not suffix.isdigit():
+        return None
     return int(suffix)
