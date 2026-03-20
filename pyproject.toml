@@ -41,19 +41,19 @@ package = true
 
 [tool.uv.sources]
 sc-cli = { path = "cli", editable = true }
-sc-core = { path = "src/core", editable = true }
+sc-core = { path = "core", editable = true }
 superconducting-circuits-backend = { path = "backend", editable = true }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["app*", "core*", "scripts*", "worker*"]
+include = ["app*", "scripts*", "worker*"]
 
 [tool.basedpyright]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
-include = ["src", "cli/src", "cli/tests"]
+include = ["src", "core", "cli/src", "cli/tests"]
 exclude = ["**/__pycache__", ".venv", "data"]
-extraPaths = ["src", "src/core", "cli/src", "backend"]
+extraPaths = ["src", "core", "cli/src", "backend"]
 # Basic presence checks only, as requested
 reportMissingParameterType = "warning"
 reportUnknownParameterType = "none" # Allow unknown types from 3rd party libs
@@ -61,7 +61,7 @@ reportUnknownParameterType = "none" # Allow unknown types from 3rd party libs
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "scripts", "cli/src", "cli/tests"]
+src = ["src", "core", "scripts", "cli/src", "cli/tests"]
 
 [tool.ruff.lint]
 select = [

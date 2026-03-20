@@ -52,7 +52,7 @@ extraPaths = ["src"]
 reportMissingTypeStubs = "none"
 
 [tool.uv.sources]
-sc-core = { path = "../src/core", editable = true }
+sc-core = { path = "../core", editable = true }
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]

@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: "定義 migration 過程中 reference docs、shared core、adapter、legacy behavior 的裁決順序"
-version: v1.3.2
-last_updated: 2026-03-15
+version: v1.4.0
+last_updated: 2026-03-21
 updated_by: codex
 ---
 
@@ -40,9 +40,9 @@ updated_by: codex
    - Standalone CLI command surface / local runtime behavior：
      `docs/reference/cli/*`
 2. `docs/reference/architecture/*` 的 registry / parity 文件
-3. canonical implementation surface（例如 `src/core/sc_core/*`）
-4. adapters 與 application implementations：`backend/`、`frontend/`、`cli/`、`desktop/`、`src/app/`
-5. 舊行為證據與歷史腳本，不構成正式 SoT
+3. canonical implementation surface for the concern（例如 core concern 的 canonical implementation surface 是 `core/*`）
+4. adapters 與 application implementations：`backend/`、`frontend/`、`core/`、`cli/`、`desktop/`、`legacy/`
+5. root-level `src/` residues（例如 `src/app/`、`src/worker/`）與其他舊行為證據，只算 migration evidence，不構成正式 SoT
 
 ## Scope Boundaries
 
@@ -80,7 +80,10 @@ updated_by: codex
   目前 code path、adapter 行為與過去輸出都不是自動 canonical truth。
 - **Shared core beats adapters**：
   若 `sc_core` 與 adapter 行為衝突，先修 adapter；只有在 contract 本身不完整時才修 `sc_core` 與其文件。
-- **Do not silently rewrite docs to match code**：
+- **Top-level boundaries beat old root `src/` layout**：
+  `backend/`、`frontend/`、`core/`、`cli/`、`desktop/`、`legacy/` 才是 architecture-level surfaces。
+  root `src/` 若仍有內容，只能視為 migration residue，不可反向推導 future canonical topology。
+- **Do not silently revise docs to match code**：
   發現 implementation 與 reference 不一致時，不可直接改文件湊合程式碼，除非使用者明確確認規格要變。
 - **Parity exceptions must be explicit**：
   若確定要保留相容特例，必須在 parity matrix 或 contract registry 顯式記錄，不能只留在程式碼內。
@@ -110,5 +113,6 @@ updated_by: codex
 - Treat implementation and old behavior as evidence, not automatic canonical truth.
 - If owner docs and consumer docs conflict, prefer the owner docs unless the user explicitly changes the spec.
 - If `sc_core` and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
+- Treat root-level `src/` residues as migration evidence only; do not infer future architecture boundaries from them.
 - Record any intentional compatibility exception in the parity matrix or contract registry.
 ```

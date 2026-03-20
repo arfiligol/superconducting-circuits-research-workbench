@@ -4,9 +4,9 @@ from pathlib import Path
 
 
 def _get_project_root() -> Path:
-    """Return the repository root (four levels above this file)."""
-    # src/core/analysis/infrastructure/paths.py -> 4 levels to root
-    return Path(__file__).resolve().parents[4]
+    """Return the repository root (three levels above this file)."""
+    # core/analysis/infrastructure/paths.py -> 3 levels to root
+    return Path(__file__).resolve().parents[3]
 
 
 def _ensure_directory(path: Path) -> None:

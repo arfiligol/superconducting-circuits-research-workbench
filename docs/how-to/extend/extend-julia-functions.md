@@ -39,7 +39,7 @@ Python                    JuliaCall                Julia
 
 ## 步驟 1：新增 Julia 函數
 
-編輯 `src/core/simulation/infrastructure/hbsolve.jl`：
+編輯 `core/simulation/infrastructure/hbsolve.jl`：
 
 ```julia
 """
@@ -107,7 +107,7 @@ end
 
 ## 步驟 2：新增 Pydantic Domain Model（如需要）
 
-若新函數需要新的輸入/輸出結構，編輯 `src/core/simulation/domain/circuit.py`：
+若新函數需要新的輸入/輸出結構，編輯 `core/simulation/domain/circuit.py`：
 
 ```python
 from pydantic import BaseModel
@@ -130,7 +130,7 @@ class MySimulationResult(BaseModel):
 
 ## 步驟 3：更新 Python Adapter
 
-編輯 `src/core/simulation/infrastructure/julia_adapter.py`：
+編輯 `core/simulation/infrastructure/julia_adapter.py`：
 
 ```python
 from core.simulation.domain.circuit import (
@@ -243,7 +243,7 @@ sc-my-simulation = "scripts.simulation.run_my_simulation:main"
 
 ```bash
 # 型別檢查
-uv run basedpyright src/core/simulation/
+uv run basedpyright core/simulation/
 
 # 執行測試
 uv run sc-my-simulation --param1 10.0 --param2 1.0

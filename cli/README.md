@@ -36,5 +36,5 @@ cli/
 ## Design Rules
 
 - Commands stay thin: parse input, render output, delegate to shared packages.
-- Shared scientific or workflow logic belongs in `src/core/sc_core`, not in `sc_cli`.
+- Shared scientific or workflow logic belongs in `core/sc_core`, not in `sc_cli`.
 - Legacy `src/scripts` remains migration reference only and should not receive new workflow logic.

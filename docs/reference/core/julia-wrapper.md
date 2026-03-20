@@ -10,9 +10,9 @@ status: stable
 owner: docs-team
 audience: team
 scope: Julia wrapper / bridge reference surface。
-version: v0.3.0
-last_updated: 2026-03-13
-updated_by: team
+version: v0.4.0
+last_updated: 2026-03-21
+updated_by: codex
 ---
 
 # Julia Wrapper
@@ -20,8 +20,9 @@ updated_by: team
 本頁記錄 Python 與 Julia 之間的 bridge layer：Python application service 如何驗證、編譯並送出 simulation input，Julia bridge 又如何將結果映射回 Python domain model。
 
 !!! info "Current Location"
-    目前 wrapper surface 不在 `sc_core` installable package 裡。
-    它主要落在 `src/core/simulation/application/run_simulation.py`、`src/core/simulation/infrastructure/julia_adapter.py` 與 `src/core/simulation/infrastructure/hbsolve.jl`。
+    canonical surface 已收斂到 top-level `core/`。
+    目前 wrapper surface 仍不在 `sc_core` installable package 裡，
+    且 implementation 主要落在 `core/simulation/application/run_simulation.py`、`core/simulation/infrastructure/julia_adapter.py` 與 `core/simulation/infrastructure/hbsolve.jl`。
 
 !!! warning "Boundary"
     Julia wrapper 只負責 marshalling、validation、runtime bootstrap 與 result mapping。
@@ -31,9 +32,9 @@ updated_by: team
 
 | File | Responsibility |
 |---|---|
-| `src/core/simulation/application/run_simulation.py` | 組裝 simulation application flow，建立 Julia adapter |
-| `src/core/simulation/infrastructure/julia_adapter.py` | 驗證 Python-side inputs、初始化 JuliaCall、呼叫 bridge、將 payload 映射回 `SimulationResult` |
-| `src/core/simulation/infrastructure/hbsolve.jl` | Julia bridge entry point，負責把 Python 送來的 topology / value / source config 交給 JosephsonCircuits.jl |
+| `core/simulation/application/run_simulation.py` | 組裝 simulation application flow，建立 Julia adapter |
+| `core/simulation/infrastructure/julia_adapter.py` | 驗證 Python-side inputs、初始化 JuliaCall、呼叫 bridge、將 payload 映射回 `SimulationResult` |
+| `core/simulation/infrastructure/hbsolve.jl` | Julia bridge entry point，負責把 Python 送來的 topology / value / source config 交給 JosephsonCircuits.jl |
 
 ## Input Contract
 

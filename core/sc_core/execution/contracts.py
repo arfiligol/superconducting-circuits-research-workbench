@@ -7,23 +7,19 @@ from typing import Literal
 
 from sc_core.tasking import (
     LaneName,
-    TaskDispatchRecord,
     TaskControlAction,
     TaskControlDecision,
     TaskControlOutcome,
     TaskControlRuntimeProjection,
+    TaskDispatchRecord,
+    TaskDispatchStatus as TaskExecutionHistoryDispatchStatus,
     TaskRetryLineage,
     TaskRuntimeState,
+    TaskSubmissionSource as TaskExecutionHistorySubmissionSource,
     TERMINAL_TASK_STATES,
     WorkerTaskName,
     is_terminal_task_state,
     sanitize_processor_runtime_metadata,
-)
-from sc_core.tasking import (
-    TaskDispatchStatus as TaskExecutionHistoryDispatchStatus,
-)
-from sc_core.tasking import (
-    TaskSubmissionSource as TaskExecutionHistorySubmissionSource,
 )
 
 ExecutionPhase = Literal[
@@ -368,6 +364,22 @@ def build_worker_execution_context(
     )
 
 
+def _lane_task_label(lane: LaneName) -> str:
+    if lane == "simulation":
+        return "Simulation task"
+    if lane == "post_processing":
+        return "Post-processing task"
+    return "Characterization task"
+
+
+def _first_failure_line(message: str) -> str:
+    for line in message.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
 def build_task_start_payload(
     *,
     provenance: WorkerExecutionProvenance,
@@ -378,7 +390,7 @@ def build_task_start_payload(
     return {
         "contract_version": EXECUTION_CONTRACT_VERSION,
         "phase": "running",
-        "summary": f"{provenance.worker_task_name} started in the {provenance.lane} lane.",
+        "summary": f"{_lane_task_label(provenance.lane)} started.",
         "recorded_at": provenance.started_at,
         "stage_label": provenance.worker_task_name,
         "stale_after_seconds": stale_after_seconds,
@@ -793,7 +805,7 @@ def build_task_success_payload(
     payload: dict[str, object] = {
         "contract_version": EXECUTION_CONTRACT_VERSION,
         "phase": "completed",
-        "summary": f"{provenance.worker_task_name} completed in the {provenance.lane} lane.",
+        "summary": f"{_lane_task_label(provenance.lane)} completed.",
         "recorded_at": provenance.completed_at,
         "stage_label": provenance.worker_task_name,
         "details": details,
@@ -813,11 +825,15 @@ def build_task_failure_payload(
     message: str,
 ) -> dict[str, object]:
     """Build the persisted error payload for a failed task."""
+    summary = f"{_lane_task_label(provenance.lane)} failed."
+    failure_excerpt = _first_failure_line(message)
+    if failure_excerpt:
+        summary = f"{summary} {failure_excerpt}"
     return {
         "contract_version": EXECUTION_CONTRACT_VERSION,
         "phase": "failed",
         "error_code": WORKER_TASK_FAILED_ERROR_CODE,
-        "summary": f"{provenance.worker_task_name} failed in the {provenance.lane} lane.",
+        "summary": summary,
         "details": {
             **provenance.to_payload(),
             "exception_type": exc_type,

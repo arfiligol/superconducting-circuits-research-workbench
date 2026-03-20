@@ -10,9 +10,9 @@ status: stable
 owner: docs-team
 audience: team
 scope: Core reference 索引，條列平台核心能力與 Python/Julia 邊界。
-version: v0.4.0
-last_updated: 2026-03-13
-updated_by: team
+version: v0.5.0
+last_updated: 2026-03-21
+updated_by: codex
 ---
 
 # Core Reference
@@ -25,6 +25,10 @@ updated_by: team
 !!! warning "Boundary"
     `Core` 不等於整個 app。
     session、HTTP transport、CLI presenter、UI state 都不屬於本區；本區只記錄核心計算、canonical contract 與 bridge boundary。
+
+!!! important "Canonical top-level core surface"
+    `core/` 是 canonical shared-core folder。
+    `src/worker/` 也只能視為 transition residue consumer，不是 core owner。
 
 ## Ownership Rules
 
@@ -40,19 +44,19 @@ updated_by: team
 
     | 頁面 | 核心聚焦 | Primary Code Surface |
     |---|---|---|
-    | [Python Core](python-core.md) | `sc_core` 的 circuit-definition、tasking、execution、storage contracts，以及 Python adopters | `src/core/sc_core/`, `src/core/shared/`, `src/worker/` |
+    | [Python Core](python-core.md) | `sc_core` 的 circuit-definition、tasking、execution、storage contracts，以及 Python adopters | canonical implementation evidence: `core/sc_core/`, `core/shared/`; `src/worker/` is transition residue consumer only |
 
 === "Python ↔ Julia Bridge"
 
     | 頁面 | 核心聚焦 | Primary Code Surface |
     |---|---|---|
-    | [Julia Wrapper](julia-wrapper.md) | Python domain model 如何被編譯、驗證、送入 Julia runtime，再映射回 Python result | `src/core/simulation/application/run_simulation.py`, `src/core/simulation/infrastructure/julia_adapter.py`, `src/core/simulation/infrastructure/hbsolve.jl` |
+    | [Julia Wrapper](julia-wrapper.md) | Python domain model 如何被編譯、驗證、送入 Julia runtime，再映射回 Python result | canonical `core/` bridge surface；implementation evidence: `core/simulation/application/run_simulation.py`, `core/simulation/infrastructure/julia_adapter.py`, `core/simulation/infrastructure/hbsolve.jl` |
 
 === "Julia-Native Surface"
 
     | 頁面 | 核心聚焦 | Primary Code Surface |
     |---|---|---|
-    | [Julia Core](julia-core.md) | JosephsonCircuits-driven simulation runtime 與 direct Julia workflow boundary | `src/core/simulation/infrastructure/hbsolve.jl`, `src/julia/` |
+    | [Julia Core](julia-core.md) | JosephsonCircuits-driven simulation runtime 與 direct Julia workflow boundary | canonical `core/` + Julia runtime surfaces；implementation evidence: `core/simulation/infrastructure/hbsolve.jl`, `src/julia/` |
     | [Julia Plotting](julia-plotting.md) | Julia-owned plotting / visualization helpers | `src/julia/plotting.jl`, `src/julia/utils.jl` |
 
 ## Ownership Map

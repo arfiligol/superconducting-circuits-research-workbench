@@ -10,9 +10,9 @@ status: stable
 owner: docs-team
 audience: team
 scope: Python core 能力、共享 contract 與 orchestration-facing reference surface。
-version: v0.4.0
-last_updated: 2026-03-13
-updated_by: team
+version: v0.5.0
+last_updated: 2026-03-21
+updated_by: codex
 ---
 
 # Python Core
@@ -21,7 +21,9 @@ updated_by: team
 
 !!! info "Owned Surface"
     Python core 的 canonical owner 是 installable `sc_core` package。
-    `src/core/shared/`、`src/worker/`、backend adapters、CLI commands 都是 adopter，不是 contract owner。
+    canonical folder 是 top-level `core/`。
+    `core/shared/` 與 `core/sc_core/` 是目前的 implementation location；
+    `src/worker/`、backend adapters、CLI commands 都是 adopter 或 transition residue，不是 contract owner。
 
 !!! warning "Do Not Move Ownership"
     HTTP schema、CLI presenter、ORM / repository implementation、Electron runtime concerns 不得寫成 `Python Core` 的 owner 範圍。
@@ -53,14 +55,14 @@ updated_by: team
     |---|---|---|
     | `sc_core.storage` | trace / result handles、trace-store locator、payload lifecycle、version markers | `StorageRecordHandle`, `TraceBatchHandle`, `TraceStoreLocator`, `TraceStorePayloadLifecycle`, `TraceStoreVersionMarkers`, `TraceResultLinkage` |
 
-## Python Adopters
+## Python Adopters And Current Residue
 
 | Adopter Surface | Role | Why it is not the owner |
 |---|---|---|
-| `src/core/shared/persistence/repositories/` | 將 persisted rows 映射到 `TaskCreationSpec`、`TaskExecutionOperation`、`TraceResultLinkage` 等 canonical objects | repository 實作是 adapter；canonical shape 由 `sc_core` 決定 |
-| `src/core/shared/persistence/trace_store.py` | 實作 TraceStore backend binding，採用 `TraceStoreLocator` 與 payload lifecycle contract | backend binding 與 runtime config 不等於 storage contract owner |
-| `src/worker/dispatch.py` | 消費 `WorkerDispatchPlan` 與 routing helpers | worker 只是 dispatcher consumer |
-| `src/worker/runtime.py` | 持久化 `TaskExecutionOperation`，驅動 managed-task lifecycle | worker runtime 不定義 lifecycle contract |
+| `core/shared/persistence/repositories/` | current implementation 中將 persisted rows 映射到 canonical objects | repository 實作是 adapter；canonical shape 由 `sc_core` 決定；最終不應反向定義 `core/` topology |
+| `core/shared/persistence/trace_store.py` | current implementation 中實作 TraceStore backend binding | backend binding 與 runtime config 不等於 storage contract owner |
+| `src/worker/dispatch.py` | current transition residue 中消費 `WorkerDispatchPlan` 與 routing helpers | worker 只是 dispatcher consumer；`src/worker/` 不是 canonical current runtime owner |
+| `src/worker/runtime.py` | current transition residue 中持久化 `TaskExecutionOperation`，驅動 managed-task lifecycle | worker runtime 不定義 lifecycle contract，也不應被視為 steady-state folder |
 | CLI command groups | 透過 `sc_core` inspection / contract surfaces 對外暴露 CLI | CLI 只做 transport / presentation |
 
 ## Consumer Pairing

@@ -10,9 +10,9 @@ status: stable
 owner: docs-team
 audience: team
 scope: Julia-native simulation / analysis core reference surface。
-version: v0.3.0
-last_updated: 2026-03-13
-updated_by: team
+version: v0.4.0
+last_updated: 2026-03-21
+updated_by: codex
 ---
 
 # Julia Core
@@ -20,8 +20,9 @@ updated_by: team
 本頁記錄 Julia-native simulation / analysis runtime 的目前邊界，以及 repo 內實際存在的 Julia surface。
 
 !!! info "Current Julia Surface"
+    canonical core surface 已收斂到 top-level `core/`。
     目前 repository 內的 Julia surface 主要分成兩類：
-    1. `src/core/simulation/infrastructure/hbsolve.jl` 的 simulation bridge
+    1. `core/simulation/infrastructure/hbsolve.jl` 的 simulation bridge
     2. `src/julia/` 下的 project-level helper 與 plotting utilities
 
 !!! warning "Ownership Boundary"
@@ -34,7 +35,7 @@ updated_by: team
 
     | Surface | Role |
     |---|---|
-    | `src/core/simulation/infrastructure/hbsolve.jl` | 將 normalized topology、component values、pump / source config 送入 JosephsonCircuits `hbsolve` |
+    | `core/simulation/infrastructure/hbsolve.jl` | 將 normalized topology、component values、pump / source config 送入 JosephsonCircuits `hbsolve` |
     | JosephsonCircuits.jl runtime | 執行 harmonic balance 求解與矩陣家族導出 |
     | Python-facing bridge payload | 回傳 frequency axis、S / Z / Y family traces、mode metadata、derived scalar traces |
 
@@ -50,7 +51,7 @@ updated_by: team
 
 | File | What it means in the current design |
 |---|---|
-| `src/core/simulation/infrastructure/hbsolve.jl` | Julia-native simulation bridge owned by core simulation runtime |
+| `core/simulation/infrastructure/hbsolve.jl` | Julia-native simulation bridge owned by core simulation runtime |
 | `src/julia/plotting.jl` | Julia-owned plotting / result visualization helpers |
 | `src/julia/utils.jl` | helper alias boundary for Julia-side call sites |
 

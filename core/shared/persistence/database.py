@@ -9,7 +9,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, create_engine
 
 # Database file location
-DATABASE_PATH = Path(__file__).parent.parent.parent.parent.parent / "data" / "database.db"
+DATABASE_PATH = Path(__file__).resolve().parents[3] / "data" / "database.db"
 
 
 def resolve_database_path() -> Path:

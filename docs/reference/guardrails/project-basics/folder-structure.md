@@ -10,16 +10,19 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 current platform 中 frontend/backend/cli/desktop/core 的放置邊界。
-version: v2.5.0
+scope: 定義 current platform 的 top-level canonical development surfaces 與 migration residue 邊界。
+version: v3.0.0
 last_updated: 2026-03-21
 updated_by: codex
 ---
 
 # Folder Structure
 
-本 branch 的目標結構是為了支援前後端分離，同時保留現有科學計算核心與文件系統。
-舊版 UI 程式碼暫時保留在 legacy 區，但不應再作為新功能落點。
+本 branch 的 canonical target layout 以 top-level folders 作為正式架構邊界。
+`backend/`、`frontend/`、`core/`、`cli/`、`desktop/`、`legacy/` 是目前應被人類與 AI Agent 直接辨識的主要開發對象。
+
+root-level `src/` 不再應被描述為 future canonical umbrella。
+任何仍留在 root `src/` 底下的內容，都應視為 migration residue，除非另有文件明寫。
 
 !!! info "How to use this page"
     當你不確定新檔案該放哪裡時，先看 placement rules，而不是先照習慣找最近的資料夾塞進去。這頁的重點是 owner boundary，不是完整檔案樹教學。
@@ -28,35 +31,23 @@ updated_by: codex
 
 ```text
 superconducting-circuits-tutorial/
-├── frontend/                  # Next.js App Router frontend
-│   ├── src/app/               # routes, layouts, pages
-│   ├── src/components/        # shared UI components
-│   ├── src/features/          # feature-local UI modules
-│   ├── src/lib/               # API clients, schemas, utilities
-│   └── tests/                 # Vitest / Playwright
-├── desktop/                   # Electron shell
-│   ├── src/main/              # Electron main process
-│   ├── src/preload/           # secure preload bridge
-│   └── resources/             # desktop packaging assets
-├── backend/                   # FastAPI service
-│   ├── src/app/api/           # routers, request/response mapping
-│   ├── src/app/services/      # use cases / orchestration
-│   ├── src/app/domain/        # domain models and rules
-│   ├── src/app/infrastructure/# DB, external integrations
-│   └── tests/                 # pytest unit / integration tests
-├── cli/                       # Typer commands
-│   ├── src/sc_cli/            # commands, presenters, runtime adapters
-│   └── tests/
-├── src/core/                  # shared scientific kernels during migration
-│   ├── simulation/
-│   ├── analysis/
-│   └── shared/
+├── backend/                   # canonical app/backend service surface
+├── frontend/                  # canonical web app surface
+├── core/                      # canonical shared scientific/core surface
+├── cli/                       # canonical standalone CLI surface
+├── desktop/                   # canonical desktop shell surface
+├── legacy/
+│   └── legacy_nicegui_archived/ # archived UI payload; not a new-work target
 ├── docs/                      # zh-TW docs, guardrails, and docs staging tree
 ├── data/                      # raw / processed / trace-store / local DB
 ├── openapi.json               # committed OpenAPI snapshot for contract sync
-├── scripts/                   # repo helpers only
-└── src/app/                   # legacy UI code during migration only
+└── scripts/                   # repo helpers only
 ```
+
+!!! important "Top-level folders are the architecture boundaries"
+    這份 target layout 故意不把 root `src/` 畫成 umbrella。
+    package-internal `src/` 可以存在於 `backend/`、`frontend/`、`desktop/`、`cli/` 之內，
+    但 root-level `src/` 不再是未來架構的正式收納模型。
 
 ## Placement Rules
 
@@ -66,13 +57,22 @@ superconducting-circuits-tutorial/
 | Electron main / preload / packaging | `desktop/` |
 | API router, service, persistence | `backend/` |
 | CLI command or batch workflow | `cli/` |
-| 可被 API / CLI / simulation 共用的科學邏輯 | `src/core/` |
+| 可被 API / CLI / simulation 共用的科學邏輯 | `core/` |
 | repo automation, docs helper, migration helper | `scripts/` |
-| 舊版 UI 修補 | `src/app/`，且需明確標註為 migration-only |
+| archived NiceGUI residue | `legacy/legacy_nicegui_archived/`（current archived residue 仍可能在 `src/app/`） |
+| worker runtime residue / redesign staging | 不屬於 target layout；若仍需碰 `src/worker/`，只能以 migration/redesign context 理解 |
 | committed OpenAPI contract snapshot | root `openapi.json` |
 
-!!! warning "Do not invent new top-level homes"
-    若現有邊界已能表達責任，就不要再新增新的 top-level package 或平行資料夾。先修正 placement，再考慮目錄擴張。
+!!! warning "Do not reintroduce root `src/` as umbrella"
+    這次決策不是把 `backend/`、`frontend/`、`core/`、`cli/` 再包回 root `src/`。
+    若現有 top-level 邊界已能表達責任，就不要再讓 root `src/` 重新變成大雜燴入口。
+
+## Current Implementation Residue
+
+| Current location | How to interpret it now |
+| --- | --- |
+| `src/app/` | archived legacy UI residue，pending relocation to `legacy/legacy_nicegui_archived/` |
+| `src/worker/` | transition residue / pending backend worker-runtime redesign；不是 canonical current runtime folder，也不是新實作 owner |
 
 ## Related Blueprints
 
@@ -84,8 +84,9 @@ superconducting-circuits-tutorial/
 1. frontend 依賴 API contract，不直接依賴 backend internals
 2. desktop 依賴 frontend build 與受控 IPC，不承載業務規則
 3. backend API 層依賴 services/domain，不反向耦合到 web framework 以外的層
-4. CLI command 不得複製複雜 workflow logic；standalone CLI 的 shared logic 應優先收斂在 CLI-local runtime abstractions 或 `src/core/`
-5. `src/core/` 不得依賴 Next.js、FastAPI、Electron 或 CLI framework
+4. CLI command 不得複製複雜 workflow logic；standalone CLI 的 shared logic 應優先收斂在 CLI-local runtime abstractions 或 top-level `core/`
+5. top-level `core/` 不得依賴 Next.js、FastAPI、Electron 或 CLI framework
+6. root `src/` residues 不得被重新解讀成正式 architecture boundary
 
 ??? note "Why the full tree is still shown"
     這頁保留完整 target layout，是因為 folder boundary 本身就是 reference contract。其餘 guardrails 不需要都像這樣展開。
@@ -97,15 +98,17 @@ superconducting-circuits-tutorial/
 - **Frontend** work goes to `frontend/`.
 - **Desktop shell** work goes to `desktop/`.
 - **Backend** work goes to `backend/`.
+- **Shared scientific logic** goes to top-level `core/`.
 - **CLI** work goes to `cli/`.
-- **Shared scientific logic** goes to `src/core/`.
+- **Archived NiceGUI residue** targets `legacy/legacy_nicegui_archived/`; current `src/app/` should be read as archived payload pending relocation.
+- **`src/worker/`** is transition residue under redesign, not a canonical development surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
-- Existing `src/app/` legacy UI code is legacy and should only receive migration-support fixes.
+- Root-level `src/` is not the future canonical umbrella.
 - Dependency direction:
     - frontend depends on API contracts, not backend internals
     - desktop depends on frontend outputs and secure IPC, not business logic ownership
     - backend API layer depends inward on services/domain
-    - standalone CLI shared logic belongs in CLI-local runtime abstractions or `src/core/`; do not assume backend services are the default owner
-    - `src/core/` must stay framework-agnostic
+    - standalone CLI shared logic belongs in CLI-local runtime abstractions or top-level `core/`; do not assume backend services are the default owner
+    - top-level `core/` must stay framework-agnostic
 ```

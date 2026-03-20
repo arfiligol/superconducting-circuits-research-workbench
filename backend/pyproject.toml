@@ -1,12 +1,13 @@
 [project]
 name = "superconducting-circuits-backend"
 version = "0.1.0"
-description = "FastAPI rewrite foundation for superconducting circuits services."
+description = "FastAPI backend for superconducting circuits services."
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.17.0",
     "casbin>=1.43.0",
     "fastapi>=0.133.0",
+    "numpy>=2.4.3",
     "pydantic-settings>=2.11.0",
     "sc-core",
     "schemdraw>=0.22",
@@ -55,7 +56,7 @@ include = ["src", "tests"]
 reportMissingTypeStubs = "none"
 
 [tool.uv.sources]
-sc-core = { path = "../src/core", editable = true }
+sc-core = { path = "../core", editable = true }
 
 [tool.setuptools]
 package-dir = {"" = "."}

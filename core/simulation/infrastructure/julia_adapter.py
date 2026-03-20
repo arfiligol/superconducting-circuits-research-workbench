@@ -19,7 +19,7 @@ from core.simulation.domain.compiler import compile_simulation_topology
 
 # Path to the Julia bridge file
 _JULIA_BRIDGE_PATH = Path(__file__).parent / "hbsolve.jl"
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class JuliaSimulator:
