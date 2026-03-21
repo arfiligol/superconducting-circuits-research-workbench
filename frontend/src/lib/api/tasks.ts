@@ -186,6 +186,7 @@ type SimulationResultExplorerSelectionResponseShape = Readonly<{
   source: string;
   metric: string;
   sweep_index?: number | null;
+  compare_axis_index?: number | null;
   trace_key?: string | null;
   z0_ohm: number;
   output_port: number;
@@ -206,6 +207,7 @@ type SimulationResultExplorerParameterSweepBootstrapResponseShape = Readonly<{
   axes: readonly SimulationResultExplorerSweepAxisResponseShape[];
   point_count: number;
   active: boolean;
+  compare_axis_index?: number | null;
 }>;
 type SimulationResultExplorerPlotAxisResponseShape = Readonly<{
   label: string;
@@ -227,6 +229,7 @@ type SimulationResultExplorerPlotResponseShape = Readonly<{
     source: string;
     metric: string;
     sweep_index?: number | null;
+    compare_axis_index?: number | null;
     trace_key?: string | null;
     z0_ohm: number;
     output_port: number;
@@ -300,7 +303,7 @@ type SimulationResultPublicationResponseShape = Readonly<{
 
 export type TaskKind = "simulation" | "post_processing" | "characterization";
 export type TaskLane = "simulation" | "characterization";
-export type TaskExecutionMode = "run" | "smoke";
+export type TaskExecutionMode = "run" | "probe";
 export type TaskExecutionStatus =
   | "queued"
   | "dispatching"
@@ -589,16 +592,15 @@ export type TaskSummary = Readonly<{
 
 export type TaskDetail = TaskSummary &
   Readonly<{
-    queueBackend: "in_memory_scaffold";
     workerTaskName:
       | "simulation_run_task"
-      | "simulation_smoke_task"
+      | "simulation_probe_task"
       | "simulation_failure_task"
       | "simulation_crash_task"
       | "post_processing_run_task"
-      | "post_processing_smoke_task"
+      | "post_processing_probe_task"
       | "characterization_run_task"
-      | "characterization_smoke_task"
+      | "characterization_probe_task"
       | "characterization_failure_task"
       | "characterization_crash_task";
     requestReady: boolean;
@@ -682,6 +684,7 @@ export type SimulationResultExplorerSelection = Readonly<{
   source: string;
   metric: string;
   sweepIndex: number | null;
+  compareAxisIndex: number | null;
   traceKey: string | null;
   z0Ohm: number;
   outputPort: number;
@@ -711,6 +714,7 @@ export type SimulationResultExplorerPlot = Readonly<{
     source: string;
     metric: string;
     sweepIndex: number | null;
+    compareAxisIndex: number | null;
     traceKey: string | null;
     z0Ohm: number;
     outputPort: number;
@@ -735,6 +739,7 @@ export type SimulationResultExplorerPayload = Readonly<{
     parameterSweep: Readonly<{
       active: boolean;
       pointCount: number;
+      compareAxisIndex: number | null;
       axes: readonly Readonly<{
         parameter: string;
         label: string;
@@ -758,6 +763,7 @@ export type SimulationResultExplorerQuery = Readonly<{
   source?: string;
   metric?: string;
   sweepIndex?: number;
+  compareAxisIndex?: number;
   z0?: number;
   outputPort?: number;
   inputPort?: number;
@@ -941,6 +947,9 @@ export function simulationResultExplorerKey(
   }
   if (typeof query?.sweepIndex === "number") {
     params.set("sweep_index", String(query.sweepIndex));
+  }
+  if (typeof query?.compareAxisIndex === "number") {
+    params.set("compare_axis_index", String(query.compareAxisIndex));
   }
   if (typeof query?.z0 === "number") {
     params.set("z0", String(query.z0));
@@ -1334,6 +1343,7 @@ function mapSimulationResultExplorerSelection(
     source: payload.source,
     metric: payload.metric,
     sweepIndex: payload.sweep_index ?? null,
+    compareAxisIndex: payload.compare_axis_index ?? null,
     traceKey: payload.trace_key ?? null,
     z0Ohm: payload.z0_ohm,
     outputPort: payload.output_port,
@@ -1403,6 +1413,7 @@ export function mapSimulationResultExplorerResponse(
       parameterSweep: {
         active: payload.bootstrap.parameter_sweep.active,
         pointCount: payload.bootstrap.parameter_sweep.point_count,
+        compareAxisIndex: payload.bootstrap.parameter_sweep.compare_axis_index ?? null,
         axes: payload.bootstrap.parameter_sweep.axes.map((axis) => ({
           parameter: axis.parameter,
           label: axis.label,
@@ -1438,6 +1449,7 @@ export function mapSimulationResultExplorerResponse(
         source: payload.plot.metadata.source,
         metric: payload.plot.metadata.metric,
         sweepIndex: payload.plot.metadata.sweep_index ?? null,
+        compareAxisIndex: payload.plot.metadata.compare_axis_index ?? null,
         traceKey: payload.plot.metadata.trace_key ?? null,
         z0Ohm: payload.plot.metadata.z0_ohm,
         outputPort: payload.plot.metadata.output_port,
@@ -1527,7 +1539,6 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
 
   return {
     ...mapTaskSummaryResponse(payload),
-    queueBackend: payload.queue_backend,
     workerTaskName: payload.worker_task_name,
     requestReady: payload.request_ready,
     submittedFromActiveDataset: payload.submitted_from_active_dataset,

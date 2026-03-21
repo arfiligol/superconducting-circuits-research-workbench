@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
-from legacy.legacy_nicegui_archived.services.characterization_runner import create_pending_analysis_run
+from core.shared.persistence import get_unit_of_work
+from core.shared.persistence.models import DesignRecord, TaskRecord
+from legacy.legacy_nicegui_archived.services.characterization_runner import (
+    create_pending_analysis_run,
+)
 from legacy.legacy_nicegui_archived.services.characterization_task_contract import (
     extract_characterization_request_from_api_payload,
 )
@@ -18,10 +22,13 @@ from legacy.legacy_nicegui_archived.services.post_processing_batch_persistence i
 from legacy.legacy_nicegui_archived.services.post_processing_task_contract import (
     extract_post_processing_request_from_api_payload,
 )
-from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import create_pending_simulation_batch
-from legacy.legacy_nicegui_archived.services.simulation_task_contract import extract_simulation_request_from_api_payload
-from core.shared.persistence import get_unit_of_work
-from core.shared.persistence.models import DesignRecord, TaskRecord
+from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
+    create_pending_simulation_batch,
+)
+from legacy.legacy_nicegui_archived.services.simulation_task_contract import (
+    extract_simulation_request_from_api_payload,
+)
+
 from worker.dispatch import DispatchedWorkerTask, TaskSubmissionKind, enqueue_task
 
 
@@ -225,23 +232,77 @@ def _dispatch_metadata_for_task(task: TaskRecord) -> DispatchedWorkerTask:
             dict(task.request_payload.get("parameters", {}))
         )
         if simulation_request is not None and task.trace_batch_id is not None:
-            return DispatchedWorkerTask("simulation", "simulation_run_task")
-        return DispatchedWorkerTask("simulation", "simulation_smoke_task")
+            return _build_dispatch_metadata(
+                lane="simulation",
+                worker_task_name="simulation_run_task",
+                execution_mode="run",
+                request_ready=True,
+                requires_trace_batch=True,
+            )
+        return _build_dispatch_metadata(
+            lane="simulation",
+            worker_task_name="simulation_probe_task",
+            execution_mode="probe",
+            request_ready=False,
+            requires_trace_batch=True,
+        )
     if task.task_kind == "post_processing":
         post_processing_request = extract_post_processing_request_from_api_payload(
             dict(task.request_payload.get("parameters", {}))
         )
         if post_processing_request is not None and task.trace_batch_id is not None:
-            return DispatchedWorkerTask("simulation", "post_processing_run_task")
-        return DispatchedWorkerTask("simulation", "post_processing_smoke_task")
+            return _build_dispatch_metadata(
+                lane="simulation",
+                worker_task_name="post_processing_run_task",
+                execution_mode="run",
+                request_ready=True,
+                requires_trace_batch=True,
+            )
+        return _build_dispatch_metadata(
+            lane="simulation",
+            worker_task_name="post_processing_probe_task",
+            execution_mode="probe",
+            request_ready=False,
+            requires_trace_batch=True,
+        )
     if task.task_kind == "characterization":
         characterization_request = extract_characterization_request_from_api_payload(
             dict(task.request_payload.get("parameters", {}))
         )
         if characterization_request is not None and task.analysis_run_id is not None:
-            return DispatchedWorkerTask("characterization", "characterization_run_task")
-        return DispatchedWorkerTask("characterization", "characterization_smoke_task")
+            return _build_dispatch_metadata(
+                lane="characterization",
+                worker_task_name="characterization_run_task",
+                execution_mode="run",
+                request_ready=True,
+                requires_trace_batch=False,
+            )
+        return _build_dispatch_metadata(
+            lane="characterization",
+            worker_task_name="characterization_probe_task",
+            execution_mode="probe",
+            request_ready=False,
+            requires_trace_batch=False,
+        )
     raise ValueError(f"Unsupported task kind '{task.task_kind}'.")
+
+
+def _build_dispatch_metadata(
+    *,
+    lane: str,
+    worker_task_name: str,
+    execution_mode: str,
+    request_ready: bool,
+    requires_trace_batch: bool,
+) -> DispatchedWorkerTask:
+    return DispatchedWorkerTask(
+        lane=lane,
+        queue_name=lane,
+        worker_task_name=worker_task_name,
+        execution_mode=execution_mode,
+        request_ready=request_ready,
+        requires_trace_batch=requires_trace_batch,
+    )
 
 
 def require_design(design_id: int) -> DesignRecord:

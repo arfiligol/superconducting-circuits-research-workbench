@@ -4,6 +4,16 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from legacy.legacy_nicegui_archived.services.characterization_task_contract import (
+    extract_characterization_request_from_api_payload,
+)
+from legacy.legacy_nicegui_archived.services.post_processing_task_contract import (
+    extract_post_processing_request_from_api_payload,
+)
+from legacy.legacy_nicegui_archived.services.simulation_task_contract import (
+    extract_simulation_request_from_api_payload,
+)
+
 from sc_core.tasking import (
     WorkerDispatchPlan,
     build_worker_dispatch_plan,
@@ -11,14 +21,6 @@ from sc_core.tasking import (
     extract_parameters_payload,
     resolve_worker_task_route,
 )
-
-from legacy.legacy_nicegui_archived.services.characterization_task_contract import (
-    extract_characterization_request_from_api_payload,
-)
-from legacy.legacy_nicegui_archived.services.post_processing_task_contract import (
-    extract_post_processing_request_from_api_payload,
-)
-from legacy.legacy_nicegui_archived.services.simulation_task_contract import extract_simulation_request_from_api_payload
 from worker.config import create_queue
 
 LaneName = Literal["simulation", "characterization"]
@@ -72,24 +74,24 @@ def _resolve_worker_task_callable(task_callable: str):
         from worker.simulation_tasks import simulation_run_task
 
         return simulation_run_task
-    if task_callable == "simulation_smoke_task":
-        from worker.simulation_tasks import simulation_smoke_task
+    if task_callable == "simulation_probe_task":
+        from worker.simulation_tasks import simulation_probe_task
 
-        return simulation_smoke_task
+        return simulation_probe_task
     if task_callable == "post_processing_run_task":
         from worker.simulation_tasks import post_processing_run_task
 
         return post_processing_run_task
-    if task_callable == "post_processing_smoke_task":
-        from worker.simulation_tasks import post_processing_smoke_task
+    if task_callable == "post_processing_probe_task":
+        from worker.simulation_tasks import post_processing_probe_task
 
-        return post_processing_smoke_task
+        return post_processing_probe_task
     if task_callable == "characterization_run_task":
         from worker.characterization_tasks import characterization_run_task
 
         return characterization_run_task
-    if task_callable == "characterization_smoke_task":
-        from worker.characterization_tasks import characterization_smoke_task
+    if task_callable == "characterization_probe_task":
+        from worker.characterization_tasks import characterization_probe_task
 
-        return characterization_smoke_task
+        return characterization_probe_task
     raise ValueError(f"Unsupported worker task '{task_callable}'.")

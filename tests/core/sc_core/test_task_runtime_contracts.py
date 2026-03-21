@@ -4,12 +4,12 @@ from datetime import UTC, datetime, timedelta, timezone
 
 from sc_core.execution import (
     TaskExecutionHistoryEvent,
-    build_task_execution_history_context,
-    build_task_control_history_metadata,
     build_task_control_audit_payload,
     build_task_control_event_log,
-    build_task_control_history_pair,
     build_task_control_history_event,
+    build_task_control_history_metadata,
+    build_task_control_history_pair,
+    build_task_execution_history_context,
     build_task_lifecycle_history_metadata,
     build_task_submission_history_metadata,
     canonicalize_execution_timestamp,
@@ -24,11 +24,11 @@ from sc_core.tasking import (
     REDACTED_RUNTIME_METADATA_VALUE,
     TERMINAL_TASK_STATES,
     allowed_task_runtime_transitions,
-    build_task_dispatch_record,
     build_lane_processor_summaries,
     build_lane_processor_summaries_from_snapshots,
     build_processor_heartbeat,
     build_processor_heartbeat_from_snapshot,
+    build_task_dispatch_record,
     build_task_retry_lineage,
     build_task_state_matrix,
     can_transition_task_state,
@@ -70,7 +70,7 @@ def test_task_state_matrix_keeps_terminal_states_immutable() -> None:
     assert allowed_task_runtime_transitions("completed") == ()
     assert is_terminal_task_state("completed") is True
     assert is_terminal_task_state("running") is False
-    assert TERMINAL_TASK_STATES == {"completed", "failed", "cancelled", "terminated"}
+    assert {"completed", "failed", "cancelled", "terminated"} == TERMINAL_TASK_STATES
     assert can_transition_task_state("running", "termination_requested") is True
     assert can_transition_task_state("completed", "failed") is False
     assert can_transition_task_state("terminated", "terminated") is True
@@ -117,7 +117,7 @@ def test_post_processing_lane_and_processor_summary_are_lane_scoped() -> None:
         request_is_valid=True,
         has_trace_batch_id=True,
     )
-    assert route.lane == "post_processing"
+    assert route.lane == "simulation"
 
     now = _utc(2026, 3, 15, 12, 0)
     heartbeats = [
@@ -145,7 +145,7 @@ def test_post_processing_lane_and_processor_summary_are_lane_scoped() -> None:
         ),
         build_processor_heartbeat(
             processor_id="post-1",
-            lane="post_processing",
+            lane="simulation",
             state="degraded",
             last_heartbeat_at=now - timedelta(seconds=5),
             runtime_metadata={"warnings": ["slow-io"], "env": b"token"},
@@ -160,6 +160,7 @@ def test_post_processing_lane_and_processor_summary_are_lane_scoped() -> None:
     )
     assert simulation_summary.healthy_processors == 1
     assert simulation_summary.busy_processors == 1
+    assert simulation_summary.degraded_processors == 1
     assert simulation_summary.offline_processors == 0
 
     characterization_summary = summarize_lane_processors(
@@ -176,11 +177,7 @@ def test_post_processing_lane_and_processor_summary_are_lane_scoped() -> None:
         recorded_at=now,
         offline_after_seconds=90,
     )
-    assert [summary.lane for summary in summaries] == [
-        "characterization",
-        "post_processing",
-        "simulation",
-    ]
+    assert [summary.lane for summary in summaries] == ["characterization", "simulation"]
 
     post_payload = heartbeats[-1].to_payload(recorded_at=now, offline_after_seconds=90)
     assert post_payload["runtime_metadata"] == {
@@ -264,13 +261,19 @@ def test_task_event_metadata_builders_are_canonical_and_complete() -> None:
     context = _task_history_context(task_status="cancelled")
 
     submission_metadata = build_task_submission_history_metadata(context)
-    assert validate_task_history_event_metadata("task_submitted", submission_metadata) == submission_metadata
+    assert (
+        validate_task_history_event_metadata("task_submitted", submission_metadata)
+        == submission_metadata
+    )
 
     lifecycle_metadata = build_task_lifecycle_history_metadata(context)
     assert lifecycle_metadata["control_action"] == "cancel"
     assert lifecycle_metadata["control_phase"] == "terminal"
     assert lifecycle_metadata["terminal_state"] == "cancelled"
-    assert validate_task_history_event_metadata("task_cancel_requested", lifecycle_metadata) == lifecycle_metadata
+    assert (
+        validate_task_history_event_metadata("task_cancel_requested", lifecycle_metadata)
+        == lifecycle_metadata
+    )
 
     retry_lineage = build_task_retry_lineage(
         source_task_id=91,
@@ -356,7 +359,9 @@ def test_task_event_metadata_canonicalizer_supports_projection_and_strict_valida
     except ValueError as exc:
         assert "retry_root_task_id" in str(exc)
     else:
-        raise AssertionError("Expected strict canonicalization to reject incomplete retry metadata.")
+        raise AssertionError(
+            "Expected strict canonicalization to reject incomplete retry metadata."
+        )
 
     projected = project_task_runtime_state_from_history(
         (
@@ -535,7 +540,7 @@ def test_processor_snapshot_projection_preserves_lane_scope() -> None:
         },
         {
             "processor_id": "post-1",
-            "lane": "post_processing",
+            "lane": "simulation",
             "state": "healthy",
             "last_heartbeat_at": now,
             "runtime_metadata": {"version": "1.0.0"},
@@ -563,8 +568,9 @@ def test_processor_snapshot_projection_preserves_lane_scope() -> None:
         recorded_at=now,
         offline_after_seconds=90,
     )
-    assert [summary.lane for summary in summaries] == ["post_processing", "simulation"]
-    assert summaries[1].busy_processors == 1
+    assert [summary.lane for summary in summaries] == ["simulation"]
+    assert summaries[0].busy_processors == 1
+    assert summaries[0].healthy_processors == 1
 
 
 def _task_history_context(*, task_status: str) -> object:

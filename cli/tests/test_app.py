@@ -1422,7 +1422,7 @@ def test_simulation_submit_command_submits_simulation_task() -> None:
     assert result.exit_code == 0
     assert "kind: simulation" in result.stdout
     assert "lane: simulation" in result.stdout
-    assert "worker_task_name: simulation_smoke_task" in result.stdout
+    assert "worker_task_name: simulation_probe_task" in result.stdout
 
 
 def test_simulation_submit_command_supports_json_output() -> None:
@@ -1681,7 +1681,7 @@ def test_tasks_submit_command_submits_simulation_task() -> None:
     assert "kind: simulation" in result.stdout
     assert "definition_id: 18" in result.stdout
     assert "status: queued" in result.stdout
-    assert "worker_task_name: simulation_smoke_task" in result.stdout
+    assert "worker_task_name: simulation_probe_task" in result.stdout
     assert "request_ready: false" in result.stdout
 
 

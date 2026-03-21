@@ -9,18 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
-
-from legacy.legacy_nicegui_archived.pages.simulation.submit_actions import build_simulation_submission
-from legacy.legacy_nicegui_archived.services.auth_service import authenticate_user, ensure_bootstrap_admin, hash_password
-from legacy.legacy_nicegui_archived.services.characterization_task_contract import build_characterization_submission
-from legacy.legacy_nicegui_archived.services.execution_context import build_ui_use_case_context
-from legacy.legacy_nicegui_archived.services.post_processing_task_contract import build_post_processing_submission
-from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
-    create_pending_simulation_batch,
-    persist_simulation_result_into_batch,
-)
-from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunResult
 from core.shared.persistence import database, get_unit_of_work
 from core.shared.persistence.models import AnalysisRunRecord, DesignRecord, TraceBatchRecord
 from core.simulation.domain.circuit import (
@@ -29,6 +17,27 @@ from core.simulation.domain.circuit import (
     SimulationResult,
     parse_circuit_definition_source,
 )
+from fastapi.testclient import TestClient
+from legacy.legacy_nicegui_archived.pages.simulation.submit_actions import (
+    build_simulation_submission,
+)
+from legacy.legacy_nicegui_archived.services.auth_service import (
+    authenticate_user,
+    ensure_bootstrap_admin,
+    hash_password,
+)
+from legacy.legacy_nicegui_archived.services.characterization_task_contract import (
+    build_characterization_submission,
+)
+from legacy.legacy_nicegui_archived.services.execution_context import build_ui_use_case_context
+from legacy.legacy_nicegui_archived.services.post_processing_task_contract import (
+    build_post_processing_submission,
+)
+from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
+    create_pending_simulation_batch,
+    persist_simulation_result_into_batch,
+)
+from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunResult
 
 
 def _configure_test_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -391,7 +400,7 @@ def test_task_creation_get_and_design_listing_use_real_task_records(
     simulation_payload = simulation.json()
     assert simulation_payload["dedupe_hit"] is False
     assert simulation_payload["dispatched_lane"] == "simulation"
-    assert simulation_payload["worker_task_name"] == "simulation_smoke_task"
+    assert simulation_payload["worker_task_name"] == "simulation_probe_task"
     assert simulation_payload["task"]["design_id"] == design_id
     assert simulation_payload["task"]["actor_id"] == user_id
     simulation_task_id = int(simulation_payload["task"]["id"])
@@ -422,7 +431,7 @@ def test_task_creation_get_and_design_listing_use_real_task_records(
     )
     assert post_processing.status_code == 202
     assert post_processing.json()["dispatched_lane"] == "simulation"
-    assert post_processing.json()["worker_task_name"] == "post_processing_smoke_task"
+    assert post_processing.json()["worker_task_name"] == "post_processing_probe_task"
 
     characterization = client.post(
         "/api/v1/tasks/characterization",
@@ -439,7 +448,7 @@ def test_task_creation_get_and_design_listing_use_real_task_records(
     assert characterization.status_code == 202
     characterization_payload = characterization.json()
     assert characterization_payload["dispatched_lane"] == "characterization"
-    assert characterization_payload["worker_task_name"] == "characterization_smoke_task"
+    assert characterization_payload["worker_task_name"] == "characterization_probe_task"
 
     task_detail = client.get(f"/api/v1/tasks/{simulation_task_id}")
     assert task_detail.status_code == 200

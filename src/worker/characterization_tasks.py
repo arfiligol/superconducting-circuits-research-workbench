@@ -1,4 +1,4 @@
-"""Characterization-lane smoke and failure task functions for RQ."""
+"""Characterization-lane probe and failure task functions for RQ."""
 
 from __future__ import annotations
 
@@ -21,21 +21,21 @@ def characterization_run_task(task_id: int) -> dict[str, Any]:
     )
 
 
-def characterization_smoke_task(task_id: int) -> dict[str, Any]:
+def characterization_probe_task(task_id: int) -> dict[str, Any]:
     """Queue one minimal successful characterization-lane lifecycle round-trip."""
     return execute_managed_task(
         task_id=task_id,
         lane_name=_LANE_NAME,
-        worker_task_name="characterization_smoke_task",
+        worker_task_name="characterization_probe_task",
         operation=lambda: TaskExecutionResult(
-            result_summary_payload={"smoke_result": "ok"},
+            result_summary_payload={"probe_result": "ok"},
         ),
     )
 
 
 def characterization_failure_task(
     task_id: int,
-    message: str = "characterization smoke failure",
+    message: str = "characterization probe failure",
 ) -> dict[str, Any]:
     """Queue one task that fails with a structured Python exception payload."""
     return execute_managed_task(

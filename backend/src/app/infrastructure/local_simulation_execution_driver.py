@@ -11,16 +11,25 @@ from sc_core.execution import TaskExecutionResult, TaskResultHandle
 
 from src.app.domain.datasets import DesignBrowseRow, TraceMetadataSummary
 from src.app.domain.tasks import CharacterizationSetup, TaskDetail, TaskResultRefs
+from src.app.infrastructure.persisted_simulation_runtime import (
+    run_real_post_processing_task,
+    run_real_simulation_task,
+)
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
     build_result_handle_ref,
     build_result_provenance_ref,
     build_trace_payload_ref,
 )
+from src.app.services.service_errors import ServiceError
 
 
 class TaskDetailRepository(Protocol):
     def get_task(self, task_id: int) -> TaskDetail | None: ...
+
+
+class CircuitDefinitionRepository(Protocol):
+    def get_circuit_definition(self, definition_id: int) -> object | None: ...
 
 
 class TaskListingRepository(TaskDetailRepository, Protocol):
@@ -82,15 +91,25 @@ class TaskExecutionRuntime(Protocol):
         worker_pid: int | None = None,
     ) -> TaskDetail: ...
 
+    def finalize_bootstrap_terminated(
+        self,
+        task_id: int,
+        *,
+        recorded_at: datetime,
+        summary: str | None = None,
+    ) -> TaskDetail: ...
+
 
 class LocalSimulationExecutionDriver:
     def __init__(
         self,
         *,
         task_repository: TaskDetailRepository,
+        circuit_definition_repository: CircuitDefinitionRepository,
         execution_runtime_factory: Callable[[], TaskExecutionRuntime],
     ) -> None:
         self._task_repository = task_repository
+        self._circuit_definition_repository = circuit_definition_repository
         self._execution_runtime_factory = execution_runtime_factory
 
     def execute_submitted_task(self, task_id: int) -> None:
@@ -98,6 +117,28 @@ class LocalSimulationExecutionDriver:
         if task is None:
             return
         if task.kind != "simulation" or task.visibility_scope != "local" or task.status != "queued":
+            return
+        if task.definition_id is None:
+            runtime = self._execution_runtime_factory()
+            runtime.fail_task(
+                task.task_id,
+                recorded_at=datetime.now(UTC),
+                exc_type="InvalidTaskPayload",
+                message="Simulation definition is missing.",
+                worker_pid=os.getpid(),
+            )
+            return
+        definition = self._circuit_definition_repository.get_circuit_definition(task.definition_id)
+        source_text = getattr(definition, "source_text", None)
+        if not isinstance(source_text, str) or not source_text.strip():
+            runtime = self._execution_runtime_factory()
+            runtime.fail_task(
+                task.task_id,
+                recorded_at=datetime.now(UTC),
+                exc_type="DefinitionNotFound",
+                message="The selected circuit definition is not available.",
+                worker_pid=os.getpid(),
+            )
             return
 
         worker_pid = os.getpid()
@@ -111,26 +152,29 @@ class LocalSimulationExecutionDriver:
                 worker_pid=worker_pid,
                 stale_after_seconds=180,
             )
-            heartbeat_at = started_at + timedelta(seconds=1)
             runtime.heartbeat_task(
                 task.task_id,
-                recorded_at=heartbeat_at,
-                summary="Simulation worker is sweeping the requested frequency range.",
-                percent_complete=72,
+                recorded_at=started_at + timedelta(seconds=1),
+                summary="Simulation runtime is executing the persisted solver request.",
+                percent_complete=24,
                 stage_label=task.worker_task_name,
-                current_step=2,
+                current_step=1,
                 total_steps=3,
                 stale_after_seconds=180,
                 details=_heartbeat_details(task),
             )
+            result_summary_payload, result_refs = run_real_simulation_task(
+                task,
+                definition_source_text=source_text,
+            )
             runtime.complete_task(
                 task.task_id,
-                recorded_at=heartbeat_at + timedelta(seconds=1),
+                recorded_at=datetime.now(UTC),
                 result=TaskExecutionResult(
-                    result_summary_payload=_result_summary_payload(task),
-                    trace_batch_id=task.task_id,
+                    result_summary_payload=result_summary_payload,
+                    trace_batch_id=result_refs.trace_batch_id,
                 ),
-                result_refs=_build_simulation_result_refs(task),
+                result_refs=result_refs,
             )
         except Exception as exc:
             current_task = self._task_repository.get_task(task_id)
@@ -287,9 +331,11 @@ class LocalPostProcessingExecutionDriver:
         self,
         *,
         task_repository: TaskDetailRepository,
+        circuit_definition_repository: CircuitDefinitionRepository,
         execution_runtime_factory: Callable[[], TaskExecutionRuntime],
     ) -> None:
         self._task_repository = task_repository
+        self._circuit_definition_repository = circuit_definition_repository
         self._execution_runtime_factory = execution_runtime_factory
 
     def execute_submitted_task(self, task_id: int) -> None:
@@ -351,6 +397,24 @@ class LocalPostProcessingExecutionDriver:
                 ),
             )
             return
+        if upstream_task.definition_id is None:
+            self._fail_task(
+                task,
+                exc_type="UpstreamTaskInvalid",
+                message="The upstream simulation task is missing its circuit definition.",
+            )
+            return
+        definition = self._circuit_definition_repository.get_circuit_definition(
+            upstream_task.definition_id
+        )
+        source_text = getattr(definition, "source_text", None)
+        if not isinstance(source_text, str) or not source_text.strip():
+            self._fail_task(
+                task,
+                exc_type="DefinitionNotFound",
+                message="The upstream circuit definition is not available.",
+            )
+            return
 
         worker_pid = os.getpid()
         started_at = datetime.now(UTC)
@@ -366,39 +430,27 @@ class LocalPostProcessingExecutionDriver:
             runtime.heartbeat_task(
                 task.task_id,
                 recorded_at=started_at + timedelta(seconds=1),
-                summary="Post-processing worker is preparing the selected upstream traces.",
-                percent_complete=38,
+                summary="Post-processing runtime is preparing the persisted upstream traces.",
+                percent_complete=26,
                 stage_label=task.worker_task_name,
                 current_step=1,
                 total_steps=3,
                 stale_after_seconds=180,
                 details=_post_processing_heartbeat_details(task, upstream_task),
             )
-            runtime.heartbeat_task(
-                task.task_id,
-                recorded_at=started_at + timedelta(seconds=2),
-                summary="Post-processing worker is applying the configured processing steps.",
-                percent_complete=82,
-                stage_label=task.worker_task_name,
-                current_step=2,
-                total_steps=3,
-                stale_after_seconds=180,
-                details=_post_processing_operation_details(task),
+            result_summary_payload, result_refs = run_real_post_processing_task(
+                task,
+                upstream_task=upstream_task,
+                definition_source_text=source_text,
             )
             runtime.complete_task(
                 task.task_id,
-                recorded_at=started_at + timedelta(seconds=3),
+                recorded_at=datetime.now(UTC),
                 result=TaskExecutionResult(
-                    result_summary_payload=_post_processing_result_summary_payload(
-                        task=task,
-                        upstream_task=upstream_task,
-                    ),
-                    trace_batch_id=task.task_id,
+                    result_summary_payload=result_summary_payload,
+                    trace_batch_id=result_refs.trace_batch_id,
                 ),
-                result_refs=_build_post_processing_result_refs(
-                    task=task,
-                    upstream_task=upstream_task,
-                ),
+                result_refs=result_refs,
             )
         except Exception as exc:
             current_task = self._task_repository.get_task(task_id)
@@ -440,16 +492,37 @@ class LocalTaskExecutionDriver:
         self._characterization_driver = characterization_driver
 
     def recover_queued_tasks(self) -> None:
-        queued_local_tasks = sorted(
+        active_local_tasks = sorted(
             (
                 task
                 for task in self._task_repository.list_tasks()
-                if task.visibility_scope == "local" and task.status == "queued"
+                if task.visibility_scope == "local"
+                and task.status
+                in {
+                    "queued",
+                    "dispatching",
+                    "running",
+                    "cancellation_requested",
+                    "cancelling",
+                    "termination_requested",
+                }
             ),
             key=lambda task: (task.submitted_at, task.task_id),
         )
-        for task in queued_local_tasks:
-            self.execute_submitted_task(task.task_id)
+        runtime = self._execution_runtime_factory()
+        for task in active_local_tasks:
+            try:
+                runtime.finalize_bootstrap_terminated(
+                    task.task_id,
+                    recorded_at=datetime.now(UTC),
+                    summary=(
+                        "Local runtime restarted before the task completed. "
+                        "Re-submit the task to run it again."
+                    ),
+                )
+            except ServiceError as exc:
+                if exc.code != "task_not_found":
+                    raise
 
     def execute_submitted_task(self, task_id: int) -> None:
         task = self._task_repository.get_task(task_id)
@@ -570,7 +643,6 @@ def _post_processing_heartbeat_details(
         "dataset_id": task.dataset_id,
         "upstream_task_id": upstream_task.task_id,
         "source_task_kind": upstream_task.kind,
-        "output_view": setup.output_view if setup is not None else None,
         "trace_family": first_selection.trace_family if first_selection is not None else None,
         "representation": first_selection.representation if first_selection is not None else None,
         "selected_trace_count": (
@@ -604,7 +676,6 @@ def _post_processing_result_summary_payload(
         "task_kind": task.kind,
         "dataset_id": task.dataset_id,
         "upstream_task_id": upstream_task.task_id,
-        "output_view": setup.output_view if setup is not None else None,
         "trace_family": first_selection.trace_family if first_selection is not None else None,
         "representation": first_selection.representation if first_selection is not None else None,
         "selected_trace_ids": (

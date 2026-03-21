@@ -143,7 +143,7 @@ def test_task_service_raises_framework_agnostic_validation_error() -> None:
 def test_circuit_definition_service_raises_framework_agnostic_error_for_missing_definition() -> (
     None
 ):
-    app_state_repository = InMemoryRewriteAppStateRepository(include_task_scaffold=False)
+    app_state_repository = InMemoryRewriteAppStateRepository(seed_tasks=False)
     service = CircuitDefinitionService(
         repository=InMemoryRewriteCatalogRepository(),
         session_repository=app_state_repository,

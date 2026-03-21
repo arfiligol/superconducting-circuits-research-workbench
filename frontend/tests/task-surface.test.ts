@@ -34,7 +34,6 @@ describe("shared task surface helpers", () => {
       terminate: false,
       retry: false,
     },
-    queueBackend: "in_memory_scaffold",
     workerTaskName: "characterization_run_task",
     requestReady: true,
     submittedFromActiveDataset: true,

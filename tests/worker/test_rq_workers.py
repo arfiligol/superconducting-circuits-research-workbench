@@ -1,4 +1,4 @@
-"""RQ worker-lane integration tests for smoke, failure, and crash semantics."""
+"""RQ worker-lane integration tests for probe, failure, and crash semantics."""
 
 from __future__ import annotations
 
@@ -10,17 +10,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-
-from legacy.legacy_nicegui_archived.pages.simulation.submit_actions import build_simulation_submission
-from legacy.legacy_nicegui_archived.services.characterization_task_contract import build_characterization_submission
-from legacy.legacy_nicegui_archived.services.execution_context import ActorContext, build_ui_use_case_context
-from legacy.legacy_nicegui_archived.services.post_processing_task_contract import build_post_processing_submission
-from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
-    create_pending_simulation_batch,
-    persist_simulation_result_into_batch,
-)
-from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunResult
-from legacy.legacy_nicegui_archived.services.task_submission import create_api_task
 from core.shared.persistence import database
 from core.shared.persistence.models import DesignRecord
 from core.shared.persistence.reconcile import reconcile_stale_tasks_and_batches
@@ -31,6 +20,25 @@ from core.simulation.domain.circuit import (
     SimulationResult,
     parse_circuit_definition_source,
 )
+from legacy.legacy_nicegui_archived.pages.simulation.submit_actions import (
+    build_simulation_submission,
+)
+from legacy.legacy_nicegui_archived.services.characterization_task_contract import (
+    build_characterization_submission,
+)
+from legacy.legacy_nicegui_archived.services.execution_context import (
+    ActorContext,
+    build_ui_use_case_context,
+)
+from legacy.legacy_nicegui_archived.services.post_processing_task_contract import (
+    build_post_processing_submission,
+)
+from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
+    create_pending_simulation_batch,
+    persist_simulation_result_into_batch,
+)
+from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunResult
+from legacy.legacy_nicegui_archived.services.task_submission import create_api_task
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -177,7 +185,7 @@ def test_lane_workers_use_rq_queue_defaults(tmp_path: Path, monkeypatch) -> None
     assert characterization_worker.QUEUE_NAME == "characterization"
 
 
-def test_simulation_lane_smoke_task_round_trips_taskrecord(
+def test_simulation_lane_probe_task_round_trips_taskrecord(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -185,9 +193,9 @@ def test_simulation_lane_smoke_task_round_trips_taskrecord(
     simulation_worker, simulation_tasks, _characterization_worker, _characterization_tasks = (
         _reload_worker_modules()
     )
-    task_id = _create_task("simulation_smoke")
+    task_id = _create_task("simulation_probe")
 
-    _enqueue_test_job(simulation_worker.queue, simulation_tasks.simulation_smoke_task, task_id)
+    _enqueue_test_job(simulation_worker.queue, simulation_tasks.simulation_probe_task, task_id)
     processed = simulation_worker.consume(max_tasks=1, idle_timeout=0.2, poll_interval=0.01)
 
     assert processed == 1
@@ -196,10 +204,10 @@ def test_simulation_lane_smoke_task_round_trips_taskrecord(
         assert task is not None
         assert task.status == "completed"
         assert task.result_summary_payload["lane"] == "simulation"
-        assert task.result_summary_payload["smoke_result"] == "ok"
+        assert task.result_summary_payload["probe_result"] == "ok"
 
 
-def test_characterization_lane_smoke_task_round_trips_taskrecord(
+def test_characterization_lane_probe_task_round_trips_taskrecord(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -207,11 +215,11 @@ def test_characterization_lane_smoke_task_round_trips_taskrecord(
     _simulation_worker, _simulation_tasks, characterization_worker, characterization_tasks = (
         _reload_worker_modules()
     )
-    task_id = _create_task("characterization_smoke")
+    task_id = _create_task("characterization_probe")
 
     _enqueue_test_job(
         characterization_worker.queue,
-        characterization_tasks.characterization_smoke_task,
+        characterization_tasks.characterization_probe_task,
         task_id,
     )
     processed = characterization_worker.consume(max_tasks=1, idle_timeout=0.2, poll_interval=0.01)
@@ -222,7 +230,7 @@ def test_characterization_lane_smoke_task_round_trips_taskrecord(
         assert task is not None
         assert task.status == "completed"
         assert task.result_summary_payload["lane"] == "characterization"
-        assert task.result_summary_payload["smoke_result"] == "ok"
+        assert task.result_summary_payload["probe_result"] == "ok"
 
 
 def test_real_characterization_worker_task_persists_analysis_run(
@@ -595,7 +603,12 @@ def test_shared_use_case_modules_import_without_page_modules() -> None:
                 "import legacy.legacy_nicegui_archived.services.post_processing_runner; "
                 "import legacy.legacy_nicegui_archived.services.characterization_runner; "
                 "print('USE_CASE_IMPORT_OK'); "
-                "print(any(name.startswith('legacy.legacy_nicegui_archived.pages.') for name in sys.modules))"
+                "print("
+                "any("
+                "name.startswith('legacy.legacy_nicegui_archived.pages.') "
+                "for name in sys.modules"
+                ")"
+                ")"
             ),
         ],
         cwd=_REPO_ROOT,

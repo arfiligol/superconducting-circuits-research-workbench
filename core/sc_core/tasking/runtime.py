@@ -558,7 +558,7 @@ def _coerce_optional_int(value: object) -> int | None:
 
 
 def _coerce_lane_name(value: object) -> LaneName:
-    if value in {"simulation", "characterization", "post_processing"}:
+    if value in {"simulation", "characterization"}:
         return value
     raise ValueError("Expected supported lane value.")
 

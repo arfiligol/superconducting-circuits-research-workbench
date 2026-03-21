@@ -1,6 +1,6 @@
-import pytest
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sc_core.execution import (
     canonicalize_execution_timestamp,
     canonicalize_task_history_event_metadata,
@@ -41,11 +41,11 @@ def test_extract_parameters_payload_returns_mapping_copy() -> None:
     ("task_kind", "request_is_valid", "has_trace_batch_id", "expected_lane", "expected_name"),
     [
         ("simulation", True, True, "simulation", "simulation_run_task"),
-        ("simulation", True, False, "simulation", "simulation_smoke_task"),
-        ("post_processing", True, True, "post_processing", "post_processing_run_task"),
-        ("post_processing", False, True, "post_processing", "post_processing_smoke_task"),
+        ("simulation", True, False, "simulation", "simulation_probe_task"),
+        ("post_processing", True, True, "simulation", "post_processing_run_task"),
+        ("post_processing", False, True, "simulation", "post_processing_probe_task"),
         ("characterization", True, False, "characterization", "characterization_run_task"),
-        ("characterization", False, False, "characterization", "characterization_smoke_task"),
+        ("characterization", False, False, "characterization", "characterization_probe_task"),
     ],
 )
 def test_resolve_worker_task_route_matches_worker_lane_contract(
@@ -63,7 +63,7 @@ def test_resolve_worker_task_route_matches_worker_lane_contract(
 
     assert route.lane == expected_lane
     assert route.worker_task_name == expected_name
-    assert route.execution_mode == ("run" if expected_name.endswith("_run_task") else "smoke")
+    assert route.execution_mode == ("run" if expected_name.endswith("_run_task") else "probe")
 
 
 def test_resolve_worker_task_route_rejects_unknown_kind() -> None:

@@ -85,7 +85,7 @@ def get_rewrite_catalog_repository() -> InMemoryRewriteCatalogRepository:
 @lru_cache(maxsize=1)
 def get_rewrite_app_state_repository() -> InMemoryRewriteAppStateRepository:
     return InMemoryRewriteAppStateRepository(
-        include_task_scaffold=False,
+        seed_tasks=False,
     )
 
 
@@ -229,6 +229,7 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
     )
     local_simulation_execution_driver = LocalSimulationExecutionDriver(
         task_repository=get_rewrite_task_repository(),
+        circuit_definition_repository=get_rewrite_catalog_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
     local_characterization_execution_driver = LocalCharacterizationExecutionDriver(
@@ -238,6 +239,7 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
     )
     local_post_processing_execution_driver = LocalPostProcessingExecutionDriver(
         task_repository=get_rewrite_task_repository(),
+        circuit_definition_repository=get_rewrite_catalog_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
     local_task_execution_driver = LocalTaskExecutionDriver(

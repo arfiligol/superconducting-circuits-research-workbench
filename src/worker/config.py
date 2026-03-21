@@ -31,7 +31,7 @@ _FAKE_SERVER_BY_URL: dict[str, Any] = FAKE_SERVER_BY_URL
 
 
 def default_stale_timeout_seconds() -> int:
-    """Return the reconcile timeout used by worker smoke and startup helpers."""
+    """Return the reconcile timeout used by worker probe and startup helpers."""
     raw_value = os.getenv("SC_WORKER_STALE_TIMEOUT_SECONDS", "300")
     return max(1, int(raw_value))
 

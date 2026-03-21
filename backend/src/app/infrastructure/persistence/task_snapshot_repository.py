@@ -121,13 +121,13 @@ class SqliteRewriteTaskSnapshotRepository:
                 dataset_id=draft.dataset_id,
                 definition_id=draft.definition_id,
                 summary=draft.summary,
-                queue_backend="in_memory_scaffold",
+                queue_backend="local_runtime",
                 worker_task_name=draft.worker_task_name,
                 request_ready=draft.request_ready,
                 submitted_from_active_dataset=draft.submitted_from_active_dataset,
                 progress_phase="queued",
                 progress_percent_complete=0,
-                progress_summary="Task accepted by rewrite in-memory scaffold.",
+                progress_summary="Task accepted by the local runtime.",
                 progress_updated_at="2026-03-12 10:30:00",
             )
             session.add(row)

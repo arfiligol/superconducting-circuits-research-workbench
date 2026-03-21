@@ -2,9 +2,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-LaneName = Literal["simulation", "characterization", "post_processing"]
+LaneName = Literal["simulation", "characterization"]
 TaskSubmissionKind = Literal["simulation", "post_processing", "characterization"]
-TaskExecutionMode = Literal["run", "smoke"]
+TaskExecutionMode = Literal["run", "probe"]
 TaskDispatchStatus = Literal[
     "accepted",
     "dispatching",
@@ -33,13 +33,13 @@ TaskDispatchLifecycleStatus = Literal[
 TASKING_CONTRACT_VERSION = "sc_tasking.v1"
 WorkerTaskName = Literal[
     "simulation_run_task",
-    "simulation_smoke_task",
+    "simulation_probe_task",
     "simulation_failure_task",
     "simulation_crash_task",
     "post_processing_run_task",
-    "post_processing_smoke_task",
+    "post_processing_probe_task",
     "characterization_run_task",
-    "characterization_smoke_task",
+    "characterization_probe_task",
     "characterization_failure_task",
     "characterization_crash_task",
 ]
@@ -107,7 +107,7 @@ def resolve_worker_task_route(
             task_kind=task_kind,
             lane="simulation",
             run_task_name="simulation_run_task",
-            smoke_task_name="simulation_smoke_task",
+            probe_task_name="simulation_probe_task",
             request_is_valid=request_is_valid,
             has_trace_batch_id=has_trace_batch_id,
             requires_trace_batch=True,
@@ -116,9 +116,9 @@ def resolve_worker_task_route(
     if task_kind == "post_processing":
         return _build_route(
             task_kind=task_kind,
-            lane="post_processing",
+            lane="simulation",
             run_task_name="post_processing_run_task",
-            smoke_task_name="post_processing_smoke_task",
+            probe_task_name="post_processing_probe_task",
             request_is_valid=request_is_valid,
             has_trace_batch_id=has_trace_batch_id,
             requires_trace_batch=True,
@@ -129,7 +129,7 @@ def resolve_worker_task_route(
             task_kind=task_kind,
             lane="characterization",
             run_task_name="characterization_run_task",
-            smoke_task_name="characterization_smoke_task",
+            probe_task_name="characterization_probe_task",
             request_is_valid=request_is_valid,
             has_trace_batch_id=has_trace_batch_id,
             requires_trace_batch=False,
@@ -241,7 +241,7 @@ def _build_route(
     task_kind: TaskSubmissionKind,
     lane: LaneName,
     run_task_name: WorkerTaskName,
-    smoke_task_name: WorkerTaskName,
+    probe_task_name: WorkerTaskName,
     request_is_valid: bool,
     has_trace_batch_id: bool,
     requires_trace_batch: bool,
@@ -250,8 +250,8 @@ def _build_route(
     return WorkerTaskRoute(
         task_kind=task_kind,
         lane=lane,
-        worker_task_name=run_task_name if request_ready else smoke_task_name,
-        execution_mode="run" if request_ready else "smoke",
+        worker_task_name=run_task_name if request_ready else probe_task_name,
+        execution_mode="run" if request_ready else "probe",
         request_ready=request_ready,
         requires_trace_batch=requires_trace_batch,
     )

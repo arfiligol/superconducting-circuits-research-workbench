@@ -10,7 +10,7 @@ export type TaskQueueStatus =
   | "terminated"
   | "completed"
   | "failed";
-export type TaskQueueExecutionMode = "run" | "smoke";
+export type TaskQueueExecutionMode = "run" | "probe";
 export type TaskQueueVisibilityScope = "local" | "private" | "workspace" | "owned";
 
 export type TaskQueueItem = Readonly<{

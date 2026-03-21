@@ -400,7 +400,6 @@ describe("simulation task workflow helpers", () => {
             terminate: false,
             retry: false,
           },
-          queueBackend: "in_memory_scaffold",
           workerTaskName: "simulation_run_task",
           requestReady: true,
           submittedFromActiveDataset: true,
@@ -458,7 +457,6 @@ describe("simulation task workflow helpers", () => {
             terminate: false,
             retry: true,
           },
-          queueBackend: "in_memory_scaffold",
           workerTaskName: "simulation_run_task",
           requestReady: true,
           submittedFromActiveDataset: true,
@@ -521,7 +519,6 @@ describe("simulation task workflow helpers", () => {
             terminate: false,
             retry: true,
           },
-          queueBackend: "in_memory_scaffold",
           workerTaskName: "post_processing_run_task",
           requestReady: true,
           submittedFromActiveDataset: true,
@@ -590,7 +587,6 @@ describe("simulation task workflow helpers", () => {
         terminate: false,
         retry: true,
       },
-      queueBackend: "in_memory_scaffold",
       workerTaskName: "post_processing_run_task",
       requestReady: true,
       submittedFromActiveDataset: true,
@@ -696,7 +692,6 @@ describe("simulation task workflow helpers", () => {
     const completedDetail = {
       ...staleQueueTask,
       status: "completed",
-      queueBackend: "in_memory_scaffold",
       workerTaskName: "simulation_run_task",
       requestReady: true,
       submittedFromActiveDataset: true,
@@ -771,7 +766,7 @@ describe("simulation task workflow helpers", () => {
         taskId: 374,
         kind: "simulation",
         lane: "simulation",
-        executionMode: "smoke",
+        executionMode: "probe",
         status: "completed",
         submittedAt: "2026-03-18 14:43:41",
         ownerUserId: "local-operator",
@@ -789,12 +784,11 @@ describe("simulation task workflow helpers", () => {
           terminate: false,
           retry: false,
         },
-        queueBackend: "in_memory_scaffold",
-        workerTaskName: "simulation_smoke_task",
+        workerTaskName: "simulation_probe_task",
         requestReady: false,
         submittedFromActiveDataset: false,
         dispatch: {
-          dispatchKey: "dispatch:374:simulation_smoke_task",
+          dispatchKey: "dispatch:374:simulation_probe_task",
           status: "completed",
           submissionSource: "explicit_dataset",
           acceptedAt: "2026-03-18 14:43:41",
@@ -1272,13 +1266,19 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Downstream State");
     expect(simulationResultExplorerSource).toContain("Simulation Result Explorer");
     expect(simulationResultExplorerSource).toContain("Post Processing Result Explorer");
-    expect(simulationResultExplorerSource).toContain("Parameter Sweep Point");
-    expect(simulationResultExplorerSource).toContain("Choose the parameter-space point");
+    expect(simulationResultExplorerSource).toContain("Parameter Sweep");
+    expect(simulationResultExplorerSource).toContain("Compare Axis");
+    expect(simulationResultExplorerSource).toContain("Single trace");
+    expect(simulationResultExplorerSource).toContain("compareAxisIndex");
+    expect(simulationResultExplorerSource).toContain("setCompareAxis");
+    expect(simulationResultExplorerSource).toContain("Comparing ${compareAxis.values.length} traces");
     expect(simulationResultExplorerSource).toContain(
       'task.kind === "post_processing" && sourceOptions.length <= 1',
     );
     expect(simulationResultExplorerSource).toContain("AppSegmentedControl");
+    expect(simulationResultExplorerSource).toContain("disabled={isExplorerBusy}");
     expect(simulationResultExplorerSource).toContain('ariaLabel="Simulation result family"');
+    expect(simulationResultExplorerSource).toContain("Refreshing explorer selection");
     expect(simulationResultExplorerSource).toContain("Simulation result source");
     expect(simulationResultExplorerSource).toContain("Simulation result metric");
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
@@ -1296,6 +1296,7 @@ describe("simulation workflow source contract", () => {
     expect(currentTraceSaveControlSource).toContain("parameterName");
     expect(tasksApiSource).toContain("/result-traces/publish");
     expect(tasksApiSource).toContain("parameter_name: payload.parameterName ?? undefined");
+    expect(tasksApiSource).toContain("compare_axis_index");
     expect(currentTraceSaveControlSource).toContain("dataset_design_conflict");
     expect(currentTraceSaveControlSource).toContain("design_not_found");
     expect(currentTraceSaveControlSource).not.toContain("Active Dataset");
@@ -1309,15 +1310,24 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkflowHookSource).toContain("const pageContext = {");
     expect(simulationWorkbenchSource).toContain("resolveAuthoritativeSimulationTaskSummary");
     expect(simulationWorkbenchSource).toContain(
-      "const displayedSimulationStageTask = attachedSimulationStageTask ?? latestSimulationStageTask;",
+      "const displayedSimulationStageTask =",
     );
+    expect(simulationWorkbenchSource).toContain("optimisticSimulationTaskDetail ??");
     expect(simulationWorkbenchSource).toContain(
       "const displayedSimulationTaskDetail =",
     );
     expect(simulationWorkbenchSource).toContain("displayedSimulationStageAuthority");
-    expect(simulationWorkbenchSource).toContain("displayedSimulationSetupAuthorityKey");
-    expect(simulationWorkbenchSource).toContain("hydratedSimulationSetupAuthorityKey");
-    expect(simulationWorkbenchSource).toContain("displayedSimulationSetupAuthorityKey === hydratedSimulationSetupAuthorityKey");
+    expect(simulationWorkbenchSource).toContain("Sync Last Task Setup");
+    expect(simulationWorkbenchSource).toContain("setOptimisticSimulationTaskDetail(task);");
+    expect(simulationWorkbenchSource).toContain("adoptCurrentSetupAsTaskBacked(task.taskId);");
+    expect(simulationWorkbenchSource).toContain("resolvedTaskId !== null && resolvedTaskId !== optimisticSimulationTaskDetail.taskId");
+    expect(simulationWorkbenchSource).toContain("!isSimulationTaskActive(latestSimulationStageTask.status)");
+    expect(simulationWorkbenchSource).toContain("activeTaskError || (!isTaskTransitioning && !attachedSimulationTaskDetail)");
+    expect(simulationWorkbenchSource).toContain("Overwrite Current");
+    expect(simulationWorkbenchSource).toContain("Save as New");
+    expect(simulationWorkbenchSource).toContain('setSaveSetupDialogMode("new-only");');
+    expect(simulationWorkflowHookSource).toContain("void Promise.all([");
+    expect(simulationWorkbenchSource).not.toContain("hydratedSimulationSetupAuthorityKey");
     expect(simulationWorkbenchSource).toContain("latestPostProcessingStageAuthority");
     expect(simulationWorkbenchSource).toContain("Persisted result handoff:");
     expect(simulationWorkbenchSource).toContain("const workflowContextResetKey =");
@@ -1367,7 +1377,6 @@ describe("task api detail mapping", () => {
       dataset_id: "fluxonium-2025-031",
       definition_id: 18,
       summary: "Simulation request for FloatingQubitWithXYLine",
-      queue_backend: "in_memory_scaffold",
       worker_task_name: "simulation_run_task",
       request_ready: true,
       submitted_from_active_dataset: true,
@@ -1603,7 +1612,6 @@ describe("task api detail mapping", () => {
           dataset_id: "fluxonium-2025-031",
           definition_id: 18,
           summary: "Simulation request for FloatingQubitWithXYLine",
-          queue_backend: "in_memory_scaffold",
           worker_task_name: "simulation_run_task",
           request_ready: true,
           submitted_from_active_dataset: true,
@@ -1794,6 +1802,7 @@ describe("task api detail mapping", () => {
       source: "ptc",
       metric: "real",
       sweepIndex: 3,
+      compareAxisIndex: null,
       traceKey: "ptc:z_matrix:2:1",
       z0Ohm: 75,
       outputPort: 2,
@@ -1814,10 +1823,12 @@ describe("task api detail mapping", () => {
     expect(explorer.bootstrap.defaultSelection.traceKey).toBe("raw:s_matrix:1:1");
     expect(explorer.bootstrap.defaultSelection.sweepIndex).toBe(2);
     expect(explorer.bootstrap.parameterSweep.pointCount).toBe(6);
+    expect(explorer.bootstrap.parameterSweep.compareAxisIndex).toBeNull();
     expect(explorer.bootstrap.parameterSweep.axes[0]?.selectedValueIndex).toBe(1);
     expect(explorer.plot.metadata.outputPortLabel).toBe("Port 2");
     expect(explorer.plot.metadata.inputPortLabel).toBe("Port 1");
     expect(explorer.plot.metadata.sweepIndex).toBe(3);
+    expect(explorer.plot.metadata.compareAxisIndex).toBeNull();
     expect(explorer.plot.metadata.traceKey).toBe("ptc:z_matrix:2:1");
     expect(explorer.plot.metadata.tracePayloadStoreKey).toBe("trace-output-44");
     expect(explorer.resultBasis.primaryResultHandleId).toBe("handle-44");

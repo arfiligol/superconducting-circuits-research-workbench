@@ -267,7 +267,7 @@ export function resolveShellTaskLabel(task: Pick<TaskSummary, "kind" | "executio
         ? "Characterization"
         : "Simulation";
 
-  return `${kindLabel} · ${task.executionMode === "smoke" ? "Probe" : task.executionMode === "run" ? "Run" : "Task"}`;
+  return `${kindLabel} · ${task.executionMode === "probe" ? "Probe" : task.executionMode === "run" ? "Run" : "Task"}`;
 }
 
 export function resolveShellActiveDatasetSummary(

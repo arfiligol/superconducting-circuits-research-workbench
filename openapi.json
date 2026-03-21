@@ -1800,7 +1800,7 @@
             "type": "string",
             "enum": [
               "run",
-              "smoke"
+              "probe"
             ],
             "title": "Execution Mode"
           },
@@ -1868,22 +1868,17 @@
             "type": "string",
             "title": "Summary"
           },
-          "queue_backend": {
-            "type": "string",
-            "const": "in_memory_scaffold",
-            "title": "Queue Backend"
-          },
           "worker_task_name": {
             "type": "string",
             "enum": [
               "simulation_run_task",
-              "simulation_smoke_task",
+              "simulation_probe_task",
               "simulation_failure_task",
               "simulation_crash_task",
               "post_processing_run_task",
-              "post_processing_smoke_task",
+              "post_processing_probe_task",
               "characterization_run_task",
-              "characterization_smoke_task",
+              "characterization_probe_task",
               "characterization_failure_task",
               "characterization_crash_task"
             ],
@@ -1930,7 +1925,6 @@
           "dataset_id",
           "definition_id",
           "summary",
-          "queue_backend",
           "worker_task_name",
           "request_ready",
           "submitted_from_active_dataset",
@@ -2250,7 +2244,7 @@
             "type": "string",
             "enum": [
               "run",
-              "smoke"
+              "probe"
             ],
             "title": "Execution Mode"
           },

@@ -149,7 +149,7 @@ class InMemoryRewriteAppStateRepository:
         storage_metadata_repository: StorageMetadataRepository | None = None,
         task_snapshot_repository: TaskSnapshotRepository | None = None,
         *,
-        include_task_scaffold: bool = True,
+        seed_tasks: bool = True,
     ) -> None:
         self._storage_metadata_repository = storage_metadata_repository
         self._task_snapshot_repository = task_snapshot_repository
@@ -188,9 +188,7 @@ class InMemoryRewriteAppStateRepository:
         self._workspace_invitations: dict[str, _WorkspaceInvitationRecord] = {}
         self._pending_invitation_acceptances: dict[str, _PendingInvitationAcceptanceRecord] = {}
         self._next_invite_id = 1
-        self._tasks = (
-            {task.task_id: task for task in build_seed_tasks()} if include_task_scaffold else {}
-        )
+        self._tasks = {task.task_id: task for task in build_seed_tasks()} if seed_tasks else {}
         self._next_task_id = max(self._tasks, default=305) + 1
         self._persist_seed_task_snapshots()
         self._persist_seed_storage_metadata()
@@ -959,14 +957,14 @@ class InMemoryRewriteAppStateRepository:
             dataset_id=draft.dataset_id,
             definition_id=draft.definition_id,
             summary=draft.summary,
-            queue_backend="in_memory_scaffold",
+            queue_backend="local_runtime",
             worker_task_name=draft.worker_task_name,
             request_ready=draft.request_ready,
             submitted_from_active_dataset=draft.submitted_from_active_dataset,
             progress=TaskProgress(
                 phase="queued",
                 percent_complete=0,
-                summary="Task accepted by rewrite in-memory scaffold.",
+                summary="Task accepted by the local runtime.",
                 updated_at="2026-03-12 10:30:00",
             ),
             result_refs=build_pending_result_refs(task_id=task_id, draft=draft),
@@ -1596,7 +1594,7 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             dataset_id="local-dataset-001",
             definition_id=3,
             summary="Local Space preview simulation is running.",
-            queue_backend="in_memory_scaffold",
+            queue_backend="local_runtime",
             worker_task_name="simulation_run_task",
             request_ready=True,
             submitted_from_active_dataset=True,
@@ -1623,7 +1621,7 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             dataset_id="fluxonium-2025-031",
             definition_id=18,
             summary="Fluxonium parameter sweep is running.",
-            queue_backend="in_memory_scaffold",
+            queue_backend="local_runtime",
             worker_task_name="simulation_run_task",
             request_ready=True,
             submitted_from_active_dataset=True,
@@ -1650,14 +1648,14 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             dataset_id="transmon-coupler-014",
             definition_id=None,
             summary="Coupler dataset characterization is queued.",
-            queue_backend="in_memory_scaffold",
+            queue_backend="local_runtime",
             worker_task_name="characterization_run_task",
             request_ready=True,
             submitted_from_active_dataset=False,
             progress=TaskProgress(
                 phase="queued",
                 percent_complete=0,
-                summary="Task accepted by rewrite in-memory scaffold.",
+                summary="Task accepted by the local runtime.",
                 updated_at="2026-03-12 08:40:00",
             ),
             result_refs=_empty_result_refs(),
@@ -1677,7 +1675,7 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             dataset_id="fluxonium-2025-031",
             definition_id=None,
             summary="Fluxonium fit bundle was post-processed.",
-            queue_backend="in_memory_scaffold",
+            queue_backend="local_runtime",
             worker_task_name="post_processing_run_task",
             request_ready=True,
             submitted_from_active_dataset=True,
@@ -1693,7 +1691,7 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             task_id=304,
             kind="simulation",
             lane="simulation",
-            execution_mode="smoke",
+            execution_mode="probe",
             status="queued",
             submitted_at="2026-03-11 17:40:00",
             owner_user_id="researcher-02",
@@ -1704,14 +1702,14 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             dataset_id="fluxonium-2025-031",
             definition_id=12,
             summary="Private simulation draft remains owner-only.",
-            queue_backend="in_memory_scaffold",
-            worker_task_name="simulation_smoke_task",
+            queue_backend="local_runtime",
+            worker_task_name="simulation_probe_task",
             request_ready=False,
             submitted_from_active_dataset=False,
             progress=TaskProgress(
                 phase="queued",
                 percent_complete=0,
-                summary="Task accepted by rewrite in-memory scaffold.",
+                summary="Task accepted by the local runtime.",
                 updated_at="2026-03-11 17:40:00",
             ),
             result_refs=_empty_result_refs(),
@@ -1731,7 +1729,7 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             dataset_id="transmon-coupler-014",
             definition_id=None,
             summary="Modeling workspace characterization is running.",
-            queue_backend="in_memory_scaffold",
+            queue_backend="local_runtime",
             worker_task_name="characterization_run_task",
             request_ready=True,
             submitted_from_active_dataset=False,

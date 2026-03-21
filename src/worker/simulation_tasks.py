@@ -1,4 +1,4 @@
-"""Simulation-lane smoke and failure task functions for RQ."""
+"""Simulation-lane probe and failure task functions for RQ."""
 
 from __future__ import annotations
 
@@ -22,14 +22,14 @@ def simulation_run_task(task_id: int) -> dict[str, Any]:
     )
 
 
-def simulation_smoke_task(task_id: int) -> dict[str, Any]:
+def simulation_probe_task(task_id: int) -> dict[str, Any]:
     """Queue one minimal successful task lifecycle round-trip."""
     return execute_managed_task(
         task_id=task_id,
         lane_name=_LANE_NAME,
-        worker_task_name="simulation_smoke_task",
+        worker_task_name="simulation_probe_task",
         operation=lambda: TaskExecutionResult(
-            result_summary_payload={"smoke_result": "ok"},
+            result_summary_payload={"probe_result": "ok"},
         ),
     )
 
@@ -44,15 +44,15 @@ def post_processing_run_task(task_id: int) -> dict[str, Any]:
     )
 
 
-def post_processing_smoke_task(task_id: int) -> dict[str, Any]:
+def post_processing_probe_task(task_id: int) -> dict[str, Any]:
     """Queue one minimal post-processing lifecycle round-trip on the simulation lane."""
     return execute_managed_task(
         task_id=task_id,
         lane_name=_LANE_NAME,
-        worker_task_name="post_processing_smoke_task",
+        worker_task_name="post_processing_probe_task",
         operation=lambda: TaskExecutionResult(
             result_summary_payload={
-                "smoke_result": "ok",
+                "probe_result": "ok",
                 "flow": "post_processing",
             },
         ),
@@ -61,7 +61,7 @@ def post_processing_smoke_task(task_id: int) -> dict[str, Any]:
 
 def simulation_failure_task(
     task_id: int,
-    message: str = "simulation smoke failure",
+    message: str = "simulation probe failure",
 ) -> dict[str, Any]:
     """Queue one task that fails with a structured Python exception payload."""
     return execute_managed_task(

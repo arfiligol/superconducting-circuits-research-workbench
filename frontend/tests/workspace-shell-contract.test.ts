@@ -58,7 +58,7 @@ describe("workspace shell contract helpers", () => {
     expect(
       resolveShellTaskLabel({
         kind: "post_processing",
-        executionMode: "smoke",
+        executionMode: "probe",
       }),
     ).toBe("Post-processing · Probe");
   });

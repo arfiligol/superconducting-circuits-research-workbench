@@ -144,7 +144,7 @@ def test_runtime_bootstrap_persists_seeded_trace_payload_and_materialized_handle
     )
 
 
-def test_task_service_uses_persisted_task_repository_not_app_state_scaffold() -> None:
+def test_task_service_uses_persisted_task_repository_not_app_state_seeds() -> None:
     app_state_repository = get_rewrite_app_state_repository()
     persisted_task = get_task_service().get_task(303)
     persisted_history = get_rewrite_task_repository().get_task_history_view(303)
@@ -195,7 +195,7 @@ def test_runtime_reset_prefers_persisted_result_handle_over_seed_defaults() -> N
     assert reloaded_task.result_refs.metadata_records[1].version == 9
 
 
-def test_runtime_reset_prefers_persisted_task_snapshot_over_scaffold_defaults() -> None:
+def test_runtime_reset_prefers_persisted_task_snapshot_over_seed_defaults() -> None:
     task_snapshot_repository = get_task_snapshot_repository()
     initial_task = get_task_service().get_task(302)
     updated_task = replace(

@@ -28,7 +28,6 @@ describe("task event history helpers", () => {
       terminate: false,
       retry: false,
     },
-    queueBackend: "in_memory_scaffold",
     workerTaskName: "simulation_run_task",
     requestReady: true,
     submittedFromActiveDataset: true,

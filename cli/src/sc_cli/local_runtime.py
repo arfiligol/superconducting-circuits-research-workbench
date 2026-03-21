@@ -534,7 +534,7 @@ def _seed_owned_only_task() -> LocalTaskDetail:
         task_id=304,
         kind="simulation",
         lane="simulation",
-        execution_mode="smoke",
+        execution_mode="probe",
         status="queued",
         visibility_scope="owned",
         dataset_id="fluxonium-2025-031",
@@ -546,7 +546,7 @@ def _seed_owned_only_task() -> LocalTaskDetail:
         workspace_id="ws-device-lab",
         workspace_slug="device-lab",
         queue_backend="local_registry",
-        worker_task_name="simulation_smoke_task",
+        worker_task_name="simulation_probe_task",
         request_ready=False,
         submitted_from_active_dataset=True,
         progress=LocalTaskProgress(
@@ -767,8 +767,8 @@ def submit_task(
     execution_mode = "run"
     worker_task_name = "local_task_runner"
     if kind == "simulation":
-        execution_mode = "smoke"
-        worker_task_name = "simulation_smoke_task"
+        execution_mode = "probe"
+        worker_task_name = "simulation_probe_task"
     elif kind == "characterization":
         worker_task_name = "characterization_run_task"
     elif kind == "post_processing":

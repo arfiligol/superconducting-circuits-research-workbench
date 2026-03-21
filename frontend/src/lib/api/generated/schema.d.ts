@@ -540,7 +540,7 @@ export interface components {
              * Execution Mode
              * @enum {string}
              */
-            execution_mode: "run" | "smoke";
+            execution_mode: "run" | "probe";
             /**
              * Status
              * @enum {string}
@@ -568,15 +568,10 @@ export interface components {
             /** Summary */
             summary: string;
             /**
-             * Queue Backend
-             * @constant
-             */
-            queue_backend: "in_memory_scaffold";
-            /**
              * Worker Task Name
              * @enum {string}
              */
-            worker_task_name: "simulation_run_task" | "simulation_smoke_task" | "simulation_failure_task" | "simulation_crash_task" | "post_processing_run_task" | "post_processing_smoke_task" | "characterization_run_task" | "characterization_smoke_task" | "characterization_failure_task" | "characterization_crash_task";
+            worker_task_name: "simulation_run_task" | "simulation_probe_task" | "simulation_failure_task" | "simulation_crash_task" | "post_processing_run_task" | "post_processing_probe_task" | "characterization_run_task" | "characterization_probe_task" | "characterization_failure_task" | "characterization_crash_task";
             /** Request Ready */
             request_ready: boolean;
             /** Submitted From Active Dataset */
@@ -696,7 +691,7 @@ export interface components {
              * Execution Mode
              * @enum {string}
              */
-            execution_mode: "run" | "smoke";
+            execution_mode: "run" | "probe";
             /**
              * Status
              * @enum {string}
