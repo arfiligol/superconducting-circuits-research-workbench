@@ -26,8 +26,10 @@ import {
 } from "../src/features/simulation/lib/saved-setups";
 import {
   mapSimulationResultExplorerResponse,
+  simulationResultExplorerBootstrapKey,
   mapTaskDetailResponse,
   simulationResultExplorerKey,
+  simulationResultExplorerViewKey,
   taskDetailKey,
   unwrapTaskMutation,
 } from "../src/lib/api/tasks";
@@ -111,6 +113,15 @@ const simulationResultExplorerSource = readFileSync(
   fileURLToPath(
     new URL(
       "../src/features/simulation/components/simulation-result-explorer.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationResultExplorerStateSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/lib/simulation-result-explorer-state.ts",
       import.meta.url,
     ),
   ),
@@ -1307,11 +1318,16 @@ describe("simulation workflow source contract", () => {
     );
     expect(simulationResultExplorerSource).toContain("AppSegmentedControl");
     expect(simulationResultExplorerSource).toContain('ariaLabel="Simulation result family"');
+    expect(simulationResultExplorerSource).toContain("Refreshing explorer selection");
     expect(simulationResultExplorerSource).toContain("Simulation result source");
     expect(simulationResultExplorerSource).toContain("Simulation result metric");
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
     expect(simulationResultExplorerSource).toContain("PTC results appear when you switch to");
     expect(simulationResultExplorerSource).toContain("Z0 only applies to Y/Z derived explorer families.");
+    expect(simulationResultExplorerSource).toContain("const bootstrap = explorer.bootstrap");
+    expect(simulationResultExplorerSource).toContain(
+      "const resolvedSelection = explorer.resolvedSelection",
+    );
     expect(simulationResultExplorerSource).toContain("CurrentTraceSaveControl");
     expect(simulationWorkbenchSource).not.toContain("SimulationResultPublicationCard");
     expect(currentTraceSaveControlSource).toContain("Save Current Trace");
@@ -1375,10 +1391,28 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkflowHookSource).not.toContain("keepPreviousData: true");
     expect(simulationWorkflowHookSource).toContain("shouldRefreshTaskDetail");
     expect(simulationWorkflowHookSource).toContain('task.status === "completed" && !hasSimulationTaskResult(task)');
-    expect(simulationResultExplorerHookSource).toContain("simulationResultExplorerKey");
-    expect(simulationResultExplorerHookSource).toContain("getSimulationResultExplorer");
+    expect(simulationResultExplorerHookSource).toContain(
+      "simulationResultExplorerBootstrapKey",
+    );
+    expect(simulationResultExplorerHookSource).toContain("simulationResultExplorerViewKey");
+    expect(simulationResultExplorerHookSource).toContain(
+      "getSimulationResultExplorerBootstrap",
+    );
+    expect(simulationResultExplorerHookSource).toContain("getSimulationResultExplorerView");
+    expect(simulationResultExplorerHookSource).toContain("viewCacheRef");
+    expect(simulationResultExplorerHookSource).toContain("activeViewSlice");
+    expect(simulationResultExplorerHookSource).toContain("isRefreshingSelection");
+    expect(simulationResultExplorerHookSource).toContain(
+      "composeSimulationResultExplorerPayload",
+    );
     expect(simulationResultExplorerHookSource).toContain("setFamily(nextFamily: string)");
     expect(simulationResultExplorerHookSource).toContain("setZ0(nextZ0: number)");
+    expect(simulationResultExplorerStateSource).toContain(
+      "buildSimulationResultExplorerSelectionCacheKey",
+    );
+    expect(simulationResultExplorerStateSource).toContain(
+      "primeSimulationResultExplorerViewCache",
+    );
     expect(simulationTaskAttachmentHookSource).toContain("simulation:attached-task:");
     expect(simulationTaskAttachmentHookSource).toContain("autoRestoredTaskIdRef");
     expect(simulationTaskAttachmentHookSource).toContain(
@@ -1772,6 +1806,9 @@ describe("task api detail mapping", () => {
     expect(simulationResultExplorerKey(31)).toBe(
       "/api/backend/tasks/31/simulation-results/explorer",
     );
+    expect(simulationResultExplorerBootstrapKey(31)).toBe(
+      "/api/backend/tasks/31/simulation-results/explorer",
+    );
     expect(
       simulationResultExplorerKey(31, {
         family: "z_matrix",
@@ -1784,6 +1821,20 @@ describe("task api detail mapping", () => {
       }),
     ).toBe(
       "/api/backend/tasks/31/simulation-results/explorer?family=z_matrix&source=ptc&metric=real&sweep_index=3&z0=75&output_port=2&input_port=1",
+    );
+    expect(
+      simulationResultExplorerViewKey(31, {
+        family: "z_matrix",
+        source: "ptc",
+        metric: "real",
+        sweepIndex: 3,
+        compareAxisIndex: 1,
+        z0: 75,
+        outputPort: 2,
+        inputPort: 1,
+      }),
+    ).toBe(
+      "/api/backend/tasks/31/simulation-results/explorer?family=z_matrix&source=ptc&metric=real&sweep_index=3&compare_axis_index=1&z0=75&output_port=2&input_port=1",
     );
 
     const explorer = mapSimulationResultExplorerResponse({

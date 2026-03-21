@@ -801,6 +801,13 @@ export type SimulationResultExplorerPayload = Readonly<{
     traceBatchId: number | null;
   }>;
 }>;
+export type SimulationResultExplorerBootstrap =
+  SimulationResultExplorerPayload["bootstrap"];
+export type SimulationResultExplorerViewSlice = Readonly<{
+  selection: SimulationResultExplorerSelection;
+  plot: SimulationResultExplorerPlot;
+  resultBasis: SimulationResultExplorerPayload["resultBasis"];
+}>;
 export type SimulationResultExplorerQuery = Readonly<{
   family?: string;
   source?: string;
@@ -971,6 +978,21 @@ export function simulationResultExplorerKey(
   taskId: number,
   query?: SimulationResultExplorerQuery,
 ) {
+  if (!query) {
+    return simulationResultExplorerBootstrapKey(taskId);
+  }
+
+  return simulationResultExplorerViewKey(taskId, query);
+}
+
+export function simulationResultExplorerBootstrapKey(taskId: number) {
+  return `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/explorer`;
+}
+
+export function simulationResultExplorerViewKey(
+  taskId: number,
+  query: SimulationResultExplorerQuery,
+) {
   const params = new URLSearchParams();
 
   if (query?.family) {
@@ -998,7 +1020,7 @@ export function simulationResultExplorerKey(
     params.set("input_port", String(query.inputPort));
   }
 
-  const basePath = `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/explorer`;
+  const basePath = simulationResultExplorerBootstrapKey(taskId);
   const search = params.toString();
   return search ? `${basePath}?${search}` : basePath;
 }
@@ -1639,6 +1661,23 @@ export async function getSimulationResultExplorer(
 ) {
   const response = await apiRequest<SimulationResultExplorerResponseShape>(
     simulationResultExplorerKey(taskId, query),
+  );
+  return mapSimulationResultExplorerResponse(response);
+}
+
+export async function getSimulationResultExplorerBootstrap(taskId: number) {
+  const response = await apiRequest<SimulationResultExplorerResponseShape>(
+    simulationResultExplorerBootstrapKey(taskId),
+  );
+  return mapSimulationResultExplorerResponse(response);
+}
+
+export async function getSimulationResultExplorerView(
+  taskId: number,
+  query: SimulationResultExplorerQuery,
+) {
+  const response = await apiRequest<SimulationResultExplorerResponseShape>(
+    simulationResultExplorerViewKey(taskId, query),
   );
   return mapSimulationResultExplorerResponse(response);
 }
