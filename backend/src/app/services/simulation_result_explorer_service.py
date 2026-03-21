@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -44,75 +45,65 @@ _FAMILY_METRICS = {
 }
 
 
+@dataclass(frozen=True)
+class ExplorerSelectionRequest:
+    family: str | None = None
+    source: str | None = None
+    metric: str | None = None
+    sweep_index: int | None = None
+    z0_ohm: float | None = None
+    output_port: int | None = None
+    input_port: int | None = None
+
+
+@dataclass(frozen=True)
+class _ExplorerContext:
+    explorer_task: TaskDetail
+    basis_task: TaskDetail
+    port_options: dict[int, str]
+    default_selection: dict[str, object]
+
+
 class SimulationResultExplorerService:
     def __init__(self, task_service: TaskService) -> None:
         self._task_service = task_service
 
+    def get_bootstrap_payload(self, task_id: int) -> dict[str, object]:
+        context = self._build_context(task_id)
+        payload = _build_base_payload(context.explorer_task)
+        payload["bootstrap"] = _build_bootstrap_payload(context)
+        payload["result_basis"] = _build_result_basis_payload(context.explorer_task)
+        return payload
+
+    def get_view_payload(
+        self,
+        task_id: int,
+        selection_request: ExplorerSelectionRequest,
+    ) -> dict[str, object]:
+        context = self._build_context(task_id)
+        payload = _build_base_payload(context.explorer_task)
+        payload.update(
+            self._build_selected_view_payload(
+                context=context,
+                selection_request=selection_request,
+            )
+        )
+        return payload
+
     def get_explorer_payload(
         self,
         task_id: int,
-        *,
-        family: str | None = None,
-        source: str | None = None,
-        metric: str | None = None,
-        sweep_index: int | None = None,
-        z0_ohm: float | None = None,
-        output_port: int | None = None,
-        input_port: int | None = None,
+        selection_request: ExplorerSelectionRequest,
     ) -> dict[str, object]:
-        task = self._task_service.get_task(task_id)
-        self._ensure_task_ready_for_explorer(task)
-        basis_task = _resolve_basis_task(task, task_service=self._task_service)
-        definition = self._task_service.get_circuit_definition(basis_task.definition_id)
-        port_options = port_options_for_task(
-            task,
-            basis_task=basis_task,
-            definition=definition,
+        context = self._build_context(task_id)
+        payload = self.get_bootstrap_payload(task_id)
+        payload.update(
+            self._build_selected_view_payload(
+                context=context,
+                selection_request=selection_request,
+            )
         )
-        default_selection = _default_selection(task, port_options=port_options)
-        selection = _resolve_selection(
-            explorer_task=task,
-            basis_task=basis_task,
-            family=family,
-            source=source,
-            metric=metric,
-            sweep_index=sweep_index,
-            z0_ohm=z0_ohm,
-            output_port=output_port,
-            input_port=input_port,
-            port_options=port_options,
-            default_selection=default_selection,
-        )
-        bundle = _load_bundle_for_selection(
-            task,
-            basis_task=basis_task,
-            selection=selection,
-        )
-        response = _build_explorer_response(
-            task,
-            basis_task=basis_task,
-            bundle=bundle,
-            selection=selection,
-            port_options=port_options,
-            default_selection=default_selection,
-        )
-        return {
-            "task_id": task.task_id,
-            "task_status": task.status,
-            "runtime_mode": "local" if task.visibility_scope == "local" else "online",
-            "bootstrap": response["bootstrap"],
-            "selection": response["selection"],
-            "plot": response["plot"],
-            "result_basis": {
-                "trace_payload_available": task.result_refs.trace_payload is not None,
-                "primary_result_handle_id": (
-                    task.result_refs.result_handles[0].handle_id
-                    if len(task.result_refs.result_handles) > 0
-                    else None
-                ),
-                "trace_batch_id": task.result_refs.trace_batch_id,
-            },
-        }
+        return payload
 
     def _ensure_task_ready_for_explorer(self, task: TaskDetail) -> None:
         if task.kind not in {"simulation", "post_processing"}:
@@ -147,15 +138,120 @@ class SimulationResultExplorerService:
                 message="Simulation result explorer requires persisted simulation_setup.",
             )
 
+    def _build_context(self, task_id: int) -> _ExplorerContext:
+        explorer_task = self._task_service.get_task(task_id)
+        self._ensure_task_ready_for_explorer(explorer_task)
+        basis_task = _resolve_basis_task(explorer_task, task_service=self._task_service)
+        definition = self._task_service.get_circuit_definition(basis_task.definition_id)
+        port_options = port_options_for_task(
+            explorer_task,
+            basis_task=basis_task,
+            definition=definition,
+        )
+        return _ExplorerContext(
+            explorer_task=explorer_task,
+            basis_task=basis_task,
+            port_options=port_options,
+            default_selection=_default_selection(explorer_task, port_options=port_options),
+        )
 
-def _build_explorer_response(
-    task: TaskDetail,
+    def _build_selected_view_payload(
+        self,
+        *,
+        context: _ExplorerContext,
+        selection_request: ExplorerSelectionRequest,
+    ) -> dict[str, object]:
+        selection = _resolve_selection(
+            context=context,
+            selection_request=selection_request,
+        )
+        bundle = _load_bundle_for_selection(context=context, selection=selection)
+        return _build_selected_view_payload(
+            context=context,
+            bundle=bundle,
+            selection=selection,
+        )
+
+
+def _build_base_payload(task: TaskDetail) -> dict[str, object]:
+    return {
+        "task_id": task.task_id,
+        "task_status": task.status,
+        "runtime_mode": "local" if task.visibility_scope == "local" else "online",
+    }
+
+
+def _build_result_basis_payload(task: TaskDetail) -> dict[str, object]:
+    return {
+        "trace_payload_available": task.result_refs.trace_payload is not None,
+        "primary_result_handle_id": (
+            task.result_refs.result_handles[0].handle_id
+            if len(task.result_refs.result_handles) > 0
+            else None
+        ),
+        "trace_batch_id": task.result_refs.trace_batch_id,
+    }
+
+
+def _build_bootstrap_payload(context: _ExplorerContext) -> dict[str, object]:
+    sweep_index = (
+        int(context.default_selection["sweep_index"])
+        if context.default_selection.get("sweep_index") is not None
+        else None
+    )
+    default_selection_payload: dict[str, object] = {
+        **{
+            key: value
+            for key, value in context.default_selection.items()
+            if not (key == "sweep_index" and value is None)
+        },
+        "trace_key": _build_trace_selection(context.default_selection).to_trace_key(),
+    }
+    return {
+        "families": [
+            {
+                "key": family_key,
+                "label": _FAMILY_LABELS[family_key],
+                "available_sources": [
+                    {"key": source_key, "label": _SOURCE_LABELS[source_key]}
+                    for source_key in _available_sources_for_task(context.explorer_task, family_key)
+                ],
+                "available_metrics": [
+                    {
+                        "key": metric_key,
+                        "label": config["label"],
+                        "unit": config["unit"],
+                    }
+                    for metric_key, config in _FAMILY_METRICS[family_key].items()
+                ],
+            }
+            for family_key in _available_families_for_task(context.explorer_task)
+        ],
+        "trace_selector": {
+            "output_ports": [
+                {"port": port, "label": label}
+                for port, label in context.port_options.items()
+            ],
+            "input_ports": [
+                {"port": port, "label": label}
+                for port, label in context.port_options.items()
+            ],
+            "output_modes": [{"key": "mode_0", "label": "Mode 0"}],
+            "input_modes": [{"key": "mode_0", "label": "Mode 0"}],
+        },
+        "parameter_sweep": _serialize_parameter_sweep_bootstrap(
+            context.basis_task.simulation_setup,
+            sweep_index=sweep_index,
+        ),
+        "default_selection": default_selection_payload,
+    }
+
+
+def _build_selected_view_payload(
     *,
-    basis_task: TaskDetail,
+    context: _ExplorerContext,
     bundle,
     selection: dict[str, object],
-    port_options: dict[int, str],
-    default_selection: dict[str, object],
 ) -> dict[str, object]:
     family = str(selection["family"])
     source = str(selection["source"])
@@ -177,18 +273,9 @@ def _build_explorer_response(
         input_port=input_port,
     )
     metric_config = _FAMILY_METRICS[family][metric]
-    output_label = port_options[output_port]
-    input_label = port_options[input_port]
+    output_label = context.port_options[output_port]
+    input_label = context.port_options[input_port]
     trace_key = _build_trace_selection(selection).to_trace_key()
-
-    default_selection_payload: dict[str, object] = {
-        **{
-            key: value
-            for key, value in default_selection.items()
-            if not (key == "sweep_index" and value is None)
-        },
-        "trace_key": _build_trace_selection(default_selection).to_trace_key(),
-    }
     selection_payload: dict[str, object] = {
         **{
             key: value
@@ -213,53 +300,16 @@ def _build_explorer_response(
         "output_port_label": output_label,
         "input_port_label": input_label,
         "trace_payload_store_key": (
-            task.result_refs.trace_payload.store_key
-            if task.result_refs.trace_payload is not None
+            context.explorer_task.result_refs.trace_payload.store_key
+            if context.explorer_task.result_refs.trace_payload is not None
             else None
         ),
     }
     if sweep_index is not None:
-        default_selection_payload["sweep_index"] = int(default_selection.get("sweep_index", 0))
         selection_payload["sweep_index"] = sweep_index
         plot_metadata["sweep_index"] = sweep_index
 
     return {
-        "bootstrap": {
-            "families": [
-                {
-                    "key": family_key,
-                    "label": _FAMILY_LABELS[family_key],
-                    "available_sources": [
-                        {"key": source_key, "label": _SOURCE_LABELS[source_key]}
-                        for source_key in _available_sources_for_task(task, family_key)
-                    ],
-                    "available_metrics": [
-                        {
-                            "key": metric_key,
-                            "label": config["label"],
-                            "unit": config["unit"],
-                        }
-                        for metric_key, config in _FAMILY_METRICS[family_key].items()
-                    ],
-                }
-                for family_key in _available_families_for_task(task)
-            ],
-            "trace_selector": {
-                "output_ports": [
-                    {"port": port, "label": label} for port, label in port_options.items()
-                ],
-                "input_ports": [
-                    {"port": port, "label": label} for port, label in port_options.items()
-                ],
-                "output_modes": [{"key": "mode_0", "label": "Mode 0"}],
-                "input_modes": [{"key": "mode_0", "label": "Mode 0"}],
-            },
-            "parameter_sweep": _serialize_parameter_sweep_bootstrap(
-                basis_task.simulation_setup,
-                sweep_index=sweep_index,
-            ),
-            "default_selection": default_selection_payload,
-        },
         "selection": selection_payload,
         "plot": {
             "x_axis": {
@@ -384,29 +434,20 @@ def _metric_from_post_processing_representation(family: str, representation: str
 
 
 def _resolve_selection(
-    explorer_task: TaskDetail,
-    basis_task: TaskDetail,
     *,
-    family: str | None,
-    source: str | None,
-    metric: str | None,
-    sweep_index: int | None,
-    z0_ohm: float | None,
-    output_port: int | None,
-    input_port: int | None,
-    port_options: dict[int, str],
-    default_selection: Mapping[str, object],
+    context: _ExplorerContext,
+    selection_request: ExplorerSelectionRequest,
 ) -> dict[str, object]:
-    resolved_family = family or str(default_selection["family"])
-    if resolved_family not in _available_families_for_task(explorer_task):
+    resolved_family = selection_request.family or str(context.default_selection["family"])
+    if resolved_family not in _available_families_for_task(context.explorer_task):
         raise service_error(
             400,
             code="request_validation_failed",
             category="validation_error",
             message="family is not available for this persisted result.",
         )
-    sources = _available_sources_for_task(explorer_task, resolved_family)
-    resolved_source = source or str(default_selection["source"])
+    sources = _available_sources_for_task(context.explorer_task, resolved_family)
+    resolved_source = selection_request.source or str(context.default_selection["source"])
     if resolved_source not in sources:
         raise service_error(
             400,
@@ -415,7 +456,7 @@ def _resolve_selection(
             message=f"source {resolved_source} is not available for family {resolved_family}.",
         )
     metric_options = _FAMILY_METRICS[resolved_family]
-    resolved_metric = metric or str(default_selection["metric"])
+    resolved_metric = selection_request.metric or str(context.default_selection["metric"])
     if resolved_metric not in metric_options:
         raise service_error(
             400,
@@ -424,16 +465,20 @@ def _resolve_selection(
             message=f"metric {resolved_metric} is not available for family {resolved_family}.",
         )
     resolved_sweep_index = (
-        sweep_index
-        if sweep_index is not None
+        selection_request.sweep_index
+        if selection_request.sweep_index is not None
         else (
-            int(default_selection["sweep_index"])
-            if default_selection.get("sweep_index") is not None
+            int(context.default_selection["sweep_index"])
+            if context.default_selection.get("sweep_index") is not None
             else None
         )
     )
-    _validate_sweep_index(basis_task.simulation_setup, resolved_sweep_index)
-    resolved_z0 = float(z0_ohm if z0_ohm is not None else default_selection["z0_ohm"])
+    _validate_sweep_index(context.basis_task.simulation_setup, resolved_sweep_index)
+    resolved_z0 = float(
+        selection_request.z0_ohm
+        if selection_request.z0_ohm is not None
+        else context.default_selection["z0_ohm"]
+    )
     if resolved_z0 <= 0:
         raise service_error(
             400,
@@ -441,9 +486,16 @@ def _resolve_selection(
             category="validation_error",
             message="z0 must be positive.",
         )
-    resolved_output_port = output_port or int(default_selection["output_port"])
-    resolved_input_port = input_port or int(default_selection["input_port"])
-    if resolved_output_port not in port_options or resolved_input_port not in port_options:
+    resolved_output_port = (
+        selection_request.output_port or int(context.default_selection["output_port"])
+    )
+    resolved_input_port = (
+        selection_request.input_port or int(context.default_selection["input_port"])
+    )
+    if (
+        resolved_output_port not in context.port_options
+        or resolved_input_port not in context.port_options
+    ):
         raise service_error(
             400,
             code="request_validation_failed",
@@ -547,15 +599,14 @@ def _serialize_parameter_sweep_bootstrap(
 
 
 def _load_bundle_for_selection(
-    task: TaskDetail,
     *,
-    basis_task: TaskDetail,
+    context: _ExplorerContext,
     selection: Mapping[str, object],
 ):
     try:
         return load_task_family_bundle(
-            task,
-            basis_task=basis_task,
+            context.explorer_task,
+            basis_task=context.basis_task,
             z0_ohm=float(selection["z0_ohm"]),
             sweep_index=(
                 int(selection["sweep_index"])

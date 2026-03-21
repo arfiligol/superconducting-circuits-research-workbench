@@ -47,6 +47,7 @@ from src.app.infrastructure.runtime import (
 )
 from src.app.services.service_errors import ServiceError, service_error
 from src.app.services.simulation_result_explorer_service import (
+    ExplorerSelectionRequest,
     SimulationResultExplorerService,
 )
 from src.app.services.task_service import TaskService
@@ -171,6 +172,61 @@ def get_task(
     )
 
 
+@router.get("/{task_id}/simulation-results/bootstrap")
+def get_simulation_result_bootstrap(
+    task_id: int,
+    explorer_service: Annotated[
+        SimulationResultExplorerService,
+        Depends(get_simulation_result_explorer_service),
+    ],
+) -> JSONResponse:
+    try:
+        payload = explorer_service.get_bootstrap_payload(task_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=payload,
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.get("/{task_id}/simulation-results/view")
+def get_simulation_result_view(
+    task_id: int,
+    explorer_service: Annotated[
+        SimulationResultExplorerService,
+        Depends(get_simulation_result_explorer_service),
+    ],
+    family: Annotated[str | None, Query()] = None,
+    source: Annotated[str | None, Query()] = None,
+    metric: Annotated[str | None, Query()] = None,
+    sweep_index: Annotated[int | None, Query(ge=0)] = None,
+    z0: Annotated[float | None, Query(gt=0, alias="z0")] = None,
+    output_port: Annotated[int | None, Query(ge=1)] = None,
+    input_port: Annotated[int | None, Query(ge=1)] = None,
+) -> JSONResponse:
+    selection_request = _build_explorer_selection_request(
+        family=family,
+        source=source,
+        metric=metric,
+        sweep_index=sweep_index,
+        z0=z0,
+        output_port=output_port,
+        input_port=input_port,
+    )
+    try:
+        payload = explorer_service.get_view_payload(task_id, selection_request)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=payload,
+        meta={
+            "generated_at": _generated_at(),
+            "filter_echo": _serialize_explorer_filter_echo(selection_request),
+        },
+    )
+
+
 @router.get("/{task_id}/simulation-results/explorer")
 def get_simulation_result_explorer(
     task_id: int,
@@ -186,32 +242,24 @@ def get_simulation_result_explorer(
     output_port: Annotated[int | None, Query(ge=1)] = None,
     input_port: Annotated[int | None, Query(ge=1)] = None,
 ) -> JSONResponse:
+    selection_request = _build_explorer_selection_request(
+        family=family,
+        source=source,
+        metric=metric,
+        sweep_index=sweep_index,
+        z0=z0,
+        output_port=output_port,
+        input_port=input_port,
+    )
     try:
-        payload = explorer_service.get_explorer_payload(
-            task_id,
-            family=family,
-            source=source,
-            metric=metric,
-            sweep_index=sweep_index,
-            z0_ohm=z0,
-            output_port=output_port,
-            input_port=input_port,
-        )
+        payload = explorer_service.get_explorer_payload(task_id, selection_request)
     except ServiceError as exc:
         return _service_error_response(exc)
     return _success_response(
         data=payload,
         meta={
             "generated_at": _generated_at(),
-            "filter_echo": {
-                "family": family,
-                "source": source,
-                "metric": metric,
-                "sweep_index": sweep_index,
-                "z0": z0,
-                "output_port": output_port,
-                "input_port": input_port,
-            },
+            "filter_echo": _serialize_explorer_filter_echo(selection_request),
         },
     )
 
@@ -719,6 +767,41 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
 
 def _generated_at() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _build_explorer_selection_request(
+    *,
+    family: str | None,
+    source: str | None,
+    metric: str | None,
+    sweep_index: int | None,
+    z0: float | None,
+    output_port: int | None,
+    input_port: int | None,
+) -> ExplorerSelectionRequest:
+    return ExplorerSelectionRequest(
+        family=family,
+        source=source,
+        metric=metric,
+        sweep_index=sweep_index,
+        z0_ohm=z0,
+        output_port=output_port,
+        input_port=input_port,
+    )
+
+
+def _serialize_explorer_filter_echo(
+    selection_request: ExplorerSelectionRequest,
+) -> dict[str, object]:
+    return {
+        "family": selection_request.family,
+        "source": selection_request.source,
+        "metric": selection_request.metric,
+        "sweep_index": selection_request.sweep_index,
+        "z0": selection_request.z0_ohm,
+        "output_port": selection_request.output_port,
+        "input_port": selection_request.input_port,
+    }
 
 
 def _as_mapping(payload: object) -> dict[str, object]:

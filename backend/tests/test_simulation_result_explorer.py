@@ -210,6 +210,60 @@ def test_completed_simulation_task_returns_explorer_bootstrap_data() -> None:
     ]
 
 
+def test_bootstrap_endpoint_is_stable_and_lighter_than_combined_payload() -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+
+    bootstrap = client.get(f"/tasks/{task['task_id']}/simulation-results/bootstrap")
+    combined = client.get(f"/tasks/{task['task_id']}/simulation-results/explorer")
+
+    assert bootstrap.status_code == 200
+    assert combined.status_code == 200
+    bootstrap_payload = bootstrap.json()["data"]
+    combined_payload = combined.json()["data"]
+
+    assert "bootstrap" in bootstrap_payload
+    assert "result_basis" in bootstrap_payload
+    assert "selection" not in bootstrap_payload
+    assert "plot" not in bootstrap_payload
+    assert bootstrap_payload["bootstrap"] == combined_payload["bootstrap"]
+    assert bootstrap_payload["result_basis"] == combined_payload["result_basis"]
+    assert len(bootstrap.content) < len(combined.content)
+
+
+def test_view_endpoint_returns_full_resolution_selected_slice() -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+
+    response = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/view"
+        "?family=z_matrix&source=ptc&metric=real&z0=75&output_port=1&input_port=1"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert "bootstrap" not in payload
+    assert payload["selection"] == {
+        "family": "z_matrix",
+        "source": "ptc",
+        "metric": "real",
+        "z0_ohm": 75.0,
+        "output_port": 1,
+        "input_port": 1,
+        "trace_mode_group": "base",
+        "output_port_label": "Port 1",
+        "input_port_label": "Port 1",
+        "output_mode": "mode_0",
+        "input_mode": "mode_0",
+        "trace_key": (
+            "family=z_matrix|source=ptc|trace_mode_group=base|output_port=1|"
+            "input_port=1|output_mode=mode_0|input_mode=mode_0|z0_ohm=75"
+        ),
+    }
+    assert len(payload["plot"]["x_axis"]["values"]) == 401
+    assert len(payload["plot"]["series"]) == 1
+    assert len(payload["plot"]["series"][0]["values"]) == 401
+    assert all(math.isfinite(value) for value in payload["plot"]["series"][0]["values"])
+
+
 def test_completed_simulation_task_returns_plottable_trace_payload() -> None:
     task = _submit_local_simulation(ptc_enabled=True)
 
@@ -302,6 +356,33 @@ def test_completed_post_processing_task_returns_explorer_payload() -> None:
     assert payload["plot"]["series"][0]["label"].startswith("Raw Z_MATRIX")
 
 
+def test_combined_endpoint_matches_bootstrap_plus_view_contract() -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+
+    bootstrap = client.get(f"/tasks/{task['task_id']}/simulation-results/bootstrap")
+    view = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/view"
+        "?family=y_matrix&source=ptc&metric=real&z0=50&output_port=1&input_port=1"
+    )
+    combined = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        "?family=y_matrix&source=ptc&metric=real&z0=50&output_port=1&input_port=1"
+    )
+
+    assert bootstrap.status_code == 200
+    assert view.status_code == 200
+    assert combined.status_code == 200
+
+    bootstrap_payload = bootstrap.json()["data"]
+    view_payload = view.json()["data"]
+    combined_payload = combined.json()["data"]
+
+    assert combined_payload["bootstrap"] == bootstrap_payload["bootstrap"]
+    assert combined_payload["result_basis"] == bootstrap_payload["result_basis"]
+    assert combined_payload["selection"] == view_payload["selection"]
+    assert combined_payload["plot"] == view_payload["plot"]
+
+
 def test_pending_or_failed_simulation_task_gets_truthful_explorer_error() -> None:
     _login()
     pending_response = client.post(
@@ -357,7 +438,7 @@ def test_ptc_source_only_appears_when_capability_exists() -> None:
     assert [source["key"] for source in families["z_matrix"]["available_sources"]] == ["raw"]
 
     rejected = client.get(
-        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        f"/tasks/{task['task_id']}/simulation-results/view"
         "?family=z_matrix&source=ptc&metric=real"
     )
     assert rejected.status_code == 400
