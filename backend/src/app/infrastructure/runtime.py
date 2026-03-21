@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
+from src.app.infrastructure.app_state_repository import InMemoryAppStateRepository
 from src.app.infrastructure.audit_store import (
     SqliteAuditLogRepository,
     bootstrap_audit_store,
@@ -26,15 +27,14 @@ from src.app.infrastructure.persistence import (
     bootstrap_metadata_schema,
     create_metadata_session_factory,
 )
-from src.app.infrastructure.request_debug import configure_backend_logging
-from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
-from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
-from src.app.infrastructure.rewrite_execution_runtime import RewriteExecutionRuntime
-from src.app.infrastructure.rewrite_processor_runtime_repository import (
+from src.app.infrastructure.processor_runtime_repository import (
     RedisProcessorRuntimeRepository,
 )
+from src.app.infrastructure.request_debug import configure_backend_logging
+from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
 from src.app.infrastructure.rewrite_task_repository import PersistedRewriteTaskRepository
 from src.app.infrastructure.session_jwt_transport import SessionJwtTransport
+from src.app.infrastructure.task_execution_runtime import TaskExecutionRuntime
 from src.app.infrastructure.worker_runtime.dispatcher import (
     LocalTaskQueueDispatcher,
 )
@@ -66,7 +66,7 @@ from src.app.settings import get_settings
 @dataclass(frozen=True)
 class _TaskRuntimeBundle:
     task_service: TaskService
-    execution_runtime: RewriteExecutionRuntime
+    execution_runtime: TaskExecutionRuntime
     simulation_execution_driver: LocalSimulationExecutionDriver
     post_processing_execution_driver: LocalPostProcessingExecutionDriver
     characterization_execution_driver: LocalCharacterizationExecutionDriver
@@ -104,18 +104,18 @@ def get_circuit_definition_persistence_repository() -> SqliteCircuitDefinitionRe
 
 
 @lru_cache(maxsize=1)
-def get_rewrite_catalog_repository() -> InMemoryRewriteCatalogRepository:
+def get_catalog_repository() -> InMemoryRewriteCatalogRepository:
     return InMemoryRewriteCatalogRepository(
         durable_definition_repository=get_circuit_definition_persistence_repository(),
         durable_publication_repository=get_research_data_publication_repository(),
         durable_characterization_repository=get_persisted_characterization_repository(),
-        task_repository=get_rewrite_task_repository(),
+        task_repository=get_task_repository(),
     )
 
 
 @lru_cache(maxsize=1)
-def get_rewrite_app_state_repository() -> InMemoryRewriteAppStateRepository:
-    return InMemoryRewriteAppStateRepository(
+def get_app_state_repository() -> InMemoryAppStateRepository:
+    return InMemoryAppStateRepository(
         seed_tasks=False,
     )
 
@@ -144,7 +144,7 @@ def get_task_snapshot_repository() -> SqliteRewriteTaskSnapshotRepository:
 
 
 @lru_cache(maxsize=1)
-def get_rewrite_task_repository() -> PersistedRewriteTaskRepository:
+def get_task_repository() -> PersistedRewriteTaskRepository:
     return PersistedRewriteTaskRepository(
         task_snapshot_repository=get_task_snapshot_repository(),
         storage_metadata_repository=get_storage_metadata_repository(),
@@ -161,7 +161,7 @@ def get_task_audit_repository() -> SqliteAuditLogRepository:
 @lru_cache(maxsize=1)
 def get_processor_runtime_repository() -> RedisProcessorRuntimeRepository:
     return RedisProcessorRuntimeRepository(
-        task_repository=get_rewrite_task_repository(),
+        task_repository=get_task_repository(),
         settings=get_worker_runtime_settings(),
         connection_factory=get_queue_connection_factory(),
     )
@@ -200,8 +200,8 @@ def get_session_token_transport() -> SessionJwtTransport:
 @lru_cache(maxsize=1)
 def get_dataset_service() -> DatasetService:
     return DatasetService(
-        repository=get_rewrite_catalog_repository(),
-        session_repository=get_rewrite_app_state_repository(),
+        repository=get_catalog_repository(),
+        session_repository=get_app_state_repository(),
         authorization_service=get_authorization_service(),
         audit_repository=get_task_audit_repository(),
     )
@@ -210,8 +210,8 @@ def get_dataset_service() -> DatasetService:
 @lru_cache(maxsize=1)
 def get_circuit_definition_service() -> CircuitDefinitionService:
     return CircuitDefinitionService(
-        repository=get_rewrite_catalog_repository(),
-        session_repository=get_rewrite_app_state_repository(),
+        repository=get_catalog_repository(),
+        session_repository=get_app_state_repository(),
         authorization_service=get_authorization_service(),
         audit_repository=get_task_audit_repository(),
     )
@@ -220,27 +220,27 @@ def get_circuit_definition_service() -> CircuitDefinitionService:
 @lru_cache(maxsize=1)
 def get_schemdraw_render_service() -> SchemdrawRenderService:
     return SchemdrawRenderService(
-        definition_repository=get_rewrite_catalog_repository(),
-        session_repository=get_rewrite_app_state_repository(),
+        definition_repository=get_catalog_repository(),
+        session_repository=get_app_state_repository(),
     )
 
 
 @lru_cache(maxsize=1)
 def get_session_service() -> SessionService:
     return SessionService(
-        repository=get_rewrite_app_state_repository(),
-        dataset_repository=get_rewrite_catalog_repository(),
+        repository=get_app_state_repository(),
+        dataset_repository=get_catalog_repository(),
         token_transport=get_session_token_transport(),
         authorization_service=get_authorization_service(),
         audit_repository=get_task_audit_repository(),
-        task_repository=get_rewrite_task_repository(),
+        task_repository=get_task_repository(),
     )
 
 
 @lru_cache(maxsize=1)
 def get_workspace_collaboration_service() -> WorkspaceCollaborationService:
     return WorkspaceCollaborationService(
-        repository=get_rewrite_app_state_repository(),
+        repository=get_app_state_repository(),
         session_service=get_session_service(),
         authorization_service=get_authorization_service(),
         delivery_service=WorkspaceInvitationDeliveryService(get_settings()),
@@ -252,7 +252,7 @@ def get_workspace_collaboration_service() -> WorkspaceCollaborationService:
 def get_audit_log_service() -> AuditLogService:
     return AuditLogService(
         repository=get_task_audit_repository(),
-        session_repository=get_rewrite_app_state_repository(),
+        session_repository=get_app_state_repository(),
         authorization_service=get_authorization_service(),
     )
 
@@ -260,38 +260,38 @@ def get_audit_log_service() -> AuditLogService:
 @lru_cache(maxsize=1)
 def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
     task_service = TaskService(
-        repository=get_rewrite_task_repository(),
+        repository=get_task_repository(),
         audit_repository=get_task_audit_repository(),
         processor_summary_repository=get_processor_runtime_repository(),
-        session_repository=get_rewrite_app_state_repository(),
-        dataset_repository=get_rewrite_catalog_repository(),
-        circuit_definition_repository=get_rewrite_catalog_repository(),
+        session_repository=get_app_state_repository(),
+        dataset_repository=get_catalog_repository(),
+        circuit_definition_repository=get_catalog_repository(),
         authorization_service=get_authorization_service(),
         queue_dispatcher=get_task_queue_dispatcher(),
     )
-    execution_runtime = RewriteExecutionRuntime(
+    execution_runtime = TaskExecutionRuntime(
         task_service=task_service,
-        task_repository=get_rewrite_task_repository(),
+        task_repository=get_task_repository(),
         audit_repository=get_task_audit_repository(),
         processor_runtime_repository=get_processor_runtime_repository(),
     )
     simulation_execution_driver = LocalSimulationExecutionDriver(
-        task_repository=get_rewrite_task_repository(),
-        circuit_definition_repository=get_rewrite_catalog_repository(),
+        task_repository=get_task_repository(),
+        circuit_definition_repository=get_catalog_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
     post_processing_execution_driver = LocalPostProcessingExecutionDriver(
-        task_repository=get_rewrite_task_repository(),
+        task_repository=get_task_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
     characterization_execution_driver = LocalCharacterizationExecutionDriver(
-        task_repository=get_rewrite_task_repository(),
-        dataset_repository=get_rewrite_catalog_repository(),
+        task_repository=get_task_repository(),
+        dataset_repository=get_catalog_repository(),
         characterization_repository=get_persisted_characterization_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
     recovery_service = LocalExecutionRecoveryService(
-        task_repository=get_rewrite_task_repository(),
+        task_repository=get_task_repository(),
         execution_runtime=execution_runtime,
         processor_repository=get_processor_runtime_repository(),
         queue_dispatcher=get_task_queue_dispatcher(),
@@ -332,7 +332,7 @@ def get_simulation_result_explorer_service() -> SimulationResultExplorerService:
     return SimulationResultExplorerService(get_task_service())
 
 
-def get_task_execution_runtime() -> RewriteExecutionRuntime:
+def get_task_execution_runtime() -> TaskExecutionRuntime:
     return _get_task_runtime_bundle().execution_runtime
 
 
@@ -341,13 +341,13 @@ def reset_runtime_state() -> None:
     get_worker_runtime_settings.cache_clear()
     get_queue_connection_factory.cache_clear()
     get_circuit_definition_persistence_repository.cache_clear()
-    get_rewrite_catalog_repository.cache_clear()
-    get_rewrite_app_state_repository.cache_clear()
+    get_catalog_repository.cache_clear()
+    get_app_state_repository.cache_clear()
     get_storage_metadata_repository.cache_clear()
     get_persisted_characterization_repository.cache_clear()
     get_research_data_publication_repository.cache_clear()
     get_task_snapshot_repository.cache_clear()
-    get_rewrite_task_repository.cache_clear()
+    get_task_repository.cache_clear()
     get_task_audit_repository.cache_clear()
     get_processor_runtime_repository.cache_clear()
     get_task_queue_dispatcher.cache_clear()
@@ -361,3 +361,8 @@ def reset_runtime_state() -> None:
     get_audit_log_service.cache_clear()
     _get_task_runtime_bundle.cache_clear()
     get_simulation_result_explorer_service.cache_clear()
+
+
+get_rewrite_catalog_repository = get_catalog_repository
+get_rewrite_app_state_repository = get_app_state_repository
+get_rewrite_task_repository = get_task_repository

@@ -6,7 +6,7 @@ from src.app.infrastructure.request_debug import configure_backend_logging
 from src.app.infrastructure.request_debug_middleware import install_request_debug_middleware
 from src.app.infrastructure.request_session_middleware import install_request_session_middleware
 from src.app.infrastructure.runtime import (
-    get_rewrite_app_state_repository,
+    get_app_state_repository,
     get_session_token_transport,
 )
 from src.app.infrastructure.secret_management import validate_secret_management_baseline
@@ -26,7 +26,7 @@ def create_application(settings: AppSettings | None = None) -> FastAPI:
     install_request_debug_middleware(app)
     install_request_session_middleware(
         app,
-        session_repository_factory=get_rewrite_app_state_repository,
+        session_repository_factory=get_app_state_repository,
         token_transport_factory=get_session_token_transport,
     )
     install_error_handlers(app)

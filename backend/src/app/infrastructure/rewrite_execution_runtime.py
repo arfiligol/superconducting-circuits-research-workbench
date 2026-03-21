@@ -640,7 +640,7 @@ class RewriteExecutionRuntime:
                 audit_id=f"audit:{action_kind}:{task.task_id}:{audit_suffix}",
                 occurred_at=recorded_at.isoformat(),
                 actor_user_id=f"runtime:{task.lane}",
-                actor_display_name="Rewrite Execution Runtime",
+                actor_display_name="Task Execution Runtime",
                 session_id=f"runtime-session:{task.workspace_id}",
                 correlation_id=f"corr:{action_kind}:{task.task_id}",
                 workspace_id=task.workspace_id,
