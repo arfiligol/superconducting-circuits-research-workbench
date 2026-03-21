@@ -534,7 +534,17 @@ export type TaskResultHandleRef = Readonly<{
 
 export type TaskDispatch = Readonly<{
   dispatchKey: string;
-  status: "accepted" | "running" | "completed" | "failed";
+  status:
+    | "accepted"
+    | "dispatching"
+    | "running"
+    | "cancellation_requested"
+    | "cancelling"
+    | "cancelled"
+    | "termination_requested"
+    | "terminated"
+    | "completed"
+    | "failed";
   submissionSource: "active_dataset" | "explicit_dataset" | "definition_only";
   acceptedAt: string;
   lastUpdatedAt: string;

@@ -602,7 +602,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "accepted" | "running" | "completed" | "failed";
+            status: "accepted" | "dispatching" | "running" | "cancellation_requested" | "cancelling" | "cancelled" | "termination_requested" | "terminated" | "completed" | "failed";
             /**
              * Submission Source
              * @enum {string}
