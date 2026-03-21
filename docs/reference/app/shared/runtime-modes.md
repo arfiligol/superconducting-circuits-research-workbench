@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: 同一個 App 的 Local Mode / Online Mode、frontend/backend mode pairing 與 mode-switch isolation contract
-version: v0.2.0
-last_updated: 2026-03-17
+version: v0.3.0
+last_updated: 2026-03-21
 updated_by: codex
 ---
 
@@ -206,7 +206,8 @@ updated_by: codex
 | switch from online to local | remote tasks 繼續在 server 端執行；app 只解除目前 online queue / attached-task context |
 | switch from local to online | local tasks 不被搬移到 server；online mode 重新建立自己的 queue context |
 | return to online mode | 重新抓取 remote queue 與 worker summary；必要時讓使用者重新 attach |
-| app close in local mode | local backend / processors 一起結束時，local tasks 應終止 |
+| closing `sc-app` only in local mode | 若 local workers 仍在，task 應繼續執行；重開 app 後可透過 queue recovery / reattach 重新觀察 |
+| stopping the whole local runtime stack | 若 `sc-app` 與 local workers 一起停止，local tasks 才可能終止或進入 reconcile-required state |
 | app close in online mode | remote tasks 繼續由 server runtime 管理；重新打開 app 後再透過 queue recovery 取得狀態 |
 
 ## Data Transition Rules
