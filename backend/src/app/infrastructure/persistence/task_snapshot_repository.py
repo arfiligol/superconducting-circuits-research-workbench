@@ -32,6 +32,7 @@ from src.app.domain.tasks import (
     resolve_retry_of_task_id,
     resolve_simulation_setup,
     resolve_task_control_state,
+    resolve_task_reconcile,
     resolve_upstream_task_id,
 )
 from src.app.infrastructure.persistence.models import (
@@ -279,7 +280,11 @@ def _upsert_dispatch_row(
         dataset_id=task_row.dataset_id,
         accepted_at=task_row.submitted_at,
         last_updated_at=task_row.progress_updated_at,
-        current_dispatch=_to_task_dispatch(row),
+        current_dispatch=_to_task_dispatch(
+            row,
+            lane=cast(TaskLane, task_row.lane),
+            events=(),
+        ),
     )
     changed = False
     if row is None:
@@ -366,15 +371,51 @@ def _apply_task_event_row(row: RewriteTaskEventRecord, event: TaskEvent) -> bool
     return changed
 
 
-def _to_task_dispatch(dispatch_row: RewriteTaskDispatchRecord | None) -> TaskDispatch | None:
+def _to_task_dispatch(
+    dispatch_row: RewriteTaskDispatchRecord | None,
+    *,
+    lane: TaskLane,
+    events: tuple[TaskEvent, ...],
+) -> TaskDispatch | None:
     if dispatch_row is None:
         return None
+    metadata = _resolve_dispatch_contract_metadata(events)
     return TaskDispatch(
         dispatch_key=dispatch_row.dispatch_key,
         status=cast(TaskDispatchStatus, dispatch_row.status),
         submission_source=cast(TaskSubmissionSource, dispatch_row.submission_source),
         accepted_at=dispatch_row.accepted_at,
         last_updated_at=dispatch_row.last_updated_at,
+        queue_name=(
+            str(metadata["queue_name"])
+            if isinstance(metadata.get("queue_name"), str)
+            else lane
+        ),
+        enqueued_at=(
+            str(metadata["enqueued_at"])
+            if isinstance(metadata.get("enqueued_at"), str)
+            else dispatch_row.accepted_at
+        ),
+        runtime_job_id=(
+            str(metadata["runtime_job_id"])
+            if isinstance(metadata.get("runtime_job_id"), str)
+            else dispatch_row.dispatch_key.replace(":", "__")
+        ),
+        dispatch_attempt_count=(
+            int(metadata["dispatch_attempt_count"])
+            if isinstance(metadata.get("dispatch_attempt_count"), int)
+            else 1
+        ),
+        last_dispatch_outcome=(
+            str(metadata["last_dispatch_outcome"])
+            if isinstance(metadata.get("last_dispatch_outcome"), str)
+            else ("accepted" if dispatch_row.status == "accepted" else "claimed")
+        ),
+        last_dispatch_error_code=(
+            str(metadata["last_dispatch_error_code"])
+            if isinstance(metadata.get("last_dispatch_error_code"), str)
+            else None
+        ),
     )
 
 
@@ -402,6 +443,11 @@ def _to_task_detail(
     result_refs: TaskResultRefs | None = None,
 ) -> TaskDetail:
     events = _to_task_events(event_rows)
+    dispatch = _to_task_dispatch(
+        dispatch_row,
+        lane=cast(TaskLane, row.lane),
+        events=events,
+    )
     return TaskDetail(
         task_id=row.task_id,
         kind=cast(TaskKind, row.kind),
@@ -436,7 +482,8 @@ def _to_task_detail(
         downstream_task_ids=resolve_downstream_task_ids(events),
         control_state=resolve_task_control_state(cast(TaskStatus, row.status), events),
         retry_of_task_id=resolve_retry_of_task_id(events),
-        dispatch=_to_task_dispatch(dispatch_row),
+        dispatch=dispatch,
+        reconcile=resolve_task_reconcile(events),
         events=events,
     )
 
@@ -456,3 +503,23 @@ def _normalize_queue_backend(value: str) -> TaskQueueBackend:
     if value == "rq_redis":
         return "rq_redis"
     return "rq_redis"
+
+
+def _resolve_dispatch_contract_metadata(
+    events: tuple[TaskEvent, ...],
+) -> dict[str, object]:
+    keys = {
+        "queue_name",
+        "enqueued_at",
+        "runtime_job_id",
+        "dispatch_attempt_count",
+        "last_dispatch_outcome",
+        "last_dispatch_error_code",
+    }
+    resolved: dict[str, object] = {}
+    for event in events:
+        for key in keys:
+            value = event.metadata.get(key)
+            if value is not None:
+                resolved[key] = value
+    return resolved

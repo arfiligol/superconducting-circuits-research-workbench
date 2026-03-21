@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from rq import Queue
 from rq.job import Job, NoSuchJobError
 
-from src.app.domain.tasks import TaskDetail
+from src.app.domain.tasks import (
+    TaskDetail,
+    TaskDispatchOutcome,
+    TaskDispatchReceipt,
+    TaskEnqueueError,
+)
 from src.app.infrastructure.worker_runtime.settings import WorkerRuntimeSettings
 
 _ACTIVE_JOB_STATUSES = {"queued", "started", "deferred", "scheduled"}
@@ -33,26 +39,40 @@ class LocalTaskQueueDispatcher:
         self._settings = settings
         self._connection_factory = connection_factory
 
-    def enqueue_submitted_task(self, task: TaskDetail) -> None:
+    def enqueue_submitted_task(self, task: TaskDetail) -> TaskDispatchReceipt:
         request = self._build_dispatch_request(task)
         connection = self._connection_factory()
         existing_job = self.get_job(request.dispatch_key)
         if existing_job is not None:
             status = existing_job.get_status(refresh=False)
             if status in _ACTIVE_JOB_STATUSES:
-                return
+                return _dispatch_receipt(task, request)
             existing_job.delete()
 
         queue = Queue(request.queue_name, connection=connection)
-        queue.enqueue(
-            _job_callable_for_lane(task.lane),
-            request.task_id,
-            job_id=_rq_job_id(request.dispatch_key),
-            meta=_build_dispatch_metadata(request, task),
-            job_timeout=request.job_timeout_seconds,
-            failure_ttl=request.failure_ttl_seconds,
-            result_ttl=request.result_ttl_seconds,
-        )
+        try:
+            queue.enqueue(
+                _job_callable_for_lane(task.lane),
+                request.task_id,
+                job_id=_rq_job_id(request.dispatch_key),
+                meta=_build_dispatch_metadata(request, task),
+                job_timeout=request.job_timeout_seconds,
+                failure_ttl=request.failure_ttl_seconds,
+                result_ttl=request.result_ttl_seconds,
+            )
+        except Exception as exc:  # pragma: no cover - exercised via tests with fake dispatcher
+            raise TaskEnqueueError(
+                code=_dispatch_error_code(exc),
+                message=str(exc),
+                receipt=_dispatch_receipt(
+                    task,
+                    request,
+                    outcome="failed",
+                    error_code=_dispatch_error_code(exc),
+                    enqueued_at=None,
+                ),
+            ) from exc
+        return _dispatch_receipt(task, request)
 
     def get_job(self, dispatch_key: str) -> Job | None:
         try:
@@ -106,3 +126,37 @@ def _build_dispatch_metadata(
         "execution_mode": task.execution_mode,
         "request_ready": task.request_ready,
     }
+
+
+def _dispatch_receipt(
+    task: TaskDetail,
+    request: QueueDispatchRequest,
+    *,
+    outcome: TaskDispatchOutcome = "accepted",
+    error_code: str | None = None,
+    enqueued_at: str | None = None,
+) -> TaskDispatchReceipt:
+    current_attempt_count = _dispatch_attempt_count(task)
+    return TaskDispatchReceipt(
+        queue_name=request.queue_name,
+        enqueued_at=enqueued_at or datetime.now(UTC).isoformat(),
+        runtime_job_id=_rq_job_id(request.dispatch_key),
+        dispatch_attempt_count=current_attempt_count + 1,
+        last_dispatch_outcome=outcome,
+        last_dispatch_error_code=error_code,
+    )
+
+
+def _dispatch_error_code(exc: Exception) -> str:
+    error_name = exc.__class__.__name__.lower()
+    if "connection" in error_name or "timeout" in error_name:
+        return "queue_connection_failed"
+    return "queue_enqueue_failed"
+
+
+def _dispatch_attempt_count(task: TaskDetail) -> int:
+    for event in task.events:
+        count = event.metadata.get("dispatch_attempt_count")
+        if isinstance(count, int) and count >= 0:
+            return count
+    return 0

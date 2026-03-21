@@ -19,14 +19,13 @@ from sc_core.execution import (
 )
 from sc_core.storage import TraceResultLinkage
 from sc_core.tasking import (
-    TaskDispatchRecord,
+    TaskDispatchStatus as _TaskDispatchStatus,
+)
+from sc_core.tasking import (
     TaskExecutionMode,
     TaskSubmissionSource,
     WorkerTaskName,
     build_task_dispatch_record,
-)
-from sc_core.tasking import (
-    TaskDispatchStatus as _TaskDispatchStatus,
 )
 from sc_core.tasking import (
     task_submission_source_for as _task_submission_source_for,
@@ -54,11 +53,15 @@ TaskVisibilityScope = Literal["local", "workspace", "owned"]
 TaskResultAvailability = Literal["pending", "ready", "none"]
 TaskEventType = Literal[
     "task_submitted",
+    "task_dispatch_claimed",
     "task_running",
     "task_completed",
     "task_failed",
     "task_cancel_requested",
+    "task_cancel_acknowledged",
     "task_terminate_requested",
+    "task_terminate_acknowledged",
+    "task_requeued",
     "task_retried",
 ]
 TaskEventLevel = TaskExecutionHistoryLevel
@@ -68,6 +71,7 @@ TaskBrowseStatusFilter = Literal["active", "recent", "all"]
 TaskPublicationState = Literal["not_published", "published"]
 TaskDispatchStatus = _TaskDispatchStatus
 task_submission_source_for = _task_submission_source_for
+TaskDispatchOutcome = Literal["accepted", "claimed", "requeued", "failed"]
 
 
 @dataclass(frozen=True)
@@ -453,8 +457,48 @@ class TaskSummary:
     summary: str
 
 
-TaskDispatch = TaskDispatchRecord
 TaskEvent = TaskExecutionHistoryEvent
+
+
+@dataclass(frozen=True)
+class TaskDispatch:
+    dispatch_key: str
+    status: TaskDispatchStatus
+    submission_source: TaskSubmissionSource
+    accepted_at: str
+    last_updated_at: str
+    queue_name: str | None = None
+    enqueued_at: str | None = None
+    runtime_job_id: str | None = None
+    dispatch_attempt_count: int = 0
+    last_dispatch_outcome: TaskDispatchOutcome | None = None
+    last_dispatch_error_code: str | None = None
+
+
+@dataclass(frozen=True)
+class TaskReconcile:
+    required: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class TaskDispatchReceipt:
+    queue_name: str
+    enqueued_at: str | None
+    runtime_job_id: str
+    dispatch_attempt_count: int
+    last_dispatch_outcome: TaskDispatchOutcome
+    last_dispatch_error_code: str | None = None
+
+
+@dataclass(frozen=True)
+class TaskEnqueueError(Exception):
+    code: str
+    message: str
+    receipt: TaskDispatchReceipt
+
+    def __str__(self) -> str:
+        return self.message
 
 
 @dataclass(frozen=True)
@@ -600,6 +644,7 @@ class TaskQueueRow:
     updated_at: str
     result_availability: TaskResultAvailability
     allowed_actions: TaskAllowedActions
+    reconcile: TaskReconcile
 
 
 @dataclass(frozen=True)
@@ -630,6 +675,7 @@ class TaskDetail(TaskSummary):
     control_state: TaskControlState = "none"
     retry_of_task_id: int | None = None
     dispatch: TaskDispatch | None = None
+    reconcile: TaskReconcile = TaskReconcile(required=False, reason=None)
     events: tuple[TaskEvent, ...] = ()
 
 
@@ -717,10 +763,16 @@ def build_task_dispatch(
     dataset_id: str | None,
     accepted_at: str,
     last_updated_at: str,
+    queue_name: str | None = None,
+    enqueued_at: str | None = None,
+    runtime_job_id: str | None = None,
+    dispatch_attempt_count: int | None = None,
+    last_dispatch_outcome: TaskDispatchOutcome | None = None,
+    last_dispatch_error_code: str | None = None,
     submission_source: TaskSubmissionSource | None = None,
     current_dispatch: TaskDispatch | None = None,
 ) -> TaskDispatch:
-    return build_task_dispatch_record(
+    record = build_task_dispatch_record(
         task_id=task_id,
         worker_task_name=cast(WorkerTaskName, worker_task_name),
         task_status=task_status,
@@ -730,6 +782,52 @@ def build_task_dispatch(
         last_updated_at=last_updated_at,
         submission_source=submission_source,
         current_dispatch=current_dispatch,
+    )
+    resolved_dispatch_attempt_count = (
+        dispatch_attempt_count
+        if dispatch_attempt_count is not None
+        else (
+            current_dispatch.dispatch_attempt_count
+            if current_dispatch is not None and current_dispatch.dispatch_attempt_count > 0
+            else 1
+        )
+    )
+    resolved_dispatch_outcome = last_dispatch_outcome
+    if resolved_dispatch_outcome is None and current_dispatch is not None:
+        resolved_dispatch_outcome = current_dispatch.last_dispatch_outcome
+    if resolved_dispatch_outcome is None:
+        resolved_dispatch_outcome = (
+            "accepted" if record.status == "accepted" else "claimed"
+        )
+    resolved_runtime_job_id = runtime_job_id
+    if resolved_runtime_job_id is None and current_dispatch is not None:
+        resolved_runtime_job_id = current_dispatch.runtime_job_id
+    if resolved_runtime_job_id is None:
+        resolved_runtime_job_id = _runtime_job_id_for_dispatch_key(record.dispatch_key)
+    return TaskDispatch(
+        dispatch_key=record.dispatch_key,
+        status=record.status,
+        submission_source=record.submission_source,
+        accepted_at=record.accepted_at,
+        last_updated_at=record.last_updated_at,
+        queue_name=queue_name if queue_name is not None else (
+            current_dispatch.queue_name if current_dispatch is not None else None
+        ),
+        enqueued_at=enqueued_at if enqueued_at is not None else (
+            current_dispatch.enqueued_at if current_dispatch is not None else accepted_at
+        ),
+        runtime_job_id=resolved_runtime_job_id,
+        dispatch_attempt_count=resolved_dispatch_attempt_count,
+        last_dispatch_outcome=resolved_dispatch_outcome,
+        last_dispatch_error_code=(
+            last_dispatch_error_code
+            if last_dispatch_error_code is not None
+            else (
+                current_dispatch.last_dispatch_error_code
+                if current_dispatch is not None
+                else None
+            )
+        ),
     )
 
 
@@ -854,6 +952,16 @@ def resolve_task_control_state(
     return "none"
 
 
+def resolve_task_reconcile(events: Sequence[TaskEvent]) -> TaskReconcile:
+    metadata = _resolve_task_contract_metadata(events)
+    required = metadata.get("reconcile_required")
+    reason = metadata.get("reconcile_reason")
+    return TaskReconcile(
+        required=bool(required) if isinstance(required, bool) else False,
+        reason=str(reason) if isinstance(reason, str) else None,
+    )
+
+
 def resolve_retry_of_task_id(events: Sequence[TaskEvent]) -> int | None:
     for event in events:
         retry_of_task_id = event.metadata.get("retry_of_task_id")
@@ -939,3 +1047,27 @@ def _parse_json_payload(payload: str) -> object | None:
         return json.loads(payload)
     except json.JSONDecodeError:
         return None
+
+
+def _resolve_task_contract_metadata(events: Sequence[TaskEvent]) -> dict[str, object]:
+    keys = {
+        "queue_name",
+        "enqueued_at",
+        "runtime_job_id",
+        "dispatch_attempt_count",
+        "last_dispatch_outcome",
+        "last_dispatch_error_code",
+        "reconcile_required",
+        "reconcile_reason",
+    }
+    resolved: dict[str, object] = {}
+    for event in events:
+        for key in keys:
+            value = event.metadata.get(key)
+            if value is not None:
+                resolved[key] = value
+    return resolved
+
+
+def _runtime_job_id_for_dispatch_key(dispatch_key: str) -> str:
+    return dispatch_key.replace(":", "__")

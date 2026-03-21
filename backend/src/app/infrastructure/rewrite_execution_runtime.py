@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, cast
 
 from sc_core.execution import (
     TaskExecutionResult,
@@ -20,6 +20,8 @@ from sc_core.execution import (
 from src.app.domain.audit import AuditRecord
 from src.app.domain.tasks import (
     TaskDetail,
+    TaskEvent,
+    TaskEventType,
     TaskLifecycleUpdate,
     TaskResultRefs,
     build_task_lifecycle_event,
@@ -143,6 +145,17 @@ class RewriteExecutionRuntime:
                 progress_updated_at=recorded_at.isoformat(),
                 summary=task.summary,
             )
+        )
+        self._append_runtime_event(
+            updated_task,
+            event_type="task_dispatch_claimed",
+            level="info",
+            occurred_at=recorded_at,
+            message="Worker claimed the queued task from Redis.",
+            metadata={
+                "audit_action": "worker.task_dispatched",
+                "worker_pid": worker_pid,
+            },
         )
         self._merge_runtime_event_metadata(
             updated_task,
@@ -333,6 +346,13 @@ class RewriteExecutionRuntime:
             recorded_at=recorded_at,
             payload={"stale_before": stale_before.isoformat()},
         )
+        self._merge_runtime_event_metadata(
+            updated_task,
+            {
+                "reconcile_required": True,
+                "reconcile_reason": "worker_stale_timeout",
+            },
+        )
         return self._task_service.get_task(updated_task.task_id)
 
     def consume_control_request(
@@ -358,6 +378,18 @@ class RewriteExecutionRuntime:
                 updated_task,
                 recorded_at=recorded_at,
                 worker_pid=worker_pid,
+            )
+            self._append_runtime_event(
+                updated_task,
+                event_type="task_cancel_acknowledged",
+                level="warning",
+                occurred_at=recorded_at,
+                message="Runtime acknowledged the cancellation request.",
+                metadata={
+                    "audit_action": "worker.task_cancellation_acknowledged",
+                    "worker_pid": worker_pid,
+                    "control_state": "cancelling",
+                },
             )
             self._merge_runtime_event_metadata(
                 updated_task,
@@ -391,6 +423,18 @@ class RewriteExecutionRuntime:
                 updated_task,
                 recorded_at=recorded_at,
                 worker_pid=worker_pid,
+            )
+            self._append_runtime_event(
+                updated_task,
+                event_type="task_terminate_acknowledged",
+                level="warning",
+                occurred_at=recorded_at,
+                message="Runtime acknowledged the terminate request.",
+                metadata={
+                    "audit_action": "worker.task_termination_acknowledged",
+                    "worker_pid": worker_pid,
+                    "control_state": "termination_requested",
+                },
             )
             self._merge_runtime_event_metadata(
                 updated_task,
@@ -548,6 +592,37 @@ class RewriteExecutionRuntime:
             task.task_id,
             task.events[-1].event_key,
             metadata,
+        )
+
+    def _append_runtime_event(
+        self,
+        task: TaskDetail,
+        *,
+        event_type: TaskEventType,
+        level: str,
+        occurred_at: datetime,
+        message: str,
+        metadata: dict[str, object],
+    ) -> None:
+        occurred_at_value = _resolve_runtime_event_occurred_at(task, occurred_at)
+        self._task_repository.append_task_event(
+            task.task_id,
+            TaskEvent(
+                event_key=f"{event_type}:{occurred_at_value}",
+                event_type=cast(TaskEventType, event_type),
+                level=cast(str, level),
+                occurred_at=occurred_at_value,
+                message=message,
+                metadata={
+                    "task_status": task.status,
+                    "dispatch_status": task.dispatch.status if task.dispatch is not None else None,
+                    "dispatch_key": (
+                        task.dispatch.dispatch_key if task.dispatch is not None else None
+                    ),
+                    "worker_task_name": task.worker_task_name,
+                    **metadata,
+                },
+            ),
         )
 
     def _append_runtime_audit(
@@ -731,3 +806,16 @@ def _merge_safe_payload_metadata(
         if value is None:
             continue
         destination[rename_map.get(key, key)] = value
+
+
+def _resolve_runtime_event_occurred_at(task: TaskDetail, occurred_at: datetime) -> str:
+    if len(task.events) == 0:
+        return occurred_at.isoformat()
+    latest_event_at = datetime.fromisoformat(task.events[-1].occurred_at)
+    if occurred_at.tzinfo is None and latest_event_at.tzinfo is not None:
+        occurred_at = occurred_at.replace(tzinfo=latest_event_at.tzinfo)
+    if occurred_at.tzinfo is not None and latest_event_at.tzinfo is None:
+        latest_event_at = latest_event_at.replace(tzinfo=occurred_at.tzinfo)
+    if occurred_at <= latest_event_at:
+        return latest_event_at.isoformat()
+    return occurred_at.isoformat()

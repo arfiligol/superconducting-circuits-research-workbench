@@ -37,7 +37,7 @@ def build_worker_runtime_settings(app_settings: AppSettings) -> WorkerRuntimeSet
         job_timeout_seconds=app_settings.rq_job_timeout_seconds,
         failure_ttl_seconds=app_settings.rq_failure_ttl_seconds,
         result_ttl_seconds=app_settings.rq_result_ttl_seconds,
-        stale_after_seconds=app_settings.rq_worker_stale_after_seconds,
+        stale_after_seconds=_resolve_worker_stale_timeout_seconds(app_settings),
         reconcile_after_seconds=app_settings.rq_reconcile_after_seconds,
         app_host=app_settings.app_host,
         app_port=app_settings.app_port,
@@ -50,3 +50,11 @@ def _resolve_redis_url(app_settings: AppSettings) -> str:
     if candidate is not None and candidate.strip():
         return candidate.strip()
     return "redis://127.0.0.1:6379/0"
+
+
+def _resolve_worker_stale_timeout_seconds(app_settings: AppSettings) -> int:
+    if app_settings.worker_stale_timeout_seconds is not None:
+        return app_settings.worker_stale_timeout_seconds
+    if app_settings.rq_worker_stale_after_seconds is not None:
+        return app_settings.rq_worker_stale_after_seconds
+    return 300

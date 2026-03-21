@@ -35,6 +35,8 @@ from src.app.domain.tasks import (
     TaskAllowedActions,
     TaskCreateDraft,
     TaskDetail,
+    TaskDispatchReceipt,
+    TaskEnqueueError,
     TaskEvent,
     TaskEventHistoryQuery,
     TaskHistoryView,
@@ -155,7 +157,7 @@ class TaskProcessorSummaryRepository(Protocol):
 
 
 class TaskQueueDispatcher(Protocol):
-    def enqueue_submitted_task(self, task: TaskDetail) -> None: ...
+    def enqueue_submitted_task(self, task: TaskDetail) -> TaskDispatchReceipt: ...
 
 
 class TaskService:
@@ -1499,6 +1501,26 @@ class TaskService:
                 },
             )
 
+    def _merge_dispatch_contract_metadata(
+        self,
+        task: TaskDetail,
+        receipt: TaskDispatchReceipt,
+    ) -> None:
+        if len(task.events) == 0:
+            return
+        self._repository.merge_task_event_metadata(
+            task.task_id,
+            task.events[0].event_key,
+            {
+                "queue_name": receipt.queue_name,
+                "enqueued_at": receipt.enqueued_at,
+                "runtime_job_id": receipt.runtime_job_id,
+                "dispatch_attempt_count": receipt.dispatch_attempt_count,
+                "last_dispatch_outcome": receipt.last_dispatch_outcome,
+                "last_dispatch_error_code": receipt.last_dispatch_error_code,
+            },
+        )
+
     def _merge_lifecycle_audit_metadata(
         self,
         *,
@@ -1545,7 +1567,32 @@ class TaskService:
             return
         if runtime_mode != "local":
             return
-        self._queue_dispatcher.enqueue_submitted_task(task)
+        try:
+            receipt = self._queue_dispatcher.enqueue_submitted_task(task)
+        except TaskEnqueueError as exc:
+            self._merge_dispatch_contract_metadata(task, exc.receipt)
+            self._append_audit_record(
+                action_kind="task.enqueue_failed",
+                resource_id=str(task.task_id),
+                outcome="failed",
+                payload={
+                    "lane": task.lane,
+                    "queue_name": exc.receipt.queue_name,
+                    "runtime_job_id": exc.receipt.runtime_job_id,
+                    "error_code": exc.code,
+                },
+            )
+            raise service_error(
+                503,
+                code="task_enqueue_failed",
+                category="task_execution_failed",
+                message="Task was persisted, but the local worker queue could not accept it.",
+                details={
+                    "task_id": task.task_id,
+                    "dispatch": _dispatch_error_payload(task, exc.receipt),
+                },
+            ) from exc
+        self._merge_dispatch_contract_metadata(task, receipt)
 
     def _resolve_upstream_task(self, upstream_task_id: int | None) -> TaskDetail | None:
         if upstream_task_id is None:
@@ -2014,7 +2061,22 @@ def _build_queue_row(task: TaskDetail, allowed_actions: TaskAllowedActions) -> T
         updated_at=task.progress.updated_at,
         result_availability=_result_availability_for(task),
         allowed_actions=allowed_actions,
+        reconcile=task.reconcile,
     )
+
+
+def _dispatch_error_payload(
+    task: TaskDetail,
+    receipt: TaskDispatchReceipt,
+) -> dict[str, object]:
+    return {
+        "dispatch_key": task.dispatch.dispatch_key if task.dispatch is not None else None,
+        "queue_name": receipt.queue_name,
+        "runtime_job_id": receipt.runtime_job_id,
+        "dispatch_attempt_count": receipt.dispatch_attempt_count,
+        "last_dispatch_outcome": receipt.last_dispatch_outcome,
+        "last_dispatch_error_code": receipt.last_dispatch_error_code,
+    }
 
 
 def _build_runtime_allowed_actions(task: TaskDetail) -> TaskAllowedActions:

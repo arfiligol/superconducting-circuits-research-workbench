@@ -508,6 +508,10 @@ def _serialize_queue_row(queue_row: TaskQueueRow) -> dict[str, object]:
             "rejection_reason": queue_row.allowed_actions.rejection_reason,
         },
         "control_state": queue_row.control_state,
+        "reconcile": {
+            "required": queue_row.reconcile.required,
+            "reason": queue_row.reconcile.reason,
+        },
     }
 
 
@@ -569,10 +573,20 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
                 "submission_source": task.dispatch.submission_source,
                 "accepted_at": task.dispatch.accepted_at,
                 "last_updated_at": task.dispatch.last_updated_at,
+                "queue_name": task.dispatch.queue_name,
+                "enqueued_at": task.dispatch.enqueued_at,
+                "runtime_job_id": task.dispatch.runtime_job_id,
+                "dispatch_attempt_count": task.dispatch.dispatch_attempt_count,
+                "last_dispatch_outcome": task.dispatch.last_dispatch_outcome,
+                "last_dispatch_error_code": task.dispatch.last_dispatch_error_code,
             }
             if task.dispatch is not None
             else None
         ),
+        "reconcile": {
+            "required": task.reconcile.required,
+            "reason": task.reconcile.reason,
+        },
         "progress": {
             "phase": task.progress.phase,
             "percent_complete": task.progress.percent_complete,
@@ -692,13 +706,14 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
         "retryable": exc.category in {"internal_error", "persistence_error"},
         "debug_ref": current_debug_ref(),
     }
+    details = dict(exc.details)
     if len(exc.field_errors) > 0:
-        error["details"] = {
-            "field_errors": [
-                {"field": field_error.field, "message": field_error.message}
-                for field_error in exc.field_errors
-            ]
-        }
+        details["field_errors"] = [
+            {"field": field_error.field, "message": field_error.message}
+            for field_error in exc.field_errors
+        ]
+    if len(details) > 0:
+        error["details"] = details
     return JSONResponse(status_code=exc.status_code, content={"ok": False, "error": error})
 
 

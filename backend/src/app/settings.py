@@ -30,7 +30,8 @@ class AppSettings(BaseSettings):
     rq_job_timeout_seconds: int = 3600
     rq_failure_ttl_seconds: int = 86400
     rq_result_ttl_seconds: int = 3600
-    rq_worker_stale_after_seconds: int = 300
+    worker_stale_timeout_seconds: int | None = None
+    rq_worker_stale_after_seconds: int | None = None
     rq_reconcile_after_seconds: int = 300
     app_host: str = "127.0.0.1"
     app_port: int = 8000

@@ -3,7 +3,13 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from src.app.domain.tasks import CharacterizationSetup, TaskLifecycleUpdate, TaskSubmissionDraft
+from src.app.domain.tasks import (
+    CharacterizationSetup,
+    TaskDispatchReceipt,
+    TaskEnqueueError,
+    TaskLifecycleUpdate,
+    TaskSubmissionDraft,
+)
 from src.app.infrastructure.runtime import (
     get_execution_recovery_service,
     get_rewrite_app_state_repository,
@@ -18,6 +24,7 @@ from tests.worker_runtime_harness import (
     clear_queue_jobs,
     drain_lane_queue,
     queue_job_count,
+    recover_lane,
     registered_worker,
 )
 
@@ -657,6 +664,10 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
             "rejection_reason": None,
         },
         "control_state": "none",
+        "reconcile": {
+            "required": False,
+            "reason": None,
+        },
     }
     assert payload["data"]["worker_summary"] == []
     assert payload["data"]["aggregate_summary"] == {
@@ -867,7 +878,14 @@ def test_get_task_returns_attach_ready_detail_with_result_handoff() -> None:
         "submission_source": "active_dataset",
         "accepted_at": "2026-03-11 19:05:00",
         "last_updated_at": "2026-03-11 19:18:00",
+        "queue_name": "simulation",
+        "enqueued_at": "2026-03-11 19:05:00",
+        "runtime_job_id": "dispatch__303__post_processing_run_task",
+        "dispatch_attempt_count": 1,
+        "last_dispatch_outcome": "claimed",
+        "last_dispatch_error_code": None,
     }
+    assert detail["reconcile"] == {"required": False, "reason": None}
     assert detail["allowed_actions"] == {
         "attach": True,
         "cancel": False,
@@ -930,7 +948,20 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert task["dataset_id"] == "local-dataset-001"
     assert task["visibility_scope"] == "local"
     assert task["status"] == "queued"
-    assert task["dispatch"]["status"] == "accepted"
+    assert task["dispatch"] == {
+        "dispatch_key": "dispatch:306:characterization_run_task",
+        "status": "accepted",
+        "submission_source": "active_dataset",
+        "accepted_at": task["dispatch"]["accepted_at"],
+        "last_updated_at": task["dispatch"]["last_updated_at"],
+        "queue_name": "characterization",
+        "enqueued_at": task["dispatch"]["enqueued_at"],
+        "runtime_job_id": "dispatch__306__characterization_run_task",
+        "dispatch_attempt_count": 1,
+        "last_dispatch_outcome": "accepted",
+        "last_dispatch_error_code": None,
+    }
+    assert task["reconcile"] == {"required": False, "reason": None}
     assert task["characterization_setup"] == _characterization_setup_payload()
     assert task["result_handoff"] == {
         "availability": "pending",
@@ -956,6 +987,7 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert isinstance(completed["result_refs"]["analysis_run_id"], int)
     assert completed["result_refs"]["analysis_run_id"] > 0
     assert completed["events"][-1]["metadata"]["audit_action"] == "worker.task_completed"
+    assert "task_dispatch_claimed" in [event["event_type"] for event in completed["events"]]
 
     records = get_task_audit_repository().list_records_for_resource(
         resource_kind="task",
@@ -967,6 +999,86 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
         "worker.task_dispatched",
         "worker.task_started",
     ]
+
+
+def test_submit_task_returns_stable_queue_failure_with_persisted_task_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingDispatcher:
+        def enqueue_submitted_task(self, task):
+            raise TaskEnqueueError(
+                code="queue_connection_failed",
+                message="redis unavailable",
+                receipt=TaskDispatchReceipt(
+                    queue_name=task.lane,
+                    enqueued_at=None,
+                    runtime_job_id=task.dispatch.dispatch_key.replace(":", "__"),
+                    dispatch_attempt_count=1,
+                    last_dispatch_outcome="failed",
+                    last_dispatch_error_code="queue_connection_failed",
+                ),
+            )
+
+    monkeypatch.setattr(get_task_service(), "_queue_dispatcher", FailingDispatcher())
+
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "characterization_setup": _characterization_setup_payload(),
+        },
+    )
+
+    assert response.status_code == 503
+    error = response.json()["error"]
+    assert error["code"] == "task_enqueue_failed"
+    task_id = error["details"]["task_id"]
+    assert task_id == 306
+    assert error["details"]["dispatch"] == {
+        "dispatch_key": "dispatch:306:characterization_run_task",
+        "queue_name": "characterization",
+        "runtime_job_id": "dispatch__306__characterization_run_task",
+        "dispatch_attempt_count": 1,
+        "last_dispatch_outcome": "failed",
+        "last_dispatch_error_code": "queue_connection_failed",
+    }
+
+    persisted = client.get(f"/tasks/{task_id}")
+    assert persisted.status_code == 200
+    detail = persisted.json()["data"]
+    assert detail["status"] == "queued"
+    assert detail["dispatch"]["dispatch_key"] == "dispatch:306:characterization_run_task"
+    assert detail["dispatch"]["dispatch_attempt_count"] == 1
+    assert detail["dispatch"]["last_dispatch_outcome"] == "failed"
+    assert detail["dispatch"]["last_dispatch_error_code"] == "queue_connection_failed"
+
+
+def test_queue_row_echoes_reconcile_metadata_after_runtime_requeue() -> None:
+    created = _submit_task_and_optionally_drain(
+        {
+            "kind": "characterization",
+            "characterization_setup": _characterization_setup_payload(),
+        }
+    )
+
+    assert created["dispatch"]["dispatch_attempt_count"] == 1
+    clear_queue_jobs("characterization")
+    recover_lane("characterization")
+
+    queue_response = client.get("/tasks?scope=local")
+    assert queue_response.status_code == 200
+    rows = queue_response.json()["data"]["rows"]
+    queue_row = next(row for row in rows if row["task_id"] == created["task_id"])
+    assert queue_row["reconcile"] == {
+        "required": True,
+        "reason": "queue_job_missing",
+    }
+
+    detail = client.get(f"/tasks/{created['task_id']}").json()["data"]
+    assert detail["reconcile"] == {"required": True, "reason": "queue_job_missing"}
+    assert detail["dispatch"]["dispatch_attempt_count"] == 2
+    assert detail["dispatch"]["last_dispatch_outcome"] == "accepted"
+    assert any(event["event_type"] == "task_requeued" for event in detail["events"])
 
 
 def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> None:
@@ -1152,11 +1264,12 @@ def test_submit_local_simulation_task_executes_to_terminal_with_materialized_res
     assert task["result_refs"]["result_handles"][0]["status"] == "materialized"
     assert [event["event_type"] for event in task["events"]] == [
         "task_submitted",
+        "task_dispatch_claimed",
         "task_running",
         "task_running",
         "task_completed",
     ]
-    assert task["events"][1]["metadata"]["audit_action"] == "worker.task_started"
+    assert task["events"][1]["metadata"]["audit_action"] == "worker.task_dispatched"
     assert task["events"][-1]["metadata"]["audit_action"] == "worker.task_completed"
 
     reset_runtime_state()
@@ -1297,6 +1410,7 @@ def test_runtime_bootstrap_recovers_stranded_local_characterization_task() -> No
     events_response = client.get(f"/tasks/{created['task_id']}/events?order=asc&limit=10")
     assert [event["event_type"] for event in events_response.json()["data"]["events"]] == [
         "task_submitted",
+        "task_dispatch_claimed",
         "task_running",
         "task_running",
         "task_running",
