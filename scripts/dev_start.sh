@@ -38,6 +38,7 @@ start_service() {
 }
 
 start_service app uv run sc-app
-echo "[dev-start] started app-only local stack"
-echo "[dev-start] queue-backed worker processes are pending the worker-isolation redesign"
+start_service worker-simulation uv run sc-worker-simulation
+start_service worker-characterization uv run sc-worker-characterization
+echo "[dev-start] started app + worker local stack"
 echo "[dev-start] use ./scripts/dev_stop.sh to stop all started processes"

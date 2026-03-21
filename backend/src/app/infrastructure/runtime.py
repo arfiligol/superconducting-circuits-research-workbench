@@ -1,5 +1,7 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any
 
 from src.app.infrastructure.audit_store import (
     SqliteAuditLogRepository,
@@ -12,7 +14,6 @@ from src.app.infrastructure.local_simulation_execution_driver import (
     LocalCharacterizationExecutionDriver,
     LocalPostProcessingExecutionDriver,
     LocalSimulationExecutionDriver,
-    LocalTaskExecutionDriver,
 )
 from src.app.infrastructure.persisted_characterization_runtime import (
     PersistedCharacterizationRepository,
@@ -30,10 +31,23 @@ from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteA
 from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
 from src.app.infrastructure.rewrite_execution_runtime import RewriteExecutionRuntime
 from src.app.infrastructure.rewrite_processor_runtime_repository import (
-    InMemoryProcessorRuntimeRepository,
+    RedisProcessorRuntimeRepository,
 )
 from src.app.infrastructure.rewrite_task_repository import PersistedRewriteTaskRepository
 from src.app.infrastructure.session_jwt_transport import SessionJwtTransport
+from src.app.infrastructure.worker_runtime.dispatcher import (
+    LocalTaskQueueDispatcher,
+)
+from src.app.infrastructure.worker_runtime.recovery import (
+    LocalExecutionRecoveryService,
+)
+from src.app.infrastructure.worker_runtime.redis_connection import (
+    build_queue_connection_factory,
+)
+from src.app.infrastructure.worker_runtime.settings import (
+    WorkerRuntimeSettings,
+    build_worker_runtime_settings,
+)
 from src.app.services.audit_log_service import AuditLogService
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.circuit_definition_service import CircuitDefinitionService
@@ -53,8 +67,21 @@ from src.app.settings import get_settings
 class _TaskRuntimeBundle:
     task_service: TaskService
     execution_runtime: RewriteExecutionRuntime
-    local_task_execution_driver: LocalTaskExecutionDriver
-    local_simulation_execution_driver: LocalSimulationExecutionDriver
+    simulation_execution_driver: LocalSimulationExecutionDriver
+    post_processing_execution_driver: LocalPostProcessingExecutionDriver
+    characterization_execution_driver: LocalCharacterizationExecutionDriver
+    queue_dispatcher: LocalTaskQueueDispatcher
+    recovery_service: LocalExecutionRecoveryService
+
+
+@lru_cache(maxsize=1)
+def get_worker_runtime_settings() -> WorkerRuntimeSettings:
+    return build_worker_runtime_settings(get_settings())
+
+
+@lru_cache(maxsize=1)
+def get_queue_connection_factory() -> Callable[[], Any]:
+    return build_queue_connection_factory(get_worker_runtime_settings().redis_url)
 
 
 @lru_cache(maxsize=1)
@@ -132,8 +159,20 @@ def get_task_audit_repository() -> SqliteAuditLogRepository:
 
 
 @lru_cache(maxsize=1)
-def get_processor_runtime_repository() -> InMemoryProcessorRuntimeRepository:
-    return InMemoryProcessorRuntimeRepository(get_rewrite_task_repository())
+def get_processor_runtime_repository() -> RedisProcessorRuntimeRepository:
+    return RedisProcessorRuntimeRepository(
+        task_repository=get_rewrite_task_repository(),
+        settings=get_worker_runtime_settings(),
+        connection_factory=get_queue_connection_factory(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_task_queue_dispatcher() -> LocalTaskQueueDispatcher:
+    return LocalTaskQueueDispatcher(
+        settings=get_worker_runtime_settings(),
+        connection_factory=get_queue_connection_factory(),
+    )
 
 
 def get_health_service() -> HealthService:
@@ -228,7 +267,7 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
         dataset_repository=get_rewrite_catalog_repository(),
         circuit_definition_repository=get_rewrite_catalog_repository(),
         authorization_service=get_authorization_service(),
-        execution_driver=None,
+        queue_dispatcher=get_task_queue_dispatcher(),
     )
     execution_runtime = RewriteExecutionRuntime(
         task_service=task_service,
@@ -236,41 +275,52 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
         audit_repository=get_task_audit_repository(),
         processor_runtime_repository=get_processor_runtime_repository(),
     )
-    local_simulation_execution_driver = LocalSimulationExecutionDriver(
+    simulation_execution_driver = LocalSimulationExecutionDriver(
         task_repository=get_rewrite_task_repository(),
         circuit_definition_repository=get_rewrite_catalog_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
-    local_characterization_execution_driver = LocalCharacterizationExecutionDriver(
+    post_processing_execution_driver = LocalPostProcessingExecutionDriver(
+        task_repository=get_rewrite_task_repository(),
+        execution_runtime_factory=lambda: execution_runtime,
+    )
+    characterization_execution_driver = LocalCharacterizationExecutionDriver(
         task_repository=get_rewrite_task_repository(),
         dataset_repository=get_rewrite_catalog_repository(),
         characterization_repository=get_persisted_characterization_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
-    local_post_processing_execution_driver = LocalPostProcessingExecutionDriver(
+    recovery_service = LocalExecutionRecoveryService(
         task_repository=get_rewrite_task_repository(),
-        circuit_definition_repository=get_rewrite_catalog_repository(),
-        execution_runtime_factory=lambda: execution_runtime,
+        execution_runtime=execution_runtime,
+        processor_repository=get_processor_runtime_repository(),
+        queue_dispatcher=get_task_queue_dispatcher(),
     )
-    local_task_execution_driver = LocalTaskExecutionDriver(
-        task_repository=get_rewrite_task_repository(),
-        execution_runtime_factory=lambda: execution_runtime,
-        simulation_driver=local_simulation_execution_driver,
-        post_processing_driver=local_post_processing_execution_driver,
-        characterization_driver=local_characterization_execution_driver,
-    )
-    task_service.set_execution_driver(local_task_execution_driver)
-    local_task_execution_driver.recover_queued_tasks()
     return _TaskRuntimeBundle(
         task_service=task_service,
         execution_runtime=execution_runtime,
-        local_task_execution_driver=local_task_execution_driver,
-        local_simulation_execution_driver=local_simulation_execution_driver,
+        simulation_execution_driver=simulation_execution_driver,
+        post_processing_execution_driver=post_processing_execution_driver,
+        characterization_execution_driver=characterization_execution_driver,
+        queue_dispatcher=get_task_queue_dispatcher(),
+        recovery_service=recovery_service,
     )
 
 
-def get_local_simulation_execution_driver() -> LocalSimulationExecutionDriver:
-    return _get_task_runtime_bundle().local_simulation_execution_driver
+def get_simulation_execution_driver() -> LocalSimulationExecutionDriver:
+    return _get_task_runtime_bundle().simulation_execution_driver
+
+
+def get_post_processing_execution_driver() -> LocalPostProcessingExecutionDriver:
+    return _get_task_runtime_bundle().post_processing_execution_driver
+
+
+def get_characterization_execution_driver() -> LocalCharacterizationExecutionDriver:
+    return _get_task_runtime_bundle().characterization_execution_driver
+
+
+def get_execution_recovery_service() -> LocalExecutionRecoveryService:
+    return _get_task_runtime_bundle().recovery_service
 
 
 def get_task_service() -> TaskService:
@@ -288,6 +338,8 @@ def get_task_execution_runtime() -> RewriteExecutionRuntime:
 
 def reset_runtime_state() -> None:
     get_settings.cache_clear()
+    get_worker_runtime_settings.cache_clear()
+    get_queue_connection_factory.cache_clear()
     get_circuit_definition_persistence_repository.cache_clear()
     get_rewrite_catalog_repository.cache_clear()
     get_rewrite_app_state_repository.cache_clear()
@@ -298,6 +350,7 @@ def reset_runtime_state() -> None:
     get_rewrite_task_repository.cache_clear()
     get_task_audit_repository.cache_clear()
     get_processor_runtime_repository.cache_clear()
+    get_task_queue_dispatcher.cache_clear()
     get_dataset_service.cache_clear()
     get_authorization_service.cache_clear()
     get_session_token_transport.cache_clear()

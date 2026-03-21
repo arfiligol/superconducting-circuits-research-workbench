@@ -10,6 +10,7 @@ from src.app.infrastructure.runtime import (
     reset_runtime_state,
 )
 from src.app.main import app
+from tests.worker_runtime_harness import drain_lane_queue
 
 client = TestClient(app)
 
@@ -72,6 +73,7 @@ def _simulation_setup_payload(
 
 def _submit_local_simulation(
     *,
+    definition_id: int = 3,
     ptc_enabled: bool,
     parameter_sweeps: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
@@ -80,7 +82,7 @@ def _submit_local_simulation(
         json={
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
-            "definition_id": 3,
+            "definition_id": definition_id,
             "summary": "Explorer source task.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=ptc_enabled),
@@ -89,7 +91,9 @@ def _submit_local_simulation(
         },
     )
     assert response.status_code == 201
-    return response.json()["data"]["task"]
+    task = response.json()["data"]["task"]
+    drain_lane_queue("simulation")
+    return client.get(f"/tasks/{task['task_id']}").json()["data"]
 
 
 def _post_processing_setup_payload(
@@ -130,7 +134,9 @@ def _submit_local_post_processing(
         },
     )
     assert response.status_code == 201
-    return response.json()["data"]["task"]
+    task = response.json()["data"]["task"]
+    drain_lane_queue("simulation")
+    return client.get(f"/tasks/{task['task_id']}").json()["data"]
 
 
 def _login() -> None:
@@ -405,18 +411,48 @@ def test_metric_changes_do_not_change_trace_key_but_canonical_selection_changes_
 
 
 def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> None:
+    definition_response = client.post(
+        "/circuit-definitions",
+        json={
+            "name": "SweepableReadoutChain",
+            "source_text": """{
+  "name": "SweepableReadoutChain",
+  "parameters": [
+    {"name": "Lj", "default": 1000.0, "unit": "pH"},
+    {"name": "Cj", "default": 1000.0, "unit": "fF"}
+  ],
+  "components": [
+    {"name": "R1", "default": 50.0, "unit": "Ohm"},
+    {"name": "C1", "default": 100.0, "unit": "fF"},
+    {"name": "Lj1", "value_ref": "Lj", "unit": "pH"},
+    {"name": "C2", "value_ref": "Cj", "unit": "fF"}
+  ],
+  "topology": [
+    ("P1", "1", "0", 1),
+    ("R1", "1", "0", "R1"),
+    ("C1", "1", "2", "C1"),
+    ("Lj1", "2", "0", "Lj1"),
+    ("C2", "2", "0", "C2")
+  ]
+}""",
+        },
+    )
+    assert definition_response.status_code == 201
+    definition_id = definition_response.json()["data"]["definition"]["definition_id"]
+
     task = _submit_local_simulation(
+        definition_id=definition_id,
         ptc_enabled=True,
         parameter_sweeps=[
             {
-                "parameter": "L_jun",
-                "values": [22.0, 24.0, 26.0],
-                "unit": "nH",
+                "parameter": "Lj",
+                "values": [850.0, 1000.0, 1150.0],
+                "unit": "pH",
             },
             {
-                "parameter": "C_q",
-                "values": [0.055, 0.05814],
-                "unit": "pF",
+                "parameter": "Cj",
+                "values": [900.0, 1000.0],
+                "unit": "fF",
             },
         ],
     )
@@ -430,17 +466,17 @@ def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> N
         "point_count": 6,
         "axes": [
             {
-                "parameter": "L_jun",
-                "label": "L_jun",
-                "unit": "nH",
-                "values": [22.0, 24.0, 26.0],
+                "parameter": "Lj",
+                "label": "Lj",
+                "unit": "pH",
+                "values": [850.0, 1000.0, 1150.0],
                 "selected_value_index": 0,
             },
             {
-                "parameter": "C_q",
-                "label": "C_q",
-                "unit": "pF",
-                "values": [0.055, 0.05814],
+                "parameter": "Cj",
+                "label": "Cj",
+                "unit": "fF",
+                "values": [900.0, 1000.0],
                 "selected_value_index": 0,
             },
         ],
@@ -465,6 +501,7 @@ def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> N
 def test_retry_task_recovers_missing_persisted_setup_for_explorer() -> None:
     source_task = _submit_local_simulation(ptc_enabled=True)
     retried = client.post(f"/tasks/{source_task['task_id']}/retry").json()["data"]["task"]
+    drain_lane_queue("simulation")
 
     with _bind_client_app_context(client):
         task_service = get_task_service()

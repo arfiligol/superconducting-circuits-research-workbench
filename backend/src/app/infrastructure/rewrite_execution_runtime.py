@@ -91,7 +91,7 @@ class RewriteExecutionRuntime:
         stale_after_seconds: int = 300,
     ) -> TaskDetail:
         task = self._get_task(task_id)
-        _ensure_task_status(task, allowed_statuses=("queued",), action="start")
+        _ensure_task_status(task, allowed_statuses=("queued", "dispatching"), action="start")
         transition = build_worker_running_transition(
             task_id=task_id,
             recorded_at=recorded_at,
@@ -122,6 +122,41 @@ class RewriteExecutionRuntime:
                 "worker_pid": worker_pid,
                 "stale_after_seconds": stale_after_seconds,
             },
+        )
+        return self._task_service.get_task(updated_task.task_id)
+
+    def dispatch_task(
+        self,
+        task_id: int,
+        *,
+        recorded_at: datetime,
+        worker_pid: int | None = None,
+    ) -> TaskDetail:
+        task = self._get_task(task_id)
+        _ensure_task_status(task, allowed_statuses=("queued",), action="dispatch")
+        updated_task = self._task_service.update_task_lifecycle(
+            TaskLifecycleUpdate(
+                task_id=task_id,
+                status="dispatching",
+                progress_percent_complete=0,
+                progress_summary="Worker claimed the queued task from Redis.",
+                progress_updated_at=recorded_at.isoformat(),
+                summary=task.summary,
+            )
+        )
+        self._merge_runtime_event_metadata(
+            updated_task,
+            {
+                "audit_action": "worker.task_dispatched",
+                "worker_pid": worker_pid,
+            },
+        )
+        self._append_runtime_audit(
+            task=updated_task,
+            action_kind="worker.task_dispatched",
+            outcome="accepted",
+            recorded_at=recorded_at,
+            payload={"worker_pid": worker_pid},
         )
         return self._task_service.get_task(updated_task.task_id)
 
@@ -222,7 +257,11 @@ class RewriteExecutionRuntime:
         worker_pid: int | None = None,
     ) -> TaskDetail:
         task = self._get_task(task_id)
-        _ensure_task_status(task, allowed_statuses=("queued", "running"), action="fail")
+        _ensure_task_status(
+            task,
+            allowed_statuses=("queued", "dispatching", "running"),
+            action="fail",
+        )
         transition = build_worker_failed_transition(
             task_id=task_id,
             recorded_at=recorded_at,
@@ -261,7 +300,17 @@ class RewriteExecutionRuntime:
         stale_before: datetime,
     ) -> TaskDetail:
         task = self._get_task(task_id)
-        _ensure_task_status(task, allowed_statuses=("running",), action="reconcile")
+        _ensure_task_status(
+            task,
+            allowed_statuses=(
+                "dispatching",
+                "running",
+                "cancellation_requested",
+                "cancelling",
+                "termination_requested",
+            ),
+            action="reconcile",
+        )
         transition = build_reconcile_stale_task_transition(
             task_id=task_id,
             recorded_at=recorded_at,

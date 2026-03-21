@@ -49,7 +49,7 @@ TaskStatus = Literal[
     "failed",
 ]
 TaskControlState = Literal["none", "cancellation_requested", "termination_requested"]
-TaskQueueBackend = Literal["local_runtime"]
+TaskQueueBackend = Literal["rq_redis"]
 TaskVisibilityScope = Literal["local", "workspace", "owned"]
 TaskResultAvailability = Literal["pending", "ready", "none"]
 TaskEventType = Literal[

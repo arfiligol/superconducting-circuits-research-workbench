@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.domain.tasks import CharacterizationSetup, TaskLifecycleUpdate, TaskSubmissionDraft
 from src.app.infrastructure.runtime import (
+    get_execution_recovery_service,
     get_rewrite_app_state_repository,
     get_rewrite_catalog_repository,
     get_task_audit_repository,
@@ -13,6 +14,12 @@ from src.app.infrastructure.runtime import (
     reset_runtime_state,
 )
 from src.app.main import app
+from tests.worker_runtime_harness import (
+    clear_queue_jobs,
+    drain_lane_queue,
+    queue_job_count,
+    registered_worker,
+)
 
 client = TestClient(app)
 
@@ -127,6 +134,38 @@ def _characterization_setup_payload(
             "residual_tolerance": 0.015,
         },
     }
+
+
+def _lane_for_kind(kind: str) -> str:
+    return "characterization" if kind == "characterization" else "simulation"
+
+
+def _submit_task_and_optionally_drain(
+    payload: dict[str, object],
+    *,
+    drain: bool = False,
+) -> dict[str, object]:
+    response = client.post("/tasks", json=payload)
+    assert response.status_code == 201
+    task = response.json()["data"]["task"]
+    if not drain:
+        return task
+    drain_lane_queue(_lane_for_kind(task["task_kind"]))
+    return client.get(f"/tasks/{task['task_id']}").json()["data"]
+
+
+def _retry_task_and_optionally_drain(
+    task_id: int,
+    *,
+    drain: bool = False,
+) -> dict[str, object]:
+    response = client.post(f"/tasks/{task_id}/retry")
+    assert response.status_code == 201
+    task = response.json()["data"]["task"]
+    if not drain:
+        return task
+    drain_lane_queue(_lane_for_kind(task["task_kind"]))
+    return client.get(f"/tasks/{task['task_id']}").json()["data"]
 
 
 @contextmanager
@@ -619,24 +658,7 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
         },
         "control_state": "none",
     }
-    assert payload["data"]["worker_summary"] == [
-        {
-            "lane": "simulation",
-            "healthy_processors": 0,
-            "busy_processors": 1,
-            "degraded_processors": 0,
-            "draining_processors": 0,
-            "offline_processors": 0,
-        },
-        {
-            "lane": "characterization",
-            "healthy_processors": 1,
-            "busy_processors": 0,
-            "degraded_processors": 0,
-            "draining_processors": 0,
-            "offline_processors": 0,
-        },
-    ]
+    assert payload["data"]["worker_summary"] == []
     assert payload["data"]["aggregate_summary"] == {
         "total": 1,
         "pending": 0,
@@ -748,48 +770,56 @@ def test_list_tasks_local_scope_semantics_stay_truthful() -> None:
 
 
 def test_list_runtime_processors_returns_standalone_worker_detail() -> None:
-    response = client.get("/tasks/runtime/processors")
+    with registered_worker("simulation", name="sc-worker-simulation:4101"), registered_worker(
+        "characterization",
+        name="sc-worker-characterization:4102",
+    ):
+        response = client.get("/tasks/runtime/processors")
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
     assert payload["data"]["processors"] == [
         {
-            "processor_id": "local-simulation-processor",
-            "lane": "simulation",
-            "state": "busy",
-            "current_task_id": 300,
-            "last_heartbeat_at": "2026-03-17 08:50:00",
+            "processor_id": "sc-worker-characterization:4102",
+            "lane": "characterization",
+            "state": "healthy",
+            "current_task_id": None,
+            "last_heartbeat_at": payload["data"]["processors"][0]["last_heartbeat_at"],
             "runtime_metadata": {
-                "authority": "local_runtime",
-                "execution_mode": "in_process",
-                "capacity": 1,
+                "authority": "rq_redis",
+                "execution_mode": "worker_process",
+                "lane": "characterization",
+                "queue_names": ["characterization"],
+                "worker_pid": 4102,
             },
         },
         {
-            "processor_id": "local-characterization-processor",
-            "lane": "characterization",
+            "processor_id": "sc-worker-simulation:4101",
+            "lane": "simulation",
             "state": "healthy",
             "current_task_id": None,
             "last_heartbeat_at": payload["data"]["processors"][1]["last_heartbeat_at"],
             "runtime_metadata": {
-                "authority": "local_runtime",
-                "execution_mode": "in_process",
-                "capacity": 1,
+                "authority": "rq_redis",
+                "execution_mode": "worker_process",
+                "lane": "simulation",
+                "queue_names": ["simulation"],
+                "worker_pid": 4101,
             },
         },
     ]
     assert payload["data"]["worker_summary"] == [
         {
-            "lane": "simulation",
-            "healthy_processors": 0,
-            "busy_processors": 1,
+            "lane": "characterization",
+            "healthy_processors": 1,
+            "busy_processors": 0,
             "degraded_processors": 0,
             "draining_processors": 0,
             "offline_processors": 0,
         },
         {
-            "lane": "characterization",
+            "lane": "simulation",
             "healthy_processors": 1,
             "busy_processors": 0,
             "degraded_processors": 0,
@@ -899,28 +929,33 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert task["task_id"] == 306
     assert task["dataset_id"] == "local-dataset-001"
     assert task["visibility_scope"] == "local"
-    assert task["status"] == "completed"
-    assert task["dispatch"]["status"] == "completed"
+    assert task["status"] == "queued"
+    assert task["dispatch"]["status"] == "accepted"
     assert task["characterization_setup"] == _characterization_setup_payload()
     assert task["result_handoff"] == {
-        "availability": "ready",
-        "primary_result_handle_id": (
-            f"analysis-run:{task['result_refs']['analysis_run_id']}:report"
-        ),
+        "availability": "pending",
+        "primary_result_handle_id": "task-result:306:primary",
         "result_handle_count": 1,
-        "trace_payload_available": True,
+        "trace_payload_available": False,
     }
-    assert isinstance(task["result_refs"]["analysis_run_id"], int)
-    assert task["result_refs"]["analysis_run_id"] > 0
+    assert task["result_refs"]["analysis_run_id"] is None
     assert task["events"][0]["metadata"]["audit_action"] == "task.submitted"
-    assert [event["event_type"] for event in task["events"]] == [
-        "task_submitted",
-        "task_running",
-        "task_running",
-        "task_running",
-        "task_completed",
-    ]
-    assert task["events"][-1]["metadata"]["audit_action"] == "worker.task_completed"
+    assert [event["event_type"] for event in task["events"]] == ["task_submitted"]
+
+    records = get_task_audit_repository().list_records_for_resource(
+        resource_kind="task",
+        resource_id="306",
+    )
+    assert [record.action_kind for record in records] == ["task.submitted"]
+
+    drain_lane_queue("characterization")
+
+    completed = client.get("/tasks/306").json()["data"]
+    assert completed["status"] == "completed"
+    assert completed["dispatch"]["status"] == "completed"
+    assert isinstance(completed["result_refs"]["analysis_run_id"], int)
+    assert completed["result_refs"]["analysis_run_id"] > 0
+    assert completed["events"][-1]["metadata"]["audit_action"] == "worker.task_completed"
 
     records = get_task_audit_repository().list_records_for_resource(
         resource_kind="task",
@@ -929,24 +964,23 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert sorted(record.action_kind for record in records) == [
         "task.submitted",
         "worker.task_completed",
+        "worker.task_dispatched",
         "worker.task_started",
     ]
 
 
 def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> None:
     simulation_setup = _simulation_setup_payload(ptc=_simulation_ptc_payload())
-    response = client.post(
-        "/tasks",
-        json={
+    task = _submit_task_and_optionally_drain(
+        {
             "kind": "simulation",
             "definition_id": 3,
             "summary": "Fluxonium sweep with HB setup.",
             "simulation_setup": simulation_setup,
         },
+        drain=True,
     )
 
-    assert response.status_code == 201
-    task = response.json()["data"]["task"]
     assert task["simulation_setup"] == simulation_setup
     assert task["simulation_setup"]["ptc"] == _simulation_ptc_payload()
     assert task["downstream_source_capabilities"] == {
@@ -974,30 +1008,27 @@ def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> N
 
 def test_post_processing_task_persists_upstream_lineage_and_downstream_reference() -> None:
     simulation_setup = _simulation_setup_payload(ptc=_simulation_ptc_payload())
-    simulation_response = client.post(
-        "/tasks",
-        json={
+    upstream_task = _submit_task_and_optionally_drain(
+        {
             "kind": "simulation",
             "definition_id": 3,
             "summary": "Upstream simulation for fit bundle.",
             "simulation_setup": simulation_setup,
         },
+        drain=True,
     )
-    upstream_task_id = simulation_response.json()["data"]["task"]["task_id"]
+    upstream_task_id = upstream_task["task_id"]
 
-    post_processing_response = client.post(
-        "/tasks",
-        json={
+    task = _submit_task_and_optionally_drain(
+        {
             "kind": "post_processing",
             "dataset_id": "local-dataset-001",
             "summary": "Fit the latest fluxonium run.",
             "upstream_task_id": upstream_task_id,
             "post_processing_setup": _post_processing_setup_payload(),
         },
+        drain=True,
     )
-
-    assert post_processing_response.status_code == 201
-    task = post_processing_response.json()["data"]["task"]
     assert task["status"] == "completed"
     assert task["dispatch"]["status"] == "completed"
     assert task["upstream_task_id"] == upstream_task_id
@@ -1086,9 +1117,8 @@ def test_simulation_task_detail_exposes_disabled_ptc_capability_state() -> None:
 
 
 def test_submit_local_simulation_task_executes_to_terminal_with_materialized_results() -> None:
-    response = client.post(
-        "/tasks",
-        json={
+    queued = _submit_task_and_optionally_drain(
+        {
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
             "definition_id": 3,
@@ -1099,8 +1129,13 @@ def test_submit_local_simulation_task_executes_to_terminal_with_materialized_res
         },
     )
 
-    assert response.status_code == 201
-    task = response.json()["data"]["task"]
+    assert queued["status"] == "queued"
+    assert queued["dispatch"]["status"] == "accepted"
+    assert queue_job_count("simulation") == 1
+
+    drain_lane_queue("simulation")
+
+    task = client.get(f"/tasks/{queued['task_id']}").json()["data"]
     assert task["status"] == "completed"
     assert task["dispatch"]["status"] == "completed"
     assert task["progress"]["phase"] == "completed"
@@ -1136,9 +1171,8 @@ def test_submit_local_simulation_task_executes_to_terminal_with_materialized_res
 
 
 def test_local_simulation_submit_does_not_leave_queue_stuck_or_worker_summary_misleading() -> None:
-    submitted = client.post(
-        "/tasks",
-        json={
+    submitted = _submit_task_and_optionally_drain(
+        {
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
             "definition_id": 3,
@@ -1147,27 +1181,37 @@ def test_local_simulation_submit_does_not_leave_queue_stuck_or_worker_summary_mi
                 ptc=_simulation_ptc_payload(enabled=False, mode="manual")
             ),
         },
-    ).json()["data"]["task"]
-
-    queue = client.get("/tasks").json()["data"]
-    submitted_row = next(row for row in queue["rows"] if row["task_id"] == submitted["task_id"])
-    simulation_summary = next(
-        summary for summary in queue["worker_summary"] if summary["lane"] == "simulation"
     )
 
-    assert submitted_row["status"] == "completed"
-    assert submitted_row["result_availability"] == "ready"
-    assert simulation_summary["healthy_processors"] == 0
-    assert simulation_summary["busy_processors"] == 1
-    assert simulation_summary["degraded_processors"] == 0
-    assert simulation_summary["draining_processors"] == 0
-    assert simulation_summary["offline_processors"] == 0
+    queue_before_drain = client.get("/tasks").json()["data"]
+    submitted_row = next(
+        row for row in queue_before_drain["rows"] if row["task_id"] == submitted["task_id"]
+    )
+
+    assert submitted_row["status"] == "queued"
+    assert submitted_row["result_availability"] == "pending"
+    assert queue_before_drain["worker_summary"] == []
+
+    drain_lane_queue("simulation")
+
+    with registered_worker("simulation", name="sc-worker-simulation:4201"):
+        runtime = client.get("/tasks/runtime/processors").json()["data"]
+
+    assert runtime["worker_summary"] == [
+        {
+            "lane": "simulation",
+            "healthy_processors": 1,
+            "busy_processors": 0,
+            "degraded_processors": 0,
+            "draining_processors": 0,
+            "offline_processors": 0,
+        }
+    ]
 
 
 def test_retry_local_simulation_executes_to_terminal_in_routes() -> None:
-    submitted = client.post(
-        "/tasks",
-        json={
+    submitted = _submit_task_and_optionally_drain(
+        {
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
             "definition_id": 3,
@@ -1176,8 +1220,9 @@ def test_retry_local_simulation_executes_to_terminal_in_routes() -> None:
                 ptc=_simulation_ptc_payload(enabled=False, mode="manual")
             ),
         },
-    ).json()["data"]["task"]
-    retried = client.post(f"/tasks/{submitted['task_id']}/retry").json()["data"]["task"]
+        drain=True,
+    )
+    retried = _retry_task_and_optionally_drain(submitted["task_id"], drain=True)
 
     assert retried["retry_of_task_id"] == submitted["task_id"]
     assert retried["status"] == "completed"
@@ -1190,29 +1235,30 @@ def test_retry_local_simulation_executes_to_terminal_in_routes() -> None:
 
 
 def test_runtime_bootstrap_recovers_stranded_local_simulation_task() -> None:
-    service = get_task_service()
-    original_driver = service._execution_driver
-    service.set_execution_driver(None)
-    try:
-        created = client.post(
-            "/tasks",
-            json={
-                "kind": "simulation",
-                "dataset_id": "local-dataset-001",
-                "definition_id": 3,
-                "summary": "Bootstrap recovery proof.",
-                "simulation_setup": _simulation_setup_payload(
-                    ptc=_simulation_ptc_payload(enabled=False, mode="manual")
-                ),
-            },
-        ).json()["data"]["task"]
-    finally:
-        service.set_execution_driver(original_driver)
+    created = _submit_task_and_optionally_drain(
+        {
+            "kind": "simulation",
+            "dataset_id": "local-dataset-001",
+            "definition_id": 3,
+            "summary": "Bootstrap recovery proof.",
+            "simulation_setup": _simulation_setup_payload(
+                ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+            ),
+        }
+    )
 
     assert created["status"] == "queued"
     assert created["dispatch"]["status"] == "accepted"
+    assert queue_job_count("simulation") == 1
+
+    clear_queue_jobs("simulation")
+    assert queue_job_count("simulation") == 0
 
     reset_runtime_state()
+
+    get_execution_recovery_service().recover_lane("simulation")
+    assert queue_job_count("simulation") == 1
+    drain_lane_queue("simulation")
 
     reloaded = client.get(f"/tasks/{created['task_id']}").json()["data"]
     assert reloaded["status"] == "completed"
@@ -1222,24 +1268,19 @@ def test_runtime_bootstrap_recovers_stranded_local_simulation_task() -> None:
 
 
 def test_runtime_bootstrap_recovers_stranded_local_characterization_task() -> None:
-    service = get_task_service()
-    original_driver = service._execution_driver
-    service.set_execution_driver(None)
-    try:
-        created = client.post(
-            "/tasks",
-            json={
-                "kind": "characterization",
-                "characterization_setup": _characterization_setup_payload(),
-            },
-        ).json()["data"]["task"]
-    finally:
-        service.set_execution_driver(original_driver)
+    created = _submit_task_and_optionally_drain(
+        {
+            "kind": "characterization",
+            "characterization_setup": _characterization_setup_payload(),
+        }
+    )
 
     assert created["status"] == "queued"
     assert created["dispatch"]["status"] == "accepted"
 
     reset_runtime_state()
+
+    drain_lane_queue("characterization")
 
     queue_response = client.get("/tasks")
     assert [row["task_id"] for row in queue_response.json()["data"]["rows"]][:2] == [300, 306]
@@ -1264,39 +1305,34 @@ def test_runtime_bootstrap_recovers_stranded_local_characterization_task() -> No
 
 
 def test_runtime_bootstrap_recovers_stranded_local_post_processing_task() -> None:
-    service = get_task_service()
-    original_driver = service._execution_driver
-    service.set_execution_driver(None)
-    try:
-        upstream = client.post(
-            "/tasks",
-            json={
-                "kind": "simulation",
-                "dataset_id": "local-dataset-001",
-                "definition_id": 3,
-                "summary": "Upstream simulation for post-processing recovery.",
-                "simulation_setup": _simulation_setup_payload(
-                    ptc=_simulation_ptc_payload(enabled=False, mode="manual")
-                ),
-            },
-        ).json()["data"]["task"]
-        created = client.post(
-            "/tasks",
-            json={
-                "kind": "post_processing",
-                "dataset_id": "local-dataset-001",
-                "summary": "Bootstrap post-processing recovery proof.",
-                "upstream_task_id": upstream["task_id"],
-                "post_processing_setup": _post_processing_setup_payload(),
-            },
-        ).json()["data"]["task"]
-    finally:
-        service.set_execution_driver(original_driver)
+    upstream = _submit_task_and_optionally_drain(
+        {
+            "kind": "simulation",
+            "dataset_id": "local-dataset-001",
+            "definition_id": 3,
+            "summary": "Upstream simulation for post-processing recovery.",
+            "simulation_setup": _simulation_setup_payload(
+                ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+            ),
+        },
+        drain=True,
+    )
+    created = _submit_task_and_optionally_drain(
+        {
+            "kind": "post_processing",
+            "dataset_id": "local-dataset-001",
+            "summary": "Bootstrap post-processing recovery proof.",
+            "upstream_task_id": upstream["task_id"],
+            "post_processing_setup": _post_processing_setup_payload(),
+        }
+    )
 
     assert created["status"] == "queued"
     assert created["dispatch"]["status"] == "accepted"
 
     reset_runtime_state()
+
+    drain_lane_queue("simulation")
 
     detail_response = client.get(f"/tasks/{created['task_id']}")
     assert detail_response.status_code == 200
@@ -1396,23 +1432,17 @@ def test_retry_denies_non_terminal_task() -> None:
 
 
 def test_runtime_updates_flow_through_detail_events_and_result_handoff() -> None:
-    service = get_task_service()
-    original_driver = service._execution_driver
-    service.set_execution_driver(None)
-    try:
-        submitted_task = service.submit_task(
-            TaskSubmissionDraft(
-                kind="characterization",
-                dataset_id=None,
-                definition_id=None,
-                summary="Execution runtime route proof.",
-                characterization_setup=CharacterizationSetup.from_mapping(
-                    _characterization_setup_payload()
-                ),
-            )
+    submitted_task = get_task_service().submit_task(
+        TaskSubmissionDraft(
+            kind="characterization",
+            dataset_id=None,
+            definition_id=None,
+            summary="Execution runtime route proof.",
+            characterization_setup=CharacterizationSetup.from_mapping(
+                _characterization_setup_payload()
+            ),
         )
-    finally:
-        service.set_execution_driver(original_driver)
+    )
 
     get_task_execution_runtime().start_task(
         submitted_task.task_id,

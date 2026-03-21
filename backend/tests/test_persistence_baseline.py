@@ -160,7 +160,7 @@ def test_alembic_upgrade_creates_rewrite_storage_tables_and_supports_round_trip(
                 dataset_id="fluxonium-2025-031",
                 definition_id=None,
                 summary="Fluxonium fit bundle was post-processed.",
-                queue_backend="local_runtime",
+                queue_backend="rq_redis",
                 worker_task_name="post_processing_run_task",
                 request_ready=True,
                 submitted_from_active_dataset=True,

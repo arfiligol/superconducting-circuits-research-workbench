@@ -121,7 +121,7 @@ class SqliteRewriteTaskSnapshotRepository:
                 dataset_id=draft.dataset_id,
                 definition_id=draft.definition_id,
                 summary=draft.summary,
-                queue_backend="local_runtime",
+                queue_backend="rq_redis",
                 worker_task_name=draft.worker_task_name,
                 request_ready=draft.request_ready,
                 submitted_from_active_dataset=draft.submitted_from_active_dataset,
@@ -417,12 +417,7 @@ def _to_task_detail(
         dataset_id=row.dataset_id,
         definition_id=row.definition_id,
         summary=row.summary,
-        queue_backend=cast(
-            TaskQueueBackend,
-            "local_runtime"
-            if row.queue_backend == "in_memory_scaffold"
-            else row.queue_backend,
-        ),
+        queue_backend=_normalize_queue_backend(row.queue_backend),
         worker_task_name=cast(WorkerTaskName, row.worker_task_name),
         request_ready=row.request_ready,
         submitted_from_active_dataset=row.submitted_from_active_dataset,
@@ -455,3 +450,9 @@ def _empty_result_refs() -> TaskResultRefs:
         trace_payload=None,
         result_handles=(),
     )
+
+
+def _normalize_queue_backend(value: str) -> TaskQueueBackend:
+    if value == "rq_redis":
+        return "rq_redis"
+    return "rq_redis"

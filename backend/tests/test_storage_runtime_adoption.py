@@ -429,9 +429,7 @@ def test_execution_runtime_persists_start_heartbeat_and_completion_across_reset(
     assert reloaded_task.status == "completed"
     assert reloaded_task.dispatch is not None
     assert reloaded_task.dispatch.status == "completed"
-    assert reloaded_task.progress.summary == (
-        "characterization_run_task completed in the characterization lane."
-    )
+    assert reloaded_task.progress.summary == "Characterization task completed."
     assert reloaded_task.result_refs.trace_batch_id == submitted_task.task_id
     assert reloaded_task.result_refs.result_handles[0].status == "materialized"
     assert [event.event_type for event in reloaded_task.events] == [
@@ -748,11 +746,7 @@ def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_c
     )
 
     queue = service.get_queue_view(TaskListQuery(limit=20))
-    simulation_summary = next(
-        summary for summary in queue.worker_summary if summary.lane == "simulation"
-    )
-    assert simulation_summary.draining_processors == 1
-    assert simulation_summary.busy_processors == 0
+    assert queue.worker_summary == ()
 
     cancelled_task = runtime.finalize_cancelled(
         301,
@@ -788,11 +782,7 @@ def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_c
     assert reloaded_task.control_state == "none"
 
     reloaded_queue = get_task_service().get_queue_view(TaskListQuery(limit=20))
-    reloaded_simulation_summary = next(
-        summary for summary in reloaded_queue.worker_summary if summary.lane == "simulation"
-    )
-    assert reloaded_simulation_summary.healthy_processors == 2
-    assert reloaded_simulation_summary.draining_processors == 0
+    assert reloaded_queue.worker_summary == ()
 
 
 def test_execution_runtime_consumes_termination_request_and_persists_terminated_state() -> None:
@@ -818,11 +808,7 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
     )
 
     queue = service.get_queue_view(TaskListQuery(limit=20))
-    simulation_summary = next(
-        summary for summary in queue.worker_summary if summary.lane == "simulation"
-    )
-    assert simulation_summary.degraded_processors == 1
-    assert simulation_summary.busy_processors == 0
+    assert queue.worker_summary == ()
 
     terminated_task = runtime.finalize_terminated(
         301,
@@ -851,8 +837,4 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
     assert reloaded_task.control_state == "none"
 
     reloaded_queue = get_task_service().get_queue_view(TaskListQuery(limit=20))
-    reloaded_simulation_summary = next(
-        summary for summary in reloaded_queue.worker_summary if summary.lane == "simulation"
-    )
-    assert reloaded_simulation_summary.healthy_processors == 2
-    assert reloaded_simulation_summary.degraded_processors == 0
+    assert reloaded_queue.worker_summary == ()

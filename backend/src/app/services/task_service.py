@@ -154,8 +154,8 @@ class TaskProcessorSummaryRepository(Protocol):
     ) -> Sequence[ProcessorHeartbeat]: ...
 
 
-class TaskExecutionDriver(Protocol):
-    def execute_submitted_task(self, task_id: int) -> None: ...
+class TaskQueueDispatcher(Protocol):
+    def enqueue_submitted_task(self, task: TaskDetail) -> None: ...
 
 
 class TaskService:
@@ -168,7 +168,7 @@ class TaskService:
         authorization_service: AuthorizationService | None = None,
         audit_repository: TaskAuditRepository | None = None,
         processor_summary_repository: TaskProcessorSummaryRepository | None = None,
-        execution_driver: TaskExecutionDriver | None = None,
+        queue_dispatcher: TaskQueueDispatcher | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
@@ -179,10 +179,7 @@ class TaskService:
         )
         self._audit_repository = audit_repository
         self._processor_summary_repository = processor_summary_repository
-        self._execution_driver = execution_driver
-
-    def set_execution_driver(self, execution_driver: TaskExecutionDriver | None) -> None:
-        self._execution_driver = execution_driver
+        self._queue_dispatcher = queue_dispatcher
 
     def list_tasks(self, query: TaskListQuery) -> list[TaskDetail]:
         tasks = [
@@ -205,27 +202,16 @@ class TaskService:
             _build_queue_row(task, self._build_allowed_actions(task, session))
             for task in paged_tasks
         )
-        visible_workspace_tasks = [
-            self._normalize_task(task)
-            for task in self._repository.list_tasks()
-            if self._is_visible(
-                task,
-                session,
-                scope="local" if session.runtime_mode == "local" else "workspace",
-            )
-        ]
         aggregate_summary = _build_queue_aggregate_summary(sorted_tasks)
         return TaskQueueView(
             rows=rows,
-            worker_summary=_build_worker_summary(
-                visible_tasks=visible_workspace_tasks,
-                runtime_mode=session.runtime_mode,
-                processor_summaries=(
+            worker_summary=(
+                tuple(
                     self._processor_summary_repository.list_lane_summaries(session.workspace_id)
-                    if self._processor_summary_repository is not None
-                    and session.runtime_mode != "local"
-                    else ()
-                ),
+                )
+                if self._processor_summary_repository is not None
+                and session.runtime_mode == "local"
+                else ()
             ),
             aggregate_summary=aggregate_summary,
             total_count=len(sorted_tasks),
@@ -240,19 +226,7 @@ class TaskService:
         lane: str | None = None,
     ) -> TaskProcessorRuntimeView:
         session = self._session_repository.get_session_state()
-        if session.runtime_mode == "local":
-            processors = _build_local_processor_details(
-                visible_tasks=[
-                    self._normalize_task(task)
-                    for task in self._repository.list_tasks()
-                    if self._is_visible(task, session, scope="local")
-                ],
-                lane=lane,
-            )
-            summary = _summaries_for_processor_details(processors)
-            return TaskProcessorRuntimeView(processors=processors, worker_summary=summary)
-
-        if self._processor_summary_repository is None:
+        if self._processor_summary_repository is None or session.runtime_mode != "local":
             return TaskProcessorRuntimeView(processors=(), worker_summary=())
         heartbeats = tuple(
             heartbeat
@@ -823,11 +797,7 @@ class TaskService:
                 "submission_source": detail.dispatch.submission_source if detail.dispatch else None,
             },
         )
-        self._execute_submitted_task_if_supported(
-            task_id=detail.task_id,
-            task_kind=detail.kind,
-            runtime_mode=session.runtime_mode,
-        )
+        self._enqueue_submitted_task_if_supported(detail, runtime_mode=session.runtime_mode)
         return self.get_task(created_task.task_id)
 
     def cancel_task(self, task_id: int) -> TaskDetail:
@@ -1041,9 +1011,8 @@ class TaskService:
                 "lane": source_task.lane,
             },
         )
-        self._execute_submitted_task_if_supported(
-            task_id=created_detail.task_id,
-            task_kind=created_detail.kind,
+        self._enqueue_submitted_task_if_supported(
+            created_detail,
             runtime_mode=session.runtime_mode,
         )
         return self.get_task(created_detail.task_id)
@@ -1566,18 +1535,17 @@ class TaskService:
             )
         )
 
-    def _execute_submitted_task_if_supported(
+    def _enqueue_submitted_task_if_supported(
         self,
+        task: TaskDetail,
         *,
-        task_id: int,
-        task_kind: TaskKind,
         runtime_mode: str,
     ) -> None:
-        if self._execution_driver is None:
+        if self._queue_dispatcher is None:
             return
         if runtime_mode != "local":
             return
-        self._execution_driver.execute_submitted_task(task_id)
+        self._queue_dispatcher.enqueue_submitted_task(task)
 
     def _resolve_upstream_task(self, upstream_task_id: int | None) -> TaskDetail | None:
         if upstream_task_id is None:
@@ -2172,43 +2140,6 @@ def _build_queue_aggregate_summary(tasks: Sequence[TaskDetail]) -> TaskQueueAggr
     )
 
 
-def _build_worker_summary(
-    *,
-    visible_tasks: Sequence[TaskDetail],
-    runtime_mode: str,
-    processor_summaries: Sequence[WorkerLaneSummary],
-) -> tuple[WorkerLaneSummary, ...]:
-    if runtime_mode == "local":
-        return _build_local_worker_summary(visible_tasks)
-    if len(processor_summaries) > 0:
-        return tuple(processor_summaries)
-    summaries: list[WorkerLaneSummary] = []
-    for lane in ("simulation", "characterization"):
-        lane_tasks = [
-            task for task in visible_tasks if _normalize_runtime_lane(task.lane) == lane
-        ]
-        busy_processors = sum(1 for task in lane_tasks if task.status in {"dispatching", "running"})
-        degraded_processors = sum(
-            1 for task in lane_tasks if task.status == "termination_requested"
-        )
-        draining_processors = sum(
-            1 for task in lane_tasks if task.status in {"cancellation_requested", "cancelling"}
-        )
-        summaries.append(
-            WorkerLaneSummary(
-                lane=lane,
-                healthy_processors=max(
-                    1 - min(busy_processors + degraded_processors + draining_processors, 1), 0
-                ),
-                busy_processors=busy_processors,
-                degraded_processors=degraded_processors,
-                draining_processors=draining_processors,
-                offline_processors=0,
-            )
-        )
-    return tuple(summaries)
-
-
 def _resolve_scope_for_session(scope: str, session: SessionState) -> str:
     if session.runtime_mode == "local":
         return "local"
@@ -2226,100 +2157,6 @@ def _serialize_processor_heartbeat(heartbeat: ProcessorHeartbeat) -> TaskProcess
     )
 
 
-def _build_local_processor_details(
-    *,
-    visible_tasks: Sequence[TaskDetail],
-    lane: str | None,
-) -> tuple[TaskProcessorDetail, ...]:
-    recorded_at = _generated_at()
-    processors: list[TaskProcessorDetail] = []
-    for lane_name in ("simulation", "characterization"):
-        if lane is not None and lane != lane_name:
-            continue
-        active_task = next(
-            (
-                task
-                for task in visible_tasks
-                if _normalize_runtime_lane(task.lane) == lane_name
-                and task.status
-                in {
-                    "dispatching",
-                    "running",
-                    "cancellation_requested",
-                    "cancelling",
-                    "termination_requested",
-                }
-            ),
-            None,
-        )
-        if lane_name == "simulation":
-            processors.append(
-                TaskProcessorDetail(
-                    processor_id="local-simulation-processor",
-                    lane="simulation",
-                    state="busy" if active_task is not None else "healthy",
-                    current_task_id=active_task.task_id if active_task is not None else None,
-                    last_heartbeat_at=(
-                        active_task.progress.updated_at if active_task is not None else recorded_at
-                    ),
-                    runtime_metadata={
-                        "authority": "local_runtime",
-                        "execution_mode": "in_process",
-                        "capacity": 1,
-                    },
-                )
-            )
-            continue
-        processors.append(
-            TaskProcessorDetail(
-                processor_id="local-characterization-processor",
-                lane="characterization",
-                state="busy" if active_task is not None else "healthy",
-                current_task_id=active_task.task_id if active_task is not None else None,
-                last_heartbeat_at=(
-                    active_task.progress.updated_at if active_task is not None else recorded_at
-                ),
-                runtime_metadata={
-                    "authority": "local_runtime",
-                    "execution_mode": "in_process",
-                    "capacity": 1,
-                },
-            )
-        )
-    return tuple(processors)
-
-
-def _summaries_for_processor_details(
-    processors: Sequence[TaskProcessorDetail],
-) -> tuple[WorkerLaneSummary, ...]:
-    summaries: list[WorkerLaneSummary] = []
-    for lane in ("simulation", "characterization"):
-        lane_processors = [processor for processor in processors if processor.lane == lane]
-        if len(lane_processors) == 0:
-            continue
-        summaries.append(
-            WorkerLaneSummary(
-                lane=lane,  # type: ignore[arg-type]
-                healthy_processors=sum(
-                    1 for processor in lane_processors if processor.state == "healthy"
-                ),
-                busy_processors=sum(
-                    1 for processor in lane_processors if processor.state == "busy"
-                ),
-                degraded_processors=sum(
-                    1 for processor in lane_processors if processor.state == "degraded"
-                ),
-                draining_processors=sum(
-                    1 for processor in lane_processors if processor.state == "draining"
-                ),
-                offline_processors=sum(
-                    1 for processor in lane_processors if processor.state == "offline"
-                ),
-            )
-        )
-    return tuple(summaries)
-
-
 def _build_publication_design_id(design_name: str) -> str:
     slug = "-".join(
         token
@@ -2332,46 +2169,6 @@ def _build_publication_design_id(design_name: str) -> str:
     return f"design_{slug}" if len(slug) > 0 else "design_simulation_result"
 
 
-def _build_local_worker_summary(
-    visible_tasks: Sequence[TaskDetail],
-) -> tuple[WorkerLaneSummary, ...]:
-    active_statuses = {"dispatching", "running"}
-    draining_statuses = {"cancellation_requested", "cancelling"}
-    summaries: list[WorkerLaneSummary] = []
-    lane_capacity = {"simulation": 1, "characterization": 1}
-    lane_order = ("simulation", "characterization")
-    for lane in lane_order:
-        lane_tasks = [
-            task for task in visible_tasks if _normalize_runtime_lane(task.lane) == lane
-        ]
-        busy_processors = min(
-            sum(1 for task in lane_tasks if task.status in active_statuses),
-            lane_capacity[lane],
-        )
-        degraded_processors = min(
-            sum(1 for task in lane_tasks if task.status == "termination_requested"),
-            max(lane_capacity[lane] - busy_processors, 0),
-        )
-        draining_processors = min(
-            sum(1 for task in lane_tasks if task.status in draining_statuses),
-            max(lane_capacity[lane] - busy_processors - degraded_processors, 0),
-        )
-        healthy_processors = max(
-            lane_capacity[lane] - busy_processors - degraded_processors - draining_processors,
-            0,
-        )
-        offline_processors = 1 if lane_capacity[lane] == 0 else 0
-        summaries.append(
-            WorkerLaneSummary(
-                lane=lane,  # type: ignore[arg-type]
-                healthy_processors=healthy_processors,
-                busy_processors=busy_processors,
-                degraded_processors=degraded_processors,
-                draining_processors=draining_processors,
-                offline_processors=offline_processors,
-            )
-        )
-    return tuple(summaries)
 
 
 def _workspace_resource(workspace_id: str):

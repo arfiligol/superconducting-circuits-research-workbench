@@ -111,7 +111,11 @@ class LocalSimulationExecutionDriver:
         task = self._task_repository.get_task(task_id)
         if task is None:
             return
-        if task.kind != "simulation" or task.visibility_scope != "local" or task.status != "queued":
+        if (
+            task.kind != "simulation"
+            or task.visibility_scope != "local"
+            or task.status not in {"queued", "dispatching"}
+        ):
             return
 
         worker_pid = os.getpid()
@@ -162,7 +166,11 @@ class LocalSimulationExecutionDriver:
             )
         except Exception as exc:
             current_task = self._task_repository.get_task(task_id)
-            if current_task is None or current_task.status not in {"queued", "running"}:
+            if current_task is None or current_task.status not in {
+                "queued",
+                "dispatching",
+                "running",
+            }:
                 return
             runtime.fail_task(
                 task.task_id,
@@ -194,7 +202,7 @@ class LocalCharacterizationExecutionDriver:
         if (
             task.kind != "characterization"
             or task.visibility_scope != "local"
-            or task.status != "queued"
+            or task.status not in {"queued", "dispatching"}
         ):
             return
         if task.dataset_id is None or task.characterization_setup is None:
@@ -304,7 +312,11 @@ class LocalCharacterizationExecutionDriver:
             )
         except Exception as exc:
             current_task = self._task_repository.get_task(task_id)
-            if current_task is None or current_task.status not in {"queued", "running"}:
+            if current_task is None or current_task.status not in {
+                "queued",
+                "dispatching",
+                "running",
+            }:
                 return
             runtime.fail_task(
                 task.task_id,
@@ -342,7 +354,7 @@ class LocalPostProcessingExecutionDriver:
         if (
             task.kind != "post_processing"
             or task.visibility_scope != "local"
-            or task.status != "queued"
+            or task.status not in {"queued", "dispatching"}
         ):
             return
         if task.post_processing_setup is None:
@@ -432,7 +444,11 @@ class LocalPostProcessingExecutionDriver:
             )
         except Exception as exc:
             current_task = self._task_repository.get_task(task_id)
-            if current_task is None or current_task.status not in {"queued", "running"}:
+            if current_task is None or current_task.status not in {
+                "queued",
+                "dispatching",
+                "running",
+            }:
                 return
             runtime.fail_task(
                 task.task_id,

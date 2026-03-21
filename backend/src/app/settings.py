@@ -23,6 +23,18 @@ class AppSettings(BaseSettings):
     smtp_from_email: str | None = None
     smtp_from_name: str | None = None
     smtp_use_tls: bool = True
+    redis_url: str | None = None
+    rq_redis_url: str | None = None
+    simulation_queue_name: str = "simulation"
+    characterization_queue_name: str = "characterization"
+    rq_job_timeout_seconds: int = 3600
+    rq_failure_ttl_seconds: int = 86400
+    rq_result_ttl_seconds: int = 3600
+    rq_worker_stale_after_seconds: int = 300
+    rq_reconcile_after_seconds: int = 300
+    app_host: str = "127.0.0.1"
+    app_port: int = 8000
+    app_reload: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="SC_",

@@ -4,6 +4,11 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
+from tests.worker_runtime_harness import (
+    drain_lane_queue,
+    queue_job_count,
+    registered_worker,
+)
 
 client = TestClient(app)
 
@@ -55,6 +60,12 @@ def _login_online() -> None:
     assert login_response.status_code == 200
 
 
+def _submit_characterization_task() -> dict[str, object]:
+    response = client.post("/tasks", json=_characterization_payload())
+    assert response.status_code == 201
+    return response.json()["data"]["task"]
+
+
 def test_local_characterization_registry_exposes_admittance_for_compatible_saved_design() -> None:
     response = client.get(
         "/datasets/local-dataset-001/designs/design_local_flux_playground/"
@@ -84,7 +95,11 @@ def test_local_characterization_registry_exposes_admittance_for_compatible_saved
 
 
 def test_local_characterization_runtime_summary_is_configured_and_healthy() -> None:
-    response = client.get("/tasks/runtime/processors")
+    with registered_worker(
+        "characterization",
+        name="sc-worker-characterization:4311",
+    ):
+        response = client.get("/tasks/runtime/processors")
 
     assert response.status_code == 200
     processor = next(
@@ -92,17 +107,15 @@ def test_local_characterization_runtime_summary_is_configured_and_healthy() -> N
         for item in response.json()["data"]["processors"]
         if item["lane"] == "characterization"
     )
-    assert processor == {
-        "processor_id": "local-characterization-processor",
+    assert processor["processor_id"] == "sc-worker-characterization:4311"
+    assert processor["state"] == "healthy"
+    assert processor["current_task_id"] is None
+    assert processor["runtime_metadata"] == {
+        "authority": "rq_redis",
+        "execution_mode": "worker_process",
         "lane": "characterization",
-        "state": "healthy",
-        "current_task_id": None,
-        "last_heartbeat_at": processor["last_heartbeat_at"],
-        "runtime_metadata": {
-            "authority": "local_runtime",
-            "execution_mode": "in_process",
-            "capacity": 1,
-        },
+        "queue_names": ["characterization"],
+        "worker_pid": 4311,
     }
 
 
@@ -169,27 +182,32 @@ def test_online_characterization_submit_rejects_recognized_but_unsupported_analy
 
 
 def test_local_characterization_submit_completes_with_analysis_run_and_result_handles() -> None:
-    response = client.post("/tasks", json=_characterization_payload())
+    task = _submit_characterization_task()
 
-    assert response.status_code == 201
-    task = response.json()["data"]["task"]
-    assert task["status"] == "completed"
-    assert task["characterization_setup"] == _characterization_payload()[
+    assert task["status"] == "queued"
+    assert task["dispatch"]["status"] == "accepted"
+    assert queue_job_count("characterization") == 1
+
+    drain_lane_queue("characterization")
+
+    detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
+    assert detail["status"] == "completed"
+    assert detail["characterization_setup"] == _characterization_payload()[
         "characterization_setup"
     ]
-    assert isinstance(task["result_refs"]["analysis_run_id"], int)
-    assert task["result_refs"]["analysis_run_id"] > 0
-    assert task["result_refs"]["trace_payload"]["payload_role"] == "analysis_projection"
-    assert task["result_refs"]["result_handles"][0]["handle_id"] == (
-        f"analysis-run:{task['result_refs']['analysis_run_id']}:report"
+    assert isinstance(detail["result_refs"]["analysis_run_id"], int)
+    assert detail["result_refs"]["analysis_run_id"] > 0
+    assert detail["result_refs"]["trace_payload"]["payload_role"] == "analysis_projection"
+    assert detail["result_refs"]["result_handles"][0]["handle_id"] == (
+        f"analysis-run:{detail['result_refs']['analysis_run_id']}:report"
     )
-    assert task["result_refs"]["result_handles"][0]["kind"] == "characterization_report"
-    assert task["result_refs"]["result_handles"][0]["status"] == "materialized"
+    assert detail["result_refs"]["result_handles"][0]["kind"] == "characterization_report"
+    assert detail["result_refs"]["result_handles"][0]["status"] == "materialized"
 
 
 def test_local_characterization_result_surfaces_survive_refresh() -> None:
-    submit_response = client.post("/tasks", json=_characterization_payload())
-    assert submit_response.status_code == 201
+    submitted = _submit_characterization_task()
+    drain_lane_queue("characterization")
 
     results_response = client.get(
         "/datasets/local-dataset-001/designs/design_local_flux_playground/characterization-results"
@@ -218,9 +236,9 @@ def test_local_characterization_result_surfaces_survive_refresh() -> None:
         "trace_local_flux_measurement",
         "trace_local_flux_preview",
     ]
-    assert detail["payload"]["analysis_run_id"] == submit_response.json()["data"]["task"][
-        "result_refs"
-    ]["analysis_run_id"]
+    task_detail = client.get(f"/tasks/{submitted['task_id']}").json()["data"]
+    assert task_detail["result_handoff"]["availability"] == "ready"
+    assert detail["payload"]["analysis_run_id"] == task_detail["result_refs"]["analysis_run_id"]
     assert detail["payload"]["fit_table"][0]["parameter"] == "f01"
     assert detail["artifact_refs"][0]["payload_locator"] == (
         f"characterization/{result_row['result_id']}/fit-table.json"
@@ -243,8 +261,8 @@ def test_local_characterization_result_surfaces_survive_refresh() -> None:
 
 
 def test_local_characterization_taggings_survive_refresh() -> None:
-    submit_response = client.post("/tasks", json=_characterization_payload())
-    assert submit_response.status_code == 201
+    submitted = _submit_characterization_task()
+    drain_lane_queue("characterization")
 
     results_response = client.get(
         "/datasets/local-dataset-001/designs/design_local_flux_playground/characterization-results"
@@ -296,6 +314,8 @@ def test_local_characterization_taggings_survive_refresh() -> None:
         f"characterization-results/{result_row['result_id']}"
     )
     assert refreshed_detail.status_code == 200
+    refreshed_task = client.get(f"/tasks/{submitted['task_id']}").json()["data"]
+    assert refreshed_task["result_handoff"]["availability"] == "ready"
     assert refreshed_detail.json()["data"]["identify_surface"]["applied_tags"] == [
         {
             "artifact_id": f"{result_row['result_id']}:fit-table",
