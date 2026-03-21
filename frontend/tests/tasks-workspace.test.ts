@@ -254,6 +254,18 @@ describe("tasks workspace source contracts", () => {
     expect(tasksWorkspaceSource).not.toContain("Active Workspace");
   });
 
+  it("pulls shared task vocabulary from canonical presenters instead of local formatters", () => {
+    expect(tasksWorkspaceSource).toContain('from "@/lib/task-presenters/presentation"');
+    expect(tasksWorkspaceSource).toContain("formatTaskExecutionStatusLabel");
+    expect(tasksWorkspaceSource).toContain("formatTaskKindLabel");
+    expect(tasksWorkspaceSource).toContain("formatTaskLaneLabel");
+    expect(tasksWorkspaceSource).toContain("formatTaskResultAvailabilityLabel");
+    expect(tasksWorkspaceSource).not.toContain("function formatTaskStatusLabel");
+    expect(tasksWorkspaceSource).not.toContain("function formatLaneLabel");
+    expect(tasksWorkspaceSource).not.toContain("function formatKindLabel");
+    expect(tasksWorkspaceSource).not.toContain("function formatResultAvailabilityLabel");
+  });
+
   it("binds browse state to URL params and uses backend-owned queue/detail/event contracts", () => {
     expect(tasksWorkspaceSource).toContain("buildTasksBrowseSearch");
     expect(tasksWorkspaceSource).toContain("parseTasksBrowseState");

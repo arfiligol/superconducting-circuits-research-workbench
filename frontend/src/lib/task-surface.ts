@@ -1,12 +1,15 @@
 import type {
   TaskAllowedActions,
   TaskDetail,
-  TaskExecutionStatus,
   TaskResultHandleRef,
   TaskSummary,
 } from "@/lib/api/tasks";
-
-type SurfaceTone = "default" | "primary" | "success" | "warning";
+import {
+  formatTaskSubmissionSourceLabel,
+  summarizeTaskLifecycleCopy,
+  type TaskLifecycleStage,
+  type TaskSurfaceTone,
+} from "@/lib/task-presenters/presentation";
 
 export type TaskConnectionState = Readonly<{
   mode: "none" | "latest" | "explicit";
@@ -26,9 +29,9 @@ export type TaskRecoveryNotice = Readonly<{
 }> | null;
 
 export type TaskLifecycleSummary = Readonly<{
-  stage: "idle" | "accepted" | "running" | "completed" | "failed";
+  stage: TaskLifecycleStage;
   statusLabel: string;
-  tone: SurfaceTone;
+  tone: TaskSurfaceTone;
   summary: string;
   progressPercent: number;
   progressSummary: string;
@@ -80,9 +83,8 @@ export type TaskActionGateSummary = Readonly<{
   terminate: TaskActionGate;
   retry: TaskActionGate;
 }>;
-
 export type TaskResultHandoffSummary = Readonly<{
-  tone: SurfaceTone;
+  tone: TaskSurfaceTone;
   title: string;
   message: string;
   isReady: boolean;
@@ -92,48 +94,6 @@ type ActionAuthorityTask = Pick<
   TaskSummary,
   "hasActionAuthority" | "allowedActions" | "taskId" | "summary"
 >;
-
-function formatSubmissionSourceLabel(
-  source: TaskDetail["dispatch"]["submissionSource"],
-): string {
-  switch (source) {
-    case "active_dataset":
-      return "Active dataset session";
-    case "explicit_dataset":
-      return "Explicit dataset binding";
-    case "definition_only":
-      return "Definition-only dispatch";
-    default:
-      return source;
-  }
-}
-
-function formatExecutionStatusLabel(status: TaskExecutionStatus): string {
-  switch (status) {
-    case "queued":
-      return "Queued";
-    case "dispatching":
-      return "Dispatching";
-    case "running":
-      return "Running";
-    case "cancellation_requested":
-      return "Cancel requested";
-    case "cancelling":
-      return "Cancelling";
-    case "cancelled":
-      return "Cancelled";
-    case "termination_requested":
-      return "Terminate requested";
-    case "terminated":
-      return "Terminated";
-    case "completed":
-      return "Completed";
-    case "failed":
-    default:
-      return "Failed";
-  }
-}
-
 export function formatTaskConnectionModeLabel(mode: TaskConnectionState["mode"]) {
   switch (mode) {
     case "explicit":
@@ -228,7 +188,7 @@ export function summarizeTaskLifecycle(
       statusLabel: "Idle",
       tone: "default",
       summary:
-        "Attach a task to inspect persisted dispatch state, progress, and backend execution metadata.",
+        "Attach a task to inspect persisted execution state, progress, and backend execution metadata.",
       progressPercent: 0,
       progressSummary: "Select or submit a task to inspect its persisted execution state.",
       backendStatusLabel: "pending",
@@ -247,70 +207,17 @@ export function summarizeTaskLifecycle(
       reconcileRecordedAt: null,
     };
   }
-
-  const statusLabel = formatExecutionStatusLabel(task.status);
-  const { stage, tone, summary } = (() => {
-    switch (task.status) {
-      case "failed":
-        return {
-          stage: "failed" as const,
-          tone: "warning" as const,
-          summary:
-            "Execution failed. Inspect dispatch metadata, persisted events, and reconcile state before retrying.",
-        };
-      case "cancelled":
-        return {
-          stage: "failed" as const,
-          tone: "warning" as const,
-          summary:
-            "Cancellation was acknowledged and persisted. The attached task remains the authority for follow-up review.",
-        };
-      case "terminated":
-        return {
-          stage: "failed" as const,
-          tone: "warning" as const,
-          summary:
-            "Termination was acknowledged and persisted. Use the task detail and event trail for recovery.",
-        };
-      case "completed":
-        return {
-          stage: "completed" as const,
-          tone: "success" as const,
-          summary:
-            "Execution completed. Result readiness now depends on the persisted result handoff, not queue state.",
-        };
-      case "running":
-      case "dispatching":
-      case "cancellation_requested":
-      case "cancelling":
-      case "termination_requested":
-        return {
-          stage: "running" as const,
-          tone: "primary" as const,
-          summary:
-            "Worker runtime is still active. Keep the attached task detail refreshed until the backend settles the request.",
-        };
-      case "queued":
-      default:
-        return {
-          stage: "accepted" as const,
-          tone: "primary" as const,
-          summary:
-            "The request is queued and waiting for a worker claim. Dispatch metadata is supplemental to the task status authority.",
-        };
-    }
-  })();
-
+  const presentation = summarizeTaskLifecycleCopy(task.status);
   return {
-    stage,
-    statusLabel,
-    tone,
-    summary,
+    stage: presentation.stage,
+    statusLabel: presentation.statusLabel,
+    tone: presentation.tone,
+    summary: presentation.summary,
     progressPercent: task.progress.percentComplete,
     progressSummary: task.progress.summary,
     backendStatusLabel: task.status,
     workerTaskName: task.workerTaskName,
-    submissionSourceLabel: formatSubmissionSourceLabel(task.dispatch.submissionSource),
+    submissionSourceLabel: formatTaskSubmissionSourceLabel(task.dispatch.submissionSource),
     acceptedAt: task.dispatch.acceptedAt,
     lastUpdatedAt: task.dispatch.lastUpdatedAt,
     taskDatasetId: task.datasetId,

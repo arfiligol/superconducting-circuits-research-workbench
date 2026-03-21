@@ -1,3 +1,5 @@
+import { isTaskExecutionStatusActive, isTaskExecutionStatusPending } from "@/lib/task-presenters/presentation";
+
 export type TaskQueueScope = "simulation" | "characterization";
 export type TaskQueueStatus =
   | "queued"
@@ -52,14 +54,10 @@ export function summarizeTaskQueue(tasks: readonly TaskQueueItem[]): TaskQueueSu
   return tasks.reduce<TaskQueueSummary>(
     (summary, task) => ({
       total: summary.total + 1,
-      pendingCount:
-        summary.pendingCount + (task.status === "queued" || task.status === "dispatching" ? 1 : 0),
+      pendingCount: summary.pendingCount + (isTaskExecutionStatusPending(task.status) ? 1 : 0),
       runningCount:
         summary.runningCount +
-        (task.status === "running" ||
-        task.status === "cancellation_requested" ||
-        task.status === "cancelling" ||
-        task.status === "termination_requested"
+        (isTaskExecutionStatusActive(task.status) && !isTaskExecutionStatusPending(task.status)
           ? 1
           : 0),
       failedCount: summary.failedCount + (task.status === "failed" ? 1 : 0),
@@ -80,14 +78,7 @@ export function summarizeTaskQueue(tasks: readonly TaskQueueItem[]): TaskQueueSu
 }
 
 export function isTaskQueueTaskActive(task: TaskQueueItem): boolean {
-  return (
-    task.status === "queued" ||
-    task.status === "dispatching" ||
-    task.status === "running" ||
-    task.status === "cancellation_requested" ||
-    task.status === "cancelling" ||
-    task.status === "termination_requested"
-  );
+  return isTaskExecutionStatusActive(task.status);
 }
 
 export function resolveLatestTask(tasks: readonly TaskQueueItem[]): TaskQueueItem | undefined {

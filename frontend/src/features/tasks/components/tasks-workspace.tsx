@@ -46,14 +46,25 @@ import {
   terminateTask,
   type TaskDetail,
   type TaskEventHistoryReadModel,
-  type TaskExecutionStatus,
   type TaskQueueReadModel,
   type TaskSummary,
 } from "@/lib/api/tasks";
 import { useAppSession } from "@/lib/app-state";
+import { isTaskExecutionStatusActive } from "@/lib/task-presenters/presentation";
+import {
+  formatTaskControlStateLabel,
+  formatTaskExecutionStatusLabel,
+  formatTaskKindLabel,
+  formatTaskLaneLabel,
+  formatTaskResultAvailabilityLabel,
+  formatTaskVisibilityScopeLabel,
+  resolveTaskExecutionStatusTone,
+  resolveTaskResultAvailabilityTone,
+} from "@/lib/task-presenters/presentation";
 import {
   summarizeTaskActionGates,
   summarizeTaskLifecycle,
+  summarizeTaskResultHandoff,
   summarizeTaskResultSurface,
 } from "@/lib/task-surface";
 
@@ -73,89 +84,12 @@ import {
 
 type PendingControlAction = "cancel" | "terminate" | null;
 
-function formatTaskStatusLabel(status: TaskExecutionStatus) {
-  switch (status) {
-    case "queued":
-      return "Queued";
-    case "dispatching":
-      return "Dispatching";
-    case "running":
-      return "Running";
-    case "cancellation_requested":
-      return "Cancel Requested";
-    case "cancelling":
-      return "Cancelling";
-    case "cancelled":
-      return "Cancelled";
-    case "termination_requested":
-      return "Terminate Requested";
-    case "terminated":
-      return "Terminated";
-    case "completed":
-      return "Completed";
-    case "failed":
-      return "Failed";
-    default:
-      return status;
-  }
-}
-
-function formatLaneLabel(lane: string) {
-  switch (lane) {
-    case "simulation":
-      return "Simulation";
-    case "characterization":
-      return "Characterization";
-    default:
-      return lane;
-  }
-}
-
-function formatKindLabel(kind: TaskSummary["kind"]) {
-  switch (kind) {
-    case "post_processing":
-      return "Post Processing";
-    case "characterization":
-      return "Characterization";
-    case "simulation":
-    default:
-      return "Simulation";
-  }
-}
-
-function formatResultAvailabilityLabel(value: TaskSummary["resultAvailability"]) {
-  switch (value) {
-    case "ready":
-      return "Ready";
-    case "pending":
-      return "Pending";
-    case "none":
-      return "None";
-    default:
-      return "--";
-  }
-}
-
 function formatReconcileLabel(task: Pick<TaskSummary, "reconcile">) {
   if (!task.reconcile?.required) {
     return "Aligned";
   }
 
   return task.reconcile.reason ?? "Needs reconcile";
-}
-
-function formatScopeLabel(scope: string) {
-  switch (scope) {
-    case "local":
-      return "Local";
-    case "private":
-      return "Private";
-    case "owned":
-      return "Mine";
-    case "workspace":
-    default:
-      return "Workspace";
-  }
 }
 
 function buildScopeOptions(
@@ -185,22 +119,28 @@ function buildScopeOptions(
 
 const statusOptions: readonly AppSelectOption[] = [
   { value: "all", label: "All statuses", description: "Keep active and terminal tasks together" },
-  { value: "queued", label: "Queued" },
-  { value: "dispatching", label: "Dispatching" },
-  { value: "running", label: "Running" },
-  { value: "cancellation_requested", label: "Cancel Requested" },
-  { value: "cancelling", label: "Cancelling" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "termination_requested", label: "Terminate Requested" },
-  { value: "terminated", label: "Terminated" },
-  { value: "completed", label: "Completed" },
-  { value: "failed", label: "Failed" },
+  { value: "queued", label: formatTaskExecutionStatusLabel("queued") },
+  { value: "dispatching", label: formatTaskExecutionStatusLabel("dispatching") },
+  { value: "running", label: formatTaskExecutionStatusLabel("running") },
+  {
+    value: "cancellation_requested",
+    label: formatTaskExecutionStatusLabel("cancellation_requested"),
+  },
+  { value: "cancelling", label: formatTaskExecutionStatusLabel("cancelling") },
+  { value: "cancelled", label: formatTaskExecutionStatusLabel("cancelled") },
+  {
+    value: "termination_requested",
+    label: formatTaskExecutionStatusLabel("termination_requested"),
+  },
+  { value: "terminated", label: formatTaskExecutionStatusLabel("terminated") },
+  { value: "completed", label: formatTaskExecutionStatusLabel("completed") },
+  { value: "failed", label: formatTaskExecutionStatusLabel("failed") },
 ];
 
 const laneOptions: readonly AppSelectOption[] = [
   { value: "all", label: "All lanes", description: "Keep the full queue visible" },
-  { value: "simulation", label: "Simulation" },
-  { value: "characterization", label: "Characterization" },
+  { value: "simulation", label: formatTaskLaneLabel("simulation") },
+  { value: "characterization", label: formatTaskLaneLabel("characterization") },
 ];
 
 function ActionGateChip({
@@ -326,14 +266,7 @@ export function TasksWorkspace() {
     () => listTasks(queueQueryInput),
     {
       refreshInterval(currentData: TaskQueueReadModel | undefined) {
-        return (currentData?.rows ?? []).some((task) =>
-          task.status === "queued" ||
-          task.status === "dispatching" ||
-          task.status === "running" ||
-          task.status === "cancellation_requested" ||
-          task.status === "cancelling" ||
-          task.status === "termination_requested",
-        )
+        return (currentData?.rows ?? []).some((task) => isTaskExecutionStatusActive(task.status))
           ? 5_000
           : 0;
       },
@@ -351,12 +284,7 @@ export function TasksWorkspace() {
           return 5_000;
         }
 
-        return currentData.status === "queued" ||
-          currentData.status === "dispatching" ||
-          currentData.status === "running" ||
-          currentData.status === "cancellation_requested" ||
-          currentData.status === "cancelling" ||
-          currentData.status === "termination_requested"
+        return isTaskExecutionStatusActive(currentData.status)
           ? 2_000
           : 0;
       },
@@ -388,6 +316,10 @@ export function TasksWorkspace() {
   );
   const selectedTaskLifecycle = summarizeTaskLifecycle(selectedTask ?? undefined);
   const selectedTaskResultSurface = summarizeTaskResultSurface(selectedTask ?? undefined);
+  const selectedTaskResultHandoff = summarizeTaskResultHandoff(
+    selectedTask ?? undefined,
+    selectedTaskResultSurface,
+  );
   const selectedTaskActionGates = summarizeTaskActionGates(selectedTask ?? undefined);
   const setupSnapshot = buildSetupSnapshot(selectedTask);
 
@@ -626,19 +558,17 @@ export function TasksWorkspace() {
                           </button>
                         </td>
                         <td className="px-4 py-3 align-top text-muted-foreground">
-                          <p className="font-medium text-foreground">{formatLaneLabel(task.lane)}</p>
-                          <p className="mt-1 text-xs">{formatKindLabel(task.kind)}</p>
+                          <p className="font-medium text-foreground">{formatTaskLaneLabel(task.lane)}</p>
+                          <p className="mt-1 text-xs">{formatTaskKindLabel(task.kind)}</p>
                         </td>
                         <td className="px-4 py-3 align-top">
                           <div className="flex flex-wrap gap-2">
-                            <SurfaceTag tone={task.status === "completed" ? "success" : task.status === "failed" ? "warning" : "primary"}>
-                              {formatTaskStatusLabel(task.status)}
+                            <SurfaceTag tone={resolveTaskExecutionStatusTone(task.status)}>
+                              {formatTaskExecutionStatusLabel(task.status)}
                             </SurfaceTag>
-                            {task.controlState && task.controlState !== "none" ? (
+                            {formatTaskControlStateLabel(task.controlState) ? (
                               <SurfaceTag tone="warning">
-                                {task.controlState === "cancellation_requested"
-                                  ? "Cancel requested"
-                                  : "Terminate requested"}
+                                {formatTaskControlStateLabel(task.controlState)}
                               </SurfaceTag>
                             ) : null}
                             {task.reconcile?.required ? (
@@ -649,7 +579,9 @@ export function TasksWorkspace() {
                         <td className="px-4 py-3 align-top text-xs text-muted-foreground">
                           <p>Dataset {task.datasetId ?? "--"}</p>
                           <p className="mt-1">Definition {task.definitionId ?? "--"}</p>
-                          <p className="mt-1 uppercase tracking-[0.12em]">{formatScopeLabel(task.visibilityScope)}</p>
+                          <p className="mt-1 uppercase tracking-[0.12em]">
+                            {formatTaskVisibilityScopeLabel(task.visibilityScope)}
+                          </p>
                         </td>
                         <td className="px-4 py-3 align-top text-muted-foreground">
                           {task.ownerDisplayName}
@@ -658,8 +590,8 @@ export function TasksWorkspace() {
                           {task.updatedAt ?? task.submittedAt ?? "--"}
                         </td>
                         <td className="px-4 py-3 align-top">
-                          <SurfaceTag tone={task.resultAvailability === "ready" ? "success" : "default"}>
-                            {formatResultAvailabilityLabel(task.resultAvailability)}
+                          <SurfaceTag tone={resolveTaskResultAvailabilityTone(task.resultAvailability)}>
+                            {formatTaskResultAvailabilityLabel(task.resultAvailability)}
                           </SurfaceTag>
                         </td>
                         <td className="px-4 py-3 align-top">
@@ -716,24 +648,20 @@ export function TasksWorkspace() {
                       </h2>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <SurfaceTag tone={selectedTask.status === "completed" ? "success" : selectedTask.status === "failed" ? "warning" : "primary"}>
-                        {formatTaskStatusLabel(selectedTask.status)}
+                      <SurfaceTag tone={resolveTaskExecutionStatusTone(selectedTask.status)}>
+                        {formatTaskExecutionStatusLabel(selectedTask.status)}
                       </SurfaceTag>
-                      <SurfaceTag tone="default">{formatKindLabel(selectedTask.kind)}</SurfaceTag>
-                      <SurfaceTag tone="default">{formatLaneLabel(selectedTask.lane)}</SurfaceTag>
+                      <SurfaceTag tone="default">{formatTaskKindLabel(selectedTask.kind)}</SurfaceTag>
+                      <SurfaceTag tone="default">{formatTaskLaneLabel(selectedTask.lane)}</SurfaceTag>
                     </div>
                   </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <div className="rounded-[0.9rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                      <p className="font-medium text-foreground">Result handoff</p>
-                      <p className="mt-2">
-                        {selectedTask.resultHandoff?.availability === "ready"
-                          ? "Persisted result handoff is ready."
-                          : selectedTask.resultHandoff?.availability === "pending"
-                            ? "Persisted result handoff is still pending."
-                            : "This task has no persisted result handoff."}
+                      <p className="font-medium text-foreground">
+                        {selectedTaskResultHandoff.title}
                       </p>
+                      <p className="mt-2">{selectedTaskResultHandoff.message}</p>
                     </div>
                     <div className="rounded-[0.9rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
                       <p className="font-medium text-foreground">Lineage</p>
@@ -886,7 +814,7 @@ export function TasksWorkspace() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-foreground">
-                      {formatLaneLabel(lane.lane)}
+                      {formatTaskLaneLabel(lane.lane)}
                     </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
                       Lane authority

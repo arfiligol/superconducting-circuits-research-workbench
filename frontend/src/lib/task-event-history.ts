@@ -1,6 +1,11 @@
 import type { TaskDetail, TaskEvent } from "@/lib/api/tasks";
-
-type SurfaceTone = "default" | "primary" | "success" | "warning";
+import {
+  formatTaskEventTypeLabel,
+  formatTaskExecutionStatusLabel,
+  resolveTaskEventLevelTone,
+  resolveTaskEventTone,
+  type TaskSurfaceTone,
+} from "@/lib/task-presenters/presentation";
 
 export type TaskEventMetadataEntry = Readonly<{
   key: string;
@@ -12,9 +17,9 @@ export type TaskEventHistoryEntry = Readonly<{
   eventKey: string;
   eventType: TaskEvent["eventType"];
   eventTypeLabel: string;
-  eventTone: SurfaceTone;
+  eventTone: TaskSurfaceTone;
   level: TaskEvent["level"];
-  levelTone: SurfaceTone;
+  levelTone: TaskSurfaceTone;
   occurredAt: string;
   message: string;
   metadataEntries: readonly TaskEventMetadataEntry[];
@@ -40,65 +45,6 @@ function toTitleCase(value: string) {
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
 }
-
-function formatTaskEventTypeLabel(eventType: TaskEvent["eventType"]) {
-  switch (eventType) {
-    case "task_submitted":
-      return "Submitted";
-    case "task_dispatch_claimed":
-      return "Dispatch Claimed";
-    case "task_running":
-      return "Running";
-    case "task_completed":
-      return "Completed";
-    case "task_failed":
-      return "Failed";
-    case "task_cancel_requested":
-      return "Cancel Requested";
-    case "task_cancel_acknowledged":
-      return "Cancel Acknowledged";
-    case "task_terminate_requested":
-      return "Terminate Requested";
-    case "task_terminate_acknowledged":
-      return "Terminate Acknowledged";
-    case "task_requeued":
-      return "Requeued";
-    case "task_retried":
-      return "Retried";
-    default:
-      return toTitleCase(eventType);
-  }
-}
-
-function resolveTaskEventTone(event: TaskEvent): SurfaceTone {
-  if (event.level === "error" || event.eventType === "task_failed") {
-    return "warning";
-  }
-
-  if (event.eventType === "task_completed") {
-    return "success";
-  }
-
-  if (
-    event.eventType === "task_running" ||
-    event.eventType === "task_submitted" ||
-    event.eventType === "task_dispatch_claimed" ||
-    event.eventType === "task_requeued"
-  ) {
-    return "primary";
-  }
-
-  return "default";
-}
-
-function resolveTaskEventLevelTone(level: TaskEvent["level"]): SurfaceTone {
-  if (level === "error" || level === "warning") {
-    return "warning";
-  }
-
-  return "default";
-}
-
 function formatMetadataValue(
   value: string | number | boolean | readonly string[] | null,
 ): string {
@@ -176,7 +122,7 @@ export function summarizeTaskEventHistory(
     errorCount: entries.filter((entry) => entry.level === "error").length,
     latestEventLabel: latestEvent?.eventTypeLabel ?? null,
     latestOccurredAt: latestEvent?.occurredAt ?? null,
-    taskStatusLabel: task ? toTitleCase(task.status) : null,
+    taskStatusLabel: task ? formatTaskExecutionStatusLabel(task.status) : null,
     dispatchStatusLabel: task ? toTitleCase(task.dispatch.status) : null,
     progressLabel: task ? `${toTitleCase(task.progress.phase)} · ${task.progress.percentComplete}%` : null,
     terminalStateLabel,

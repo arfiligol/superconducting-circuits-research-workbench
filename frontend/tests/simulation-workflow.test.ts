@@ -1504,6 +1504,17 @@ describe("task api detail mapping", () => {
         submission_source: "active_dataset",
         accepted_at: "2026-03-12 10:20:00",
         last_updated_at: "2026-03-12 10:21:00",
+        queue_name: "simulation",
+        enqueued_at: "2026-03-12 10:20:01",
+        runtime_job_id: "job-31",
+        dispatch_attempt_count: 1,
+        last_dispatch_outcome: "claimed",
+        last_dispatch_error_code: null,
+      },
+      reconcile: {
+        required: false,
+        reason: null,
+        recorded_at: null,
       },
       events: [
         {
@@ -1587,6 +1598,12 @@ describe("task api detail mapping", () => {
           },
         ],
       },
+      result_handoff: {
+        availability: "pending",
+        primary_result_handle_id: null,
+        result_handle_count: 1,
+        trace_payload_available: true,
+      },
     });
 
     expect(detail.resultRefs.traceBatchId).toBe(44);
@@ -1628,6 +1645,23 @@ describe("task api detail mapping", () => {
       submissionSource: "active_dataset",
       acceptedAt: "2026-03-12 10:20:00",
       lastUpdatedAt: "2026-03-12 10:21:00",
+      queueName: "simulation",
+      enqueuedAt: "2026-03-12 10:20:01",
+      runtimeJobId: "job-31",
+      dispatchAttemptCount: 1,
+      lastDispatchOutcome: "claimed",
+      lastDispatchErrorCode: null,
+    });
+    expect(detail.resultHandoff).toEqual({
+      availability: "pending",
+      primaryResultHandleId: null,
+      resultHandleCount: 1,
+      tracePayloadAvailable: true,
+    });
+    expect(detail.reconcile).toEqual({
+      required: false,
+      reason: null,
+      recordedAt: null,
     });
     expect(detail.events).toEqual([
       {
@@ -1679,6 +1713,17 @@ describe("task api detail mapping", () => {
             submission_source: "active_dataset",
             accepted_at: "2026-03-12 10:20:00",
             last_updated_at: "2026-03-12 10:21:00",
+            queue_name: "simulation",
+            enqueued_at: "2026-03-12 10:20:01",
+            runtime_job_id: "job-31",
+            dispatch_attempt_count: 1,
+            last_dispatch_outcome: "claimed",
+            last_dispatch_error_code: null,
+          },
+          reconcile: {
+            required: false,
+            reason: null,
+            recorded_at: null,
           },
           events: [
             {
@@ -1704,6 +1749,12 @@ describe("task api detail mapping", () => {
             metadata_records: [],
             trace_payload: null,
             result_handles: [],
+          },
+          result_handoff: {
+            availability: "pending",
+            primary_result_handle_id: null,
+            result_handle_count: 0,
+            trace_payload_available: false,
           },
         },
       }),

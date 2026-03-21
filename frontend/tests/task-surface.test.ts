@@ -289,4 +289,37 @@ describe("shared task surface helpers", () => {
       isReady: true,
     });
   });
+
+  it("anchors lifecycle state on task status and handoff availability instead of dispatch fallbacks", () => {
+    const mismatchTask = {
+      ...task,
+      status: "cancelled" as const,
+      dispatch: {
+        ...task.dispatch,
+        status: "running" as const,
+      },
+      resultHandoff: {
+        availability: "none" as const,
+        primaryResultHandleId: null,
+        resultHandleCount: 0,
+        tracePayloadAvailable: false,
+      },
+    };
+
+    expect(summarizeTaskLifecycle(mismatchTask)).toMatchObject({
+      stage: "cancelled",
+      statusLabel: "Cancelled",
+      tone: "warning",
+    });
+
+    expect(
+      summarizeTaskResultHandoff(mismatchTask, summarizeTaskResultSurface(mismatchTask)),
+    ).toEqual({
+      tone: "warning",
+      title: "No persisted result handoff",
+      message:
+        "The backend reports no persisted result handoff for this task yet. Treat the attached task detail as the only authority.",
+      isReady: false,
+    });
+  });
 });

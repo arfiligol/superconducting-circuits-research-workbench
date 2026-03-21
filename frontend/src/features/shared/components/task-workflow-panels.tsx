@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { LoaderCircle, RefreshCcw } from "lucide-react";
 
-import type { TaskDetail, TaskExecutionStatus, TaskResultHandleRef } from "@/lib/api/tasks";
+import type { TaskDetail, TaskResultHandleRef } from "@/lib/api/tasks";
+import {
+  formatTaskVisibilityScopeLabel,
+  resolveTaskExecutionStatusTone,
+} from "@/lib/task-presenters/presentation";
 import {
   formatTaskConnectionModeLabel,
   groupTaskResultHandles,
@@ -18,28 +22,6 @@ import {
   cx,
   resolveSurfaceInsetToneClass,
 } from "./surface-kit";
-
-function taskStatusTone(status: TaskExecutionStatus) {
-  if (status === "completed") {
-    return "success" as const;
-  }
-
-  if (
-    status === "running" ||
-    status === "dispatching" ||
-    status === "cancellation_requested" ||
-    status === "cancelling" ||
-    status === "termination_requested"
-  ) {
-    return "primary" as const;
-  }
-
-  if (status === "failed" || status === "cancelled" || status === "terminated") {
-    return "warning" as const;
-  }
-
-  return "default" as const;
-}
 
 function formatHandleKindLabel(kind: TaskResultHandleRef["kind"]) {
   return kind.split("_").map((segment) => segment[0]?.toUpperCase() + segment.slice(1)).join(" ");
@@ -357,7 +339,11 @@ export function TaskLifecyclePanel({ task, summary }: TaskLifecyclePanelProps) {
               <SurfaceTag tone="warning">{task.dispatch.lastDispatchErrorCode}</SurfaceTag>
             ) : null}
             {summary.executionMode ? <SurfaceTag tone="default">{summary.executionMode}</SurfaceTag> : null}
-            {summary.visibilityScope ? <SurfaceTag tone="default">{summary.visibilityScope}</SurfaceTag> : null}
+            {summary.visibilityScope ? (
+              <SurfaceTag tone="default">
+                {formatTaskVisibilityScopeLabel(summary.visibilityScope)}
+              </SurfaceTag>
+            ) : null}
             {summary.reconcileRequired ? <SurfaceTag tone="warning">Needs reconcile</SurfaceTag> : null}
           </>
         ) : (
@@ -556,7 +542,9 @@ function TaskResultHandleGroup({
           >
             <div className="flex flex-wrap items-center gap-2 text-[11px]">
               <SurfaceTag
-                tone={taskStatusTone(handle.status === "materialized" ? "completed" : "queued")}
+                tone={resolveTaskExecutionStatusTone(
+                  handle.status === "materialized" ? "completed" : "queued",
+                )}
               >
                 {handle.status}
               </SurfaceTag>
