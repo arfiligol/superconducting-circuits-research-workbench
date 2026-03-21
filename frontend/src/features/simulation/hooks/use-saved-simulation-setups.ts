@@ -43,6 +43,9 @@ type SimulationSetupAuthorityPresentation = Readonly<{
   restoreLabel: string | null;
 }>;
 
+type SavedSetupSaveDialogMode = "new-only" | "choose";
+type SavedSetupSaveAction = "create" | "overwrite";
+
 type UseSavedSimulationSetupsOptions = Readonly<{
   form: UseFormReturn<SimulationRequestValues>;
   workflowContextResetKey: string;
@@ -154,6 +157,10 @@ export function useSavedSimulationSetups({
   const [selectedSavedSetupId, setSelectedSavedSetupId] = useState<string | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+  const [saveDialogMode, setSaveDialogMode] = useState<SavedSetupSaveDialogMode>("new-only");
+  const [saveDialogOverwriteTargetId, setSaveDialogOverwriteTargetId] = useState<string | null>(
+    null,
+  );
   const [saveSetupNameDraft, setSaveSetupNameDraft] = useState("");
   const [savedSetupFeedback, setSavedSetupFeedback] = useState<string | null>(null);
   const [simulationSetupSource, setSimulationSetupSource] = useState<SimulationSetupSource>({
@@ -392,13 +399,16 @@ export function useSavedSimulationSetups({
 
   const openSaveDialog = useCallback(() => {
     if (activeSavedSetup) {
-      persistSavedSetup(activeSavedSetup.name, activeSavedSetup.id);
-      return;
+      setSaveDialogMode("choose");
+      setSaveDialogOverwriteTargetId(activeSavedSetup.id);
+      setSaveSetupNameDraft(activeSavedSetup.name);
+    } else {
+      setSaveDialogMode("new-only");
+      setSaveDialogOverwriteTargetId(null);
+      setSaveSetupNameDraft(buildSavedSetupNameSuggestion());
     }
-
-    setSaveSetupNameDraft(buildSavedSetupNameSuggestion());
     setIsSaveDialogOpen(true);
-  }, [activeSavedSetup, buildSavedSetupNameSuggestion, persistSavedSetup]);
+  }, [activeSavedSetup, buildSavedSetupNameSuggestion]);
 
   const openManageDialog = useCallback(() => {
     setIsManageDialogOpen(true);
@@ -406,9 +416,21 @@ export function useSavedSimulationSetups({
 
   const openSaveAsNewFromManage = useCallback(() => {
     setIsManageDialogOpen(false);
+    setSaveDialogMode("new-only");
+    setSaveDialogOverwriteTargetId(null);
     setSaveSetupNameDraft(buildSavedSetupNameSuggestion());
     setIsSaveDialogOpen(true);
   }, [buildSavedSetupNameSuggestion]);
+
+  const submitSaveDialog = useCallback(
+    (action: SavedSetupSaveAction) => {
+      persistSavedSetup(
+        saveSetupNameDraft,
+        action === "overwrite" ? saveDialogOverwriteTargetId : null,
+      );
+    },
+    [persistSavedSetup, saveDialogOverwriteTargetId, saveSetupNameDraft],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -531,6 +553,8 @@ export function useSavedSimulationSetups({
     setSelectedSavedSetupId(null);
     setIsSaveDialogOpen(false);
     setIsManageDialogOpen(false);
+    setSaveDialogMode("new-only");
+    setSaveDialogOverwriteTargetId(null);
     setSaveSetupNameDraft("");
     setSavedSetupFeedback(null);
     setSimulationSetupSource({ kind: "default" });
@@ -543,6 +567,8 @@ export function useSavedSimulationSetups({
     setSelectedSavedSetupId(null);
     setIsSaveDialogOpen(false);
     setIsManageDialogOpen(false);
+    setSaveDialogMode("new-only");
+    setSaveDialogOverwriteTargetId(null);
     setSaveSetupNameDraft("");
     setSavedSetupFeedback(null);
     setSimulationSetupSource({ kind: "default" });
@@ -555,6 +581,8 @@ export function useSavedSimulationSetups({
     visibleSavedSetups,
     isSaveDialogOpen,
     isManageDialogOpen,
+    saveDialogMode,
+    saveDialogOverwriteTargetId,
     saveSetupNameDraft,
     savedSetupFeedback,
     simulationSetupSource,
@@ -569,6 +597,7 @@ export function useSavedSimulationSetups({
     openSaveDialog,
     openManageDialog,
     openSaveAsNewFromManage,
+    submitSaveDialog,
     setSaveSetupNameDraft,
     setIsSaveDialogOpen,
     setIsManageDialogOpen,

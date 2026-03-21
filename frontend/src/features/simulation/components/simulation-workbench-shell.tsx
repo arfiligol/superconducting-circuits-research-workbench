@@ -985,17 +985,19 @@ export function SimulationWorkbenchShell() {
     visibleSavedSetups,
     isSaveDialogOpen,
     isManageDialogOpen,
+    saveDialogMode,
+    saveDialogOverwriteTargetId,
     saveSetupNameDraft,
     savedSetupFeedback,
     simulationSetupAuthorityPresentation,
     restoreSimulationSetupFromCurrentSource,
     applySavedSetup,
     applyOfficialExamplePreset,
-    persistSavedSetup,
     deleteSavedSetup,
     openSaveDialog,
     openManageDialog,
     openSaveAsNewFromManage,
+    submitSaveDialog,
     setSaveSetupNameDraft,
     setIsSaveDialogOpen,
     setIsManageDialogOpen,
@@ -2791,6 +2793,12 @@ export function SimulationWorkbenchShell() {
         }}
       >
         <div className="space-y-4">
+          {saveDialogMode === "choose" && activeSavedSetup ? (
+            <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
+              Saving from <span className="font-medium text-foreground">{activeSavedSetup.name}</span>.
+              Choose whether to overwrite the current saved setup or create a new one.
+            </div>
+          ) : null}
           <SetupInputField label="Setup Name">
             <SetupTextInput
               value={saveSetupNameDraft}
@@ -2810,16 +2818,41 @@ export function SimulationWorkbenchShell() {
             >
               Cancel
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                persistSavedSetup(saveSetupNameDraft, activeSavedSetup?.id ?? null);
-              }}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-            >
-              <Save className="h-4 w-4" />
-              Save Setup
-            </button>
+            {saveDialogMode === "choose" && saveDialogOverwriteTargetId ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    submitSaveDialog("create");
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10"
+                >
+                  <Plus className="h-4 w-4" />
+                  Save as New
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    submitSaveDialog("overwrite");
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                  <Save className="h-4 w-4" />
+                  Overwrite Current
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  submitSaveDialog("create");
+                }}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+              >
+                <Save className="h-4 w-4" />
+                Save Setup
+              </button>
+            )}
           </div>
         </div>
       </OverlayDialog>

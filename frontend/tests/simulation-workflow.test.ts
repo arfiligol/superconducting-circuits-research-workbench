@@ -1388,6 +1388,32 @@ describe("simulation workflow source contract", () => {
       "window.sessionStorage.setItem(attachedTaskStorageKey",
     );
   });
+
+  it("keeps saved setup overwrite and create-new paths explicitly separated", () => {
+    expect(savedSimulationSetupsHookSource).toContain(
+      'type SavedSetupSaveDialogMode = "new-only" | "choose";',
+    );
+    expect(savedSimulationSetupsHookSource).toContain(
+      'type SavedSetupSaveAction = "create" | "overwrite";',
+    );
+    expect(savedSimulationSetupsHookSource).toContain('setSaveDialogMode("choose");');
+    expect(savedSimulationSetupsHookSource).toContain(
+      "setSaveDialogOverwriteTargetId(activeSavedSetup.id);",
+    );
+    expect(savedSimulationSetupsHookSource).toContain('setSaveDialogMode("new-only");');
+    expect(savedSimulationSetupsHookSource).toContain("const submitSaveDialog = useCallback(");
+    expect(savedSimulationSetupsHookSource).toContain(
+      'action === "overwrite" ? saveDialogOverwriteTargetId : null',
+    );
+    expect(simulationWorkbenchSource).toContain('submitSaveDialog("create");');
+    expect(simulationWorkbenchSource).toContain('submitSaveDialog("overwrite");');
+    expect(simulationWorkbenchSource).toContain("Save Current as New");
+    expect(simulationWorkbenchSource).toContain("Overwrite Current");
+    expect(simulationWorkbenchSource).toContain("Save as New");
+    expect(simulationWorkbenchSource).not.toContain(
+      "persistSavedSetup(saveSetupNameDraft, activeSavedSetup?.id ?? null);",
+    );
+  });
 });
 
 describe("task api detail mapping", () => {
