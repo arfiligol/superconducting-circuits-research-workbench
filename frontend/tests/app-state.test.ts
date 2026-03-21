@@ -1037,6 +1037,11 @@ describe("task queue store", () => {
         updated_at: "2026-03-12 01:30:00",
         result_availability: "ready",
         control_state: "none",
+        reconcile: {
+          required: true,
+          reason: "queue_job_missing",
+          recorded_at: "2026-03-12 01:31:00",
+        },
         summary: "Fluxonium sweep queued from workspace",
         allowed_actions: {
           attach: true,
@@ -1064,6 +1069,11 @@ describe("task queue store", () => {
       summary: "Fluxonium sweep queued from workspace",
       resultAvailability: "ready",
       controlState: "none",
+      reconcile: {
+        required: true,
+        reason: "queue_job_missing",
+        recordedAt: "2026-03-12 01:31:00",
+      },
       allowedActions: {
         attach: true,
         cancel: false,
@@ -1108,6 +1118,11 @@ describe("task queue store", () => {
               updated_at: "2026-03-17T12:00:00Z",
               result_availability: "pending",
               control_state: "none",
+              reconcile: {
+                required: false,
+                reason: null,
+                recorded_at: null,
+              },
               summary: "Queued characterization",
               allowed_actions: {
                 attach: true,
@@ -1154,6 +1169,11 @@ describe("task queue store", () => {
           summary: "Queued characterization",
           resultAvailability: "pending",
           controlState: "none",
+          reconcile: {
+            required: false,
+            reason: null,
+            recordedAt: null,
+          },
           hasActionAuthority: true,
           allowedActions: {
             attach: true,

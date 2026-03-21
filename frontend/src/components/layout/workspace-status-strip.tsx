@@ -491,9 +491,9 @@ export function WorkspaceStatusStrip({
           ? `${summary.completedCount} Completed · ${summary.failedCount} Failed`
           : "No active tasks";
   const queueDetail = activeTaskDetail
-    ? `Attached #${activeTaskDetail.taskId} · ${formatTaskStatusLabel(activeTaskDetail.progress.phase)}`
+    ? `Attached #${activeTaskDetail.taskId} · ${formatTaskStatusLabel(activeTaskDetail.status)}${activeTaskDetail.reconcile?.required ? " · Reconcile needed" : ""}`
     : latestTask
-      ? `Latest #${latestTask.taskId} · ${formatTaskStatusLabel(latestTask.status)}`
+      ? `Latest #${latestTask.taskId} · ${formatTaskStatusLabel(latestTask.status)}${latestTask.reconcile?.required ? " · Reconcile needed" : ""}`
       : runtimeMode === "local"
         ? "No Local Space task attached"
         : "No online task attached";
@@ -1152,7 +1152,7 @@ export function WorkspaceStatusStrip({
                     value={activeTaskDetail ? `#${activeTaskDetail.taskId}` : "No attached task"}
                     detail={
                       activeTaskDetail
-                        ? `${formatTaskStatusLabel(activeTaskDetail.progress.phase)} · ${Math.round(activeTaskDetail.progress.percentComplete)}%`
+                        ? `${formatTaskStatusLabel(activeTaskDetail.status)} · ${Math.round(activeTaskDetail.progress.percentComplete)}%${activeTaskDetail.reconcile?.required ? ` · ${activeTaskDetail.reconcile.reason ?? "Needs reconcile"}` : ""}`
                         : resolvedTaskId
                           ? `Waiting for task #${resolvedTaskId} detail`
                           : runtimeMode === "local"
@@ -1317,6 +1317,11 @@ export function WorkspaceStatusStrip({
                             <p className="mt-1 truncate text-xs uppercase tracking-[0.16em] text-muted-foreground">
                               {formatTaskStatusLabel(task.status)} · {task.summary}
                             </p>
+                            {task.reconcile?.required ? (
+                              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                                Reconcile: {task.reconcile.reason ?? "Needs review"}
+                              </p>
+                            ) : null}
                           </div>
                           <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                             {task.visibilityScope}

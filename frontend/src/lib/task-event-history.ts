@@ -27,6 +27,7 @@ export type TaskEventHistorySummary = Readonly<{
   errorCount: number;
   latestEventLabel: string | null;
   latestOccurredAt: string | null;
+  taskStatusLabel: string | null;
   dispatchStatusLabel: string | null;
   progressLabel: string | null;
   terminalStateLabel: string;
@@ -44,12 +45,26 @@ function formatTaskEventTypeLabel(eventType: TaskEvent["eventType"]) {
   switch (eventType) {
     case "task_submitted":
       return "Submitted";
+    case "task_dispatch_claimed":
+      return "Dispatch Claimed";
     case "task_running":
       return "Running";
     case "task_completed":
       return "Completed";
     case "task_failed":
       return "Failed";
+    case "task_cancel_requested":
+      return "Cancel Requested";
+    case "task_cancel_acknowledged":
+      return "Cancel Acknowledged";
+    case "task_terminate_requested":
+      return "Terminate Requested";
+    case "task_terminate_acknowledged":
+      return "Terminate Acknowledged";
+    case "task_requeued":
+      return "Requeued";
+    case "task_retried":
+      return "Retried";
     default:
       return toTitleCase(eventType);
   }
@@ -64,7 +79,12 @@ function resolveTaskEventTone(event: TaskEvent): SurfaceTone {
     return "success";
   }
 
-  if (event.eventType === "task_running" || event.eventType === "task_submitted") {
+  if (
+    event.eventType === "task_running" ||
+    event.eventType === "task_submitted" ||
+    event.eventType === "task_dispatch_claimed" ||
+    event.eventType === "task_requeued"
+  ) {
     return "primary";
   }
 
@@ -129,15 +149,25 @@ export function summarizeTaskEventHistory(
   const entries = buildTaskEventHistoryEntries(task);
   const latestEvent = entries[0] ?? null;
   const terminalStateLabel =
-    task?.progress.phase === "failed" || task?.dispatch.status === "failed"
+    task?.status === "failed"
       ? "Failure persisted"
-      : task?.progress.phase === "completed" || task?.dispatch.status === "completed"
-        ? "Completion persisted"
-        : task?.progress.phase === "running" || task?.dispatch.status === "running"
-          ? "Execution active"
-          : entries.length > 0
-            ? "Event trail attached"
-            : "Awaiting events";
+      : task?.status === "cancelled"
+        ? "Cancellation persisted"
+        : task?.status === "terminated"
+          ? "Termination persisted"
+          : task?.status === "completed"
+            ? task.resultHandoff?.availability === "ready"
+              ? "Completion persisted"
+              : "Completion awaiting handoff"
+            : task?.status === "running" ||
+                task?.status === "dispatching" ||
+                task?.status === "cancellation_requested" ||
+                task?.status === "cancelling" ||
+                task?.status === "termination_requested"
+              ? "Execution active"
+              : entries.length > 0
+                ? "Event trail attached"
+                : "Awaiting events";
 
   return {
     total: entries.length,
@@ -146,8 +176,9 @@ export function summarizeTaskEventHistory(
     errorCount: entries.filter((entry) => entry.level === "error").length,
     latestEventLabel: latestEvent?.eventTypeLabel ?? null,
     latestOccurredAt: latestEvent?.occurredAt ?? null,
+    taskStatusLabel: task ? toTitleCase(task.status) : null,
     dispatchStatusLabel: task ? toTitleCase(task.dispatch.status) : null,
-    progressLabel: task ? `${task.progress.phase} · ${task.progress.percentComplete}%` : null,
+    progressLabel: task ? `${toTitleCase(task.progress.phase)} · ${task.progress.percentComplete}%` : null,
     terminalStateLabel,
   };
 }

@@ -158,6 +158,8 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("resolveShellActiveDatasetSummary");
     expect(statusStripSource).toContain("datasetSummary.value");
     expect(statusStripSource).toContain("switchRuntimeMode(");
+    expect(statusStripSource).toContain("activeTaskDetail.status");
+    expect(statusStripSource).not.toContain("activeTaskDetail.progress.phase");
   });
 
   it("adopts the live backend runtime transition enums in shell notices and auth entry flows", () => {

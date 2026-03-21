@@ -144,6 +144,11 @@ describe("tasks browse helpers", () => {
           summary: "Simulation request",
           resultAvailability: "pending",
           controlState: "none",
+          reconcile: {
+            required: true,
+            reason: "queue_job_missing",
+            recordedAt: "2026-03-19T00:01:00Z",
+          },
           hasActionAuthority: true,
           allowedActions: {
             attach: true,
@@ -170,6 +175,7 @@ describe("tasks browse helpers", () => {
           summary: "Characterization request",
           resultAvailability: "ready",
           controlState: "none",
+          reconcile: null,
           hasActionAuthority: true,
           allowedActions: {
             attach: true,
@@ -217,6 +223,15 @@ describe("tasks browse helpers", () => {
         latestTaskId: 91,
       },
     ]);
+  });
+
+  it("surfaces reconcile state in queue and shell task views", () => {
+    expect(tasksWorkspaceSource).toContain(">Reconcile</p>");
+    expect(tasksWorkspaceSource).toContain("formatReconcileLabel(task)");
+    expect(tasksWorkspaceSource).toContain('<SurfaceTag tone="warning">{formatReconcileLabel(task)}</SurfaceTag>');
+    expect(taskPanelsSource).toContain("Reconcile needed");
+    expect(statusStripSource).toContain('Reconcile: {task.reconcile.reason ?? "Needs review"}');
+    expect(statusStripSource).toContain("activeTaskDetail.reconcile?.required");
   });
 });
 

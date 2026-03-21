@@ -27,6 +27,7 @@ import {
   listTraceMetadata,
   type TraceMetadataRow,
 } from "@/lib/api/datasets";
+import { getTaskEnqueueFailureDetails } from "@/lib/api/client";
 import { useActiveDataset } from "@/lib/app-state/active-dataset";
 import { useAppSession } from "@/lib/app-state/app-session";
 import { useTaskQueue } from "@/lib/app-state/task-queue";
@@ -37,6 +38,7 @@ import {
   taskDetailKey,
   tasksListKey,
   type CharacterizationSetupDraft,
+  type TaskDetail,
 } from "@/lib/api/tasks";
 
 type TaggingMutationState = Readonly<{
@@ -145,8 +147,16 @@ function buildCharacterizationSummary(input: Readonly<{
   return `${input.analysisLabel} · ${input.designName ?? input.designId} · ${input.selectedTraceCount} traces`;
 }
 
-function shouldRefreshTask(status: string | undefined) {
-  return status === "queued" || status === "running" || status === "dispatching";
+function shouldRefreshTask(task: TaskDetail | undefined) {
+  return (
+    task?.status === "queued" ||
+    task?.status === "dispatching" ||
+    task?.status === "running" ||
+    task?.status === "cancellation_requested" ||
+    task?.status === "cancelling" ||
+    task?.status === "termination_requested" ||
+    (task?.status === "completed" && task.resultHandoff?.availability === "pending")
+  );
 }
 
 function defaultSelectedTraceIds(rows: readonly TraceMetadataRow[]) {
@@ -211,7 +221,7 @@ export function useCharacterizationWorkflowData({
           return 5_000;
         }
 
-        return shouldRefreshTask(currentData.status) ? 2_000 : 0;
+        return shouldRefreshTask(currentData) ? 2_000 : 0;
       },
     },
   );
@@ -621,8 +631,27 @@ export function useCharacterizationWorkflowData({
 
       return task;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to submit the characterization run.";
+      const enqueueFailure = getTaskEnqueueFailureDetails(error);
+      if (enqueueFailure?.taskId) {
+        const persistedTask = await getTask(enqueueFailure.taskId).catch(() => null);
+        if (persistedTask) {
+          setAttachedTaskId(enqueueFailure.taskId);
+        }
+        await Promise.all([
+          mutate(tasksListKey),
+          taskQueueState.refreshTaskQueue(),
+          runHistoryQuery.mutate(),
+          persistedTask
+            ? mutate(taskDetailKey(enqueueFailure.taskId), persistedTask, { revalidate: false })
+            : Promise.resolve(undefined),
+        ]);
+      }
+
+      const message = enqueueFailure?.taskId
+        ? `Run #${enqueueFailure.taskId} was recorded but failed to enqueue${enqueueFailure.dispatch?.lastDispatchErrorCode ? ` (${enqueueFailure.dispatch.lastDispatchErrorCode})` : ""}. Inspect the attached latest run before retrying.`
+        : error instanceof Error
+          ? error.message
+          : "Unable to submit the characterization run.";
       setTaskMutationState({ state: "error", message });
       throw error;
     }

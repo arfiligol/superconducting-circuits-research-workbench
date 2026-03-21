@@ -545,7 +545,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "completed" | "failed";
+            status: "queued" | "dispatching" | "running" | "cancellation_requested" | "cancelling" | "cancelled" | "termination_requested" | "terminated" | "completed" | "failed";
             /** Submitted At */
             submitted_at: string;
             /** Owner User Id */
@@ -560,13 +560,23 @@ export interface components {
              * Visibility Scope
              * @enum {string}
              */
-            visibility_scope: "workspace" | "owned";
+            visibility_scope: "local" | "private" | "workspace" | "owned";
             /** Dataset Id */
             dataset_id: string | null;
             /** Definition Id */
             definition_id: number | null;
             /** Summary */
             summary: string;
+            /**
+             * Result Availability
+             * @enum {string}
+             */
+            result_availability?: "pending" | "ready" | "none";
+            /**
+             * Control State
+             * @enum {string}
+             */
+            control_state?: "none" | "cancellation_requested" | "termination_requested";
             /**
              * Worker Task Name
              * @enum {string}
@@ -577,7 +587,9 @@ export interface components {
             /** Submitted From Active Dataset */
             submitted_from_active_dataset: boolean;
             dispatch: components["schemas"]["TaskDispatchResponse"];
+            reconcile: components["schemas"]["TaskReconcileResponse"];
             progress: components["schemas"]["TaskProgressResponse"];
+            result_handoff: components["schemas"]["TaskResultHandoffResponse"];
             result_refs: components["schemas"]["TaskResultRefsResponse"];
             /** Events */
             events: components["schemas"]["TaskEventResponse"][];
@@ -600,6 +612,18 @@ export interface components {
             accepted_at: string;
             /** Last Updated At */
             last_updated_at: string;
+            /** Queue Name */
+            queue_name?: string | null;
+            /** Enqueued At */
+            enqueued_at?: string | null;
+            /** Runtime Job Id */
+            runtime_job_id?: string | null;
+            /** Dispatch Attempt Count */
+            dispatch_attempt_count?: number;
+            /** Last Dispatch Outcome */
+            last_dispatch_outcome?: string | null;
+            /** Last Dispatch Error Code */
+            last_dispatch_error_code?: string | null;
         };
         /** TaskEventResponse */
         TaskEventResponse: {
@@ -609,7 +633,7 @@ export interface components {
              * Event Type
              * @enum {string}
              */
-            event_type: "task_submitted" | "task_running" | "task_completed" | "task_failed";
+            event_type: "task_submitted" | "task_dispatch_claimed" | "task_running" | "task_completed" | "task_failed" | "task_cancel_requested" | "task_cancel_acknowledged" | "task_terminate_requested" | "task_terminate_acknowledged" | "task_requeued" | "task_retried";
             /**
              * Level
              * @enum {string}
@@ -639,13 +663,36 @@ export interface components {
              * Phase
              * @enum {string}
              */
-            phase: "queued" | "running" | "completed" | "failed";
+            phase: "queued" | "dispatching" | "running" | "cancellation_requested" | "cancelling" | "cancelled" | "termination_requested" | "terminated" | "completed" | "failed";
             /** Percent Complete */
             percent_complete: number;
             /** Summary */
             summary: string;
             /** Updated At */
             updated_at: string;
+        };
+        /** TaskReconcileResponse */
+        TaskReconcileResponse: {
+            /** Required */
+            required: boolean;
+            /** Reason */
+            reason?: string | null;
+            /** Recorded At */
+            recorded_at?: string | null;
+        };
+        /** TaskResultHandoffResponse */
+        TaskResultHandoffResponse: {
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "pending" | "ready" | "none";
+            /** Primary Result Handle Id */
+            primary_result_handle_id: string | null;
+            /** Result Handle Count */
+            result_handle_count: number;
+            /** Trace Payload Available */
+            trace_payload_available: boolean;
         };
         /** TaskResultRefsResponse */
         TaskResultRefsResponse: {
@@ -696,28 +743,42 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "completed" | "failed";
+            status: "queued" | "dispatching" | "running" | "cancellation_requested" | "cancelling" | "cancelled" | "termination_requested" | "terminated" | "completed" | "failed";
             /** Submitted At */
             submitted_at: string;
+            /** Updated At */
+            updated_at?: string | null;
             /** Owner User Id */
-            owner_user_id: string;
+            owner_user_id?: string | null;
+            /** Owner User Id */
             /** Owner Display Name */
             owner_display_name: string;
             /** Workspace Id */
-            workspace_id: string;
+            workspace_id?: string | null;
             /** Workspace Slug */
-            workspace_slug: string;
+            workspace_slug?: string | null;
             /**
              * Visibility Scope
              * @enum {string}
              */
-            visibility_scope: "workspace" | "owned";
+            visibility_scope: "local" | "private" | "workspace" | "owned";
             /** Dataset Id */
             dataset_id: string | null;
             /** Definition Id */
             definition_id: number | null;
             /** Summary */
             summary: string;
+            /**
+             * Result Availability
+             * @enum {string}
+             */
+            result_availability?: "pending" | "ready" | "none";
+            /**
+             * Control State
+             * @enum {string}
+             */
+            control_state?: "none" | "cancellation_requested" | "termination_requested";
+            reconcile?: components["schemas"]["TaskReconcileResponse"];
         };
         /** TracePayloadRefResponse */
         TracePayloadRefResponse: {

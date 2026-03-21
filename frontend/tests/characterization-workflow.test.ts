@@ -361,6 +361,11 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain('kind: "characterization"');
     expect(characterizationHookSource).toContain("selected_trace_ids: selectedTraceIds");
     expect(characterizationHookSource).toContain("submitCharacterizationTask()");
+    expect(characterizationHookSource).toContain("getTaskEnqueueFailureDetails");
+    expect(characterizationHookSource).toContain('task?.status === "dispatching"');
+    expect(characterizationHookSource).toContain('task?.status === "cancellation_requested"');
+    expect(characterizationHookSource).toContain('task?.status === "termination_requested"');
+    expect(characterizationHookSource).toContain('task.resultHandoff?.availability === "pending"');
     expect(characterizationHookSource).toContain("activeTask?.characterizationSetup");
     expect(characterizationHookSource).toContain("setSelectedTraceIds([...activeTask.characterizationSetup.selected_trace_ids]);");
     expect(characterizationHookSource).toContain("setCompletedRunSync({");

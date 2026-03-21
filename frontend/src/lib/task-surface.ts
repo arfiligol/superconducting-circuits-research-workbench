@@ -1,6 +1,7 @@
 import type {
   TaskAllowedActions,
   TaskDetail,
+  TaskExecutionStatus,
   TaskResultHandleRef,
   TaskSummary,
 } from "@/lib/api/tasks";
@@ -42,6 +43,9 @@ export type TaskLifecycleSummary = Readonly<{
   submittedFromActiveDataset: boolean;
   executionMode: TaskDetail["executionMode"] | null;
   visibilityScope: TaskDetail["visibilityScope"] | null;
+  reconcileRequired: boolean;
+  reconcileReason: string | null;
+  reconcileRecordedAt: string | null;
 }>;
 
 export type TaskResultSurfaceSummary = Readonly<{
@@ -77,13 +81,6 @@ export type TaskActionGateSummary = Readonly<{
   retry: TaskActionGate;
 }>;
 
-export type TaskContextBindingSummary = Readonly<{
-  tone: SurfaceTone;
-  title: string;
-  message: string;
-  hasMismatch: boolean;
-}> | null;
-
 export type TaskResultHandoffSummary = Readonly<{
   tone: SurfaceTone;
   title: string;
@@ -108,6 +105,32 @@ function formatSubmissionSourceLabel(
       return "Definition-only dispatch";
     default:
       return source;
+  }
+}
+
+function formatExecutionStatusLabel(status: TaskExecutionStatus): string {
+  switch (status) {
+    case "queued":
+      return "Queued";
+    case "dispatching":
+      return "Dispatching";
+    case "running":
+      return "Running";
+    case "cancellation_requested":
+      return "Cancel requested";
+    case "cancelling":
+      return "Cancelling";
+    case "cancelled":
+      return "Cancelled";
+    case "termination_requested":
+      return "Terminate requested";
+    case "terminated":
+      return "Terminated";
+    case "completed":
+      return "Completed";
+    case "failed":
+    default:
+      return "Failed";
   }
 }
 
@@ -219,97 +242,70 @@ export function summarizeTaskLifecycle(
       submittedFromActiveDataset: false,
       executionMode: null,
       visibilityScope: null,
+      reconcileRequired: false,
+      reconcileReason: null,
+      reconcileRecordedAt: null,
     };
   }
 
-  const stage =
-    task.dispatch.status === "failed" || task.status === "failed" || task.progress.phase === "failed"
-      ? "failed"
-      : task.dispatch.status === "completed" ||
-          task.status === "completed" ||
-          task.progress.phase === "completed"
-        ? "completed"
-        : task.dispatch.status === "running" ||
-            task.status === "running" ||
-            task.progress.phase === "running"
-          ? "running"
-          : "accepted";
-
-  if (stage === "failed") {
-    return {
-      stage,
-      statusLabel: "Dispatch failed",
-      tone: "warning",
-      summary:
-        "The backend accepted the request but execution failed. Persisted dispatch, events, and result refs still anchor recovery.",
-      progressPercent: task.progress.percentComplete,
-      progressSummary: task.progress.summary,
-      backendStatusLabel: task.status,
-      workerTaskName: task.workerTaskName,
-      submissionSourceLabel: formatSubmissionSourceLabel(task.dispatch.submissionSource),
-      acceptedAt: task.dispatch.acceptedAt,
-      lastUpdatedAt: task.dispatch.lastUpdatedAt,
-      taskDatasetId: task.datasetId,
-      dispatchKey: task.dispatch.dispatchKey,
-      requestReady: task.requestReady,
-      submittedFromActiveDataset: task.submittedFromActiveDataset,
-      executionMode: task.executionMode,
-      visibilityScope: task.visibilityScope,
-    };
-  }
-
-  if (stage === "completed") {
-    return {
-      stage,
-      statusLabel: "Dispatch completed",
-      tone: "success",
-      summary:
-        "The task completed. Persisted result handles, metadata records, and event history can be reattached after refresh.",
-      progressPercent: task.progress.percentComplete,
-      progressSummary: task.progress.summary,
-      backendStatusLabel: task.status,
-      workerTaskName: task.workerTaskName,
-      submissionSourceLabel: formatSubmissionSourceLabel(task.dispatch.submissionSource),
-      acceptedAt: task.dispatch.acceptedAt,
-      lastUpdatedAt: task.dispatch.lastUpdatedAt,
-      taskDatasetId: task.datasetId,
-      dispatchKey: task.dispatch.dispatchKey,
-      requestReady: task.requestReady,
-      submittedFromActiveDataset: task.submittedFromActiveDataset,
-      executionMode: task.executionMode,
-      visibilityScope: task.visibilityScope,
-    };
-  }
-
-  if (stage === "running") {
-    return {
-      stage,
-      statusLabel: "Dispatch running",
-      tone: "primary",
-      summary:
-        "Worker execution is active. Progress, events, and result refs remain recoverable from the persisted task contract.",
-      progressPercent: task.progress.percentComplete,
-      progressSummary: task.progress.summary,
-      backendStatusLabel: task.status,
-      workerTaskName: task.workerTaskName,
-      submissionSourceLabel: formatSubmissionSourceLabel(task.dispatch.submissionSource),
-      acceptedAt: task.dispatch.acceptedAt,
-      lastUpdatedAt: task.dispatch.lastUpdatedAt,
-      taskDatasetId: task.datasetId,
-      dispatchKey: task.dispatch.dispatchKey,
-      requestReady: task.requestReady,
-      submittedFromActiveDataset: task.submittedFromActiveDataset,
-      executionMode: task.executionMode,
-      visibilityScope: task.visibilityScope,
-    };
-  }
+  const statusLabel = formatExecutionStatusLabel(task.status);
+  const { stage, tone, summary } = (() => {
+    switch (task.status) {
+      case "failed":
+        return {
+          stage: "failed" as const,
+          tone: "warning" as const,
+          summary:
+            "Execution failed. Inspect dispatch metadata, persisted events, and reconcile state before retrying.",
+        };
+      case "cancelled":
+        return {
+          stage: "failed" as const,
+          tone: "warning" as const,
+          summary:
+            "Cancellation was acknowledged and persisted. The attached task remains the authority for follow-up review.",
+        };
+      case "terminated":
+        return {
+          stage: "failed" as const,
+          tone: "warning" as const,
+          summary:
+            "Termination was acknowledged and persisted. Use the task detail and event trail for recovery.",
+        };
+      case "completed":
+        return {
+          stage: "completed" as const,
+          tone: "success" as const,
+          summary:
+            "Execution completed. Result readiness now depends on the persisted result handoff, not queue state.",
+        };
+      case "running":
+      case "dispatching":
+      case "cancellation_requested":
+      case "cancelling":
+      case "termination_requested":
+        return {
+          stage: "running" as const,
+          tone: "primary" as const,
+          summary:
+            "Worker runtime is still active. Keep the attached task detail refreshed until the backend settles the request.",
+        };
+      case "queued":
+      default:
+        return {
+          stage: "accepted" as const,
+          tone: "primary" as const,
+          summary:
+            "The request is queued and waiting for a worker claim. Dispatch metadata is supplemental to the task status authority.",
+        };
+    }
+  })();
 
   return {
     stage,
-    statusLabel: "Dispatch accepted",
-    tone: "primary",
-    summary:
-      "The request is queued and ready to be reattached once worker execution advances.",
+    statusLabel,
+    tone,
+    summary,
     progressPercent: task.progress.percentComplete,
     progressSummary: task.progress.summary,
     backendStatusLabel: task.status,
@@ -323,6 +319,9 @@ export function summarizeTaskLifecycle(
     submittedFromActiveDataset: task.submittedFromActiveDataset,
     executionMode: task.executionMode,
     visibilityScope: task.visibilityScope,
+    reconcileRequired: task.reconcile?.required ?? false,
+    reconcileReason: task.reconcile?.reason ?? null,
+    reconcileRecordedAt: task.reconcile?.recordedAt ?? null,
   };
 }
 
@@ -408,48 +407,9 @@ export function summarizeTaskActionGates(
   };
 }
 
-export function summarizeTaskContextBinding(input: Readonly<{
-  task: TaskDetail | undefined;
-  activeDatasetId: string | null;
-  activeDefinitionId?: number | null;
-}>): TaskContextBindingSummary {
-  if (!input.task) {
-    return null;
-  }
-
-  if (input.activeDatasetId && input.task.datasetId && input.task.datasetId !== input.activeDatasetId) {
-    return {
-      tone: "warning",
-      title: "Dataset context mismatch",
-      message: `Task #${input.task.taskId} is bound to dataset ${input.task.datasetId}, while the current shell dataset is ${input.activeDatasetId}. Keep the task attached for recovery, but do not treat it as the active dataset authority.`,
-      hasMismatch: true,
-    };
-  }
-
-  if (
-    typeof input.activeDefinitionId === "number" &&
-    typeof input.task.definitionId === "number" &&
-    input.task.definitionId !== input.activeDefinitionId
-  ) {
-    return {
-      tone: "warning",
-      title: "Definition context mismatch",
-      message: `Task #${input.task.taskId} is bound to definition #${input.task.definitionId}, while the page currently targets definition #${input.activeDefinitionId}. Attached task state stays visible for comparison, but definition context has diverged.`,
-      hasMismatch: true,
-    };
-  }
-
-  return {
-    tone: "success",
-    title: "Task context aligned",
-    message: "Attached task context matches the current shell and page context.",
-    hasMismatch: false,
-  };
-}
-
 export function summarizeTaskResultHandoff(
   task: TaskDetail | undefined,
-  resultSummary: TaskResultSurfaceSummary,
+  _resultSummary: TaskResultSurfaceSummary,
 ): TaskResultHandoffSummary {
   if (!task) {
     return {
@@ -460,38 +420,33 @@ export function summarizeTaskResultHandoff(
     };
   }
 
-  const isTerminal = task.status === "completed" || task.status === "failed";
-  const hasPersistedResult =
-    resultSummary.materializedHandleCount > 0 ||
-    resultSummary.hasTracePayload ||
-    resultSummary.analysisRunId !== null ||
-    resultSummary.traceBatchId !== null;
-
-  if (isTerminal && hasPersistedResult) {
+  if (task.resultHandoff?.availability === "ready") {
     return {
       tone: "success",
       title: "Persisted result ready",
       message:
-        "This terminal task has enough persisted result authority to hand off into the result surface without relying on in-memory execution state.",
+        "The backend has marked the persisted result handoff ready. Result surfaces should use this as the readiness authority.",
       isReady: true,
     };
   }
 
-  if (isTerminal) {
+  if (task.resultHandoff?.availability === "pending") {
     return {
-      tone: "warning",
-      title: "Terminal without persisted result",
+      tone: "primary",
+      title: "Result handoff pending",
       message:
-        "The task is terminal, but no persisted result handle or trace payload is attached yet.",
+        task.status === "completed"
+          ? "Execution is complete, but the persisted result handoff is still pending."
+          : "Execution is still active and the persisted result handoff is not ready yet.",
       isReady: false,
     };
   }
 
   return {
-    tone: "primary",
-    title: "Execution still active",
+    tone: "warning",
+    title: "No persisted result handoff",
     message:
-      "Stay on the attached task surface until the task reaches a terminal state and materializes persisted outputs.",
+      "The backend reports no persisted result handoff for this task yet. Treat the attached task detail as the only authority.",
     isReady: false,
   };
 }

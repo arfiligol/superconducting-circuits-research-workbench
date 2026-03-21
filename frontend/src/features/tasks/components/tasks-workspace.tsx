@@ -136,6 +136,14 @@ function formatResultAvailabilityLabel(value: TaskSummary["resultAvailability"])
   }
 }
 
+function formatReconcileLabel(task: Pick<TaskSummary, "reconcile">) {
+  if (!task.reconcile?.required) {
+    return "Aligned";
+  }
+
+  return task.reconcile.reason ?? "Needs reconcile";
+}
+
 function formatScopeLabel(scope: string) {
   switch (scope) {
     case "local":
@@ -633,6 +641,9 @@ export function TasksWorkspace() {
                                   : "Terminate requested"}
                               </SurfaceTag>
                             ) : null}
+                            {task.reconcile?.required ? (
+                              <SurfaceTag tone="warning">{formatReconcileLabel(task)}</SurfaceTag>
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-4 py-3 align-top text-xs text-muted-foreground">
@@ -713,7 +724,7 @@ export function TasksWorkspace() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <div className="rounded-[0.9rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
                       <p className="font-medium text-foreground">Result handoff</p>
                       <p className="mt-2">
@@ -730,6 +741,14 @@ export function TasksWorkspace() {
                         Retry of {selectedTask.retryOfTaskId ?? "--"} · Upstream{" "}
                         {selectedTask.upstreamTaskId ?? "--"} · Downstream{" "}
                         {selectedTask.downstreamTaskIds?.length ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-[0.9rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">Reconcile</p>
+                      <p className="mt-2">
+                        {selectedTask.reconcile?.required
+                          ? selectedTask.reconcile.reason ?? "Worker runtime conflict recorded."
+                          : "No reconcile warning is recorded for this task."}
                       </p>
                     </div>
                   </div>

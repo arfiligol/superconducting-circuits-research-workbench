@@ -46,6 +46,18 @@ export class ApiError extends Error {
   }
 }
 
+export type TaskEnqueueFailureDetails = Readonly<{
+  taskId: number | null;
+  dispatch: Readonly<{
+    dispatchKey: string | null;
+    queueName: string | null;
+    runtimeJobId: string | null;
+    dispatchAttemptCount: number | null;
+    lastDispatchOutcome: string | null;
+    lastDispatchErrorCode: string | null;
+  }> | null;
+}>;
+
 type ApiRequestInit = Omit<RequestInit, "body"> & {
   body?: BodyInit | Record<string, unknown> | null;
 };
@@ -77,6 +89,46 @@ export async function apiRequestEnvelope<TData, TMeta = unknown>(
   return {
     data: payload as TData,
     meta: undefined,
+  };
+}
+
+export function getTaskEnqueueFailureDetails(error: unknown): TaskEnqueueFailureDetails | null {
+  if (!(error instanceof ApiError) || error.errorCode !== "task_enqueue_failed") {
+    return null;
+  }
+
+  const details =
+    typeof error.details === "object" && error.details !== null
+      ? (error.details as Record<string, unknown>)
+      : null;
+  const dispatch =
+    details && typeof details.dispatch === "object" && details.dispatch !== null
+      ? (details.dispatch as Record<string, unknown>)
+      : null;
+
+  return {
+    taskId: typeof details?.task_id === "number" ? details.task_id : null,
+    dispatch: dispatch
+      ? {
+          dispatchKey:
+            typeof dispatch.dispatch_key === "string" ? dispatch.dispatch_key : null,
+          queueName: typeof dispatch.queue_name === "string" ? dispatch.queue_name : null,
+          runtimeJobId:
+            typeof dispatch.runtime_job_id === "string" ? dispatch.runtime_job_id : null,
+          dispatchAttemptCount:
+            typeof dispatch.dispatch_attempt_count === "number"
+              ? dispatch.dispatch_attempt_count
+              : null,
+          lastDispatchOutcome:
+            typeof dispatch.last_dispatch_outcome === "string"
+              ? dispatch.last_dispatch_outcome
+              : null,
+          lastDispatchErrorCode:
+            typeof dispatch.last_dispatch_error_code === "string"
+              ? dispatch.last_dispatch_error_code
+              : null,
+        }
+      : null,
   };
 }
 

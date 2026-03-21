@@ -44,9 +44,12 @@ export function TaskEventHistoryPanel({
       <div className="mt-4 rounded-[0.9rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
         <p className="font-medium text-foreground">{narrative}</p>
         <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-          <SurfaceTag tone={summary.dispatchStatusLabel ? "primary" : "default"}>
-            Dispatch {summary.dispatchStatusLabel ?? "--"}
+          <SurfaceTag tone={summary.taskStatusLabel ? "primary" : "default"}>
+            Task {summary.taskStatusLabel ?? "--"}
           </SurfaceTag>
+          {summary.dispatchStatusLabel ? (
+            <SurfaceTag tone="default">Dispatch {summary.dispatchStatusLabel}</SurfaceTag>
+          ) : null}
           <SurfaceTag tone={summary.warningCount > 0 ? "warning" : "default"}>
             Warning events {summary.warningCount}
           </SurfaceTag>

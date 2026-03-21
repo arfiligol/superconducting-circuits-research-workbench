@@ -91,6 +91,11 @@ type TaskResultHandoffResponseShape = Readonly<{
   result_handle_count: number;
   trace_payload_available: boolean;
 }>;
+type TaskReconcileResponseShape = Readonly<{
+  required: boolean;
+  reason?: string | null;
+  recorded_at?: string | null;
+}>;
 type TaskPublicationSummaryResponseShape = Readonly<{
   state: "not_published" | "published";
   publish_allowed: boolean;
@@ -114,8 +119,9 @@ type TaskDetailResponseShape = components["schemas"]["TaskDetailResponse"] &
     downstream_task_ids?: readonly number[];
     retry_of_task_id?: number | null;
     control_state?: TaskControlState;
-    dispatch?: components["schemas"]["TaskDispatchResponse"] | null;
-    result_handoff?: TaskResultHandoffResponseShape;
+    dispatch: components["schemas"]["TaskDispatchResponse"];
+    result_handoff: TaskResultHandoffResponseShape;
+    reconcile?: TaskReconcileResponseShape | null;
   }>;
 type LiveTaskQueueRowResponseShape = Readonly<{
   task_id: number;
@@ -129,6 +135,9 @@ type LiveTaskQueueRowResponseShape = Readonly<{
   result_availability: TaskResultAvailability;
   allowed_actions: TaskAllowedActionsResponse;
   control_state: TaskControlState;
+  dataset_id?: string | null;
+  definition_id?: number | null;
+  reconcile?: TaskReconcileResponseShape | null;
 }>;
 type WorkerLaneSummaryResponseShape = Readonly<{
   lane: string;
@@ -529,15 +538,38 @@ export type TaskDispatch = Readonly<{
   submissionSource: "active_dataset" | "explicit_dataset" | "definition_only";
   acceptedAt: string;
   lastUpdatedAt: string;
+  queueName?: string | null;
+  enqueuedAt?: string | null;
+  runtimeJobId?: string | null;
+  dispatchAttemptCount?: number | null;
+  lastDispatchOutcome?: string | null;
+  lastDispatchErrorCode?: string | null;
 }>;
 
 export type TaskEvent = Readonly<{
   eventKey: string;
-  eventType: "task_submitted" | "task_running" | "task_completed" | "task_failed";
+  eventType:
+    | "task_submitted"
+    | "task_dispatch_claimed"
+    | "task_running"
+    | "task_completed"
+    | "task_failed"
+    | "task_cancel_requested"
+    | "task_cancel_acknowledged"
+    | "task_terminate_requested"
+    | "task_terminate_acknowledged"
+    | "task_requeued"
+    | "task_retried";
   level: "info" | "warning" | "error";
   occurredAt: string;
   message: string;
   metadata: Readonly<Record<string, string | number | boolean | readonly string[] | null>>;
+}>;
+
+export type TaskReconcile = Readonly<{
+  required: boolean;
+  reason: string | null;
+  recordedAt: string | null;
 }>;
 
 export type TaskResultHandoff = Readonly<{
@@ -586,6 +618,7 @@ export type TaskSummary = Readonly<{
   summary: string;
   resultAvailability?: TaskResultAvailability | null;
   controlState?: TaskControlState | null;
+  reconcile?: TaskReconcile | null;
   hasActionAuthority: boolean;
   allowedActions: TaskAllowedActions;
 }>;
@@ -615,7 +648,7 @@ export type TaskDetail = TaskSummary &
     dispatch: TaskDispatch;
     events: readonly TaskEvent[];
     progress: Readonly<{
-      phase: "queued" | "running" | "completed" | "failed";
+      phase: TaskExecutionStatus;
       percentComplete: number;
       summary: string;
       updatedAt: string;
@@ -847,12 +880,6 @@ const emptyTaskAllowedActions: TaskAllowedActions = {
   retry: false,
   rejectionReason: null,
 };
-const defaultTaskResultHandoff: TaskResultHandoff = {
-  availability: "pending",
-  primaryResultHandleId: null,
-  resultHandleCount: 0,
-  tracePayloadAvailable: false,
-};
 const defaultTaskPublicationSummary = (
   taskId: number,
   sourceResultHandleIds: readonly string[] = [],
@@ -1031,6 +1058,29 @@ function mapTaskDispatch(payload: components["schemas"]["TaskDispatchResponse"])
     submissionSource: payload.submission_source,
     acceptedAt: payload.accepted_at,
     lastUpdatedAt: payload.last_updated_at,
+    queueName: "queue_name" in payload ? payload.queue_name ?? null : null,
+    enqueuedAt: "enqueued_at" in payload ? payload.enqueued_at ?? null : null,
+    runtimeJobId: "runtime_job_id" in payload ? payload.runtime_job_id ?? null : null,
+    dispatchAttemptCount:
+      "dispatch_attempt_count" in payload ? payload.dispatch_attempt_count ?? 0 : 0,
+    lastDispatchOutcome:
+      "last_dispatch_outcome" in payload ? payload.last_dispatch_outcome ?? null : null,
+    lastDispatchErrorCode:
+      "last_dispatch_error_code" in payload ? payload.last_dispatch_error_code ?? null : null,
+  };
+}
+
+function mapTaskReconcile(
+  payload: TaskReconcileResponseShape | null | undefined,
+): TaskReconcile | null {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    required: payload.required,
+    reason: payload.reason ?? null,
+    recordedAt: payload.recorded_at ?? null,
   };
 }
 
@@ -1184,12 +1234,8 @@ function mapCharacterizationSetupResponse(
 }
 
 function mapTaskResultHandoff(
-  payload: TaskResultHandoffResponseShape | undefined,
+  payload: TaskResultHandoffResponseShape,
 ): TaskResultHandoff {
-  if (!payload) {
-    return defaultTaskResultHandoff;
-  }
-
   return {
     availability: payload.availability,
     primaryResultHandleId: payload.primary_result_handle_id,
@@ -1281,17 +1327,18 @@ export function mapTaskSummaryResponse(
     status: payload.status,
     submittedAt: "submitted_at" in payload ? payload.submitted_at : null,
     updatedAt: "updated_at" in payload ? payload.updated_at : null,
-    ownerUserId: "owner_user_id" in payload ? payload.owner_user_id : null,
+    ownerUserId: "owner_user_id" in payload ? payload.owner_user_id ?? null : null,
     ownerDisplayName: payload.owner_display_name,
-    workspaceId: "workspace_id" in payload ? payload.workspace_id : null,
-    workspaceSlug: "workspace_slug" in payload ? payload.workspace_slug : null,
+    workspaceId: "workspace_id" in payload ? payload.workspace_id ?? null : null,
+    workspaceSlug: "workspace_slug" in payload ? payload.workspace_slug ?? null : null,
     visibilityScope: payload.visibility_scope,
-    datasetId: "dataset_id" in payload ? payload.dataset_id : null,
-    definitionId: "definition_id" in payload ? payload.definition_id : null,
+    datasetId: "dataset_id" in payload ? payload.dataset_id ?? null : null,
+    definitionId: "definition_id" in payload ? payload.definition_id ?? null : null,
     summary: payload.summary,
     resultAvailability:
       "result_availability" in payload ? payload.result_availability : null,
     controlState: "control_state" in payload ? payload.control_state : null,
+    reconcile: "reconcile" in payload ? mapTaskReconcile(payload.reconcile) : null,
     hasActionAuthority: actionState.hasActionAuthority,
     allowedActions: actionState.allowedActions,
   };
@@ -1317,6 +1364,7 @@ export function normalizeTaskSummary(task: TaskSummaryLike): TaskSummary {
 
   return {
     ...task,
+    reconcile: task.reconcile ?? null,
     hasActionAuthority: actionState.hasActionAuthority,
     allowedActions: actionState.allowedActions,
   };
@@ -1521,12 +1569,6 @@ export async function listTasks(query?: TaskListQuery) {
 }
 
 export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDetail {
-  const fallbackDispatchStatus: TaskDispatch["status"] =
-    payload.status === "completed"
-      ? "completed"
-      : payload.status === "failed"
-        ? "failed"
-        : "running";
   const mappedResultRefs = {
     traceBatchId: payload.result_refs.trace_batch_id,
     analysisRunId: payload.result_refs.analysis_run_id,
@@ -1551,15 +1593,7 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
     upstreamTaskId: payload.upstream_task_id ?? null,
     downstreamTaskIds: [...(payload.downstream_task_ids ?? [])],
     retryOfTaskId: payload.retry_of_task_id ?? null,
-    dispatch: payload.dispatch
-      ? mapTaskDispatch(payload.dispatch)
-      : {
-          dispatchKey: `task:${payload.task_id}`,
-          status: fallbackDispatchStatus,
-          submissionSource: "definition_only",
-          acceptedAt: payload.submitted_at,
-          lastUpdatedAt: payload.submitted_at,
-        },
+    dispatch: mapTaskDispatch(payload.dispatch),
     events: payload.events.map(mapTaskEvent),
     progress: {
       phase: payload.progress.phase,
@@ -1568,6 +1602,7 @@ export function mapTaskDetailResponse(payload: TaskDetailResponseShape): TaskDet
       updatedAt: payload.progress.updated_at,
     },
     resultHandoff: mapTaskResultHandoff(payload.result_handoff),
+    reconcile: mapTaskReconcile(payload.reconcile),
     publicationSummary: mapTaskPublicationSummary(payload.publication_summary, {
       taskId: payload.task_id,
       sourceResultHandleIds: mappedResultRefs.resultHandles.map((handle) => handle.handleId),

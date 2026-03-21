@@ -230,12 +230,12 @@ type TaskLifecyclePanelProps = Readonly<{
 export function TaskLifecyclePanel({ task, summary }: TaskLifecyclePanelProps) {
   return (
     <SurfacePanel
-      title="Dispatch / Execution Status"
-      description="Track persisted dispatch authority, worker progress, and request readiness using the same task contract across workflow surfaces."
+      title="Execution Status"
+      description="Task detail status is the lifecycle authority. Dispatch and reconcile metadata stay visible here as supplemental runtime context."
     >
       <div className="grid gap-3 md:grid-cols-4">
         <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Dispatch</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Status</p>
           <p className="mt-2 text-lg font-semibold text-foreground">{summary.statusLabel}</p>
         </div>
         <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-4">
@@ -259,6 +259,20 @@ export function TaskLifecyclePanel({ task, summary }: TaskLifecyclePanelProps) {
           </p>
         </div>
       </div>
+
+      {summary.reconcileRequired ? (
+        <div className={cx("mt-4 rounded-[0.9rem] border px-4 py-4 text-sm", resolveSurfaceInsetToneClass("warning"))}>
+          <p className="font-medium text-foreground">Reconcile needed</p>
+          <p className="mt-2 text-muted-foreground">
+            {summary.reconcileReason ?? "The backend recorded a worker-runtime conflict for this task."}
+          </p>
+          {summary.reconcileRecordedAt ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Recorded {summary.reconcileRecordedAt}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 rounded-[0.9rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
         <p className="font-medium text-foreground">{summary.summary}</p>
@@ -332,8 +346,19 @@ export function TaskLifecyclePanel({ task, summary }: TaskLifecyclePanelProps) {
                 : "Dataset detached from session"}
             </SurfaceTag>
             {summary.dispatchKey ? <SurfaceTag tone={summary.tone}>{summary.dispatchKey}</SurfaceTag> : null}
+            {task?.dispatch.queueName ? <SurfaceTag tone="default">Queue {task.dispatch.queueName}</SurfaceTag> : null}
+            {typeof task?.dispatch.dispatchAttemptCount === "number" ? (
+              <SurfaceTag tone="default">Attempt {task.dispatch.dispatchAttemptCount}</SurfaceTag>
+            ) : null}
+            {task?.dispatch.lastDispatchOutcome ? (
+              <SurfaceTag tone="default">{task.dispatch.lastDispatchOutcome}</SurfaceTag>
+            ) : null}
+            {task?.dispatch.lastDispatchErrorCode ? (
+              <SurfaceTag tone="warning">{task.dispatch.lastDispatchErrorCode}</SurfaceTag>
+            ) : null}
             {summary.executionMode ? <SurfaceTag tone="default">{summary.executionMode}</SurfaceTag> : null}
             {summary.visibilityScope ? <SurfaceTag tone="default">{summary.visibilityScope}</SurfaceTag> : null}
+            {summary.reconcileRequired ? <SurfaceTag tone="warning">Needs reconcile</SurfaceTag> : null}
           </>
         ) : (
           <SurfaceTag tone="default">No task attached</SurfaceTag>

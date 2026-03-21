@@ -31,6 +31,11 @@ export type TaskQueueItem = Readonly<{
   summary: string;
   resultAvailability?: "pending" | "ready" | "none" | null;
   controlState?: "none" | "cancellation_requested" | "termination_requested" | null;
+  reconcile?: Readonly<{
+    required: boolean;
+    reason: string | null;
+    recordedAt: string | null;
+  }> | null;
 }>;
 
 export type TaskQueueSummary = Readonly<{
