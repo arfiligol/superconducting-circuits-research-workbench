@@ -71,6 +71,33 @@ const simulationWorkflowHookSource = readFileSync(
   ),
   "utf8",
 );
+const simulationTaskAttachmentHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/hooks/use-simulation-task-attachment.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationSubmissionHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/hooks/use-simulation-submission.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const savedSimulationSetupsHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/hooks/use-saved-simulation-setups.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 const simulationResultExplorerHookSource = readFileSync(
   fileURLToPath(
     new URL(
@@ -1201,11 +1228,16 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Add Step");
     expect(simulationWorkbenchSource).toContain("Step Type");
     expect(simulationWorkbenchSource).toContain("updatePostProcessingStepType");
+    expect(simulationWorkbenchSource).toContain("useSimulationSubmission");
+    expect(simulationWorkbenchSource).toContain("useSimulationTaskAttachment");
+    expect(simulationWorkbenchSource).toContain("useSavedSimulationSetups");
     expect(simulationWorkbenchSource).toContain("Load Official Example");
-    expect(simulationWorkbenchSource).toContain("Task-backed · #");
-    expect(simulationWorkbenchSource).toContain("Edited from task #");
-    expect(simulationWorkbenchSource).toContain("Official Example");
-    expect(simulationWorkbenchSource).toContain("Browser-saved convenience draft for this definition.");
+    expect(savedSimulationSetupsHookSource).toContain("Task-backed · #");
+    expect(savedSimulationSetupsHookSource).toContain("Edited from task #");
+    expect(savedSimulationSetupsHookSource).toContain("Official Example");
+    expect(savedSimulationSetupsHookSource).toContain(
+      "Browser-saved convenience draft for this definition.",
+    );
     expect(simulationWorkbenchSource).toContain("Manage");
     expect(simulationWorkbenchSource).toContain("Save");
     expect(simulationWorkbenchSource).toContain('role="switch"');
@@ -1213,9 +1245,11 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("<AppNumberInput");
     expect(simulationWorkbenchSource).not.toContain("function SetupNumberInput");
     expect(simulationWorkbenchSource).not.toContain('type="checkbox"');
-    expect(simulationWorkbenchSource).toContain("buildSimulationSetupDraft");
-    expect(simulationWorkbenchSource).toContain("buildSimulationSetupFormValuesFromPersistedSetup");
-    expect(simulationWorkbenchSource).toContain("buildPostProcessingSetupDraft");
+    expect(simulationSubmissionHookSource).toContain("buildSimulationSetupDraft");
+    expect(savedSimulationSetupsHookSource).toContain(
+      "buildSimulationSetupFormValuesFromPersistedSetup",
+    );
+    expect(simulationSubmissionHookSource).toContain("buildPostProcessingSetupDraft");
     expect(simulationWorkbenchSource).toContain('label="Expanded Netlist"');
     expect(simulationWorkbenchSource).not.toContain('detail="Read-only expanded netlist."');
     expect(simulationWorkbenchSource).not.toContain('label="Canonical Source"');
@@ -1266,19 +1300,13 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Downstream State");
     expect(simulationResultExplorerSource).toContain("Simulation Result Explorer");
     expect(simulationResultExplorerSource).toContain("Post Processing Result Explorer");
-    expect(simulationResultExplorerSource).toContain("Parameter Sweep");
-    expect(simulationResultExplorerSource).toContain("Compare Axis");
-    expect(simulationResultExplorerSource).toContain("Single trace");
-    expect(simulationResultExplorerSource).toContain("compareAxisIndex");
-    expect(simulationResultExplorerSource).toContain("setCompareAxis");
-    expect(simulationResultExplorerSource).toContain("Comparing ${compareAxis.values.length} traces");
+    expect(simulationResultExplorerSource).toContain("Parameter Sweep Point");
+    expect(simulationResultExplorerHookSource).toContain("setSweepValue(axisIndex: number, nextValueIndex: number)");
     expect(simulationResultExplorerSource).toContain(
       'task.kind === "post_processing" && sourceOptions.length <= 1',
     );
     expect(simulationResultExplorerSource).toContain("AppSegmentedControl");
-    expect(simulationResultExplorerSource).toContain("disabled={isExplorerBusy}");
     expect(simulationResultExplorerSource).toContain('ariaLabel="Simulation result family"');
-    expect(simulationResultExplorerSource).toContain("Refreshing explorer selection");
     expect(simulationResultExplorerSource).toContain("Simulation result source");
     expect(simulationResultExplorerSource).toContain("Simulation result metric");
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
@@ -1312,38 +1340,38 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain(
       "const displayedSimulationStageTask =",
     );
-    expect(simulationWorkbenchSource).toContain("optimisticSimulationTaskDetail ??");
     expect(simulationWorkbenchSource).toContain(
       "const displayedSimulationTaskDetail =",
     );
     expect(simulationWorkbenchSource).toContain("displayedSimulationStageAuthority");
-    expect(simulationWorkbenchSource).toContain("Sync Last Task Setup");
-    expect(simulationWorkbenchSource).toContain("setOptimisticSimulationTaskDetail(task);");
-    expect(simulationWorkbenchSource).toContain("adoptCurrentSetupAsTaskBacked(task.taskId);");
-    expect(simulationWorkbenchSource).toContain("resolvedTaskId !== null && resolvedTaskId !== optimisticSimulationTaskDetail.taskId");
-    expect(simulationWorkbenchSource).toContain("!isSimulationTaskActive(latestSimulationStageTask.status)");
-    expect(simulationWorkbenchSource).toContain("activeTaskError || (!isTaskTransitioning && !attachedSimulationTaskDetail)");
-    expect(simulationWorkbenchSource).toContain("Overwrite Current");
-    expect(simulationWorkbenchSource).toContain("Save as New");
-    expect(simulationWorkbenchSource).toContain('setSaveSetupDialogMode("new-only");');
-    expect(simulationWorkflowHookSource).toContain("void Promise.all([");
-    expect(simulationWorkbenchSource).not.toContain("hydratedSimulationSetupAuthorityKey");
+    expect(savedSimulationSetupsHookSource).toContain("Sync Last Task Setup");
+    expect(savedSimulationSetupsHookSource).toContain("resetForWorkflowContext");
+    expect(savedSimulationSetupsHookSource).toContain("openSaveAsNewFromManage");
+    expect(simulationSubmissionHookSource).toContain("task_enqueue_failed");
+    expect(simulationSubmissionHookSource).toContain("onTaskAttached(task.taskId);");
+    expect(simulationSubmissionHookSource).toContain("await Promise.all([");
     expect(simulationWorkbenchSource).toContain("latestPostProcessingStageAuthority");
     expect(simulationWorkbenchSource).toContain("Persisted result handoff:");
     expect(simulationWorkbenchSource).toContain("const workflowContextResetKey =");
-    expect(simulationWorkbenchSource).toContain("form.reset(defaultRequestValues, { keepDefaultValues: true });");
-    expect(simulationWorkbenchSource).toContain("setSimulationSetupSource({ kind: \"default\" });");
+    expect(savedSimulationSetupsHookSource).toContain(
+      "form.reset(defaultRequestValues, { keepDefaultValues: true });",
+    );
+    expect(savedSimulationSetupsHookSource).toContain('setSimulationSetupSource({ kind: "default" });');
     expect(simulationWorkbenchSource).toContain("setPostProcessingSteps([]);");
     expect(simulationWorkbenchSource).not.toContain("summarizeTaskContextBinding");
     expect(simulationWorkbenchSource).not.toContain("taskContextBinding?.hasMismatch");
-    expect(simulationWorkflowHookSource).toContain("simulation_setup: simulationSetup ?? null");
-    expect(simulationWorkflowHookSource).toContain("post_processing_setup: postProcessingSetup ?? null");
+    expect(simulationSubmissionHookSource).toContain("simulation_setup: simulationSetup ?? null");
+    expect(simulationSubmissionHookSource).toContain(
+      "post_processing_setup: postProcessingSetup ?? null",
+    );
     expect(simulationWorkflowHookSource).toContain("attachedContextTask");
     expect(simulationWorkflowHookSource).toContain("attachedSimulationTaskDetail");
     expect(simulationWorkflowHookSource).toContain("upstreamSimulationStageTask");
-    expect(simulationWorkflowHookSource).toContain("async function verifySelectedDefinition");
-    expect(simulationWorkflowHookSource).toContain("await listCircuitDefinitions()");
-    expect(simulationWorkflowHookSource).toContain("await getCircuitDefinition(nextDefinitionId)");
+    expect(simulationSubmissionHookSource).toContain("const verifySelectedDefinition");
+    expect(simulationSubmissionHookSource).toContain("await listCircuitDefinitions()");
+    expect(simulationSubmissionHookSource).toContain(
+      "await getCircuitDefinition(nextDefinitionId)",
+    );
     expect(simulationWorkflowHookSource).not.toContain("keepPreviousData: true");
     expect(simulationWorkflowHookSource).toContain("shouldRefreshTaskDetail");
     expect(simulationWorkflowHookSource).toContain('task.status === "completed" && !hasSimulationTaskResult(task)');
@@ -1351,10 +1379,14 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultExplorerHookSource).toContain("getSimulationResultExplorer");
     expect(simulationResultExplorerHookSource).toContain("setFamily(nextFamily: string)");
     expect(simulationResultExplorerHookSource).toContain("setZ0(nextZ0: number)");
-    expect(simulationWorkbenchSource).toContain("simulation:attached-task:");
-    expect(simulationWorkbenchSource).toContain("autoRestoredTaskIdRef");
-    expect(simulationWorkbenchSource).toContain("readStoredAttachedTaskId(attachedTaskStorageKey)");
-    expect(simulationWorkbenchSource).toContain("window.sessionStorage.setItem(attachedTaskStorageKey");
+    expect(simulationTaskAttachmentHookSource).toContain("simulation:attached-task:");
+    expect(simulationTaskAttachmentHookSource).toContain("autoRestoredTaskIdRef");
+    expect(simulationTaskAttachmentHookSource).toContain(
+      "readStoredAttachedTaskId(attachedTaskStorageKey)",
+    );
+    expect(simulationTaskAttachmentHookSource).toContain(
+      "window.sessionStorage.setItem(attachedTaskStorageKey",
+    );
   });
 });
 
