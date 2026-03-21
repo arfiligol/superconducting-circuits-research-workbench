@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.shared.persistence.models import TaskRecord
 from fastapi import APIRouter, HTTPException, Request, status
 
 from legacy.legacy_nicegui_archived.api.dependencies import current_user
@@ -14,9 +15,11 @@ from legacy.legacy_nicegui_archived.api.schemas import (
     TaskResponse,
 )
 from legacy.legacy_nicegui_archived.services.execution_context import ActorContext
-from legacy.legacy_nicegui_archived.services.latest_result_lookup import list_design_tasks, require_task
+from legacy.legacy_nicegui_archived.services.latest_result_lookup import (
+    list_design_tasks,
+    require_task,
+)
 from legacy.legacy_nicegui_archived.services.task_submission import SubmittedTask, create_api_task
-from core.shared.persistence.models import TaskRecord
 
 router = APIRouter(tags=["tasks"])
 
@@ -85,6 +88,11 @@ def create_simulation_task(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     return _task_dispatch_response(submitted)
 
 
@@ -108,6 +116,11 @@ def create_post_processing_task(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     return _task_dispatch_response(submitted)
 
 
@@ -131,6 +144,11 @@ def create_characterization_task(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     return _task_dispatch_response(submitted)
 
 

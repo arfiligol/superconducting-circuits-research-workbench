@@ -15,16 +15,6 @@ PID_DIR="$ROOT_DIR/tmp/dev_pids"
 LOG_DIR="$ROOT_DIR/tmp/dev_logs"
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
-check_rq_backend() {
-  uv run python - <<'PY'
-from worker.config import ensure_connection_available
-
-ensure_connection_available("simulation")
-ensure_connection_available("characterization")
-print("[dev-start] rq backend reachable")
-PY
-}
-
 start_service() {
   local name="$1"
   shift
@@ -47,9 +37,7 @@ start_service() {
   echo "[dev-start] started $name (pid=$pid, log=$log_file)"
 }
 
-check_rq_backend
 start_service app uv run sc-app
-start_service worker-simulation uv run sc-worker-simulation
-start_service worker-characterization uv run sc-worker-characterization
-
-echo "[dev-start] use ./scripts/dev_stop.sh to stop all WS10 processes"
+echo "[dev-start] started app-only local stack"
+echo "[dev-start] queue-backed worker processes are pending the worker-isolation redesign"
+echo "[dev-start] use ./scripts/dev_stop.sh to stop all started processes"

@@ -34,8 +34,6 @@ dependencies = [
 [project.scripts]
 sc-app = "scripts.backend_app:main"
 sc-legacy-nicegui = "legacy.legacy_nicegui_archived.main:start"
-sc-worker-simulation = "worker.simulation_worker:main"
-sc-worker-characterization = "worker.characterization_worker:main"
 
 [tool.uv]
 package = true
@@ -47,7 +45,7 @@ superconducting-circuits-backend = { path = "backend", editable = true }
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
-include = ["scripts*", "worker*", "legacy*"]
+include = ["scripts*", "legacy*"]
 
 [tool.basedpyright]
 typeCheckingMode = "basic"
