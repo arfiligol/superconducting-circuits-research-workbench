@@ -346,7 +346,7 @@ def app_server(tmp_path_factory: pytest.TempPathFactory) -> AppServer:
     env["NICEGUI_SCREEN_TEST_PORT"] = str(port)
     env["SC_APP_RECONNECT_TIMEOUT"] = "1.0"
     process = subprocess.Popen(
-        ["uv", "run", "sc-app"],
+        ["uv", "run", "sc-legacy-nicegui"],
         cwd=Path(__file__).resolve().parents[3],
         env=env,
         stdout=log_file,

@@ -824,7 +824,7 @@ def _build_validation_notices(
 
 def _legacy_validation_notices() -> tuple[ValidationNotice, ...]:
     return (
-        ValidationNotice(level="ok", message="Canonical schema matches rewrite draft v1."),
+        ValidationNotice(level="ok", message="Canonical schema matches the current draft v1."),
         ValidationNotice(level="ok", message="All required element blocks are present."),
         ValidationNotice(
             level="warning",

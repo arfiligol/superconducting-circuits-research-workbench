@@ -1,7 +1,7 @@
 """Tests for record-scope availability evaluator."""
 
-from app.features.characterization.query.analysis_registry import ANALYSIS_REGISTRY
-from app.services.analysis_scope_evaluator import get_available_analyses
+from legacy.legacy_nicegui_archived.features.characterization.query.analysis_registry import ANALYSIS_REGISTRY
+from legacy.legacy_nicegui_archived.services.analysis_scope_evaluator import get_available_analyses
 
 
 def test_get_available_analyses_filters_per_dataset_and_matches_requires() -> None:

@@ -160,7 +160,7 @@ def test_alembic_upgrade_creates_rewrite_storage_tables_and_supports_round_trip(
                 dataset_id="fluxonium-2025-031",
                 definition_id=None,
                 summary="Fluxonium fit bundle was post-processed.",
-                queue_backend="in_memory_scaffold",
+                queue_backend="local_runtime",
                 worker_task_name="post_processing_run_task",
                 request_ready=True,
                 submitted_from_active_dataset=True,
@@ -187,7 +187,7 @@ def test_alembic_upgrade_creates_rewrite_storage_tables_and_supports_round_trip(
                 event_type="task_submitted",
                 level="info",
                 occurred_at="2026-03-11 19:05:00",
-                message="Task submission accepted by rewrite runtime.",
+                message="Task submission accepted by local runtime.",
                 metadata_json={
                     "task_status": "queued",
                     "dispatch_status": "completed",

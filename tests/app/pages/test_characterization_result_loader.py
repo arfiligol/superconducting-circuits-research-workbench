@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from app.api.schemas import (
+from legacy.legacy_nicegui_archived.api.schemas import (
     DesignTasksResponse,
     LatestCharacterizationResponse,
     TaskResponse,
 )
-from app.pages.characterization.result_loader import (
+from legacy.legacy_nicegui_archived.pages.characterization.result_loader import (
     build_recovery_state,
     latest_characterization_task,
 )

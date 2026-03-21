@@ -432,7 +432,7 @@ def test_task_history_projection_recovers_control_runtime_states() -> None:
             event_key="task_submitted:1",
             event_type="task_submitted",
             occurred_at=_utc(2026, 3, 16, 9, 0),
-            message="Task submission accepted by rewrite runtime.",
+            message="Task submission accepted by local runtime.",
             metadata={"task_status": "queued"},
         ),
         build_task_control_history_event(

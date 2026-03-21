@@ -60,7 +60,7 @@ describe("workspace shell contract helpers", () => {
         kind: "post_processing",
         executionMode: "smoke",
       }),
-    ).toBe("Post-processing · Smoke");
+    ).toBe("Post-processing · Probe");
   });
 
   it("derives auth-aware shell summaries from the shared session surface", () => {

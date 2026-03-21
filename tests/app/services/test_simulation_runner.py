@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import cast
 
-from app.services.execution_context import ActorContext, UseCaseContext
-from app.services.simulation_runner import (
+from legacy.legacy_nicegui_archived.services.execution_context import ActorContext, UseCaseContext
+from legacy.legacy_nicegui_archived.services.simulation_runner import (
     SimulationRunRequest,
     execute_simulation_run,
     execute_simulation_run_async,

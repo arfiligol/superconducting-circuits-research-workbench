@@ -19,11 +19,11 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.services.auth_service import ensure_bootstrap_admin
-from app.services.execution_context import build_ui_use_case_context
-from app.services.simulation_batch_persistence import create_pending_simulation_batch
-from app.services.simulation_runner import SimulationRunResult
-from app.services.simulation_submission import build_simulation_submission
+from legacy.legacy_nicegui_archived.services.auth_service import ensure_bootstrap_admin
+from legacy.legacy_nicegui_archived.services.execution_context import build_ui_use_case_context
+from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import create_pending_simulation_batch
+from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunResult
+from legacy.legacy_nicegui_archived.services.simulation_submission import build_simulation_submission
 from core.shared.persistence import database, get_unit_of_work
 from core.shared.persistence.models import CircuitRecord, DesignRecord
 from core.shared.persistence.startup_reconcile import run_startup_reconcile
@@ -75,8 +75,8 @@ def _configure_test_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("SC_WORKER_STALE_TIMEOUT_SECONDS", "1")
     database.get_engine.cache_clear()
     for module_name in (
-        "app.main",
-        "app.services.task_submission",
+        "legacy.legacy_nicegui_archived.main",
+        "legacy.legacy_nicegui_archived.services.task_submission",
         "worker.characterization_worker",
         "worker.characterization_tasks",
         "worker.config",
@@ -255,7 +255,7 @@ def _wait_for_http_ready(
                 return
         except Exception:
             time.sleep(0.2)
-    raise AssertionError(f"Timed out waiting for sc-app on port {port}")
+    raise AssertionError(f"Timed out waiting for sc-legacy-nicegui on port {port}")
 
 
 @pytest.fixture()
@@ -264,7 +264,7 @@ def runtime_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Generator[tuple[TestClient, Any], None, None]:
     _configure_test_environment(tmp_path, monkeypatch)
-    app_main = importlib.import_module("app.main")
+    app_main = importlib.import_module("legacy.legacy_nicegui_archived.main")
     admin = ensure_bootstrap_admin()
     with TestClient(app_main.ui_app) as client:
         _login(client)
@@ -343,7 +343,7 @@ def test_worker_survives_while_app_restarts_and_state_recovers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_test_environment(tmp_path, monkeypatch)
-    app_main = importlib.import_module("app.main")
+    app_main = importlib.import_module("legacy.legacy_nicegui_archived.main")
     admin = ensure_bootstrap_admin()
     design_id, circuit_id = _create_design_and_circuit("WS10 App Restart")
     simulation_execution = importlib.import_module("worker.simulation_execution")
@@ -396,7 +396,7 @@ def test_app_and_worker_restart_together_keep_persisted_failure_visible(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_test_environment(tmp_path, monkeypatch)
-    app_main = importlib.import_module("app.main")
+    app_main = importlib.import_module("legacy.legacy_nicegui_archived.main")
     admin = ensure_bootstrap_admin()
     design_id, _circuit_id = _create_design_and_circuit("WS10 Joint Restart")
     task_id, batch_id = _create_stale_simulation_task(

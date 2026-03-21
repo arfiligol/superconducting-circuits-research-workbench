@@ -3,7 +3,7 @@
 import importlib.util
 from pathlib import Path
 
-from app.pages.simulation import (
+from legacy.legacy_nicegui_archived.pages.simulation import (
     _JOSEPHSON_BUILTIN_SETUP_PAYLOADS,
     _builtin_saved_setups_for_schema,
     _compress_source_mode_components,

@@ -8,12 +8,12 @@ from datetime import UTC, datetime
 
 from sc_core.execution import build_task_heartbeat_operation
 
-from app.services.characterization_runner import (
+from legacy.legacy_nicegui_archived.services.characterization_runner import (
     execute_characterization_run_async,
     save_analysis_run_status,
 )
-from app.services.characterization_task_contract import PersistedCharacterizationTaskRequest
-from app.services.task_progress import TaskProgressUpdate
+from legacy.legacy_nicegui_archived.services.characterization_task_contract import PersistedCharacterizationTaskRequest
+from legacy.legacy_nicegui_archived.services.task_progress import TaskProgressUpdate
 from core.shared.persistence.unit_of_work import get_unit_of_work
 from worker.runtime import TaskExecutionResult
 

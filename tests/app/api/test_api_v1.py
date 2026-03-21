@@ -11,16 +11,16 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.pages.simulation.submit_actions import build_simulation_submission
-from app.services.auth_service import authenticate_user, ensure_bootstrap_admin, hash_password
-from app.services.characterization_task_contract import build_characterization_submission
-from app.services.execution_context import build_ui_use_case_context
-from app.services.post_processing_task_contract import build_post_processing_submission
-from app.services.simulation_batch_persistence import (
+from legacy.legacy_nicegui_archived.pages.simulation.submit_actions import build_simulation_submission
+from legacy.legacy_nicegui_archived.services.auth_service import authenticate_user, ensure_bootstrap_admin, hash_password
+from legacy.legacy_nicegui_archived.services.characterization_task_contract import build_characterization_submission
+from legacy.legacy_nicegui_archived.services.execution_context import build_ui_use_case_context
+from legacy.legacy_nicegui_archived.services.post_processing_task_contract import build_post_processing_submission
+from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
     create_pending_simulation_batch,
     persist_simulation_result_into_batch,
 )
-from app.services.simulation_runner import SimulationRunResult
+from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunResult
 from core.shared.persistence import database, get_unit_of_work
 from core.shared.persistence.models import AnalysisRunRecord, DesignRecord, TraceBatchRecord
 from core.simulation.domain.circuit import (
@@ -55,7 +55,7 @@ def client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Generator[TestClient, None, None]:
     _configure_test_environment(tmp_path, monkeypatch)
-    app_main = importlib.import_module("app.main")
+    app_main = importlib.import_module("legacy.legacy_nicegui_archived.main")
     ensure_bootstrap_admin()
     with TestClient(app_main.ui_app) as test_client:
         yield test_client

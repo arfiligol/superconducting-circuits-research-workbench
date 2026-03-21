@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.services.post_processing_step_registry import (
+from legacy.legacy_nicegui_archived.services.post_processing_step_registry import (
     build_default_step_config,
     preview_pipeline_labels,
     run_post_processing_step,

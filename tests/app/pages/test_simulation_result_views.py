@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import app.features.simulation.page as simulation_feature_page
-import app.pages.simulation as simulation_page
-from app.pages.simulation import (
+import legacy.legacy_nicegui_archived.features.simulation.page as simulation_feature_page
+import legacy.legacy_nicegui_archived.pages.simulation as simulation_page
+from legacy.legacy_nicegui_archived.pages.simulation import (
     _POST_PROCESS_INPUT_Y_SOURCE_OPTIONS,
     _RAW_RESULT_MATRIX_SOURCE_OPTIONS_BY_FAMILY,
     _Z0_CONTROL_CLASSES,
@@ -66,7 +66,7 @@ from app.pages.simulation import (
     _TraceStoreResultBundle,
     _ViewTraceStore,
 )
-from app.features.simulation.setup.manager import (
+from legacy.legacy_nicegui_archived.features.simulation.setup.manager import (
     delete_setup,
     rename_setup,
     save_setup_as,

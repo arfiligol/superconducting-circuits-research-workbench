@@ -45,7 +45,7 @@ export const definitionSections: readonly DefinitionSection[] = [
 export const definitionSource = `circuit:\n  name: fluxonium_reference_a\n  family: fluxonium\n  elements:\n    junction:\n      ej_ghz: 8.45\n    shunt_inductor:\n      el_ghz: 0.42\n    capacitance:\n      ec_ghz: 1.22\n  sweep:\n    flux_bias: [0.0, 0.5]\n    temperature_mk: 15\n`;
 
 export const validationNotices: readonly ValidationNotice[] = [
-  { level: "ok", message: "Canonical schema matches rewrite draft v1." },
+  { level: "ok", message: "Canonical schema matches the current draft v1." },
   { level: "ok", message: "All required element blocks are present." },
   { level: "warning", message: "Port mapping metadata still needs migration from legacy forms." },
 ];

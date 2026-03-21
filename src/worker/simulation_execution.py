@@ -10,12 +10,12 @@ from typing import Any
 
 from sc_core.execution import build_task_heartbeat_operation, build_task_heartbeat_payload
 
-from app.services.simulation_batch_persistence import (
+from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
     mark_simulation_batch_failed,
     persist_simulation_result_into_batch,
 )
-from app.services.simulation_runner import SimulationRunRequest, execute_simulation_run
-from app.services.simulation_task_contract import PersistedSimulationTaskRequest
+from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunRequest, execute_simulation_run
+from legacy.legacy_nicegui_archived.services.simulation_task_contract import PersistedSimulationTaskRequest
 from core.shared.persistence.unit_of_work import get_unit_of_work
 from core.simulation.application.run_simulation import (
     SimulationSweepAxis,

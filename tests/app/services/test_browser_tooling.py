@@ -1,6 +1,6 @@
 """Tests for browser-side helper command builders."""
 
-from app.services.browser_tooling import (
+from legacy.legacy_nicegui_archived.services.browser_tooling import (
     build_schema_formatter_hotkey_js,
     build_schema_formatter_js,
     build_schematic_preview_action_js,

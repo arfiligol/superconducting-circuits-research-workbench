@@ -9,21 +9,21 @@ from datetime import UTC, datetime
 
 from sc_core.execution import build_task_heartbeat_operation, build_task_heartbeat_payload
 
-from app.services.post_processing_batch_persistence import (
+from legacy.legacy_nicegui_archived.services.post_processing_batch_persistence import (
     mark_post_processing_batch_failed,
     persist_post_processing_result_into_batch,
 )
-from app.services.post_processing_runner import (
+from legacy.legacy_nicegui_archived.services.post_processing_runner import (
     PostProcessingInputSource,
     PostProcessingRunRequest,
     PostProcessingRunResult,
     execute_post_processing_pipeline,
 )
-from app.services.post_processing_support import (
+from legacy.legacy_nicegui_archived.services.post_processing_support import (
     estimate_port_ground_cap_weights,
     extract_compensated_post_processing_payload,
 )
-from app.services.post_processing_task_contract import PersistedPostProcessingTaskRequest
+from legacy.legacy_nicegui_archived.services.post_processing_task_contract import PersistedPostProcessingTaskRequest
 from core.shared.persistence.unit_of_work import get_unit_of_work
 from worker.runtime import TaskExecutionResult
 

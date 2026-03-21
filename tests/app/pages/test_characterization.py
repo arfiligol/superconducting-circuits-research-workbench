@@ -2,9 +2,9 @@
 
 import inspect
 
-import app.features.characterization.page as characterization_feature_page
-import app.pages.characterization as characterization_page
-from app.pages.characterization import (
+import legacy.legacy_nicegui_archived.features.characterization.page as characterization_feature_page
+import legacy.legacy_nicegui_archived.pages.characterization as characterization_page
+from legacy.legacy_nicegui_archived.pages.characterization import (
     _analysis_run_provenance_text,
     _build_analysis_run_availability,
     _build_analysis_run_ui_state,
@@ -24,12 +24,12 @@ from app.pages.characterization import (
     _trace_mode_group_for_selected_rows,
     _trace_source_summary_payload,
 )
-from app.services.characterization_runner import (
+from legacy.legacy_nicegui_archived.services.characterization_runner import (
     CharacterizationRunRequest,
     SweepSupportDiagnostic,
     _build_analysis_run_record,
 )
-from app.features.characterization.views.result_artifacts import (
+from legacy.legacy_nicegui_archived.features.characterization.views.result_artifacts import (
     build_result_artifacts_for_analysis,
 )
 from core.shared.persistence.models import (

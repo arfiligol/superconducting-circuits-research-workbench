@@ -12,12 +12,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from app.services.auth_service import ensure_bootstrap_admin
-from app.services.simulation_batch_persistence import (
+from legacy.legacy_nicegui_archived.services.auth_service import ensure_bootstrap_admin
+from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
     create_pending_simulation_batch,
     persist_simulation_result_into_batch,
 )
-from app.services.simulation_runner import SimulationRunResult
+from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunResult
 from core.shared.persistence import database, get_unit_of_work
 from core.shared.persistence.models import CircuitRecord, DesignRecord
 from core.simulation.domain.circuit import SimulationResult
@@ -29,11 +29,11 @@ def _configure_cli_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("SC_TRACE_STORE_ROOT", str(tmp_path / "trace_store"))
     database.get_engine.cache_clear()
     for module_name in (
-        "app.main",
-        "app.services.latest_result_lookup",
-        "app.services.post_processing_task_contract",
-        "app.services.simulation_submission",
-        "app.services.task_submission",
+        "legacy.legacy_nicegui_archived.main",
+        "legacy.legacy_nicegui_archived.services.latest_result_lookup",
+        "legacy.legacy_nicegui_archived.services.post_processing_task_contract",
+        "legacy.legacy_nicegui_archived.services.simulation_submission",
+        "legacy.legacy_nicegui_archived.services.task_submission",
         "scripts.cli",
         "scripts.cli.entry",
         "scripts.simulation",
@@ -369,4 +369,4 @@ def test_sc_sim_commands_do_not_require_running_web_server(
     )
 
     assert result.exit_code == 0
-    assert "app.main" not in sys.modules
+    assert "legacy.legacy_nicegui_archived.main" not in sys.modules

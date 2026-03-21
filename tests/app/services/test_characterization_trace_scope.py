@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.features.characterization.query.trace_scope import (
+from legacy.legacy_nicegui_archived.features.characterization.query.trace_scope import (
     CharacterizationTraceScopeUnitOfWork,
     TraceSourceSummary,
     count_scope_trace_records,

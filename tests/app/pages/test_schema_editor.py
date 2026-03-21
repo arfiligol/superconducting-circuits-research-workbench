@@ -1,6 +1,6 @@
 """Tests for Schema Editor source persistence and expanded preview helpers."""
 
-from app.pages.schema_editor import _editor_text_from_record, _stored_schema_text_from_editor
+from legacy.legacy_nicegui_archived.pages.schema_editor import _editor_text_from_record, _stored_schema_text_from_editor
 from core.simulation.domain.circuit import (
     format_expanded_circuit_definition,
     parse_circuit_definition_source,

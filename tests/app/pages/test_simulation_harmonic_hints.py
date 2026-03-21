@@ -1,6 +1,6 @@
 """Tests for simulation-page harmonic/grid coincidence helpers."""
 
-from app.pages.simulation import (
+from legacy.legacy_nicegui_archived.pages.simulation import (
     _detect_harmonic_grid_coincidences,
     _estimate_mode_lattice_size,
     _format_harmonic_grid_hint,

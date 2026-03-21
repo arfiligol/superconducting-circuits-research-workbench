@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from app.services.characterization_runner import (
+from legacy.legacy_nicegui_archived.services.characterization_runner import (
     CharacterizationRunRequest,
     CharacterizationRunResult,
     SweepSupportDiagnostic,
@@ -17,7 +17,7 @@ from app.services.characterization_runner import (
     execute_characterization_run,
     execute_characterization_run_async,
 )
-from app.services.execution_context import ActorContext, UseCaseContext
+from legacy.legacy_nicegui_archived.services.execution_context import ActorContext, UseCaseContext
 from core.analysis.application.services.resonance_extract_service import ResonanceExtractService
 from core.analysis.application.services.resonance_fit_service import ResonanceFitService
 from core.shared.persistence import DataRecord, database, get_unit_of_work
@@ -647,7 +647,7 @@ def test_execute_analysis_run_blocks_unsupported_sweep_before_dispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.services.characterization_runner.diagnose_analysis_sweep_support",
+        "legacy.legacy_nicegui_archived.services.characterization_runner.diagnose_analysis_sweep_support",
         lambda **_: SweepSupportDiagnostic(
             status="blocked",
             reason="S21 resonance fitting supports at most one sweep axis.",

@@ -1,6 +1,6 @@
 """Tests for Schemdraw live-preview execution helpers."""
 
-from app.services.schemdraw_live_preview import (
+from legacy.legacy_nicegui_archived.services.schemdraw_live_preview import (
     build_relation_context,
     parse_relation_config_text,
     render_schemdraw_preview,

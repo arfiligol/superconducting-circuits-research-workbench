@@ -130,7 +130,7 @@ describe("circuit schemdraw readiness inference", () => {
       source_text: "circuit:\n  name: fluxonium_reference_a\n",
       normalized_output:
         '{ "circuit": "fluxonium_reference_a", "elements": 3, "ports": "pending", "schemdraw_ready": true }',
-      validation_notices: [{ level: "ok", message: "Canonical schema matches rewrite draft v1." }],
+      validation_notices: [{ level: "ok", message: "Canonical schema matches the current draft v1." }],
       validation_summary: {
         status: "ok",
         notice_count: 1,

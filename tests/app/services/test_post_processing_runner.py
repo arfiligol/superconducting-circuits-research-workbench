@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.execution_context import ActorContext, UseCaseContext
-from app.services.post_processing_runner import (
+from legacy.legacy_nicegui_archived.services.execution_context import ActorContext, UseCaseContext
+from legacy.legacy_nicegui_archived.services.post_processing_runner import (
     PostProcessingInputSource,
     PostProcessingRunRequest,
     execute_post_processing_pipeline,

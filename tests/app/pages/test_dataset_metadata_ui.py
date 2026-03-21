@@ -6,11 +6,11 @@ import inspect
 from datetime import datetime
 from types import SimpleNamespace
 
-import app.features.dashboard.page as dashboard_feature_page
-import app.features.raw_data.page as raw_data_feature_page
-import app.features.simulation.page as simulation_feature_page
-from app.pages import dashboard, raw_data, simulation
-from app.services.design_trace_workflow import summarize_design_trace_workflow
+import legacy.legacy_nicegui_archived.features.dashboard.page as dashboard_feature_page
+import legacy.legacy_nicegui_archived.features.raw_data.page as raw_data_feature_page
+import legacy.legacy_nicegui_archived.features.simulation.page as simulation_feature_page
+from legacy.legacy_nicegui_archived.pages import dashboard, raw_data, simulation
+from legacy.legacy_nicegui_archived.services.design_trace_workflow import summarize_design_trace_workflow
 
 
 def test_dashboard_page_exposes_dataset_metadata_editor_controls() -> None:

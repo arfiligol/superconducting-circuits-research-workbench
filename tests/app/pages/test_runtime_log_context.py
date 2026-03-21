@@ -1,7 +1,7 @@
 """Unit tests for page-level runtime log context formatting."""
 
-from app.pages.characterization.state import CharacterizationRuntimeState
-from app.pages.simulation.state import SimulationRuntimeState
+from legacy.legacy_nicegui_archived.pages.characterization.state import CharacterizationRuntimeState
+from legacy.legacy_nicegui_archived.pages.simulation.state import SimulationRuntimeState
 
 
 def test_simulation_runtime_state_prefixes_status_with_context_tokens() -> None:

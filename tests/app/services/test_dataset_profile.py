@@ -1,6 +1,6 @@
 """Tests for dataset profile normalization and capability helpers."""
 
-from app.services.dataset_profile import (
+from legacy.legacy_nicegui_archived.services.dataset_profile import (
     CAPABILITY_SQUID_FIT,
     CAPABILITY_Y11_FIT,
     CAPABILITY_Y_PARAMETER,

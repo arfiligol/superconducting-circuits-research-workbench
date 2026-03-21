@@ -66,7 +66,7 @@ root = Path.cwd()
 port = int(os.environ["SC_APP_PORT"])
 env = dict(os.environ)
 proc = subprocess.Popen(
-    [str(root / ".venv/bin/sc-app")],
+    [str(root / ".venv/bin/sc-legacy-nicegui")],
     cwd=root,
     env=env,
     stdout=subprocess.DEVNULL,
@@ -82,11 +82,11 @@ try:
             response.read()
             conn.close()
             if response.status == 200:
-                print(f"sc-app ready on http://127.0.0.1:{port}")
+                print(f"sc-legacy-nicegui ready on http://127.0.0.1:{port}")
                 raise SystemExit(0)
         except Exception:
             time.sleep(0.2)
-    raise SystemExit("sc-app startup smoke timed out")
+    raise SystemExit("sc-legacy-nicegui startup smoke timed out")
 finally:
     proc.terminate()
     try:
@@ -105,7 +105,7 @@ run_required \
   "sc-worker-characterization startup" \
   env SC_RQ_REDIS_URL="${SC_RQ_REDIS_URL:-fakeredis://integrator-smoke}" \
   uv run sc-worker-characterization --max-tasks 0
-run_required "sc-app startup" run_app_startup_smoke
+run_required "sc-legacy-nicegui startup" run_app_startup_smoke
 run_required \
   "focused runtime validation" \
   uv run pytest tests/app/pages/test_unaffected_page_routes.py tests/scripts/test_runtime_smokes.py tests/scripts/cli/test_sim_tasks.py -q

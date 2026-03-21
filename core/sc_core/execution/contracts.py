@@ -981,7 +981,7 @@ def build_task_submission_history_event(
         event_type="task_submitted",
         level="info",
         occurred_at=context.submitted_at,
-        message="Task submission accepted by rewrite runtime.",
+        message="Task submission accepted by local runtime.",
         metadata=build_task_submission_history_metadata(context),
     )
 

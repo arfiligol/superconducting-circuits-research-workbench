@@ -12,13 +12,13 @@ from sc_core.tasking import (
     resolve_worker_task_route,
 )
 
-from app.services.characterization_task_contract import (
+from legacy.legacy_nicegui_archived.services.characterization_task_contract import (
     extract_characterization_request_from_api_payload,
 )
-from app.services.post_processing_task_contract import (
+from legacy.legacy_nicegui_archived.services.post_processing_task_contract import (
     extract_post_processing_request_from_api_payload,
 )
-from app.services.simulation_task_contract import extract_simulation_request_from_api_payload
+from legacy.legacy_nicegui_archived.services.simulation_task_contract import extract_simulation_request_from_api_payload
 from worker.config import create_queue
 
 LaneName = Literal["simulation", "characterization"]

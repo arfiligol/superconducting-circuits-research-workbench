@@ -11,16 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from app.pages.simulation.submit_actions import build_simulation_submission
-from app.services.characterization_task_contract import build_characterization_submission
-from app.services.execution_context import ActorContext, build_ui_use_case_context
-from app.services.post_processing_task_contract import build_post_processing_submission
-from app.services.simulation_batch_persistence import (
+from legacy.legacy_nicegui_archived.pages.simulation.submit_actions import build_simulation_submission
+from legacy.legacy_nicegui_archived.services.characterization_task_contract import build_characterization_submission
+from legacy.legacy_nicegui_archived.services.execution_context import ActorContext, build_ui_use_case_context
+from legacy.legacy_nicegui_archived.services.post_processing_task_contract import build_post_processing_submission
+from legacy.legacy_nicegui_archived.services.simulation_batch_persistence import (
     create_pending_simulation_batch,
     persist_simulation_result_into_batch,
 )
-from app.services.simulation_runner import SimulationRunResult
-from app.services.task_submission import create_api_task
+from legacy.legacy_nicegui_archived.services.simulation_runner import SimulationRunResult
+from legacy.legacy_nicegui_archived.services.task_submission import create_api_task
 from core.shared.persistence import database
 from core.shared.persistence.models import DesignRecord
 from core.shared.persistence.reconcile import reconcile_stale_tasks_and_batches
@@ -562,7 +562,7 @@ def test_app_import_does_not_import_worker_or_julia_adapter_modules() -> None:
             sys.executable,
             "-c",
             (
-                "import sys; import app.main; "
+                "import sys; import legacy.legacy_nicegui_archived.main; "
                 "print('APP_IMPORT_OK'); "
                 "print('worker.simulation_worker' in sys.modules); "
                 "print('worker.characterization_worker' in sys.modules); "
@@ -591,11 +591,11 @@ def test_shared_use_case_modules_import_without_page_modules() -> None:
             "-c",
             (
                 "import sys; "
-                "import app.services.simulation_runner; "
-                "import app.services.post_processing_runner; "
-                "import app.services.characterization_runner; "
+                "import legacy.legacy_nicegui_archived.services.simulation_runner; "
+                "import legacy.legacy_nicegui_archived.services.post_processing_runner; "
+                "import legacy.legacy_nicegui_archived.services.characterization_runner; "
                 "print('USE_CASE_IMPORT_OK'); "
-                "print(any(name.startswith('app.pages.') for name in sys.modules))"
+                "print(any(name.startswith('legacy.legacy_nicegui_archived.pages.') for name in sys.modules))"
             ),
         ],
         cwd=_REPO_ROOT,

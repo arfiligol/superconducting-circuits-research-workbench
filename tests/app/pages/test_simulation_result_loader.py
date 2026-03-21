@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from app.api.schemas import DesignTasksResponse, LatestTraceBatchResponse, TaskResponse
-from app.pages.simulation.result_loader import (
+from legacy.legacy_nicegui_archived.api.schemas import DesignTasksResponse, LatestTraceBatchResponse, TaskResponse
+from legacy.legacy_nicegui_archived.pages.simulation.result_loader import (
     build_recovery_state,
     build_task_recovery_state,
     latest_post_processing_task,

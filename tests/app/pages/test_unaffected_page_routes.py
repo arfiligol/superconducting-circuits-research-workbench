@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.services.auth_service import ensure_bootstrap_admin
+from legacy.legacy_nicegui_archived.services.auth_service import ensure_bootstrap_admin
 from core.shared.persistence import database, get_unit_of_work
 from core.shared.persistence.models import CircuitRecord
 
@@ -55,7 +55,7 @@ def authenticated_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Generator[TestClient, None, None]:
     _configure_test_environment(tmp_path, monkeypatch)
-    app_main = importlib.import_module("app.main")
+    app_main = importlib.import_module("legacy.legacy_nicegui_archived.main")
     ensure_bootstrap_admin()
     with TestClient(app_main.ui_app) as client:
         login = client.post(
