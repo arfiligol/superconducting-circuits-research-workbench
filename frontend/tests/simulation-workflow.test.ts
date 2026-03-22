@@ -119,10 +119,28 @@ const simulationResultExplorerSource = readFileSync(
   ),
   "utf8",
 );
+const simulationResultExplorerSectionsSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-result-explorer-sections.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 const simulationResultExplorerStateSource = readFileSync(
   fileURLToPath(
     new URL(
       "../src/features/simulation/lib/simulation-result-explorer-state.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const currentTraceSaveDialogSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/current-trace-save-dialog.tsx",
       import.meta.url,
     ),
   ),
@@ -1312,34 +1330,44 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Downstream State");
     expect(simulationResultExplorerSource).toContain("Simulation Result Explorer");
     expect(simulationResultExplorerSource).toContain("Post Processing Result Explorer");
-    expect(simulationResultExplorerSource).toContain("Parameter Sweep");
-    expect(simulationResultExplorerSource).toContain("Compare Axis");
-    expect(simulationResultExplorerSource).toContain("Focus active trace");
     expect(simulationResultExplorerHookSource).toContain("setSweepValue(axisIndex: number, nextValueIndex: number)");
     expect(simulationResultExplorerHookSource).toContain("setCompareAxis(nextAxisIndex: number)");
     expect(simulationResultExplorerSource).toContain(
       'task.kind === "post_processing" && sourceOptions.length <= 1',
     );
     expect(simulationResultExplorerSource).toContain("AppSegmentedControl");
-    expect(simulationResultExplorerSource).toContain('ariaLabel="Simulation result family"');
-    expect(simulationResultExplorerSource).toContain("Refreshing explorer selection");
     expect(simulationResultExplorerSource).toContain("LoaderCircle");
     expect(simulationResultExplorerSource).toContain('role="status"');
-    expect(simulationResultExplorerSource).toContain("Simulation result source");
-    expect(simulationResultExplorerSource).toContain("Simulation result metric");
-    expect(simulationResultExplorerSource).toContain("Simulation result output port");
-    expect(simulationResultExplorerSource).toContain("PTC results appear when you switch to");
-    expect(simulationResultExplorerSource).toContain("Z0 only applies to Y/Z derived explorer families.");
+    expect(simulationResultExplorerSource).toContain("ExplorerControlPanel");
+    expect(simulationResultExplorerSource).toContain("ParameterSweepPanel");
+    expect(simulationResultExplorerSource).toContain("ResultViewPanel");
+    expect(simulationResultExplorerSource).toContain("ResultSourcePanel");
     expect(simulationResultExplorerSource).toContain("const bootstrap = explorer.bootstrap");
     expect(simulationResultExplorerSource).toContain(
       "const resolvedSelection = explorer.resolvedSelection",
     );
     expect(simulationResultExplorerSource).toContain("CurrentTraceSaveControl");
+    expect(simulationResultExplorerSectionsSource).toContain("Simulation result source");
+    expect(simulationResultExplorerSectionsSource).toContain("Simulation result metric");
+    expect(simulationResultExplorerSectionsSource).toContain("Simulation result output port");
+    expect(simulationResultExplorerSectionsSource).toContain("Parameter Sweep");
+    expect(simulationResultExplorerSectionsSource).toContain("Compare Axis");
+    expect(simulationResultExplorerSectionsSource).toContain("Focus active trace");
+    expect(simulationResultExplorerSectionsSource).toContain(
+      'ariaLabel="Simulation result family"',
+    );
+    expect(simulationResultExplorerSectionsSource).toContain(
+      "Refreshing explorer selection",
+    );
+    expect(simulationResultExplorerSectionsSource).toContain(
+      "PTC results appear when you switch to",
+    );
+    expect(simulationResultExplorerSectionsSource).toContain(
+      "Z0 only applies to Y/Z derived explorer families.",
+    );
     expect(simulationWorkbenchSource).not.toContain("SimulationResultPublicationCard");
     expect(currentTraceSaveControlSource).toContain("Save Traces");
-    expect(currentTraceSaveControlSource).toContain("Parameter Prefix");
-    expect(currentTraceSaveControlSource).toContain("visible traces will be saved as separate traces");
-    expect(currentTraceSaveControlSource).toContain("New Design");
+    expect(currentTraceSaveControlSource).toContain("CurrentTraceSaveDialog");
     expect(currentTraceSaveControlSource).toContain("Open Saved Trace in Raw Data");
     expect(currentTraceSaveControlSource).toContain("Open Saved Traces in Raw Data");
     expect(currentTraceSaveControlSource).toContain("createDatasetDesign");
@@ -1347,6 +1375,11 @@ describe("simulation workflow source contract", () => {
     expect(currentTraceSaveControlSource).toContain("traceKeys");
     expect(currentTraceSaveControlSource).toContain("traceCount");
     expect(currentTraceSaveControlSource).toContain("parameterName");
+    expect(currentTraceSaveDialogSource).toContain("Parameter Prefix");
+    expect(currentTraceSaveDialogSource).toContain(
+      "visible traces will be saved as separate traces",
+    );
+    expect(currentTraceSaveDialogSource).toContain("New Design");
     expect(tasksApiSource).toContain("/result-traces/publish");
     expect(tasksApiSource).toContain("trace_keys: [...payload.traceKeys]");
     expect(tasksApiSource).toContain("parameter_name: payload.parameterName ?? undefined");
