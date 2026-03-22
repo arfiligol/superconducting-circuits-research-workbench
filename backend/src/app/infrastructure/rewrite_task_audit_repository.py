@@ -62,9 +62,7 @@ def _matches_query(record: AuditRecord, query: AuditListQuery) -> bool:
         return False
     if query.resource_kind is not None and record.resource_kind != query.resource_kind:
         return False
-    if query.outcome is not None and record.outcome != query.outcome:
-        return False
-    return True
+    return query.outcome is None or record.outcome == query.outcome
 
 
 def _sort_records(records: list[AuditRecord]) -> list[AuditRecord]:

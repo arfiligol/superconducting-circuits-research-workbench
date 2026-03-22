@@ -1,5 +1,6 @@
-from pathlib import Path
 import sys
+from importlib import import_module
+from pathlib import Path
 
 from sc_core.execution import TaskResultHandle
 from src.app.domain.circuit_definitions import CircuitDefinitionDraft
@@ -10,7 +11,9 @@ _WORKSPACE_SRC = Path(__file__).resolve().parents[2] / "src"
 if str(_WORKSPACE_SRC) not in sys.path:
     sys.path.insert(0, str(_WORKSPACE_SRC))
 
-from core.simulation.domain.circuit import parse_circuit_definition_source
+parse_circuit_definition_source = import_module(
+    "core.simulation.domain.circuit"
+).parse_circuit_definition_source
 
 
 def test_packaged_sc_core_import_is_available_to_backend() -> None:
