@@ -8,6 +8,7 @@ import {
   getSimulationResultExplorerView,
   simulationResultExplorerBootstrapKey,
   simulationResultExplorerViewKey,
+  type SimulationResultExplorerBootstrap,
   type SimulationResultExplorerPayload,
   type SimulationResultExplorerViewSlice,
 } from "@/lib/api/tasks";
@@ -79,16 +80,14 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
       return;
     }
 
-    const bootstrapViewSlice = extractSimulationResultExplorerViewSlice(bootstrapPayload);
-    primeSimulationResultExplorerViewCache(
-      viewCacheRef.current,
-      bootstrapViewKey,
-      bootstrapViewSlice,
-    );
-    setSelection((current) => current ?? buildEditableSelection(bootstrapPayload.selection));
-    setActiveViewSlice((current) =>
-      current ?? extractSimulationResultExplorerViewSlice(bootstrapPayload),
-    );
+    setSelection((current) => current ?? extractBootstrapSelection(bootstrapPayload.bootstrap));
+
+    const cachedBootstrapView = viewCacheRef.current.get(bootstrapViewKey);
+    if (!cachedBootstrapView) {
+      return;
+    }
+
+    setActiveViewSlice((current) => current ?? cachedBootstrapView);
     setActiveViewKey((current) => current ?? bootstrapViewKey);
   }, [bootstrapPayload, bootstrapViewKey, taskId]);
 
@@ -97,25 +96,18 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
       return;
     }
 
-    if (requestedViewKey === bootstrapViewKey && bootstrapPayload) {
-      setActiveViewSlice(extractSimulationResultExplorerViewSlice(bootstrapPayload));
-      setActiveViewKey(requestedViewKey);
-      return;
-    }
-
     const cachedView = viewCacheRef.current.get(requestedViewKey);
     if (cachedView) {
       setActiveViewSlice(cachedView);
       setActiveViewKey(requestedViewKey);
     }
-  }, [bootstrapPayload, bootstrapViewKey, requestedViewKey]);
+  }, [requestedViewKey]);
 
   const shouldFetchView =
     enabled &&
     taskId !== null &&
     viewQueryInput !== undefined &&
     requestedViewKey !== null &&
-    requestedViewKey !== bootstrapViewKey &&
     !viewCacheRef.current.has(requestedViewKey);
   const viewQuery = useSWR(
     shouldFetchView && taskId !== null && viewQueryInput
@@ -151,7 +143,7 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
 
   const data = useMemo<SimulationResultExplorerPayload | undefined>(() => {
     if (!bootstrapPayload || !activeViewSlice) {
-      return bootstrapPayload;
+      return undefined;
     }
 
     return composeSimulationResultExplorerPayload(bootstrapPayload, activeViewSlice);
@@ -164,18 +156,27 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
     requestedViewKey !== null &&
     activeViewKey !== null &&
     requestedViewKey !== activeViewKey;
+  type ExplorerSelectionUpdateContext = Readonly<{
+    bootstrap: SimulationResultExplorerBootstrap;
+    resolvedSelection: EditableExplorerSelection | null;
+  }>;
 
   function updateSelection(
     updater: (
       current: EditableExplorerSelection,
-      payload: SimulationResultExplorerPayload,
+      context: ExplorerSelectionUpdateContext,
     ) => EditableExplorerSelection,
   ) {
     if (!bootstrapPayload || !effectiveSelection) {
       return;
     }
 
-    setSelection(updater(effectiveSelection, bootstrapPayload));
+    setSelection(
+      updater(effectiveSelection, {
+        bootstrap: bootstrapPayload.bootstrap,
+        resolvedSelection,
+      }),
+    );
   }
 
   return {
@@ -186,7 +187,10 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
     resolvedSelection,
     selectedFamily,
     error: viewQuery.error ?? bootstrapQuery.error,
-    isLoading: bootstrapQuery.isLoading && !data,
+    isLoading:
+      !data &&
+      (bootstrapQuery.isLoading ||
+        (enabled && taskId !== null && bootstrapPayload !== undefined && viewQuery.isLoading)),
     isValidating: bootstrapQuery.isValidating || viewQuery.isValidating,
     isRefreshingSelection,
     async mutate() {
@@ -216,7 +220,7 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
           family: family.key,
           source,
           metric,
-          compareAxisIndex: nextPayload.selection.compareAxisIndex,
+          compareAxisIndex: nextPayload.resolvedSelection?.compareAxisIndex ?? current.compareAxisIndex,
         };
       });
     },

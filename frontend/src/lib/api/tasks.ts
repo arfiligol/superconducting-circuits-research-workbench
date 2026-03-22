@@ -264,15 +264,29 @@ type SimulationResultExplorerResultBasisResponseShape = Readonly<{
   primary_result_handle_id: string | null;
   trace_batch_id: number | null;
 }>;
-type SimulationResultExplorerResponseShape = Readonly<{
+type SimulationResultExplorerResponseBaseShape = Readonly<{
   task_id: number;
   task_status: TaskExecutionStatus;
   runtime_mode: "local" | "online";
-  bootstrap: SimulationResultExplorerBootstrapResponseShape;
-  selection: SimulationResultExplorerSelectionResponseShape;
-  plot: SimulationResultExplorerPlotResponseShape;
-  result_basis: SimulationResultExplorerResultBasisResponseShape;
 }>;
+type SimulationResultExplorerBootstrapEnvelopeResponseShape =
+  SimulationResultExplorerResponseBaseShape &
+    Readonly<{
+      bootstrap: SimulationResultExplorerBootstrapResponseShape;
+      result_basis: SimulationResultExplorerResultBasisResponseShape;
+    }>;
+type SimulationResultExplorerViewResponseShape = SimulationResultExplorerResponseBaseShape &
+  Readonly<{
+    selection: SimulationResultExplorerSelectionResponseShape;
+    plot: SimulationResultExplorerPlotResponseShape;
+  }>;
+type SimulationResultExplorerResponseShape = SimulationResultExplorerResponseBaseShape &
+  Readonly<{
+    bootstrap: SimulationResultExplorerBootstrapResponseShape;
+    selection: SimulationResultExplorerSelectionResponseShape;
+    plot: SimulationResultExplorerPlotResponseShape;
+    result_basis: SimulationResultExplorerResultBasisResponseShape;
+  }>;
 type PublishedSimulationResultDatasetResponseShape = Readonly<{
   dataset_id: string;
   name: string;
@@ -803,10 +817,23 @@ export type SimulationResultExplorerPayload = Readonly<{
 }>;
 export type SimulationResultExplorerBootstrap =
   SimulationResultExplorerPayload["bootstrap"];
+export type SimulationResultExplorerBootstrapPayload = Readonly<{
+  taskId: number;
+  taskStatus: TaskExecutionStatus;
+  runtimeMode: "local" | "online";
+  bootstrap: SimulationResultExplorerBootstrap;
+  resultBasis: SimulationResultExplorerPayload["resultBasis"];
+}>;
+export type SimulationResultExplorerViewPayload = Readonly<{
+  taskId: number;
+  taskStatus: TaskExecutionStatus;
+  runtimeMode: "local" | "online";
+  selection: SimulationResultExplorerSelection;
+  plot: SimulationResultExplorerPlot;
+}>;
 export type SimulationResultExplorerViewSlice = Readonly<{
   selection: SimulationResultExplorerSelection;
   plot: SimulationResultExplorerPlot;
-  resultBasis: SimulationResultExplorerPayload["resultBasis"];
 }>;
 export type SimulationResultExplorerQuery = Readonly<{
   family?: string;
@@ -986,7 +1013,7 @@ export function simulationResultExplorerKey(
 }
 
 export function simulationResultExplorerBootstrapKey(taskId: number) {
-  return `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/explorer`;
+  return `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/bootstrap`;
 }
 
 export function simulationResultExplorerViewKey(
@@ -1007,9 +1034,6 @@ export function simulationResultExplorerViewKey(
   if (typeof query?.sweepIndex === "number") {
     params.set("sweep_index", String(query.sweepIndex));
   }
-  if (typeof query?.compareAxisIndex === "number") {
-    params.set("compare_axis_index", String(query.compareAxisIndex));
-  }
   if (typeof query?.z0 === "number") {
     params.set("z0", String(query.z0));
   }
@@ -1020,7 +1044,7 @@ export function simulationResultExplorerViewKey(
     params.set("input_port", String(query.inputPort));
   }
 
-  const basePath = simulationResultExplorerBootstrapKey(taskId);
+  const basePath = `/api/backend/tasks/${encodeURIComponent(taskId)}/simulation-results/view`;
   const search = params.toString();
   return search ? `${basePath}?${search}` : basePath;
 }
@@ -1451,105 +1475,140 @@ function normalizeSimulationExplorerPortLabel(label: string | undefined, port: n
     .replace(/^P(\d+)$/i, "Port $1");
 }
 
-export function mapSimulationResultExplorerResponse(
-  payload: SimulationResultExplorerResponseShape,
-): SimulationResultExplorerPayload {
+function mapSimulationResultExplorerBootstrap(
+  payload: SimulationResultExplorerBootstrapResponseShape,
+): SimulationResultExplorerBootstrap {
+  return {
+    families: payload.families.map((family) => ({
+      key: family.key,
+      label: family.label,
+      availableSources: family.available_sources.map((source) => ({
+        key: source.key,
+        label: source.label,
+      })),
+      availableMetrics: family.available_metrics.map((metric) => ({
+        key: metric.key,
+        label: metric.label,
+        unit: metric.unit,
+      })),
+    })),
+    traceSelector: {
+      outputPorts: payload.trace_selector.output_ports.map((port) => ({
+        port: port.port,
+        label: normalizeSimulationExplorerPortLabel(port.label, port.port),
+      })),
+      inputPorts: payload.trace_selector.input_ports.map((port) => ({
+        port: port.port,
+        label: normalizeSimulationExplorerPortLabel(port.label, port.port),
+      })),
+      outputModes: payload.trace_selector.output_modes.map((mode) => ({
+        key: mode.key,
+        label: mode.label,
+      })),
+      inputModes: payload.trace_selector.input_modes.map((mode) => ({
+        key: mode.key,
+        label: mode.label,
+      })),
+    },
+    parameterSweep: {
+      active: payload.parameter_sweep.active,
+      pointCount: payload.parameter_sweep.point_count,
+      compareAxisIndex: payload.parameter_sweep.compare_axis_index ?? null,
+      axes: payload.parameter_sweep.axes.map((axis) => ({
+        parameter: axis.parameter,
+        label: axis.label,
+        unit: axis.unit ?? null,
+        values: [...axis.values],
+        selectedValueIndex: axis.selected_value_index,
+      })),
+    },
+    defaultSelection: mapSimulationResultExplorerSelection(payload.default_selection),
+  };
+}
+
+function mapSimulationResultExplorerPlot(
+  payload: SimulationResultExplorerPlotResponseShape,
+): SimulationResultExplorerPlot {
+  return {
+    xAxis: {
+      label: payload.x_axis.label,
+      unit: payload.x_axis.unit,
+      values: [...(payload.x_axis.values ?? [])],
+    },
+    yAxis: {
+      label: payload.y_axis.label,
+      unit: payload.y_axis.unit,
+      values: [...(payload.y_axis.values ?? [])],
+    },
+    series: payload.series.map((series) => ({
+      seriesId: series.series_id,
+      label: series.label,
+      values: [...series.values],
+      unit: series.unit,
+    })),
+    metadata: {
+      family: payload.metadata.family,
+      source: payload.metadata.source,
+      metric: payload.metadata.metric,
+      sweepIndex: payload.metadata.sweep_index ?? null,
+      compareAxisIndex: payload.metadata.compare_axis_index ?? null,
+      traceKey: payload.metadata.trace_key ?? null,
+      z0Ohm: payload.metadata.z0_ohm,
+      outputPort: payload.metadata.output_port,
+      inputPort: payload.metadata.input_port,
+      outputPortLabel: normalizeSimulationExplorerPortLabel(
+        payload.metadata.output_port_label,
+        payload.metadata.output_port,
+      ),
+      inputPortLabel: normalizeSimulationExplorerPortLabel(
+        payload.metadata.input_port_label,
+        payload.metadata.input_port,
+      ),
+      tracePayloadStoreKey: payload.metadata.trace_payload_store_key ?? null,
+    },
+  };
+}
+
+function mapSimulationResultExplorerResultBasis(
+  payload: SimulationResultExplorerResultBasisResponseShape,
+): SimulationResultExplorerPayload["resultBasis"] {
+  return {
+    tracePayloadAvailable: payload.trace_payload_available,
+    primaryResultHandleId: payload.primary_result_handle_id,
+    traceBatchId: payload.trace_batch_id,
+  };
+}
+
+export function mapSimulationResultExplorerBootstrapResponse(
+  payload: SimulationResultExplorerBootstrapEnvelopeResponseShape,
+): SimulationResultExplorerBootstrapPayload {
   return {
     taskId: payload.task_id,
     taskStatus: payload.task_status,
     runtimeMode: payload.runtime_mode,
-    bootstrap: {
-      families: payload.bootstrap.families.map((family) => ({
-        key: family.key,
-        label: family.label,
-        availableSources: family.available_sources.map((source) => ({
-          key: source.key,
-          label: source.label,
-        })),
-        availableMetrics: family.available_metrics.map((metric) => ({
-          key: metric.key,
-          label: metric.label,
-          unit: metric.unit,
-        })),
-      })),
-      traceSelector: {
-        outputPorts: payload.bootstrap.trace_selector.output_ports.map((port) => ({
-          port: port.port,
-          label: normalizeSimulationExplorerPortLabel(port.label, port.port),
-        })),
-        inputPorts: payload.bootstrap.trace_selector.input_ports.map((port) => ({
-          port: port.port,
-          label: normalizeSimulationExplorerPortLabel(port.label, port.port),
-        })),
-        outputModes: payload.bootstrap.trace_selector.output_modes.map((mode) => ({
-          key: mode.key,
-          label: mode.label,
-        })),
-        inputModes: payload.bootstrap.trace_selector.input_modes.map((mode) => ({
-          key: mode.key,
-          label: mode.label,
-        })),
-      },
-      parameterSweep: {
-        active: payload.bootstrap.parameter_sweep.active,
-        pointCount: payload.bootstrap.parameter_sweep.point_count,
-        compareAxisIndex: payload.bootstrap.parameter_sweep.compare_axis_index ?? null,
-        axes: payload.bootstrap.parameter_sweep.axes.map((axis) => ({
-          parameter: axis.parameter,
-          label: axis.label,
-          unit: axis.unit ?? null,
-          values: [...axis.values],
-          selectedValueIndex: axis.selected_value_index,
-        })),
-      },
-      defaultSelection: mapSimulationResultExplorerSelection(
-        payload.bootstrap.default_selection,
-      ),
-    },
+    bootstrap: mapSimulationResultExplorerBootstrap(payload.bootstrap),
+    resultBasis: mapSimulationResultExplorerResultBasis(payload.result_basis),
+  };
+}
+
+export function mapSimulationResultExplorerViewResponse(
+  payload: SimulationResultExplorerViewResponseShape,
+): SimulationResultExplorerViewPayload {
+  return {
+    taskId: payload.task_id,
+    taskStatus: payload.task_status,
+    runtimeMode: payload.runtime_mode,
     selection: mapSimulationResultExplorerSelection(payload.selection),
-    plot: {
-      xAxis: {
-        label: payload.plot.x_axis.label,
-        unit: payload.plot.x_axis.unit,
-        values: [...(payload.plot.x_axis.values ?? [])],
-      },
-      yAxis: {
-        label: payload.plot.y_axis.label,
-        unit: payload.plot.y_axis.unit,
-        values: [...(payload.plot.y_axis.values ?? [])],
-      },
-      series: payload.plot.series.map((series) => ({
-        seriesId: series.series_id,
-        label: series.label,
-        values: [...series.values],
-        unit: series.unit,
-      })),
-      metadata: {
-        family: payload.plot.metadata.family,
-        source: payload.plot.metadata.source,
-        metric: payload.plot.metadata.metric,
-        sweepIndex: payload.plot.metadata.sweep_index ?? null,
-        compareAxisIndex: payload.plot.metadata.compare_axis_index ?? null,
-        traceKey: payload.plot.metadata.trace_key ?? null,
-        z0Ohm: payload.plot.metadata.z0_ohm,
-        outputPort: payload.plot.metadata.output_port,
-        inputPort: payload.plot.metadata.input_port,
-        outputPortLabel: normalizeSimulationExplorerPortLabel(
-          payload.plot.metadata.output_port_label,
-          payload.plot.metadata.output_port,
-        ),
-        inputPortLabel: normalizeSimulationExplorerPortLabel(
-          payload.plot.metadata.input_port_label,
-          payload.plot.metadata.input_port,
-        ),
-        tracePayloadStoreKey: payload.plot.metadata.trace_payload_store_key ?? null,
-      },
-    },
-    resultBasis: {
-      tracePayloadAvailable: payload.result_basis.trace_payload_available,
-      primaryResultHandleId: payload.result_basis.primary_result_handle_id,
-      traceBatchId: payload.result_basis.trace_batch_id,
-    },
+    plot: mapSimulationResultExplorerPlot(payload.plot),
+  };
+}
+
+export function mapSimulationResultExplorerResponse(
+  payload: SimulationResultExplorerResponseShape,
+): SimulationResultExplorerPayload {
+  return {
+    ...mapSimulationResultExplorerBootstrapResponse(payload),
+    ...mapSimulationResultExplorerViewResponse(payload),
   };
 }
 
@@ -1666,20 +1725,20 @@ export async function getSimulationResultExplorer(
 }
 
 export async function getSimulationResultExplorerBootstrap(taskId: number) {
-  const response = await apiRequest<SimulationResultExplorerResponseShape>(
+  const response = await apiRequest<SimulationResultExplorerBootstrapEnvelopeResponseShape>(
     simulationResultExplorerBootstrapKey(taskId),
   );
-  return mapSimulationResultExplorerResponse(response);
+  return mapSimulationResultExplorerBootstrapResponse(response);
 }
 
 export async function getSimulationResultExplorerView(
   taskId: number,
   query: SimulationResultExplorerQuery,
 ) {
-  const response = await apiRequest<SimulationResultExplorerResponseShape>(
+  const response = await apiRequest<SimulationResultExplorerViewResponseShape>(
     simulationResultExplorerViewKey(taskId, query),
   );
-  return mapSimulationResultExplorerResponse(response);
+  return mapSimulationResultExplorerViewResponse(response);
 }
 
 function mapPublishedSimulationResultDataset(

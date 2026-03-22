@@ -10,9 +10,13 @@ import {
   primeSimulationResultExplorerViewCache,
   resolveSimulationExplorerSweepAxes,
 } from "../src/features/simulation/lib/simulation-result-explorer-state";
-import type { SimulationResultExplorerPayload } from "../src/lib/api/tasks";
+import type {
+  SimulationResultExplorerBootstrapPayload,
+  SimulationResultExplorerPayload,
+  SimulationResultExplorerViewPayload,
+} from "../src/lib/api/tasks";
 
-function buildExplorerPayload(taskId: number): SimulationResultExplorerPayload {
+function buildBootstrapPayload(taskId: number): SimulationResultExplorerBootstrapPayload {
   return {
     taskId,
     taskStatus: "completed",
@@ -62,6 +66,19 @@ function buildExplorerPayload(taskId: number): SimulationResultExplorerPayload {
         inputMode: "mode_0",
       },
     },
+    resultBasis: {
+      tracePayloadAvailable: true,
+      primaryResultHandleId: "handle-31",
+      traceBatchId: 31,
+    },
+  };
+}
+
+function buildViewPayload(taskId: number): SimulationResultExplorerViewPayload {
+  return {
+    taskId,
+    taskStatus: "completed",
+    runtimeMode: "local",
     selection: {
       family: "s_matrix",
       source: "raw",
@@ -111,12 +128,14 @@ function buildExplorerPayload(taskId: number): SimulationResultExplorerPayload {
         tracePayloadStoreKey: "trace-output-31",
       },
     },
-    resultBasis: {
-      tracePayloadAvailable: true,
-      primaryResultHandleId: "handle-31",
-      traceBatchId: 31,
-    },
   };
+}
+
+function buildExplorerPayload(taskId: number): SimulationResultExplorerPayload {
+  return composeSimulationResultExplorerPayload(
+    buildBootstrapPayload(taskId),
+    extractSimulationResultExplorerViewSlice(buildViewPayload(taskId)),
+  );
 }
 
 describe("simulation result explorer state helpers", () => {
@@ -142,16 +161,16 @@ describe("simulation result explorer state helpers", () => {
   });
 
   it("splits bootstrap payload from full-resolution current view slices", () => {
-    const bootstrapPayload = buildExplorerPayload(31);
+    const bootstrapPayload = buildBootstrapPayload(31);
     const viewSlice = extractSimulationResultExplorerViewSlice({
-      ...bootstrapPayload,
+      ...buildViewPayload(31),
       selection: {
-        ...bootstrapPayload.selection,
+        ...buildViewPayload(31).selection,
         sweepIndex: 3,
         traceKey: "raw:s_matrix:1:1:3",
       },
       plot: {
-        ...bootstrapPayload.plot,
+        ...buildViewPayload(31).plot,
         series: [
           {
             seriesId: "raw:s_matrix:1:1:3",
@@ -161,7 +180,7 @@ describe("simulation result explorer state helpers", () => {
           },
         ],
         metadata: {
-          ...bootstrapPayload.plot.metadata,
+          ...buildViewPayload(31).plot.metadata,
           sweepIndex: 3,
           traceKey: "raw:s_matrix:1:1:3",
         },
@@ -190,19 +209,19 @@ describe("simulation result explorer state helpers", () => {
     primeSimulationResultExplorerViewCache(
       cache,
       "31:default",
-      extractSimulationResultExplorerViewSlice(buildExplorerPayload(31)),
+      extractSimulationResultExplorerViewSlice(buildViewPayload(31)),
       2,
     );
     primeSimulationResultExplorerViewCache(
       cache,
       "31:alt",
-      extractSimulationResultExplorerViewSlice(buildExplorerPayload(31)),
+      extractSimulationResultExplorerViewSlice(buildViewPayload(31)),
       2,
     );
     primeSimulationResultExplorerViewCache(
       cache,
       "31:newest",
-      extractSimulationResultExplorerViewSlice(buildExplorerPayload(31)),
+      extractSimulationResultExplorerViewSlice(buildViewPayload(31)),
       2,
     );
 

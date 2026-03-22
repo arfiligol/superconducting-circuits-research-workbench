@@ -2,10 +2,12 @@
 
 import type {
   SimulationResultExplorerBootstrap,
+  SimulationResultExplorerBootstrapPayload,
   SimulationResultExplorerFamily,
   SimulationResultExplorerPayload,
   SimulationResultExplorerQuery,
   SimulationResultExplorerSelection,
+  SimulationResultExplorerViewPayload,
   SimulationResultExplorerViewSlice,
 } from "@/lib/api/tasks";
 
@@ -82,24 +84,22 @@ export function buildSimulationResultExplorerSelectionCacheKey(
 }
 
 export function extractSimulationResultExplorerViewSlice(
-  payload: SimulationResultExplorerPayload,
+  payload: SimulationResultExplorerViewPayload | SimulationResultExplorerPayload,
 ): SimulationResultExplorerViewSlice {
   return {
     selection: payload.selection,
     plot: payload.plot,
-    resultBasis: payload.resultBasis,
   };
 }
 
 export function composeSimulationResultExplorerPayload(
-  bootstrapPayload: SimulationResultExplorerPayload,
+  bootstrapPayload: SimulationResultExplorerBootstrapPayload,
   viewSlice: SimulationResultExplorerViewSlice,
 ): SimulationResultExplorerPayload {
   return {
     ...bootstrapPayload,
     selection: viewSlice.selection,
     plot: viewSlice.plot,
-    resultBasis: viewSlice.resultBasis,
   };
 }
 

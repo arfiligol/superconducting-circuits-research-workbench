@@ -25,7 +25,8 @@ import {
   serializeSavedSimulationSetupRecords,
 } from "../src/features/simulation/lib/saved-setups";
 import {
-  mapSimulationResultExplorerResponse,
+  mapSimulationResultExplorerBootstrapResponse,
+  mapSimulationResultExplorerViewResponse,
   simulationResultExplorerBootstrapKey,
   mapTaskDetailResponse,
   simulationResultExplorerKey,
@@ -1804,10 +1805,10 @@ describe("task api detail mapping", () => {
 
   it("maps simulation result explorer payloads and explorer keys", () => {
     expect(simulationResultExplorerKey(31)).toBe(
-      "/api/backend/tasks/31/simulation-results/explorer",
+      "/api/backend/tasks/31/simulation-results/bootstrap",
     );
     expect(simulationResultExplorerBootstrapKey(31)).toBe(
-      "/api/backend/tasks/31/simulation-results/explorer",
+      "/api/backend/tasks/31/simulation-results/bootstrap",
     );
     expect(
       simulationResultExplorerKey(31, {
@@ -1820,7 +1821,7 @@ describe("task api detail mapping", () => {
         inputPort: 1,
       }),
     ).toBe(
-      "/api/backend/tasks/31/simulation-results/explorer?family=z_matrix&source=ptc&metric=real&sweep_index=3&z0=75&output_port=2&input_port=1",
+      "/api/backend/tasks/31/simulation-results/view?family=z_matrix&source=ptc&metric=real&sweep_index=3&z0=75&output_port=2&input_port=1",
     );
     expect(
       simulationResultExplorerViewKey(31, {
@@ -1834,10 +1835,10 @@ describe("task api detail mapping", () => {
         inputPort: 1,
       }),
     ).toBe(
-      "/api/backend/tasks/31/simulation-results/explorer?family=z_matrix&source=ptc&metric=real&sweep_index=3&compare_axis_index=1&z0=75&output_port=2&input_port=1",
+      "/api/backend/tasks/31/simulation-results/view?family=z_matrix&source=ptc&metric=real&sweep_index=3&z0=75&output_port=2&input_port=1",
     );
 
-    const explorer = mapSimulationResultExplorerResponse({
+    const bootstrap = mapSimulationResultExplorerBootstrapResponse({
       task_id: 31,
       task_status: "completed",
       runtime_mode: "local",
@@ -1904,6 +1905,16 @@ describe("task api detail mapping", () => {
           input_port: 1,
         },
       },
+      result_basis: {
+        trace_payload_available: true,
+        primary_result_handle_id: "handle-44",
+        trace_batch_id: 44,
+      },
+    });
+    const view = mapSimulationResultExplorerViewResponse({
+      task_id: 31,
+      task_status: "completed",
+      runtime_mode: "local",
       selection: {
         family: "z_matrix",
         source: "ptc",
@@ -1950,12 +1961,12 @@ describe("task api detail mapping", () => {
           trace_payload_store_key: "trace-output-44",
         },
       },
-      result_basis: {
-        trace_payload_available: true,
-        primary_result_handle_id: "handle-44",
-        trace_batch_id: 44,
-      },
     });
+    const explorer = {
+      ...bootstrap,
+      selection: view.selection,
+      plot: view.plot,
+    };
 
     expect(explorer.selection).toEqual({
       family: "z_matrix",
