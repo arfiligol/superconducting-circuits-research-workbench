@@ -65,6 +65,20 @@ class PersistedSimulationTraceGridData:
     values: np.ndarray
 
 
+@dataclass(frozen=True)
+class _TaskBundlePayloadKeys:
+    raw: str
+    ptc: str
+
+
+@dataclass(frozen=True)
+class _PersistedBundleTraceRecords:
+    trace_records: list[dict[str, object]]
+    trace_store: Any
+    first_record: dict[str, object]
+    frequencies_ghz: tuple[float, ...]
+
+
 def ensure_core_runtime_path() -> None:
     workspace_src = Path(__file__).resolve().parents[4] / "src"
     if str(workspace_src) not in sys.path:
@@ -262,14 +276,11 @@ def run_real_post_processing_task(
 
 
 def available_sources_for_task_family(task: TaskDetail, family: str) -> tuple[str, ...]:
-    if task.kind == "simulation":
-        raw_available = _bundle_payload_for_task(task, SIMULATION_RAW_BUNDLE_KEY) is not None
-        ptc_available = _bundle_payload_for_task(task, SIMULATION_PTC_BUNDLE_KEY) is not None
-    elif task.kind == "post_processing":
-        raw_available = _bundle_payload_for_task(task, POST_PROCESSING_RAW_BUNDLE_KEY) is not None
-        ptc_available = _bundle_payload_for_task(task, POST_PROCESSING_PTC_BUNDLE_KEY) is not None
-    else:
+    payload_keys = _bundle_payload_keys_for_task(task)
+    if payload_keys is None:
         return ()
+    raw_available = _bundle_payload_for_task(task, payload_keys.raw) is not None
+    ptc_available = _bundle_payload_for_task(task, payload_keys.ptc) is not None
 
     sources: list[str] = []
     if raw_available:
@@ -277,6 +288,46 @@ def available_sources_for_task_family(task: TaskDetail, family: str) -> tuple[st
     if ptc_available and family in {"y_matrix", "z_matrix"}:
         sources.append("ptc")
     return tuple(sources)
+
+
+def _bundle_payload_keys_for_task(task: TaskDetail) -> _TaskBundlePayloadKeys | None:
+    if task.kind == "simulation":
+        return _TaskBundlePayloadKeys(
+            raw=SIMULATION_RAW_BUNDLE_KEY,
+            ptc=SIMULATION_PTC_BUNDLE_KEY,
+        )
+    if task.kind == "post_processing":
+        return _TaskBundlePayloadKeys(
+            raw=POST_PROCESSING_RAW_BUNDLE_KEY,
+            ptc=POST_PROCESSING_PTC_BUNDLE_KEY,
+        )
+    return None
+
+
+def _bundle_payload_for_source(
+    task: TaskDetail,
+    source: str,
+) -> dict[str, object] | None:
+    payload_keys = _bundle_payload_keys_for_task(task)
+    if payload_keys is None:
+        return None
+    if source == "raw":
+        return _bundle_payload_for_task(task, payload_keys.raw)
+    if source == "ptc":
+        return _bundle_payload_for_task(task, payload_keys.ptc)
+    raise ValueError(f"Unsupported simulation trace source: {source}")
+
+
+def _required_bundle_payload(
+    task: TaskDetail,
+    *,
+    source: str,
+    missing_message: str,
+) -> dict[str, object]:
+    payload = _bundle_payload_for_source(task, source)
+    if payload is None:
+        raise ValueError(missing_message)
+    return payload
 
 
 def port_options_for_task(
@@ -311,50 +362,76 @@ def load_task_family_bundle(
         sweep_index,
     )
     if task.kind == "simulation":
-        raw_payload = _bundle_payload_for_task(task, SIMULATION_RAW_BUNDLE_KEY)
-        if raw_payload is None:
-            raise ValueError("Simulation raw bundle is missing.")
-        merged = _build_simulation_bundle_view(
-            bundle_payload=raw_payload,
+        return _load_simulation_bundle_view(
+            task=task,
             axis_indices=axis_indices,
-            source_key="raw",
         )
-        ptc_payload = _bundle_payload_for_task(task, SIMULATION_PTC_BUNDLE_KEY)
-        if ptc_payload is not None:
-            merged = _merge_bundle_views(
-                merged,
-                _build_simulation_bundle_view(
-                    bundle_payload=ptc_payload,
-                    axis_indices=axis_indices,
-                    source_key="ptc",
-                ),
-            )
-        return merged
 
     if task.kind != "post_processing":
         raise ValueError("Persisted family bundles are only available for result tasks.")
 
-    raw_payload = _bundle_payload_for_task(task, POST_PROCESSING_RAW_BUNDLE_KEY)
-    if raw_payload is None:
-        raise ValueError("Post-processing raw bundle is missing.")
+    return _load_post_processing_bundle_view(
+        task=task,
+        axis_indices=axis_indices,
+        z0_ohm=z0_ohm,
+    )
+
+
+def _load_simulation_bundle_view(
+    *,
+    task: TaskDetail,
+    axis_indices: tuple[int, ...],
+) -> PersistedExplorerBundle:
+    merged = _build_simulation_bundle_view(
+        bundle_payload=_required_bundle_payload(
+            task,
+            source="raw",
+            missing_message="Simulation raw bundle is missing.",
+        ),
+        axis_indices=axis_indices,
+        source_key="raw",
+    )
+    ptc_payload = _bundle_payload_for_source(task, "ptc")
+    if ptc_payload is None:
+        return merged
+    return _merge_bundle_views(
+        merged,
+        _build_simulation_bundle_view(
+            bundle_payload=ptc_payload,
+            axis_indices=axis_indices,
+            source_key="ptc",
+        ),
+    )
+
+
+def _load_post_processing_bundle_view(
+    *,
+    task: TaskDetail,
+    axis_indices: tuple[int, ...],
+    z0_ohm: float,
+) -> PersistedExplorerBundle:
     merged = _build_post_processing_bundle_view(
-        bundle_payload=raw_payload,
+        bundle_payload=_required_bundle_payload(
+            task,
+            source="raw",
+            missing_message="Post-processing raw bundle is missing.",
+        ),
         axis_indices=axis_indices,
         source_key="raw",
         z0_ohm=z0_ohm,
     )
-    ptc_payload = _bundle_payload_for_task(task, POST_PROCESSING_PTC_BUNDLE_KEY)
-    if ptc_payload is not None:
-        merged = _merge_bundle_views(
-            merged,
-            _build_post_processing_bundle_view(
-                bundle_payload=ptc_payload,
-                axis_indices=axis_indices,
-                source_key="ptc",
-                z0_ohm=z0_ohm,
-            ),
-        )
-    return merged
+    ptc_payload = _bundle_payload_for_source(task, "ptc")
+    if ptc_payload is None:
+        return merged
+    return _merge_bundle_views(
+        merged,
+        _build_post_processing_bundle_view(
+            bundle_payload=ptc_payload,
+            axis_indices=axis_indices,
+            source_key="ptc",
+            z0_ohm=z0_ohm,
+        ),
+    )
 
 
 def extract_selection_trace_data(
@@ -411,16 +488,12 @@ def extract_simulation_trace_grid_data(
     if task.kind != "simulation" or task.simulation_setup is None:
         raise ValueError("Simulation trace grid extraction requires a persisted simulation task.")
 
-    if source == "raw":
-        bundle_payload = _bundle_payload_for_task(task, SIMULATION_RAW_BUNDLE_KEY)
-    elif source == "ptc":
-        bundle_payload = _bundle_payload_for_task(task, SIMULATION_PTC_BUNDLE_KEY)
-    else:
-        raise ValueError(f"Unsupported simulation trace source: {source}")
+    bundle_payload = _bundle_payload_for_source(task, source)
     if bundle_payload is None:
         raise ValueError("Simulation bundle payload is missing.")
 
-    trace_records = _require_trace_records(bundle_payload)
+    loaded_bundle = _load_bundle_trace_records(bundle_payload)
+    trace_records = loaded_bundle.trace_records
     real_record = None
     imag_record = None
     for record in trace_records:
@@ -440,16 +513,7 @@ def extract_simulation_trace_grid_data(
     if real_record is None or imag_record is None:
         raise ValueError("Persisted simulation trace grid is missing real/imaginary pairs.")
 
-    trace_store = _trace_store()
-    first_store_ref = _require_mapping(real_record.get("store_ref"), field_name="store_ref")
-    frequencies = tuple(
-        float(value)
-        for value in _read_axis_values(
-            trace_store,
-            first_store_ref,
-            axis_name="frequency",
-        )
-    )
+    frequencies = loaded_bundle.frequencies_ghz
 
     coordinates = list(_decode_axis_indices(task.simulation_setup, sweep_index))
     compare_values: tuple[float, ...] | None = None
@@ -470,13 +534,13 @@ def extract_simulation_trace_grid_data(
         (slice(None), *selectors) if len(selectors) > 0 else (slice(None),)
     )
     real_grid = _read_trace_grid_values(
-        trace_store,
+        loaded_bundle.trace_store,
         _require_mapping(real_record.get("store_ref"), field_name="store_ref"),
         selection=selection,
         frequency_count=len(frequencies),
     )
     imag_grid = _read_trace_grid_values(
-        trace_store,
+        loaded_bundle.trace_store,
         _require_mapping(imag_record.get("store_ref"), field_name="store_ref"),
         selection=selection,
         frequency_count=len(frequencies),
@@ -903,13 +967,9 @@ def _simulation_bundle_to_runtime(
     bundle_payload: Mapping[str, object],
 ) -> tuple[Any, dict[str, object] | None]:
     symbols = _core_symbols()
-    trace_store = _trace_store()
-    trace_records = bundle_payload.get("trace_records", ())
-    if not isinstance(trace_records, list) or len(trace_records) == 0:
-        raise ValueError("Trace bundle payload has no trace records.")
-    first_store_ref = _require_mapping(trace_records[0].get("store_ref"), field_name="store_ref")
-    frequencies = _read_axis_values(trace_store, first_store_ref, axis_name="frequency")
-    axis_defs = trace_records[0].get("axes", [])
+    loaded_bundle = _load_bundle_trace_records(bundle_payload)
+    frequencies = np.asarray(loaded_bundle.frequencies_ghz, dtype=float)
+    axis_defs = loaded_bundle.first_record.get("axes", [])
     sweep_axes = axis_defs[1:] if isinstance(axis_defs, list) else []
     axis_values_lookup: list[tuple[str, tuple[float, ...], str]] = []
     for _axis_index, axis_def in enumerate(sweep_axes, start=1):
@@ -919,13 +979,20 @@ def _simulation_bundle_to_runtime(
         axis_unit = str(axis_def.get("unit", "")).strip()
         values = tuple(
             float(value)
-            for value in _read_axis_values(trace_store, first_store_ref, axis_name=axis_name)
+            for value in _read_axis_values(
+                loaded_bundle.trace_store,
+                _require_mapping(
+                    loaded_bundle.first_record.get("store_ref"),
+                    field_name="store_ref",
+                ),
+                axis_name=axis_name,
+            )
         )
         axis_values_lookup.append((axis_name, values, axis_unit))
 
     if len(axis_values_lookup) == 0:
         return _simulation_result_from_trace_records(
-            trace_records=trace_records,
+            trace_records=loaded_bundle.trace_records,
             frequencies_ghz=frequencies,
             axis_indices=(),
         ), None
@@ -944,7 +1011,7 @@ def _simulation_bundle_to_runtime(
                 axis_indices=tuple(int(value) for value in axis_indices),
                 axis_values=axis_values,
                 result=_simulation_result_from_trace_records(
-                    trace_records=trace_records,
+                    trace_records=loaded_bundle.trace_records,
                     frequencies_ghz=frequencies,
                     axis_indices=tuple(int(value) for value in axis_indices),
                 ),
@@ -1100,15 +1167,13 @@ def _parse_bundle_payload(payload: str) -> dict[str, object] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _build_simulation_bundle_view(
-    *,
+def _load_bundle_trace_records(
     bundle_payload: Mapping[str, object],
-    axis_indices: tuple[int, ...],
-    source_key: str,
-) -> PersistedExplorerBundle:
+) -> _PersistedBundleTraceRecords:
     trace_records = _require_trace_records(bundle_payload)
+    first_record = trace_records[0]
     trace_store = _trace_store()
-    first_store_ref = _require_mapping(trace_records[0].get("store_ref"), field_name="store_ref")
+    first_store_ref = _require_mapping(first_record.get("store_ref"), field_name="store_ref")
     frequencies = tuple(
         float(value)
         for value in _read_axis_values(
@@ -1117,6 +1182,22 @@ def _build_simulation_bundle_view(
             axis_name="frequency",
         )
     )
+    return _PersistedBundleTraceRecords(
+        trace_records=trace_records,
+        trace_store=trace_store,
+        first_record=first_record,
+        frequencies_ghz=frequencies,
+    )
+
+
+def _build_simulation_bundle_view(
+    *,
+    bundle_payload: Mapping[str, object],
+    axis_indices: tuple[int, ...],
+    source_key: str,
+) -> PersistedExplorerBundle:
+    loaded_bundle = _load_bundle_trace_records(bundle_payload)
+    trace_records = loaded_bundle.trace_records
     ports = sorted(
         {
             int(trace_meta.get("output_port", 0))
@@ -1151,7 +1232,7 @@ def _build_simulation_bundle_view(
             )
         }
     return PersistedExplorerBundle(
-        frequencies_ghz=frequencies,
+        frequencies_ghz=loaded_bundle.frequencies_ghz,
         labels=labels,
         family_bundle=family_bundle,
     )
@@ -1164,18 +1245,12 @@ def _build_post_processing_bundle_view(
     source_key: str,
     z0_ohm: float,
 ) -> PersistedExplorerBundle:
-    trace_records = _require_trace_records(bundle_payload)
-    trace_store = _trace_store()
-    first_store_ref = _require_mapping(trace_records[0].get("store_ref"), field_name="store_ref")
-    frequencies = tuple(
-        float(value)
-        for value in _read_axis_values(
-            trace_store,
-            first_store_ref,
-            axis_name="frequency",
-        )
+    loaded_bundle = _load_bundle_trace_records(bundle_payload)
+    trace_records = loaded_bundle.trace_records
+    first_meta = _require_mapping(
+        loaded_bundle.first_record.get("trace_meta"),
+        field_name="trace_meta",
     )
-    first_meta = _require_mapping(trace_records[0].get("trace_meta"), field_name="trace_meta")
     raw_labels = first_meta.get("labels", ())
     labels = tuple(str(label) for label in raw_labels) if isinstance(raw_labels, list) else ()
     if len(labels) == 0:
@@ -1207,7 +1282,7 @@ def _build_post_processing_bundle_view(
             source_key: [_matrix_s_from_y(matrix, z0_ohm=z0_ohm) for matrix in y_matrices]
         }
     return PersistedExplorerBundle(
-        frequencies_ghz=frequencies,
+        frequencies_ghz=loaded_bundle.frequencies_ghz,
         labels=labels,
         family_bundle=family_bundle,
     )
