@@ -18,9 +18,9 @@ describe("research workflow surface helpers", () => {
         },
         lifecycleSummary: {
           stage: "completed",
-          statusLabel: "Dispatch completed",
+          statusLabel: "Completed",
           tone: "success",
-          summary: "The task completed and result refs remain reattachable.",
+          summary: "Execution completed. Result readiness now depends on the persisted result handoff, not queue state.",
           progressPercent: 100,
           progressSummary: "Completed",
           backendStatusLabel: "completed",
@@ -34,6 +34,9 @@ describe("research workflow surface helpers", () => {
           submittedFromActiveDataset: true,
           executionMode: "run",
           visibilityScope: "workspace",
+          reconcileRequired: false,
+          reconcileReason: null,
+          reconcileRecordedAt: null,
         },
         eventHistorySummary: {
           total: 4,
@@ -42,8 +45,9 @@ describe("research workflow surface helpers", () => {
           errorCount: 0,
           latestEventLabel: "Completed",
           latestOccurredAt: "2026-03-13 11:04:00",
+          taskStatusLabel: "Completed",
           dispatchStatusLabel: "Completed",
-          progressLabel: "completed · 100%",
+          progressLabel: "Completed · 100%",
           terminalStateLabel: "Completion persisted",
         },
         resultSummary: {
@@ -61,7 +65,7 @@ describe("research workflow surface helpers", () => {
         },
       }),
     ).toEqual({
-      statusLabel: "Dispatch completed",
+      statusLabel: "Completed",
       statusTone: "success",
       persistenceLabel: "Persisted task #84 attached",
       warningEventCount: 0,
@@ -81,15 +85,16 @@ describe("research workflow surface helpers", () => {
         {
           id: "dispatch",
           label: "Dispatch",
-          value: "Dispatch completed",
-          detail: "The task completed and result refs remain reattachable.",
+          value: "Completed",
+          detail:
+            "Execution completed. Result readiness now depends on the persisted result handoff, not queue state.",
           tone: "success",
         },
         {
           id: "events",
           label: "Events",
           value: "Completed",
-          detail: "4 persisted events · completed · 100%",
+          detail: "4 persisted events · Completed · 100%",
           tone: "primary",
         },
         {
@@ -118,9 +123,10 @@ describe("research workflow surface helpers", () => {
         },
         lifecycleSummary: {
           stage: "running",
-          statusLabel: "Dispatch running",
+          statusLabel: "Running",
           tone: "primary",
-          summary: "Worker execution is active.",
+          summary:
+            "Worker runtime is still active. Keep the attached task detail refreshed until the backend settles the request.",
           progressPercent: 52,
           progressSummary: "Running fit updates",
           backendStatusLabel: "running",
@@ -134,6 +140,9 @@ describe("research workflow surface helpers", () => {
           submittedFromActiveDataset: true,
           executionMode: "run",
           visibilityScope: "workspace",
+          reconcileRequired: true,
+          reconcileReason: "queue_job_missing",
+          reconcileRecordedAt: "2026-03-13 12:03:00",
         },
         eventHistorySummary: {
           total: 2,
@@ -142,8 +151,9 @@ describe("research workflow surface helpers", () => {
           errorCount: 0,
           latestEventLabel: "Running",
           latestOccurredAt: "2026-03-13 12:04:00",
+          taskStatusLabel: "Running",
           dispatchStatusLabel: "Running",
-          progressLabel: "running · 52%",
+          progressLabel: "Running · 52%",
           terminalStateLabel: "Execution active",
         },
         resultSummary: {
@@ -168,7 +178,7 @@ describe("research workflow surface helpers", () => {
         },
         {
           id: "dispatch",
-          value: "Dispatch running",
+          value: "Running",
           tone: "primary",
         },
         {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { EditorState } from "@codemirror/state";
 import { json } from "@codemirror/lang-json";
@@ -19,11 +19,13 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import CodeMirror from "@uiw/react-codemirror";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
+import { useFieldArray, useForm } from "react-hook-form";
 
+import { useSavedSimulationSetups } from "@/features/simulation/hooks/use-saved-simulation-setups";
+import { useSimulationSubmission } from "@/features/simulation/hooks/use-simulation-submission";
+import { useSimulationTaskAttachment } from "@/features/simulation/hooks/use-simulation-task-attachment";
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
 import { SimulationResultExplorer } from "@/features/simulation/components/simulation-result-explorer";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
@@ -38,29 +40,17 @@ import {
   type PostProcessingStepType,
 } from "@/features/simulation/lib/post-processing-basis";
 import {
-  buildSimulationSetupDraft,
-  buildSimulationSetupFormValuesFromPersistedSetup,
-  cloneSimulationSetupFormValues,
   createDefaultSimulationParameterSweepAxis,
   createDefaultSimulationSource,
-  defaultSimulationSetupFormValues,
   deriveSimulationPtcPortOptions,
   deriveSimulationSweepTargetOptions,
   parseCommaSeparatedStringValues,
-  serializeSimulationSetupFormValues,
-  simulationSetupFormSchema,
-  type SimulationSetupFormValues,
 } from "@/features/simulation/lib/setup-form";
 import {
-  createSavedSimulationSetupRecord,
-  filterSavedSimulationSetupsByDefinition,
-  readSavedSimulationSetupRecords,
-  removeSavedSimulationSetupRecord,
-  replaceSavedSimulationSetupRecord,
-  SAVED_SIMULATION_SETUPS_STORAGE_KEY,
-  serializeSavedSimulationSetupRecords,
-  type SavedSimulationSetupRecord,
-} from "@/features/simulation/lib/saved-setups";
+  defaultRequestValues,
+  simulationRequestSchema,
+  type SimulationRequestValues,
+} from "@/features/simulation/lib/request-form";
 import {
   formatSimulationTaskStatusLabel,
   hasSimulationTaskResult,
@@ -68,6 +58,7 @@ import {
   resolvePostProcessingUpstreamTaskId,
   resolveSimulationSelectionRecovery,
   summarizeSimulationTaskResults,
+  type SimulationStageKind,
 } from "@/features/simulation/lib/workflow";
 import {
   AppInlineSelect,
@@ -90,28 +81,7 @@ import type {
   TaskExecutionStatus,
   TaskSummary,
 } from "@/lib/api/tasks";
-import {
-  resolveTaskConnectionState,
-  resolveTaskRecoveryNotice,
-} from "@/lib/task-surface";
 import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
-
-const simulationRequestSchema = simulationSetupFormSchema
-  .extend({
-    simulationNote: z.string().trim().max(180, "Keep the request note within 180 characters."),
-    postProcessingNote: z
-      .string()
-      .trim()
-      .max(180, "Keep the request note within 180 characters."),
-  });
-
-type SimulationRequestValues = z.infer<typeof simulationRequestSchema>;
-
-const defaultRequestValues: SimulationRequestValues = {
-  ...defaultSimulationSetupFormValues,
-  simulationNote: "",
-  postProcessingNote: "",
-};
 
 type StageTone = "default" | "primary" | "success" | "warning" | "error";
 
@@ -138,79 +108,6 @@ const ptcModeOptions: readonly AppSelectOption[] = [
   { value: "auto", label: "Auto compensate" },
   { value: "manual", label: "Manual notes" },
 ];
-const simulationStageFieldNames = [
-  "simulationNote",
-  "simulationStartGhz",
-  "simulationStopGhz",
-  "simulationPointCount",
-  "simulationSpacing",
-  "simulationParameterSweepEnabled",
-  "simulationParameterSweepAxes",
-  "simulationSolverFamily",
-  "simulationMaxIterations",
-  "simulationConvergenceTolerance",
-  "simulationHarmonicBalanceEnabled",
-  "simulationHarmonicCount",
-  "simulationOversampleFactor",
-  "simulationSources",
-  "simulationPtcEnabled",
-  "simulationPtcMode",
-  "simulationPtcCompensatePorts",
-  "simulationPtcManualNotes",
-  "simulationAdvancedDampingStrategy",
-  "simulationAdvancedLineSearchEnabled",
-  "simulationAdvancedResidualClamp",
-  "simulationAdvancedNewtonRelaxation",
-  "simulationAdvancedNotes",
-] as const;
-
-function buildSimulationSearchHref(
-  pathname: string,
-  searchParamsValue: string,
-  updates: Readonly<Record<string, string | null>>,
-) {
-  const params = new URLSearchParams(searchParamsValue);
-
-  for (const [key, value] of Object.entries(updates)) {
-    if (value === null) {
-      params.delete(key);
-    } else {
-      params.set(key, value);
-    }
-  }
-
-  const nextSearch = params.toString();
-  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
-}
-
-function parseTaskIdParam(value: string | null): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsedValue = Number.parseInt(value, 10);
-  return Number.isFinite(parsedValue) ? parsedValue : null;
-}
-
-function buildAttachedTaskStorageKey(
-  definitionId: number | null,
-  datasetId: string | null,
-): string | null {
-  if (typeof definitionId !== "number" || !datasetId) {
-    return null;
-  }
-
-  return `simulation:attached-task:${definitionId}:${datasetId}`;
-}
-
-function readStoredAttachedTaskId(storageKey: string | null): number | null {
-  if (typeof window === "undefined" || !storageKey) {
-    return null;
-  }
-
-  return parseTaskIdParam(window.sessionStorage.getItem(storageKey));
-}
-
 function describeApiError(error: Error | undefined) {
   if (!error) {
     return null;
@@ -674,75 +571,6 @@ function DraftOnlyBadge() {
   return <SurfaceTag>Local draft only</SurfaceTag>;
 }
 
-type SimulationSetupSource =
-  | Readonly<{ kind: "default" }>
-  | Readonly<{ kind: "task"; taskId: number }>
-  | Readonly<{ kind: "saved"; recordId: string; name: string }>
-  | Readonly<{ kind: "official-example"; presetId: string }>;
-
-type SimulationSetupAuthorityPresentation = Readonly<{
-  primaryTag: Readonly<{ label: string; tone: StageTone }>;
-  secondaryTag?: Readonly<{ label: string; tone: StageTone }> | null;
-  message: string;
-  restoreLabel: string | null;
-}>;
-
-function resolveSimulationSetupAuthorityPresentation(
-  source: SimulationSetupSource,
-  isDirty: boolean,
-): SimulationSetupAuthorityPresentation {
-  switch (source.kind) {
-    case "task":
-      return {
-        primaryTag: {
-          label: isDirty ? `Edited from task #${source.taskId}` : `Task-backed · #${source.taskId}`,
-          tone: isDirty ? "warning" : "primary",
-        },
-        secondaryTag: isDirty ? { label: "Local draft", tone: "default" } : null,
-        message: isDirty
-          ? "Current Stage 2 edits differ from this task's persisted simulation setup."
-          : "Viewing the saved simulation setup from the current run.",
-        restoreLabel: isDirty ? "Reapply task setup" : null,
-      };
-    case "official-example":
-      return {
-        primaryTag: {
-          label: isDirty ? "Edited from Official Example" : "Official Example",
-          tone: isDirty ? "warning" : "primary",
-        },
-        secondaryTag: isDirty ? { label: "Local draft", tone: "default" } : null,
-        message: isDirty
-          ? "Current Stage 2 edits diverge from the Josephson official example preset."
-          : "Loaded from the Josephson official example seed for this definition.",
-        restoreLabel: isDirty ? "Reload Official Example" : null,
-      };
-    case "saved":
-      return {
-        primaryTag: {
-          label: isDirty ? "Edited from saved draft" : `Saved draft · ${source.name}`,
-          tone: isDirty ? "warning" : "success",
-        },
-        secondaryTag: isDirty ? { label: "Browser-local", tone: "default" } : null,
-        message: isDirty
-          ? "Current Stage 2 edits differ from the browser-saved draft."
-          : "Browser-saved convenience draft for this definition.",
-        restoreLabel: isDirty ? "Reload saved draft" : null,
-      };
-    case "default":
-    default:
-      return {
-        primaryTag: {
-          label: isDirty ? "Unsaved draft" : "Generic default",
-          tone: "default",
-        },
-        message: isDirty
-          ? "Current Stage 2 edits are browser-local until you save them or submit a task."
-          : "Using the generic fallback setup for the selected definition.",
-        restoreLabel: null,
-      };
-  }
-}
-
 function SetupSlideToggle({
   checked,
   onCheckedChange,
@@ -903,35 +731,21 @@ function formatSavedSetupTimestamp(isoTimestamp: string) {
 }
 
 export function SimulationWorkbenchShell() {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
   const { pushToast } = useAppToasts();
-  const searchParamsString = searchParams.toString();
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
   const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
-  const [simulationSetupBuildError, setSimulationSetupBuildError] = useState<string | null>(null);
-  const [postProcessingBuildError, setPostProcessingBuildError] = useState<string | null>(null);
   const [postProcessingSteps, setPostProcessingSteps] = useState<readonly PostProcessingStepDraft[]>(
     [],
   );
   const [newPostProcessingStepType, setNewPostProcessingStepType] =
     useState<PostProcessingStepType>("coordinate_transform");
-  const [savedSimulationSetups, setSavedSimulationSetups] = useState<
-    readonly SavedSimulationSetupRecord[]
-  >([]);
-  const [hasHydratedSavedSetups, setHasHydratedSavedSetups] = useState(false);
-  const [selectedSavedSetupId, setSelectedSavedSetupId] = useState<string | null>(null);
-  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
-  const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
-  const [saveSetupNameDraft, setSaveSetupNameDraft] = useState("");
-  const [savedSetupFeedback, setSavedSetupFeedback] = useState<string | null>(null);
-  const autoRestoredTaskIdRef = useRef<number | null>(null);
+  const [hydratedPostTaskId, setHydratedPostTaskId] = useState<number | null>(null);
   const hasObservedSimulationTaskToastRef = useRef(false);
   const hasObservedPostProcessingTaskToastRef = useRef(false);
   const lastSimulationTaskToastKeyRef = useRef<string | null>(null);
   const lastPostProcessingTaskToastKeyRef = useRef<string | null>(null);
+  const lastWorkflowContextResetKeyRef = useRef<string | null>(null);
 
   const form = useForm<SimulationRequestValues>({
     resolver: zodResolver(simulationRequestSchema),
@@ -945,28 +759,18 @@ export function SimulationWorkbenchShell() {
     control: form.control,
     name: "simulationSources",
   });
-  const watchedSimulationStageValues = useWatch({
-    control: form.control,
-    name: simulationStageFieldNames,
-  });
-  const [simulationSetupSource, setSimulationSetupSource] = useState<SimulationSetupSource>({
-    kind: "default",
-  });
-  const [hydratedSimulationSetupAuthorityKey, setHydratedSimulationSetupAuthorityKey] =
-    useState<string | null>(null);
-  const [appliedSimulationSetupSnapshotKey, setAppliedSimulationSetupSnapshotKey] = useState(
-    serializeSimulationSetupFormValues(defaultSimulationSetupFormValues),
-  );
-  const [hydratedPostTaskId, setHydratedPostTaskId] = useState<number | null>(null);
   const parameterSweepEnabled = form.watch("simulationParameterSweepEnabled");
   const harmonicBalanceEnabled = form.watch("simulationHarmonicBalanceEnabled");
   const ptcEnabled = form.watch("simulationPtcEnabled");
   const watchedSimulationSources = form.watch("simulationSources");
   const selectedPtcPortsValue = form.watch("simulationPtcCompensatePorts");
 
-  const requestedDefinitionId = searchParams.get("definitionId");
-  const requestedTaskId = parseTaskIdParam(searchParams.get("taskId"));
-  const rawDefinitionId = parseSimulationDefinitionIdParam(requestedDefinitionId);
+  const requestedDefinitionIdParam = searchParams.get("definitionId");
+  const requestedTaskIdValue = searchParams.get("taskId");
+  const requestedTaskId = requestedTaskIdValue
+    ? Number.parseInt(requestedTaskIdValue, 10) || null
+    : null;
+  const rawDefinitionId = parseSimulationDefinitionIdParam(requestedDefinitionIdParam);
   const {
     session,
     activeDatasetState,
@@ -990,11 +794,32 @@ export function SimulationWorkbenchShell() {
     resolvedTaskId,
     activeTask,
     activeTaskError,
-    taskMutationStatus,
-    submitSimulationTask,
-    clearTaskMutationStatus,
     refreshSimulationWorkflow,
   } = useSimulationWorkflowData(rawDefinitionId, requestedTaskId);
+
+  const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null;
+  const workflowContextResetKey = `${resolvedDefinitionId ?? "none"}:${activeDatasetId ?? "none"}`;
+  const taskAttachment = useSimulationTaskAttachment({
+    resolvedDefinitionId,
+    resolvedTaskId,
+    latestSimulationTask,
+    activeTask,
+    activeTaskError,
+    pageContext: {
+      definitionId: resolvedDefinitionId,
+      datasetId: activeDatasetId,
+    },
+  });
+  const {
+    requestedDefinitionId,
+    requestedTaskId: attachedRequestedTaskId,
+    taskConnectionState,
+    taskRecovery,
+    replaceSearchState,
+    attachTask,
+    clearRequestedTask,
+    resetAutoRestoreState,
+  } = taskAttachment;
 
   const definitionRecovery = resolveSimulationSelectionRecovery(
     requestedDefinitionId,
@@ -1010,28 +835,6 @@ export function SimulationWorkbenchShell() {
           preview_artifact_count: activeDefinition.preview_artifacts.length,
         }
       : null);
-  const taskConnectionState = resolveTaskConnectionState({
-    requestedTaskId,
-    resolvedTaskId,
-    latestTaskId: latestSimulationTask?.taskId ?? null,
-    activeTask,
-  });
-  const taskRecovery = resolveTaskRecoveryNotice(
-    requestedTaskId,
-    latestSimulationTask?.taskId ?? null,
-    activeTaskError,
-  );
-  const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null;
-  const attachedTaskStorageKey = useMemo(
-    () =>
-      buildAttachedTaskStorageKey(
-        resolvedDefinitionId,
-        activeDatasetId,
-      ),
-    [activeDatasetId, resolvedDefinitionId],
-  );
-  const workflowContextResetKey = `${resolvedDefinitionId ?? "none"}:${activeDatasetId ?? "none"}`;
-  const lastWorkflowContextResetKeyRef = useRef<string | null>(null);
   const definitionsErrorMessage = describeApiError(definitionsError);
   const activeDefinitionErrorMessage = describeApiError(activeDefinitionError);
   const simulationStageErrorMessage = describeApiError(latestSimulationTaskError);
@@ -1082,12 +885,6 @@ export function SimulationWorkbenchShell() {
       return normalizedOutput;
     }
   }, [activeDefinition]);
-  const visibleSavedSetups = useMemo(
-    () => filterSavedSimulationSetupsByDefinition(savedSimulationSetups, resolvedDefinitionId),
-    [resolvedDefinitionId, savedSimulationSetups],
-  );
-  const activeSavedSetup =
-    visibleSavedSetups.find((setup) => setup.id === selectedSavedSetupId) ?? null;
   const officialExamplePreset = useMemo(
     () =>
       resolveOfficialSimulationExamplePreset(
@@ -1175,6 +972,54 @@ export function SimulationWorkbenchShell() {
   const displayedSimulationStageTask = attachedSimulationStageTask ?? latestSimulationStageTask;
   const displayedSimulationTaskDetail =
     attachedSimulationTaskDetail ?? latestSimulationTaskDetail;
+  const savedSetups = useSavedSimulationSetups({
+    form,
+    workflowContextResetKey,
+    resolvedDefinitionId,
+    selectedDefinitionName: selectedDefinitionDisplay?.name ?? null,
+    displayedSimulationTaskDetail,
+    officialExamplePreset,
+  });
+  const {
+    activeSavedSetup,
+    visibleSavedSetups,
+    isSaveDialogOpen,
+    isManageDialogOpen,
+    saveDialogMode,
+    saveDialogOverwriteTargetId,
+    saveSetupNameDraft,
+    savedSetupFeedback,
+    simulationSetupAuthorityPresentation,
+    restoreSimulationSetupFromCurrentSource,
+    applySavedSetup,
+    applyOfficialExamplePreset,
+    deleteSavedSetup,
+    openSaveDialog,
+    openManageDialog,
+    openSaveAsNewFromManage,
+    submitSaveDialog,
+    setSaveSetupNameDraft,
+    setIsSaveDialogOpen,
+    setIsManageDialogOpen,
+    resetForWorkflowContext,
+  } = savedSetups;
+  const {
+    taskMutationStatus,
+    simulationSetupBuildError,
+    postProcessingBuildError,
+    clearTaskMutationStatus,
+    clearBuildErrors,
+    submit,
+  } = useSimulationSubmission({
+    form,
+    postProcessingSteps,
+    resolvedDefinitionId,
+    selectedDefinitionName: selectedDefinitionSummary?.name ?? null,
+    activeDefinitionName: activeDefinition?.name ?? null,
+    displayedSimulationStageTaskId: displayedSimulationStageTask?.taskId ?? null,
+    buildPostProcessingSetupDraft,
+    onTaskAttached: taskAttachment.attachTask,
+  });
   const simulationSetupBlockedReason =
     resolvedDefinitionId === null
       ? "Select a definition before submitting a simulation run."
@@ -1190,25 +1035,6 @@ export function SimulationWorkbenchShell() {
   const latestPostProcessingStageAuthority = resolveAuthoritativeSimulationTaskSummary(
     latestPostProcessingTask,
     latestPostProcessingTaskDetail,
-  );
-  const displayedSimulationSetupAuthorityKey = useMemo(() => {
-    if (!displayedSimulationTaskDetail?.simulationSetup) {
-      return null;
-    }
-
-    return `task:${displayedSimulationTaskDetail.taskId}:${JSON.stringify(
-      displayedSimulationTaskDetail.simulationSetup,
-    )}`;
-  }, [displayedSimulationTaskDetail]);
-  const currentSimulationSetupSnapshotKey = useMemo(
-    () => serializeSimulationSetupFormValues(snapshotCurrentSimulationSetup()),
-    [watchedSimulationStageValues],
-  );
-  const isSimulationSetupDirtyToSource =
-    currentSimulationSetupSnapshotKey !== appliedSimulationSetupSnapshotKey;
-  const simulationSetupAuthorityPresentation = resolveSimulationSetupAuthorityPresentation(
-    simulationSetupSource,
-    isSimulationSetupDirtyToSource,
   );
   const simulationResultReady =
     displayedSimulationTaskDetail !== undefined
@@ -1260,7 +1086,7 @@ export function SimulationWorkbenchShell() {
       return;
     }
 
-    setPostProcessingBuildError(null);
+    clearBuildErrors();
     setPostProcessingSteps((current) => [
       ...current,
       createPostProcessingStep(stepType, postProcessingPipelineContext),
@@ -1268,7 +1094,7 @@ export function SimulationWorkbenchShell() {
   }
 
   function removePostProcessingStep(stepId: string) {
-    setPostProcessingBuildError(null);
+    clearBuildErrors();
     setPostProcessingSteps((current) => current.filter((step) => step.id !== stepId));
   }
 
@@ -1277,7 +1103,7 @@ export function SimulationWorkbenchShell() {
     field: "portA" | "portB",
     value: string,
   ) {
-    setPostProcessingBuildError(null);
+    clearBuildErrors();
     setPostProcessingSteps((current) =>
       current.map((step) =>
         step.id === stepId && step.type === "coordinate_transform"
@@ -1288,7 +1114,7 @@ export function SimulationWorkbenchShell() {
   }
 
   function toggleKronReductionKeepLabel(stepId: string, label: string) {
-    setPostProcessingBuildError(null);
+    clearBuildErrors();
     setPostProcessingSteps((current) =>
       current.map((step) => {
         if (step.id !== stepId || step.type !== "kron_reduction") {
@@ -1321,7 +1147,7 @@ export function SimulationWorkbenchShell() {
       return;
     }
 
-    setPostProcessingBuildError(null);
+    clearBuildErrors();
     setPostProcessingSteps((current) =>
       current.map((step) =>
         step.id === stepId
@@ -1329,74 +1155,6 @@ export function SimulationWorkbenchShell() {
           : step,
       ),
     );
-  }
-
-  function applySimulationSetupValues(
-    nextValues: Readonly<SimulationSetupFormValues>,
-    source: SimulationSetupSource,
-    input?: Readonly<{
-      keepSavedSelection?: boolean;
-      feedback?: string | null;
-      hydratedAuthorityKey?: string | null;
-    }>,
-  ) {
-    const normalizedValues = cloneSimulationSetupFormValues(nextValues);
-    form.reset(
-      {
-        ...form.getValues(),
-        ...normalizedValues,
-      },
-      { keepDefaultValues: true },
-    );
-    const nextHydratedAuthorityKey =
-      input?.hydratedAuthorityKey !== undefined
-        ? input.hydratedAuthorityKey
-        : source.kind === "task"
-          ? displayedSimulationSetupAuthorityKey
-          : displayedSimulationSetupAuthorityKey ?? null;
-    setAppliedSimulationSetupSnapshotKey(serializeSimulationSetupFormValues(normalizedValues));
-    setSimulationSetupSource(source);
-    setHydratedSimulationSetupAuthorityKey(nextHydratedAuthorityKey);
-    if (!input?.keepSavedSelection) {
-      setSelectedSavedSetupId(null);
-    }
-    setSavedSetupFeedback(input?.feedback ?? null);
-    setSimulationSetupBuildError(null);
-  }
-
-  function restoreSimulationSetupFromCurrentSource() {
-    if (simulationSetupSource.kind === "task" && displayedSimulationTaskDetail?.simulationSetup) {
-      applySimulationSetupValues(
-        buildSimulationSetupFormValuesFromPersistedSetup(
-          snapshotCurrentSimulationSetup(),
-          displayedSimulationTaskDetail.simulationSetup,
-        ),
-        simulationSetupSource,
-        {
-          hydratedAuthorityKey: displayedSimulationSetupAuthorityKey,
-          feedback: `Reloaded task-backed setup from task #${simulationSetupSource.taskId}.`,
-        },
-      );
-      return;
-    }
-
-    if (simulationSetupSource.kind === "saved" && activeSavedSetup) {
-      applySimulationSetupValues(activeSavedSetup.values, simulationSetupSource, {
-        keepSavedSelection: true,
-        feedback: `Reloaded saved draft “${activeSavedSetup.name}”.`,
-      });
-      return;
-    }
-
-    if (
-      simulationSetupSource.kind === "official-example" &&
-      officialExamplePreset &&
-      officialExamplePreset.id === simulationSetupSource.presetId
-    ) {
-      applySimulationSetupValues(officialExamplePreset.values, simulationSetupSource, {
-        feedback: "Reloaded the Official Example preset.",
-      });
-    }
   }
 
   useEffect(() => {
@@ -1456,34 +1214,6 @@ export function SimulationWorkbenchShell() {
 
   useEffect(() => {
     if (
-      !displayedSimulationTaskDetail?.simulationSetup ||
-      displayedSimulationSetupAuthorityKey === null ||
-      displayedSimulationSetupAuthorityKey === hydratedSimulationSetupAuthorityKey
-    ) {
-      return;
-    }
-
-    applySimulationSetupValues(
-      buildSimulationSetupFormValuesFromPersistedSetup(
-        snapshotCurrentSimulationSetup(),
-        displayedSimulationTaskDetail.simulationSetup,
-      ),
-      {
-        kind: "task",
-        taskId: displayedSimulationTaskDetail.taskId,
-      },
-      {
-        hydratedAuthorityKey: displayedSimulationSetupAuthorityKey,
-      },
-    );
-  }, [
-    displayedSimulationSetupAuthorityKey,
-    displayedSimulationTaskDetail,
-    hydratedSimulationSetupAuthorityKey,
-  ]);
-
-  useEffect(() => {
-    if (
       !latestPostProcessingTaskDetail?.postProcessingSetup ||
       latestPostProcessingTaskDetail.taskId === hydratedPostTaskId
     ) {
@@ -1530,321 +1260,6 @@ export function SimulationWorkbenchShell() {
   }, [newPostProcessingStepType, postProcessingStepTypeOptions]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    setSavedSimulationSetups(
-      readSavedSimulationSetupRecords(
-        window.localStorage.getItem(SAVED_SIMULATION_SETUPS_STORAGE_KEY),
-      ),
-    );
-    setHasHydratedSavedSetups(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hasHydratedSavedSetups || typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(
-      SAVED_SIMULATION_SETUPS_STORAGE_KEY,
-      serializeSavedSimulationSetupRecords(savedSimulationSetups),
-    );
-  }, [hasHydratedSavedSetups, savedSimulationSetups]);
-
-  useEffect(() => {
-    if (!selectedSavedSetupId) {
-      return;
-    }
-
-    if (!visibleSavedSetups.some((setup) => setup.id === selectedSavedSetupId)) {
-      setSelectedSavedSetupId(null);
-    }
-  }, [selectedSavedSetupId, visibleSavedSetups]);
-
-  useEffect(() => {
-    const fallbackToAuthoritativeSource = () => {
-      if (displayedSimulationTaskDetail?.simulationSetup) {
-        applySimulationSetupValues(
-          buildSimulationSetupFormValuesFromPersistedSetup(
-            snapshotCurrentSimulationSetup(),
-            displayedSimulationTaskDetail.simulationSetup,
-          ),
-          {
-            kind: "task",
-            taskId: displayedSimulationTaskDetail.taskId,
-          },
-          {
-            hydratedAuthorityKey: displayedSimulationSetupAuthorityKey,
-          },
-        );
-        return;
-      }
-
-      applySimulationSetupValues(defaultSimulationSetupFormValues, { kind: "default" }, {
-        hydratedAuthorityKey: null,
-      });
-    };
-
-    if (simulationSetupSource.kind === "saved") {
-      if (!visibleSavedSetups.some((setup) => setup.id === simulationSetupSource.recordId)) {
-        fallbackToAuthoritativeSource();
-      }
-      return;
-    }
-
-    if (
-      simulationSetupSource.kind === "official-example" &&
-      (!officialExamplePreset || officialExamplePreset.id !== simulationSetupSource.presetId)
-    ) {
-      fallbackToAuthoritativeSource();
-    }
-  }, [
-    displayedSimulationSetupAuthorityKey,
-    displayedSimulationTaskDetail,
-    officialExamplePreset,
-    simulationSetupSource,
-    visibleSavedSetups,
-  ]);
-
-  function snapshotCurrentSimulationSetup(): SimulationSetupFormValues {
-    const values = form.getValues();
-    return cloneSimulationSetupFormValues({
-      simulationStartGhz: values.simulationStartGhz,
-      simulationStopGhz: values.simulationStopGhz,
-      simulationPointCount: values.simulationPointCount,
-      simulationSpacing: values.simulationSpacing,
-      simulationParameterSweepEnabled: values.simulationParameterSweepEnabled,
-      simulationParameterSweepAxes: values.simulationParameterSweepAxes,
-      simulationSolverFamily: values.simulationSolverFamily,
-      simulationMaxIterations: values.simulationMaxIterations,
-      simulationConvergenceTolerance: values.simulationConvergenceTolerance,
-      simulationHarmonicBalanceEnabled: values.simulationHarmonicBalanceEnabled,
-      simulationHarmonicCount: values.simulationHarmonicCount,
-      simulationOversampleFactor: values.simulationOversampleFactor,
-      simulationSources: values.simulationSources,
-      simulationPtcEnabled: values.simulationPtcEnabled,
-      simulationPtcMode: values.simulationPtcMode,
-      simulationPtcCompensatePorts: values.simulationPtcCompensatePorts,
-      simulationPtcManualNotes: values.simulationPtcManualNotes,
-      simulationAdvancedDampingStrategy: values.simulationAdvancedDampingStrategy,
-      simulationAdvancedLineSearchEnabled: values.simulationAdvancedLineSearchEnabled,
-      simulationAdvancedResidualClamp: values.simulationAdvancedResidualClamp,
-      simulationAdvancedNewtonRelaxation: values.simulationAdvancedNewtonRelaxation,
-      simulationAdvancedNotes: values.simulationAdvancedNotes,
-    });
-  }
-
-  function buildSavedSetupNameSuggestion() {
-    const baseName = selectedDefinitionDisplay?.name ?? "Simulation Setup";
-    const nextIndex = visibleSavedSetups.length + 1;
-    return `${baseName} ${nextIndex}`;
-  }
-
-  function applySavedSetup(record: SavedSimulationSetupRecord) {
-    applySimulationSetupValues(record.values, {
-      kind: "saved",
-      recordId: record.id,
-      name: record.name,
-    }, {
-      keepSavedSelection: true,
-      feedback: `Loaded saved setup “${record.name}”.`,
-    });
-    setSelectedSavedSetupId(record.id);
-    setIsSaveDialogOpen(false);
-    setIsManageDialogOpen(false);
-  }
-
-  function applyOfficialExamplePreset() {
-    if (!officialExamplePreset) {
-      return;
-    }
-
-    applySimulationSetupValues(officialExamplePreset.values, {
-      kind: "official-example",
-      presetId: officialExamplePreset.id,
-    }, {
-      feedback: `Loaded the Official Example preset for ${officialExamplePreset.exampleName}.`,
-    });
-    setIsSaveDialogOpen(false);
-    setIsManageDialogOpen(false);
-  }
-
-  function persistSavedSetup(name: string, existingRecordId?: string | null) {
-    if (resolvedDefinitionId === null) {
-      setSavedSetupFeedback("Select a definition before saving a setup.");
-      return;
-    }
-
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setSavedSetupFeedback("Saved setup name is required.");
-      return;
-    }
-
-    const existingRecord = existingRecordId
-      ? visibleSavedSetups.find((record) => record.id === existingRecordId) ?? null
-      : null;
-    const nowIso = new Date().toISOString();
-    const nextRecord = createSavedSimulationSetupRecord({
-      id: existingRecord?.id ?? (typeof crypto !== "undefined" ? crypto.randomUUID() : `setup-${Date.now()}`),
-      definitionId: resolvedDefinitionId,
-      definitionName: selectedDefinitionDisplay?.name ?? null,
-      name: trimmedName,
-      createdAt: existingRecord?.createdAt ?? nowIso,
-      updatedAt: nowIso,
-      values: snapshotCurrentSimulationSetup(),
-    });
-
-    setSavedSimulationSetups((current) => replaceSavedSimulationSetupRecord(current, nextRecord));
-    setSelectedSavedSetupId(nextRecord.id);
-    setSavedSetupFeedback(
-      existingRecord
-        ? `Updated saved setup “${nextRecord.name}”.`
-        : `Saved “${nextRecord.name}” in this browser.`,
-    );
-    if (simulationSetupSource.kind === "saved" && simulationSetupSource.recordId === nextRecord.id) {
-      setSimulationSetupSource({
-        kind: "saved",
-        recordId: nextRecord.id,
-        name: nextRecord.name,
-      });
-    }
-    setSaveSetupNameDraft(nextRecord.name);
-    setIsSaveDialogOpen(false);
-  }
-
-  function handleSaveSetup() {
-    if (activeSavedSetup) {
-      persistSavedSetup(activeSavedSetup.name, activeSavedSetup.id);
-      return;
-    }
-
-    setSaveSetupNameDraft(buildSavedSetupNameSuggestion());
-    setIsSaveDialogOpen(true);
-  }
-
-  function deleteSavedSetup(recordId: string) {
-    const record = savedSimulationSetups.find((entry) => entry.id === recordId);
-    setSavedSimulationSetups((current) => removeSavedSimulationSetupRecord(current, recordId));
-    if (selectedSavedSetupId === recordId) {
-      setSelectedSavedSetupId(null);
-    }
-    setSavedSetupFeedback(
-      record ? `Deleted saved setup “${record.name}”.` : "Deleted saved setup.",
-    );
-  }
-
-  function replaceSearchState(updates: Readonly<Record<string, string | null>>) {
-    startTransition(() => {
-      router.replace(buildSimulationSearchHref(pathname, searchParamsString, updates), {
-        scroll: false,
-      });
-    });
-  }
-
-  function rememberAttachedTask(taskId: number) {
-    if (typeof window === "undefined" || attachedTaskStorageKey === null) {
-      return;
-    }
-
-    window.sessionStorage.setItem(attachedTaskStorageKey, String(taskId));
-  }
-
-  useEffect(() => {
-    if (resolvedDefinitionId === null || resolvedDefinitionId === rawDefinitionId) {
-      return;
-    }
-
-    startTransition(() => {
-      router.replace(
-        buildSimulationSearchHref(pathname, searchParamsString, {
-          definitionId: String(resolvedDefinitionId),
-        }),
-        { scroll: false },
-      );
-    });
-  }, [pathname, rawDefinitionId, resolvedDefinitionId, router, searchParamsString]);
-
-  useEffect(() => {
-    if (requestedTaskId !== null || attachedTaskStorageKey === null) {
-      return;
-    }
-
-    const storedTaskId = readStoredAttachedTaskId(attachedTaskStorageKey);
-    if (storedTaskId === null) {
-      return;
-    }
-
-    autoRestoredTaskIdRef.current = storedTaskId;
-    startTransition(() => {
-      router.replace(
-        buildSimulationSearchHref(pathname, searchParamsString, {
-          definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
-          taskId: String(storedTaskId),
-        }),
-        { scroll: false },
-      );
-    });
-  }, [
-    attachedTaskStorageKey,
-    pathname,
-    requestedTaskId,
-    resolvedDefinitionId,
-    router,
-    searchParamsString,
-  ]);
-
-  useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      attachedTaskStorageKey === null ||
-      !activeTask ||
-      resolvedTaskId !== activeTask.taskId
-    ) {
-      return;
-    }
-
-    window.sessionStorage.setItem(attachedTaskStorageKey, String(activeTask.taskId));
-    if (autoRestoredTaskIdRef.current === activeTask.taskId) {
-      autoRestoredTaskIdRef.current = null;
-    }
-  }, [activeTask, attachedTaskStorageKey, resolvedTaskId]);
-
-  useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      attachedTaskStorageKey === null ||
-      !activeTaskError ||
-      requestedTaskId === null ||
-      autoRestoredTaskIdRef.current !== requestedTaskId
-    ) {
-      return;
-    }
-
-    window.sessionStorage.removeItem(attachedTaskStorageKey);
-    autoRestoredTaskIdRef.current = null;
-    startTransition(() => {
-      router.replace(
-        buildSimulationSearchHref(pathname, searchParamsString, {
-          definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
-          taskId: null,
-        }),
-        { scroll: false },
-      );
-    });
-  }, [
-    activeTaskError,
-    attachedTaskStorageKey,
-    pathname,
-    requestedTaskId,
-    resolvedDefinitionId,
-    router,
-    searchParamsString,
-  ]);
-
-  useEffect(() => {
     const previousContextKey = lastWorkflowContextResetKeyRef.current;
     lastWorkflowContextResetKeyRef.current = workflowContextResetKey;
     if (previousContextKey === null || previousContextKey === workflowContextResetKey) {
@@ -1852,48 +1267,28 @@ export function SimulationWorkbenchShell() {
     }
 
     clearTaskMutationStatus();
-    form.reset(defaultRequestValues, { keepDefaultValues: true });
+    clearBuildErrors();
+    resetForWorkflowContext();
     setIsAdvancedHbsolveExpanded(false);
-    setSimulationSetupBuildError(null);
-    setPostProcessingBuildError(null);
     setPostProcessingSteps([]);
     setNewPostProcessingStepType("coordinate_transform");
-    setSelectedSavedSetupId(null);
-    setIsSaveDialogOpen(false);
-    setIsManageDialogOpen(false);
-    setSaveSetupNameDraft("");
-    setSavedSetupFeedback(null);
-    setSimulationSetupSource({ kind: "default" });
-    setHydratedSimulationSetupAuthorityKey(null);
-    setAppliedSimulationSetupSnapshotKey(
-      serializeSimulationSetupFormValues(defaultSimulationSetupFormValues),
-    );
     setHydratedPostTaskId(null);
-    autoRestoredTaskIdRef.current = null;
+    resetAutoRestoreState();
     hasObservedSimulationTaskToastRef.current = false;
     hasObservedPostProcessingTaskToastRef.current = false;
     lastSimulationTaskToastKeyRef.current = null;
     lastPostProcessingTaskToastKeyRef.current = null;
 
-    if (requestedTaskId !== null) {
-      startTransition(() => {
-        router.replace(
-          buildSimulationSearchHref(pathname, searchParamsString, {
-            definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
-            taskId: null,
-          }),
-          { scroll: false },
-        );
-      });
+    if (attachedRequestedTaskId !== null) {
+      clearRequestedTask();
     }
   }, [
+    attachedRequestedTaskId,
+    clearBuildErrors,
+    clearRequestedTask,
     clearTaskMutationStatus,
-    form,
-    pathname,
-    requestedTaskId,
-    resolvedDefinitionId,
-    router,
-    searchParamsString,
+    resetAutoRestoreState,
+    resetForWorkflowContext,
     workflowContextResetKey,
   ]);
 
@@ -1981,38 +1376,6 @@ export function SimulationWorkbenchShell() {
     }
   }, [latestPostProcessingTaskDetail, pushToast]);
 
-  useEffect(() => {
-    if (
-      requestedTaskId === null ||
-      !activeTask ||
-      resolvedDefinitionId === null ||
-      activeDatasetId === null ||
-      (activeTask.definitionId === resolvedDefinitionId &&
-        activeTask.datasetId === activeDatasetId)
-    ) {
-      return;
-    }
-
-    autoRestoredTaskIdRef.current = null;
-    startTransition(() => {
-      router.replace(
-        buildSimulationSearchHref(pathname, searchParamsString, {
-          definitionId: String(resolvedDefinitionId),
-          taskId: null,
-        }),
-        { scroll: false },
-      );
-    });
-  }, [
-    activeDatasetId,
-    activeTask,
-    pathname,
-    requestedTaskId,
-    resolvedDefinitionId,
-    router,
-    searchParamsString,
-  ]);
-
   async function handleRefreshWorkflow() {
     setIsRefreshingWorkflow(true);
     try {
@@ -2022,60 +1385,8 @@ export function SimulationWorkbenchShell() {
     }
   }
 
-  async function handleSubmit(kind: "simulation" | "post_processing") {
-    const fieldNames =
-      kind === "simulation" ? simulationStageFieldNames : ["postProcessingNote"] as const;
-    const fieldName = kind === "simulation" ? "simulationNote" : "postProcessingNote";
-    const isValid = await form.trigger(fieldNames);
-    if (!isValid) {
-      return;
-    }
-
-    setSimulationSetupBuildError(null);
-    setPostProcessingBuildError(null);
-    const values = form.getValues();
-    let simulationSetup = null;
-    let postProcessingSetup = null;
-    try {
-      simulationSetup =
-        kind === "simulation"
-          ? buildSimulationSetupDraft(values)
-          : null;
-      postProcessingSetup =
-        kind === "post_processing" ? buildPostProcessingSetupDraft(postProcessingSteps) : null;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to build and submit workflow setup.";
-      if (kind === "simulation") {
-        setSimulationSetupBuildError(message);
-      } else {
-        setPostProcessingBuildError(message);
-      }
-      return;
-    }
-
-    const task = await submitSimulationTask({
-      kind,
-      note: values[fieldName],
-      simulationSetup,
-      postProcessingSetup,
-      upstreamTaskId:
-        kind === "post_processing" ? (displayedSimulationStageTask?.taskId ?? null) : null,
-    });
-
-    rememberAttachedTask(task.taskId);
-    replaceSearchState({
-      definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
-      taskId: String(task.taskId),
-    });
-  }
-
-  function attachTask(taskId: number) {
-    rememberAttachedTask(taskId);
-    replaceSearchState({
-      definitionId: resolvedDefinitionId !== null ? String(resolvedDefinitionId) : null,
-      taskId: String(taskId),
-    });
+  async function handleSubmit(kind: SimulationStageKind) {
+    await submit(kind);
   }
 
   return (
@@ -2234,7 +1545,7 @@ export function SimulationWorkbenchShell() {
               <button
                 type="button"
                 onClick={() => {
-                  setIsManageDialogOpen(true);
+                  openManageDialog();
                 }}
                 disabled={resolvedDefinitionId === null}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
@@ -2244,7 +1555,7 @@ export function SimulationWorkbenchShell() {
               </button>
               <button
                 type="button"
-                onClick={handleSaveSetup}
+                onClick={openSaveDialog}
                 disabled={resolvedDefinitionId === null}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -3482,13 +2793,19 @@ export function SimulationWorkbenchShell() {
         }}
       >
         <div className="space-y-4">
+          {saveDialogMode === "choose" && activeSavedSetup ? (
+            <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
+              Saving from <span className="font-medium text-foreground">{activeSavedSetup.name}</span>.
+              Choose whether to overwrite the current saved setup or create a new one.
+            </div>
+          ) : null}
           <SetupInputField label="Setup Name">
             <SetupTextInput
               value={saveSetupNameDraft}
               onChange={(event) => {
                 setSaveSetupNameDraft(event.target.value);
               }}
-              placeholder={buildSavedSetupNameSuggestion()}
+              placeholder={selectedDefinitionDisplay?.name ?? "Simulation Setup"}
             />
           </SetupInputField>
           <div className="flex flex-wrap justify-end gap-2">
@@ -3501,16 +2818,41 @@ export function SimulationWorkbenchShell() {
             >
               Cancel
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                persistSavedSetup(saveSetupNameDraft, activeSavedSetup?.id ?? null);
-              }}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-            >
-              <Save className="h-4 w-4" />
-              Save Setup
-            </button>
+            {saveDialogMode === "choose" && saveDialogOverwriteTargetId ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    submitSaveDialog("create");
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10"
+                >
+                  <Plus className="h-4 w-4" />
+                  Save as New
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    submitSaveDialog("overwrite");
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                  <Save className="h-4 w-4" />
+                  Overwrite Current
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  submitSaveDialog("create");
+                }}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+              >
+                <Save className="h-4 w-4" />
+                Save Setup
+              </button>
+            )}
           </div>
         </div>
       </OverlayDialog>
@@ -3580,9 +2922,7 @@ export function SimulationWorkbenchShell() {
             <button
               type="button"
               onClick={() => {
-                setIsManageDialogOpen(false);
-                setSaveSetupNameDraft(buildSavedSetupNameSuggestion());
-                setIsSaveDialogOpen(true);
+                openSaveAsNewFromManage();
               }}
               disabled={resolvedDefinitionId === null}
               className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"

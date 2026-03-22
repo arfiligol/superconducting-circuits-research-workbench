@@ -1,163 +1,207 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 
 import {
-  getSimulationResultExplorer,
-  simulationResultExplorerKey,
-  type SimulationResultExplorerFamily,
+  getSimulationResultExplorerBootstrap,
+  getSimulationResultExplorerView,
+  simulationResultExplorerBootstrapKey,
+  simulationResultExplorerViewKey,
+  type SimulationResultExplorerBootstrap,
   type SimulationResultExplorerPayload,
-  type SimulationResultExplorerQuery,
-  type SimulationResultExplorerSelection,
+  type SimulationResultExplorerViewSlice,
 } from "@/lib/api/tasks";
 
-type EditableExplorerSelection = Readonly<{
-  family: string;
-  source: string;
-  metric: string;
-  sweepIndex: number | null;
-  traceKey: string | null;
-  z0: number;
-  outputPort: number;
-  inputPort: number;
-}>;
-
-function buildEditableSelection(
-  selection: SimulationResultExplorerSelection,
-): EditableExplorerSelection {
-  return {
-    family: selection.family,
-    source: selection.source,
-    metric: selection.metric,
-    sweepIndex: selection.sweepIndex,
-    traceKey: selection.traceKey,
-    z0: selection.z0Ohm,
-    outputPort: selection.outputPort,
-    inputPort: selection.inputPort,
-  };
-}
-
-function encodeSweepIndex(
-  axes: readonly Readonly<{
-    values: readonly number[];
-  }>[],
-  coordinates: readonly number[],
-) {
-  if (axes.length === 0) {
-    return null;
-  }
-
-  let encoded = 0;
-  for (let axisIndex = 0; axisIndex < axes.length; axisIndex += 1) {
-    const axisSize = Math.max(axes[axisIndex]?.values.length ?? 0, 1);
-    const coordinate = Math.min(
-      Math.max(coordinates[axisIndex] ?? 0, 0),
-      Math.max(axisSize - 1, 0),
-    );
-    encoded = encoded * axisSize + coordinate;
-  }
-  return encoded;
-}
-
-function resolveAvailableFamily(
-  families: readonly SimulationResultExplorerFamily[],
-  familyKey: string,
-) {
-  return families.find((family) => family.key === familyKey) ?? families[0] ?? null;
-}
-
-function clampPort(
-  nextPort: number,
-  ports: readonly Readonly<{ port: number; label: string }>[],
-) {
-  return ports.some((portOption) => portOption.port === nextPort)
-    ? nextPort
-    : (ports[0]?.port ?? 1);
-}
-
-function buildExplorerQuery(
-  selection: EditableExplorerSelection | null,
-): SimulationResultExplorerQuery | undefined {
-  if (!selection) {
-    return undefined;
-  }
-
-  return {
-    family: selection.family,
-    source: selection.source,
-    metric: selection.metric,
-    sweepIndex: selection.sweepIndex ?? undefined,
-    z0: selection.z0,
-    outputPort: selection.outputPort,
-    inputPort: selection.inputPort,
-  };
-}
+import {
+  buildEditableSelection,
+  buildSimulationResultExplorerQuery,
+  buildSimulationResultExplorerSelectionCacheKey,
+  clampSimulationExplorerPort,
+  composeSimulationResultExplorerPayload,
+  encodeSimulationExplorerSweepIndex,
+  extractBootstrapSelection,
+  extractSimulationResultExplorerViewSlice,
+  primeSimulationResultExplorerViewCache,
+  resolveAvailableExplorerFamily,
+  type EditableExplorerSelection,
+} from "../lib/simulation-result-explorer-state";
 
 export function useSimulationResultExplorer(taskId: number | null, enabled: boolean) {
   const [selection, setSelection] = useState<EditableExplorerSelection | null>(null);
+  const [activeViewKey, setActiveViewKey] = useState<string | null>(null);
+  const [activeViewSlice, setActiveViewSlice] =
+    useState<SimulationResultExplorerViewSlice | null>(null);
+  const viewCacheRef = useRef(new Map<string, SimulationResultExplorerViewSlice>());
 
   useEffect(() => {
     setSelection(null);
+    setActiveViewKey(null);
+    setActiveViewSlice(null);
+    viewCacheRef.current = new Map();
   }, [taskId]);
 
-  const query = useMemo(() => buildExplorerQuery(selection), [selection]);
-  const explorerQuery = useSWR(
-    enabled && taskId !== null ? simulationResultExplorerKey(taskId, query) : null,
+  const bootstrapQuery = useSWR(
+    enabled && taskId !== null ? simulationResultExplorerBootstrapKey(taskId) : null,
     () =>
       taskId !== null
-        ? getSimulationResultExplorer(taskId, query)
+        ? getSimulationResultExplorerBootstrap(taskId)
         : Promise.resolve(undefined),
-    {
-      keepPreviousData: true,
-    },
   );
 
+  const bootstrapPayload = bootstrapQuery.data;
+  const bootstrapSelection = useMemo(
+    () => (bootstrapPayload ? extractBootstrapSelection(bootstrapPayload.bootstrap) : null),
+    [bootstrapPayload],
+  );
+  const effectiveSelection = selection ?? bootstrapSelection;
+  const selectedFamily =
+    bootstrapPayload && effectiveSelection
+      ? resolveAvailableExplorerFamily(
+          bootstrapPayload.bootstrap.families,
+          effectiveSelection.family,
+        )
+      : null;
+  const viewQueryInput = useMemo(
+    () => buildSimulationResultExplorerQuery(effectiveSelection),
+    [effectiveSelection],
+  );
+  const bootstrapViewKey =
+    taskId !== null && bootstrapSelection
+      ? buildSimulationResultExplorerSelectionCacheKey(taskId, bootstrapSelection)
+      : null;
+  const requestedViewKey =
+    taskId !== null && effectiveSelection
+      ? buildSimulationResultExplorerSelectionCacheKey(taskId, effectiveSelection)
+      : null;
+
   useEffect(() => {
-    const explorerData = explorerQuery.data;
-    if (!explorerData) {
+    if (!bootstrapPayload || taskId === null || !bootstrapViewKey) {
       return;
     }
 
-    setSelection((current) =>
-      current
-        ? {
-            ...current,
-            sweepIndex: explorerData.selection.sweepIndex,
-            traceKey: explorerData.selection.traceKey,
-          }
-        : buildEditableSelection(explorerData.selection),
-    );
-  }, [explorerQuery.data]);
+    setSelection((current) => current ?? extractBootstrapSelection(bootstrapPayload.bootstrap));
 
-  const payload = explorerQuery.data;
-  const effectiveSelection =
-    selection ?? (payload ? buildEditableSelection(payload.selection) : null);
-  const selectedFamily =
-    payload && effectiveSelection
-      ? resolveAvailableFamily(payload.bootstrap.families, effectiveSelection.family)
-      : null;
+    const cachedBootstrapView = viewCacheRef.current.get(bootstrapViewKey);
+    if (!cachedBootstrapView) {
+      return;
+    }
+
+    setActiveViewSlice((current) => current ?? cachedBootstrapView);
+    setActiveViewKey((current) => current ?? bootstrapViewKey);
+  }, [bootstrapPayload, bootstrapViewKey, taskId]);
+
+  useEffect(() => {
+    if (!requestedViewKey) {
+      return;
+    }
+
+    const cachedView = viewCacheRef.current.get(requestedViewKey);
+    if (cachedView) {
+      setActiveViewSlice(cachedView);
+      setActiveViewKey(requestedViewKey);
+    }
+  }, [requestedViewKey]);
+
+  const shouldFetchView =
+    enabled &&
+    taskId !== null &&
+    viewQueryInput !== undefined &&
+    requestedViewKey !== null &&
+    !viewCacheRef.current.has(requestedViewKey);
+  const viewQuery = useSWR(
+    shouldFetchView && taskId !== null && viewQueryInput
+      ? simulationResultExplorerViewKey(taskId, viewQueryInput)
+      : null,
+    () =>
+      taskId !== null && viewQueryInput
+        ? getSimulationResultExplorerView(taskId, viewQueryInput)
+        : Promise.resolve(undefined),
+  );
+
+  useEffect(() => {
+    if (!viewQuery.data || taskId === null) {
+      return;
+    }
+
+    const resolvedSelection = buildEditableSelection(viewQuery.data.selection);
+    const resolvedViewKey = buildSimulationResultExplorerSelectionCacheKey(
+      taskId,
+      resolvedSelection,
+    );
+    const resolvedViewSlice = extractSimulationResultExplorerViewSlice(viewQuery.data);
+
+    primeSimulationResultExplorerViewCache(
+      viewCacheRef.current,
+      resolvedViewKey,
+      resolvedViewSlice,
+    );
+    setSelection(resolvedSelection);
+    setActiveViewSlice(resolvedViewSlice);
+    setActiveViewKey(resolvedViewKey);
+  }, [taskId, viewQuery.data]);
+
+  const data = useMemo<SimulationResultExplorerPayload | undefined>(() => {
+    if (!bootstrapPayload || !activeViewSlice) {
+      return undefined;
+    }
+
+    return composeSimulationResultExplorerPayload(bootstrapPayload, activeViewSlice);
+  }, [activeViewSlice, bootstrapPayload]);
+  const resolvedSelection = useMemo(
+    () => (data ? buildEditableSelection(data.selection) : null),
+    [data],
+  );
+  const isRefreshingSelection =
+    requestedViewKey !== null &&
+    activeViewKey !== null &&
+    requestedViewKey !== activeViewKey;
+  type ExplorerSelectionUpdateContext = Readonly<{
+    bootstrap: SimulationResultExplorerBootstrap;
+    resolvedSelection: EditableExplorerSelection | null;
+  }>;
 
   function updateSelection(
     updater: (
       current: EditableExplorerSelection,
-      payload: SimulationResultExplorerPayload,
+      context: ExplorerSelectionUpdateContext,
     ) => EditableExplorerSelection,
   ) {
-    if (!payload || !effectiveSelection) {
+    if (!bootstrapPayload || !effectiveSelection) {
       return;
     }
 
-    setSelection(updater(effectiveSelection, payload));
+    setSelection(
+      updater(effectiveSelection, {
+        bootstrap: bootstrapPayload.bootstrap,
+        resolvedSelection,
+      }),
+    );
   }
 
   return {
-    ...explorerQuery,
+    data,
+    bootstrap: bootstrapPayload?.bootstrap,
+    currentView: activeViewSlice,
     selection: effectiveSelection,
+    resolvedSelection,
     selectedFamily,
+    error: viewQuery.error ?? bootstrapQuery.error,
+    isLoading:
+      !data &&
+      (bootstrapQuery.isLoading ||
+        (enabled && taskId !== null && bootstrapPayload !== undefined && viewQuery.isLoading)),
+    isValidating: bootstrapQuery.isValidating || viewQuery.isValidating,
+    isRefreshingSelection,
+    async mutate() {
+      await Promise.all([bootstrapQuery.mutate(), viewQuery.mutate()]);
+    },
     setFamily(nextFamily: string) {
       updateSelection((current, nextPayload) => {
-        const family = resolveAvailableFamily(nextPayload.bootstrap.families, nextFamily);
+        const family = resolveAvailableExplorerFamily(
+          nextPayload.bootstrap.families,
+          nextFamily,
+        );
         if (!family) {
           return current;
         }
@@ -176,12 +220,16 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
           family: family.key,
           source,
           metric,
+          compareAxisIndex: nextPayload.resolvedSelection?.compareAxisIndex ?? current.compareAxisIndex,
         };
       });
     },
     setSource(nextSource: string) {
       updateSelection((current, nextPayload) => {
-        const family = resolveAvailableFamily(nextPayload.bootstrap.families, current.family);
+        const family = resolveAvailableExplorerFamily(
+          nextPayload.bootstrap.families,
+          current.family,
+        );
         if (!family) {
           return current;
         }
@@ -198,7 +246,10 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
     },
     setMetric(nextMetric: string) {
       updateSelection((current, nextPayload) => {
-        const family = resolveAvailableFamily(nextPayload.bootstrap.families, current.family);
+        const family = resolveAvailableExplorerFamily(
+          nextPayload.bootstrap.families,
+          current.family,
+        );
         if (!family) {
           return current;
         }
@@ -231,7 +282,7 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
         }
 
         coordinates[axisIndex] = Math.min(Math.max(nextValueIndex, 0), axisSize - 1);
-        const encoded = encodeSweepIndex(sweepAxes, coordinates);
+        const encoded = encodeSimulationExplorerSweepIndex(sweepAxes, coordinates);
 
         return {
           ...current,
@@ -252,13 +303,19 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
     setOutputPort(nextPort: number) {
       updateSelection((current, nextPayload) => ({
         ...current,
-        outputPort: clampPort(nextPort, nextPayload.bootstrap.traceSelector.outputPorts),
+        outputPort: clampSimulationExplorerPort(
+          nextPort,
+          nextPayload.bootstrap.traceSelector.outputPorts,
+        ),
       }));
     },
     setInputPort(nextPort: number) {
       updateSelection((current, nextPayload) => ({
         ...current,
-        inputPort: clampPort(nextPort, nextPayload.bootstrap.traceSelector.inputPorts),
+        inputPort: clampSimulationExplorerPort(
+          nextPort,
+          nextPayload.bootstrap.traceSelector.inputPorts,
+        ),
       }));
     },
   };

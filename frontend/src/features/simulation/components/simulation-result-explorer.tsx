@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 
 import { CurrentTraceSaveControl } from "@/features/simulation/components/current-trace-save-control";
 import { useSimulationResultExplorer } from "@/features/simulation/hooks/use-simulation-result-explorer";
+import { resolveSimulationExplorerSweepAxes } from "@/features/simulation/lib/simulation-result-explorer-state";
 import { AppNumberInput } from "@/features/shared/components/app-number-input";
 import {
   AppSegmentedControl,
@@ -232,8 +233,10 @@ export function SimulationResultExplorer({
   }, [explorer.selection]);
 
   const payload = explorer.data;
+  const bootstrap = explorer.bootstrap;
   const selection = explorer.selection;
-  const familyOptions = payload?.bootstrap.families ?? [];
+  const resolvedSelection = explorer.resolvedSelection;
+  const familyOptions = bootstrap?.families ?? payload?.bootstrap.families ?? [];
   const sourceOptions = useMemo<readonly AppSelectOption[]>(
     () =>
       explorer.selectedFamily?.availableSources.map((source) => ({
@@ -254,19 +257,19 @@ export function SimulationResultExplorer({
   const sourceIsLocked = task.kind === "post_processing" && sourceOptions.length <= 1;
   const outputPortOptions = useMemo<readonly AppSelectOption[]>(
     () =>
-      payload?.bootstrap.traceSelector.outputPorts.map((port) => ({
+      bootstrap?.traceSelector.outputPorts.map((port) => ({
         value: String(port.port),
         label: port.label,
       })) ?? [],
-    [payload],
+    [bootstrap],
   );
   const inputPortOptions = useMemo<readonly AppSelectOption[]>(
     () =>
-      payload?.bootstrap.traceSelector.inputPorts.map((port) => ({
+      bootstrap?.traceSelector.inputPorts.map((port) => ({
         value: String(port.port),
         label: port.label,
       })) ?? [],
-    [payload],
+    [bootstrap],
   );
   const xAxisTitle = payload
     ? formatAxisTitle(payload.plot.xAxis.label, payload.plot.xAxis.unit)
@@ -330,7 +333,17 @@ export function SimulationResultExplorer({
     );
   }
 
-  const parameterSweep = payload.bootstrap.parameterSweep;
+  const parameterSweepBase = bootstrap?.parameterSweep ?? payload.bootstrap.parameterSweep;
+  const parameterSweep = useMemo(
+    () => ({
+      ...parameterSweepBase,
+      axes: resolveSimulationExplorerSweepAxes(
+        parameterSweepBase.axes,
+        selection?.sweepIndex ?? null,
+      ),
+    }),
+    [parameterSweepBase, selection?.sweepIndex],
+  );
   const activeSweepPoint = (selection.sweepIndex ?? 0) + 1;
 
   return (
@@ -364,9 +377,9 @@ export function SimulationResultExplorer({
                 traceKey={payload.selection.traceKey}
                 traceLabel={payload.plot.series[0]?.label ?? null}
                 defaultParameter={resolveDefaultTraceParameter(
-                  selection.family,
-                  selection.outputPort,
-                  selection.inputPort,
+                  resolvedSelection?.family ?? selection.family,
+                  resolvedSelection?.outputPort ?? selection.outputPort,
+                  resolvedSelection?.inputPort ?? selection.inputPort,
                 )}
               />
             </div>
@@ -525,6 +538,12 @@ export function SimulationResultExplorer({
             </div>
           </div>
 
+          {explorer.isRefreshingSelection ? (
+            <div className="mt-4 rounded-[0.95rem] border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foreground/80">
+              Refreshing explorer selection while keeping the previous full-resolution view visible.
+            </div>
+          ) : null}
+
           <div className="mt-4">
             {hasSeries ? (
               viewMode === "plot" ? (
@@ -622,9 +641,12 @@ export function SimulationResultExplorer({
             <div>
               <span className="text-muted-foreground">Selection</span>
               <span className="ml-2 font-medium text-foreground">
-                {selection.source.toUpperCase()} ·{" "}
-                {payload.selection.outputPortLabel ?? `Port ${selection.outputPort}`} to{" "}
-                {payload.selection.inputPortLabel ?? `Port ${selection.inputPort}`}
+                {(resolvedSelection?.source ?? selection.source).toUpperCase()} ·{" "}
+                {payload.selection.outputPortLabel ??
+                  `Port ${resolvedSelection?.outputPort ?? selection.outputPort}`}{" "}
+                to{" "}
+                {payload.selection.inputPortLabel ??
+                  `Port ${resolvedSelection?.inputPort ?? selection.inputPort}`}
               </span>
             </div>
             <div>

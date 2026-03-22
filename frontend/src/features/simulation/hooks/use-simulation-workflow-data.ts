@@ -1,17 +1,15 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import useSWR, { useSWRConfig } from "swr";
+import useSWR from "swr";
 
 import {
-  circuitDefinitionDetailKey,
-  circuitDefinitionsListKey,
   getCircuitDefinition,
   listCircuitDefinitions,
+  circuitDefinitionDetailKey,
+  circuitDefinitionsListKey,
 } from "@/features/circuit-definition-editor/lib/api";
 import { resolveSimulationDefinitionId } from "@/features/simulation/lib/definition-id";
 import {
-  buildSimulationRequestSummary,
   filterSimulationTasksByContext,
   hasSimulationTaskResult,
   resolveContextBoundAttachedTask,
@@ -24,39 +22,17 @@ import { useTaskQueue } from "@/lib/app-state/task-queue";
 import {
   getTask,
   normalizeTaskSummary,
-  type PostProcessingSetupDraft,
-  type SimulationSetupDraft,
-  submitTask,
   taskDetailKey,
-  tasksListKey,
   type TaskDetail,
 } from "@/lib/api/tasks";
-
-type TaskMutationStatus = Readonly<{
-  state: "idle" | "submitting" | "success" | "error";
-  message: string | null;
-}>;
-
-type SubmitSimulationTaskInput = Readonly<{
-  kind: "simulation" | "post_processing";
-  note: string;
-  simulationSetup?: SimulationSetupDraft | null;
-  postProcessingSetup?: PostProcessingSetupDraft | null;
-  upstreamTaskId?: number | null;
-}>;
 
 export function useSimulationWorkflowData(
   selectedDefinitionId: number | null,
   selectedTaskId: number | null,
 ) {
-  const { mutate } = useSWRConfig();
   const { session } = useAppSession();
   const activeDatasetState = useActiveDataset();
   const taskQueueState = useTaskQueue();
-  const [taskMutationStatus, setTaskMutationStatus] = useState<TaskMutationStatus>({
-    state: "idle",
-    message: null,
-  });
 
   const definitionsQuery = useSWR(circuitDefinitionsListKey, listCircuitDefinitions);
   const resolvedDefinitionId = resolveSimulationDefinitionId(
@@ -227,113 +203,6 @@ export function useSimulationWorkflowData(
       ? activeTask
       : postProcessingStageTaskQuery.data;
 
-  async function verifySelectedDefinition(nextDefinitionId: number) {
-    const refreshedDefinitions = await listCircuitDefinitions();
-    await mutate(circuitDefinitionsListKey, refreshedDefinitions, { revalidate: false });
-
-    if (!refreshedDefinitions.some((definition) => definition.definition_id === nextDefinitionId)) {
-      throw new Error(
-        `Definition #${nextDefinitionId} is no longer available. Refresh the workflow and choose a visible definition before submitting a run.`,
-      );
-    }
-
-    try {
-      const refreshedDefinition = await getCircuitDefinition(nextDefinitionId);
-      await mutate(circuitDefinitionDetailKey(nextDefinitionId), refreshedDefinition, {
-        revalidate: false,
-      });
-      return refreshedDefinition;
-    } catch {
-      throw new Error(
-        `Definition #${nextDefinitionId} is unavailable right now. Refresh the workflow and choose a visible definition before submitting a run.`,
-      );
-    }
-  }
-
-  async function submitSimulationTask({
-    kind,
-    note,
-    simulationSetup,
-    postProcessingSetup,
-    upstreamTaskId,
-  }: SubmitSimulationTaskInput): Promise<TaskDetail> {
-    if (!session?.canSubmitTasks) {
-      const error = new Error("This session cannot submit tasks.");
-      setTaskMutationStatus({ state: "error", message: error.message });
-      throw error;
-    }
-
-    if (resolvedDefinitionId === null) {
-      const error = new Error("Select a canonical definition before submitting a task.");
-      setTaskMutationStatus({ state: "error", message: error.message });
-      throw error;
-    }
-
-    const datasetId = activeDatasetState.activeDataset?.datasetId ?? null;
-    if (!datasetId) {
-      const error = new Error("Attach an active dataset before submitting a task.");
-      setTaskMutationStatus({ state: "error", message: error.message });
-      throw error;
-    }
-
-    let verifiedDefinitionName = selectedDefinitionSummary?.name ?? activeDefinition?.name ?? null;
-    try {
-      const verifiedDefinition = await verifySelectedDefinition(resolvedDefinitionId);
-      verifiedDefinitionName = verifiedDefinition.name;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to verify the selected definition.";
-      setTaskMutationStatus({ state: "error", message });
-      throw error;
-    }
-
-    setTaskMutationStatus({ state: "submitting", message: null });
-
-    try {
-      const task = await submitTask({
-        kind,
-        dataset_id: datasetId,
-        definition_id: resolvedDefinitionId,
-        summary: buildSimulationRequestSummary({
-          kind,
-          definitionId: resolvedDefinitionId,
-          definitionName: verifiedDefinitionName,
-          datasetId,
-          datasetName: activeDatasetState.activeDataset?.name ?? null,
-          note,
-        }),
-        simulation_setup: simulationSetup ?? null,
-        post_processing_setup: postProcessingSetup ?? null,
-        upstream_task_id: upstreamTaskId ?? null,
-      });
-
-      await Promise.all([
-        mutate(tasksListKey),
-        mutate(taskDetailKey(task.taskId), task, { revalidate: false }),
-        taskQueueState.refreshTaskQueue(),
-      ]);
-
-      setTaskMutationStatus({
-        state: "success",
-        message:
-          kind === "simulation"
-            ? `Simulation task #${task.taskId} submitted.`
-            : `Post-processing task #${task.taskId} submitted.`,
-      });
-
-      return task;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to submit the simulation task.";
-      setTaskMutationStatus({ state: "error", message });
-      throw error;
-    }
-  }
-
-  const clearTaskMutationStatus = useCallback(() => {
-    setTaskMutationStatus({ state: "idle", message: null });
-  }, []);
-
   async function refreshSimulationWorkflow() {
     await Promise.all([
       definitionsQuery.mutate(),
@@ -383,9 +252,6 @@ export function useSimulationWorkflowData(
     activeTaskError: taskDetailQuery.error as Error | undefined,
     isTaskTransitioning:
       typeof resolvedTaskId === "number" && (!hasAttachedTask || taskDetailQuery.isLoading),
-    taskMutationStatus,
-    submitSimulationTask,
-    clearTaskMutationStatus,
     refreshSimulationWorkflow,
     refreshDefinitions: definitionsQuery.mutate,
     refreshTaskQueue: taskQueueState.refreshTaskQueue,

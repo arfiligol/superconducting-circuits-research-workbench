@@ -39,9 +39,14 @@ import {
 import { ShellNotice } from "@/components/layout/shell-notice";
 import { cx } from "@/features/shared/components/surface-kit";
 import { datasetCatalogKey, listDatasetCatalog } from "@/lib/api/datasets";
-import type { TaskExecutionStatus, WorkerLaneSummary } from "@/lib/api/tasks";
+import type { WorkerLaneSummary } from "@/lib/api/tasks";
 import { useActiveDataset, useActiveTask, useAppSession, useDeveloperMode, useTaskQueue } from "@/lib/app-state";
 import type { RuntimeAuthTransition, RuntimeMode } from "@/lib/api/session";
+import {
+  formatTaskExecutionStatusLabel,
+  formatTaskVisibilityScopeLabel,
+  formatWorkerLaneLabel,
+} from "@/lib/task-presenters/presentation";
 
 type WorkspaceStatusStripProps = Readonly<{
   open: boolean;
@@ -255,34 +260,6 @@ function buildContextResetSearch(
   return nextSearch.length > 0 ? `${pathname}?${nextSearch}` : pathname;
 }
 
-function formatTaskStatusLabel(status: TaskExecutionStatus) {
-  switch (status) {
-    case "queued":
-    case "dispatching":
-      return "Pending";
-    case "running":
-    case "cancellation_requested":
-    case "cancelling":
-    case "termination_requested":
-      return "Running";
-    case "completed":
-      return "Completed";
-    case "cancelled":
-      return "Cancelled";
-    case "terminated":
-      return "Terminated";
-    case "failed":
-      return "Failed";
-  }
-}
-
-function formatWorkerLaneLabel(lane: string) {
-  return lane
-    .split("_")
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(" ");
-}
-
 function summarizeWorkerRuntime(workerSummary: readonly WorkerLaneSummary[]) {
   if (workerSummary.length === 0) {
     return {
@@ -491,9 +468,9 @@ export function WorkspaceStatusStrip({
           ? `${summary.completedCount} Completed · ${summary.failedCount} Failed`
           : "No active tasks";
   const queueDetail = activeTaskDetail
-    ? `Attached #${activeTaskDetail.taskId} · ${formatTaskStatusLabel(activeTaskDetail.progress.phase)}`
+    ? `Attached #${activeTaskDetail.taskId} · ${formatTaskExecutionStatusLabel(activeTaskDetail.status)}${activeTaskDetail.reconcile?.required ? " · Reconcile needed" : ""}`
     : latestTask
-      ? `Latest #${latestTask.taskId} · ${formatTaskStatusLabel(latestTask.status)}`
+      ? `Latest #${latestTask.taskId} · ${formatTaskExecutionStatusLabel(latestTask.status)}${latestTask.reconcile?.required ? " · Reconcile needed" : ""}`
       : runtimeMode === "local"
         ? "No Local Space task attached"
         : "No online task attached";
@@ -1152,7 +1129,7 @@ export function WorkspaceStatusStrip({
                     value={activeTaskDetail ? `#${activeTaskDetail.taskId}` : "No attached task"}
                     detail={
                       activeTaskDetail
-                        ? `${formatTaskStatusLabel(activeTaskDetail.progress.phase)} · ${Math.round(activeTaskDetail.progress.percentComplete)}%`
+                        ? `${formatTaskExecutionStatusLabel(activeTaskDetail.status)} · ${Math.round(activeTaskDetail.progress.percentComplete)}%${activeTaskDetail.reconcile?.required ? ` · ${activeTaskDetail.reconcile.reason ?? "Needs reconcile"}` : ""}`
                         : resolvedTaskId
                           ? `Waiting for task #${resolvedTaskId} detail`
                           : runtimeMode === "local"
@@ -1315,11 +1292,16 @@ export function WorkspaceStatusStrip({
                               #{task.taskId} · {resolveShellTaskLabel(task)}
                             </p>
                             <p className="mt-1 truncate text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                              {formatTaskStatusLabel(task.status)} · {task.summary}
+                              {formatTaskExecutionStatusLabel(task.status)} · {task.summary}
                             </p>
+                            {task.reconcile?.required ? (
+                              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                                Reconcile: {task.reconcile.reason ?? "Needs review"}
+                              </p>
+                            ) : null}
                           </div>
                           <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                            {task.visibilityScope}
+                            {formatTaskVisibilityScopeLabel(task.visibilityScope)}
                           </span>
                         </div>
                       </Link>

@@ -37,8 +37,25 @@ describe("task event history helpers", () => {
       submissionSource: "active_dataset",
       acceptedAt: "2026-03-13 08:00:00",
       lastUpdatedAt: "2026-03-13 08:04:00",
+      queueName: "simulation",
+      enqueuedAt: "2026-03-13 08:00:01",
+      runtimeJobId: "job-58",
+      dispatchAttemptCount: 2,
+      lastDispatchOutcome: "requeued",
+      lastDispatchErrorCode: "queue_job_missing",
     },
     events: [
+      {
+        eventKey: "task-event-58-requeued",
+        eventType: "task_requeued",
+        level: "warning",
+        occurredAt: "2026-03-13 08:08:00",
+        message: "Task was requeued after the worker job went missing.",
+        metadata: {
+          reconcile_reason: "queue_job_missing",
+          dispatch_attempt_count: 2,
+        },
+      },
       {
         eventKey: "task-event-58-completed",
         eventType: "task_completed",
@@ -79,6 +96,12 @@ describe("task event history helpers", () => {
       summary: "Running solver sweep",
       updatedAt: "2026-03-13 08:04:00",
     },
+    resultHandoff: {
+      availability: "pending",
+      primaryResultHandleId: null,
+      resultHandleCount: 0,
+      tracePayloadAvailable: false,
+    },
     resultRefs: {
       traceBatchId: null,
       analysisRunId: null,
@@ -92,23 +115,24 @@ describe("task event history helpers", () => {
     const entries = buildTaskEventHistoryEntries(task);
 
     expect(entries.map((entry) => entry.eventTypeLabel)).toEqual([
+      "Requeued",
       "Completed",
       "Running",
       "Submitted",
     ]);
     expect(entries[0]?.metadataEntries).toEqual([
       {
-        key: "task_id",
-        label: "Task Id",
-        value: "58",
+        key: "reconcile_reason",
+        label: "Reconcile Reason",
+        value: "queue_job_missing",
       },
       {
-        key: "pending_checks",
-        label: "Pending Checks",
-        value: "plot_bundle, fit_summary",
+        key: "dispatch_attempt_count",
+        label: "Dispatch Attempt Count",
+        value: "2",
       },
     ]);
-    expect(entries[2]?.metadataEntries).toEqual([
+    expect(entries[3]?.metadataEntries).toEqual([
       {
         key: "dataset_id",
         label: "Dataset Id",
@@ -124,14 +148,15 @@ describe("task event history helpers", () => {
 
   it("summarizes task events alongside dispatch and progress state", () => {
     expect(summarizeTaskEventHistory(task)).toEqual({
-      total: 3,
+      total: 4,
       infoCount: 2,
-      warningCount: 1,
+      warningCount: 2,
       errorCount: 0,
-      latestEventLabel: "Completed",
-      latestOccurredAt: "2026-03-13 08:07:00",
+      latestEventLabel: "Requeued",
+      latestOccurredAt: "2026-03-13 08:08:00",
+      taskStatusLabel: "Running",
       dispatchStatusLabel: "Running",
-      progressLabel: "running · 64%",
+      progressLabel: "Running · 64%",
       terminalStateLabel: "Execution active",
     });
   });
@@ -144,6 +169,7 @@ describe("task event history helpers", () => {
       errorCount: 0,
       latestEventLabel: null,
       latestOccurredAt: null,
+      taskStatusLabel: null,
       dispatchStatusLabel: null,
       progressLabel: null,
       terminalStateLabel: "Awaiting events",

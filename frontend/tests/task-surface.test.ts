@@ -5,7 +5,6 @@ import {
   resolveTaskConnectionState,
   resolveTaskRecoveryNotice,
   summarizeTaskActionGates,
-  summarizeTaskContextBinding,
   summarizeTaskLifecycle,
   summarizeTaskResultHandoff,
   summarizeTaskResultSurface,
@@ -43,6 +42,17 @@ describe("shared task surface helpers", () => {
       submissionSource: "active_dataset",
       acceptedAt: "2026-03-13 09:20:00",
       lastUpdatedAt: "2026-03-13 09:21:00",
+      queueName: "characterization",
+      enqueuedAt: "2026-03-13 09:20:01",
+      runtimeJobId: "job-41",
+      dispatchAttemptCount: 1,
+      lastDispatchOutcome: "claimed",
+      lastDispatchErrorCode: null,
+    },
+    reconcile: {
+      required: false,
+      reason: null,
+      recordedAt: null,
     },
     events: [],
     progress: {
@@ -129,6 +139,12 @@ describe("shared task surface helpers", () => {
         },
       ],
     },
+    resultHandoff: {
+      availability: "pending",
+      primaryResultHandleId: "handle-fit-41",
+      resultHandleCount: 2,
+      tracePayloadAvailable: true,
+    },
   } as const;
 
   it("resolves connection state for explicit and follow-latest attachments", () => {
@@ -169,10 +185,10 @@ describe("shared task surface helpers", () => {
 
     expect(summarizeTaskLifecycle(task)).toEqual({
       stage: "running",
-      statusLabel: "Dispatch running",
+      statusLabel: "Running",
       tone: "primary",
       summary:
-        "Worker execution is active. Progress, events, and result refs remain recoverable from the persisted task contract.",
+        "Worker runtime is still active. Keep the attached task detail refreshed until the backend settles the request.",
       progressPercent: 58,
       progressSummary: "Fitting admittance curves",
       backendStatusLabel: "running",
@@ -186,6 +202,9 @@ describe("shared task surface helpers", () => {
       submittedFromActiveDataset: true,
       executionMode: "run",
       visibilityScope: "workspace",
+      reconcileRequired: false,
+      reconcileReason: null,
+      reconcileRecordedAt: null,
     });
   });
 
@@ -214,7 +233,7 @@ describe("shared task surface helpers", () => {
     expect(summarizeTaskResultSurface(undefined).hasTracePayload).toBe(false);
   });
 
-  it("summarizes backend-gated task actions, context binding, and result handoff", () => {
+  it("summarizes backend-gated task actions and result handoff", () => {
     const completedTask = {
       ...task,
       status: "completed" as const,
@@ -227,6 +246,12 @@ describe("shared task surface helpers", () => {
         phase: "completed" as const,
         percentComplete: 100,
         summary: "Characterization complete",
+      },
+      resultHandoff: {
+        availability: "ready" as const,
+        primaryResultHandleId: "handle-fit-41",
+        resultHandleCount: 2,
+        tracePayloadAvailable: true,
       },
     };
 
@@ -255,38 +280,46 @@ describe("shared task surface helpers", () => {
     });
 
     expect(
-      summarizeTaskContextBinding({
-        task,
-        activeDatasetId: "fluxonium-2025-031",
-      }),
-    ).toEqual({
-      tone: "success",
-      title: "Task context aligned",
-      message: "Attached task context matches the current shell and page context.",
-      hasMismatch: false,
-    });
-
-    expect(
-      summarizeTaskContextBinding({
-        task,
-        activeDatasetId: "transmon-014",
-      }),
-    ).toEqual({
-      tone: "warning",
-      title: "Dataset context mismatch",
-      message:
-        "Task #41 is bound to dataset fluxonium-2025-031, while the current shell dataset is transmon-014. Keep the task attached for recovery, but do not treat it as the active dataset authority.",
-      hasMismatch: true,
-    });
-
-    expect(
       summarizeTaskResultHandoff(completedTask, summarizeTaskResultSurface(completedTask)),
     ).toEqual({
       tone: "success",
       title: "Persisted result ready",
       message:
-        "This terminal task has enough persisted result authority to hand off into the result surface without relying on in-memory execution state.",
+        "The backend has marked the persisted result handoff ready. Result surfaces should use this as the readiness authority.",
       isReady: true,
+    });
+  });
+
+  it("anchors lifecycle state on task status and handoff availability instead of dispatch fallbacks", () => {
+    const mismatchTask = {
+      ...task,
+      status: "cancelled" as const,
+      dispatch: {
+        ...task.dispatch,
+        status: "running" as const,
+      },
+      resultHandoff: {
+        availability: "none" as const,
+        primaryResultHandleId: null,
+        resultHandleCount: 0,
+        tracePayloadAvailable: false,
+      },
+    };
+
+    expect(summarizeTaskLifecycle(mismatchTask)).toMatchObject({
+      stage: "cancelled",
+      statusLabel: "Cancelled",
+      tone: "warning",
+    });
+
+    expect(
+      summarizeTaskResultHandoff(mismatchTask, summarizeTaskResultSurface(mismatchTask)),
+    ).toEqual({
+      tone: "warning",
+      title: "No persisted result handoff",
+      message:
+        "The backend reports no persisted result handoff for this task yet. Treat the attached task detail as the only authority.",
+      isReady: false,
     });
   });
 });

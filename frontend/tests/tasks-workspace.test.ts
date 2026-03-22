@@ -144,6 +144,11 @@ describe("tasks browse helpers", () => {
           summary: "Simulation request",
           resultAvailability: "pending",
           controlState: "none",
+          reconcile: {
+            required: true,
+            reason: "queue_job_missing",
+            recordedAt: "2026-03-19T00:01:00Z",
+          },
           hasActionAuthority: true,
           allowedActions: {
             attach: true,
@@ -170,6 +175,7 @@ describe("tasks browse helpers", () => {
           summary: "Characterization request",
           resultAvailability: "ready",
           controlState: "none",
+          reconcile: null,
           hasActionAuthority: true,
           allowedActions: {
             attach: true,
@@ -218,6 +224,15 @@ describe("tasks browse helpers", () => {
       },
     ]);
   });
+
+  it("surfaces reconcile state in queue and shell task views", () => {
+    expect(tasksWorkspaceSource).toContain(">Reconcile</p>");
+    expect(tasksWorkspaceSource).toContain("formatReconcileLabel(task)");
+    expect(tasksWorkspaceSource).toContain('<SurfaceTag tone="warning">{formatReconcileLabel(task)}</SurfaceTag>');
+    expect(taskPanelsSource).toContain("Reconcile needed");
+    expect(statusStripSource).toContain('Reconcile: {task.reconcile.reason ?? "Needs review"}');
+    expect(statusStripSource).toContain("activeTaskDetail.reconcile?.required");
+  });
 });
 
 describe("tasks workspace source contracts", () => {
@@ -237,6 +252,18 @@ describe("tasks workspace source contracts", () => {
     expect(tasksWorkspaceSource).not.toContain("Runtime Mode");
     expect(tasksWorkspaceSource).not.toContain("Active Dataset");
     expect(tasksWorkspaceSource).not.toContain("Active Workspace");
+  });
+
+  it("pulls shared task vocabulary from canonical presenters instead of local formatters", () => {
+    expect(tasksWorkspaceSource).toContain('from "@/lib/task-presenters/presentation"');
+    expect(tasksWorkspaceSource).toContain("formatTaskExecutionStatusLabel");
+    expect(tasksWorkspaceSource).toContain("formatTaskKindLabel");
+    expect(tasksWorkspaceSource).toContain("formatTaskLaneLabel");
+    expect(tasksWorkspaceSource).toContain("formatTaskResultAvailabilityLabel");
+    expect(tasksWorkspaceSource).not.toContain("function formatTaskStatusLabel");
+    expect(tasksWorkspaceSource).not.toContain("function formatLaneLabel");
+    expect(tasksWorkspaceSource).not.toContain("function formatKindLabel");
+    expect(tasksWorkspaceSource).not.toContain("function formatResultAvailabilityLabel");
   });
 
   it("binds browse state to URL params and uses backend-owned queue/detail/event contracts", () => {

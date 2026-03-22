@@ -158,6 +158,8 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("resolveShellActiveDatasetSummary");
     expect(statusStripSource).toContain("datasetSummary.value");
     expect(statusStripSource).toContain("switchRuntimeMode(");
+    expect(statusStripSource).toContain("activeTaskDetail.status");
+    expect(statusStripSource).not.toContain("activeTaskDetail.progress.phase");
   });
 
   it("adopts the live backend runtime transition enums in shell notices and auth entry flows", () => {
@@ -236,6 +238,7 @@ describe("workspace shell source contracts", () => {
 
   it("combines queue and worker runtime context into one shell surface", () => {
     expect(statusStripSource).toContain('title="Tasks & Runtime"');
+    expect(statusStripSource).toContain('from "@/lib/task-presenters/presentation"');
     expect(statusStripSource).toContain("workerSummary,");
     expect(statusStripSource).toContain("summarizeWorkerRuntime(workerSummary)");
     expect(statusStripSource).toContain("Worker lanes");
@@ -250,6 +253,8 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain("laneSummary.degradedProcessors");
     expect(statusStripSource).toContain("laneSummary.drainingProcessors");
     expect(statusStripSource).toContain("laneSummary.offlineProcessors");
+    expect(statusStripSource).not.toContain("function formatTaskStatusLabel");
+    expect(statusStripSource).not.toContain("function formatWorkerLaneLabel");
     expect(statusStripSource).not.toContain("resolveShellWorkerSummary(");
     expect(statusStripSource).not.toContain('title="Worker Summary"');
   });
