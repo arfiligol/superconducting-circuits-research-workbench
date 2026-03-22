@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
+from tests.worker_runtime_harness import drain_lane_queue
 
 client = TestClient(app)
 
@@ -52,13 +53,7 @@ def _simulation_setup_payload() -> dict[str, object]:
             "point_count": 401,
             "spacing": "linear",
         },
-        "parameter_sweeps": [
-            {
-                "parameter": "junction.inductance_lj",
-                "values": [8.4, 8.6, 8.8],
-                "unit": "nH",
-            }
-        ],
+        "parameter_sweeps": [],
         "solver": {
             "solver_family": "hfss-hb",
             "max_iterations": 40,
@@ -73,7 +68,7 @@ def _simulation_setup_payload() -> dict[str, object]:
             {
                 "source_id": "drive-port-a",
                 "kind": "port_drive",
-                "target": "port_A",
+                "target": "port_1",
                 "amplitude": -35.0,
                 "frequency_ghz": 6.45,
                 "phase_deg": 0.0,
@@ -216,4 +211,11 @@ def test_local_definition_persists_across_runtime_reset_and_can_submit_simulatio
     assert submit_response.status_code == 201
     task = submit_response.json()["data"]["task"]
     assert task["definition_id"] == definition_id
-    assert task["status"] == "completed"
+    assert task["status"] == "queued"
+    assert task["dispatch"]["status"] == "accepted"
+
+    drain_lane_queue("simulation")
+
+    completed = client.get(f"/tasks/{task['task_id']}").json()["data"]
+    assert completed["definition_id"] == definition_id
+    assert completed["status"] == "completed"

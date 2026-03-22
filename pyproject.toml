@@ -32,7 +32,9 @@ dependencies = [
 ]
 
 [project.scripts]
-sc-app = "scripts.backend_app:main"
+sc-app = "src.app.infrastructure.worker_runtime.entrypoints:run_uvicorn_app"
+sc-worker-simulation = "src.app.infrastructure.worker_runtime.entrypoints:run_simulation_worker"
+sc-worker-characterization = "src.app.infrastructure.worker_runtime.entrypoints:run_characterization_worker"
 sc-legacy-nicegui = "legacy.legacy_nicegui_archived.main:start"
 
 [tool.uv]

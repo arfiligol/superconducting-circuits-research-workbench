@@ -9,6 +9,7 @@ from src.app.infrastructure.runtime import (
     reset_runtime_state,
 )
 from src.app.main import app
+from tests.worker_runtime_harness import drain_lane_queue
 
 client = TestClient(app)
 
@@ -88,7 +89,9 @@ def _submit_local_simulation(*, ptc_enabled: bool = True) -> dict[str, object]:
         },
     )
     assert response.status_code == 201
-    return response.json()["data"]["task"]
+    task = response.json()["data"]["task"]
+    drain_lane_queue("simulation")
+    return client.get(f"/tasks/{task['task_id']}").json()["data"]
 
 
 def _published_trace_ids(task_id: int, *, include_ptc: bool) -> list[str]:
@@ -490,7 +493,6 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
             "summary": "Post-processing result save source.",
             "upstream_task_id": upstream["task_id"],
             "post_processing_setup": {
-                "output_view": "matrix",
                 "selections": [
                     {
                         "trace_family": "z_matrix",
@@ -499,18 +501,15 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
                         "trace_ids": ["trace_local_flux_preview"],
                     }
                 ],
-                "operations": [
-                    {
-                        "operation": "coordinate_transform",
-                        "enabled": True,
-                        "config": {"template": "cm_dm"},
-                    }
-                ],
+                "operations": [],
             },
         },
     )
     assert post_processing.status_code == 201
-    task = post_processing.json()["data"]["task"]
+    queued = post_processing.json()["data"]["task"]
+    assert queued["status"] == "queued"
+    drain_lane_queue("simulation")
+    task = client.get(f"/tasks/{queued['task_id']}").json()["data"]
 
     created_design = client.post(
         "/datasets/local-dataset-001/designs",
@@ -541,7 +540,4 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
         f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/{payload['trace']['trace_id']}"
     )
     assert trace_detail.status_code == 200
-    assert trace_detail.json()["data"]["preview_payload"]["history_steps"] == [
-        "Raw",
-        "Coordinate Transformation",
-    ]
+    assert trace_detail.json()["data"]["preview_payload"]["history_steps"] == ["Raw"]

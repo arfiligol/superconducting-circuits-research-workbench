@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "==> Exporting OpenAPI spec from backend..."
 cd "$REPO_ROOT"
-PYTHONPATH=. uv run python scripts/export_openapi.py
+npm run openapi:export
 
 echo "==> Generating TypeScript types..."
 cd "$REPO_ROOT/frontend"

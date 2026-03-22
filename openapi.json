@@ -38,8 +38,256 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/runtime-mode": {
+      "patch": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Switch Runtime Mode",
+        "operationId": "switch_runtime_mode_session_runtime_mode_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/server-targets": {
+      "get": {
+        "tags": [
+          "session"
+        ],
+        "summary": "List Server Targets",
+        "operationId": "list_server_targets_session_server_targets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Remember Server Target",
+        "operationId": "remember_server_target_session_server_targets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/server-targets/validate": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Validate Server Target",
+        "operationId": "validate_server_target_session_server_targets_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/login": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Login",
+        "operationId": "login_session_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/logout": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_session_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/refresh": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Refresh Session",
+        "operationId": "refresh_session_session_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/active-workspace": {
+      "patch": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Switch Active Workspace",
+        "operationId": "switch_active_workspace_session_active_workspace_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -58,7 +306,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ActiveDatasetUpdateRequest"
+                "title": "Payload"
               }
             }
           },
@@ -69,9 +317,400 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/workspace-invitations": {
+      "get": {
+        "tags": [
+          "session"
+        ],
+        "summary": "List Workspace Invitations",
+        "operationId": "list_workspace_invitations_session_workspace_invitations_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Create Workspace Invitation",
+        "operationId": "create_workspace_invitation_session_workspace_invitations_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/workspace-invitations/{invite_id}": {
+      "get": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Get Workspace Invitation",
+        "operationId": "get_workspace_invitation_session_workspace_invitations__invite_id__get",
+        "parameters": [
+          {
+            "name": "invite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Invite Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/workspace-invitations/{invite_id}/revoke": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Revoke Workspace Invitation",
+        "operationId": "revoke_workspace_invitation_session_workspace_invitations__invite_id__revoke_post",
+        "parameters": [
+          {
+            "name": "invite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Invite Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/workspace-invitations/accept": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Accept Workspace Invitation",
+        "operationId": "accept_workspace_invitation_session_workspace_invitations_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {},
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/workspace-memberships": {
+      "get": {
+        "tags": [
+          "session"
+        ],
+        "summary": "List Workspace Memberships",
+        "operationId": "list_workspace_memberships_session_workspace_memberships_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/workspace-memberships/leave": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Leave Workspace",
+        "operationId": "leave_workspace_session_workspace_memberships_leave_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {},
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/workspace-memberships/{user_id}/remove": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Remove Workspace Member",
+        "operationId": "remove_workspace_member_session_workspace_memberships__user_id__remove_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {},
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/workspace-memberships/transfer-ownership": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Transfer Workspace Ownership",
+        "operationId": "transfer_workspace_ownership_session_workspace_memberships_transfer_ownership_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -103,12 +742,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "queued",
-                    "running",
-                    "completed",
-                    "failed"
-                  ],
                   "type": "string"
                 },
                 {
@@ -125,10 +758,6 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "simulation",
-                    "characterization"
-                  ],
                   "type": "string"
                 },
                 {
@@ -143,13 +772,63 @@
             "in": "query",
             "required": false,
             "schema": {
-              "enum": [
-                "workspace",
-                "owned"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "type": "string",
-              "default": "workspace",
               "title": "Scope"
+            }
+          },
+          {
+            "name": "scope_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope Filter"
+            }
+          },
+          {
+            "name": "status_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Filter"
+            }
+          },
+          {
+            "name": "lane_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lane Filter"
             }
           },
           {
@@ -170,6 +849,57 @@
             }
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -187,13 +917,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TaskSummaryResponse"
-                  },
-                  "title": "Response List Tasks Tasks Get"
-                }
+                "schema": {}
               }
             }
           },
@@ -220,7 +944,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TaskSubmissionRequest"
+                "title": "Payload"
               }
             }
           }
@@ -230,9 +954,70 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskMutationResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/runtime/processors": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "List Runtime Processors",
+        "operationId": "list_runtime_processors_tasks_runtime_processors_get",
+        "parameters": [
+          {
+            "name": "lane_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lane Filter"
+            }
+          },
+          {
+            "name": "lane",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lane"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -272,9 +1057,459 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskDetailResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/simulation-results/bootstrap": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Simulation Result Bootstrap",
+        "operationId": "get_simulation_result_bootstrap_tasks__task_id__simulation_results_bootstrap_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/simulation-results/view": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Simulation Result View",
+        "operationId": "get_simulation_result_view_tasks__task_id__simulation_results_view_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "family",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Family"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric"
+            }
+          },
+          {
+            "name": "sweep_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sweep Index"
+            }
+          },
+          {
+            "name": "z0",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Z0"
+            }
+          },
+          {
+            "name": "output_port",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Output Port"
+            }
+          },
+          {
+            "name": "input_port",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Input Port"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/simulation-results/explorer": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Simulation Result Explorer",
+        "operationId": "get_simulation_result_explorer_tasks__task_id__simulation_results_explorer_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "family",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Family"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Metric"
+            }
+          },
+          {
+            "name": "sweep_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sweep Index"
+            }
+          },
+          {
+            "name": "z0",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Z0"
+            }
+          },
+          {
+            "name": "output_port",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Output Port"
+            }
+          },
+          {
+            "name": "input_port",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Input Port"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/simulation-results/publish": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Publish Simulation Result",
+        "operationId": "publish_simulation_result_tasks__task_id__simulation_results_publish_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/result-traces/publish": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Publish Result Trace",
+        "operationId": "publish_result_trace_tasks__task_id__result_traces_publish_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -343,9 +1578,16 @@
                 {
                   "enum": [
                     "task_submitted",
+                    "task_dispatch_claimed",
                     "task_running",
                     "task_completed",
-                    "task_failed"
+                    "task_failed",
+                    "task_cancel_requested",
+                    "task_cancel_acknowledged",
+                    "task_terminate_requested",
+                    "task_terminate_acknowledged",
+                    "task_requeued",
+                    "task_retried"
                   ],
                   "type": "string"
                 },
@@ -362,13 +1604,443 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TaskEventResponse"
-                  },
-                  "title": "Response List Task Events Tasks  Task Id  Events Get"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/cancel": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Cancel Task",
+        "operationId": "cancel_task_tasks__task_id__cancel_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/terminate": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Terminate Task",
+        "operationId": "terminate_task_tasks__task_id__terminate_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/retry": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Retry Task",
+        "operationId": "retry_task_tasks__task_id__retry_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit-logs": {
+      "get": {
+        "tags": [
+          "audit-logs"
+        ],
+        "summary": "List Audit Logs",
+        "operationId": "list_audit_logs_audit_logs_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "actor_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "name": "action_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action Kind"
+            }
+          },
+          {
+            "name": "resource_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resource Kind"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit-logs/export-summary": {
+      "get": {
+        "tags": [
+          "audit-logs"
+        ],
+        "summary": "Get Export Summary",
+        "operationId": "get_export_summary_audit_logs_export_summary_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "actor_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "name": "action_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action Kind"
+            }
+          },
+          {
+            "name": "resource_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resource Kind"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit-logs/{audit_id}": {
+      "get": {
+        "tags": [
+          "audit-logs"
+        ],
+        "summary": "Get Audit Detail",
+        "operationId": "get_audit_detail_audit_logs__audit_id__get",
+        "parameters": [
+          {
+            "name": "audit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Audit Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -390,74 +2062,39 @@
         "tags": [
           "datasets"
         ],
-        "summary": "List Datasets",
-        "operationId": "list_datasets_datasets_get",
+        "summary": "List Dataset Catalog",
+        "operationId": "list_dataset_catalog_datasets_get",
         "parameters": [
           {
-            "name": "family",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "minLength": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Family"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "Ready",
-                    "Queued",
-                    "Review"
-                  ],
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Status"
+              "title": "Limit"
             }
           },
           {
-            "name": "sort_by",
+            "name": "cursor",
             "in": "query",
             "required": false,
             "schema": {
-              "enum": [
-                "updated_at",
-                "name",
-                "samples"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "type": "string",
-              "default": "updated_at",
-              "title": "Sort By"
-            }
-          },
-          {
-            "name": "sort_order",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "asc",
-                "desc"
-              ],
-              "type": "string",
-              "default": "desc",
-              "title": "Sort Order"
+              "title": "Cursor"
             }
           }
         ],
@@ -466,13 +2103,172 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/DatasetSummaryResponse"
-                  },
-                  "title": "Response List Datasets Datasets Get"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Create Dataset",
+        "operationId": "create_dataset_datasets_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/profile": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Get Dataset Profile",
+        "operationId": "get_dataset_profile_datasets__dataset_id__profile_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Update Dataset Profile",
+        "operationId": "update_dataset_profile_datasets__dataset_id__profile_patch",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/archive": {
+      "post": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Archive Dataset",
+        "operationId": "archive_dataset_datasets__dataset_id__archive_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -490,12 +2286,12 @@
       }
     },
     "/datasets/{dataset_id}": {
-      "get": {
+      "delete": {
         "tags": [
           "datasets"
         ],
-        "summary": "Get Dataset",
-        "operationId": "get_dataset_datasets__dataset_id__get",
+        "summary": "Delete Dataset",
+        "operationId": "delete_dataset_datasets__dataset_id__delete",
         "parameters": [
           {
             "name": "dataset_id",
@@ -512,9 +2308,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DatasetDetailResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -531,13 +2325,13 @@
         }
       }
     },
-    "/datasets/{dataset_id}/metadata": {
-      "patch": {
+    "/datasets/{dataset_id}/ingestions": {
+      "post": {
         "tags": [
           "datasets"
         ],
-        "summary": "Update Dataset Metadata",
-        "operationId": "update_dataset_metadata_datasets__dataset_id__metadata_patch",
+        "summary": "Ingest Raw Data",
+        "operationId": "ingest_raw_data_datasets__dataset_id__ingestions_post",
         "parameters": [
           {
             "name": "dataset_id",
@@ -554,7 +2348,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DatasetMetadataUpdateRequest"
+                "title": "Payload"
               }
             }
           }
@@ -564,9 +2358,822 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DatasetMetadataUpdateResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/metrics-summary": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "List Tagged Core Metrics",
+        "operationId": "list_tagged_core_metrics_datasets__dataset_id__metrics_summary_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/designs": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "List Designs",
+        "operationId": "list_designs_datasets__dataset_id__designs_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Create Design",
+        "operationId": "create_design_datasets__dataset_id__designs_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/designs/{design_id}/traces": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "List Trace Metadata",
+        "operationId": "list_trace_metadata_datasets__dataset_id__designs__design_id__traces_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "design_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Design Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "family",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Family"
+            }
+          },
+          {
+            "name": "representation",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Representation"
+            }
+          },
+          {
+            "name": "source_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Kind"
+            }
+          },
+          {
+            "name": "trace_mode_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Trace Mode Group"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Get Trace Detail",
+        "operationId": "get_trace_detail_datasets__dataset_id__designs__design_id__traces__trace_id__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "design_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Design Id"
+            }
+          },
+          {
+            "name": "trace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/designs/{design_id}/characterization-results": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "List Characterization Results",
+        "operationId": "list_characterization_results_datasets__dataset_id__designs__design_id__characterization_results_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "design_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Design Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "analysis_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/designs/{design_id}/characterization-analysis-registry": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "List Characterization Analysis Registry",
+        "operationId": "list_characterization_analysis_registry_datasets__dataset_id__designs__design_id__characterization_analysis_registry_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "design_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Design Id"
+            }
+          },
+          {
+            "name": "selected_trace_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Selected Trace Ids"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/designs/{design_id}/characterization-run-history": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "List Characterization Run History",
+        "operationId": "list_characterization_run_history_datasets__dataset_id__designs__design_id__characterization_run_history_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "design_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Design Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "analysis_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/designs/{design_id}/characterization-results/{result_id}": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Get Characterization Result",
+        "operationId": "get_characterization_result_datasets__dataset_id__designs__design_id__characterization_results__result_id__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "design_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Design Id"
+            }
+          },
+          {
+            "name": "result_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Result Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/datasets/{dataset_id}/designs/{design_id}/characterization-results/{result_id}/taggings": {
+      "post": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Apply Characterization Tagging",
+        "operationId": "apply_characterization_tagging_datasets__dataset_id__designs__design_id__characterization_results__result_id__taggings_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "design_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Design Id"
+            }
+          },
+          {
+            "name": "result_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Result Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -586,26 +3193,26 @@
     "/circuit-definitions": {
       "get": {
         "tags": [
+          "definition-authoring",
           "circuit-definitions"
         ],
         "summary": "List Circuit Definitions",
         "operationId": "list_circuit_definitions_circuit_definitions_get",
         "parameters": [
           {
-            "name": "search",
+            "name": "search_query",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
-                  "minLength": 1
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Search"
+              "title": "Search Query"
             }
           },
           {
@@ -615,11 +3222,11 @@
             "schema": {
               "enum": [
                 "created_at",
-                "name",
-                "element_count"
+                "updated_at",
+                "name"
               ],
               "type": "string",
-              "default": "created_at",
+              "default": "updated_at",
               "title": "Sort By"
             }
           },
@@ -636,6 +3243,50 @@
               "default": "desc",
               "title": "Sort Order"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
           }
         ],
         "responses": {
@@ -643,13 +3294,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CircuitDefinitionSummaryResponse"
-                  },
-                  "title": "Response List Circuit Definitions Circuit Definitions Get"
-                }
+                "schema": {}
               }
             }
           },
@@ -667,6 +3312,7 @@
       },
       "post": {
         "tags": [
+          "definition-authoring",
           "circuit-definitions"
         ],
         "summary": "Create Circuit Definition",
@@ -676,19 +3322,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CircuitDefinitionCreateRequest"
+                "title": "Payload"
               }
             }
           }
         },
         "responses": {
-          "201": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CircuitDefinitionMutationResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -708,6 +3352,7 @@
     "/circuit-definitions/{definition_id}": {
       "get": {
         "tags": [
+          "definition-authoring",
           "circuit-definitions"
         ],
         "summary": "Get Circuit Definition",
@@ -728,9 +3373,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CircuitDefinitionDetailResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -748,6 +3391,7 @@
       },
       "put": {
         "tags": [
+          "definition-authoring",
           "circuit-definitions"
         ],
         "summary": "Update Circuit Definition",
@@ -768,7 +3412,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CircuitDefinitionUpdateRequest"
+                "title": "Payload"
               }
             }
           }
@@ -778,9 +3422,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CircuitDefinitionMutationResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -798,6 +3440,7 @@
       },
       "delete": {
         "tags": [
+          "definition-authoring",
           "circuit-definitions"
         ],
         "summary": "Delete Circuit Definition",
@@ -814,8 +3457,150 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "Successful Response"
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/circuit-definitions/{definition_id}/publish": {
+      "post": {
+        "tags": [
+          "definition-authoring",
+          "circuit-definitions"
+        ],
+        "summary": "Publish Circuit Definition",
+        "operationId": "publish_circuit_definition_circuit_definitions__definition_id__publish_post",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Definition Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/circuit-definitions/{definition_id}/clone": {
+      "post": {
+        "tags": [
+          "definition-authoring",
+          "circuit-definitions"
+        ],
+        "summary": "Clone Circuit Definition",
+        "operationId": "clone_circuit_definition_circuit_definitions__definition_id__clone_post",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Definition Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {},
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schemdraw/render": {
+      "post": {
+        "tags": [
+          "definition-authoring",
+          "schemdraw"
+        ],
+        "summary": "Render Schemdraw Preview",
+        "operationId": "render_schemdraw_preview_schemdraw_render_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -833,584 +3618,6 @@
   },
   "components": {
     "schemas": {
-      "ActiveDatasetResponse": {
-        "properties": {
-          "dataset_id": {
-            "type": "string",
-            "title": "Dataset Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "family": {
-            "type": "string",
-            "title": "Family"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "Ready",
-              "Queued",
-              "Review"
-            ],
-            "title": "Status"
-          },
-          "owner": {
-            "type": "string",
-            "title": "Owner"
-          },
-          "access_scope": {
-            "type": "string",
-            "enum": [
-              "workspace",
-              "shared"
-            ],
-            "title": "Access Scope"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dataset_id",
-          "name",
-          "family",
-          "status",
-          "owner",
-          "access_scope"
-        ],
-        "title": "ActiveDatasetResponse"
-      },
-      "ActiveDatasetUpdateRequest": {
-        "properties": {
-          "dataset_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dataset Id"
-          }
-        },
-        "type": "object",
-        "title": "ActiveDatasetUpdateRequest"
-      },
-      "CircuitDefinitionCreateRequest": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Name"
-          },
-          "source_text": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Source Text"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "source_text"
-        ],
-        "title": "CircuitDefinitionCreateRequest"
-      },
-      "CircuitDefinitionDetailResponse": {
-        "properties": {
-          "definition_id": {
-            "type": "integer",
-            "title": "Definition Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "element_count": {
-            "type": "integer",
-            "title": "Element Count"
-          },
-          "validation_status": {
-            "type": "string",
-            "enum": [
-              "ok",
-              "warning"
-            ],
-            "title": "Validation Status"
-          },
-          "preview_artifact_count": {
-            "type": "integer",
-            "title": "Preview Artifact Count"
-          },
-          "source_text": {
-            "type": "string",
-            "title": "Source Text"
-          },
-          "normalized_output": {
-            "type": "string",
-            "title": "Normalized Output"
-          },
-          "validation_notices": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationNoticeResponse"
-            },
-            "type": "array",
-            "title": "Validation Notices"
-          },
-          "validation_summary": {
-            "$ref": "#/components/schemas/CircuitDefinitionValidationSummaryResponse"
-          },
-          "preview_artifacts": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Preview Artifacts"
-          }
-        },
-        "type": "object",
-        "required": [
-          "definition_id",
-          "name",
-          "created_at",
-          "element_count",
-          "validation_status",
-          "preview_artifact_count",
-          "source_text",
-          "normalized_output",
-          "validation_notices",
-          "validation_summary",
-          "preview_artifacts"
-        ],
-        "title": "CircuitDefinitionDetailResponse"
-      },
-      "CircuitDefinitionMutationResponse": {
-        "properties": {
-          "operation": {
-            "type": "string",
-            "enum": [
-              "created",
-              "updated"
-            ],
-            "title": "Operation"
-          },
-          "definition": {
-            "$ref": "#/components/schemas/CircuitDefinitionDetailResponse"
-          }
-        },
-        "type": "object",
-        "required": [
-          "operation",
-          "definition"
-        ],
-        "title": "CircuitDefinitionMutationResponse"
-      },
-      "CircuitDefinitionSummaryResponse": {
-        "properties": {
-          "definition_id": {
-            "type": "integer",
-            "title": "Definition Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "element_count": {
-            "type": "integer",
-            "title": "Element Count"
-          },
-          "validation_status": {
-            "type": "string",
-            "enum": [
-              "ok",
-              "warning"
-            ],
-            "title": "Validation Status"
-          },
-          "preview_artifact_count": {
-            "type": "integer",
-            "title": "Preview Artifact Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "definition_id",
-          "name",
-          "created_at",
-          "element_count",
-          "validation_status",
-          "preview_artifact_count"
-        ],
-        "title": "CircuitDefinitionSummaryResponse"
-      },
-      "CircuitDefinitionUpdateRequest": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Name"
-          },
-          "source_text": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Source Text"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "source_text"
-        ],
-        "title": "CircuitDefinitionUpdateRequest"
-      },
-      "CircuitDefinitionValidationSummaryResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "ok",
-              "warning"
-            ],
-            "title": "Status"
-          },
-          "notice_count": {
-            "type": "integer",
-            "title": "Notice Count"
-          },
-          "warning_count": {
-            "type": "integer",
-            "title": "Warning Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status",
-          "notice_count",
-          "warning_count"
-        ],
-        "title": "CircuitDefinitionValidationSummaryResponse"
-      },
-      "DatasetDetailResponse": {
-        "properties": {
-          "dataset_id": {
-            "type": "string",
-            "title": "Dataset Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "family": {
-            "type": "string",
-            "title": "Family"
-          },
-          "owner": {
-            "type": "string",
-            "title": "Owner"
-          },
-          "updated_at": {
-            "type": "string",
-            "title": "Updated At"
-          },
-          "device_type": {
-            "type": "string",
-            "title": "Device Type"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "samples": {
-            "type": "integer",
-            "title": "Samples"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "Ready",
-              "Queued",
-              "Review"
-            ],
-            "title": "Status"
-          },
-          "capability_count": {
-            "type": "integer",
-            "title": "Capability Count"
-          },
-          "tag_count": {
-            "type": "integer",
-            "title": "Tag Count"
-          },
-          "capabilities": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Capabilities"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags"
-          },
-          "preview_columns": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Preview Columns"
-          },
-          "preview_rows": {
-            "items": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "type": "array",
-            "title": "Preview Rows"
-          },
-          "artifacts": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Artifacts"
-          },
-          "lineage": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Lineage"
-          },
-          "metrics": {
-            "$ref": "#/components/schemas/DatasetMetricsResponse"
-          },
-          "storage": {
-            "$ref": "#/components/schemas/DatasetStorageResponse"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dataset_id",
-          "name",
-          "family",
-          "owner",
-          "updated_at",
-          "device_type",
-          "source",
-          "samples",
-          "status",
-          "capability_count",
-          "tag_count",
-          "capabilities",
-          "tags",
-          "preview_columns",
-          "preview_rows",
-          "artifacts",
-          "lineage",
-          "metrics",
-          "storage"
-        ],
-        "title": "DatasetDetailResponse"
-      },
-      "DatasetMetadataUpdateRequest": {
-        "properties": {
-          "device_type": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Device Type"
-          },
-          "capabilities": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Capabilities"
-          },
-          "source": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Source"
-          }
-        },
-        "type": "object",
-        "required": [
-          "device_type",
-          "source"
-        ],
-        "title": "DatasetMetadataUpdateRequest"
-      },
-      "DatasetMetadataUpdateResponse": {
-        "properties": {
-          "dataset": {
-            "$ref": "#/components/schemas/DatasetDetailResponse"
-          },
-          "updated_fields": {
-            "items": {
-              "type": "string",
-              "enum": [
-                "device_type",
-                "capabilities",
-                "source"
-              ]
-            },
-            "type": "array",
-            "title": "Updated Fields"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dataset",
-          "updated_fields"
-        ],
-        "title": "DatasetMetadataUpdateResponse"
-      },
-      "DatasetMetricsResponse": {
-        "properties": {
-          "capability_count": {
-            "type": "integer",
-            "title": "Capability Count"
-          },
-          "tag_count": {
-            "type": "integer",
-            "title": "Tag Count"
-          },
-          "preview_row_count": {
-            "type": "integer",
-            "title": "Preview Row Count"
-          },
-          "artifact_count": {
-            "type": "integer",
-            "title": "Artifact Count"
-          },
-          "lineage_depth": {
-            "type": "integer",
-            "title": "Lineage Depth"
-          }
-        },
-        "type": "object",
-        "required": [
-          "capability_count",
-          "tag_count",
-          "preview_row_count",
-          "artifact_count",
-          "lineage_depth"
-        ],
-        "title": "DatasetMetricsResponse"
-      },
-      "DatasetStorageResponse": {
-        "properties": {
-          "metadata_record": {
-            "$ref": "#/components/schemas/MetadataRecordRefResponse"
-          },
-          "primary_trace": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TracePayloadRefResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "result_handles": {
-            "items": {
-              "$ref": "#/components/schemas/ResultHandleRefResponse"
-            },
-            "type": "array",
-            "title": "Result Handles"
-          }
-        },
-        "type": "object",
-        "required": [
-          "metadata_record",
-          "primary_trace",
-          "result_handles"
-        ],
-        "title": "DatasetStorageResponse"
-      },
-      "DatasetSummaryResponse": {
-        "properties": {
-          "dataset_id": {
-            "type": "string",
-            "title": "Dataset Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "family": {
-            "type": "string",
-            "title": "Family"
-          },
-          "owner": {
-            "type": "string",
-            "title": "Owner"
-          },
-          "updated_at": {
-            "type": "string",
-            "title": "Updated At"
-          },
-          "device_type": {
-            "type": "string",
-            "title": "Device Type"
-          },
-          "source": {
-            "type": "string",
-            "title": "Source"
-          },
-          "samples": {
-            "type": "integer",
-            "title": "Samples"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "Ready",
-              "Queued",
-              "Review"
-            ],
-            "title": "Status"
-          },
-          "capability_count": {
-            "type": "integer",
-            "title": "Capability Count"
-          },
-          "tag_count": {
-            "type": "integer",
-            "title": "Tag Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dataset_id",
-          "name",
-          "family",
-          "owner",
-          "updated_at",
-          "device_type",
-          "source",
-          "samples",
-          "status",
-          "capability_count",
-          "tag_count"
-        ],
-        "title": "DatasetSummaryResponse"
-      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1447,968 +3654,6 @@
           "environment"
         ],
         "title": "HealthStatus"
-      },
-      "MetadataRecordRefResponse": {
-        "properties": {
-          "backend": {
-            "type": "string",
-            "const": "sqlite_metadata",
-            "title": "Backend"
-          },
-          "record_type": {
-            "type": "string",
-            "enum": [
-              "dataset",
-              "trace_batch",
-              "analysis_run",
-              "result_handle"
-            ],
-            "title": "Record Type"
-          },
-          "record_id": {
-            "type": "string",
-            "title": "Record Id"
-          },
-          "version": {
-            "type": "integer",
-            "title": "Version"
-          },
-          "schema_version": {
-            "type": "string",
-            "title": "Schema Version"
-          }
-        },
-        "type": "object",
-        "required": [
-          "backend",
-          "record_type",
-          "record_id",
-          "version",
-          "schema_version"
-        ],
-        "title": "MetadataRecordRefResponse"
-      },
-      "ResultHandleRefResponse": {
-        "properties": {
-          "contract_version": {
-            "type": "string",
-            "title": "Contract Version"
-          },
-          "handle_id": {
-            "type": "string",
-            "title": "Handle Id"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "simulation_trace",
-              "fit_summary",
-              "characterization_report",
-              "plot_bundle"
-            ],
-            "title": "Kind"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "pending",
-              "materialized"
-            ],
-            "title": "Status"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "metadata_record": {
-            "$ref": "#/components/schemas/MetadataRecordRefResponse"
-          },
-          "payload_backend": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "local_zarr",
-                  "json_artifact",
-                  "markdown_artifact",
-                  "bundle_archive"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Payload Backend"
-          },
-          "payload_format": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "zarr",
-                  "json",
-                  "markdown",
-                  "zip"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Payload Format"
-          },
-          "payload_role": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "trace_payload",
-                  "report_artifact",
-                  "bundle_artifact"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Payload Role"
-          },
-          "payload_locator": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Payload Locator"
-          },
-          "provenance_task_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provenance Task Id"
-          },
-          "provenance": {
-            "$ref": "#/components/schemas/ResultProvenanceRefResponse"
-          }
-        },
-        "type": "object",
-        "required": [
-          "contract_version",
-          "handle_id",
-          "kind",
-          "status",
-          "label",
-          "metadata_record",
-          "payload_backend",
-          "payload_format",
-          "payload_role",
-          "payload_locator",
-          "provenance_task_id",
-          "provenance"
-        ],
-        "title": "ResultHandleRefResponse"
-      },
-      "ResultProvenanceRefResponse": {
-        "properties": {
-          "source_dataset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Dataset Id"
-          },
-          "source_task_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Task Id"
-          },
-          "trace_batch_record": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MetadataRecordRefResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "analysis_run_record": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MetadataRecordRefResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "source_dataset_id",
-          "source_task_id",
-          "trace_batch_record",
-          "analysis_run_record"
-        ],
-        "title": "ResultProvenanceRefResponse"
-      },
-      "SessionAuthResponse": {
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": [
-              "authenticated",
-              "anonymous"
-            ],
-            "title": "State"
-          },
-          "mode": {
-            "type": "string",
-            "const": "development_stub",
-            "title": "Mode"
-          },
-          "scopes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Scopes"
-          },
-          "can_submit_tasks": {
-            "type": "boolean",
-            "title": "Can Submit Tasks"
-          },
-          "can_manage_datasets": {
-            "type": "boolean",
-            "title": "Can Manage Datasets"
-          }
-        },
-        "type": "object",
-        "required": [
-          "state",
-          "mode",
-          "scopes",
-          "can_submit_tasks",
-          "can_manage_datasets"
-        ],
-        "title": "SessionAuthResponse"
-      },
-      "SessionResponse": {
-        "properties": {
-          "session_id": {
-            "type": "string",
-            "title": "Session Id"
-          },
-          "auth": {
-            "$ref": "#/components/schemas/SessionAuthResponse"
-          },
-          "identity": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SessionUserResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "workspace": {
-            "$ref": "#/components/schemas/WorkspaceContextResponse"
-          }
-        },
-        "type": "object",
-        "required": [
-          "session_id",
-          "auth",
-          "identity",
-          "workspace"
-        ],
-        "title": "SessionResponse"
-      },
-      "SessionUserResponse": {
-        "properties": {
-          "user_id": {
-            "type": "string",
-            "title": "User Id"
-          },
-          "display_name": {
-            "type": "string",
-            "title": "Display Name"
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          }
-        },
-        "type": "object",
-        "required": [
-          "user_id",
-          "display_name",
-          "email"
-        ],
-        "title": "SessionUserResponse"
-      },
-      "TaskDetailResponse": {
-        "properties": {
-          "task_id": {
-            "type": "integer",
-            "title": "Task Id"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "simulation",
-              "post_processing",
-              "characterization"
-            ],
-            "title": "Kind"
-          },
-          "lane": {
-            "type": "string",
-            "enum": [
-              "simulation",
-              "characterization"
-            ],
-            "title": "Lane"
-          },
-          "execution_mode": {
-            "type": "string",
-            "enum": [
-              "run",
-              "probe"
-            ],
-            "title": "Execution Mode"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "running",
-              "completed",
-              "failed"
-            ],
-            "title": "Status"
-          },
-          "submitted_at": {
-            "type": "string",
-            "title": "Submitted At"
-          },
-          "owner_user_id": {
-            "type": "string",
-            "title": "Owner User Id"
-          },
-          "owner_display_name": {
-            "type": "string",
-            "title": "Owner Display Name"
-          },
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "workspace_slug": {
-            "type": "string",
-            "title": "Workspace Slug"
-          },
-          "visibility_scope": {
-            "type": "string",
-            "enum": [
-              "workspace",
-              "owned"
-            ],
-            "title": "Visibility Scope"
-          },
-          "dataset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dataset Id"
-          },
-          "definition_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Definition Id"
-          },
-          "summary": {
-            "type": "string",
-            "title": "Summary"
-          },
-          "worker_task_name": {
-            "type": "string",
-            "enum": [
-              "simulation_run_task",
-              "simulation_probe_task",
-              "simulation_failure_task",
-              "simulation_crash_task",
-              "post_processing_run_task",
-              "post_processing_probe_task",
-              "characterization_run_task",
-              "characterization_probe_task",
-              "characterization_failure_task",
-              "characterization_crash_task"
-            ],
-            "title": "Worker Task Name"
-          },
-          "request_ready": {
-            "type": "boolean",
-            "title": "Request Ready"
-          },
-          "submitted_from_active_dataset": {
-            "type": "boolean",
-            "title": "Submitted From Active Dataset"
-          },
-          "dispatch": {
-            "$ref": "#/components/schemas/TaskDispatchResponse"
-          },
-          "progress": {
-            "$ref": "#/components/schemas/TaskProgressResponse"
-          },
-          "result_refs": {
-            "$ref": "#/components/schemas/TaskResultRefsResponse"
-          },
-          "events": {
-            "items": {
-              "$ref": "#/components/schemas/TaskEventResponse"
-            },
-            "type": "array",
-            "title": "Events"
-          }
-        },
-        "type": "object",
-        "required": [
-          "task_id",
-          "kind",
-          "lane",
-          "execution_mode",
-          "status",
-          "submitted_at",
-          "owner_user_id",
-          "owner_display_name",
-          "workspace_id",
-          "workspace_slug",
-          "visibility_scope",
-          "dataset_id",
-          "definition_id",
-          "summary",
-          "worker_task_name",
-          "request_ready",
-          "submitted_from_active_dataset",
-          "dispatch",
-          "progress",
-          "result_refs",
-          "events"
-        ],
-        "title": "TaskDetailResponse"
-      },
-      "TaskDispatchResponse": {
-        "properties": {
-          "dispatch_key": {
-            "type": "string",
-            "title": "Dispatch Key"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "accepted",
-              "running",
-              "completed",
-              "failed"
-            ],
-            "title": "Status"
-          },
-          "submission_source": {
-            "type": "string",
-            "enum": [
-              "active_dataset",
-              "explicit_dataset",
-              "definition_only"
-            ],
-            "title": "Submission Source"
-          },
-          "accepted_at": {
-            "type": "string",
-            "title": "Accepted At"
-          },
-          "last_updated_at": {
-            "type": "string",
-            "title": "Last Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dispatch_key",
-          "status",
-          "submission_source",
-          "accepted_at",
-          "last_updated_at"
-        ],
-        "title": "TaskDispatchResponse"
-      },
-      "TaskEventResponse": {
-        "properties": {
-          "event_key": {
-            "type": "string",
-            "title": "Event Key"
-          },
-          "event_type": {
-            "type": "string",
-            "enum": [
-              "task_submitted",
-              "task_running",
-              "task_completed",
-              "task_failed"
-            ],
-            "title": "Event Type"
-          },
-          "level": {
-            "type": "string",
-            "enum": [
-              "info",
-              "warning",
-              "error"
-            ],
-            "title": "Level"
-          },
-          "occurred_at": {
-            "type": "string",
-            "title": "Occurred At"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "metadata": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "boolean"
-                },
-                {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Metadata"
-          }
-        },
-        "type": "object",
-        "required": [
-          "event_key",
-          "event_type",
-          "level",
-          "occurred_at",
-          "message",
-          "metadata"
-        ],
-        "title": "TaskEventResponse"
-      },
-      "TaskMutationResponse": {
-        "properties": {
-          "operation": {
-            "type": "string",
-            "const": "submitted",
-            "title": "Operation"
-          },
-          "task": {
-            "$ref": "#/components/schemas/TaskDetailResponse"
-          }
-        },
-        "type": "object",
-        "required": [
-          "operation",
-          "task"
-        ],
-        "title": "TaskMutationResponse"
-      },
-      "TaskProgressResponse": {
-        "properties": {
-          "phase": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "running",
-              "completed",
-              "failed"
-            ],
-            "title": "Phase"
-          },
-          "percent_complete": {
-            "type": "integer",
-            "maximum": 100.0,
-            "minimum": 0.0,
-            "title": "Percent Complete"
-          },
-          "summary": {
-            "type": "string",
-            "title": "Summary"
-          },
-          "updated_at": {
-            "type": "string",
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "phase",
-          "percent_complete",
-          "summary",
-          "updated_at"
-        ],
-        "title": "TaskProgressResponse"
-      },
-      "TaskResultRefsResponse": {
-        "properties": {
-          "trace_batch_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trace Batch Id"
-          },
-          "analysis_run_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Analysis Run Id"
-          },
-          "metadata_records": {
-            "items": {
-              "$ref": "#/components/schemas/MetadataRecordRefResponse"
-            },
-            "type": "array",
-            "title": "Metadata Records"
-          },
-          "trace_payload": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TracePayloadRefResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "result_handles": {
-            "items": {
-              "$ref": "#/components/schemas/ResultHandleRefResponse"
-            },
-            "type": "array",
-            "title": "Result Handles"
-          }
-        },
-        "type": "object",
-        "required": [
-          "trace_batch_id",
-          "analysis_run_id",
-          "metadata_records",
-          "trace_payload",
-          "result_handles"
-        ],
-        "title": "TaskResultRefsResponse"
-      },
-      "TaskSubmissionRequest": {
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "simulation",
-              "post_processing",
-              "characterization"
-            ],
-            "title": "Kind"
-          },
-          "dataset_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dataset Id"
-          },
-          "definition_id": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Definition Id"
-          },
-          "summary": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Summary"
-          }
-        },
-        "type": "object",
-        "required": [
-          "kind"
-        ],
-        "title": "TaskSubmissionRequest"
-      },
-      "TaskSummaryResponse": {
-        "properties": {
-          "task_id": {
-            "type": "integer",
-            "title": "Task Id"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "simulation",
-              "post_processing",
-              "characterization"
-            ],
-            "title": "Kind"
-          },
-          "lane": {
-            "type": "string",
-            "enum": [
-              "simulation",
-              "characterization"
-            ],
-            "title": "Lane"
-          },
-          "execution_mode": {
-            "type": "string",
-            "enum": [
-              "run",
-              "probe"
-            ],
-            "title": "Execution Mode"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "running",
-              "completed",
-              "failed"
-            ],
-            "title": "Status"
-          },
-          "submitted_at": {
-            "type": "string",
-            "title": "Submitted At"
-          },
-          "owner_user_id": {
-            "type": "string",
-            "title": "Owner User Id"
-          },
-          "owner_display_name": {
-            "type": "string",
-            "title": "Owner Display Name"
-          },
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "workspace_slug": {
-            "type": "string",
-            "title": "Workspace Slug"
-          },
-          "visibility_scope": {
-            "type": "string",
-            "enum": [
-              "workspace",
-              "owned"
-            ],
-            "title": "Visibility Scope"
-          },
-          "dataset_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dataset Id"
-          },
-          "definition_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Definition Id"
-          },
-          "summary": {
-            "type": "string",
-            "title": "Summary"
-          }
-        },
-        "type": "object",
-        "required": [
-          "task_id",
-          "kind",
-          "lane",
-          "execution_mode",
-          "status",
-          "submitted_at",
-          "owner_user_id",
-          "owner_display_name",
-          "workspace_id",
-          "workspace_slug",
-          "visibility_scope",
-          "dataset_id",
-          "definition_id",
-          "summary"
-        ],
-        "title": "TaskSummaryResponse"
-      },
-      "TracePayloadRefResponse": {
-        "properties": {
-          "contract_version": {
-            "type": "string",
-            "title": "Contract Version"
-          },
-          "backend": {
-            "type": "string",
-            "enum": [
-              "local_zarr",
-              "s3_zarr"
-            ],
-            "title": "Backend"
-          },
-          "payload_role": {
-            "type": "string",
-            "enum": [
-              "dataset_primary",
-              "task_output",
-              "analysis_projection"
-            ],
-            "title": "Payload Role"
-          },
-          "store_key": {
-            "type": "string",
-            "title": "Store Key"
-          },
-          "store_uri": {
-            "type": "string",
-            "title": "Store Uri"
-          },
-          "group_path": {
-            "type": "string",
-            "title": "Group Path"
-          },
-          "array_path": {
-            "type": "string",
-            "title": "Array Path"
-          },
-          "dtype": {
-            "type": "string",
-            "title": "Dtype"
-          },
-          "shape": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Shape"
-          },
-          "chunk_shape": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Chunk Shape"
-          },
-          "schema_version": {
-            "type": "string",
-            "title": "Schema Version"
-          }
-        },
-        "type": "object",
-        "required": [
-          "contract_version",
-          "backend",
-          "payload_role",
-          "store_key",
-          "store_uri",
-          "group_path",
-          "array_path",
-          "dtype",
-          "shape",
-          "chunk_shape",
-          "schema_version"
-        ],
-        "title": "TracePayloadRefResponse"
       },
       "ValidationError": {
         "properties": {
@@ -2449,81 +3694,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "ValidationNoticeResponse": {
-        "properties": {
-          "level": {
-            "type": "string",
-            "enum": [
-              "ok",
-              "warning"
-            ],
-            "title": "Level"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "type": "object",
-        "required": [
-          "level",
-          "message"
-        ],
-        "title": "ValidationNoticeResponse"
-      },
-      "WorkspaceContextResponse": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "slug": {
-            "type": "string",
-            "title": "Slug"
-          },
-          "display_name": {
-            "type": "string",
-            "title": "Display Name"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "owner",
-              "member",
-              "viewer"
-            ],
-            "title": "Role"
-          },
-          "default_task_scope": {
-            "type": "string",
-            "enum": [
-              "workspace",
-              "owned"
-            ],
-            "title": "Default Task Scope"
-          },
-          "active_dataset": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ActiveDatasetResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "slug",
-          "display_name",
-          "role",
-          "default_task_scope",
-          "active_dataset"
-        ],
-        "title": "WorkspaceContextResponse"
       }
     }
   }

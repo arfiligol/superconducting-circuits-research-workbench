@@ -1,43 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/platform_common.sh"
 
-if [[ -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
-fi
+ROOT_DIR="$(platform_root_dir)"
+platform_load_env "$ROOT_DIR"
+cd "$ROOT_DIR"
+APP_URL="$(platform_app_url)"
+APP_PORT="$(platform_app_port)"
 
 PID_DIR="$ROOT_DIR/tmp/dev_pids"
 LOG_DIR="$ROOT_DIR/tmp/dev_logs"
 mkdir -p "$PID_DIR" "$LOG_DIR"
-
-start_service() {
-  local name="$1"
-  shift
-  local pid_file="$PID_DIR/$name.pid"
-  local log_file="$LOG_DIR/$name.log"
-
-  if [[ -f "$pid_file" ]]; then
-    local existing_pid
-    existing_pid="$(cat "$pid_file")"
-    if kill -0 "$existing_pid" 2>/dev/null; then
-      echo "[dev-start] $name already running (pid=$existing_pid)"
-      return
-    fi
-    rm -f "$pid_file"
-  fi
-
-  "$@" >"$log_file" 2>&1 &
-  local pid=$!
-  printf '%s\n' "$pid" >"$pid_file"
-  echo "[dev-start] started $name (pid=$pid, log=$log_file)"
-}
-
-start_service app uv run sc-app
-echo "[dev-start] started app-only local stack"
-echo "[dev-start] queue-backed worker processes are pending the worker-isolation redesign"
+platform_require_path "$ROOT_DIR/.venv" "npm run platform:install" "dev-start"
+platform_require_free_port "$APP_PORT" app "dev-start"
+platform_check_redis "$ROOT_DIR"
+platform_start_service "$PID_DIR" "$LOG_DIR" app bash -lc "cd '$ROOT_DIR' && exec uv run sc-app"
+platform_start_service "$PID_DIR" "$LOG_DIR" worker-simulation bash -lc "cd '$ROOT_DIR' && exec uv run sc-worker-simulation"
+platform_start_service "$PID_DIR" "$LOG_DIR" worker-characterization bash -lc "cd '$ROOT_DIR' && exec uv run sc-worker-characterization"
+platform_wait_for_url "app" "$APP_URL/health" "$LOG_DIR/app.log" "$PID_DIR/app.pid"
+platform_wait_for_runtime_health "$ROOT_DIR" "$APP_URL"
+echo "[dev-start] started app + worker local stack with external Redis"
 echo "[dev-start] use ./scripts/dev_stop.sh to stop all started processes"

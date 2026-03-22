@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from fastapi import FastAPI, Request
 
-from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
+from src.app.infrastructure.app_state_repository import InMemoryAppStateRepository
 from src.app.infrastructure.session_jwt_transport import (
     APP_CONTEXT_COOKIE_NAME,
     SESSION_COOKIE_NAME,
@@ -15,7 +15,7 @@ from src.app.infrastructure.session_jwt_transport import (
 def install_request_session_middleware(
     app: FastAPI,
     *,
-    session_repository_factory: Callable[[], InMemoryRewriteAppStateRepository],
+    session_repository_factory: Callable[[], InMemoryAppStateRepository],
     token_transport_factory: Callable[[], SessionJwtTransport],
 ) -> None:
     @app.middleware("http")
@@ -54,7 +54,7 @@ def install_request_session_middleware(
 def _resolve_request_session_state(
     *,
     session_token: str | None,
-    session_repository: InMemoryRewriteAppStateRepository,
+    session_repository: InMemoryAppStateRepository,
     token_transport: SessionJwtTransport,
 ):
     if session_token is None or len(session_token.strip()) == 0:

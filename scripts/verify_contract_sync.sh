@@ -4,6 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+echo "==> Checking backend OpenAPI drift..."
+(cd "$REPO_ROOT" && npm run openapi:check)
+
 echo "==> Running sync_api_types.sh..."
 "$SCRIPT_DIR/sync_api_types.sh"
 

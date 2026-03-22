@@ -49,6 +49,10 @@ from src.app.domain.datasets import (
 )
 from src.app.domain.result_traces import ResultTraceSelection
 from src.app.domain.tasks import TaskDetail
+from src.app.infrastructure.persisted_characterization_runtime import (
+    CharacterizationTaggingResultPayload,
+    PersistedCharacterizationRepository,
+)
 from src.app.infrastructure.persistence.research_data_publication_repository import (
     SqliteResearchDataPublicationRepository,
 )
@@ -82,6 +86,7 @@ class InMemoryRewriteCatalogRepository:
         self,
         durable_definition_repository: DurableCircuitDefinitionRepository | None = None,
         durable_publication_repository: SqliteResearchDataPublicationRepository | None = None,
+        durable_characterization_repository: PersistedCharacterizationRepository | None = None,
         task_repository: CharacterizationTaskRepository | None = None,
     ) -> None:
         self._datasets = {dataset.dataset_id: dataset for dataset in _seed_datasets()}
@@ -108,6 +113,7 @@ class InMemoryRewriteCatalogRepository:
                 continue
             self._circuit_definitions[definition.definition_id] = definition
         self._durable_publication_repository = durable_publication_repository
+        self._durable_characterization_repository = durable_characterization_repository
         self._task_repository = task_repository
         self._next_dataset_id = 100
         all_definition_ids = {
@@ -474,7 +480,15 @@ class InMemoryRewriteCatalogRepository:
         self,
         dataset_id: str,
     ) -> tuple[TaggedCoreMetricSummary, ...]:
-        return self._tagged_core_metrics.get(dataset_id, ())
+        persisted_metrics = (
+            self._durable_characterization_repository.list_tagged_core_metrics(dataset_id)
+            if self._durable_characterization_repository is not None
+            else ()
+        )
+        return _merge_tagged_core_metrics(
+            self._tagged_core_metrics.get(dataset_id, ()),
+            persisted_metrics,
+        )
 
     def list_designs(
         self,
@@ -539,9 +553,17 @@ class InMemoryRewriteCatalogRepository:
         dataset_id: str,
         design_id: str,
     ) -> tuple[CharacterizationResultSummary, ...]:
+        persisted_rows = (
+            self._durable_characterization_repository.list_result_summaries(dataset_id, design_id)
+            if self._durable_characterization_repository is not None
+            else ()
+        )
         return _merge_characterization_result_rows(
             self._characterization_results.get((dataset_id, design_id), ()),
-            self._task_derived_characterization_result_rows(dataset_id, design_id),
+            (
+                *persisted_rows,
+                *self._task_derived_characterization_result_rows(dataset_id, design_id),
+            ),
         )
 
     def list_characterization_analysis_registry(
@@ -559,9 +581,14 @@ class InMemoryRewriteCatalogRepository:
         dataset_id: str,
         design_id: str,
     ) -> tuple[CharacterizationRunHistoryRow, ...]:
+        persisted_rows = (
+            self._durable_characterization_repository.list_run_history(dataset_id, design_id)
+            if self._durable_characterization_repository is not None
+            else ()
+        )
         return _merge_characterization_run_rows(
             self._characterization_run_history.get((dataset_id, design_id), ()),
-            self._task_derived_characterization_run_rows(dataset_id, design_id),
+            (*persisted_rows, *self._task_derived_characterization_run_rows(dataset_id, design_id)),
         )
 
     def get_characterization_result(
@@ -573,6 +600,17 @@ class InMemoryRewriteCatalogRepository:
         cached = self._characterization_result_details.get((dataset_id, design_id, result_id))
         if cached is not None:
             return cached
+        if self._durable_characterization_repository is not None:
+            persisted = self._durable_characterization_repository.get_result_detail(
+                dataset_id,
+                design_id,
+                result_id,
+            )
+            if persisted is not None:
+                self._characterization_result_details[
+                    (dataset_id, design_id, result_id)
+                ] = persisted
+                return persisted
         derived = self._task_derived_characterization_result_detail(
             dataset_id,
             design_id,
@@ -589,6 +627,26 @@ class InMemoryRewriteCatalogRepository:
         result_id: str,
         request: CharacterizationTaggingRequest,
     ) -> CharacterizationTaggingResult:
+        if self._durable_characterization_repository is not None:
+            persisted = self._durable_characterization_repository.apply_tagging(
+                dataset_id,
+                design_id,
+                result_id,
+                artifact_id=request.artifact_id,
+                source_parameter=request.source_parameter,
+                designated_metric=request.designated_metric,
+            )
+            if persisted is not None:
+                detail = self._durable_characterization_repository.get_result_detail(
+                    dataset_id,
+                    design_id,
+                    result_id,
+                )
+                if detail is not None:
+                    self._characterization_result_details[
+                        (dataset_id, design_id, result_id)
+                    ] = detail
+                return _to_characterization_tagging_result(persisted)
         detail_key = (dataset_id, design_id, result_id)
         detail = self._characterization_result_details[detail_key]
         metric_option = next(
@@ -1075,6 +1133,27 @@ def _merge_characterization_run_rows(
     return tuple(merged_rows)
 
 
+def _merge_tagged_core_metrics(
+    base_rows: tuple[TaggedCoreMetricSummary, ...],
+    persisted_rows: tuple[TaggedCoreMetricSummary, ...],
+) -> tuple[TaggedCoreMetricSummary, ...]:
+    merged_rows: list[TaggedCoreMetricSummary] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for row in persisted_rows:
+        pair = (row.source_parameter, row.designated_metric)
+        if pair in seen_pairs:
+            continue
+        merged_rows.append(row)
+        seen_pairs.add(pair)
+    for row in base_rows:
+        pair = (row.source_parameter, row.designated_metric)
+        if pair in seen_pairs:
+            continue
+        merged_rows.append(row)
+        seen_pairs.add(pair)
+    return tuple(merged_rows)
+
+
 def _parse_characterization_result_summary(
     payload: object,
 ) -> CharacterizationResultSummary | None:
@@ -1232,6 +1311,21 @@ def _slugify(value: str) -> str:
             for character in value.strip()
         ).split("-")
         if token
+    )
+
+
+def _to_characterization_tagging_result(
+    payload: CharacterizationTaggingResultPayload,
+) -> CharacterizationTaggingResult:
+    return CharacterizationTaggingResult(
+        tagging_status="applied",
+        dataset_id=payload.dataset_id,
+        design_id=payload.design_id,
+        result_id=payload.result_id,
+        artifact_id=payload.artifact_id,
+        source_parameter=payload.source_parameter,
+        designated_metric=payload.designated_metric,
+        tagged_metric=payload.tagged_metric,
     )
 
 

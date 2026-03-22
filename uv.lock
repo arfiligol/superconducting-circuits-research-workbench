@@ -2502,6 +2502,8 @@ dependencies = [
     { name = "fastapi" },
     { name = "numpy" },
     { name = "pydantic-settings" },
+    { name = "redis" },
+    { name = "rq" },
     { name = "sc-core" },
     { name = "schemdraw" },
     { name = "sqlalchemy" },
@@ -2515,6 +2517,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.133.0" },
     { name = "numpy", specifier = ">=2.4.3" },
     { name = "pydantic-settings", specifier = ">=2.11.0" },
+    { name = "redis", specifier = ">=6.4.0" },
+    { name = "rq", specifier = ">=2.6.0" },
     { name = "sc-core", editable = "core" },
     { name = "schemdraw", specifier = ">=0.22" },
     { name = "sqlalchemy", specifier = ">=2.0.44" },
@@ -2524,6 +2528,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "basedpyright", specifier = ">=1.34.0" },
+    { name = "fakeredis", specifier = ">=2.32.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "ruff", specifier = ">=0.14.0" },

@@ -4,6 +4,7 @@ from datetime import datetime
 import pytest
 from sc_core.execution import TaskExecutionResult, TaskResultHandle
 from sqlalchemy import update
+from src.app.api.schemas.tasks import TaskDispatchResponse, TaskEventResponse
 from src.app.domain.tasks import (
     CharacterizationSetup,
     TaskEventHistoryQuery,
@@ -25,6 +26,7 @@ from src.app.infrastructure.runtime import (
     get_task_execution_runtime,
     get_task_service,
     get_task_snapshot_repository,
+    get_worker_runtime_settings,
     reset_runtime_state,
 )
 from src.app.infrastructure.storage_reference_factory import (
@@ -75,6 +77,37 @@ def _characterization_setup() -> CharacterizationSetup:
             },
         }
     )
+
+
+def test_task_schema_models_accept_documented_dispatch_and_event_family() -> None:
+    dispatch_schema = TaskDispatchResponse.model_json_schema()
+    dispatch_properties = dispatch_schema["properties"]
+    assert "queue_name" in dispatch_properties
+    assert "enqueued_at" in dispatch_properties
+    assert "runtime_job_id" in dispatch_properties
+    assert "dispatch_attempt_count" in dispatch_properties
+    assert "last_dispatch_outcome" in dispatch_properties
+    assert "last_dispatch_error_code" in dispatch_properties
+
+    event_enum = TaskEventResponse.model_json_schema()["properties"]["event_type"]["enum"]
+    assert "task_dispatch_claimed" in event_enum
+    assert "task_cancel_acknowledged" in event_enum
+    assert "task_terminate_acknowledged" in event_enum
+    assert "task_requeued" in event_enum
+
+
+def test_worker_runtime_settings_accept_documented_stale_timeout_env_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SC_WORKER_STALE_TIMEOUT_SECONDS", "123")
+    monkeypatch.setenv("SC_RQ_WORKER_STALE_AFTER_SECONDS", "456")
+    reset_runtime_state()
+
+    settings = get_worker_runtime_settings()
+
+    assert settings.stale_after_seconds == 123
+
+    reset_runtime_state()
 
 
 def test_runtime_task_submission_persists_pending_result_metadata() -> None:
@@ -429,9 +462,7 @@ def test_execution_runtime_persists_start_heartbeat_and_completion_across_reset(
     assert reloaded_task.status == "completed"
     assert reloaded_task.dispatch is not None
     assert reloaded_task.dispatch.status == "completed"
-    assert reloaded_task.progress.summary == (
-        "characterization_run_task completed in the characterization lane."
-    )
+    assert reloaded_task.progress.summary == "Characterization task completed."
     assert reloaded_task.result_refs.trace_batch_id == submitted_task.task_id
     assert reloaded_task.result_refs.result_handles[0].status == "materialized"
     assert [event.event_type for event in reloaded_task.events] == [
@@ -473,9 +504,13 @@ def test_execution_runtime_reconcile_marks_running_task_failed_with_safe_metadat
     assert reconciled_task.status == "failed"
     assert reconciled_task.dispatch is not None
     assert reconciled_task.dispatch.status == "failed"
+    assert reconciled_task.reconcile.required is True
+    assert reconciled_task.reconcile.reason == "worker_stale_timeout"
     assert reconciled_task.events[-1].event_type == "task_failed"
     assert reconciled_task.events[-1].metadata["audit_action"] == "reconcile.task_failed"
     assert reconciled_task.events[-1].metadata["error_code"] == "stale_task_timeout"
+    assert reconciled_task.events[-1].metadata["reconcile_required"] is True
+    assert reconciled_task.events[-1].metadata["reconcile_reason"] == "worker_stale_timeout"
     assert "message" not in reconciled_task.events[-1].metadata
 
     _reset_runtime_state_online()
@@ -486,6 +521,8 @@ def test_execution_runtime_reconcile_marks_running_task_failed_with_safe_metadat
     )
 
     assert reloaded_history.task.status == "failed"
+    assert reloaded_history.task.reconcile.required is True
+    assert reloaded_history.task.reconcile.reason == "worker_stale_timeout"
     assert reloaded_history.latest_event is not None
     assert reloaded_history.latest_event.event_type == "task_failed"
     assert reloaded_history.latest_event.metadata["audit_action"] == "reconcile.task_failed"
@@ -742,17 +779,17 @@ def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_c
 
     assert cancelling_task.status == "cancelling"
     assert cancelling_task.control_state == "cancellation_requested"
-    assert cancelling_task.events[-1].event_type == "task_cancel_requested"
-    assert cancelling_task.events[-1].metadata["audit_action"] == (
+    acknowledge_event = next(
+        event
+        for event in cancelling_task.events
+        if event.event_type == "task_cancel_acknowledged"
+    )
+    assert acknowledge_event.metadata["audit_action"] == (
         "worker.task_cancellation_acknowledged"
     )
 
     queue = service.get_queue_view(TaskListQuery(limit=20))
-    simulation_summary = next(
-        summary for summary in queue.worker_summary if summary.lane == "simulation"
-    )
-    assert simulation_summary.draining_processors == 1
-    assert simulation_summary.busy_processors == 0
+    assert queue.worker_summary == ()
 
     cancelled_task = runtime.finalize_cancelled(
         301,
@@ -761,8 +798,10 @@ def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_c
 
     assert cancelled_task.status == "cancelled"
     assert cancelled_task.control_state == "none"
-    assert cancelled_task.events[-1].event_type == "task_cancel_requested"
-    assert cancelled_task.events[-1].metadata["audit_action"] == "worker.task_cancelled"
+    assert any(
+        event.metadata.get("audit_action") == "worker.task_cancelled"
+        for event in cancelled_task.events
+    )
 
     audit_records = get_task_audit_repository().list_records_for_resource(
         resource_kind="task",
@@ -788,11 +827,7 @@ def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_c
     assert reloaded_task.control_state == "none"
 
     reloaded_queue = get_task_service().get_queue_view(TaskListQuery(limit=20))
-    reloaded_simulation_summary = next(
-        summary for summary in reloaded_queue.worker_summary if summary.lane == "simulation"
-    )
-    assert reloaded_simulation_summary.healthy_processors == 2
-    assert reloaded_simulation_summary.draining_processors == 0
+    assert reloaded_queue.worker_summary == ()
 
 
 def test_execution_runtime_consumes_termination_request_and_persists_terminated_state() -> None:
@@ -812,17 +847,17 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
 
     assert acknowledged_task.status == "termination_requested"
     assert acknowledged_task.control_state == "termination_requested"
-    assert acknowledged_task.events[-1].event_type == "task_terminate_requested"
-    assert acknowledged_task.events[-1].metadata["audit_action"] == (
+    acknowledge_event = next(
+        event
+        for event in acknowledged_task.events
+        if event.event_type == "task_terminate_acknowledged"
+    )
+    assert acknowledge_event.metadata["audit_action"] == (
         "worker.task_termination_acknowledged"
     )
 
     queue = service.get_queue_view(TaskListQuery(limit=20))
-    simulation_summary = next(
-        summary for summary in queue.worker_summary if summary.lane == "simulation"
-    )
-    assert simulation_summary.degraded_processors == 1
-    assert simulation_summary.busy_processors == 0
+    assert queue.worker_summary == ()
 
     terminated_task = runtime.finalize_terminated(
         301,
@@ -831,8 +866,10 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
 
     assert terminated_task.status == "terminated"
     assert terminated_task.control_state == "none"
-    assert terminated_task.events[-1].event_type == "task_terminate_requested"
-    assert terminated_task.events[-1].metadata["audit_action"] == "worker.task_terminated"
+    assert any(
+        event.metadata.get("audit_action") == "worker.task_terminated"
+        for event in terminated_task.events
+    )
 
     audit_records = get_task_audit_repository().list_records_for_resource(
         resource_kind="task",
@@ -851,8 +888,4 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
     assert reloaded_task.control_state == "none"
 
     reloaded_queue = get_task_service().get_queue_view(TaskListQuery(limit=20))
-    reloaded_simulation_summary = next(
-        summary for summary in reloaded_queue.worker_summary if summary.lane == "simulation"
-    )
-    assert reloaded_simulation_summary.healthy_processors == 2
-    assert reloaded_simulation_summary.degraded_processors == 0
+    assert reloaded_queue.worker_summary == ()

@@ -29,6 +29,7 @@ class ServiceError(Exception):
     category: ApiErrorCategory
     message: str
     field_errors: tuple[ServiceFieldError, ...] = field(default_factory=tuple)
+    details: dict[str, object] = field(default_factory=dict)
 
     def __str__(self) -> str:
         return self.message
@@ -41,6 +42,7 @@ def service_error(
     category: ApiErrorCategory,
     message: str,
     field_errors: tuple[ServiceFieldError, ...] = (),
+    details: dict[str, object] | None = None,
 ) -> ServiceError:
     return ServiceError(
         status_code=status_code,
@@ -48,4 +50,5 @@ def service_error(
         category=category,
         message=message,
         field_errors=field_errors,
+        details=dict(details or {}),
     )

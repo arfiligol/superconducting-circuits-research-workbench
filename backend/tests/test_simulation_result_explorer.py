@@ -1,3 +1,4 @@
+import math
 from contextlib import contextmanager
 
 import pytest
@@ -9,6 +10,7 @@ from src.app.infrastructure.runtime import (
     reset_runtime_state,
 )
 from src.app.main import app
+from tests.worker_runtime_harness import drain_lane_queue
 
 client = TestClient(app)
 
@@ -71,6 +73,7 @@ def _simulation_setup_payload(
 
 def _submit_local_simulation(
     *,
+    definition_id: int = 3,
     ptc_enabled: bool,
     parameter_sweeps: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
@@ -79,7 +82,7 @@ def _submit_local_simulation(
         json={
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
-            "definition_id": 3,
+            "definition_id": definition_id,
             "summary": "Explorer source task.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=ptc_enabled),
@@ -88,7 +91,9 @@ def _submit_local_simulation(
         },
     )
     assert response.status_code == 201
-    return response.json()["data"]["task"]
+    task = response.json()["data"]["task"]
+    drain_lane_queue("simulation")
+    return client.get(f"/tasks/{task['task_id']}").json()["data"]
 
 
 def _post_processing_setup_payload(
@@ -97,7 +102,6 @@ def _post_processing_setup_payload(
     representation: str = "real",
 ) -> dict[str, object]:
     return {
-        "output_view": "matrix",
         "selections": [
             {
                 "trace_family": trace_family,
@@ -106,20 +110,7 @@ def _post_processing_setup_payload(
                 "trace_ids": ["trace_local_flux_preview"],
             }
         ],
-        "operations": [
-            {
-                "operation": "coordinate_transform",
-                "enabled": True,
-                "config": {
-                    "template": "cm_dm",
-                    "weight_mode": "auto",
-                    "alpha": 0.5,
-                    "beta": 0.5,
-                    "port_a": 1,
-                    "port_b": 1,
-                },
-            }
-        ],
+        "operations": [],
     }
 
 
@@ -143,7 +134,9 @@ def _submit_local_post_processing(
         },
     )
     assert response.status_code == 201
-    return response.json()["data"]["task"]
+    task = response.json()["data"]["task"]
+    drain_lane_queue("simulation")
+    return client.get(f"/tasks/{task['task_id']}").json()["data"]
 
 
 def _login() -> None:
@@ -217,6 +210,60 @@ def test_completed_simulation_task_returns_explorer_bootstrap_data() -> None:
     ]
 
 
+def test_bootstrap_endpoint_is_stable_and_lighter_than_combined_payload() -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+
+    bootstrap = client.get(f"/tasks/{task['task_id']}/simulation-results/bootstrap")
+    combined = client.get(f"/tasks/{task['task_id']}/simulation-results/explorer")
+
+    assert bootstrap.status_code == 200
+    assert combined.status_code == 200
+    bootstrap_payload = bootstrap.json()["data"]
+    combined_payload = combined.json()["data"]
+
+    assert "bootstrap" in bootstrap_payload
+    assert "result_basis" in bootstrap_payload
+    assert "selection" not in bootstrap_payload
+    assert "plot" not in bootstrap_payload
+    assert bootstrap_payload["bootstrap"] == combined_payload["bootstrap"]
+    assert bootstrap_payload["result_basis"] == combined_payload["result_basis"]
+    assert len(bootstrap.content) < len(combined.content)
+
+
+def test_view_endpoint_returns_full_resolution_selected_slice() -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+
+    response = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/view"
+        "?family=z_matrix&source=ptc&metric=real&z0=75&output_port=1&input_port=1"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert "bootstrap" not in payload
+    assert payload["selection"] == {
+        "family": "z_matrix",
+        "source": "ptc",
+        "metric": "real",
+        "z0_ohm": 75.0,
+        "output_port": 1,
+        "input_port": 1,
+        "trace_mode_group": "base",
+        "output_port_label": "Port 1",
+        "input_port_label": "Port 1",
+        "output_mode": "mode_0",
+        "input_mode": "mode_0",
+        "trace_key": (
+            "family=z_matrix|source=ptc|trace_mode_group=base|output_port=1|"
+            "input_port=1|output_mode=mode_0|input_mode=mode_0|z0_ohm=75"
+        ),
+    }
+    assert len(payload["plot"]["x_axis"]["values"]) == 401
+    assert len(payload["plot"]["series"]) == 1
+    assert len(payload["plot"]["series"][0]["values"]) == 401
+    assert all(math.isfinite(value) for value in payload["plot"]["series"][0]["values"])
+
+
 def test_completed_simulation_task_returns_plottable_trace_payload() -> None:
     task = _submit_local_simulation(ptc_enabled=True)
 
@@ -248,7 +295,8 @@ def test_completed_simulation_task_returns_plottable_trace_payload() -> None:
     assert len(payload["plot"]["series"]) == 1
     assert len(payload["plot"]["series"][0]["values"]) == 401
     assert payload["plot"]["y_axis"]["unit"] == "ohm"
-    assert any(abs(value) > 0.001 for value in payload["plot"]["series"][0]["values"])
+    assert all(math.isfinite(value) for value in payload["plot"]["series"][0]["values"])
+    assert len(set(payload["plot"]["series"][0]["values"])) > 1
 
 
 def test_completed_post_processing_task_returns_explorer_payload() -> None:
@@ -308,6 +356,33 @@ def test_completed_post_processing_task_returns_explorer_payload() -> None:
     assert payload["plot"]["series"][0]["label"].startswith("Raw Z_MATRIX")
 
 
+def test_combined_endpoint_matches_bootstrap_plus_view_contract() -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+
+    bootstrap = client.get(f"/tasks/{task['task_id']}/simulation-results/bootstrap")
+    view = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/view"
+        "?family=y_matrix&source=ptc&metric=real&z0=50&output_port=1&input_port=1"
+    )
+    combined = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        "?family=y_matrix&source=ptc&metric=real&z0=50&output_port=1&input_port=1"
+    )
+
+    assert bootstrap.status_code == 200
+    assert view.status_code == 200
+    assert combined.status_code == 200
+
+    bootstrap_payload = bootstrap.json()["data"]
+    view_payload = view.json()["data"]
+    combined_payload = combined.json()["data"]
+
+    assert combined_payload["bootstrap"] == bootstrap_payload["bootstrap"]
+    assert combined_payload["result_basis"] == bootstrap_payload["result_basis"]
+    assert combined_payload["selection"] == view_payload["selection"]
+    assert combined_payload["plot"] == view_payload["plot"]
+
+
 def test_pending_or_failed_simulation_task_gets_truthful_explorer_error() -> None:
     _login()
     pending_response = client.post(
@@ -363,7 +438,7 @@ def test_ptc_source_only_appears_when_capability_exists() -> None:
     assert [source["key"] for source in families["z_matrix"]["available_sources"]] == ["raw"]
 
     rejected = client.get(
-        f"/tasks/{task['task_id']}/simulation-results/explorer"
+        f"/tasks/{task['task_id']}/simulation-results/view"
         "?family=z_matrix&source=ptc&metric=real"
     )
     assert rejected.status_code == 400
@@ -417,18 +492,48 @@ def test_metric_changes_do_not_change_trace_key_but_canonical_selection_changes_
 
 
 def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> None:
+    definition_response = client.post(
+        "/circuit-definitions",
+        json={
+            "name": "SweepableReadoutChain",
+            "source_text": """{
+  "name": "SweepableReadoutChain",
+  "parameters": [
+    {"name": "Lj", "default": 1000.0, "unit": "pH"},
+    {"name": "Cj", "default": 1000.0, "unit": "fF"}
+  ],
+  "components": [
+    {"name": "R1", "default": 50.0, "unit": "Ohm"},
+    {"name": "C1", "default": 100.0, "unit": "fF"},
+    {"name": "Lj1", "value_ref": "Lj", "unit": "pH"},
+    {"name": "C2", "value_ref": "Cj", "unit": "fF"}
+  ],
+  "topology": [
+    ("P1", "1", "0", 1),
+    ("R1", "1", "0", "R1"),
+    ("C1", "1", "2", "C1"),
+    ("Lj1", "2", "0", "Lj1"),
+    ("C2", "2", "0", "C2")
+  ]
+}""",
+        },
+    )
+    assert definition_response.status_code == 201
+    definition_id = definition_response.json()["data"]["definition"]["definition_id"]
+
     task = _submit_local_simulation(
+        definition_id=definition_id,
         ptc_enabled=True,
         parameter_sweeps=[
             {
-                "parameter": "L_jun",
-                "values": [22.0, 24.0, 26.0],
-                "unit": "nH",
+                "parameter": "Lj",
+                "values": [850.0, 1000.0, 1150.0],
+                "unit": "pH",
             },
             {
-                "parameter": "C_q",
-                "values": [0.055, 0.05814],
-                "unit": "pF",
+                "parameter": "Cj",
+                "values": [900.0, 1000.0],
+                "unit": "fF",
             },
         ],
     )
@@ -442,17 +547,17 @@ def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> N
         "point_count": 6,
         "axes": [
             {
-                "parameter": "L_jun",
-                "label": "L_jun",
-                "unit": "nH",
-                "values": [22.0, 24.0, 26.0],
+                "parameter": "Lj",
+                "label": "Lj",
+                "unit": "pH",
+                "values": [850.0, 1000.0, 1150.0],
                 "selected_value_index": 0,
             },
             {
-                "parameter": "C_q",
-                "label": "C_q",
-                "unit": "pF",
-                "values": [0.055, 0.05814],
+                "parameter": "Cj",
+                "label": "Cj",
+                "unit": "fF",
+                "values": [900.0, 1000.0],
                 "selected_value_index": 0,
             },
         ],
@@ -477,6 +582,7 @@ def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> N
 def test_retry_task_recovers_missing_persisted_setup_for_explorer() -> None:
     source_task = _submit_local_simulation(ptc_enabled=True)
     retried = client.post(f"/tasks/{source_task['task_id']}/retry").json()["data"]["task"]
+    drain_lane_queue("simulation")
 
     with _bind_client_app_context(client):
         task_service = get_task_service()

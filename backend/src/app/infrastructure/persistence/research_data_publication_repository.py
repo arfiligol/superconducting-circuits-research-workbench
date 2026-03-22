@@ -20,8 +20,19 @@ from src.app.domain.datasets import (
     TraceDetail,
     TraceMetadataSummary,
 )
-from src.app.domain.result_traces import ResultTraceSelection
+from src.app.domain.result_traces import (
+    ResultTraceSelection,
+    build_trace_id,
+    build_trace_parameter,
+    resolve_saved_trace_parameter,
+)
 from src.app.domain.tasks import TaskDetail
+from src.app.infrastructure.persisted_runtime import (
+    available_sources_for_task_family,
+    build_trace_preview_payload,
+    extract_selection_trace_data,
+    write_complex_trace_payload,
+)
 from src.app.infrastructure.persistence.models import (
     RewriteDatasetDesignRecord,
     RewritePublishedSimulationResultRecord,
@@ -30,12 +41,10 @@ from src.app.infrastructure.persistence.models import (
 from src.app.infrastructure.persistence.storage_metadata_repository import (
     SqliteRewriteStorageMetadataRepository,
 )
-from src.app.infrastructure.simulation_result_publication_materializer import (
-    build_result_trace_publication_detail,
-    build_result_trace_publication_summary,
-    build_simulation_publication_key,
-    build_simulation_publication_trace_details,
-    build_simulation_publication_trace_summary,
+from src.app.infrastructure.storage_reference_factory import (
+    build_metadata_record_ref,
+    build_result_handle_ref,
+    build_result_provenance_ref,
 )
 
 
@@ -116,7 +125,7 @@ class SqliteResearchDataPublicationRepository:
         draft: SimulationResultPublicationDraft,
     ) -> SimulationResultPublicationResult:
         design_id = draft.design_id or _build_design_id(draft.design_name)
-        publication_key = build_simulation_publication_key(
+        publication_key = _build_simulation_publication_key(
             task_id=task.task_id,
             dataset_id=dataset.dataset_id,
             design_id=design_id,
@@ -135,22 +144,26 @@ class SqliteResearchDataPublicationRepository:
                 )
             raise ValueError("simulation result already published elsewhere")
 
-        published_at = "2026-03-19T11:30:00Z"
-        trace_details = build_simulation_publication_trace_details(
-            task=task,
-            dataset_id=dataset.dataset_id,
-            design_id=design_id,
+        published_at = _timestamp_now()
+        trace_details = tuple(
+            _build_persisted_simulation_publication_trace(
+                task=task,
+                dataset_id=dataset.dataset_id,
+                design_id=design_id,
+                family=family,
+                source=source,
+            )
+            for family, source in _legacy_bundle_publication_targets(task)
         )
-        for _, _, detail in trace_details:
+        for _summary, detail in trace_details:
             payload_ref = detail.payload_ref
+            if payload_ref is None:
+                raise ValueError("published simulation result is missing a trace payload")
             result_handle = detail.result_handles[0]
             trace_batch_record = result_handle.provenance.trace_batch_record
-            if payload_ref is None or trace_batch_record is None:
+            if trace_batch_record is None:
                 raise ValueError("published simulation result is missing storage metadata")
-            self._storage_metadata_repository.save_trace_payload(
-                trace_batch_record,
-                payload_ref,
-            )
+            self._storage_metadata_repository.save_trace_payload(trace_batch_record, payload_ref)
             self._storage_metadata_repository.save_result_handle(result_handle)
 
         with self._session_factory() as session:
@@ -180,13 +193,7 @@ class SqliteResearchDataPublicationRepository:
             )
             session.add(row)
             session.flush()
-            for family, source, detail in trace_details:
-                summary = build_simulation_publication_trace_summary(
-                    detail=detail,
-                    task=task,
-                    family=family,
-                    source=source,
-                )
+            for summary, detail in trace_details:
                 session.add(
                     RewritePublishedSimulationTraceRecord(
                         publication_id=row.id,
@@ -232,33 +239,18 @@ class SqliteResearchDataPublicationRepository:
         draft: ResultTracePublicationDraft,
     ) -> ResultTracePublicationResult:
         selection = ResultTraceSelection.from_trace_key(draft.trace_key)
-        publication_key = build_simulation_publication_key(
+        saved_parameter = resolve_saved_trace_parameter(selection, draft.parameter_name)
+        trace_id = build_trace_id(
+            task_id=task.task_id,
+            selection=selection,
+            parameter_name=saved_parameter,
+        )
+        publication_key = _build_simulation_publication_key(
             task_id=task.task_id,
             dataset_id=dataset.dataset_id,
             design_id=design.design_id,
         )
         published_at = _timestamp_now()
-        detail = build_result_trace_publication_detail(
-            task=task,
-            basis_task=basis_task,
-            dataset_id=dataset.dataset_id,
-            design_id=design.design_id,
-            selection=selection,
-            parameter_name=draft.parameter_name,
-        )
-        summary = build_result_trace_publication_summary(
-            task=task,
-            detail=detail,
-            selection=selection,
-            parameter_name=draft.parameter_name,
-        )
-        payload_ref = detail.payload_ref
-        result_handle = detail.result_handles[0]
-        trace_batch_record = result_handle.provenance.trace_batch_record
-        if payload_ref is None or trace_batch_record is None:
-            raise ValueError("published result trace is missing storage metadata")
-        self._storage_metadata_repository.save_trace_payload(trace_batch_record, payload_ref)
-        self._storage_metadata_repository.save_result_handle(result_handle)
 
         with self._session_factory() as session:
             publication_row = session.scalar(
@@ -290,7 +282,7 @@ class SqliteResearchDataPublicationRepository:
             existing_trace_row = session.scalar(
                 select(RewritePublishedSimulationTraceRecord).where(
                     RewritePublishedSimulationTraceRecord.publication_id == publication_row.id,
-                    RewritePublishedSimulationTraceRecord.trace_id == detail.trace_id,
+                    RewritePublishedSimulationTraceRecord.trace_id == trace_id,
                 )
             )
             if existing_trace_row is not None:
@@ -300,8 +292,104 @@ class SqliteResearchDataPublicationRepository:
                     publication_key=publication_key,
                     state="already_published",
                     trace_key=draft.trace_key,
-                    trace_id=existing_trace_row.trace_id,
+                    trace_id=trace_id,
                 )
+
+        trace_data = extract_selection_trace_data(
+            task,
+            basis_task=basis_task,
+            selection=selection,
+        )
+        payload_ref = write_complex_trace_payload(
+            dataset_id=dataset.dataset_id,
+            design_id=design.design_id,
+            trace_id=trace_id,
+            frequencies_ghz=trace_data.frequencies_ghz,
+            values=trace_data.values,
+        )
+        trace_batch_record = build_metadata_record_ref(
+            "trace_batch",
+            f"trace_batch:published:{task.task_id}:{design.dataset_id}:{design.design_id}",
+            version=1,
+        )
+        result_handle_record = build_metadata_record_ref(
+            "result_handle",
+            f"result_handle:published:{task.task_id}:{trace_id}",
+            version=2,
+        )
+        result_handle = build_result_handle_ref(
+            handle_id=f"published-result:{task.task_id}:{trace_id}",
+            kind="simulation_trace",
+            status="materialized",
+            label=f"Published {saved_parameter} {selection.source.upper()} trace",
+            metadata_record=result_handle_record,
+            payload_backend="local_zarr",
+            payload_format="zarr",
+            payload_role="trace_payload",
+            payload_locator=payload_ref.store_uri or payload_ref.store_key,
+            provenance_task_id=task.task_id,
+            provenance=build_result_provenance_ref(
+                source_dataset_id=task.dataset_id,
+                source_task_id=task.task_id,
+                trace_batch_record=trace_batch_record,
+            ),
+        )
+        detail = TraceDetail(
+            trace_id=trace_id,
+            dataset_id=dataset.dataset_id,
+            design_id=design.design_id,
+            axes=(
+                TraceAxis(
+                    name="frequency",
+                    unit="GHz",
+                    length=len(trace_data.frequencies_ghz),
+                ),
+            ),
+            preview_payload=_build_published_trace_preview_payload(
+                task=task,
+                selection=selection,
+                saved_parameter=saved_parameter,
+                trace_data=trace_data,
+            ),
+            payload_ref=payload_ref,
+            result_handles=(result_handle,),
+        )
+        summary = TraceMetadataSummary(
+            trace_id=trace_id,
+            dataset_id=dataset.dataset_id,
+            design_id=design.design_id,
+            family=selection.family,
+            parameter=saved_parameter,
+            representation="complex",
+            trace_mode_group=selection.trace_mode_group,
+            source_kind=cast(str, trace_data.source_kind),
+            stage_kind=cast(str, trace_data.stage_kind),
+            provenance_summary=_published_trace_provenance_summary(task, selection),
+        )
+        self._storage_metadata_repository.save_trace_payload(trace_batch_record, payload_ref)
+        self._storage_metadata_repository.save_result_handle(result_handle)
+
+        with self._session_factory() as session:
+            publication_row = session.scalar(
+                select(RewritePublishedSimulationResultRecord).where(
+                    RewritePublishedSimulationResultRecord.source_task_id == task.task_id
+                )
+            )
+            if publication_row is None:
+                publication_row = RewritePublishedSimulationResultRecord(
+                    publication_key=publication_key,
+                    source_task_id=task.task_id,
+                    source_dataset_id=task.dataset_id,
+                    source_result_handle_ids=[
+                        handle.handle_id for handle in task.result_refs.result_handles
+                    ],
+                    target_dataset_id=dataset.dataset_id,
+                    target_design_id=design.design_id,
+                    target_design_name=design.name,
+                    published_at=published_at,
+                )
+                session.add(publication_row)
+                session.flush()
             publication_row.published_at = published_at
             publication_row.target_design_name = design.name
             session.add(
@@ -338,7 +426,7 @@ class SqliteResearchDataPublicationRepository:
             publication_key=publication_key,
             state="published",
             trace_key=draft.trace_key,
-            trace_id=detail.trace_id,
+            trace_id=trace_id,
         )
 
     def list_designs(
@@ -582,6 +670,176 @@ class SqliteResearchDataPublicationRepository:
             )
 
 
+def _build_published_trace_preview_payload(
+    *,
+    task: TaskDetail,
+    selection: ResultTraceSelection,
+    saved_parameter: str,
+    trace_data,
+) -> dict[str, object]:
+    preview = build_trace_preview_payload(
+        selection=selection,
+        trace_data=trace_data,
+    )
+    preview["kind"] = "series"
+    preview["family"] = selection.family
+    preview["source"] = selection.source
+    preview["parameter"] = saved_parameter
+    preview["default_parameter"] = build_trace_parameter(selection)
+    preview["output_port"] = selection.output_port
+    preview["input_port"] = selection.input_port
+    preview["trace_mode_group"] = selection.trace_mode_group
+    preview["output_mode"] = selection.output_mode
+    preview["input_mode"] = selection.input_mode
+    preview["history_steps"] = _build_trace_history_steps(task=task, selection=selection)
+    preview["history_summary"] = " -> ".join(preview["history_steps"])
+    preview["points"] = [
+        [float(frequency), float(value.real), float(value.imag)]
+        for frequency, value in zip(
+            trace_data.frequencies_ghz,
+            trace_data.values,
+            strict=True,
+        )
+    ]
+    return preview
+
+
+def _legacy_bundle_publication_targets(task: TaskDetail) -> tuple[tuple[str, str], ...]:
+    targets: list[tuple[str, str]] = [
+        ("s_matrix", "raw"),
+        ("y_matrix", "raw"),
+        ("z_matrix", "raw"),
+    ]
+    if "ptc" in available_sources_for_task_family(task, "y_matrix"):
+        targets.extend((("y_matrix", "ptc"), ("z_matrix", "ptc")))
+    return tuple(targets)
+
+
+def _build_persisted_simulation_publication_trace(
+    *,
+    task: TaskDetail,
+    dataset_id: str,
+    design_id: str,
+    family: str,
+    source: str,
+) -> tuple[TraceMetadataSummary, TraceDetail]:
+    selection = ResultTraceSelection(
+        family=family,
+        source=source,
+        output_port=1,
+        input_port=1,
+        z0_ohm=50.0 if family in {"y_matrix", "z_matrix"} else None,
+    )
+    trace_data = extract_selection_trace_data(
+        task,
+        basis_task=task,
+        selection=selection,
+    )
+    trace_id = f"trace_simulation_task_{task.task_id}_{family}_{source}"
+    payload_ref = write_complex_trace_payload(
+        dataset_id=dataset_id,
+        design_id=design_id,
+        trace_id=trace_id,
+        frequencies_ghz=trace_data.frequencies_ghz,
+        values=trace_data.values,
+    )
+    trace_batch_record = build_metadata_record_ref(
+        "trace_batch",
+        f"trace_batch:published:{task.task_id}:{dataset_id}:{design_id}",
+        version=1,
+    )
+    result_handle_record = build_metadata_record_ref(
+        "result_handle",
+        f"result_handle:published:{task.task_id}:{family}:{source}",
+        version=2,
+    )
+    result_handle = build_result_handle_ref(
+        handle_id=f"published-result:{task.task_id}:{family}:{source}",
+        kind="simulation_trace",
+        status="materialized",
+        label=f"Published {family.upper()} {source.upper()} result",
+        metadata_record=result_handle_record,
+        payload_backend="local_zarr",
+        payload_format="zarr",
+        payload_role="trace_payload",
+        payload_locator=payload_ref.store_uri or payload_ref.store_key,
+        provenance_task_id=task.task_id,
+        provenance=build_result_provenance_ref(
+            source_dataset_id=task.dataset_id,
+            source_task_id=task.task_id,
+            trace_batch_record=trace_batch_record,
+        ),
+    )
+    detail = TraceDetail(
+        trace_id=trace_id,
+        dataset_id=dataset_id,
+        design_id=design_id,
+        axes=(
+            TraceAxis(
+                name="frequency",
+                unit="GHz",
+                length=len(trace_data.frequencies_ghz),
+            ),
+        ),
+        preview_payload=_build_published_trace_preview_payload(
+            task=task,
+            selection=selection,
+            saved_parameter=build_trace_parameter(selection),
+            trace_data=trace_data,
+        ),
+        payload_ref=payload_ref,
+        result_handles=(result_handle,),
+    )
+    summary = TraceMetadataSummary(
+        trace_id=detail.trace_id,
+        dataset_id=dataset_id,
+        design_id=design_id,
+        family=family,
+        parameter=source,
+        representation="complex_matrix",
+        trace_mode_group=selection.trace_mode_group,
+        source_kind=cast(str, trace_data.source_kind),
+        stage_kind=cast(str, trace_data.stage_kind),
+        provenance_summary=f"Published from simulation task {task.task_id}",
+    )
+    return summary, detail
+
+
+def _build_trace_history_steps(
+    *,
+    task: TaskDetail,
+    selection: ResultTraceSelection,
+) -> list[str]:
+    history = ["PTC" if selection.source == "ptc" else "Raw"]
+    if task.kind != "post_processing" or task.post_processing_setup is None:
+        return history
+    for operation in task.post_processing_setup.operations:
+        if not operation.enabled:
+            continue
+        history.append(_humanize_post_processing_operation(operation.operation))
+    return history
+
+
+def _humanize_post_processing_operation(operation: str) -> str:
+    if operation == "coordinate_transform":
+        return "Coordinate Transformation"
+    if operation == "kron_reduction":
+        return "Kron Reduction"
+    return operation.replace("_", " ").title()
+
+
+def _published_trace_provenance_summary(
+    task: TaskDetail,
+    selection: ResultTraceSelection,
+) -> str:
+    if task.kind == "post_processing":
+        return (
+            f"Published from post-processing task {task.task_id} "
+            f"({selection.source.upper()} {build_trace_parameter(selection)})"
+        )
+    return f"Published from simulation task {task.task_id}"
+
+
 def _to_publication_record(
     row: RewritePublishedSimulationResultRecord,
     trace_rows: list[RewritePublishedSimulationTraceRecord],
@@ -612,6 +870,15 @@ def _to_trace_summary(row: RewritePublishedSimulationTraceRecord) -> TraceMetada
         stage_kind=cast(str, row.stage_kind),
         provenance_summary=row.provenance_summary,
     )
+
+
+def _build_simulation_publication_key(
+    *,
+    task_id: int,
+    dataset_id: str,
+    design_id: str,
+) -> str:
+    return f"simulation-publication:{task_id}:{dataset_id}:{design_id}"
 
 
 def _build_design_id(name: str) -> str:

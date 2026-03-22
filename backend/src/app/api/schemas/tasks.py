@@ -11,7 +11,18 @@ from src.app.api.schemas.storage import (
 
 
 class TaskProgressResponse(BaseModel):
-    phase: Literal["queued", "running", "completed", "failed"]
+    phase: Literal[
+        "queued",
+        "dispatching",
+        "running",
+        "cancellation_requested",
+        "cancelling",
+        "cancelled",
+        "termination_requested",
+        "terminated",
+        "completed",
+        "failed",
+    ]
     percent_complete: int = Field(ge=0, le=100)
     summary: str
     updated_at: str
@@ -19,15 +30,49 @@ class TaskProgressResponse(BaseModel):
 
 class TaskDispatchResponse(BaseModel):
     dispatch_key: str
-    status: Literal["accepted", "running", "completed", "failed"]
+    status: Literal[
+        "accepted",
+        "dispatching",
+        "running",
+        "cancellation_requested",
+        "cancelling",
+        "cancelled",
+        "termination_requested",
+        "terminated",
+        "completed",
+        "failed",
+    ]
     submission_source: Literal["active_dataset", "explicit_dataset", "definition_only"]
     accepted_at: str
     last_updated_at: str
+    queue_name: str | None
+    enqueued_at: str | None
+    runtime_job_id: str | None
+    dispatch_attempt_count: int = Field(ge=0)
+    last_dispatch_outcome: str | None
+    last_dispatch_error_code: str | None
+
+
+class TaskReconcileResponse(BaseModel):
+    required: bool
+    reason: str | None = None
 
 
 class TaskEventResponse(BaseModel):
     event_key: str
-    event_type: Literal["task_submitted", "task_running", "task_completed", "task_failed"]
+    event_type: Literal[
+        "task_submitted",
+        "task_dispatch_claimed",
+        "task_running",
+        "task_completed",
+        "task_failed",
+        "task_cancel_requested",
+        "task_cancel_acknowledged",
+        "task_terminate_requested",
+        "task_terminate_acknowledged",
+        "task_requeued",
+        "task_retried",
+    ]
     level: Literal["info", "warning", "error"]
     occurred_at: str
     message: str
@@ -47,24 +92,35 @@ class TaskSummaryResponse(BaseModel):
     kind: Literal["simulation", "post_processing", "characterization"]
     lane: Literal["simulation", "characterization"]
     execution_mode: TaskExecutionMode
-    status: Literal["queued", "running", "completed", "failed"]
+    status: Literal[
+        "queued",
+        "dispatching",
+        "running",
+        "cancellation_requested",
+        "cancelling",
+        "cancelled",
+        "termination_requested",
+        "terminated",
+        "completed",
+        "failed",
+    ]
     submitted_at: str
     owner_user_id: str
     owner_display_name: str
     workspace_id: str
     workspace_slug: str
-    visibility_scope: Literal["workspace", "owned"]
+    visibility_scope: Literal["local", "workspace", "owned"]
     dataset_id: str | None
     definition_id: int | None
     summary: str
 
 
 class TaskDetailResponse(TaskSummaryResponse):
-    queue_backend: Literal["in_memory_scaffold"]
     worker_task_name: WorkerTaskName
     request_ready: bool
     submitted_from_active_dataset: bool
     dispatch: TaskDispatchResponse
+    reconcile: TaskReconcileResponse
     progress: TaskProgressResponse
     result_refs: TaskResultRefsResponse
     events: list[TaskEventResponse]

@@ -47,6 +47,7 @@ from src.app.infrastructure.runtime import (
 )
 from src.app.services.service_errors import ServiceError, service_error
 from src.app.services.simulation_result_explorer_service import (
+    ExplorerSelectionRequest,
     SimulationResultExplorerService,
 )
 from src.app.services.task_service import TaskService
@@ -171,6 +172,61 @@ def get_task(
     )
 
 
+@router.get("/{task_id}/simulation-results/bootstrap")
+def get_simulation_result_bootstrap(
+    task_id: int,
+    explorer_service: Annotated[
+        SimulationResultExplorerService,
+        Depends(get_simulation_result_explorer_service),
+    ],
+) -> JSONResponse:
+    try:
+        payload = explorer_service.get_bootstrap_payload(task_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=payload,
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.get("/{task_id}/simulation-results/view")
+def get_simulation_result_view(
+    task_id: int,
+    explorer_service: Annotated[
+        SimulationResultExplorerService,
+        Depends(get_simulation_result_explorer_service),
+    ],
+    family: Annotated[str | None, Query()] = None,
+    source: Annotated[str | None, Query()] = None,
+    metric: Annotated[str | None, Query()] = None,
+    sweep_index: Annotated[int | None, Query(ge=0)] = None,
+    z0: Annotated[float | None, Query(gt=0, alias="z0")] = None,
+    output_port: Annotated[int | None, Query(ge=1)] = None,
+    input_port: Annotated[int | None, Query(ge=1)] = None,
+) -> JSONResponse:
+    selection_request = _build_explorer_selection_request(
+        family=family,
+        source=source,
+        metric=metric,
+        sweep_index=sweep_index,
+        z0=z0,
+        output_port=output_port,
+        input_port=input_port,
+    )
+    try:
+        payload = explorer_service.get_view_payload(task_id, selection_request)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data=payload,
+        meta={
+            "generated_at": _generated_at(),
+            "filter_echo": _serialize_explorer_filter_echo(selection_request),
+        },
+    )
+
+
 @router.get("/{task_id}/simulation-results/explorer")
 def get_simulation_result_explorer(
     task_id: int,
@@ -186,32 +242,24 @@ def get_simulation_result_explorer(
     output_port: Annotated[int | None, Query(ge=1)] = None,
     input_port: Annotated[int | None, Query(ge=1)] = None,
 ) -> JSONResponse:
+    selection_request = _build_explorer_selection_request(
+        family=family,
+        source=source,
+        metric=metric,
+        sweep_index=sweep_index,
+        z0=z0,
+        output_port=output_port,
+        input_port=input_port,
+    )
     try:
-        payload = explorer_service.get_explorer_payload(
-            task_id,
-            family=family,
-            source=source,
-            metric=metric,
-            sweep_index=sweep_index,
-            z0_ohm=z0,
-            output_port=output_port,
-            input_port=input_port,
-        )
+        payload = explorer_service.get_explorer_payload(task_id, selection_request)
     except ServiceError as exc:
         return _service_error_response(exc)
     return _success_response(
         data=payload,
         meta={
             "generated_at": _generated_at(),
-            "filter_echo": {
-                "family": family,
-                "source": source,
-                "metric": metric,
-                "sweep_index": sweep_index,
-                "z0": z0,
-                "output_port": output_port,
-                "input_port": input_port,
-            },
+            "filter_echo": _serialize_explorer_filter_echo(selection_request),
         },
     )
 
@@ -508,6 +556,10 @@ def _serialize_queue_row(queue_row: TaskQueueRow) -> dict[str, object]:
             "rejection_reason": queue_row.allowed_actions.rejection_reason,
         },
         "control_state": queue_row.control_state,
+        "reconcile": {
+            "required": queue_row.reconcile.required,
+            "reason": queue_row.reconcile.reason,
+        },
     }
 
 
@@ -529,7 +581,6 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
         "dataset_id": task.dataset_id,
         "definition_id": task.definition_id,
         "summary": task.summary,
-        "queue_backend": task.queue_backend,
         "worker_task_name": task.worker_task_name,
         "request_ready": task.request_ready,
         "submitted_from_active_dataset": task.submitted_from_active_dataset,
@@ -570,10 +621,20 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
                 "submission_source": task.dispatch.submission_source,
                 "accepted_at": task.dispatch.accepted_at,
                 "last_updated_at": task.dispatch.last_updated_at,
+                "queue_name": task.dispatch.queue_name,
+                "enqueued_at": task.dispatch.enqueued_at,
+                "runtime_job_id": task.dispatch.runtime_job_id,
+                "dispatch_attempt_count": task.dispatch.dispatch_attempt_count,
+                "last_dispatch_outcome": task.dispatch.last_dispatch_outcome,
+                "last_dispatch_error_code": task.dispatch.last_dispatch_error_code,
             }
             if task.dispatch is not None
             else None
         ),
+        "reconcile": {
+            "required": task.reconcile.required,
+            "reason": task.reconcile.reason,
+        },
         "progress": {
             "phase": task.progress.phase,
             "percent_complete": task.progress.percent_complete,
@@ -693,18 +754,54 @@ def _service_error_response(exc: ServiceError) -> JSONResponse:
         "retryable": exc.category in {"internal_error", "persistence_error"},
         "debug_ref": current_debug_ref(),
     }
+    details = dict(exc.details)
     if len(exc.field_errors) > 0:
-        error["details"] = {
-            "field_errors": [
-                {"field": field_error.field, "message": field_error.message}
-                for field_error in exc.field_errors
-            ]
-        }
+        details["field_errors"] = [
+            {"field": field_error.field, "message": field_error.message}
+            for field_error in exc.field_errors
+        ]
+    if len(details) > 0:
+        error["details"] = details
     return JSONResponse(status_code=exc.status_code, content={"ok": False, "error": error})
 
 
 def _generated_at() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _build_explorer_selection_request(
+    *,
+    family: str | None,
+    source: str | None,
+    metric: str | None,
+    sweep_index: int | None,
+    z0: float | None,
+    output_port: int | None,
+    input_port: int | None,
+) -> ExplorerSelectionRequest:
+    return ExplorerSelectionRequest(
+        family=family,
+        source=source,
+        metric=metric,
+        sweep_index=sweep_index,
+        z0_ohm=z0,
+        output_port=output_port,
+        input_port=input_port,
+    )
+
+
+def _serialize_explorer_filter_echo(
+    selection_request: ExplorerSelectionRequest,
+) -> dict[str, object]:
+    return {
+        "family": selection_request.family,
+        "source": selection_request.source,
+        "metric": selection_request.metric,
+        "sweep_index": selection_request.sweep_index,
+        "z0": selection_request.z0_ohm,
+        "output_port": selection_request.output_port,
+        "input_port": selection_request.input_port,
+    }
 
 
 def _as_mapping(payload: object) -> dict[str, object]:
@@ -780,21 +877,6 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
     if payload is None:
         return None
     body = _as_mapping(payload)
-    if body.get("source") is not None:
-        _required_literal(
-            body.get("source"),
-            field_name="post_processing_setup.source",
-            allowed={"raw", "ptc"},
-            default="raw",
-        )
-    output_view = (
-        _required_string(
-            body.get("output_view"),
-            field_name="post_processing_setup.output_view",
-        )
-        if body.get("output_view") is not None
-        else "matrix"
-    )
     raw_selections = body.get("selections", [])
     raw_operations = body.get("operations")
     if not isinstance(raw_selections, list):
@@ -812,7 +894,6 @@ def _parse_post_processing_setup(payload: object) -> PostProcessingSetup | None:
             message="post_processing_setup.operations must be an array.",
         )
     return PostProcessingSetup(
-        output_view=output_view,
         selections=tuple(_parse_trace_selection(item) for item in raw_selections),
         operations=tuple(_parse_post_processing_operation(item) for item in raw_operations),
     )
@@ -1256,6 +1337,10 @@ def _deserialize_task_event_metadata_value(key: str, value: object) -> object:
         "characterization_result_summary",
         "characterization_result_detail",
         "characterization_run_history_row",
+        "simulation_raw_bundle",
+        "simulation_ptc_bundle",
+        "post_processing_raw_bundle",
+        "post_processing_ptc_bundle",
     }:
         return value
     if not isinstance(value, str):
