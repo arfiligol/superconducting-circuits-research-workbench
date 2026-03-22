@@ -8,24 +8,31 @@ import {
   getSimulationResultExplorerView,
   simulationResultExplorerBootstrapKey,
   simulationResultExplorerViewKey,
-  type SimulationResultExplorerBootstrap,
   type SimulationResultExplorerPayload,
   type SimulationResultExplorerViewSlice,
 } from "@/lib/api/tasks";
 
 import {
   buildEditableSelection,
-  buildSimulationResultExplorerQuery,
   buildSimulationResultExplorerSelectionCacheKey,
-  clampSimulationExplorerPort,
   composeSimulationResultExplorerPayload,
-  encodeSimulationExplorerSweepIndex,
-  extractBootstrapSelection,
   extractSimulationResultExplorerViewSlice,
   primeSimulationResultExplorerViewCache,
-  resolveAvailableExplorerFamily,
   type EditableExplorerSelection,
 } from "../lib/simulation-result-explorer-state";
+import {
+  buildExplorerSelectionUpdateContext,
+  deriveSimulationResultExplorerState,
+  updateExplorerCompareAxisSelection,
+  updateExplorerFamilySelection,
+  updateExplorerInputPortSelection,
+  updateExplorerMetricSelection,
+  updateExplorerOutputPortSelection,
+  updateExplorerSourceSelection,
+  updateExplorerSweepValueSelection,
+  updateExplorerZ0Selection,
+  type ExplorerSelectionUpdateContext,
+} from "../lib/simulation-result-explorer-selection";
 
 export function useSimulationResultExplorer(taskId: number | null, enabled: boolean) {
   const [selection, setSelection] = useState<EditableExplorerSelection | null>(null);
@@ -50,37 +57,31 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
   );
 
   const bootstrapPayload = bootstrapQuery.data;
-  const bootstrapSelection = useMemo(
-    () => (bootstrapPayload ? extractBootstrapSelection(bootstrapPayload.bootstrap) : null),
-    [bootstrapPayload],
+  const {
+    bootstrapSelection,
+    effectiveSelection,
+    selectedFamily,
+    viewQueryInput,
+    bootstrapViewKey,
+    requestedViewKey,
+    isRefreshingSelection,
+  } = useMemo(
+    () =>
+      deriveSimulationResultExplorerState({
+        taskId,
+        bootstrapPayload,
+        selection,
+        activeViewKey,
+      }),
+    [activeViewKey, bootstrapPayload, selection, taskId],
   );
-  const effectiveSelection = selection ?? bootstrapSelection;
-  const selectedFamily =
-    bootstrapPayload && effectiveSelection
-      ? resolveAvailableExplorerFamily(
-          bootstrapPayload.bootstrap.families,
-          effectiveSelection.family,
-        )
-      : null;
-  const viewQueryInput = useMemo(
-    () => buildSimulationResultExplorerQuery(effectiveSelection),
-    [effectiveSelection],
-  );
-  const bootstrapViewKey =
-    taskId !== null && bootstrapSelection
-      ? buildSimulationResultExplorerSelectionCacheKey(taskId, bootstrapSelection)
-      : null;
-  const requestedViewKey =
-    taskId !== null && effectiveSelection
-      ? buildSimulationResultExplorerSelectionCacheKey(taskId, effectiveSelection)
-      : null;
 
   useEffect(() => {
     if (!bootstrapPayload || taskId === null || !bootstrapViewKey) {
       return;
     }
 
-    setSelection((current) => current ?? extractBootstrapSelection(bootstrapPayload.bootstrap));
+    setSelection((current) => current ?? bootstrapSelection);
 
     const cachedBootstrapView = viewCacheRef.current.get(bootstrapViewKey);
     if (!cachedBootstrapView) {
@@ -89,7 +90,7 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
 
     setActiveViewSlice((current) => current ?? cachedBootstrapView);
     setActiveViewKey((current) => current ?? bootstrapViewKey);
-  }, [bootstrapPayload, bootstrapViewKey, taskId]);
+  }, [bootstrapSelection, bootstrapViewKey, bootstrapPayload, taskId]);
 
   useEffect(() => {
     if (!requestedViewKey) {
@@ -152,14 +153,6 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
     () => (data ? buildEditableSelection(data.selection) : null),
     [data],
   );
-  const isRefreshingSelection =
-    requestedViewKey !== null &&
-    activeViewKey !== null &&
-    requestedViewKey !== activeViewKey;
-  type ExplorerSelectionUpdateContext = Readonly<{
-    bootstrap: SimulationResultExplorerBootstrap;
-    resolvedSelection: EditableExplorerSelection | null;
-  }>;
 
   function updateSelection(
     updater: (
@@ -171,11 +164,13 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
       return;
     }
 
+    const context = buildExplorerSelectionUpdateContext(bootstrapPayload, resolvedSelection);
+    if (!context) {
+      return;
+    }
+
     setSelection(
-      updater(effectiveSelection, {
-        bootstrap: bootstrapPayload.bootstrap,
-        resolvedSelection,
-      }),
+      updater(effectiveSelection, context),
     );
   }
 
@@ -197,143 +192,42 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
       await Promise.all([bootstrapQuery.mutate(), viewQuery.mutate()]);
     },
     setFamily(nextFamily: string) {
-      updateSelection((current, nextPayload) => {
-        const family = resolveAvailableExplorerFamily(
-          nextPayload.bootstrap.families,
-          nextFamily,
-        );
-        if (!family) {
-          return current;
-        }
-
-        const source =
-          family.availableSources.find((option) => option.key === current.source)?.key ??
-          family.availableSources[0]?.key ??
-          current.source;
-        const metric =
-          family.availableMetrics.find((option) => option.key === current.metric)?.key ??
-          family.availableMetrics[0]?.key ??
-          current.metric;
-
-        return {
-          ...current,
-          family: family.key,
-          source,
-          metric,
-          compareAxisIndex: nextPayload.resolvedSelection?.compareAxisIndex ?? current.compareAxisIndex,
-        };
-      });
+      updateSelection((current, context) =>
+        updateExplorerFamilySelection(current, context, nextFamily),
+      );
     },
     setSource(nextSource: string) {
-      updateSelection((current, nextPayload) => {
-        const family = resolveAvailableExplorerFamily(
-          nextPayload.bootstrap.families,
-          current.family,
-        );
-        if (!family) {
-          return current;
-        }
-
-        if (!family.availableSources.some((option) => option.key === nextSource)) {
-          return current;
-        }
-
-        return {
-          ...current,
-          source: nextSource,
-        };
-      });
+      updateSelection((current, context) =>
+        updateExplorerSourceSelection(current, context, nextSource),
+      );
     },
     setMetric(nextMetric: string) {
-      updateSelection((current, nextPayload) => {
-        const family = resolveAvailableExplorerFamily(
-          nextPayload.bootstrap.families,
-          current.family,
-        );
-        if (!family) {
-          return current;
-        }
-
-        if (!family.availableMetrics.some((option) => option.key === nextMetric)) {
-          return current;
-        }
-
-        return {
-          ...current,
-          metric: nextMetric,
-        };
-      });
+      updateSelection((current, context) =>
+        updateExplorerMetricSelection(current, context, nextMetric),
+      );
     },
     setSweepValue(axisIndex: number, nextValueIndex: number) {
-      updateSelection((current, nextPayload) => {
-        const sweepAxes = nextPayload.bootstrap.parameterSweep.axes;
-        if (
-          !nextPayload.bootstrap.parameterSweep.active ||
-          axisIndex < 0 ||
-          axisIndex >= sweepAxes.length
-        ) {
-          return current;
-        }
-
-        const coordinates = sweepAxes.map((axis) => axis.selectedValueIndex);
-        const axisSize = sweepAxes[axisIndex]?.values.length ?? 0;
-        if (axisSize <= 0) {
-          return current;
-        }
-
-        coordinates[axisIndex] = Math.min(Math.max(nextValueIndex, 0), axisSize - 1);
-        const encoded = encodeSimulationExplorerSweepIndex(sweepAxes, coordinates);
-
-        return {
-          ...current,
-          sweepIndex: encoded,
-        };
-      });
+      updateSelection((current, context) =>
+        updateExplorerSweepValueSelection(current, context, axisIndex, nextValueIndex),
+      );
     },
     setCompareAxis(nextAxisIndex: number) {
-      updateSelection((current, nextPayload) => {
-        const sweepAxes = nextPayload.bootstrap.parameterSweep.axes;
-        if (
-          !nextPayload.bootstrap.parameterSweep.active ||
-          nextAxisIndex < 0 ||
-          nextAxisIndex >= sweepAxes.length
-        ) {
-          return current;
-        }
-
-        return {
-          ...current,
-          compareAxisIndex: nextAxisIndex,
-        };
-      });
+      updateSelection((current, context) =>
+        updateExplorerCompareAxisSelection(current, context, nextAxisIndex),
+      );
     },
     setZ0(nextZ0: number) {
-      if (!Number.isFinite(nextZ0) || nextZ0 <= 0) {
-        return;
-      }
-
-      updateSelection((current) => ({
-        ...current,
-        z0: nextZ0,
-      }));
+      updateSelection((current) => updateExplorerZ0Selection(current, nextZ0));
     },
     setOutputPort(nextPort: number) {
-      updateSelection((current, nextPayload) => ({
-        ...current,
-        outputPort: clampSimulationExplorerPort(
-          nextPort,
-          nextPayload.bootstrap.traceSelector.outputPorts,
-        ),
-      }));
+      updateSelection((current, context) =>
+        updateExplorerOutputPortSelection(current, context, nextPort),
+      );
     },
     setInputPort(nextPort: number) {
-      updateSelection((current, nextPayload) => ({
-        ...current,
-        inputPort: clampSimulationExplorerPort(
-          nextPort,
-          nextPayload.bootstrap.traceSelector.inputPorts,
-        ),
-      }));
+      updateSelection((current, context) =>
+        updateExplorerInputPortSelection(current, context, nextPort),
+      );
     },
   };
 }

@@ -3,7 +3,6 @@
 import type {
   SimulationResultExplorerBootstrap,
   SimulationResultExplorerBootstrapPayload,
-  SimulationResultExplorerFamily,
   SimulationResultExplorerPayload,
   SimulationResultExplorerQuery,
   SimulationResultExplorerSelection,
@@ -183,22 +182,6 @@ export function resolveSimulationExplorerSweepAxes(
     ...axis,
     selectedValueIndex: coordinates[axisIndex] ?? axis.selectedValueIndex,
   }));
-}
-
-export function resolveAvailableExplorerFamily(
-  families: readonly SimulationResultExplorerFamily[],
-  familyKey: string,
-): SimulationResultExplorerFamily | null {
-  return families.find((family) => family.key === familyKey) ?? families[0] ?? null;
-}
-
-export function clampSimulationExplorerPort(
-  nextPort: number,
-  ports: readonly Readonly<{ port: number; label: string }>[],
-): number {
-  return ports.some((portOption) => portOption.port === nextPort)
-    ? nextPort
-    : (ports[0]?.port ?? 1);
 }
 
 export function extractBootstrapSelection(

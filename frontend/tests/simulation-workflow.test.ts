@@ -137,6 +137,15 @@ const simulationResultExplorerStateSource = readFileSync(
   ),
   "utf8",
 );
+const simulationResultExplorerSelectionSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/lib/simulation-result-explorer-selection.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 const currentTraceSaveDialogSource = readFileSync(
   fileURLToPath(
     new URL(
@@ -1450,6 +1459,15 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultExplorerHookSource).toContain(
       "composeSimulationResultExplorerPayload",
     );
+    expect(simulationResultExplorerHookSource).toContain(
+      "deriveSimulationResultExplorerState",
+    );
+    expect(simulationResultExplorerHookSource).toContain(
+      "buildExplorerSelectionUpdateContext",
+    );
+    expect(simulationResultExplorerHookSource).toContain(
+      "updateExplorerFamilySelection",
+    );
     expect(simulationResultExplorerHookSource).toContain("setFamily(nextFamily: string)");
     expect(simulationResultExplorerHookSource).toContain("setZ0(nextZ0: number)");
     expect(simulationResultExplorerStateSource).toContain(
@@ -1457,6 +1475,15 @@ describe("simulation workflow source contract", () => {
     );
     expect(simulationResultExplorerStateSource).toContain(
       "primeSimulationResultExplorerViewCache",
+    );
+    expect(simulationResultExplorerSelectionSource).toContain(
+      "deriveSimulationResultExplorerState",
+    );
+    expect(simulationResultExplorerSelectionSource).toContain(
+      "updateExplorerSweepValueSelection",
+    );
+    expect(simulationResultExplorerSelectionSource).toContain(
+      "updateExplorerCompareAxisSelection",
     );
     expect(simulationTaskAttachmentHookSource).toContain("simulation:attached-task:");
     expect(simulationTaskAttachmentHookSource).toContain("autoRestoredTaskIdRef");
