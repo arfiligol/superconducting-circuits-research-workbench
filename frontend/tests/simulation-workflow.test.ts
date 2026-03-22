@@ -1312,14 +1312,19 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("Downstream State");
     expect(simulationResultExplorerSource).toContain("Simulation Result Explorer");
     expect(simulationResultExplorerSource).toContain("Post Processing Result Explorer");
-    expect(simulationResultExplorerSource).toContain("Parameter Sweep Point");
+    expect(simulationResultExplorerSource).toContain("Parameter Sweep");
+    expect(simulationResultExplorerSource).toContain("Compare Axis");
+    expect(simulationResultExplorerSource).toContain("Focus active trace");
     expect(simulationResultExplorerHookSource).toContain("setSweepValue(axisIndex: number, nextValueIndex: number)");
+    expect(simulationResultExplorerHookSource).toContain("setCompareAxis(nextAxisIndex: number)");
     expect(simulationResultExplorerSource).toContain(
       'task.kind === "post_processing" && sourceOptions.length <= 1',
     );
     expect(simulationResultExplorerSource).toContain("AppSegmentedControl");
     expect(simulationResultExplorerSource).toContain('ariaLabel="Simulation result family"');
     expect(simulationResultExplorerSource).toContain("Refreshing explorer selection");
+    expect(simulationResultExplorerSource).toContain("LoaderCircle");
+    expect(simulationResultExplorerSource).toContain('role="status"');
     expect(simulationResultExplorerSource).toContain("Simulation result source");
     expect(simulationResultExplorerSource).toContain("Simulation result metric");
     expect(simulationResultExplorerSource).toContain("Simulation result output port");
@@ -1331,15 +1336,19 @@ describe("simulation workflow source contract", () => {
     );
     expect(simulationResultExplorerSource).toContain("CurrentTraceSaveControl");
     expect(simulationWorkbenchSource).not.toContain("SimulationResultPublicationCard");
-    expect(currentTraceSaveControlSource).toContain("Save Current Trace");
-    expect(currentTraceSaveControlSource).toContain("Parameter");
+    expect(currentTraceSaveControlSource).toContain("Save Traces");
+    expect(currentTraceSaveControlSource).toContain("Parameter Prefix");
+    expect(currentTraceSaveControlSource).toContain("visible traces will be saved as separate traces");
     expect(currentTraceSaveControlSource).toContain("New Design");
     expect(currentTraceSaveControlSource).toContain("Open Saved Trace in Raw Data");
+    expect(currentTraceSaveControlSource).toContain("Open Saved Traces in Raw Data");
     expect(currentTraceSaveControlSource).toContain("createDatasetDesign");
-    expect(currentTraceSaveControlSource).toContain("publishSimulationResultTrace");
-    expect(currentTraceSaveControlSource).toContain("traceKey");
+    expect(currentTraceSaveControlSource).toContain("publishSimulationResultTraces");
+    expect(currentTraceSaveControlSource).toContain("traceKeys");
+    expect(currentTraceSaveControlSource).toContain("traceCount");
     expect(currentTraceSaveControlSource).toContain("parameterName");
     expect(tasksApiSource).toContain("/result-traces/publish");
+    expect(tasksApiSource).toContain("trace_keys: [...payload.traceKeys]");
     expect(tasksApiSource).toContain("parameter_name: payload.parameterName ?? undefined");
     expect(tasksApiSource).toContain("compare_axis_index");
     expect(currentTraceSaveControlSource).toContain("dataset_design_conflict");
@@ -1347,6 +1356,8 @@ describe("simulation workflow source contract", () => {
     expect(currentTraceSaveControlSource).not.toContain("Active Dataset");
     expect(currentTraceSaveControlSource).not.toContain("Save to Dataset");
     expect(currentTraceSaveControlSource).not.toContain("Target Dataset");
+    expect(currentTraceSaveControlSource).not.toContain("Save Current Trace");
+    expect(currentTraceSaveControlSource).not.toContain("publishSimulationResultTrace(");
   });
 
   it("binds stage authority to the current definition and dataset context", () => {
@@ -1422,6 +1433,10 @@ describe("simulation workflow source contract", () => {
     expect(simulationTaskAttachmentHookSource).toContain(
       "window.sessionStorage.setItem(attachedTaskStorageKey",
     );
+    expect(simulationTaskAttachmentHookSource).toContain(
+      "const clearRememberedAttachedTask = useCallback(",
+    );
+    expect(simulationTaskAttachmentHookSource).toContain("clearRememberedAttachedTask();");
   });
 
   it("keeps saved setup overwrite and create-new paths explicitly separated", () => {
@@ -1835,7 +1850,7 @@ describe("task api detail mapping", () => {
         inputPort: 1,
       }),
     ).toBe(
-      "/api/backend/tasks/31/simulation-results/view?family=z_matrix&source=ptc&metric=real&sweep_index=3&z0=75&output_port=2&input_port=1",
+      "/api/backend/tasks/31/simulation-results/view?family=z_matrix&source=ptc&metric=real&sweep_index=3&compare_axis_index=1&z0=75&output_port=2&input_port=1",
     );
 
     const bootstrap = mapSimulationResultExplorerBootstrapResponse({
@@ -1877,6 +1892,7 @@ describe("task api detail mapping", () => {
         parameter_sweep: {
           active: true,
           point_count: 6,
+          compare_axis_index: 0,
           axes: [
             {
               parameter: "L_jun",
@@ -1899,6 +1915,7 @@ describe("task api detail mapping", () => {
           source: "raw",
           metric: "magnitude_db",
           sweep_index: 2,
+          compare_axis_index: 0,
           trace_key: "raw:s_matrix:1:1",
           z0_ohm: 50,
           output_port: 1,
@@ -1920,6 +1937,7 @@ describe("task api detail mapping", () => {
         source: "ptc",
         metric: "real",
         sweep_index: 3,
+        compare_axis_index: 1,
         trace_key: "ptc:z_matrix:2:1",
         z0_ohm: 75,
         output_port: 2,
@@ -1952,6 +1970,7 @@ describe("task api detail mapping", () => {
           source: "ptc",
           metric: "real",
           sweep_index: 3,
+          compare_axis_index: 1,
           trace_key: "ptc:z_matrix:2:1",
           z0_ohm: 75,
           output_port: 2,
@@ -1973,7 +1992,7 @@ describe("task api detail mapping", () => {
       source: "ptc",
       metric: "real",
       sweepIndex: 3,
-      compareAxisIndex: null,
+      compareAxisIndex: 1,
       traceKey: "ptc:z_matrix:2:1",
       z0Ohm: 75,
       outputPort: 2,
@@ -1994,12 +2013,12 @@ describe("task api detail mapping", () => {
     expect(explorer.bootstrap.defaultSelection.traceKey).toBe("raw:s_matrix:1:1");
     expect(explorer.bootstrap.defaultSelection.sweepIndex).toBe(2);
     expect(explorer.bootstrap.parameterSweep.pointCount).toBe(6);
-    expect(explorer.bootstrap.parameterSweep.compareAxisIndex).toBeNull();
+    expect(explorer.bootstrap.parameterSweep.compareAxisIndex).toBe(0);
     expect(explorer.bootstrap.parameterSweep.axes[0]?.selectedValueIndex).toBe(1);
     expect(explorer.plot.metadata.outputPortLabel).toBe("Port 2");
     expect(explorer.plot.metadata.inputPortLabel).toBe("Port 1");
     expect(explorer.plot.metadata.sweepIndex).toBe(3);
-    expect(explorer.plot.metadata.compareAxisIndex).toBeNull();
+    expect(explorer.plot.metadata.compareAxisIndex).toBe(1);
     expect(explorer.plot.metadata.traceKey).toBe("ptc:z_matrix:2:1");
     expect(explorer.plot.metadata.tracePayloadStoreKey).toBe("trace-output-44");
     expect(explorer.resultBasis.primaryResultHandleId).toBe("handle-44");

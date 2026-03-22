@@ -1,15 +1,19 @@
 import math
+import time
 from contextlib import contextmanager
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from src.app.domain.tasks import TaskLifecycleUpdate
+from src.app.domain.tasks import PostProcessingOperation, TaskLifecycleUpdate
+from src.app.infrastructure import persisted_runtime
 from src.app.infrastructure.runtime import (
     get_rewrite_app_state_repository,
     get_task_service,
     reset_runtime_state,
 )
 from src.app.main import app
+from src.app.services import simulation_result_explorer_service
 from tests.worker_runtime_harness import drain_lane_queue
 
 client = TestClient(app)
@@ -92,14 +96,25 @@ def _submit_local_simulation(
     )
     assert response.status_code == 201
     task = response.json()["data"]["task"]
-    drain_lane_queue("simulation")
-    return client.get(f"/tasks/{task['task_id']}").json()["data"]
+    detail = task
+    for _ in range(3):
+        drain_lane_queue("simulation")
+        for _ in range(5):
+            detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
+            if (
+                detail["status"] == "completed"
+                and detail["result_handoff"]["availability"] == "ready"
+            ):
+                return detail
+            time.sleep(0.05)
+    return detail
 
 
 def _post_processing_setup_payload(
     *,
     trace_family: str = "z_matrix",
     representation: str = "real",
+    operations: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     return {
         "selections": [
@@ -110,16 +125,18 @@ def _post_processing_setup_payload(
                 "trace_ids": ["trace_local_flux_preview"],
             }
         ],
-        "operations": [],
+        "operations": operations or [],
     }
 
 
 def _submit_local_post_processing(
     *,
+    definition_id: int = 3,
     trace_family: str = "z_matrix",
     representation: str = "real",
+    operations: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
-    upstream_task = _submit_local_simulation(ptc_enabled=True)
+    upstream_task = _submit_local_simulation(definition_id=definition_id, ptc_enabled=True)
     response = client.post(
         "/tasks",
         json={
@@ -130,13 +147,21 @@ def _submit_local_post_processing(
             "post_processing_setup": _post_processing_setup_payload(
                 trace_family=trace_family,
                 representation=representation,
+                operations=operations,
             ),
         },
     )
     assert response.status_code == 201
     task = response.json()["data"]["task"]
-    drain_lane_queue("simulation")
-    return client.get(f"/tasks/{task['task_id']}").json()["data"]
+    detail = task
+    for _ in range(3):
+        drain_lane_queue("simulation")
+        for _ in range(5):
+            detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
+            if detail["status"] in {"completed", "failed", "cancelled", "terminated"}:
+                return detail
+            time.sleep(0.05)
+    return detail
 
 
 def _login() -> None:
@@ -228,6 +253,35 @@ def test_bootstrap_endpoint_is_stable_and_lighter_than_combined_payload() -> Non
     assert bootstrap_payload["bootstrap"] == combined_payload["bootstrap"]
     assert bootstrap_payload["result_basis"] == combined_payload["result_basis"]
     assert len(bootstrap.content) < len(combined.content)
+
+
+def test_bundle_payload_cache_avoids_reparsing_large_completion_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = _submit_local_simulation(ptc_enabled=True)
+    persisted_runtime._PARSED_BUNDLE_PAYLOAD_CACHE.clear()
+    parse_calls = 0
+    original_literal_eval = persisted_runtime.ast.literal_eval
+
+    def counting_literal_eval(payload: str):
+        nonlocal parse_calls
+        parse_calls += 1
+        return original_literal_eval(payload)
+
+    monkeypatch.setattr(persisted_runtime.ast, "literal_eval", counting_literal_eval)
+
+    first = persisted_runtime._bundle_payload_for_task(
+        get_task_service().get_task(task["task_id"]),
+        persisted_runtime.SIMULATION_RAW_BUNDLE_KEY,
+    )
+    second = persisted_runtime._bundle_payload_for_task(
+        get_task_service().get_task(task["task_id"]),
+        persisted_runtime.SIMULATION_RAW_BUNDLE_KEY,
+    )
+
+    assert first is not None
+    assert second is not None
+    assert parse_calls == 1
 
 
 def test_view_endpoint_returns_full_resolution_selected_slice() -> None:
@@ -354,6 +408,58 @@ def test_completed_post_processing_task_returns_explorer_payload() -> None:
     )
     assert len(payload["plot"]["series"]) == 1
     assert payload["plot"]["series"][0]["label"].startswith("Raw Z_MATRIX")
+
+
+def test_post_processing_kron_reduction_accepts_lowercase_transformed_keep_labels() -> None:
+    symbols = persisted_runtime._core_symbols()
+    sweep = symbols["PortMatrixSweep"](
+        frequencies_ghz=(5.0, 6.0),
+        mode=(0,),
+        labels=("1", "2"),
+        y_matrices=(
+            np.array(
+                [
+                    [1.0 + 0.0j, 0.1 + 0.0j],
+                    [0.1 + 0.0j, 2.0 + 0.0j],
+                ],
+                dtype=complex,
+            ),
+            np.array(
+                [
+                    [1.5 + 0.0j, 0.15 + 0.0j],
+                    [0.15 + 0.0j, 2.5 + 0.0j],
+                ],
+                dtype=complex,
+            ),
+        ),
+        source_kind="z",
+    )
+
+    reduced = persisted_runtime._apply_post_processing_operations(
+        sweep,
+        operations=(
+            PostProcessingOperation(
+                operation="coordinate_transform",
+                enabled=True,
+                config={
+                    "template": "cm_dm",
+                    "weight_mode": "auto",
+                    "alpha": 0.5,
+                    "beta": 0.5,
+                    "port_a": 1,
+                    "port_b": 2,
+                },
+            ),
+            PostProcessingOperation(
+                operation="kron_reduction",
+                enabled=True,
+                config={"keep_labels": ["dm(1,2)"]},
+            ),
+        ),
+    )
+
+    assert reduced.dimension == 1
+    assert reduced.labels == ("DM(1,2)",)
 
 
 def test_combined_endpoint_matches_bootstrap_plus_view_contract() -> None:
@@ -545,6 +651,7 @@ def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> N
     assert payload["bootstrap"]["parameter_sweep"] == {
         "active": True,
         "point_count": 6,
+        "compare_axis_index": 0,
         "axes": [
             {
                 "parameter": "Lj",
@@ -563,7 +670,13 @@ def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> N
         ],
     }
     assert payload["selection"]["sweep_index"] == 0
+    assert payload["selection"]["compare_axis_index"] == 0
     assert payload["plot"]["metadata"]["sweep_index"] == 0
+    assert payload["plot"]["metadata"]["compare_axis_index"] == 0
+    assert len(payload["plot"]["series"]) == 3
+    assert payload["plot"]["series"][0]["label"] == "Lj = 850 pH"
+    assert payload["plot"]["series"][1]["label"] == "Lj = 1000 pH"
+    assert payload["plot"]["series"][2]["label"] == "Lj = 1150 pH"
     default_trace_key = payload["selection"]["trace_key"]
 
     shifted = client.get(
@@ -574,9 +687,146 @@ def test_parameter_sweep_bootstrap_and_selection_change_the_plotted_point() -> N
     shifted_payload = shifted.json()["data"]
 
     assert shifted_payload["selection"]["sweep_index"] == 5
+    assert shifted_payload["selection"]["compare_axis_index"] == 0
     assert shifted_payload["plot"]["metadata"]["sweep_index"] == 5
+    assert shifted_payload["plot"]["metadata"]["compare_axis_index"] == 0
     assert shifted_payload["selection"]["trace_key"] != default_trace_key
     assert shifted_payload["plot"]["series"][0]["values"] != payload["plot"]["series"][0]["values"]
+
+
+def test_parameter_sweep_compare_axis_can_switch_to_a_different_multi_trace_dimension() -> None:
+    definition_response = client.post(
+        "/circuit-definitions",
+        json={
+            "name": "SweepableReadoutChainCompareAxis",
+            "source_text": """{
+  "name": "SweepableReadoutChainCompareAxis",
+  "parameters": [
+    {"name": "Lj", "default": 1000.0, "unit": "pH"},
+    {"name": "Cj", "default": 1000.0, "unit": "fF"}
+  ],
+  "components": [
+    {"name": "R1", "default": 50.0, "unit": "Ohm"},
+    {"name": "C1", "default": 100.0, "unit": "fF"},
+    {"name": "Lj1", "value_ref": "Lj", "unit": "pH"},
+    {"name": "C2", "value_ref": "Cj", "unit": "fF"}
+  ],
+  "topology": [
+    ("P1", "1", "0", 1),
+    ("R1", "1", "0", "R1"),
+    ("C1", "1", "2", "C1"),
+    ("Lj1", "2", "0", "Lj1"),
+    ("C2", "2", "0", "C2")
+  ]
+}""",
+        },
+    )
+    assert definition_response.status_code == 201
+    definition_id = definition_response.json()["data"]["definition"]["definition_id"]
+
+    task = _submit_local_simulation(
+        definition_id=definition_id,
+        ptc_enabled=True,
+        parameter_sweeps=[
+            {
+                "parameter": "Lj",
+                "values": [850.0, 1000.0, 1150.0],
+                "unit": "pH",
+            },
+            {
+                "parameter": "Cj",
+                "values": [900.0, 1000.0],
+                "unit": "fF",
+            },
+        ],
+    )
+
+    response = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/view"
+        "?family=s_matrix&source=raw&metric=magnitude_db&output_port=1&input_port=1"
+        "&sweep_index=5&compare_axis_index=1"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+
+    assert payload["selection"]["sweep_index"] == 5
+    assert payload["selection"]["compare_axis_index"] == 1
+    assert payload["plot"]["metadata"]["sweep_index"] == 5
+    assert payload["plot"]["metadata"]["compare_axis_index"] == 1
+    assert len(payload["plot"]["series"]) == 2
+    assert payload["plot"]["series"][0]["label"] == "Cj = 900 fF"
+    assert payload["plot"]["series"][1]["label"] == "Cj = 1000 fF"
+
+    invalid = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/view"
+        "?family=s_matrix&source=raw&metric=magnitude_db&output_port=1&input_port=1"
+        "&compare_axis_index=9"
+    )
+    assert invalid.status_code == 400
+    assert invalid.json()["error"]["code"] == "request_validation_failed"
+
+
+def test_simulation_view_avoids_bundle_materialization_for_compare_axis_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    definition_response = client.post(
+        "/circuit-definitions",
+        json={
+            "name": "SweepableReadoutChainFastPath",
+            "source_text": """{
+  "name": "SweepableReadoutChainFastPath",
+  "parameters": [
+    {"name": "Lj", "default": 1000.0, "unit": "pH"}
+  ],
+  "components": [
+    {"name": "R1", "default": 50.0, "unit": "Ohm"},
+    {"name": "C1", "default": 100.0, "unit": "fF"},
+    {"name": "Lj1", "value_ref": "Lj", "unit": "pH"}
+  ],
+  "topology": [
+    ("P1", "1", "0", 1),
+    ("R1", "1", "0", "R1"),
+    ("C1", "1", "2", "C1"),
+    ("Lj1", "2", "0", "Lj1")
+  ]
+}""",
+        },
+    )
+    assert definition_response.status_code == 201
+    definition_id = definition_response.json()["data"]["definition"]["definition_id"]
+
+    task = _submit_local_simulation(
+        definition_id=definition_id,
+        ptc_enabled=True,
+        parameter_sweeps=[
+            {
+                "parameter": "Lj",
+                "values": [10.0, 12.0, 14.0],
+                "unit": "nH",
+            }
+        ],
+    )
+
+    def fail_bundle_materialization(*args, **kwargs):
+        raise AssertionError("simulation compare-axis view should not materialize full bundles")
+
+    monkeypatch.setattr(
+        simulation_result_explorer_service,
+        "load_task_family_bundle",
+        fail_bundle_materialization,
+    )
+
+    response = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/view"
+        "?family=s_matrix&source=raw&metric=magnitude_db&output_port=1&input_port=1"
+        "&sweep_index=0&compare_axis_index=0"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["selection"]["compare_axis_index"] == 0
+    assert len(payload["plot"]["series"]) == 3
 
 
 def test_retry_task_recovers_missing_persisted_setup_for_explorer() -> None:

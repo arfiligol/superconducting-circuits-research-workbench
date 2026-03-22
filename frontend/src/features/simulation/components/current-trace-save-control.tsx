@@ -20,7 +20,7 @@ import {
   type DesignBrowseRow,
 } from "@/lib/api/datasets";
 import {
-  publishSimulationResultTrace,
+  publishSimulationResultTraces,
   taskDetailKey,
   type PublishedSimulationTrace,
   type TaskDetail,
@@ -29,8 +29,9 @@ import {
 type CurrentTraceSaveControlProps = Readonly<{
   task: TaskDetail;
   activeDatasetId: string | null;
-  traceKey: string | null;
+  traceKeys: readonly string[];
   traceLabel: string | null;
+  traceCount: number;
   defaultParameter: string | null;
 }>;
 
@@ -47,7 +48,7 @@ type CreateDesignState = Readonly<{
 type SavedTraceState = Readonly<{
   designId: string;
   designName: string;
-  trace: PublishedSimulationTrace;
+  traces: readonly PublishedSimulationTrace[];
 }>;
 
 async function listAllDatasetDesigns(datasetId: string) {
@@ -92,7 +93,7 @@ function describePublishError(error: unknown) {
     }
   }
 
-  return "Unable to save the current trace right now.";
+  return "Unable to save the visible traces right now.";
 }
 
 function describeCreateDesignError(error: unknown) {
@@ -120,6 +121,7 @@ function describeCreateDesignError(error: unknown) {
 function SaveDialog({
   open,
   traceLabel,
+  traceCount,
   parameterValue,
   designValue,
   designOptions,
@@ -138,6 +140,7 @@ function SaveDialog({
 }: Readonly<{
   open: boolean;
   traceLabel: string | null;
+  traceCount: number;
   parameterValue: string;
   designValue: string;
   designOptions: readonly AppSelectOption[];
@@ -180,10 +183,14 @@ function SaveDialog({
               id="save-current-trace-dialog-title"
               className="text-base font-semibold text-foreground"
             >
-              Save Current Trace
+              Save Traces
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {traceLabel ? `${traceLabel} will be saved into the selected design.` : "Save the current explorer trace into a design."}
+              {traceCount > 1
+                ? `${traceCount} visible traces will be saved as separate traces in the selected design.`
+                : traceLabel
+                  ? `${traceLabel} will be saved into the selected design.`
+                  : "Save the current explorer trace into a design."}
             </p>
           </div>
           <button
@@ -206,7 +213,7 @@ function SaveDialog({
 
           <label className="block">
             <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              Parameter
+              {traceCount > 1 ? "Parameter Prefix" : "Parameter"}
             </p>
             <input
               value={parameterValue}
@@ -292,7 +299,7 @@ function SaveDialog({
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              {mutationState.state === "saving" ? "Saving..." : "Save Current Trace"}
+              {mutationState.state === "saving" ? "Saving..." : "Save Traces"}
             </button>
           </div>
         </div>
@@ -304,8 +311,9 @@ function SaveDialog({
 export function CurrentTraceSaveControl({
   task,
   activeDatasetId,
-  traceKey,
+  traceKeys,
   traceLabel,
+  traceCount,
   defaultParameter,
 }: CurrentTraceSaveControlProps) {
   const { mutate } = useSWRConfig();
@@ -349,13 +357,20 @@ export function CurrentTraceSaveControl({
       return null;
     }
 
+    if (savedTraceState.traces.length === 1) {
+      return buildRawDataBrowseHref({
+        designId: savedTraceState.designId,
+        traceId: savedTraceState.traces[0]?.traceId ?? null,
+        designQuery: savedTraceState.designName,
+      });
+    }
+
     return buildRawDataBrowseHref({
       designId: savedTraceState.designId,
-      traceId: savedTraceState.trace.traceId,
       designQuery: savedTraceState.designName,
     });
   }, [savedTraceState]);
-  const saveDisabled = !activeDatasetId || !traceKey;
+  const saveDisabled = !activeDatasetId || traceKeys.length === 0;
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -405,10 +420,10 @@ export function CurrentTraceSaveControl({
   }
 
   async function handleSaveTrace() {
-    if (!traceKey || !selectedDesignId) {
+    if (traceKeys.length === 0 || !selectedDesignId) {
       setMutationState({
         state: "error",
-        message: "Choose a design before saving the current trace.",
+        message: "Choose a design before saving the visible traces.",
       });
       return;
     }
@@ -417,7 +432,10 @@ export function CurrentTraceSaveControl({
     if (!normalizedParameterName) {
       setMutationState({
         state: "error",
-        message: "Enter the saved parameter name before saving this trace.",
+        message:
+          traceCount > 1
+            ? "Enter the saved parameter prefix before saving these traces."
+            : "Enter the saved parameter name before saving this trace.",
       });
       return;
     }
@@ -425,8 +443,8 @@ export function CurrentTraceSaveControl({
     setMutationState({ state: "saving", message: null });
 
     try {
-      const result = await publishSimulationResultTrace(task.taskId, {
-        traceKey,
+      const result = await publishSimulationResultTraces(task.taskId, {
+        traceKeys,
         designId: selectedDesignId,
         parameterName: normalizedParameterName,
       });
@@ -434,7 +452,7 @@ export function CurrentTraceSaveControl({
       setSavedTraceState({
         designId: result.design.designId,
         designName: result.design.name,
-        trace: result.trace,
+        traces: result.traces,
       });
       setMutationState({ state: "idle", message: null });
       setIsDialogOpen(false);
@@ -462,18 +480,24 @@ export function CurrentTraceSaveControl({
           className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Save className="h-4 w-4" />
-          Save Current Trace
+          Save Traces
         </button>
 
         {savedTraceState ? (
           <>
-            <SurfaceTag tone="success">Saved to {savedTraceState.designName}</SurfaceTag>
+            <SurfaceTag tone="success">
+              {savedTraceState.traces.length > 1
+                ? `Saved ${savedTraceState.traces.length} traces to ${savedTraceState.designName}`
+                : `Saved to ${savedTraceState.designName}`}
+            </SurfaceTag>
             {rawDataHref ? (
               <Link
                 href={rawDataHref}
                 className="inline-flex items-center gap-2 text-sm font-medium text-primary transition hover:opacity-80"
               >
-                Open Saved Trace in Raw Data
+                {savedTraceState.traces.length > 1
+                  ? "Open Saved Traces in Raw Data"
+                  : "Open Saved Trace in Raw Data"}
                 <ExternalLink className="h-4 w-4" />
               </Link>
             ) : null}
@@ -484,6 +508,7 @@ export function CurrentTraceSaveControl({
       <SaveDialog
         open={isDialogOpen}
         traceLabel={traceLabel}
+        traceCount={traceCount}
         parameterValue={parameterName}
         designValue={selectedDesignId}
         designOptions={designOptions}

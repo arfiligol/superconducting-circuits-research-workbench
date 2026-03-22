@@ -34,6 +34,7 @@ import {
   createPostProcessingStep,
   derivePostProcessingStepContext,
   isPostProcessingStepTypeAvailable,
+  normalizePostProcessingBasisLabel,
   parsePostProcessingPortNumber,
   sanitizePostProcessingStep,
   type PostProcessingStepDraft,
@@ -164,7 +165,9 @@ function formatPostProcessingStepLabel(stepType: PostProcessingStepType) {
 
 function buildPostProcessingOperationDraft(step: PostProcessingStepDraft) {
   if (step.type === "kron_reduction") {
-    const keepLabels = [...step.keepLabels];
+    const keepLabels = Array.from(
+      new Set(step.keepLabels.map(normalizePostProcessingBasisLabel)),
+    );
     if (keepLabels.length === 0) {
       throw new Error("Kron Reduction requires at least one kept port.");
     }
@@ -221,7 +224,7 @@ function hydratePostProcessingSteps(
     if (operation.operation === "kron_reduction") {
       const keepLabels = Array.isArray(operation.config.keep_labels)
         ? operation.config.keep_labels
-            .map((label) => String(label))
+            .map((label) => normalizePostProcessingBasisLabel(String(label)))
         : [];
       hydratedSteps.push({
         id: `post-step:hydrated-kron-${index}`,

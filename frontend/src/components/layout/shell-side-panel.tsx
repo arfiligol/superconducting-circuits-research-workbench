@@ -27,10 +27,11 @@ export function ShellSidePanel({
   eyebrow = "SUPERCONDUCTING CIRCUITS",
   children,
   className,
-  offsetTopClassName = "top-[74px]",
+  offsetTopClassName = "top-[var(--shell-header-height)]",
   variant = "account",
   interactionBoundaryRef,
 }: ShellSidePanelProps) {
+  const isContextSurface = variant === "context";
   const panelRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -78,6 +79,23 @@ export function ShellSidePanel({
     };
   }, [interactionBoundaryRef, onClose, open, variant]);
 
+  useEffect(() => {
+    if (!open || !isContextSurface) {
+      return;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [isContextSurface, open]);
+
   if (!open) {
     return null;
   }
@@ -86,7 +104,6 @@ export function ShellSidePanel({
     return null;
   }
 
-  const isContextSurface = variant === "context";
   const content = (
     <>
       {isContextSurface ? (
@@ -94,7 +111,7 @@ export function ShellSidePanel({
           type="button"
           aria-label="Close panel backdrop"
           className={cx(
-            "fixed inset-x-0 bottom-0 z-[60] bg-slate-950/42 backdrop-blur-[3px]",
+            "fixed inset-x-0 bottom-0 z-40 bg-black/45 backdrop-blur-[8px] dark:bg-black/65",
             offsetTopClassName,
           )}
           onClick={onClose}
@@ -103,10 +120,10 @@ export function ShellSidePanel({
       <aside
         ref={panelRef}
         className={cx(
-          "fixed z-[61] flex flex-col overflow-hidden border border-border bg-card shadow-[0_28px_90px_rgba(15,23,42,0.22)]",
+          "fixed flex flex-col overflow-hidden border border-border bg-card shadow-[0_28px_90px_rgba(15,23,42,0.22)]",
           isContextSurface
-            ? "inset-x-4 top-[calc(74px+1rem)] bottom-4 mx-auto w-auto max-w-[min(1040px,calc(100vw-2rem))] rounded-[1.4rem] sm:inset-x-6 sm:bottom-6"
-            : "right-0 top-[74px] h-[calc(100dvh-74px)] w-full max-w-[440px] rounded-l-[1.6rem] border-l border-border/85 bg-card/98 shadow-[-24px_0_70px_rgba(15,23,42,0.24)] backdrop-blur",
+            ? "inset-x-4 top-[calc(var(--shell-header-height)+1rem)] bottom-4 z-45 mx-auto w-auto max-w-[min(1220px,calc(100vw-1.5rem))] overscroll-contain rounded-[1.4rem] border-border/90 bg-card/98 shadow-[0_36px_120px_rgba(15,23,42,0.34)] sm:inset-x-5 md:inset-x-7 md:top-[calc(var(--shell-header-height)+1.25rem)] md:bottom-5"
+            : "right-0 top-[var(--shell-header-height)] z-[61] h-[calc(100dvh-var(--shell-header-height))] w-full max-w-[440px] rounded-l-[1.6rem] border-l border-border/85 bg-card/98 shadow-[-24px_0_70px_rgba(15,23,42,0.24)] backdrop-blur",
           className,
         )}
         aria-modal="true"
@@ -141,7 +158,7 @@ export function ShellSidePanel({
 
         <div
           className={cx(
-            "min-h-0 flex-1 overflow-y-auto",
+            "min-h-0 flex-1 overflow-y-auto overscroll-contain",
             isContextSurface ? "px-6 py-5" : "px-5 py-5",
           )}
         >

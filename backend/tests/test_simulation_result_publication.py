@@ -1,3 +1,4 @@
+import time
 from contextlib import contextmanager
 
 import pytest
@@ -40,7 +41,11 @@ def _login() -> None:
     assert response.status_code == 200
 
 
-def _simulation_setup_payload(*, ptc_enabled: bool) -> dict[str, object]:
+def _simulation_setup_payload(
+    *,
+    ptc_enabled: bool,
+    parameter_sweeps: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     return {
         "frequency_sweep": {
             "start_ghz": 1.0,
@@ -48,7 +53,7 @@ def _simulation_setup_payload(*, ptc_enabled: bool) -> dict[str, object]:
             "point_count": 401,
             "spacing": "linear",
         },
-        "parameter_sweeps": [],
+        "parameter_sweeps": parameter_sweeps or [],
         "solver": {
             "solver_family": "harmonic_balance",
             "max_iterations": 20,
@@ -77,21 +82,39 @@ def _simulation_setup_payload(*, ptc_enabled: bool) -> dict[str, object]:
     }
 
 
-def _submit_local_simulation(*, ptc_enabled: bool = True) -> dict[str, object]:
+def _submit_local_simulation(
+    *,
+    definition_id: int = 3,
+    ptc_enabled: bool = True,
+    parameter_sweeps: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     response = client.post(
         "/tasks",
         json={
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
-            "definition_id": 3,
+            "definition_id": definition_id,
             "summary": "Result publication source task.",
-            "simulation_setup": _simulation_setup_payload(ptc_enabled=ptc_enabled),
+            "simulation_setup": _simulation_setup_payload(
+                ptc_enabled=ptc_enabled,
+                parameter_sweeps=parameter_sweeps,
+            ),
         },
     )
     assert response.status_code == 201
     task = response.json()["data"]["task"]
-    drain_lane_queue("simulation")
-    return client.get(f"/tasks/{task['task_id']}").json()["data"]
+    detail = task
+    for _ in range(3):
+        drain_lane_queue("simulation")
+        for _ in range(5):
+            detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
+            if (
+                detail["status"] == "completed"
+                and detail["result_handoff"]["availability"] == "ready"
+            ):
+                return detail
+            time.sleep(0.05)
+    return detail
 
 
 def _published_trace_ids(task_id: int, *, include_ptc: bool) -> list[str]:
@@ -130,6 +153,34 @@ def _trace_key(
     if z0_ohm is not None:
         parts.append(f"z0_ohm={z0_ohm}")
     return "|".join(parts)
+
+
+def _create_sweepable_definition(name: str) -> int:
+    response = client.post(
+        "/circuit-definitions",
+        json={
+            "name": name,
+            "source_text": """{
+  "name": "SweepableReadoutChain",
+  "parameters": [
+    {"name": "Lj", "default": 1000.0, "unit": "pH"}
+  ],
+  "components": [
+    {"name": "R1", "default": 50.0, "unit": "Ohm"},
+    {"name": "C1", "default": 100.0, "unit": "fF"},
+    {"name": "Lj1", "value_ref": "Lj", "unit": "pH"}
+  ],
+  "topology": [
+    ("P1", "1", "0", 1),
+    ("R1", "1", "0", "R1"),
+    ("C1", "1", "2", "C1"),
+    ("Lj1", "2", "0", "Lj1")
+  ]
+}""",
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["data"]["definition"]["definition_id"]
 
 
 @contextmanager
@@ -541,3 +592,87 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
     )
     assert trace_detail.status_code == 200
     assert trace_detail.json()["data"]["preview_payload"]["history_steps"] == ["Raw"]
+
+
+def test_visible_trace_publish_materializes_each_visible_trace_as_a_saved_trace() -> None:
+    definition_id = _create_sweepable_definition("VisibleTraceSaveDefinition")
+    task = _submit_local_simulation(
+        definition_id=definition_id,
+        ptc_enabled=False,
+        parameter_sweeps=[
+            {
+                "parameter": "Lj",
+                "values": [850.0, 1000.0, 1150.0],
+                "unit": "pH",
+            }
+        ],
+    )
+
+    explorer = client.get(
+        f"/tasks/{task['task_id']}/simulation-results/view"
+        "?family=s_matrix&source=raw&metric=magnitude_db&output_port=1&input_port=1"
+        "&sweep_index=0&compare_axis_index=0"
+    )
+    assert explorer.status_code == 200
+    trace_keys = [
+        str(series["trace_key"])
+        for series in explorer.json()["data"]["plot"]["series"]
+        if isinstance(series.get("trace_key"), str)
+    ]
+    assert len(trace_keys) == 3
+
+    created_design = client.post(
+        "/datasets/local-dataset-001/designs",
+        json={"name": "Visible Trace Save Target"},
+    )
+    assert created_design.status_code == 201
+    design = created_design.json()["data"]["design"]
+
+    publish = client.post(
+        f"/tasks/{task['task_id']}/result-traces/publish",
+        json={
+            "design_id": design["design_id"],
+            "trace_keys": trace_keys,
+            "parameter_name": "Readout Admittance",
+        },
+    )
+
+    assert publish.status_code == 200
+    payload = publish.json()["data"]
+    assert payload["operation"] == "published"
+    assert payload["trace_key"] == trace_keys[0]
+    assert payload["raw_data"]["trace_id"] is None
+    assert len(payload["traces"]) == 3
+    assert [trace["parameter"] for trace in payload["traces"]] == [
+        "Readout Admittance · Lj = 850 pH",
+        "Readout Admittance · Lj = 1000 pH",
+        "Readout Admittance · Lj = 1150 pH",
+    ]
+    assert payload["publication_summary"]["published_trace_ids"] == [
+        trace["trace_id"] for trace in payload["traces"]
+    ]
+
+    trace_rows = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
+    )
+    assert trace_rows.status_code == 200
+    rows = trace_rows.json()["data"]["rows"]
+    assert {row["parameter"] for row in rows} == {
+        "Readout Admittance · Lj = 850 pH",
+        "Readout Admittance · Lj = 1000 pH",
+        "Readout Admittance · Lj = 1150 pH",
+    }
+    assert {row["trace_id"] for row in rows} == {
+        trace["trace_id"] for trace in payload["traces"]
+    }
+
+    repeated = client.post(
+        f"/tasks/{task['task_id']}/result-traces/publish",
+        json={
+            "design_id": design["design_id"],
+            "trace_keys": trace_keys,
+            "parameter_name": "Readout Admittance",
+        },
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["data"]["operation"] == "already_published"

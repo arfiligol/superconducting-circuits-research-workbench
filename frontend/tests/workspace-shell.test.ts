@@ -104,9 +104,14 @@ const developerModeSource = readFileSync(
 );
 
 describe("workspace shell source contracts", () => {
-  it("keeps the sticky header layered above the sidebar and gives the hamburger trigger feedback", () => {
-    expect(shellSource).toContain("sticky top-0 z-50");
-    expect(shellSource).toContain("z-30 w-[220px]");
+  it("keeps the fixed header layered above the sidebar and gives the hamburger trigger feedback", () => {
+    expect(shellSource).toContain("fixed inset-x-0 top-0 z-50");
+    expect(shellSource).toContain("pt-[var(--shell-header-height)]");
+    expect(shellSource).toContain("lg:pl-[var(--shell-sidebar-width)]");
+    expect(shellSource).toContain("top-[var(--shell-header-height)]");
+    expect(shellSource).toContain("overflow-y-auto border-r");
+    expect(shellSource).toContain('document.documentElement.style.setProperty("--shell-header-height"');
+    expect(shellSource).toContain('document.documentElement.style.setProperty(');
     expect(shellSource).toContain("cursor-pointer items-center justify-center");
     expect(shellSource).toContain("hover:border-primary/35 hover:bg-primary/10");
     expect(shellSource).toContain("focus-visible:ring-2");
@@ -193,14 +198,27 @@ describe("workspace shell source contracts", () => {
     expect(headerSource).toContain('activePanel === "account"');
     expect(headerSource).toContain('activePanel === "context"');
     expect(headerSource).toContain("shellControlsRef");
-    expect(shellSidePanelSource).toContain('offsetTopClassName = "top-[74px]"');
+    expect(shellSidePanelSource).toContain(
+      'offsetTopClassName = "top-[var(--shell-header-height)]"',
+    );
     expect(shellSidePanelSource).toContain("createPortal");
     expect(shellSidePanelSource).toContain('variant?: "context" | "account"');
     expect(shellSidePanelSource).toContain('const isContextSurface = variant === "context"');
     expect(shellSidePanelSource).toContain('variant !== "account"');
+    expect(shellSidePanelSource).toContain('document.body.style.overflow = "hidden"');
+    expect(shellSidePanelSource).toContain('document.documentElement.style.overflow = "hidden"');
     expect(shellSidePanelSource).toContain("interactionBoundaryRef");
-    expect(shellSidePanelSource).toContain("inset-x-4 top-[calc(74px+1rem)]");
-    expect(shellSidePanelSource).toContain("h-[calc(100dvh-74px)]");
+    expect(shellSidePanelSource).toContain("bg-black/45 backdrop-blur-[8px] dark:bg-black/65");
+    expect(shellSidePanelSource).toContain(
+      "inset-x-4 top-[calc(var(--shell-header-height)+1rem)]",
+    );
+    expect(shellSidePanelSource).toContain(
+      "max-w-[min(1220px,calc(100vw-1.5rem))]",
+    );
+    expect(shellSidePanelSource).toContain("overscroll-contain");
+    expect(shellSidePanelSource).toContain("md:top-[calc(var(--shell-header-height)+1.25rem)]");
+    expect(shellSidePanelSource).toContain("md:bottom-5");
+    expect(shellSidePanelSource).toContain("h-[calc(100dvh-var(--shell-header-height))]");
   });
 
   it("splits context and account into different shell surface models", () => {

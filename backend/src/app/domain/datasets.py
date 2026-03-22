@@ -149,7 +149,7 @@ class SimulationResultPublicationResult:
 @dataclass(frozen=True)
 class ResultTracePublicationDraft:
     design_id: str
-    trace_key: str
+    trace_keys: tuple[str, ...]
     parameter_name: str | None = None
 
 
@@ -160,8 +160,8 @@ class ResultTracePublicationResult:
     published_at: str
     dataset: DatasetDetail
     design: DesignBrowseRow
-    trace_key: str
-    trace: TraceMetadataSummary
+    trace_keys: tuple[str, ...]
+    traces: tuple[TraceMetadataSummary, ...]
 
 
 @dataclass(frozen=True)

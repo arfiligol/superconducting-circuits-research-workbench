@@ -536,10 +536,10 @@ class TaskService:
                     "Choose the existing design or start from a different task."
                 ),
             )
-        self._validate_result_trace_selection(
+        self._validate_result_trace_selections(
             task=task,
             basis_task=basis_task,
-            trace_key=draft.trace_key,
+            trace_keys=draft.trace_keys,
         )
         try:
             result = self._dataset_repository.publish_result_trace(
@@ -588,8 +588,8 @@ class TaskService:
             payload={
                 "dataset_id": result.dataset.dataset_id,
                 "design_id": result.design.design_id,
-                "trace_id": result.trace.trace_id,
-                "trace_key": result.trace_key,
+                "trace_ids": [trace.trace_id for trace in result.traces],
+                "trace_keys": list(result.trace_keys),
                 "publication_key": result.publication_key,
                 "state": result.state,
             },
@@ -1281,83 +1281,95 @@ class TaskService:
             )
         return upstream_task
 
-    def _validate_result_trace_selection(
+    def _validate_result_trace_selections(
         self,
         *,
         task: TaskDetail,
         basis_task: TaskDetail,
-        trace_key: str,
+        trace_keys: tuple[str, ...],
     ) -> None:
-        try:
-            selection = ResultTraceSelection.from_trace_key(trace_key)
-        except ValueError as exc:
+        if len(trace_keys) == 0:
             raise service_error(
                 400,
                 code="request_validation_failed",
                 category="validation_error",
-                message=str(exc),
-            ) from exc
-        if selection.source not in available_sources_for_task_family(task, selection.family):
-            raise service_error(
-                400,
-                code="request_validation_failed",
-                category="validation_error",
-                message=(
-                    f"source {selection.source} is not available for family "
-                    f"{selection.family}."
-                ),
+                message="At least one trace_key is required.",
             )
+
         port_options = port_options_for_task(
             task,
             basis_task=basis_task,
             definition=self.get_circuit_definition(basis_task.definition_id),
         )
-        if (
-            selection.output_port not in port_options
-            or selection.input_port not in port_options
-        ):
-            raise service_error(
-                400,
-                code="request_validation_failed",
-                category="validation_error",
-                message="Requested trace selection ports are not available for this result.",
-            )
-        if selection.trace_mode_group != "base":
-            raise service_error(
-                400,
-                code="request_validation_failed",
-                category="validation_error",
-                message="Only base trace selections are supported.",
-            )
-        if selection.output_mode != "mode_0" or selection.input_mode != "mode_0":
-            raise service_error(
-                400,
-                code="request_validation_failed",
-                category="validation_error",
-                message="Only mode_0 trace selections are supported.",
-            )
         sweep_count = 1
         for axis in basis_task.simulation_setup.parameter_sweeps:
             sweep_count *= max(len(axis.values), 1)
-        if len(basis_task.simulation_setup.parameter_sweeps) == 0:
-            if selection.sweep_index is not None:
+
+        for trace_key in trace_keys:
+            try:
+                selection = ResultTraceSelection.from_trace_key(trace_key)
+            except ValueError as exc:
                 raise service_error(
                     400,
                     code="request_validation_failed",
                     category="validation_error",
-                    message="Requested trace selection does not expose parameter sweep points.",
+                    message=str(exc),
+                ) from exc
+            if selection.source not in available_sources_for_task_family(task, selection.family):
+                raise service_error(
+                    400,
+                    code="request_validation_failed",
+                    category="validation_error",
+                    message=(
+                        f"source {selection.source} is not available for family "
+                        f"{selection.family}."
+                    ),
                 )
-        elif (
-            selection.sweep_index is None
-            or selection.sweep_index < 0
-            or selection.sweep_index >= sweep_count
-        ):
-            raise service_error(
-                400,
-                code="request_validation_failed",
-                category="validation_error",
-                message="Requested trace selection parameter sweep point is invalid.",
-            )
+            if (
+                selection.output_port not in port_options
+                or selection.input_port not in port_options
+            ):
+                raise service_error(
+                    400,
+                    code="request_validation_failed",
+                    category="validation_error",
+                    message="Requested trace selection ports are not available for this result.",
+                )
+            if selection.trace_mode_group != "base":
+                raise service_error(
+                    400,
+                    code="request_validation_failed",
+                    category="validation_error",
+                    message="Only base trace selections are supported.",
+                )
+            if selection.output_mode != "mode_0" or selection.input_mode != "mode_0":
+                raise service_error(
+                    400,
+                    code="request_validation_failed",
+                    category="validation_error",
+                    message="Only mode_0 trace selections are supported.",
+                )
+            if len(basis_task.simulation_setup.parameter_sweeps) == 0:
+                if selection.sweep_index is not None:
+                    raise service_error(
+                        400,
+                        code="request_validation_failed",
+                        category="validation_error",
+                        message=(
+                            "Requested trace selection does not expose parameter sweep points."
+                        ),
+                    )
+            elif (
+                selection.sweep_index is None
+                or selection.sweep_index < 0
+                or selection.sweep_index >= sweep_count
+            ):
+                raise service_error(
+                    400,
+                    code="request_validation_failed",
+                    category="validation_error",
+                    message="Requested trace selection parameter sweep point is invalid.",
+                )
 
     def _build_default_publication_summary(self, task: TaskDetail) -> TaskPublicationSummary:
         default_dataset = (

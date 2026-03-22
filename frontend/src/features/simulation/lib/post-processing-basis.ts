@@ -31,6 +31,18 @@ function isNumericBasisLabel(label: string) {
   return /^\d+$/.test(label.trim());
 }
 
+export function normalizePostProcessingBasisLabel(label: string) {
+  const trimmed = label.trim();
+  const transformedMatch = /^(cm|dm)\(\s*(\d+)\s*,\s*(\d+)\s*\)$/iu.exec(trimmed);
+  if (transformedMatch) {
+    const family = (transformedMatch[1] ?? "").toUpperCase();
+    const portA = transformedMatch[2] ?? "";
+    const portB = transformedMatch[3] ?? "";
+    return `${family}(${portA},${portB})`;
+  }
+  return trimmed;
+}
+
 export function parsePostProcessingPortNumber(portValue: string) {
   const matchedPort = /port_(\d+)/i.exec(portValue.trim());
   if (!matchedPort) {
@@ -42,7 +54,7 @@ export function parsePostProcessingPortNumber(portValue: string) {
 }
 
 export function formatPostProcessingBasisLabel(label: string) {
-  const trimmed = label.trim();
+  const trimmed = normalizePostProcessingBasisLabel(label);
   if (isNumericBasisLabel(trimmed)) {
     return `Port ${trimmed}`;
   }
@@ -85,8 +97,8 @@ function previewCoordinateTransformLabels(
     return [...basisLabels];
   }
 
-  nextLabels[portAIndex] = `cm(${portA},${portB})`;
-  nextLabels[portBIndex] = `dm(${portA},${portB})`;
+  nextLabels[portAIndex] = normalizePostProcessingBasisLabel(`CM(${portA},${portB})`);
+  nextLabels[portBIndex] = normalizePostProcessingBasisLabel(`DM(${portA},${portB})`);
   return nextLabels;
 }
 
@@ -94,8 +106,10 @@ function previewKronReductionLabels(
   basisLabels: readonly string[],
   step: KronReductionStepDraft,
 ) {
-  const keepLabelSet = new Set(step.keepLabels);
-  return basisLabels.filter((label) => keepLabelSet.has(label));
+  const keepLabelSet = new Set(step.keepLabels.map(normalizePostProcessingBasisLabel));
+  return basisLabels.filter((label) =>
+    keepLabelSet.has(normalizePostProcessingBasisLabel(label)),
+  );
 }
 
 export function previewPostProcessingBasisLabels(
@@ -175,7 +189,9 @@ export function createPostProcessingStep(
   return {
     id: stepId,
     type: "kron_reduction",
-    keepLabels: context.basisOptions.map((option) => option.value),
+    keepLabels: context.basisOptions.map((option) =>
+      normalizePostProcessingBasisLabel(option.value),
+    ),
   };
 }
 
@@ -195,9 +211,13 @@ export function sanitizePostProcessingStep(
     };
   }
 
-  const availableBasisLabels = new Set(context.basisOptions.map((option) => option.value));
+  const availableBasisLabels = new Set(
+    context.basisOptions.map((option) => normalizePostProcessingBasisLabel(option.value)),
+  );
   return {
     ...step,
-    keepLabels: step.keepLabels.filter((label) => availableBasisLabels.has(label)),
+    keepLabels: step.keepLabels
+      .map(normalizePostProcessingBasisLabel)
+      .filter((label) => availableBasisLabels.has(label)),
   };
 }

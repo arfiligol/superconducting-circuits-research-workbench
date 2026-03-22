@@ -10,6 +10,7 @@ from src.app.domain.result_traces import ResultTraceSelection
 from src.app.domain.tasks import SimulationSetup, TaskDetail
 from src.app.infrastructure.persisted_runtime import (
     available_sources_for_task_family,
+    extract_simulation_trace_grid_data,
     load_task_family_bundle,
     port_options_for_task,
 )
@@ -51,6 +52,7 @@ class ExplorerSelectionRequest:
     source: str | None = None
     metric: str | None = None
     sweep_index: int | None = None
+    compare_axis_index: int | None = None
     z0_ohm: float | None = None
     output_port: int | None = None
     input_port: int | None = None
@@ -152,7 +154,11 @@ class SimulationResultExplorerService:
             explorer_task=explorer_task,
             basis_task=basis_task,
             port_options=port_options,
-            default_selection=_default_selection(explorer_task, port_options=port_options),
+            default_selection=_default_selection(
+                explorer_task,
+                basis_task=basis_task,
+                port_options=port_options,
+            ),
         )
 
     def _build_selected_view_payload(
@@ -165,6 +171,11 @@ class SimulationResultExplorerService:
             context=context,
             selection_request=selection_request,
         )
+        if context.explorer_task.kind == "simulation":
+            return _build_selected_view_payload_fast(
+                context=context,
+                selection=selection,
+            )
         bundle = _load_bundle_for_selection(context=context, selection=selection)
         return _build_selected_view_payload(
             context=context,
@@ -199,11 +210,16 @@ def _build_bootstrap_payload(context: _ExplorerContext) -> dict[str, object]:
         if context.default_selection.get("sweep_index") is not None
         else None
     )
+    compare_axis_index = (
+        int(context.default_selection["compare_axis_index"])
+        if context.default_selection.get("compare_axis_index") is not None
+        else None
+    )
     default_selection_payload: dict[str, object] = {
         **{
             key: value
             for key, value in context.default_selection.items()
-            if not (key == "sweep_index" and value is None)
+            if key not in {"sweep_index", "compare_axis_index"} or value is not None
         },
         "trace_key": _build_trace_selection(context.default_selection).to_trace_key(),
     }
@@ -242,6 +258,7 @@ def _build_bootstrap_payload(context: _ExplorerContext) -> dict[str, object]:
         "parameter_sweep": _serialize_parameter_sweep_bootstrap(
             context.basis_task.simulation_setup,
             sweep_index=sweep_index,
+            compare_axis_index=compare_axis_index,
         ),
         "default_selection": default_selection_payload,
     }
@@ -261,17 +278,15 @@ def _build_selected_view_payload(
         if selection.get("sweep_index") is not None
         else None
     )
+    compare_axis_index = (
+        int(selection["compare_axis_index"])
+        if selection.get("compare_axis_index") is not None
+        else None
+    )
     z0_ohm = float(selection["z0_ohm"])
     output_port = int(selection["output_port"])
     input_port = int(selection["input_port"])
 
-    matrices = bundle.family_bundle[family][source]
-    selected_values = _extract_metric_values(
-        matrices,
-        metric=metric,
-        output_port=output_port,
-        input_port=input_port,
-    )
     metric_config = _FAMILY_METRICS[family][metric]
     output_label = context.port_options[output_port]
     input_label = context.port_options[input_port]
@@ -280,7 +295,7 @@ def _build_selected_view_payload(
         **{
             key: value
             for key, value in selection.items()
-            if not (key == "sweep_index" and value is None)
+            if key not in {"sweep_index", "compare_axis_index"} or value is not None
         },
         "trace_mode_group": "base",
         "output_port_label": output_label,
@@ -289,6 +304,8 @@ def _build_selected_view_payload(
         "input_mode": "mode_0",
         "trace_key": trace_key,
     }
+    if compare_axis_index is not None:
+        selection_payload["compare_axis_index"] = compare_axis_index
     plot_metadata: dict[str, object] = {
         "trace_key": trace_key,
         "family": family,
@@ -308,6 +325,21 @@ def _build_selected_view_payload(
     if sweep_index is not None:
         selection_payload["sweep_index"] = sweep_index
         plot_metadata["sweep_index"] = sweep_index
+    if compare_axis_index is not None:
+        plot_metadata["compare_axis_index"] = compare_axis_index
+
+    plot_series = _build_plot_series(
+        context=context,
+        bundle=bundle,
+        selection=selection,
+        compare_axis_index=compare_axis_index,
+        metric=metric,
+        metric_config=metric_config,
+        family=family,
+        source=source,
+        output_port=output_port,
+        input_port=input_port,
+    )
 
     return {
         "selection": selection_payload,
@@ -321,17 +353,110 @@ def _build_selected_view_payload(
                 "label": metric_config["label"],
                 "unit": metric_config["unit"],
             },
-            "series": [
-                {
-                    "series_id": f"{family}:{source}:{metric}:{output_port}:{input_port}",
-                    "label": (
-                        f"{_SOURCE_LABELS[source]} {family.upper()} {output_label} {input_label} "
-                        f"{metric_config['label']}"
-                    ),
-                    "values": selected_values,
-                    "unit": metric_config["unit"],
-                }
-            ],
+            "series": plot_series,
+            "metadata": plot_metadata,
+        },
+    }
+
+
+def _build_selected_view_payload_fast(
+    *,
+    context: _ExplorerContext,
+    selection: dict[str, object],
+) -> dict[str, object]:
+    family = str(selection["family"])
+    source = str(selection["source"])
+    metric = str(selection["metric"])
+    sweep_index = (
+        int(selection["sweep_index"])
+        if selection.get("sweep_index") is not None
+        else None
+    )
+    compare_axis_index = (
+        int(selection["compare_axis_index"])
+        if selection.get("compare_axis_index") is not None
+        else None
+    )
+    z0_ohm = float(selection["z0_ohm"])
+    output_port = int(selection["output_port"])
+    input_port = int(selection["input_port"])
+
+    metric_config = _FAMILY_METRICS[family][metric]
+    output_label = context.port_options[output_port]
+    input_label = context.port_options[input_port]
+    trace_key = _build_trace_selection(selection).to_trace_key()
+    selection_payload: dict[str, object] = {
+        **{
+            key: value
+            for key, value in selection.items()
+            if key not in {"sweep_index", "compare_axis_index"} or value is not None
+        },
+        "trace_mode_group": "base",
+        "output_port_label": output_label,
+        "input_port_label": input_label,
+        "output_mode": "mode_0",
+        "input_mode": "mode_0",
+        "trace_key": trace_key,
+    }
+    if compare_axis_index is not None:
+        selection_payload["compare_axis_index"] = compare_axis_index
+    plot_metadata: dict[str, object] = {
+        "trace_key": trace_key,
+        "family": family,
+        "source": source,
+        "metric": metric,
+        "z0_ohm": z0_ohm,
+        "output_port": output_port,
+        "input_port": input_port,
+        "output_port_label": output_label,
+        "input_port_label": input_label,
+        "trace_payload_store_key": (
+            context.explorer_task.result_refs.trace_payload.store_key
+            if context.explorer_task.result_refs.trace_payload is not None
+            else None
+        ),
+    }
+    if sweep_index is not None:
+        selection_payload["sweep_index"] = sweep_index
+        plot_metadata["sweep_index"] = sweep_index
+    if compare_axis_index is not None:
+        plot_metadata["compare_axis_index"] = compare_axis_index
+
+    trace_grid = extract_simulation_trace_grid_data(
+        context.explorer_task,
+        family=family,
+        source=source,
+        output_port=output_port,
+        input_port=input_port,
+        sweep_index=sweep_index,
+        compare_axis_index=compare_axis_index,
+    )
+    plot_series = _build_plot_series_from_trace_grid(
+        context=context,
+        selection=selection,
+        trace_grid=trace_grid,
+        compare_axis_index=compare_axis_index,
+        metric=metric,
+        metric_config=metric_config,
+        family=family,
+        source=source,
+        output_port=output_port,
+        input_port=input_port,
+    )
+
+    return {
+        "selection": selection_payload,
+        "plot": {
+            "x_axis": {
+                "label": "Frequency",
+                "unit": "GHz",
+                "values": [float(value) for value in trace_grid.frequencies_ghz],
+            },
+            "y_axis": {
+                "label": metric_config["label"],
+                "unit": metric_config["unit"],
+            },
+            "series": plot_series,
             "metadata": plot_metadata,
         },
     }
@@ -370,12 +495,19 @@ def _resolve_basis_task(task: TaskDetail, *, task_service: TaskService) -> TaskD
 def _default_selection(
     task: TaskDetail,
     *,
+    basis_task: TaskDetail,
     port_options: dict[int, str],
 ) -> dict[str, object]:
     default_port = min(port_options) if len(port_options) > 0 else 1
+    basis_setup = basis_task.simulation_setup
     default_sweep_index = (
-        _default_sweep_index(task.simulation_setup)
-        if task.kind == "simulation"
+        _default_sweep_index(basis_setup)
+        if basis_setup is not None
+        else None
+    )
+    default_compare_axis_index = (
+        _default_compare_axis_index(basis_setup)
+        if basis_setup is not None
         else None
     )
     if task.kind == "post_processing" and task.post_processing_setup is not None:
@@ -399,6 +531,7 @@ def _default_selection(
                     selection.representation,
                 ),
                 "sweep_index": default_sweep_index,
+                "compare_axis_index": default_compare_axis_index,
                 "z0_ohm": 50.0,
                 "output_port": default_port,
                 "input_port": default_port,
@@ -409,6 +542,7 @@ def _default_selection(
         "source": "raw",
         "metric": "magnitude_db",
         "sweep_index": default_sweep_index,
+        "compare_axis_index": default_compare_axis_index,
         "z0_ohm": 50.0,
         "output_port": default_port,
         "input_port": default_port,
@@ -473,7 +607,18 @@ def _resolve_selection(
             else None
         )
     )
-    _validate_sweep_index(context.basis_task.simulation_setup, resolved_sweep_index)
+    basis_setup = context.basis_task.simulation_setup
+    _validate_sweep_index(basis_setup, resolved_sweep_index)
+    resolved_compare_axis_index = _resolve_compare_axis_index(
+        basis_setup,
+        selection_request.compare_axis_index
+        if selection_request.compare_axis_index is not None
+        else (
+            int(context.default_selection["compare_axis_index"])
+            if context.default_selection.get("compare_axis_index") is not None
+            else None
+        ),
+    )
     resolved_z0 = float(
         selection_request.z0_ohm
         if selection_request.z0_ohm is not None
@@ -507,6 +652,7 @@ def _resolve_selection(
         "source": resolved_source,
         "metric": resolved_metric,
         "sweep_index": resolved_sweep_index,
+        "compare_axis_index": resolved_compare_axis_index,
         "z0_ohm": resolved_z0,
         "output_port": resolved_output_port,
         "input_port": resolved_input_port,
@@ -526,6 +672,10 @@ def _available_sources_for_task(task: TaskDetail, family: str) -> tuple[str, ...
 
 
 def _default_sweep_index(setup: SimulationSetup) -> int | None:
+    return 0 if len(setup.parameter_sweeps) > 0 else None
+
+
+def _default_compare_axis_index(setup: SimulationSetup) -> int | None:
     return 0 if len(setup.parameter_sweeps) > 0 else None
 
 
@@ -558,6 +708,31 @@ def _validate_sweep_index(setup: SimulationSetup, sweep_index: int | None) -> No
         )
 
 
+def _resolve_compare_axis_index(
+    setup: SimulationSetup,
+    compare_axis_index: int | None,
+) -> int | None:
+    if len(setup.parameter_sweeps) == 0:
+        if compare_axis_index is not None:
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message="compare_axis_index is not available for this persisted result.",
+            )
+        return None
+
+    resolved_index = compare_axis_index if compare_axis_index is not None else 0
+    if resolved_index < 0 or resolved_index >= len(setup.parameter_sweeps):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="compare_axis_index is outside the available parameter sweep range.",
+        )
+    return resolved_index
+
+
 def _decode_sweep_index(setup: SimulationSetup, sweep_index: int | None) -> tuple[int, ...]:
     if len(setup.parameter_sweeps) == 0:
         return ()
@@ -572,10 +747,27 @@ def _decode_sweep_index(setup: SimulationSetup, sweep_index: int | None) -> tupl
     return tuple(coordinates)
 
 
+def _encode_sweep_index(
+    setup: SimulationSetup,
+    coordinates: tuple[int, ...],
+) -> int | None:
+    if len(setup.parameter_sweeps) == 0:
+        return None
+
+    encoded = 0
+    for axis_index, sweep in enumerate(setup.parameter_sweeps):
+        axis_size = max(len(sweep.values), 1)
+        coordinate = coordinates[axis_index] if axis_index < len(coordinates) else 0
+        coordinate = min(max(coordinate, 0), axis_size - 1)
+        encoded = (encoded * axis_size) + coordinate
+    return encoded
+
+
 def _serialize_parameter_sweep_bootstrap(
     setup: SimulationSetup,
     *,
     sweep_index: int | None,
+    compare_axis_index: int | None,
 ) -> dict[str, object]:
     coordinates = _decode_sweep_index(setup, sweep_index)
     axes: list[dict[str, object]] = []
@@ -595,6 +787,7 @@ def _serialize_parameter_sweep_bootstrap(
         "axes": axes,
         "point_count": _sweep_point_count(setup),
         "active": len(axes) > 0,
+        "compare_axis_index": compare_axis_index,
     }
 
 
@@ -623,6 +816,170 @@ def _load_bundle_for_selection(
         ) from exc
 
 
+def _build_plot_series(
+    *,
+    context: _ExplorerContext,
+    bundle,
+    selection: Mapping[str, object],
+    compare_axis_index: int | None,
+    metric: str,
+    metric_config: Mapping[str, str],
+    family: str,
+    source: str,
+    output_port: int,
+    input_port: int,
+) -> list[dict[str, object]]:
+    base_series_id = f"{family}:{source}:{metric}:{output_port}:{input_port}"
+    if compare_axis_index is None or context.basis_task.simulation_setup is None:
+        matrices = bundle.family_bundle[family][source]
+        selected_values = _extract_metric_values(
+            matrices,
+            metric=metric,
+            output_port=output_port,
+            input_port=input_port,
+        )
+        return [
+            {
+                "series_id": base_series_id,
+                "label": (
+                    f"{_SOURCE_LABELS[source]} {family.upper()} "
+                    f"{context.port_options[output_port]} {context.port_options[input_port]} "
+                    f"{metric_config['label']}"
+                ),
+                "trace_key": _build_trace_selection(selection).to_trace_key(),
+                "values": selected_values,
+                "unit": metric_config["unit"],
+            }
+        ]
+
+    setup = context.basis_task.simulation_setup
+    coordinates = list(
+        _decode_sweep_index(
+            setup,
+            int(selection["sweep_index"]) if selection.get("sweep_index") is not None else None,
+        )
+    )
+    compare_axis = setup.parameter_sweeps[compare_axis_index]
+    current_sweep_index = (
+        int(selection["sweep_index"])
+        if selection.get("sweep_index") is not None
+        else None
+    )
+    series_entries: list[dict[str, object]] = []
+    for value_index, sweep_value in enumerate(compare_axis.values):
+        coordinates[compare_axis_index] = value_index
+        trace_sweep_index = _encode_sweep_index(setup, tuple(coordinates))
+        trace_selection = dict(selection)
+        trace_selection["sweep_index"] = trace_sweep_index
+        trace_bundle = (
+            bundle
+            if trace_sweep_index == current_sweep_index
+            else _load_bundle_for_selection(context=context, selection=trace_selection)
+        )
+        matrices = trace_bundle.family_bundle[family][source]
+        selected_values = _extract_metric_values(
+            matrices,
+            metric=metric,
+            output_port=output_port,
+            input_port=input_port,
+        )
+        series_entries.append(
+            {
+                "series_id": (
+                    f"{base_series_id}:sweep:{trace_sweep_index}"
+                    if trace_sweep_index is not None
+                    else base_series_id
+                ),
+                "label": _format_compare_axis_series_label(
+                    compare_axis.parameter,
+                    float(sweep_value),
+                    compare_axis.unit,
+                ),
+                "trace_key": _build_trace_selection(trace_selection).to_trace_key(),
+                "values": selected_values,
+                "unit": metric_config["unit"],
+            }
+        )
+    return series_entries
+
+
+def _build_plot_series_from_trace_grid(
+    *,
+    context: _ExplorerContext,
+    selection: Mapping[str, object],
+    trace_grid,
+    compare_axis_index: int | None,
+    metric: str,
+    metric_config: Mapping[str, str],
+    family: str,
+    source: str,
+    output_port: int,
+    input_port: int,
+) -> list[dict[str, object]]:
+    metric_grid = _extract_metric_grid_values(trace_grid.values, metric=metric)
+    base_series_id = f"{family}:{source}:{metric}:{output_port}:{input_port}"
+    if compare_axis_index is None or trace_grid.compare_values is None:
+        return [
+            {
+                "series_id": base_series_id,
+                "label": (
+                    f"{_SOURCE_LABELS[source]} {family.upper()} "
+                    f"{context.port_options[output_port]} {context.port_options[input_port]} "
+                    f"{metric_config['label']}"
+                ),
+                "trace_key": _build_trace_selection(selection).to_trace_key(),
+                "values": [float(value) for value in metric_grid[:, 0]],
+                "unit": metric_config["unit"],
+            }
+        ]
+
+    compare_axis = context.basis_task.simulation_setup.parameter_sweeps[compare_axis_index]
+    coordinates = list(
+        _decode_sweep_index(
+            context.basis_task.simulation_setup,
+            int(selection["sweep_index"]) if selection.get("sweep_index") is not None else None,
+        )
+    )
+    series_entries: list[dict[str, object]] = []
+    for value_index, sweep_value in enumerate(trace_grid.compare_values):
+        coordinates[compare_axis_index] = value_index
+        trace_sweep_index = _encode_sweep_index(
+            context.basis_task.simulation_setup,
+            tuple(coordinates),
+        )
+        trace_selection = dict(selection)
+        trace_selection["sweep_index"] = trace_sweep_index
+        series_entries.append(
+            {
+                "series_id": f"{base_series_id}:sweep:{value_index}",
+                "label": _format_compare_axis_series_label(
+                    compare_axis.parameter,
+                    float(sweep_value),
+                    compare_axis.unit,
+                ),
+                "trace_key": _build_trace_selection(trace_selection).to_trace_key(),
+                "values": [float(value) for value in metric_grid[:, value_index]],
+                "unit": metric_config["unit"],
+            }
+        )
+    return series_entries
+
+
+def _format_compare_axis_series_label(
+    parameter: str,
+    value: float,
+    unit: str | None,
+) -> str:
+    compact_value = (
+        str(int(value))
+        if float(value).is_integer()
+        else format(float(value), ".6f").rstrip("0").rstrip(".")
+    )
+    if unit:
+        return f"{parameter} = {compact_value} {unit}"
+    return f"{parameter} = {compact_value}"
+
+
 def _extract_metric_values(
     matrices: list[np.ndarray],
     *,
@@ -646,6 +1003,24 @@ def _extract_metric_values(
         return [float(20 * math.log10(max(abs(value), 1e-12))) for value in values]
     if metric == "magnitude":
         return [float(abs(value)) for value in values]
+    raise ValueError(f"Unsupported metric: {metric}")
+
+
+def _extract_metric_grid_values(
+    values: np.ndarray,
+    *,
+    metric: str,
+) -> np.ndarray:
+    if metric == "real":
+        return np.asarray(values.real, dtype=float)
+    if metric == "imag":
+        return np.asarray(values.imag, dtype=float)
+    if metric == "phase_deg":
+        return np.asarray(np.degrees(np.angle(values)), dtype=float)
+    if metric == "magnitude_db":
+        return np.asarray(20 * np.log10(np.maximum(np.abs(values), 1e-12)), dtype=float)
+    if metric == "magnitude":
+        return np.asarray(np.abs(values), dtype=float)
     raise ValueError(f"Unsupported metric: {metric}")
 
 

@@ -47,7 +47,7 @@ from src.app.domain.datasets import (
     TraceDetail,
     TraceMetadataSummary,
 )
-from src.app.domain.result_traces import ResultTraceSelection
+from src.app.domain.result_traces import ResultTraceSelection, build_trace_parameter
 from src.app.domain.tasks import TaskDetail
 from src.app.infrastructure.persisted_characterization_runtime import (
     CharacterizationTaggingResultPayload,
@@ -399,31 +399,50 @@ class InMemoryRewriteCatalogRepository:
                 design=design,
                 draft=draft,
             )
-        selection = ResultTraceSelection.from_trace_key(draft.trace_key)
+        selections = tuple(
+            ResultTraceSelection.from_trace_key(trace_key)
+            for trace_key in draft.trace_keys
+        )
+        if len(selections) == 0:
+            raise ValueError("result trace publication requires at least one trace_key")
+        selection = selections[0]
         publication_key = build_simulation_publication_key(
             task_id=task.task_id,
             dataset_id=dataset.dataset_id,
             design_id=design.design_id,
         )
-        detail = build_result_trace_publication_detail(
-            task=task,
-            basis_task=basis_task,
-            dataset_id=dataset.dataset_id,
-            design_id=design.design_id,
-            selection=selection,
-            parameter_name=draft.parameter_name,
-        )
-        summary = build_result_trace_publication_summary(
-            task=task,
-            detail=detail,
-            selection=selection,
-            parameter_name=draft.parameter_name,
-        )
         trace_rows = list(self._trace_summaries.get((dataset.dataset_id, design.design_id), ()))
-        already_published = any(row.trace_id == detail.trace_id for row in trace_rows)
-        self._trace_details[(dataset.dataset_id, design.design_id, detail.trace_id)] = detail
-        trace_rows = [row for row in trace_rows if row.trace_id != detail.trace_id]
-        trace_rows.append(summary)
+        result_summaries: list[TraceMetadataSummary] = []
+        any_published = False
+        for selection_index, selection in enumerate(selections):
+            saved_parameter = (
+                draft.parameter_name
+                if len(selections) == 1
+                else (
+                    f"{draft.parameter_name or build_trace_parameter(selection)} "
+                    f"{selection_index + 1}"
+                )
+            )
+            detail = build_result_trace_publication_detail(
+                task=task,
+                basis_task=basis_task,
+                dataset_id=dataset.dataset_id,
+                design_id=design.design_id,
+                selection=selection,
+                parameter_name=saved_parameter,
+            )
+            summary = build_result_trace_publication_summary(
+                task=task,
+                detail=detail,
+                selection=selection,
+                parameter_name=saved_parameter,
+            )
+            already_published = any(row.trace_id == detail.trace_id for row in trace_rows)
+            any_published = any_published or not already_published
+            self._trace_details[(dataset.dataset_id, design.design_id, detail.trace_id)] = detail
+            trace_rows = [row for row in trace_rows if row.trace_id != detail.trace_id]
+            trace_rows.append(summary)
+            result_summaries.append(summary)
         self._trace_summaries[(dataset.dataset_id, design.design_id)] = tuple(
             sorted(trace_rows, key=lambda row: row.trace_id)
         )
@@ -448,13 +467,13 @@ class InMemoryRewriteCatalogRepository:
         updated_dataset = replace(dataset, updated_at="2026-03-20T00:00:00Z")
         self._datasets[dataset.dataset_id] = updated_dataset
         return ResultTracePublicationResult(
-            state="already_published" if already_published else "published",
+            state="published" if any_published else "already_published",
             publication_key=publication_key,
             published_at="2026-03-20T00:00:00Z",
             dataset=updated_dataset,
             design=design_row,
-            trace_key=draft.trace_key,
-            trace=summary,
+            trace_keys=draft.trace_keys,
+            traces=tuple(result_summaries),
         )
 
     def update_dataset_profile(

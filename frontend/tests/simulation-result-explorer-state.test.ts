@@ -39,7 +39,7 @@ function buildBootstrapPayload(taskId: number): SimulationResultExplorerBootstra
       parameterSweep: {
         active: true,
         pointCount: 4,
-        compareAxisIndex: 1,
+        compareAxisIndex: 0,
         axes: [
           {
             parameter: "L_jun",
@@ -55,7 +55,7 @@ function buildBootstrapPayload(taskId: number): SimulationResultExplorerBootstra
         source: "raw",
         metric: "magnitude_db",
         sweepIndex: 2,
-        compareAxisIndex: 1,
+        compareAxisIndex: 0,
         traceKey: "raw:s_matrix:1:1:2",
         z0Ohm: 50,
         outputPort: 1,
@@ -84,7 +84,7 @@ function buildViewPayload(taskId: number): SimulationResultExplorerViewPayload {
       source: "raw",
       metric: "magnitude_db",
       sweepIndex: 2,
-      compareAxisIndex: 1,
+      compareAxisIndex: 0,
       traceKey: "raw:s_matrix:1:1:2",
       z0Ohm: 50,
       outputPort: 1,
@@ -109,6 +109,7 @@ function buildViewPayload(taskId: number): SimulationResultExplorerViewPayload {
         {
           seriesId: "raw:s_matrix:1:1:2",
           label: "S11",
+          traceKey: "raw:s_matrix:1:1:2",
           values: [-12, -10, -9],
           unit: "dB",
         },
@@ -118,7 +119,7 @@ function buildViewPayload(taskId: number): SimulationResultExplorerViewPayload {
         source: "raw",
         metric: "magnitude_db",
         sweepIndex: 2,
-        compareAxisIndex: 1,
+        compareAxisIndex: 0,
         traceKey: "raw:s_matrix:1:1:2",
         z0Ohm: 50,
         outputPort: 1,
@@ -143,7 +144,7 @@ describe("simulation result explorer state helpers", () => {
     const selection = buildEditableSelection(buildExplorerPayload(31).selection);
 
     expect(buildSimulationResultExplorerSelectionCacheKey(31, selection)).toBe(
-      "31:family=s_matrix&source=raw&metric=magnitude_db&z0=50&output_port=1&input_port=1&sweep_index=2&compare_axis_index=1",
+      "31:family=s_matrix&source=raw&metric=magnitude_db&z0=50&output_port=1&input_port=1&sweep_index=2&compare_axis_index=0",
     );
     expect(buildSimulationResultExplorerSelectionCacheKey(44, selection)).not.toBe(
       buildSimulationResultExplorerSelectionCacheKey(31, selection),
@@ -153,7 +154,7 @@ describe("simulation result explorer state helpers", () => {
       source: "raw",
       metric: "magnitude_db",
       sweepIndex: 2,
-      compareAxisIndex: 1,
+      compareAxisIndex: 0,
       z0: 50,
       outputPort: 1,
       inputPort: 1,
@@ -175,6 +176,7 @@ describe("simulation result explorer state helpers", () => {
           {
             seriesId: "raw:s_matrix:1:1:3",
             label: "S11",
+            traceKey: "raw:s_matrix:1:1:3",
             values: [-8, -7, -6],
             unit: "dB",
           },

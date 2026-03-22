@@ -201,6 +201,7 @@ def get_simulation_result_view(
     source: Annotated[str | None, Query()] = None,
     metric: Annotated[str | None, Query()] = None,
     sweep_index: Annotated[int | None, Query(ge=0)] = None,
+    compare_axis_index: Annotated[int | None, Query(ge=0)] = None,
     z0: Annotated[float | None, Query(gt=0, alias="z0")] = None,
     output_port: Annotated[int | None, Query(ge=1)] = None,
     input_port: Annotated[int | None, Query(ge=1)] = None,
@@ -210,6 +211,7 @@ def get_simulation_result_view(
         source=source,
         metric=metric,
         sweep_index=sweep_index,
+        compare_axis_index=compare_axis_index,
         z0=z0,
         output_port=output_port,
         input_port=input_port,
@@ -238,6 +240,7 @@ def get_simulation_result_explorer(
     source: Annotated[str | None, Query()] = None,
     metric: Annotated[str | None, Query()] = None,
     sweep_index: Annotated[int | None, Query(ge=0)] = None,
+    compare_axis_index: Annotated[int | None, Query(ge=0)] = None,
     z0: Annotated[float | None, Query(gt=0, alias="z0")] = None,
     output_port: Annotated[int | None, Query(ge=1)] = None,
     input_port: Annotated[int | None, Query(ge=1)] = None,
@@ -247,6 +250,7 @@ def get_simulation_result_explorer(
         source=source,
         metric=metric,
         sweep_index=sweep_index,
+        compare_axis_index=compare_axis_index,
         z0=z0,
         output_port=output_port,
         input_port=input_port,
@@ -331,7 +335,7 @@ def publish_result_trace(
             task_id,
             ResultTracePublicationDraft(
                 design_id=parsed_payload["design_id"],
-                trace_key=parsed_payload["trace_key"],
+                trace_keys=parsed_payload["trace_keys"],
                 parameter_name=parsed_payload["parameter_name"],
             ),
         )
@@ -368,12 +372,17 @@ def publish_result_trace(
                 "trace_count": result.design.trace_count,
                 "updated_at": result.design.updated_at,
             },
-            "trace_key": result.trace_key,
-            "trace": _serialize_published_trace(result.trace),
+            "trace_key": result.trace_keys[0] if len(result.trace_keys) > 0 else None,
+            "trace": (
+                _serialize_published_trace(result.traces[0])
+                if len(result.traces) > 0
+                else None
+            ),
+            "traces": [_serialize_published_trace(trace) for trace in result.traces],
             "raw_data": {
-                "dataset_id": result.trace.dataset_id,
-                "design_id": result.trace.design_id,
-                "trace_id": result.trace.trace_id,
+                "dataset_id": result.design.dataset_id,
+                "design_id": result.design.design_id,
+                "trace_id": result.traces[0].trace_id if len(result.traces) == 1 else None,
             },
         },
         meta={"generated_at": _generated_at()},
@@ -775,6 +784,7 @@ def _build_explorer_selection_request(
     source: str | None,
     metric: str | None,
     sweep_index: int | None,
+    compare_axis_index: int | None,
     z0: float | None,
     output_port: int | None,
     input_port: int | None,
@@ -784,6 +794,7 @@ def _build_explorer_selection_request(
         source=source,
         metric=metric,
         sweep_index=sweep_index,
+        compare_axis_index=compare_axis_index,
         z0_ohm=z0,
         output_port=output_port,
         input_port=input_port,
@@ -798,6 +809,7 @@ def _serialize_explorer_filter_echo(
         "source": selection_request.source,
         "metric": selection_request.metric,
         "sweep_index": selection_request.sweep_index,
+        "compare_axis_index": selection_request.compare_axis_index,
         "z0": selection_request.z0_ohm,
         "output_port": selection_request.output_port,
         "input_port": selection_request.input_port,
@@ -834,6 +846,22 @@ def _optional_string(value: object, *, field_name: str) -> str | None:
             message=f"{field_name} must not be empty when provided.",
         )
     return stripped
+
+
+def _optional_string_sequence(value: object, *, field_name: str) -> list[str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=f"{field_name} must be an array of strings or null.",
+        )
+    return [
+        _required_string(item, field_name=f"{field_name}[{index}]")
+        for index, item in enumerate(value)
+    ]
 
 
 def _parse_simulation_setup(payload: object) -> SimulationSetup | None:
@@ -1181,17 +1209,32 @@ def _parse_simulation_result_publication_payload(payload: object) -> dict[str, s
     }
 
 
-def _parse_result_trace_publication_payload(payload: object) -> dict[str, str | None]:
+def _parse_result_trace_publication_payload(payload: object) -> dict[str, object]:
     body = _require_mapping(payload, field_name="result_trace_publication")
+    trace_keys = _optional_string_sequence(
+        body.get("trace_keys"),
+        field_name="result_trace_publication.trace_keys",
+    )
+    if trace_keys is None:
+        trace_keys = [
+            _required_string(
+                body.get("trace_key"),
+                field_name="result_trace_publication.trace_key",
+            )
+        ]
+    if len(trace_keys) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="result_trace_publication.trace_keys must not be empty.",
+        )
     return {
         "design_id": _required_string(
             body.get("design_id"),
             field_name="result_trace_publication.design_id",
         ),
-        "trace_key": _required_string(
-            body.get("trace_key"),
-            field_name="result_trace_publication.trace_key",
-        ),
+        "trace_keys": tuple(trace_keys),
         "parameter_name": _optional_string(
             body.get("parameter_name"),
             field_name="result_trace_publication.parameter_name",

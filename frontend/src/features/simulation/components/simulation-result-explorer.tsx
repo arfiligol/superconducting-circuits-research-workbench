@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type ComponentType } from "react";
 import dynamic from "next/dynamic";
-import { DatabaseZap, LineChart, Rows3 } from "lucide-react";
+import { DatabaseZap, LineChart, LoaderCircle, Rows3 } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { CurrentTraceSaveControl } from "@/features/simulation/components/current-trace-save-control";
@@ -109,12 +109,13 @@ function SimulationResultPlot({
   const gridColor = isDark ? "rgba(148, 163, 184, 0.22)" : "rgba(148, 163, 184, 0.18)";
   const lineColor = isDark ? "rgba(148, 163, 184, 0.42)" : "rgba(148, 163, 184, 0.3)";
   const palette = ["#2563eb", "#0f766e", "#b45309", "#7c3aed"];
+  const legendOnSide = series.length > 1;
   const layout = useMemo(
     () => ({
       title: undefined,
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
-      margin: { t: 18, r: 18, b: 54, l: 62 },
+      margin: { t: 18, r: legendOnSide ? 260 : 18, b: 54, l: 62 },
       xaxis: {
         title: {
           text: xAxisTitle,
@@ -146,16 +147,18 @@ function SimulationResultPlot({
         automargin: true,
       },
       legend: {
-        orientation: "h",
-        y: 1.14,
-        x: 0,
+        orientation: "v",
+        y: 1,
+        x: 1.02,
+        yanchor: "top",
+        xanchor: "left",
         font: { color: axisColor },
       },
       font: {
         color: axisColor,
       },
     }),
-    [axisColor, gridColor, lineColor, xAxisTitle, yAxisTitle],
+    [axisColor, gridColor, legendOnSide, lineColor, xAxisTitle, yAxisTitle],
   );
 
   return (
@@ -202,6 +205,7 @@ export function SimulationResultExplorer({
 }: SimulationResultExplorerProps) {
   const [viewMode, setViewMode] = useState<ExplorerViewMode>("plot");
   const [z0Input, setZ0Input] = useState("50");
+  const [showComparedTraces, setShowComparedTraces] = useState(true);
   const explorer = useSimulationResultExplorer(task.taskId, true);
   const explorerTitle =
     task.kind === "post_processing"
@@ -277,7 +281,6 @@ export function SimulationResultExplorer({
   const yAxisTitle = payload
     ? formatAxisTitle(payload.plot.yAxis.label, payload.plot.yAxis.unit)
     : "Result";
-  const hasSeries = (payload?.plot.series.length ?? 0) > 0;
   const showZ0Control = selection?.family !== "s_matrix";
   const familySegmentOptions = useMemo<readonly AppSegmentedOption[]>(
     () =>
@@ -298,6 +301,61 @@ export function SimulationResultExplorer({
     selection?.family === "s_matrix" &&
     !explorer.selectedFamily?.availableSources.some((source) => source.key === "ptc") &&
     ptcFamilyLabels.length > 0;
+  const parameterSweepBase = bootstrap?.parameterSweep ??
+    payload?.bootstrap.parameterSweep ?? {
+      active: false,
+      pointCount: 0,
+      compareAxisIndex: null,
+      axes: [],
+    };
+  const parameterSweep = useMemo(
+    () => ({
+      ...parameterSweepBase,
+      axes: resolveSimulationExplorerSweepAxes(
+        parameterSweepBase.axes,
+        selection?.sweepIndex ?? null,
+      ),
+    }),
+    [parameterSweepBase, selection?.sweepIndex],
+  );
+  const compareAxisIndex =
+    parameterSweep.active && parameterSweep.axes.length > 0
+      ? selection?.compareAxisIndex ?? parameterSweep.compareAxisIndex ?? 0
+      : null;
+  const compareAxis =
+    compareAxisIndex !== null && compareAxisIndex < parameterSweep.axes.length
+      ? parameterSweep.axes[compareAxisIndex]
+      : null;
+  const fixedSweepAxes = parameterSweep.axes.filter(
+    (_axis, axisIndex) => axisIndex !== compareAxisIndex,
+  );
+  const activeTraceSeries =
+    compareAxis && compareAxis.selectedValueIndex < (payload?.plot.series.length ?? 0)
+      ? payload?.plot.series[compareAxis.selectedValueIndex] ?? null
+      : payload?.plot.series[0] ?? null;
+  const visiblePlotSeries =
+    compareAxis && !showComparedTraces && activeTraceSeries
+      ? [activeTraceSeries]
+      : payload?.plot.series ?? [];
+  const visibleTraceKeys = useMemo(() => {
+    const keys = visiblePlotSeries
+      .map((series) => series.traceKey)
+      .filter((traceKey): traceKey is string => typeof traceKey === "string" && traceKey.length > 0);
+    if (keys.length > 0) {
+      return [...new Set(keys)];
+    }
+    return payload?.selection.traceKey ? [payload.selection.traceKey] : [];
+  }, [payload?.selection.traceKey, visiblePlotSeries]);
+  const hasSeries = visiblePlotSeries.length > 0;
+  const resultViewDescription =
+    compareAxis && (payload?.plot.series.length ?? 0) > 1
+      ? `Comparing ${compareAxis.label} traces while keeping ${activeTraceSeries?.label ?? "the active trace"} as the canonical current trace.`
+      : `${activeTraceSeries?.label ?? "Backend plot selection"} updates as soon as the family, source, metric, port, or Z0 selection changes.`;
+
+  useEffect(() => {
+    setShowComparedTraces(true);
+  }, [task.taskId, selection?.family, selection?.source, selection?.metric, compareAxisIndex]);
+
   if (explorer.isLoading || (!payload && !explorer.error)) {
     return (
       <SurfacePanel
@@ -308,8 +366,13 @@ export function SimulationResultExplorer({
             : "Loading simulation result controls and plot data."
         }
       >
-        <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-          Loading the persisted explorer surface for task #{task.taskId}.
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-3 rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground"
+        >
+          <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
+          <span>Loading the persisted explorer surface for task #{task.taskId}.</span>
         </div>
       </SurfacePanel>
     );
@@ -332,19 +395,6 @@ export function SimulationResultExplorer({
       </SurfacePanel>
     );
   }
-
-  const parameterSweepBase = bootstrap?.parameterSweep ?? payload.bootstrap.parameterSweep;
-  const parameterSweep = useMemo(
-    () => ({
-      ...parameterSweepBase,
-      axes: resolveSimulationExplorerSweepAxes(
-        parameterSweepBase.axes,
-        selection?.sweepIndex ?? null,
-      ),
-    }),
-    [parameterSweepBase, selection?.sweepIndex],
-  );
-  const activeSweepPoint = (selection.sweepIndex ?? 0) + 1;
 
   return (
     <SurfacePanel
@@ -374,8 +424,13 @@ export function SimulationResultExplorer({
               <CurrentTraceSaveControl
                 task={task}
                 activeDatasetId={activeDatasetId}
-                traceKey={payload.selection.traceKey}
-                traceLabel={payload.plot.series[0]?.label ?? null}
+                traceKeys={visibleTraceKeys}
+                traceLabel={
+                  visibleTraceKeys.length > 1
+                    ? `${visibleTraceKeys.length} visible traces`
+                    : activeTraceSeries?.label ?? null
+                }
+                traceCount={visibleTraceKeys.length}
                 defaultParameter={resolveDefaultTraceParameter(
                   resolvedSelection?.family ?? selection.family,
                   resolvedSelection?.outputPort ?? selection.outputPort,
@@ -472,47 +527,111 @@ export function SimulationResultExplorer({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Parameter Sweep Point
+                  Parameter Sweep
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Choose the parameter-space point that this result view should inspect.
+                  {parameterSweep.axes.length === 1
+                    ? `Single-axis sweep results show every ${compareAxis?.label ?? "sweep"} trace. Choose the active trace or focus a single trace when you want a less crowded plot.`
+                    : "Choose a compare axis to draw multiple traces, then fix the remaining sweep dimensions to single values."}
                 </p>
               </div>
-              <SurfaceTag tone="default">
-                Point {activeSweepPoint} of {parameterSweep.pointCount}
-              </SurfaceTag>
+              <div className="flex flex-wrap items-center gap-2">
+                <SurfaceTag tone="default">
+                  {(payload.plot.series.length ?? 0) > 0
+                    ? `${payload.plot.series.length} traces`
+                    : `${parameterSweep.pointCount} total points`}
+                </SurfaceTag>
+                <SurfaceTag tone="default">{parameterSweep.pointCount} total points</SurfaceTag>
+              </div>
             </div>
 
             <div
               className={cx(
                 "mt-4 grid gap-4",
-                parameterSweep.axes.length === 1
-                  ? "md:grid-cols-1"
-                  : parameterSweep.axes.length === 2
-                    ? "md:grid-cols-2"
-                    : "md:grid-cols-2 xl:grid-cols-3",
+                fixedSweepAxes.length <= 1
+                  ? "md:grid-cols-1 xl:grid-cols-3"
+                  : fixedSweepAxes.length === 2
+                    ? "md:grid-cols-2 xl:grid-cols-4"
+                    : "md:grid-cols-2 xl:grid-cols-5",
               )}
             >
-              {parameterSweep.axes.map((axis, axisIndex) => (
-                <ExplorerField
-                  key={`${axis.parameter}-${axisIndex}`}
-                  label={axis.label}
-                  detail={axis.unit ? `Unit · ${axis.unit}` : undefined}
-                >
+              {parameterSweep.axes.length > 1 ? (
+                <ExplorerField label="Compare Axis">
                   <AppInlineSelect
-                    ariaLabel={`${axis.label} sweep selection`}
-                    testId={`${explorerTestPrefix}-result-sweep-axis-${axisIndex}`}
-                    value={String(axis.selectedValueIndex)}
+                    ariaLabel="Simulation result compare axis"
+                    testId={`${explorerTestPrefix}-result-compare-axis`}
+                    value={String(compareAxisIndex ?? 0)}
                     onChange={(nextValue) => {
-                      explorer.setSweepValue(axisIndex, Number.parseInt(nextValue, 10));
+                      explorer.setCompareAxis(Number.parseInt(nextValue, 10));
                     }}
-                    options={axis.values.map((value, valueIndex) => ({
-                      value: String(valueIndex),
-                      label: formatSweepValueLabel(value, axis.unit),
+                    options={parameterSweep.axes.map((axis, axisIndex) => ({
+                      value: String(axisIndex),
+                      label: axis.label,
+                      description: axis.unit ? `Unit · ${axis.unit}` : undefined,
                     }))}
                   />
                 </ExplorerField>
-              ))}
+              ) : null}
+
+              {compareAxis ? (
+                <ExplorerField
+                  label="Active Trace"
+                  detail={compareAxis.unit ? `Unit · ${compareAxis.unit}` : undefined}
+                >
+                  <AppInlineSelect
+                    ariaLabel={`${compareAxis.label} active trace`}
+                    testId={`${explorerTestPrefix}-result-active-trace`}
+                    value={String(compareAxis.selectedValueIndex)}
+                    onChange={(nextValue) => {
+                      explorer.setSweepValue(compareAxisIndex ?? 0, Number.parseInt(nextValue, 10));
+                    }}
+                    options={compareAxis.values.map((value, valueIndex) => ({
+                      value: String(valueIndex),
+                      label: formatSweepValueLabel(value, compareAxis.unit),
+                    }))}
+                  />
+                </ExplorerField>
+              ) : null}
+
+              {parameterSweep.axes.map((axis, axisIndex) => {
+                if (axisIndex === compareAxisIndex) {
+                  return null;
+                }
+                return (
+                  <ExplorerField
+                    key={`${axis.parameter}-${axisIndex}`}
+                    label={axis.label}
+                    detail={axis.unit ? `Unit · ${axis.unit}` : undefined}
+                  >
+                    <AppInlineSelect
+                      ariaLabel={`${axis.label} sweep selection`}
+                      testId={`${explorerTestPrefix}-result-sweep-axis-${axisIndex}`}
+                      value={String(axis.selectedValueIndex)}
+                      onChange={(nextValue) => {
+                        explorer.setSweepValue(axisIndex, Number.parseInt(nextValue, 10));
+                      }}
+                      options={axis.values.map((value, valueIndex) => ({
+                        value: String(valueIndex),
+                        label: formatSweepValueLabel(value, axis.unit),
+                      }))}
+                    />
+                  </ExplorerField>
+                );
+              })}
+
+              {compareAxis && payload.plot.series.length > 1 ? (
+                <ExplorerField label="Trace Visibility">
+                  <button
+                    type="button"
+                    className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-[1rem] border border-border/85 bg-surface/95 px-4 py-3 text-sm font-medium text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_8px_24px_rgba(15,23,42,0.06)] transition hover:border-primary/35 hover:text-primary"
+                    onClick={() => {
+                      setShowComparedTraces((current) => !current);
+                    }}
+                  >
+                    {showComparedTraces ? "Focus active trace" : "Show all traces"}
+                  </button>
+                </ExplorerField>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -524,8 +643,7 @@ export function SimulationResultExplorer({
                 Result View
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                {payload.plot.series[0]?.label ?? "Backend plot selection"} updates as soon as the
-                family, source, metric, port, or Z0 selection changes.
+                {resultViewDescription}
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -539,8 +657,16 @@ export function SimulationResultExplorer({
           </div>
 
           {explorer.isRefreshingSelection ? (
-            <div className="mt-4 rounded-[0.95rem] border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foreground/80">
-              Refreshing explorer selection while keeping the previous full-resolution view visible.
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-4 flex items-center gap-3 rounded-[0.95rem] border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foreground/80"
+            >
+              <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
+              <span>
+                Refreshing explorer selection while keeping the previous full-resolution view
+                visible.
+              </span>
             </div>
           ) : null}
 
@@ -549,7 +675,7 @@ export function SimulationResultExplorer({
               viewMode === "plot" ? (
                 <SimulationResultPlot
                   xValues={payload.plot.xAxis.values}
-                  series={payload.plot.series}
+                  series={visiblePlotSeries}
                   xAxisTitle={xAxisTitle}
                   yAxisTitle={yAxisTitle}
                 />
@@ -559,7 +685,7 @@ export function SimulationResultExplorer({
                     <thead className="bg-card">
                       <tr className="text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
                         <th className="px-4 py-3">{xAxisTitle}</th>
-                        {payload.plot.series.map((series) => (
+                        {visiblePlotSeries.map((series) => (
                           <th key={series.seriesId} className="px-4 py-3">
                             {series.label}
                           </th>
@@ -570,7 +696,7 @@ export function SimulationResultExplorer({
                       {payload.plot.xAxis.values.map((xValue, index) => (
                         <tr key={`${xValue}-${index}`}>
                           <td className="px-4 py-3 text-muted-foreground">{xValue}</td>
-                          {payload.plot.series.map((series) => (
+                          {visiblePlotSeries.map((series) => (
                             <td
                               key={`${series.seriesId}-${index}`}
                               className="px-4 py-3 font-medium text-foreground"

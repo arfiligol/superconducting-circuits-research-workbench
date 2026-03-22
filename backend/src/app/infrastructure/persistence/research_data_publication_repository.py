@@ -26,7 +26,7 @@ from src.app.domain.result_traces import (
     build_trace_parameter,
     resolve_saved_trace_parameter,
 )
-from src.app.domain.tasks import TaskDetail
+from src.app.domain.tasks import SimulationSetup, TaskDetail
 from src.app.infrastructure.persisted_runtime import (
     available_sources_for_task_family,
     build_trace_preview_payload,
@@ -238,12 +238,10 @@ class SqliteResearchDataPublicationRepository:
         design: DesignBrowseRow,
         draft: ResultTracePublicationDraft,
     ) -> ResultTracePublicationResult:
-        selection = ResultTraceSelection.from_trace_key(draft.trace_key)
-        saved_parameter = resolve_saved_trace_parameter(selection, draft.parameter_name)
-        trace_id = build_trace_id(
-            task_id=task.task_id,
-            selection=selection,
-            parameter_name=saved_parameter,
+        requests = _build_requested_trace_publications(
+            task=task,
+            basis_task=basis_task,
+            draft=draft,
         )
         publication_key = _build_simulation_publication_key(
             task_id=task.task_id,
@@ -278,96 +276,105 @@ class SqliteResearchDataPublicationRepository:
                 )
                 session.add(publication_row)
                 session.flush()
+            existing_trace_ids = {
+                row.trace_id
+                for row in session.scalars(
+                    select(RewritePublishedSimulationTraceRecord).where(
+                        RewritePublishedSimulationTraceRecord.publication_id == publication_row.id,
+                        RewritePublishedSimulationTraceRecord.trace_id.in_(
+                            [request["trace_id"] for request in requests]
+                        ),
+                    )
+                ).all()
+            }
 
-            existing_trace_row = session.scalar(
-                select(RewritePublishedSimulationTraceRecord).where(
-                    RewritePublishedSimulationTraceRecord.publication_id == publication_row.id,
-                    RewritePublishedSimulationTraceRecord.trace_id == trace_id,
-                )
-            )
-            if existing_trace_row is not None:
-                return self._load_result_trace_publication(
-                    dataset=dataset,
-                    design=design,
-                    publication_key=publication_key,
-                    state="already_published",
-                    trace_key=draft.trace_key,
-                    trace_id=trace_id,
-                )
-
-        trace_data = extract_selection_trace_data(
-            task,
-            basis_task=basis_task,
-            selection=selection,
-        )
-        payload_ref = write_complex_trace_payload(
-            dataset_id=dataset.dataset_id,
-            design_id=design.design_id,
-            trace_id=trace_id,
-            frequencies_ghz=trace_data.frequencies_ghz,
-            values=trace_data.values,
-        )
-        trace_batch_record = build_metadata_record_ref(
-            "trace_batch",
-            f"trace_batch:published:{task.task_id}:{design.dataset_id}:{design.design_id}",
-            version=1,
-        )
-        result_handle_record = build_metadata_record_ref(
-            "result_handle",
-            f"result_handle:published:{task.task_id}:{trace_id}",
-            version=2,
-        )
-        result_handle = build_result_handle_ref(
-            handle_id=f"published-result:{task.task_id}:{trace_id}",
-            kind="simulation_trace",
-            status="materialized",
-            label=f"Published {saved_parameter} {selection.source.upper()} trace",
-            metadata_record=result_handle_record,
-            payload_backend="local_zarr",
-            payload_format="zarr",
-            payload_role="trace_payload",
-            payload_locator=payload_ref.store_uri or payload_ref.store_key,
-            provenance_task_id=task.task_id,
-            provenance=build_result_provenance_ref(
-                source_dataset_id=task.dataset_id,
-                source_task_id=task.task_id,
-                trace_batch_record=trace_batch_record,
-            ),
-        )
-        detail = TraceDetail(
-            trace_id=trace_id,
-            dataset_id=dataset.dataset_id,
-            design_id=design.design_id,
-            axes=(
-                TraceAxis(
-                    name="frequency",
-                    unit="GHz",
-                    length=len(trace_data.frequencies_ghz),
-                ),
-            ),
-            preview_payload=_build_published_trace_preview_payload(
-                task=task,
+        materialized_requests: list[dict[str, object]] = []
+        for request in requests:
+            if request["trace_id"] in existing_trace_ids:
+                continue
+            selection = cast(ResultTraceSelection, request["selection"])
+            saved_parameter = cast(str, request["parameter_name"])
+            trace_id = cast(str, request["trace_id"])
+            trace_data = extract_selection_trace_data(
+                task,
+                basis_task=basis_task,
                 selection=selection,
-                saved_parameter=saved_parameter,
-                trace_data=trace_data,
-            ),
-            payload_ref=payload_ref,
-            result_handles=(result_handle,),
-        )
-        summary = TraceMetadataSummary(
-            trace_id=trace_id,
-            dataset_id=dataset.dataset_id,
-            design_id=design.design_id,
-            family=selection.family,
-            parameter=saved_parameter,
-            representation="complex",
-            trace_mode_group=selection.trace_mode_group,
-            source_kind=cast(str, trace_data.source_kind),
-            stage_kind=cast(str, trace_data.stage_kind),
-            provenance_summary=_published_trace_provenance_summary(task, selection),
-        )
-        self._storage_metadata_repository.save_trace_payload(trace_batch_record, payload_ref)
-        self._storage_metadata_repository.save_result_handle(result_handle)
+            )
+            payload_ref = write_complex_trace_payload(
+                dataset_id=dataset.dataset_id,
+                design_id=design.design_id,
+                trace_id=trace_id,
+                frequencies_ghz=trace_data.frequencies_ghz,
+                values=trace_data.values,
+            )
+            trace_batch_record = build_metadata_record_ref(
+                "trace_batch",
+                f"trace_batch:published:{task.task_id}:{design.dataset_id}:{design.design_id}",
+                version=1,
+            )
+            result_handle_record = build_metadata_record_ref(
+                "result_handle",
+                f"result_handle:published:{task.task_id}:{trace_id}",
+                version=2,
+            )
+            result_handle = build_result_handle_ref(
+                handle_id=f"published-result:{task.task_id}:{trace_id}",
+                kind="simulation_trace",
+                status="materialized",
+                label=f"Published {saved_parameter} {selection.source.upper()} trace",
+                metadata_record=result_handle_record,
+                payload_backend="local_zarr",
+                payload_format="zarr",
+                payload_role="trace_payload",
+                payload_locator=payload_ref.store_uri or payload_ref.store_key,
+                provenance_task_id=task.task_id,
+                provenance=build_result_provenance_ref(
+                    source_dataset_id=task.dataset_id,
+                    source_task_id=task.task_id,
+                    trace_batch_record=trace_batch_record,
+                ),
+            )
+            detail = TraceDetail(
+                trace_id=trace_id,
+                dataset_id=dataset.dataset_id,
+                design_id=design.design_id,
+                axes=(
+                    TraceAxis(
+                        name="frequency",
+                        unit="GHz",
+                        length=len(trace_data.frequencies_ghz),
+                    ),
+                ),
+                preview_payload=_build_published_trace_preview_payload(
+                    task=task,
+                    selection=selection,
+                    saved_parameter=saved_parameter,
+                    trace_data=trace_data,
+                ),
+                payload_ref=payload_ref,
+                result_handles=(result_handle,),
+            )
+            summary = TraceMetadataSummary(
+                trace_id=trace_id,
+                dataset_id=dataset.dataset_id,
+                design_id=design.design_id,
+                family=selection.family,
+                parameter=saved_parameter,
+                representation="complex",
+                trace_mode_group=selection.trace_mode_group,
+                source_kind=cast(str, trace_data.source_kind),
+                stage_kind=cast(str, trace_data.stage_kind),
+                provenance_summary=_published_trace_provenance_summary(task, selection),
+            )
+            self._storage_metadata_repository.save_trace_payload(trace_batch_record, payload_ref)
+            self._storage_metadata_repository.save_result_handle(result_handle)
+            materialized_requests.append(
+                {
+                    "trace_id": trace_id,
+                    "summary": summary,
+                    "detail": detail,
+                }
+            )
 
         with self._session_factory() as session:
             publication_row = session.scalar(
@@ -392,41 +399,44 @@ class SqliteResearchDataPublicationRepository:
                 session.flush()
             publication_row.published_at = published_at
             publication_row.target_design_name = design.name
-            session.add(
-                RewritePublishedSimulationTraceRecord(
-                    publication_id=publication_row.id,
-                    dataset_id=dataset.dataset_id,
-                    design_id=design.design_id,
-                    trace_id=detail.trace_id,
-                    family=summary.family,
-                    parameter=summary.parameter,
-                    representation=summary.representation,
-                    trace_mode_group=summary.trace_mode_group,
-                    source_kind=summary.source_kind,
-                    stage_kind=summary.stage_kind,
-                    provenance_summary=summary.provenance_summary,
-                    axes_json=[
-                        {
-                            "name": axis.name,
-                            "unit": axis.unit,
-                            "length": axis.length,
-                        }
-                        for axis in detail.axes
-                    ],
-                    preview_payload_json=detail.preview_payload,
-                    payload_store_key=cast(str, detail.payload_ref.store_key),
-                    result_handle_id=detail.result_handles[0].handle_id,
-                    published_at=published_at,
+            for request in materialized_requests:
+                summary = cast(TraceMetadataSummary, request["summary"])
+                detail = cast(TraceDetail, request["detail"])
+                session.add(
+                    RewritePublishedSimulationTraceRecord(
+                        publication_id=publication_row.id,
+                        dataset_id=dataset.dataset_id,
+                        design_id=design.design_id,
+                        trace_id=detail.trace_id,
+                        family=summary.family,
+                        parameter=summary.parameter,
+                        representation=summary.representation,
+                        trace_mode_group=summary.trace_mode_group,
+                        source_kind=summary.source_kind,
+                        stage_kind=summary.stage_kind,
+                        provenance_summary=summary.provenance_summary,
+                        axes_json=[
+                            {
+                                "name": axis.name,
+                                "unit": axis.unit,
+                                "length": axis.length,
+                            }
+                            for axis in detail.axes
+                        ],
+                        preview_payload_json=detail.preview_payload,
+                        payload_store_key=cast(str, detail.payload_ref.store_key),
+                        result_handle_id=detail.result_handles[0].handle_id,
+                        published_at=published_at,
+                    )
                 )
-            )
             session.commit()
         return self._load_result_trace_publication(
             dataset=dataset,
             design=design,
             publication_key=publication_key,
-            state="published",
-            trace_key=draft.trace_key,
-            trace_id=trace_id,
+            state="published" if len(materialized_requests) > 0 else "already_published",
+            trace_keys=tuple(cast(str, request["trace_key"]) for request in requests),
+            trace_ids=tuple(cast(str, request["trace_id"]) for request in requests),
         )
 
     def list_designs(
@@ -621,8 +631,8 @@ class SqliteResearchDataPublicationRepository:
         design: DesignBrowseRow,
         publication_key: str,
         state: str,
-        trace_key: str,
-        trace_id: str,
+        trace_keys: tuple[str, ...],
+        trace_ids: tuple[str, ...],
     ) -> ResultTracePublicationResult:
         with self._session_factory() as session:
             publication_row = session.scalar(
@@ -632,25 +642,20 @@ class SqliteResearchDataPublicationRepository:
             )
             if publication_row is None:
                 raise ValueError("published simulation result record was not found")
-            trace_row = session.scalar(
-                select(RewritePublishedSimulationTraceRecord).where(
-                    RewritePublishedSimulationTraceRecord.publication_id == publication_row.id,
-                    RewritePublishedSimulationTraceRecord.trace_id == trace_id,
+            publication_trace_rows = session.scalars(
+                select(RewritePublishedSimulationTraceRecord)
+                .where(
+                    RewritePublishedSimulationTraceRecord.publication_id == publication_row.id
                 )
-            )
-            if trace_row is None:
+                .order_by(RewritePublishedSimulationTraceRecord.id.asc())
+            ).all()
+            trace_summaries = tuple(_to_trace_summary(row) for row in publication_trace_rows)
+            trace_rows_by_id = {row.trace_id: row for row in publication_trace_rows}
+            requested_trace_rows = [
+                trace_rows_by_id[trace_id] for trace_id in trace_ids if trace_id in trace_rows_by_id
+            ]
+            if len(requested_trace_rows) != len(trace_ids):
                 raise ValueError("published result trace record was not found")
-            trace_summaries = tuple(
-                _to_trace_summary(row)
-                for row in session.scalars(
-                    select(RewritePublishedSimulationTraceRecord)
-                    .where(
-                        RewritePublishedSimulationTraceRecord.publication_id
-                        == publication_row.id
-                    )
-                    .order_by(RewritePublishedSimulationTraceRecord.id.asc())
-                ).all()
-            )
             return ResultTracePublicationResult(
                 state=cast(str, state),
                 publication_key=publication_row.publication_key,
@@ -665,9 +670,174 @@ class SqliteResearchDataPublicationRepository:
                     trace_count=len(trace_summaries),
                     updated_at=publication_row.published_at,
                 ),
-                trace_key=trace_key,
-                trace=_to_trace_summary(trace_row),
+                trace_keys=trace_keys,
+                traces=tuple(_to_trace_summary(row) for row in requested_trace_rows),
             )
+
+
+def _build_requested_trace_publications(
+    *,
+    task: TaskDetail,
+    basis_task: TaskDetail,
+    draft: ResultTracePublicationDraft,
+) -> tuple[dict[str, object], ...]:
+    unique_trace_keys = tuple(dict.fromkeys(draft.trace_keys))
+    if len(unique_trace_keys) == 0:
+        raise ValueError("result trace publication requires at least one trace_key")
+    selections = tuple(
+        ResultTraceSelection.from_trace_key(trace_key)
+        for trace_key in unique_trace_keys
+    )
+    _validate_publication_selection_group(selections)
+    parameter_names = _resolve_requested_parameter_names(
+        basis_task=basis_task,
+        selections=selections,
+        parameter_name=draft.parameter_name,
+    )
+    requests: list[dict[str, object]] = []
+    for trace_key, selection, saved_parameter in zip(
+        unique_trace_keys,
+        selections,
+        parameter_names,
+        strict=True,
+    ):
+        requests.append(
+            {
+                "trace_key": trace_key,
+                "selection": selection,
+                "parameter_name": saved_parameter,
+                "trace_id": build_trace_id(
+                    task_id=task.task_id,
+                    selection=selection,
+                    parameter_name=saved_parameter,
+                ),
+            }
+        )
+    return tuple(requests)
+
+
+def _validate_publication_selection_group(
+    selections: tuple[ResultTraceSelection, ...],
+) -> None:
+    primary = selections[0]
+    primary_signature = (
+        primary.family,
+        primary.source,
+        primary.output_port,
+        primary.input_port,
+        primary.trace_mode_group,
+        primary.output_mode,
+        primary.input_mode,
+        primary.z0_ohm,
+    )
+    for selection in selections[1:]:
+        selection_signature = (
+            selection.family,
+            selection.source,
+            selection.output_port,
+            selection.input_port,
+            selection.trace_mode_group,
+            selection.output_mode,
+            selection.input_mode,
+            selection.z0_ohm,
+        )
+        if selection_signature != primary_signature:
+            raise ValueError(
+                "Visible trace publication requires selections from the same explorer view."
+            )
+
+
+def _resolve_requested_parameter_names(
+    *,
+    basis_task: TaskDetail,
+    selections: tuple[ResultTraceSelection, ...],
+    parameter_name: str | None,
+) -> tuple[str, ...]:
+    if len(selections) == 1:
+        return (resolve_saved_trace_parameter(selections[0], parameter_name),)
+
+    base_parameter = (
+        " ".join(part for part in (parameter_name or "").strip().split() if len(part) > 0)
+        or build_trace_parameter(selections[0])
+    )
+    suffixes = _build_selection_suffixes(
+        basis_task=basis_task,
+        selections=selections,
+    )
+    return tuple(
+        (
+            f"{base_parameter} · {suffix}"
+            if len(suffix) > 0
+            else f"{base_parameter} · Trace {index + 1}"
+        )
+        for index, suffix in enumerate(suffixes)
+    )
+
+
+def _build_selection_suffixes(
+    *,
+    basis_task: TaskDetail,
+    selections: tuple[ResultTraceSelection, ...],
+) -> tuple[str, ...]:
+    setup = basis_task.simulation_setup
+    if setup is None or len(setup.parameter_sweeps) == 0:
+        return tuple("" for _ in selections)
+
+    coordinates = [
+        _decode_sweep_coordinates(setup, selection.sweep_index)
+        for selection in selections
+    ]
+    varying_axes = [
+        axis_index
+        for axis_index, sweep in enumerate(setup.parameter_sweeps)
+        if len({point[axis_index] for point in coordinates}) > 1 and len(sweep.values) > 0
+    ]
+    if len(varying_axes) == 0:
+        return tuple("" for _ in selections)
+
+    suffixes: list[str] = []
+    for point in coordinates:
+        parts: list[str] = []
+        for axis_index in varying_axes:
+            sweep = setup.parameter_sweeps[axis_index]
+            coordinate = min(max(point[axis_index], 0), max(len(sweep.values) - 1, 0))
+            parts.append(
+                _format_selection_suffix(
+                    sweep.parameter,
+                    float(sweep.values[coordinate]),
+                    sweep.unit,
+                )
+            )
+        suffixes.append(" · ".join(parts))
+    return tuple(suffixes)
+
+
+def _decode_sweep_coordinates(
+    setup: SimulationSetup,
+    sweep_index: int | None,
+) -> tuple[int, ...]:
+    if len(setup.parameter_sweeps) == 0:
+        return ()
+
+    resolved_index = sweep_index or 0
+    coordinates = [0] * len(setup.parameter_sweeps)
+    remaining = resolved_index
+    for axis_index in range(len(setup.parameter_sweeps) - 1, -1, -1):
+        axis_size = max(len(setup.parameter_sweeps[axis_index].values), 1)
+        coordinates[axis_index] = remaining % axis_size
+        remaining //= axis_size
+    return tuple(coordinates)
+
+
+def _format_selection_suffix(parameter: str, value: float, unit: str | None) -> str:
+    compact_value = (
+        str(int(value))
+        if float(value).is_integer()
+        else format(float(value), ".6f").rstrip("0").rstrip(".")
+    )
+    if unit:
+        return f"{parameter} = {compact_value} {unit}"
+    return f"{parameter} = {compact_value}"
 
 
 def _build_published_trace_preview_payload(

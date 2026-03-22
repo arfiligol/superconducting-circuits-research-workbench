@@ -30,8 +30,14 @@ POST_PROCESSING_RAW_BUNDLE_KEY = "post_processing_raw_bundle"
 POST_PROCESSING_PTC_BUNDLE_KEY = "post_processing_ptc_bundle"
 
 _SIMULATION_CACHE: dict[str, dict[str, object]] = {}
+_PARSED_BUNDLE_PAYLOAD_CACHE: dict[tuple[int, str, str], tuple[str, dict[str, object]]] = {}
+_PARSED_BUNDLE_PAYLOAD_CACHE_MAX = 32
 _MODE_TRACE_LABEL_PATTERN = re.compile(
     r"^[SYZ](?P<output_port>\d+)(?P<input_port>\d+)\[om=(?P<output_mode>\([^]]*\)),im=(?P<input_mode>\([^]]*\))\]$"
+)
+_POST_PROCESSING_BASIS_LABEL_PATTERN = re.compile(
+    r"^(?P<family>cm|dm)\(\s*(?P<port_a>\d+)\s*,\s*(?P<port_b>\d+)\s*\)$",
+    re.IGNORECASE,
 )
 
 
@@ -50,6 +56,13 @@ class PersistedTraceSelectionData:
     input_label: str
     source_kind: str
     stage_kind: str
+
+
+@dataclass(frozen=True)
+class PersistedSimulationTraceGridData:
+    frequencies_ghz: tuple[float, ...]
+    compare_values: tuple[float, ...] | None
+    values: np.ndarray
 
 
 def ensure_core_runtime_path() -> None:
@@ -382,6 +395,96 @@ def extract_selection_trace_data(
             or selection.family in {"y_matrix", "z_matrix"}
             else "raw"
         ),
+    )
+
+
+def extract_simulation_trace_grid_data(
+    task: TaskDetail,
+    *,
+    family: str,
+    source: str,
+    output_port: int,
+    input_port: int,
+    sweep_index: int | None,
+    compare_axis_index: int | None,
+) -> PersistedSimulationTraceGridData:
+    if task.kind != "simulation" or task.simulation_setup is None:
+        raise ValueError("Simulation trace grid extraction requires a persisted simulation task.")
+
+    if source == "raw":
+        bundle_payload = _bundle_payload_for_task(task, SIMULATION_RAW_BUNDLE_KEY)
+    elif source == "ptc":
+        bundle_payload = _bundle_payload_for_task(task, SIMULATION_PTC_BUNDLE_KEY)
+    else:
+        raise ValueError(f"Unsupported simulation trace source: {source}")
+    if bundle_payload is None:
+        raise ValueError("Simulation bundle payload is missing.")
+
+    trace_records = _require_trace_records(bundle_payload)
+    real_record = None
+    imag_record = None
+    for record in trace_records:
+        if record.get("family") != family:
+            continue
+        trace_meta = _require_mapping(record.get("trace_meta"), field_name="trace_meta")
+        if (
+            int(trace_meta.get("output_port", 0) or 0) != output_port
+            or int(trace_meta.get("input_port", 0) or 0) != input_port
+        ):
+            continue
+        representation = str(record.get("representation", "")).strip()
+        if representation == "real":
+            real_record = record
+        elif representation == "imaginary":
+            imag_record = record
+    if real_record is None or imag_record is None:
+        raise ValueError("Persisted simulation trace grid is missing real/imaginary pairs.")
+
+    trace_store = _trace_store()
+    first_store_ref = _require_mapping(real_record.get("store_ref"), field_name="store_ref")
+    frequencies = tuple(
+        float(value)
+        for value in _read_axis_values(
+            trace_store,
+            first_store_ref,
+            axis_name="frequency",
+        )
+    )
+
+    coordinates = list(_decode_axis_indices(task.simulation_setup, sweep_index))
+    compare_values: tuple[float, ...] | None = None
+    if compare_axis_index is not None:
+        if (
+            compare_axis_index < 0
+            or compare_axis_index >= len(task.simulation_setup.parameter_sweeps)
+        ):
+            raise ValueError("compare_axis_index is outside the available parameter sweep range.")
+        compare_axis = task.simulation_setup.parameter_sweeps[compare_axis_index]
+        compare_values = tuple(float(value) for value in compare_axis.values)
+        selectors: list[object] = [int(coordinate) for coordinate in coordinates]
+        selectors[compare_axis_index] = slice(None)
+    else:
+        selectors = [int(coordinate) for coordinate in coordinates]
+
+    selection: tuple[object, ...] = (
+        (slice(None), *selectors) if len(selectors) > 0 else (slice(None),)
+    )
+    real_grid = _read_trace_grid_values(
+        trace_store,
+        _require_mapping(real_record.get("store_ref"), field_name="store_ref"),
+        selection=selection,
+        frequency_count=len(frequencies),
+    )
+    imag_grid = _read_trace_grid_values(
+        trace_store,
+        _require_mapping(imag_record.get("store_ref"), field_name="store_ref"),
+        selection=selection,
+        frequency_count=len(frequencies),
+    )
+    return PersistedSimulationTraceGridData(
+        frequencies_ghz=frequencies,
+        compare_values=compare_values,
+        values=np.asarray(real_grid + (1j * imag_grid), dtype=np.complex128),
     )
 
 
@@ -732,18 +835,32 @@ def _apply_post_processing_operations(
             continue
         if operation.operation == "kron_reduction":
             keep_labels = tuple(
-                str(label) for label in operation.config.get("keep_labels", ()) if str(label)
+                _normalize_post_processing_basis_label(label)
+                for label in operation.config.get("keep_labels", ())
+                if str(label).strip()
             )
             if len(keep_labels) == 0:
                 raise ValueError("Kron reduction requires keep_labels.")
+            keep_label_set = set(keep_labels)
             keep_indices = [
                 index
                 for index, label in enumerate(current.labels)
-                if label in keep_labels
+                if _normalize_post_processing_basis_label(label) in keep_label_set
             ]
             current = symbols["kron_reduce"](current, keep_indices=keep_indices)
             continue
     return current
+
+
+def _normalize_post_processing_basis_label(label: object) -> str:
+    trimmed = str(label).strip()
+    transformed_match = _POST_PROCESSING_BASIS_LABEL_PATTERN.match(trimmed)
+    if transformed_match is None:
+        return trimmed
+    family = (transformed_match.group("family") or "").upper()
+    port_a = transformed_match.group("port_a") or ""
+    port_b = transformed_match.group("port_b") or ""
+    return f"{family}({port_a},{port_b})"
 
 
 def _persist_post_processing_bundle(
@@ -957,15 +1074,30 @@ def _bundle_payload_for_task(task: TaskDetail, key: str) -> dict[str, object] | 
     if isinstance(payload, dict):
         return payload
     if isinstance(payload, str):
-        try:
-            parsed = json.loads(payload)
-        except json.JSONDecodeError:
-            try:
-                parsed = ast.literal_eval(payload)
-            except (SyntaxError, ValueError):
-                return None
-        return parsed if isinstance(parsed, dict) else None
+        cache_key = (task.task_id, completion_event.event_key, key)
+        cached = _PARSED_BUNDLE_PAYLOAD_CACHE.get(cache_key)
+        if cached is not None and cached[0] == payload:
+            return cached[1]
+        parsed = _parse_bundle_payload(payload)
+        if parsed is None:
+            return None
+        _PARSED_BUNDLE_PAYLOAD_CACHE[cache_key] = (payload, parsed)
+        while len(_PARSED_BUNDLE_PAYLOAD_CACHE) > _PARSED_BUNDLE_PAYLOAD_CACHE_MAX:
+            oldest_key = next(iter(_PARSED_BUNDLE_PAYLOAD_CACHE))
+            _PARSED_BUNDLE_PAYLOAD_CACHE.pop(oldest_key, None)
+        return parsed
     return None
+
+
+def _parse_bundle_payload(payload: str) -> dict[str, object] | None:
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        try:
+            parsed = ast.literal_eval(payload)
+        except (SyntaxError, ValueError):
+            return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _build_simulation_bundle_view(
@@ -1263,6 +1395,25 @@ def _read_trace_values(
     )
     values = np.asarray(trace_store.read_trace_slice(store_ref, selection=selection))
     return np.asarray(values).reshape(-1)
+
+
+def _read_trace_grid_values(
+    trace_store: Any,
+    store_ref: Mapping[str, object],
+    *,
+    selection: tuple[object, ...],
+    frequency_count: int,
+) -> np.ndarray:
+    values = np.asarray(trace_store.read_trace_slice(store_ref, selection=selection))
+    if values.ndim == 1:
+        if values.shape[0] == frequency_count:
+            return values.reshape(frequency_count, 1)
+        return values.reshape(1, -1).T
+    if values.shape[0] == frequency_count:
+        return values.reshape(frequency_count, -1)
+    if values.shape[-1] == frequency_count:
+        return np.moveaxis(values, -1, 0).reshape(frequency_count, -1)
+    return values.reshape(frequency_count, -1)
 
 
 def _read_axis_values(

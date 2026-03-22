@@ -290,6 +290,23 @@ export function useSimulationResultExplorer(taskId: number | null, enabled: bool
         };
       });
     },
+    setCompareAxis(nextAxisIndex: number) {
+      updateSelection((current, nextPayload) => {
+        const sweepAxes = nextPayload.bootstrap.parameterSweep.axes;
+        if (
+          !nextPayload.bootstrap.parameterSweep.active ||
+          nextAxisIndex < 0 ||
+          nextAxisIndex >= sweepAxes.length
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          compareAxisIndex: nextAxisIndex,
+        };
+      });
+    },
     setZ0(nextZ0: number) {
       if (!Number.isFinite(nextZ0) || nextZ0 <= 0) {
         return;

@@ -111,6 +111,14 @@ export function useSimulationTaskAttachment({
     [attachedTaskStorageKey],
   );
 
+  const clearRememberedAttachedTask = useCallback(() => {
+    if (typeof window === "undefined" || attachedTaskStorageKey === null) {
+      return;
+    }
+
+    window.sessionStorage.removeItem(attachedTaskStorageKey);
+  }, [attachedTaskStorageKey]);
+
   const attachTask = useCallback(
     (taskId: number) => {
       rememberAttachedTask(taskId);
@@ -184,11 +192,12 @@ export function useSimulationTaskAttachment({
       return;
     }
 
-    window.sessionStorage.removeItem(attachedTaskStorageKey);
+    clearRememberedAttachedTask();
     clearRequestedTask();
   }, [
     activeTaskError,
     attachedTaskStorageKey,
+    clearRememberedAttachedTask,
     clearRequestedTask,
     requestedTaskId,
   ]);
@@ -205,8 +214,16 @@ export function useSimulationTaskAttachment({
       return;
     }
 
+    clearRememberedAttachedTask();
     clearRequestedTask();
-  }, [activeTask, clearRequestedTask, pageContext.datasetId, pageContext.definitionId, requestedTaskId]);
+  }, [
+    activeTask,
+    clearRememberedAttachedTask,
+    clearRequestedTask,
+    pageContext.datasetId,
+    pageContext.definitionId,
+    requestedTaskId,
+  ]);
 
   const taskConnectionState = resolveTaskConnectionState({
     requestedTaskId,

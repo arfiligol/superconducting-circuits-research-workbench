@@ -226,6 +226,7 @@ type SimulationResultExplorerPlotAxisResponseShape = Readonly<{
 type SimulationResultExplorerPlotSeriesResponseShape = Readonly<{
   series_id: string;
   label: string;
+  trace_key?: string | null;
   values: readonly number[];
   unit: string;
 }>;
@@ -759,6 +760,7 @@ export type SimulationResultExplorerPlotAxis = Readonly<{
 export type SimulationResultExplorerSeries = Readonly<{
   seriesId: string;
   label: string;
+  traceKey: string | null;
   values: readonly number[];
   unit: string;
 }>;
@@ -846,7 +848,7 @@ export type SimulationResultExplorerQuery = Readonly<{
   inputPort?: number;
 }>;
 export type SimulationResultTracePublicationDraft = Readonly<{
-  traceKey: string;
+  traceKeys: readonly string[];
   parameterName?: string | null;
   designName?: string | null;
   designId?: string | null;
@@ -884,6 +886,7 @@ export type SimulationResultTracePublicationResult = Readonly<{
   task: TaskDetail;
   dataset: PublishedSimulationResultDataset;
   design: PublishedSimulationResultDesign;
+  traces: readonly PublishedSimulationTrace[];
   trace: PublishedSimulationTrace;
 }>;
 export type TaskQueueReadModel = Readonly<{
@@ -1033,6 +1036,9 @@ export function simulationResultExplorerViewKey(
   }
   if (typeof query?.sweepIndex === "number") {
     params.set("sweep_index", String(query.sweepIndex));
+  }
+  if (typeof query?.compareAxisIndex === "number") {
+    params.set("compare_axis_index", String(query.compareAxisIndex));
   }
   if (typeof query?.z0 === "number") {
     params.set("z0", String(query.z0));
@@ -1543,6 +1549,7 @@ function mapSimulationResultExplorerPlot(
     series: payload.series.map((series) => ({
       seriesId: series.series_id,
       label: series.label,
+      traceKey: series.trace_key ?? null,
       values: [...series.values],
       unit: series.unit,
     })),
@@ -1801,11 +1808,14 @@ function mapSimulationResultPublicationResponse(
     task: mapTaskDetailResponse(payload.task),
     dataset: mapPublishedSimulationResultDataset(payload.dataset),
     design: mapPublishedSimulationResultDesign(payload.design),
+    traces: (payload.traces ?? (trace ? [trace] : [])).map((item) =>
+      mapPublishedSimulationTrace(item),
+    ),
     trace: mapPublishedSimulationTrace(trace),
   };
 }
 
-export async function publishSimulationResultTrace(
+export async function publishSimulationResultTraces(
   taskId: number,
   payload: SimulationResultTracePublicationDraft,
 ): Promise<SimulationResultTracePublicationResult> {
@@ -1814,7 +1824,7 @@ export async function publishSimulationResultTrace(
     {
       method: "POST",
       body: {
-        trace_key: payload.traceKey,
+        trace_keys: [...payload.traceKeys],
         design_id: payload.designId,
         parameter_name: payload.parameterName ?? undefined,
       },

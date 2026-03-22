@@ -1197,6 +1197,23 @@
             }
           },
           {
+            "name": "compare_axis_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Compare Axis Index"
+            }
+          },
+          {
             "name": "z0",
             "in": "query",
             "required": false,
@@ -1350,6 +1367,23 @@
                 }
               ],
               "title": "Sweep Index"
+            }
+          },
+          {
+            "name": "compare_axis_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Compare Axis Index"
             }
           },
           {
