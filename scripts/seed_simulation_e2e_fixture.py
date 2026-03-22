@@ -30,6 +30,33 @@ def _drain_lane_queue(lane: str) -> None:
     worker.work(burst=True)
 
 
+def _wait_for_task_ready(
+    client: TestClient,
+    task_id: int,
+    *,
+    lane: str,
+    timeout_seconds: float = 30.0,
+) -> dict[str, object]:
+    deadline = time.time() + timeout_seconds
+    detail: dict[str, object] | None = None
+    while time.time() < deadline:
+        _drain_lane_queue(lane)
+        detail_response = client.get(f"/tasks/{task_id}")
+        detail_response.raise_for_status()
+        detail = detail_response.json()["data"]
+        if (
+            detail["status"] == "completed"
+            and detail["result_handoff"]["availability"] == "ready"
+        ):
+            return detail
+        time.sleep(0.05)
+
+    raise RuntimeError(
+        f"Failed to materialize the frontend simulation E2E fixture within {timeout_seconds:.1f}s; "
+        f"last detail={detail!r}"
+    )
+
+
 def _seed_fixture() -> dict[str, int]:
     reset_runtime_state()
     client = TestClient(app)
@@ -121,22 +148,7 @@ def _seed_fixture() -> dict[str, int]:
     )
     simulation_response.raise_for_status()
     simulation_task_id = int(simulation_response.json()["data"]["task"]["task_id"])
-
-    detail: dict[str, object] | None = None
-    for _ in range(3):
-        _drain_lane_queue("simulation")
-        detail_response = client.get(f"/tasks/{simulation_task_id}")
-        detail_response.raise_for_status()
-        detail = detail_response.json()["data"]
-        if (
-            detail["status"] == "completed"
-            and detail["result_handoff"]["availability"] == "ready"
-        ):
-            break
-        time.sleep(0.05)
-
-    if detail is None or detail["status"] != "completed":
-        raise RuntimeError("Failed to materialize the frontend simulation E2E fixture.")
+    _wait_for_task_ready(client, simulation_task_id, lane="simulation")
 
     reset_runtime_state()
     return {

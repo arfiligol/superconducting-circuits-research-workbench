@@ -33,6 +33,29 @@ def _drain_lane_queue(lane: str) -> None:
     worker.work(burst=True)
 
 
+def _wait_for_task_ready(
+    task_id: int,
+    *,
+    lane: str,
+    timeout_seconds: float = 30.0,
+) -> dict[str, object]:
+    deadline = time.time() + timeout_seconds
+    detail: dict[str, object] | None = None
+    while time.time() < deadline:
+        _drain_lane_queue(lane)
+        detail = client.get(f"/tasks/{task_id}").json()["data"]
+        if (
+            detail["status"] == "completed"
+            and detail["result_handoff"]["availability"] == "ready"
+        ):
+            return detail
+        time.sleep(0.05)
+
+    raise AssertionError(
+        f"Task {task_id} did not complete within {timeout_seconds:.1f}s; last detail={detail!r}"
+    )
+
+
 def _simulation_setup_payload(
     *,
     parameter_sweeps: list[dict[str, object]],
@@ -124,19 +147,7 @@ def _submit_simulation_and_wait(
     )
     assert response.status_code == 201
     task = response.json()["data"]["task"]
-
-    detail = task
-    for _ in range(3):
-        _drain_lane_queue("simulation")
-        detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
-        if (
-            detail["status"] == "completed"
-            and detail["result_handoff"]["availability"] == "ready"
-        ):
-            return detail
-        time.sleep(0.05)
-
-    return detail
+    return _wait_for_task_ready(int(task["task_id"]), lane="simulation")
 
 
 def _submit_post_processing_and_wait(
@@ -183,19 +194,7 @@ def _submit_post_processing_and_wait(
     )
     assert response.status_code == 201
     task = response.json()["data"]["task"]
-
-    detail = task
-    for _ in range(3):
-        _drain_lane_queue("simulation")
-        detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
-        if (
-            detail["status"] == "completed"
-            and detail["result_handoff"]["availability"] == "ready"
-        ):
-            return detail
-        time.sleep(0.05)
-
-    return detail
+    return _wait_for_task_ready(int(task["task_id"]), lane="simulation")
 
 
 def _create_design(name: str) -> str:

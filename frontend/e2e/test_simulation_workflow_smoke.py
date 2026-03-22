@@ -79,11 +79,13 @@ def _seed_completed_simulation_fixture(
     backend_dir: Path,
     database_path: Path,
     audit_database_path: Path,
+    trace_store_root: Path,
 ) -> dict[str, int]:
     output_path = database_path.parent / "fixture.json"
     env = os.environ.copy()
     env["SC_DATABASE_PATH"] = str(database_path)
     env["SC_AUDIT_DATABASE_PATH"] = str(audit_database_path)
+    env["SC_TRACE_STORE_ROOT"] = str(trace_store_root)
     env["SC_RQ_REDIS_URL"] = "fakeredis://frontend-simulation-e2e"
     subprocess.run(
         [
@@ -117,10 +119,12 @@ def simulation_stack(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str 
     run_dir = tmp_path_factory.mktemp("frontend_simulation_smoke")
     database_path = run_dir / "database.db"
     audit_database_path = run_dir / "audit-log.db"
+    trace_store_root = run_dir / "trace_store"
     fixture = _seed_completed_simulation_fixture(
         backend_dir=backend_dir,
         database_path=database_path,
         audit_database_path=audit_database_path,
+        trace_store_root=trace_store_root,
     )
 
     backend_port = _find_free_port()
@@ -134,6 +138,7 @@ def simulation_stack(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str 
     backend_env = os.environ.copy()
     backend_env["SC_DATABASE_PATH"] = str(database_path)
     backend_env["SC_AUDIT_DATABASE_PATH"] = str(audit_database_path)
+    backend_env["SC_TRACE_STORE_ROOT"] = str(trace_store_root)
     backend_env["SC_RQ_REDIS_URL"] = "fakeredis://frontend-simulation-e2e"
     backend_process = subprocess.Popen(
         [
@@ -156,6 +161,7 @@ def simulation_stack(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str 
 
     frontend_env = os.environ.copy()
     frontend_env["BACKEND_BASE_URL"] = backend_base_url
+    frontend_env["NEXT_DIST_DIR"] = ".next-e2e"
     frontend_process = subprocess.Popen(
         [
             "npm",
