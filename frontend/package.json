@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "cd .. && uv run python -m playwright install chromium && uv run pytest frontend/e2e/test_simulation_workflow_smoke.py -q",
     "sync:types": "../scripts/sync_api_types.sh"
   },
   "dependencies": {
