@@ -39,6 +39,7 @@ const tasksApiSource = readFileSync(
   fileURLToPath(new URL("../src/lib/api/tasks.ts", import.meta.url)),
   "utf8",
 );
+const SIMULATION_SCHEMA_ID = "7f3a2c91-1d7f-4a55-9cfd-0f0b7d5c1001";
 
 describe("tasks browse helpers", () => {
   it("resolves scope defaults from runtime mode and session defaults", () => {
@@ -100,7 +101,7 @@ describe("tasks browse helpers", () => {
             workspaceSlug: "device-lab",
             visibilityScope: "workspace",
             datasetId: "fluxonium-2025-031",
-            definitionId: 18,
+            definitionId: SIMULATION_SCHEMA_ID,
             summary: "Simulation request",
             resultAvailability: "pending",
             controlState: "none",
@@ -140,7 +141,7 @@ describe("tasks browse helpers", () => {
           workspaceSlug: "device-lab",
           visibilityScope: "workspace",
           datasetId: "fluxonium-2025-031",
-          definitionId: 18,
+          definitionId: SIMULATION_SCHEMA_ID,
           summary: "Simulation request",
           resultAvailability: "pending",
           controlState: "none",

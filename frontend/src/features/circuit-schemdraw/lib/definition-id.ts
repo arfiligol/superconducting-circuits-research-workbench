@@ -1,15 +1,18 @@
 import { parseDefinitionIdParam } from "@/features/circuit-definition-editor/lib/definition-id";
 import type { CircuitDefinitionSummary } from "@/features/circuit-definition-editor/lib/contracts";
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 
-export function parseSchemdrawDefinitionIdParam(value: string | null): number | null {
+export function parseSchemdrawDefinitionIdParam(
+  value: string | null,
+): CircuitDefinitionId | null {
   const parsedValue = parseDefinitionIdParam(value);
-  return typeof parsedValue === "number" ? parsedValue : null;
+  return parsedValue === "new" ? null : parsedValue;
 }
 
 export function resolveSchemdrawDefinitionId(
   currentValue: string | null,
   definitions: readonly CircuitDefinitionSummary[] | undefined,
-): number | null {
+): CircuitDefinitionId | null {
   if (currentValue === null) {
     return null;
   }
@@ -19,7 +22,7 @@ export function resolveSchemdrawDefinitionId(
   }
 
   const parsedValue = parseSchemdrawDefinitionIdParam(currentValue);
-  if (typeof parsedValue === "number") {
+  if (parsedValue !== null) {
     return definitions.some((definition) => definition.definition_id === parsedValue)
       ? parsedValue
       : definitions[0].definition_id;

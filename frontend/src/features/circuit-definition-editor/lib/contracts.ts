@@ -1,4 +1,5 @@
 import type { components } from "@/lib/api/generated/schema";
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 
 export type CircuitDefinitionAllowedActions = Readonly<{
   update: boolean;
@@ -69,7 +70,7 @@ export type CircuitDefinitionDetailResponse = Omit<
     validation_notices: readonly DefinitionValidationNoticeResponse[];
     validation_summary: CircuitDefinitionValidationSummaryResponse;
     preview_artifacts: readonly string[];
-    lineage_parent_id: number | null;
+    lineage_parent_id: CircuitDefinitionId | null;
   }>;
 
 export type DefinitionValidationNotice = Readonly<{
@@ -108,7 +109,7 @@ export type CircuitDefinitionDetail = CircuitDefinitionSummary &
     validation_notices: readonly DefinitionValidationNotice[];
     validation_summary: CircuitDefinitionValidationSummary;
     preview_artifacts: readonly string[];
-    lineage_parent_id?: number | null;
+    lineage_parent_id?: CircuitDefinitionId | null;
   }>;
 
 export type CircuitDefinitionPersistedPreview = Pick<
@@ -159,7 +160,7 @@ export type CircuitDefinitionMutationEnvelopeResponse = Readonly<{
 
 export type CircuitDefinitionDeleteResponse = Readonly<{
   operation: "deleted";
-  definition_id: number;
+  definition_id: CircuitDefinitionId;
 }>;
 
 export type CircuitDefinitionCatalogResponse = Readonly<{

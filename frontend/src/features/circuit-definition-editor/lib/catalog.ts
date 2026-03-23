@@ -1,4 +1,5 @@
 import type { CircuitDefinitionSummary } from "@/features/circuit-definition-editor/lib/contracts";
+import { matchesSchemaIdQuery } from "@/features/circuit-definition-editor/lib/schema-identity";
 
 export type CircuitDefinitionCatalogSort = "recent" | "name";
 
@@ -15,7 +16,7 @@ export function filterCircuitDefinitionCatalog(
 
     return (
       definition.name.toLowerCase().includes(normalizedQuery) ||
-      String(definition.definition_id).includes(normalizedQuery)
+      matchesSchemaIdQuery(definition.definition_id, normalizedQuery)
     );
   });
 

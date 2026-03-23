@@ -2,6 +2,7 @@ import type {
   CircuitDefinitionPersistedPreview,
   DefinitionValidationNotice,
 } from "@/features/circuit-definition-editor/lib/contracts";
+import { formatSchemaIdLabel } from "@/features/circuit-definition-editor/lib/schema-identity";
 
 export type PersistedPreviewState = Readonly<{
   label: string;
@@ -38,7 +39,7 @@ export type NormalizedOutputPreview = Readonly<{
 }>;
 
 type PreviewStateInput = Readonly<{
-  selectedDefinitionId: number | "new" | null;
+  selectedDefinitionId: string | "new" | null;
   isDirty: boolean;
   isSaving: boolean;
   activeDefinition: CircuitDefinitionPersistedPreview | undefined;
@@ -76,12 +77,12 @@ export function resolvePersistedPreviewState({
 
   if (activeDefinition) {
     const lineageLabel =
-      typeof activeDefinition.lineage_parent_id === "number"
-        ? ` Derived from definition #${activeDefinition.lineage_parent_id}.`
+      typeof activeDefinition.lineage_parent_id === "string"
+        ? ` Derived from ${formatSchemaIdLabel(activeDefinition.lineage_parent_id)}.`
         : "";
     return {
       label: "Persisted Preview",
-      detail: `Backend validation is attached to definition #${activeDefinition.definition_id} in ${activeDefinition.visibility_scope} visibility. Last updated at ${activeDefinition.updated_at}.${lineageLabel}`,
+      detail: `Backend validation is attached to ${formatSchemaIdLabel(activeDefinition.definition_id)} in ${activeDefinition.visibility_scope} visibility. Last updated at ${activeDefinition.updated_at}.${lineageLabel}`,
       tone: "accent",
     };
   }
@@ -112,7 +113,7 @@ export function partitionValidationNotices(
 }
 
 export function resolvePrioritizedValidationLane(input: Readonly<{
-  selectedDefinitionId: number | "new" | null;
+  selectedDefinitionId: string | "new" | null;
   isDirty: boolean;
   groups: ValidationNoticeGroups;
 }>): PrioritizedValidationLane {

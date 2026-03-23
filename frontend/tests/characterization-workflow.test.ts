@@ -42,6 +42,7 @@ const taskApiSource = readFileSync(
   fileURLToPath(new URL("../src/lib/api/tasks.ts", import.meta.url)),
   "utf8",
 );
+const RELATED_SIMULATION_SCHEMA_ID = "51cfd0e2-1a2f-4c1e-86d9-33f6b2d91003";
 
 describe("characterization api keys", () => {
   it("builds stable dataset, result detail, and nested tagging paths", () => {
@@ -272,7 +273,7 @@ describe("characterization task helpers", () => {
       workspaceSlug: "device-lab",
       visibilityScope: "owned",
       datasetId: "transmon-014",
-      definitionId: 24,
+      definitionId: RELATED_SIMULATION_SCHEMA_ID,
       summary: "Simulation task",
       hasActionAuthority: false,
       allowedActions: {

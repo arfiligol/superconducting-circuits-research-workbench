@@ -80,7 +80,7 @@ export function buildCircuitDefinitionDraftSurface(input: Readonly<{
 }
 
 export function buildCircuitDefinitionPersistedPreviewSurface(input: Readonly<{
-  selectedDefinitionId: number | "new" | null;
+  selectedDefinitionId: string | "new" | null;
   isDirty: boolean;
   mutationPhase: CircuitDefinitionMutationPhase;
   activeDefinition: CircuitDefinitionPersistedPreview | undefined;

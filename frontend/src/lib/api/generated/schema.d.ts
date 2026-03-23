@@ -235,7 +235,7 @@ export interface components {
         /** CircuitDefinitionDetailResponse */
         CircuitDefinitionDetailResponse: {
             /** Definition Id */
-            definition_id: number;
+            definition_id: string;
             /** Name */
             name: string;
             /** Created At */
@@ -271,7 +271,7 @@ export interface components {
         /** CircuitDefinitionSummaryResponse */
         CircuitDefinitionSummaryResponse: {
             /** Definition Id */
-            definition_id: number;
+            definition_id: string;
             /** Name */
             name: string;
             /** Created At */
@@ -564,7 +564,7 @@ export interface components {
             /** Dataset Id */
             dataset_id: string | null;
             /** Definition Id */
-            definition_id: number | null;
+            definition_id: string | null;
             /** Summary */
             summary: string;
             /**
@@ -716,7 +716,7 @@ export interface components {
             /** Dataset Id */
             dataset_id?: string | null;
             /** Definition Id */
-            definition_id?: number | null;
+            definition_id?: string | null;
             /** Summary */
             summary?: string | null;
         };
@@ -765,7 +765,7 @@ export interface components {
             /** Dataset Id */
             dataset_id: string | null;
             /** Definition Id */
-            definition_id: number | null;
+            definition_id: string | null;
             /** Summary */
             summary: string;
             /**
@@ -1241,7 +1241,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                definition_id: number;
+                definition_id: string;
             };
             cookie?: never;
         };
@@ -1272,7 +1272,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                definition_id: number;
+                definition_id: string;
             };
             cookie?: never;
         };
@@ -1307,7 +1307,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                definition_id: number;
+                definition_id: string;
             };
             cookie?: never;
         };

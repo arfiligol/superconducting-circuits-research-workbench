@@ -5,6 +5,8 @@ import {
   summarizeTaskEventHistory,
 } from "../src/lib/task-event-history";
 
+const SIMULATION_SCHEMA_ID = "7f3a2c91-1d7f-4a55-9cfd-0f0b7d5c1001";
+
 describe("task event history helpers", () => {
   const task = {
     taskId: 58,
@@ -19,7 +21,7 @@ describe("task event history helpers", () => {
     workspaceSlug: "device-lab",
     visibilityScope: "workspace",
     datasetId: "fluxonium-2025-031",
-    definitionId: 18,
+    definitionId: SIMULATION_SCHEMA_ID,
     summary: "Simulation request for Fluxonium sweep 031",
     hasActionAuthority: true,
     allowedActions: {

@@ -31,6 +31,10 @@ import { SimulationResultExplorer } from "@/features/simulation/components/simul
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import { resolveOfficialSimulationExamplePreset } from "@/features/simulation/lib/official-example";
 import {
+  buildSchemaIdentityDescription,
+  formatSchemaIdLabel,
+} from "@/features/circuit-definition-editor/lib/schema-identity";
+import {
   createPostProcessingStep,
   derivePostProcessingStepContext,
   isPostProcessingStepTypeAvailable,
@@ -847,7 +851,11 @@ export function SimulationWorkbenchShell() {
       const options = (definitions ?? []).map((definition) => ({
         value: String(definition.definition_id),
         label: definition.name,
-        description: `Definition #${definition.definition_id} · ${definition.preview_artifact_count} preview artifacts`,
+        description: buildSchemaIdentityDescription({
+          definitionId: definition.definition_id,
+          createdAt: definition.created_at,
+          extra: `${definition.preview_artifact_count} preview artifacts`,
+        }),
       }));
 
       if (options.length > 0 || !activeDefinition) {
@@ -858,7 +866,11 @@ export function SimulationWorkbenchShell() {
         {
           value: String(activeDefinition.definition_id),
           label: activeDefinition.name,
-          description: `Definition #${activeDefinition.definition_id} · ${activeDefinition.preview_artifacts.length} preview artifacts`,
+          description: buildSchemaIdentityDescription({
+            definitionId: activeDefinition.definition_id,
+            createdAt: activeDefinition.created_at,
+            extra: `${activeDefinition.preview_artifacts.length} preview artifacts`,
+          }),
         },
       ];
     },

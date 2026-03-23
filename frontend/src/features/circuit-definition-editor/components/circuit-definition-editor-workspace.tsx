@@ -20,6 +20,10 @@ import {
   buildCircuitSchemdrawHref,
 } from "@/features/circuit-definition-editor/lib/routes";
 import {
+  formatSchemaIdLabel,
+  type CircuitDefinitionId,
+} from "@/features/circuit-definition-editor/lib/schema-identity";
+import {
   buildCircuitDefinitionDraft,
   formatCircuitNetlistSource,
   parseCircuitNetlistSource,
@@ -276,6 +280,8 @@ export function CircuitDefinitionEditorWorkspace() {
 
   const activeDefinitionLabel =
     selectedDefinitionId === "new" ? "New Circuit Definition" : activeDefinition?.name ?? "Loading schema";
+  const isPersistedSelection =
+    selectedDefinitionId !== null && selectedDefinitionId !== "new";
   const persistedStateToneClass =
     persistedPreviewSurface.persistedPreviewState.tone === "warning"
       ? resolveSurfaceInsetToneClass("warning")
@@ -461,7 +467,7 @@ export function CircuitDefinitionEditorWorkspace() {
             <ArrowLeft className="h-4 w-4" />
             Back to Schemas
           </button>
-          {typeof selectedDefinitionId === "number" ? (
+          {isPersistedSelection ? (
             <button
               type="button"
               onClick={() => {
@@ -522,10 +528,13 @@ export function CircuitDefinitionEditorWorkspace() {
               <span className="rounded-full border border-border bg-surface px-3 py-1">
                 {selectedDefinitionId === "new"
                   ? "Draft only"
-                  : `Definition #${activeDefinition?.definition_id ?? "--"}`}
+                  : formatSchemaIdLabel(activeDefinition?.definition_id ?? selectedDefinitionId)}
               </span>
               {activeDefinition ? (
                 <>
+                  <span className="rounded-full border border-border bg-surface px-3 py-1">
+                    {activeDefinition.created_at}
+                  </span>
                   <span className="rounded-full border border-border bg-surface px-3 py-1">
                     {activeDefinition.visibility_scope}
                   </span>
@@ -537,16 +546,16 @@ export function CircuitDefinitionEditorWorkspace() {
               <span className="rounded-full border border-border bg-surface px-3 py-1">
                 {persistedPreviewSurface.persistedPreviewState.label}
               </span>
-              {typeof activeDefinition?.lineage_parent_id === "number" ? (
+              {typeof activeDefinition?.lineage_parent_id === "string" ? (
                 <span className="rounded-full border border-border bg-surface px-3 py-1">
-                  Cloned from #{activeDefinition.lineage_parent_id}
+                  Cloned from {formatSchemaIdLabel(activeDefinition.lineage_parent_id)}
                 </span>
               ) : null}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {typeof selectedDefinitionId === "number" ? (
+            {isPersistedSelection ? (
               <button
                 type="button"
                 onClick={() => {
@@ -567,7 +576,7 @@ export function CircuitDefinitionEditorWorkspace() {
                 Delete
               </button>
             ) : null}
-            {typeof selectedDefinitionId === "number" && session?.runtimeMode !== "local" ? (
+            {isPersistedSelection && session?.runtimeMode !== "local" ? (
               <button
                 type="button"
                 onClick={() => {
@@ -585,7 +594,7 @@ export function CircuitDefinitionEditorWorkspace() {
                 Publish
               </button>
             ) : null}
-            {typeof selectedDefinitionId === "number" ? (
+            {isPersistedSelection ? (
               <button
                 type="button"
                 onClick={() => {

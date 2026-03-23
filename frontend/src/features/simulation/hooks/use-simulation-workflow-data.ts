@@ -25,9 +25,10 @@ import {
   taskDetailKey,
   type TaskDetail,
 } from "@/lib/api/tasks";
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 
 export function useSimulationWorkflowData(
-  selectedDefinitionId: number | null,
+  selectedDefinitionId: CircuitDefinitionId | null,
   selectedTaskId: number | null,
 ) {
   const { session } = useAppSession();
@@ -36,29 +37,29 @@ export function useSimulationWorkflowData(
 
   const definitionsQuery = useSWR(circuitDefinitionsListKey, listCircuitDefinitions);
   const resolvedDefinitionId = resolveSimulationDefinitionId(
-    selectedDefinitionId === null ? null : String(selectedDefinitionId),
+    selectedDefinitionId,
     definitionsQuery.data,
   );
   const selectedDefinitionSummary =
-    typeof resolvedDefinitionId === "number"
+    resolvedDefinitionId !== null
       ? definitionsQuery.data?.find(
           (definition) => definition.definition_id === resolvedDefinitionId,
         )
       : undefined;
   const definitionDetailKey =
-    typeof resolvedDefinitionId === "number"
+    resolvedDefinitionId !== null
       ? circuitDefinitionDetailKey(resolvedDefinitionId)
       : null;
   const definitionDetailQuery = useSWR(
     definitionDetailKey,
     () =>
-      typeof resolvedDefinitionId === "number"
+      resolvedDefinitionId !== null
         ? getCircuitDefinition(resolvedDefinitionId)
         : Promise.resolve(undefined),
   );
   const activeDefinition = definitionDetailQuery.data;
   const hasAttachedDefinition =
-    typeof resolvedDefinitionId === "number" &&
+    resolvedDefinitionId !== null &&
     activeDefinition?.definition_id === resolvedDefinitionId;
   const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null;
   const pageContext = {
@@ -228,7 +229,7 @@ export function useSimulationWorkflowData(
     activeDefinition,
     activeDefinitionError: definitionDetailQuery.error as Error | undefined,
     isDefinitionTransitioning:
-      typeof resolvedDefinitionId === "number" &&
+      resolvedDefinitionId !== null &&
       (!hasAttachedDefinition || definitionDetailQuery.isLoading),
     simulationTasks,
     currentContextSimulationTasks,

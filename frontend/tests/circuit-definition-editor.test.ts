@@ -53,11 +53,16 @@ const catalogWorkspaceSource = readFileSync(
   new URL("../src/features/circuit-definition-editor/components/circuit-definition-catalog-workspace.tsx", import.meta.url),
   "utf8",
 );
+const PRIMARY_SCHEMA_ID = "7f3a2c91-1d7f-4a55-9cfd-0f0b7d5c1001";
+const SECONDARY_SCHEMA_ID = "2e51d9a4-8e24-4981-9947-2ce9a8f71002";
+const TERTIARY_SCHEMA_ID = "51cfd0e2-1a2f-4c1e-86d9-33f6b2d91003";
+const LINEAGE_SCHEMA_ID = "9ab1f3d7-4c5e-4ab6-9c7d-44f7c3ea1004";
+const MISSING_SCHEMA_ID = "f3b7a1c9-8d4e-4a2b-9f7c-55d8e4fb1005";
 
 describe("circuit definition editor routing helpers", () => {
   const definitions = [
     {
-      definition_id: 18,
+      definition_id: PRIMARY_SCHEMA_ID,
       name: "FloatingQubitWithXYLine",
       created_at: "2026-03-08T18:19:42Z",
       visibility_scope: "private",
@@ -73,7 +78,7 @@ describe("circuit definition editor routing helpers", () => {
       preview_artifact_count: 0,
     },
     {
-      definition_id: 12,
+      definition_id: SECONDARY_SCHEMA_ID,
       name: "FluxoniumReadoutChain",
       created_at: "2026-03-05T11:14:03Z",
       visibility_scope: "workspace",
@@ -90,16 +95,16 @@ describe("circuit definition editor routing helpers", () => {
     },
   ] as const;
 
-  it("parses numeric and new definition query params", () => {
-    expect(parseDefinitionIdParam("18")).toBe(18);
+  it("parses uuid and new definition query params", () => {
+    expect(parseDefinitionIdParam(PRIMARY_SCHEMA_ID)).toBe(PRIMARY_SCHEMA_ID);
     expect(parseDefinitionIdParam("new")).toBe("new");
     expect(parseDefinitionIdParam("bad")).toBeNull();
     expect(parseDefinitionIdParam(null)).toBeNull();
   });
 
   it("falls back to the first definition when the selection is missing or invalid", () => {
-    expect(resolveSelectedDefinitionId(null, definitions)).toBe("18");
-    expect(resolveSelectedDefinitionId("999", definitions)).toBe("18");
+    expect(resolveSelectedDefinitionId(null, definitions)).toBe(PRIMARY_SCHEMA_ID);
+    expect(resolveSelectedDefinitionId(MISSING_SCHEMA_ID, definitions)).toBe(PRIMARY_SCHEMA_ID);
   });
 
   it("preserves explicit new-draft selection and editor routes", () => {
@@ -108,8 +113,8 @@ describe("circuit definition editor routing helpers", () => {
     expect(buildCircuitDefinitionEditorHref("new")).toBe(
       "/circuit-definition-editor?definitionId=new",
     );
-    expect(buildCircuitDefinitionEditorHref(18)).toBe(
-      "/circuit-definition-editor?definitionId=18",
+    expect(buildCircuitDefinitionEditorHref(PRIMARY_SCHEMA_ID)).toBe(
+      `/circuit-definition-editor?definitionId=${PRIMARY_SCHEMA_ID}`,
     );
   });
 
@@ -118,7 +123,7 @@ describe("circuit definition editor routing helpers", () => {
       filterCircuitDefinitionCatalog(definitions, "flux", "name").map(
         (definition) => definition.definition_id,
       ),
-    ).toEqual([12]);
+    ).toEqual([SECONDARY_SCHEMA_ID]);
   });
 });
 
@@ -128,17 +133,21 @@ describe("circuit definition editor api adapters", () => {
     expect(circuitDefinitionsCatalogKey).toBe(
       "/api/backend/circuit-definitions?view=authoring-catalog",
     );
-    expect(circuitDefinitionDetailKey(18)).toBe("/api/backend/circuit-definitions/18");
-    expect(circuitDefinitionPublishKey(18)).toBe(
-      "/api/backend/circuit-definitions/18/publish",
+    expect(circuitDefinitionDetailKey(PRIMARY_SCHEMA_ID)).toBe(
+      `/api/backend/circuit-definitions/${PRIMARY_SCHEMA_ID}`,
     );
-    expect(circuitDefinitionCloneKey(18)).toBe("/api/backend/circuit-definitions/18/clone");
+    expect(circuitDefinitionPublishKey(PRIMARY_SCHEMA_ID)).toBe(
+      `/api/backend/circuit-definitions/${PRIMARY_SCHEMA_ID}/publish`,
+    );
+    expect(circuitDefinitionCloneKey(PRIMARY_SCHEMA_ID)).toBe(
+      `/api/backend/circuit-definitions/${PRIMARY_SCHEMA_ID}/clone`,
+    );
   });
 
   it("maps backend summary rows without inventing preview placeholders", () => {
     expect(
       mapCircuitDefinitionSummaryResponse({
-        definition_id: 18,
+        definition_id: PRIMARY_SCHEMA_ID,
         name: "FloatingQubitWithXYLine",
         created_at: "2026-03-08T18:19:42Z",
         element_count: 3,
@@ -154,7 +163,7 @@ describe("circuit definition editor api adapters", () => {
         },
       }),
     ).toEqual({
-      definition_id: 18,
+      definition_id: PRIMARY_SCHEMA_ID,
       name: "FloatingQubitWithXYLine",
       created_at: "2026-03-08T18:19:42Z",
       element_count: 3,
@@ -173,7 +182,7 @@ describe("circuit definition editor api adapters", () => {
 
   it("maps backend detail fields and compatibility shims", () => {
     const detail = mapCircuitDefinitionDetailResponse({
-      definition_id: 18,
+      definition_id: PRIMARY_SCHEMA_ID,
       workspace_id: "ws_lab_a",
       visibility_scope: "private",
       lifecycle_state: "active",
@@ -232,7 +241,7 @@ describe("circuit definition editor api adapters", () => {
         blocking_notice_count: 1,
       },
       preview_artifacts: ["definition.normalized.json", "definition.preview.svg"],
-      lineage_parent_id: 7,
+      lineage_parent_id: LINEAGE_SCHEMA_ID,
     });
 
     expect(detail.allowed_actions?.publish).toBe(true);
@@ -251,7 +260,7 @@ describe("circuit definition editor api adapters", () => {
 
   it("unwraps mutation responses into persisted detail payloads", () => {
     const detail = mapCircuitDefinitionDetailResponse({
-      definition_id: 24,
+      definition_id: TERTIARY_SCHEMA_ID,
       workspace_id: "ws_lab_a",
       visibility_scope: "workspace",
       lifecycle_state: "active",
@@ -290,7 +299,7 @@ describe("circuit definition editor api adapters", () => {
         definition: detail,
       }),
     ).toMatchObject({
-      definition_id: 24,
+      definition_id: TERTIARY_SCHEMA_ID,
       visibility_scope: "workspace",
     });
   });
@@ -298,7 +307,7 @@ describe("circuit definition editor api adapters", () => {
 
 describe("circuit definition action helpers", () => {
   const persistedDefinition = {
-    definition_id: 18,
+    definition_id: PRIMARY_SCHEMA_ID,
     name: "FloatingQubitWithXYLine",
     created_at: "2026-03-08T18:19:42Z",
     visibility_scope: "private",
@@ -387,7 +396,7 @@ describe("circuit definition action helpers", () => {
 
     expect(
       summarizeEditorDefinitionActionState({
-        selectedDefinitionId: 18,
+        selectedDefinitionId: PRIMARY_SCHEMA_ID,
         activeDefinition: {
           ...persistedDefinition,
           visibility_scope: "local",
@@ -434,7 +443,7 @@ describe("circuit definition action helpers", () => {
   it("keeps save/publish/clone/delete states distinct from format and draft state", () => {
     expect(
       summarizeEditorDefinitionActionState({
-        selectedDefinitionId: 18,
+        selectedDefinitionId: PRIMARY_SCHEMA_ID,
         activeDefinition: persistedDefinition,
         isDirty: true,
         isMutationPending: false,
@@ -571,11 +580,11 @@ describe("circuit definition preview helpers", () => {
 
     expect(
       resolvePersistedPreviewState({
-        selectedDefinitionId: 18,
+        selectedDefinitionId: PRIMARY_SCHEMA_ID,
         isDirty: false,
         isSaving: false,
         activeDefinition: {
-          definition_id: 18,
+          definition_id: PRIMARY_SCHEMA_ID,
           visibility_scope: "workspace",
           preview_artifact_count: 2,
           updated_at: "2026-03-15T09:00:00Z",
@@ -588,23 +597,23 @@ describe("circuit definition preview helpers", () => {
             blocking_notice_count: 0,
           },
           preview_artifacts: ["definition.preview.svg"],
-          lineage_parent_id: 9,
+          lineage_parent_id: LINEAGE_SCHEMA_ID,
         },
       }),
     ).toEqual({
       label: "Persisted Preview",
       detail:
-        "Backend validation is attached to definition #18 in workspace visibility. Last updated at 2026-03-15T09:00:00Z. Derived from definition #9.",
+        "Backend validation is attached to Schema ID 7f3a2c91 in workspace visibility. Last updated at 2026-03-15T09:00:00Z. Derived from Schema ID 9ab1f3d7.",
       tone: "accent",
     });
 
     expect(
       buildCircuitDefinitionPersistedPreviewSurface({
-        selectedDefinitionId: 18,
+        selectedDefinitionId: PRIMARY_SCHEMA_ID,
         isDirty: true,
         mutationPhase: "idle",
         activeDefinition: {
-          definition_id: 18,
+          definition_id: PRIMARY_SCHEMA_ID,
           visibility_scope: "workspace",
           updated_at: "2026-03-15T09:00:00Z",
           normalized_output: "{\n  \"circuit\": \"floating_xy\"\n}",
@@ -617,7 +626,7 @@ describe("circuit definition preview helpers", () => {
           },
           preview_artifacts: ["definition.preview.svg"],
           preview_artifact_count: 1,
-          lineage_parent_id: 9,
+          lineage_parent_id: LINEAGE_SCHEMA_ID,
         },
       }).persistedPreviewState,
     ).toEqual({
@@ -688,7 +697,7 @@ describe("circuit definition preview helpers", () => {
 
     expect(
       resolvePrioritizedValidationLane({
-        selectedDefinitionId: 18,
+        selectedDefinitionId: PRIMARY_SCHEMA_ID,
         isDirty: false,
         groups: {
           blocking: [

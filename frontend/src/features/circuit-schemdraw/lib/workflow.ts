@@ -3,6 +3,11 @@ import type {
   CircuitDefinitionSummary,
   DefinitionValidationNotice,
 } from "@/features/circuit-definition-editor/lib/contracts";
+import {
+  formatSchemaIdLabel,
+  matchesSchemaIdQuery,
+  type CircuitDefinitionId,
+} from "@/features/circuit-definition-editor/lib/schema-identity";
 import { parseSchemdrawDefinitionIdParam } from "@/features/circuit-schemdraw/lib/definition-id";
 
 export type SchemdrawCatalogFilter = "all" | "ready" | "warning" | "artifacts";
@@ -173,7 +178,7 @@ export function filterAndSortSchemdrawCatalog(
 
     return (
       definition.name.toLowerCase().includes(normalizedQuery) ||
-      String(definition.definition_id).includes(normalizedQuery)
+      matchesSchemaIdQuery(definition.definition_id, normalizedQuery)
     );
   });
 
@@ -195,7 +200,7 @@ export function filterAndSortSchemdrawCatalog(
 
 export function resolveSchemdrawSelectionRecovery(
   requestedDefinitionId: string | null,
-  resolvedDefinitionId: number | null,
+  resolvedDefinitionId: CircuitDefinitionId | null,
   definitions: readonly CircuitDefinitionSummary[] | undefined,
 ): SchemdrawSelectionRecovery {
   if (!definitions || definitions.length === 0 || resolvedDefinitionId === null) {
@@ -211,7 +216,7 @@ export function resolveSchemdrawSelectionRecovery(
     return {
       tone: "warning",
       title: "Invalid URL selection",
-      message: `The URL selection "${requestedDefinitionId}" is not a canonical definition id. Showing definition #${resolvedDefinitionId} instead.`,
+      message: `The URL selection "${requestedDefinitionId}" is not a canonical schema ID. Showing ${formatSchemaIdLabel(resolvedDefinitionId)} instead.`,
     };
   }
 
@@ -222,7 +227,7 @@ export function resolveSchemdrawSelectionRecovery(
     return {
       tone: "warning",
       title: "Definition not found",
-      message: `Definition #${parsedDefinitionId} is not available in the current catalog. Reattached to definition #${resolvedDefinitionId}.`,
+      message: `${formatSchemaIdLabel(parsedDefinitionId)} is not available in the current catalog. Reattached to ${formatSchemaIdLabel(resolvedDefinitionId)}.`,
     };
   }
 
@@ -272,7 +277,7 @@ export function buildSchemdrawStructuredPreview(
 
 export function pinActiveSchemdrawDefinition(
   filteredDefinitions: readonly CircuitDefinitionSummary[],
-  activeDefinitionId: number | null,
+  activeDefinitionId: CircuitDefinitionId | null,
 ) {
   if (activeDefinitionId === null) {
     return null;
@@ -285,7 +290,7 @@ export function pinActiveSchemdrawDefinition(
 
 export function resolveSchemdrawAttachmentState(
   activeDefinition: CircuitDefinitionDetail | undefined,
-  resolvedDefinitionId: number | null,
+  resolvedDefinitionId: CircuitDefinitionId | null,
 ) {
   if (resolvedDefinitionId === null) {
     return {
@@ -297,7 +302,7 @@ export function resolveSchemdrawAttachmentState(
   return {
     isAttached: activeDefinition?.definition_id === resolvedDefinitionId,
     isStaleSnapshot:
-      typeof activeDefinition?.definition_id === "number" &&
+      typeof activeDefinition?.definition_id === "string" &&
       activeDefinition.definition_id !== resolvedDefinitionId,
   };
 }

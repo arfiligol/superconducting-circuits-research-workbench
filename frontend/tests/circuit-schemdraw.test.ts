@@ -67,6 +67,10 @@ const schemdrawViewerSource = readFileSync(
   ),
   "utf8",
 );
+const PRIMARY_SCHEMA_ID = "7f3a2c91-1d7f-4a55-9cfd-0f0b7d5c1001";
+const SECONDARY_SCHEMA_ID = "2e51d9a4-8e24-4981-9947-2ce9a8f71002";
+const TERTIARY_SCHEMA_ID = "51cfd0e2-1a2f-4c1e-86d9-33f6b2d91003";
+const MISSING_SCHEMA_ID = "f3b7a1c9-8d4e-4a2b-9f7c-55d8e4fb1005";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -76,7 +80,7 @@ afterEach(() => {
 describe("circuit schemdraw routing helpers", () => {
   const definitions = [
     {
-      definition_id: 18,
+      definition_id: PRIMARY_SCHEMA_ID,
       name: "FloatingQubitWithXYLine",
       created_at: "2026-03-08 18:19:42",
       element_count: 12,
@@ -84,7 +88,7 @@ describe("circuit schemdraw routing helpers", () => {
       preview_artifact_count: 2,
     },
     {
-      definition_id: 12,
+      definition_id: SECONDARY_SCHEMA_ID,
       name: "FluxoniumReadoutChain",
       created_at: "2026-03-05 11:14:03",
       element_count: 9,
@@ -93,8 +97,8 @@ describe("circuit schemdraw routing helpers", () => {
     },
   ] as const;
 
-  it("parses numeric ids and rejects draft-only values for schemdraw", () => {
-    expect(parseSchemdrawDefinitionIdParam("18")).toBe(18);
+  it("parses uuid ids and rejects draft-only values for schemdraw", () => {
+    expect(parseSchemdrawDefinitionIdParam(PRIMARY_SCHEMA_ID)).toBe(PRIMARY_SCHEMA_ID);
     expect(parseSchemdrawDefinitionIdParam("new")).toBeNull();
     expect(parseSchemdrawDefinitionIdParam("bad")).toBeNull();
     expect(parseSchemdrawDefinitionIdParam(null)).toBeNull();
@@ -105,12 +109,14 @@ describe("circuit schemdraw routing helpers", () => {
   });
 
   it("falls back to the first definition when the selection is invalid", () => {
-    expect(resolveSchemdrawDefinitionId("999", definitions)).toBe(18);
-    expect(resolveSchemdrawDefinitionId("new", definitions)).toBe(18);
+    expect(resolveSchemdrawDefinitionId(MISSING_SCHEMA_ID, definitions)).toBe(PRIMARY_SCHEMA_ID);
+    expect(resolveSchemdrawDefinitionId("new", definitions)).toBe(PRIMARY_SCHEMA_ID);
   });
 
   it("preserves a valid selected definition", () => {
-    expect(resolveSchemdrawDefinitionId("12", definitions)).toBe(12);
+    expect(resolveSchemdrawDefinitionId(SECONDARY_SCHEMA_ID, definitions)).toBe(
+      SECONDARY_SCHEMA_ID,
+    );
   });
 
   it("supports an explicitly cleared linked schema selection even before definitions load", () => {
@@ -121,7 +127,7 @@ describe("circuit schemdraw routing helpers", () => {
 describe("circuit schemdraw readiness inference", () => {
   it("marks definitions ready when normalized output advertises schemdraw readiness and warnings are absent", () => {
     const readiness = inferSchemdrawReadiness({
-      definition_id: 18,
+      definition_id: PRIMARY_SCHEMA_ID,
       name: "FloatingQubitWithXYLine",
       created_at: "2026-03-08 18:19:42",
       element_count: 12,
@@ -147,7 +153,7 @@ describe("circuit schemdraw readiness inference", () => {
 
   it("marks definitions warning when validation notices contain warnings", () => {
     const readiness = inferSchemdrawReadiness({
-      definition_id: 12,
+      definition_id: SECONDARY_SCHEMA_ID,
       name: "FluxoniumReadoutChain",
       created_at: "2026-03-05 11:14:03",
       element_count: 9,
@@ -179,7 +185,7 @@ describe("circuit schemdraw readiness inference", () => {
 describe("circuit schemdraw workflow helpers", () => {
   const definitions = [
     {
-      definition_id: 18,
+      definition_id: PRIMARY_SCHEMA_ID,
       name: "FloatingQubitWithXYLine",
       created_at: "2026-03-08 18:19:42",
       element_count: 12,
@@ -187,7 +193,7 @@ describe("circuit schemdraw workflow helpers", () => {
       preview_artifact_count: 2,
     },
     {
-      definition_id: 12,
+      definition_id: SECONDARY_SCHEMA_ID,
       name: "FluxoniumReadoutChain",
       created_at: "2026-03-05 11:14:03",
       element_count: 9,
@@ -195,7 +201,7 @@ describe("circuit schemdraw workflow helpers", () => {
       preview_artifact_count: 0,
     },
     {
-      definition_id: 24,
+      definition_id: TERTIARY_SCHEMA_ID,
       name: "TransmonControlReference",
       created_at: "2026-03-10 09:22:11",
       element_count: 7,
@@ -220,7 +226,7 @@ describe("circuit schemdraw workflow helpers", () => {
       sort: "name",
     });
 
-    expect(results.map((definition) => definition.definition_id)).toEqual([12]);
+    expect(results.map((definition) => definition.definition_id)).toEqual([SECONDARY_SCHEMA_ID]);
   });
 
   it("pins the active definition when it falls out of the filtered catalog", () => {
@@ -230,19 +236,21 @@ describe("circuit schemdraw workflow helpers", () => {
       sort: "recent",
     });
 
-    expect(filtered.map((definition) => definition.definition_id)).toEqual([24]);
-    expect(pinActiveSchemdrawDefinition(filtered, 18)).toBe(18);
-    expect(pinActiveSchemdrawDefinition(filtered, 24)).toBeNull();
+    expect(filtered.map((definition) => definition.definition_id)).toEqual([TERTIARY_SCHEMA_ID]);
+    expect(pinActiveSchemdrawDefinition(filtered, PRIMARY_SCHEMA_ID)).toBe(PRIMARY_SCHEMA_ID);
+    expect(pinActiveSchemdrawDefinition(filtered, TERTIARY_SCHEMA_ID)).toBeNull();
   });
 
   it("reports invalid or missing routed selections", () => {
-    expect(resolveSchemdrawSelectionRecovery("abc", 18, definitions)?.title).toBe(
+    expect(resolveSchemdrawSelectionRecovery("abc", PRIMARY_SCHEMA_ID, definitions)?.title).toBe(
       "Invalid URL selection",
     );
-    expect(resolveSchemdrawSelectionRecovery("999", 18, definitions)?.title).toBe(
+    expect(
+      resolveSchemdrawSelectionRecovery(MISSING_SCHEMA_ID, PRIMARY_SCHEMA_ID, definitions)?.title,
+    ).toBe(
       "Definition not found",
     );
-    expect(resolveSchemdrawSelectionRecovery(null, 18, definitions)).toBeNull();
+    expect(resolveSchemdrawSelectionRecovery(null, PRIMARY_SCHEMA_ID, definitions)).toBeNull();
   });
 
   it("builds a structured normalized output preview", () => {
@@ -276,7 +284,7 @@ describe("circuit schemdraw workflow helpers", () => {
     expect(
       resolveSchemdrawAttachmentState(
         {
-          definition_id: 12,
+          definition_id: SECONDARY_SCHEMA_ID,
           name: "FluxoniumReadoutChain",
           created_at: "2026-03-05 11:14:03",
           element_count: 9,
@@ -292,7 +300,7 @@ describe("circuit schemdraw workflow helpers", () => {
           },
           preview_artifacts: ["definition.normalized.json"],
         },
-        18,
+        PRIMARY_SCHEMA_ID,
       ),
     ).toEqual({
       isAttached: false,
@@ -380,7 +388,7 @@ describe("circuit schemdraw render helpers", () => {
   it("builds render requests from editor drafts and linked schema context", () => {
     const request = buildSchemdrawRenderRequest({
       activeDefinition: {
-        definition_id: 18,
+        definition_id: PRIMARY_SCHEMA_ID,
         name: "FloatingQubitWithXYLine",
         created_at: "2026-03-08 18:19:42",
         element_count: 12,
@@ -413,7 +421,7 @@ describe("circuit schemdraw render helpers", () => {
       document_version: 4,
       render_mode: "manual",
       linked_schema: {
-        definition_id: 18,
+        definition_id: PRIMARY_SCHEMA_ID,
         workspace_id: "ws_lab_a",
         name: "FloatingQubitWithXYLine",
         source_hash: "sha256:definition18",

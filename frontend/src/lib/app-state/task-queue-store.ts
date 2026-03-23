@@ -29,7 +29,7 @@ export type TaskQueueItem = Readonly<{
   workspaceSlug: string | null;
   visibilityScope: TaskQueueVisibilityScope;
   datasetId: string | null;
-  definitionId: number | null;
+  definitionId: string | null;
   summary: string;
   resultAvailability?: "pending" | "ready" | "none" | null;
   controlState?: "none" | "cancellation_requested" | "termination_requested" | null;

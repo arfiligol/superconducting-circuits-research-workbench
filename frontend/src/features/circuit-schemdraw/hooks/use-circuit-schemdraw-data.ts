@@ -23,30 +23,31 @@ import {
   updateSchemdrawDraft,
   type SchemdrawEditorDraft,
 } from "@/features/circuit-schemdraw/lib/render";
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 
 type RenderMode = "debounced" | "manual";
 
-export function useCircuitSchemdrawData(selectedDefinitionId: number | null) {
+export function useCircuitSchemdrawData(selectedDefinitionId: CircuitDefinitionId | null) {
   const definitionsQuery = useSWR(circuitDefinitionsListKey, listCircuitDefinitions);
   const resolvedDefinitionId = resolveSchemdrawDefinitionId(
-    selectedDefinitionId === null ? null : String(selectedDefinitionId),
+    selectedDefinitionId,
     definitionsQuery.data,
   );
   const selectedDefinitionSummary =
-    typeof resolvedDefinitionId === "number"
+    resolvedDefinitionId !== null
       ? definitionsQuery.data?.find(
           (definition) => definition.definition_id === resolvedDefinitionId,
         )
       : undefined;
   const detailKey =
-    typeof resolvedDefinitionId === "number"
+    resolvedDefinitionId !== null
       ? circuitDefinitionDetailKey(resolvedDefinitionId)
       : null;
 
   const detailQuery = useSWR(
     detailKey,
     () =>
-      typeof resolvedDefinitionId === "number"
+      resolvedDefinitionId !== null
         ? getCircuitDefinition(resolvedDefinitionId)
         : Promise.resolve(undefined),
     {
@@ -197,7 +198,7 @@ export function useCircuitSchemdrawData(selectedDefinitionId: number | null) {
     activeDefinition: detailQuery.data,
     activeDefinitionError: detailQuery.error as Error | undefined,
     isDefinitionTransitioning:
-      typeof resolvedDefinitionId === "number" &&
+      resolvedDefinitionId !== null &&
       (detailQuery.isLoading || detailQuery.data?.definition_id !== resolvedDefinitionId),
     refreshDefinitions: definitionsQuery.mutate,
     refreshActiveDefinition: detailQuery.mutate,

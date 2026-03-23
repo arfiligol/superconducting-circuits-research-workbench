@@ -59,7 +59,7 @@ export function summarizeCatalogDefinitionActionState(
 }
 
 export function summarizeEditorDefinitionActionState(input: Readonly<{
-  selectedDefinitionId: number | "new" | null;
+  selectedDefinitionId: string | "new" | null;
   activeDefinition: CircuitDefinitionDetail | undefined;
   isDirty: boolean;
   isMutationPending: boolean;

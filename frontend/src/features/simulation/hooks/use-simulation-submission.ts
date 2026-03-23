@@ -37,6 +37,7 @@ import { useActiveDataset } from "@/lib/app-state/active-dataset";
 import { useAppSession } from "@/lib/app-state/app-session";
 import { useTaskQueue } from "@/lib/app-state/task-queue";
 import { ApiError } from "@/lib/api/client";
+import { formatSchemaIdLabel, type CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 
 export type SimulationTaskMutationStatus = Readonly<{
   state: "idle" | "submitting" | "success" | "error";
@@ -54,7 +55,7 @@ type SubmitSimulationTaskInput = Readonly<{
 type UseSimulationSubmissionOptions = Readonly<{
   form: UseFormReturn<SimulationRequestValues>;
   postProcessingSteps: readonly PostProcessingStepDraft[];
-  resolvedDefinitionId: number | null;
+  resolvedDefinitionId: CircuitDefinitionId | null;
   selectedDefinitionName: string | null;
   activeDefinitionName: string | null;
   displayedSimulationStageTaskId: number | null;
@@ -105,13 +106,13 @@ export function useSimulationSubmission({
   }, []);
 
   const verifySelectedDefinition = useCallback(
-    async (nextDefinitionId: number) => {
+    async (nextDefinitionId: CircuitDefinitionId) => {
       const refreshedDefinitions = await listCircuitDefinitions();
       await mutate(circuitDefinitionsListKey, refreshedDefinitions, { revalidate: false });
 
       if (!refreshedDefinitions.some((definition) => definition.definition_id === nextDefinitionId)) {
         throw new Error(
-          `Definition #${nextDefinitionId} is no longer available. Refresh the workflow and choose a visible definition before submitting a run.`,
+          `${formatSchemaIdLabel(nextDefinitionId)} is no longer available. Refresh the workflow and choose a visible schema before submitting a run.`,
         );
       }
 
@@ -123,7 +124,7 @@ export function useSimulationSubmission({
         return refreshedDefinition;
       } catch {
         throw new Error(
-          `Definition #${nextDefinitionId} is unavailable right now. Refresh the workflow and choose a visible definition before submitting a run.`,
+          `${formatSchemaIdLabel(nextDefinitionId)} is unavailable right now. Refresh the workflow and choose a visible schema before submitting a run.`,
         );
       }
     },
@@ -145,7 +146,7 @@ export function useSimulationSubmission({
       }
 
       if (resolvedDefinitionId === null) {
-        const error = new Error("Select a canonical definition before submitting a task.");
+        const error = new Error("Select a canonical schema before submitting a task.");
         setTaskMutationStatus({ state: "error", message: error.message });
         throw error;
       }

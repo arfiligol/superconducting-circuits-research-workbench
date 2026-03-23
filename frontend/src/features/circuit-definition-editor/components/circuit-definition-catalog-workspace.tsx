@@ -23,6 +23,11 @@ import {
 } from "@/features/circuit-definition-editor/lib/catalog";
 import { isCircuitDefinitionMutationPending } from "@/features/circuit-definition-editor/lib/editor-state";
 import { buildCircuitDefinitionEditorHref } from "@/features/circuit-definition-editor/lib/routes";
+import {
+  formatSchemaIdLabel,
+  type CircuitDefinitionId,
+  type CircuitDefinitionRouteId,
+} from "@/features/circuit-definition-editor/lib/schema-identity";
 import { AppSelectField } from "@/features/shared/components/app-select";
 import { cx, resolveSurfaceInsetToneClass } from "@/features/shared/components/surface-kit";
 import { useAppSession } from "@/lib/app-state";
@@ -32,7 +37,7 @@ type PendingCatalogAction =
   | Readonly<{
       kind: "delete";
       definitions: readonly Readonly<{
-        definitionId: number;
+        definitionId: CircuitDefinitionId;
         definitionName: string;
       }>[];
     }>
@@ -54,7 +59,9 @@ export function CircuitDefinitionCatalogWorkspace() {
   const [, startTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState<CircuitDefinitionCatalogSort>("recent");
-  const [selectedDefinitionIds, setSelectedDefinitionIds] = useState<ReadonlySet<number>>(
+  const [selectedDefinitionIds, setSelectedDefinitionIds] = useState<
+    ReadonlySet<CircuitDefinitionId>
+  >(
     () => new Set(),
   );
   const [pendingAction, setPendingAction] = useState<PendingCatalogAction>(null);
@@ -102,7 +109,7 @@ export function CircuitDefinitionCatalogWorkspace() {
 
   useEffect(() => {
     setSelectedDefinitionIds((current) => {
-      const next = new Set<number>();
+      const next = new Set<CircuitDefinitionId>();
       for (const definitionId of current) {
         if (selectableDefinitionIds.includes(definitionId)) {
           next.add(definitionId);
@@ -112,7 +119,7 @@ export function CircuitDefinitionCatalogWorkspace() {
     });
   }, [selectableDefinitionIds]);
 
-  function openEditor(definitionId: number | "new") {
+  function openEditor(definitionId: CircuitDefinitionRouteId) {
     startTransition(() => {
       router.push(buildCircuitDefinitionEditorHref(definitionId));
     });
@@ -138,16 +145,16 @@ export function CircuitDefinitionCatalogWorkspace() {
     setPendingAction(null);
   }
 
-  async function handlePublish(definitionId: number) {
+  async function handlePublish(definitionId: CircuitDefinitionId) {
     await publishDefinition(definitionId);
   }
 
-  async function handleClone(definitionId: number) {
+  async function handleClone(definitionId: CircuitDefinitionId) {
     const clonedDetail = await cloneDefinition(definitionId);
     openEditor(clonedDetail.definition_id);
   }
 
-  function toggleDefinitionSelection(definitionId: number) {
+  function toggleDefinitionSelection(definitionId: CircuitDefinitionId) {
     setSelectedDefinitionIds((current) => {
       const next = new Set(current);
       if (next.has(definitionId)) {
@@ -234,7 +241,7 @@ export function CircuitDefinitionCatalogWorkspace() {
               onChange={(event) => {
                 setSearchQuery(event.target.value);
               }}
-              placeholder="Find by name or id"
+              placeholder="Find by name or schema ID"
               className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
           </label>
@@ -371,7 +378,7 @@ export function CircuitDefinitionCatalogWorkspace() {
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                           <span className="rounded-full border border-border px-3 py-1">
-                            Definition #{definition.definition_id}
+                            {formatSchemaIdLabel(definition.definition_id)}
                           </span>
                           <span className="rounded-full border border-border px-3 py-1">
                             Owner {definition.owner_display_name ?? "Unknown"}

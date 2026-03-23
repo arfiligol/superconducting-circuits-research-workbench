@@ -26,6 +26,7 @@ import {
   simulationStageFieldNames,
   type SimulationRequestValues,
 } from "@/features/simulation/lib/request-form";
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 import type { TaskDetail } from "@/lib/api/tasks";
 
 type StageTone = "default" | "primary" | "success" | "warning" | "error";
@@ -49,7 +50,7 @@ type SavedSetupSaveAction = "create" | "overwrite";
 type UseSavedSimulationSetupsOptions = Readonly<{
   form: UseFormReturn<SimulationRequestValues>;
   workflowContextResetKey: string;
-  resolvedDefinitionId: number | null;
+  resolvedDefinitionId: CircuitDefinitionId | null;
   selectedDefinitionName: string | null;
   displayedSimulationTaskDetail: TaskDetail | undefined;
   officialExamplePreset: OfficialSimulationExamplePreset | null;

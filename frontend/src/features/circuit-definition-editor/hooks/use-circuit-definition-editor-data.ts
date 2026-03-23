@@ -23,6 +23,10 @@ import type {
   CircuitDefinitionDetail,
   CircuitDefinitionUpdateDraft,
 } from "@/features/circuit-definition-editor/lib/contracts";
+import type {
+  CircuitDefinitionId,
+  CircuitDefinitionRouteId,
+} from "@/features/circuit-definition-editor/lib/schema-identity";
 
 type MutationStatus = Readonly<{
   state:
@@ -36,7 +40,9 @@ type MutationStatus = Readonly<{
   message: string | null;
 }>;
 
-export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "new" | null) {
+export function useCircuitDefinitionEditorData(
+  selectedDefinitionId: CircuitDefinitionRouteId | null,
+) {
   const { mutate } = useSWRConfig();
   const [mutationStatus, setMutationStatus] = useState<MutationStatus>({
     state: "idle",
@@ -45,17 +51,20 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
 
   const definitionsQuery = useSWR(circuitDefinitionsCatalogKey, listCircuitDefinitionsCatalog);
   const detailKey =
-    typeof selectedDefinitionId === "number"
+    selectedDefinitionId !== null && selectedDefinitionId !== "new"
       ? circuitDefinitionDetailKey(selectedDefinitionId)
       : null;
 
   const detailQuery = useSWR(detailKey, () =>
-    typeof selectedDefinitionId === "number"
+    selectedDefinitionId !== null && selectedDefinitionId !== "new"
       ? getCircuitDefinition(selectedDefinitionId)
       : Promise.resolve(undefined),
   );
 
-  async function refreshDefinitionQueries(definitionId: number, nextDetail?: CircuitDefinitionDetail) {
+  async function refreshDefinitionQueries(
+    definitionId: CircuitDefinitionId,
+    nextDetail?: CircuitDefinitionDetail,
+  ) {
     await Promise.all([
       mutate(circuitDefinitionsListKey),
       mutate(circuitDefinitionsCatalogKey),
@@ -70,7 +79,7 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
   async function saveDefinition(
     draft: CircuitDefinitionCreateDraft,
     input: Readonly<{
-      definitionId: number | "new" | null;
+      definitionId: CircuitDefinitionRouteId | null;
       activeDefinition?: CircuitDefinitionDetail;
     }>,
   ): Promise<CircuitDefinitionDetail> {
@@ -78,7 +87,7 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
 
     try {
       const detail =
-        typeof input.definitionId === "number"
+        input.definitionId !== null && input.definitionId !== "new"
           ? await updateCircuitDefinition(input.definitionId, {
               source_text: draft.source_text,
               name: draft.name,
@@ -90,7 +99,7 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
       setMutationStatus({
         state: "success",
         message:
-          typeof input.definitionId === "number"
+          input.definitionId !== null && input.definitionId !== "new"
             ? "Circuit definition updated."
             : "Circuit definition created.",
       });
@@ -103,19 +112,19 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
     }
   }
 
-  async function removeDefinition(definitionId: number) {
+  async function removeDefinition(definitionId: CircuitDefinitionId) {
     const result = await removeDefinitions([definitionId]);
     if (result.failedIds.length > 0) {
       throw new Error("Unable to delete the circuit definition.");
     }
   }
 
-  async function removeDefinitions(definitionIds: readonly number[]) {
+  async function removeDefinitions(definitionIds: readonly CircuitDefinitionId[]) {
     const uniqueDefinitionIds = [...new Set(definitionIds)];
     if (uniqueDefinitionIds.length === 0) {
       return {
-        deletedIds: [] as number[],
-        failedIds: [] as number[],
+        deletedIds: [] as CircuitDefinitionId[],
+        failedIds: [] as CircuitDefinitionId[],
       };
     }
 
@@ -128,7 +137,10 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
       }),
     );
     const deletedIds = settled
-      .filter((result): result is PromiseFulfilledResult<number> => result.status === "fulfilled")
+      .filter(
+        (result): result is PromiseFulfilledResult<CircuitDefinitionId> =>
+          result.status === "fulfilled",
+      )
       .map((result) => result.value);
     const failedIds = uniqueDefinitionIds.filter(
       (definitionId) => !deletedIds.includes(definitionId),
@@ -168,7 +180,7 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
     };
   }
 
-  async function publishDefinition(definitionId: number) {
+  async function publishDefinition(definitionId: CircuitDefinitionId) {
     setMutationStatus({ state: "publishing", message: null });
 
     try {
@@ -188,7 +200,7 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
   }
 
   async function cloneDefinition(
-    definitionId: number,
+    definitionId: CircuitDefinitionId,
     cloneDraft?: CircuitDefinitionCloneDraft,
   ) {
     setMutationStatus({ state: "cloning", message: null });

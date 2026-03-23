@@ -2,12 +2,13 @@ import {
   cloneSimulationSetupFormValues,
   type SimulationSetupFormValues,
 } from "@/features/simulation/lib/setup-form";
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 
 export const SAVED_SIMULATION_SETUPS_STORAGE_KEY = "sc-simulation-saved-setups-v1";
 
 export type SavedSimulationSetupRecord = Readonly<{
   id: string;
-  definitionId: number;
+  definitionId: CircuitDefinitionId;
   definitionName: string | null;
   name: string;
   createdAt: string;
@@ -17,7 +18,7 @@ export type SavedSimulationSetupRecord = Readonly<{
 
 type SavedSimulationSetupPayload = Readonly<{
   id: string;
-  definitionId: number;
+  definitionId: CircuitDefinitionId;
   definitionName: string | null;
   name: string;
   createdAt: string;
@@ -33,7 +34,7 @@ function isSavedSimulationSetupPayload(value: unknown): value is SavedSimulation
   const candidate = value as Partial<SavedSimulationSetupPayload>;
   return (
     typeof candidate.id === "string" &&
-    typeof candidate.definitionId === "number" &&
+    typeof candidate.definitionId === "string" &&
     (candidate.definitionName === null || typeof candidate.definitionName === "string") &&
     typeof candidate.name === "string" &&
     typeof candidate.createdAt === "string" &&
@@ -45,7 +46,7 @@ function isSavedSimulationSetupPayload(value: unknown): value is SavedSimulation
 
 export function createSavedSimulationSetupRecord(input: Readonly<{
   id: string;
-  definitionId: number;
+  definitionId: CircuitDefinitionId;
   definitionName: string | null;
   name: string;
   createdAt: string;
@@ -91,7 +92,7 @@ export function sortSavedSimulationSetupRecords(records: readonly SavedSimulatio
 
 export function filterSavedSimulationSetupsByDefinition(
   records: readonly SavedSimulationSetupRecord[],
-  definitionId: number | null,
+  definitionId: CircuitDefinitionId | null,
 ) {
   if (definitionId === null) {
     return [];

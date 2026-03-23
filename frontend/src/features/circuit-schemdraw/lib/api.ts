@@ -1,3 +1,4 @@
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 import { ApiError, apiRequest } from "@/lib/api/client";
 
 export type SchemdrawDiagnostic = Readonly<{
@@ -17,7 +18,7 @@ export type SchemdrawPreviewMetadata = Readonly<{
 }>;
 
 export type SchemdrawLinkedSchemaSnapshot = Readonly<{
-  definition_id: number;
+  definition_id: CircuitDefinitionId;
   workspace_id?: string | null;
   name: string;
   source_hash?: string | null;

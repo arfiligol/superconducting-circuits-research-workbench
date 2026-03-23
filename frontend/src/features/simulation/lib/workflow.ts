@@ -1,6 +1,11 @@
 import type {
   CircuitDefinitionSummary,
 } from "@/features/circuit-definition-editor/lib/contracts";
+import {
+  formatSchemaIdLabel,
+  matchesSchemaIdQuery,
+  type CircuitDefinitionId,
+} from "@/features/circuit-definition-editor/lib/schema-identity";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import {
   normalizeTaskSummary,
@@ -13,7 +18,7 @@ export type SimulationTaskScope = "all" | "definition" | "dataset";
 export type SimulationTaskStatusFilter = "all" | "active" | "completed" | "failed";
 export type SimulationStageKind = "simulation" | "post_processing";
 export type SimulationPageContext = Readonly<{
-  definitionId: number | null;
+  definitionId: CircuitDefinitionId | null;
   datasetId: string | null;
 }>;
 
@@ -49,7 +54,7 @@ type FilterSimulationTasksOptions = Readonly<{
   searchQuery: string;
   scope: SimulationTaskScope;
   statusFilter: SimulationTaskStatusFilter;
-  selectedDefinitionId: number | null;
+  selectedDefinitionId: CircuitDefinitionId | null;
   activeDatasetId: string | null;
 }>;
 
@@ -108,7 +113,7 @@ function isActiveTask(task: TaskSummary) {
 
 function matchesTaskScope(
   task: TaskSummary,
-  selectedDefinitionId: number | null,
+  selectedDefinitionId: CircuitDefinitionId | null,
   activeDatasetId: string | null,
   scope: SimulationTaskScope,
 ) {
@@ -150,14 +155,14 @@ export function filterSimulationDefinitions(
 
     return (
       definition.name.toLowerCase().includes(normalizedQuery) ||
-      String(definition.definition_id).includes(normalizedQuery)
+      matchesSchemaIdQuery(definition.definition_id, normalizedQuery)
     );
   });
 }
 
 export function resolveSimulationSelectionRecovery(
   requestedDefinitionId: string | null,
-  resolvedDefinitionId: number | null,
+  resolvedDefinitionId: CircuitDefinitionId | null,
   definitions: readonly CircuitDefinitionSummary[] | undefined,
 ): SimulationSelectionRecovery {
   if (!definitions || definitions.length === 0 || resolvedDefinitionId === null) {
@@ -173,7 +178,7 @@ export function resolveSimulationSelectionRecovery(
     return {
       tone: "warning",
       title: "Invalid URL selection",
-      message: `The URL selection "${requestedDefinitionId}" is not a canonical definition id. Showing definition #${resolvedDefinitionId} instead.`,
+      message: `The URL selection "${requestedDefinitionId}" is not a canonical schema ID. Showing ${formatSchemaIdLabel(resolvedDefinitionId)} instead.`,
     };
   }
 
@@ -185,7 +190,7 @@ export function resolveSimulationSelectionRecovery(
     return {
       tone: "warning",
       title: "Definition not found",
-      message: `Definition #${parsedDefinitionId} is not available in the current catalog. Reattached to definition #${resolvedDefinitionId}.`,
+      message: `${formatSchemaIdLabel(parsedDefinitionId)} is not available in the current catalog. Reattached to ${formatSchemaIdLabel(resolvedDefinitionId)}.`,
     };
   }
 
@@ -194,7 +199,7 @@ export function resolveSimulationSelectionRecovery(
 
 export function buildSimulationRequestSummary(input: Readonly<{
   kind: "simulation" | "post_processing";
-  definitionId: number | null;
+  definitionId: CircuitDefinitionId | null;
   definitionName: string | null;
   datasetId: string | null;
   datasetName: string | null;
@@ -205,7 +210,7 @@ export function buildSimulationRequestSummary(input: Readonly<{
   const segments = [
     input.definitionName
       ? `${baseLabel} for ${input.definitionName}`
-      : `${baseLabel} for definition #${input.definitionId ?? "--"}`,
+      : `${baseLabel} for ${formatSchemaIdLabel(input.definitionId)}`,
     input.datasetName
       ? `dataset ${input.datasetName}`
       : `dataset ${input.datasetId ?? "unbound"}`,
@@ -229,7 +234,7 @@ export function matchesSimulationTaskContext(
   task: Pick<TaskSummary, "definitionId" | "datasetId">,
   context: SimulationPageContext,
 ) {
-  if (typeof context.definitionId !== "number" || !context.datasetId) {
+  if (typeof context.definitionId !== "string" || !context.datasetId) {
     return false;
   }
 

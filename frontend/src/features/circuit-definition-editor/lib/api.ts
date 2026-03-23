@@ -18,6 +18,7 @@ import type {
   DefinitionValidationNotice,
   DefinitionValidationNoticeResponse,
 } from "@/features/circuit-definition-editor/lib/contracts";
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 
 function toCompatibilityValidationStatus(
   status: CircuitDefinitionDetailResponse["validation_summary"]["status"],
@@ -88,15 +89,15 @@ export function mapCircuitDefinitionDetailResponse(
 export const circuitDefinitionsListKey = "/api/backend/circuit-definitions";
 export const circuitDefinitionsCatalogKey = `${circuitDefinitionsListKey}?view=authoring-catalog`;
 
-export function circuitDefinitionDetailKey(definitionId: number) {
+export function circuitDefinitionDetailKey(definitionId: CircuitDefinitionId) {
   return `/api/backend/circuit-definitions/${definitionId}`;
 }
 
-export function circuitDefinitionPublishKey(definitionId: number) {
+export function circuitDefinitionPublishKey(definitionId: CircuitDefinitionId) {
   return `${circuitDefinitionDetailKey(definitionId)}/publish`;
 }
 
-export function circuitDefinitionCloneKey(definitionId: number) {
+export function circuitDefinitionCloneKey(definitionId: CircuitDefinitionId) {
   return `${circuitDefinitionDetailKey(definitionId)}/clone`;
 }
 
@@ -131,7 +132,7 @@ export async function listCircuitDefinitions(): Promise<readonly CircuitDefiniti
   return response.catalog.rows;
 }
 
-export async function getCircuitDefinition(definitionId: number) {
+export async function getCircuitDefinition(definitionId: CircuitDefinitionId) {
   const response = await apiRequest<CircuitDefinitionDetailResponse>(
     circuitDefinitionDetailKey(definitionId),
   );
@@ -154,7 +155,7 @@ export async function createCircuitDefinition(payload: CircuitDefinitionCreateDr
 }
 
 export async function updateCircuitDefinition(
-  definitionId: number,
+  definitionId: CircuitDefinitionId,
   payload: CircuitDefinitionUpdateDraft,
 ) {
   const response = await apiRequest<CircuitDefinitionMutationEnvelopeResponse>(
@@ -171,7 +172,7 @@ export async function updateCircuitDefinition(
   });
 }
 
-export async function publishCircuitDefinition(definitionId: number) {
+export async function publishCircuitDefinition(definitionId: CircuitDefinitionId) {
   const response = await apiRequest<CircuitDefinitionMutationEnvelopeResponse>(
     circuitDefinitionPublishKey(definitionId),
     {
@@ -186,7 +187,7 @@ export async function publishCircuitDefinition(definitionId: number) {
 }
 
 export async function cloneCircuitDefinition(
-  definitionId: number,
+  definitionId: CircuitDefinitionId,
   payload?: CircuitDefinitionCloneDraft,
 ) {
   const response = await apiRequest<CircuitDefinitionMutationEnvelopeResponse>(
@@ -203,7 +204,7 @@ export async function cloneCircuitDefinition(
   });
 }
 
-export async function deleteCircuitDefinition(definitionId: number) {
+export async function deleteCircuitDefinition(definitionId: CircuitDefinitionId) {
   return apiRequest<CircuitDefinitionDeleteResponse>(circuitDefinitionDetailKey(definitionId), {
     method: "DELETE",
   });

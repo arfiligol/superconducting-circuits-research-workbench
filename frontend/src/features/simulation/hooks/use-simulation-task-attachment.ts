@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import type { SimulationPageContext } from "@/features/simulation/lib/workflow";
 import type { TaskSummary, TaskDetail } from "@/lib/api/tasks";
+import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 import {
   resolveTaskConnectionState,
   resolveTaskRecoveryNotice,
@@ -40,10 +41,10 @@ function parseTaskIdParam(value: string | null): number | null {
 }
 
 function buildAttachedTaskStorageKey(
-  definitionId: number | null,
+  definitionId: CircuitDefinitionId | null,
   datasetId: string | null,
 ): string | null {
-  if (typeof definitionId !== "number" || !datasetId) {
+  if (typeof definitionId !== "string" || !datasetId) {
     return null;
   }
 
@@ -59,7 +60,7 @@ function readStoredAttachedTaskId(storageKey: string | null): number | null {
 }
 
 type UseSimulationTaskAttachmentOptions = Readonly<{
-  resolvedDefinitionId: number | null;
+  resolvedDefinitionId: CircuitDefinitionId | null;
   resolvedTaskId: number | null;
   latestSimulationTask: TaskSummary | undefined;
   activeTask: TaskDetail | undefined;

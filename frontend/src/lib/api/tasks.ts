@@ -136,7 +136,7 @@ type LiveTaskQueueRowResponseShape = Readonly<{
   allowed_actions: TaskAllowedActionsResponse;
   control_state: TaskControlState;
   dataset_id?: string | null;
-  definition_id?: number | null;
+  definition_id?: string | null;
   reconcile?: TaskReconcileResponseShape | null;
 }>;
 type WorkerLaneSummaryResponseShape = Readonly<{
@@ -639,7 +639,7 @@ export type TaskSummary = Readonly<{
   workspaceSlug: string | null;
   visibilityScope: TaskVisibilityScope;
   datasetId: string | null;
-  definitionId: number | null;
+  definitionId: string | null;
   summary: string;
   resultAvailability?: TaskResultAvailability | null;
   controlState?: TaskControlState | null;
@@ -692,7 +692,7 @@ export type TaskDetail = TaskSummary &
 export type TaskSubmissionDraft = Readonly<{
   kind: TaskKind;
   dataset_id?: string | null;
-  definition_id?: number | null;
+  definition_id?: string | null;
   summary?: string | null;
   simulation_setup?: SimulationSetupDraft | null;
   post_processing_setup?: PostProcessingSetupDraft | null;

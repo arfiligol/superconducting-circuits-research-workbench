@@ -1,6 +1,10 @@
+import {
+  parseCircuitDefinitionId,
+  type CircuitDefinitionRouteId,
+} from "@/features/circuit-definition-editor/lib/schema-identity";
 import type { CircuitDefinitionSummary } from "@/features/circuit-definition-editor/lib/contracts";
 
-export function parseDefinitionIdParam(value: string | null): number | "new" | null {
+export function parseDefinitionIdParam(value: string | null): CircuitDefinitionRouteId | null {
   if (!value) {
     return null;
   }
@@ -9,8 +13,7 @@ export function parseDefinitionIdParam(value: string | null): number | "new" | n
     return "new";
   }
 
-  const numericValue = Number.parseInt(value, 10);
-  return Number.isFinite(numericValue) ? numericValue : null;
+  return parseCircuitDefinitionId(value);
 }
 
 export function resolveSelectedDefinitionId(
@@ -26,9 +29,9 @@ export function resolveSelectedDefinitionId(
     return "new";
   }
 
-  if (typeof parsedValue === "number") {
+  if (parsedValue !== null) {
     return definitions.some((definition) => definition.definition_id === parsedValue)
-      ? String(parsedValue)
+      ? parsedValue
       : String(definitions[0].definition_id);
   }
 

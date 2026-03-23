@@ -42,6 +42,8 @@ const activeTaskSource = readFileSync(
   fileURLToPath(new URL("../src/lib/app-state/active-task.tsx", import.meta.url)),
   "utf8",
 );
+const SIMULATION_SCHEMA_ID = "7f3a2c91-1d7f-4a55-9cfd-0f0b7d5c1001";
+const SECONDARY_SIMULATION_SCHEMA_ID = "51cfd0e2-1a2f-4c1e-86d9-33f6b2d91003";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -97,8 +99,12 @@ describe("active dataset state helpers", () => {
 
 describe("url state snapshot helpers", () => {
   it("derives the search string from Next-style URLSearchParams without patching history", () => {
-    expect(resolveSearchFromParams(new URLSearchParams("definitionId=24&taskId=31"))).toBe(
-      "?definitionId=24&taskId=31",
+    expect(
+      resolveSearchFromParams(
+        new URLSearchParams(`definitionId=${SECONDARY_SIMULATION_SCHEMA_ID}&taskId=31`),
+      ),
+    ).toBe(
+      `?definitionId=${SECONDARY_SIMULATION_SCHEMA_ID}&taskId=31`,
     );
     expect(resolveSearchFromParams(new URLSearchParams())).toBe("");
     expect(resolveSearchFromParams(null)).toBe("");
@@ -107,7 +113,7 @@ describe("url state snapshot helpers", () => {
   it("reuses the previous snapshot object when pathname and search are unchanged", () => {
     const snapshot = {
       pathname: "/circuit-simulation",
-      search: "?definitionId=18&taskId=31",
+      search: `?definitionId=${SIMULATION_SCHEMA_ID}&taskId=31`,
     } as const;
 
     expect(resolveUrlSnapshot(snapshot, snapshot.pathname, snapshot.search)).toBe(snapshot);
@@ -116,12 +122,18 @@ describe("url state snapshot helpers", () => {
   it("returns a new snapshot when pathname or search changes", () => {
     const snapshot = {
       pathname: "/circuit-simulation",
-      search: "?definitionId=18",
+      search: `?definitionId=${SIMULATION_SCHEMA_ID}`,
     } as const;
 
-    expect(resolveUrlSnapshot(snapshot, "/circuit-simulation", "?definitionId=24")).toEqual({
+    expect(
+      resolveUrlSnapshot(
+        snapshot,
+        "/circuit-simulation",
+        `?definitionId=${SECONDARY_SIMULATION_SCHEMA_ID}`,
+      ),
+    ).toEqual({
       pathname: "/circuit-simulation",
-      search: "?definitionId=24",
+      search: `?definitionId=${SECONDARY_SIMULATION_SCHEMA_ID}`,
     });
     expect(resolveUrlSnapshot(snapshot, "/raw-data", "?datasetId=fluxonium-2025-031")).toEqual({
       pathname: "/raw-data",

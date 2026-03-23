@@ -33,6 +33,11 @@ import {
   cx,
   resolveSurfaceInsetToneClass,
 } from "@/features/shared/components/surface-kit";
+import {
+  buildSchemaIdentityDescription,
+  formatSchemaIdLabel,
+  type CircuitDefinitionId,
+} from "@/features/circuit-definition-editor/lib/schema-identity";
 import { useDeveloperMode } from "@/lib/app-state";
 import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
 
@@ -347,7 +352,7 @@ export function CircuitSchemdrawWorkspace() {
     [developerModeEnabled, relationDiagnostics, renderSurface.failureDetail],
   );
 
-  function replaceDefinitionId(definitionId: number | null) {
+  function replaceDefinitionId(definitionId: CircuitDefinitionId | null) {
     startTransition(() => {
       router.replace(
         definitionSearchHref(
@@ -382,7 +387,7 @@ export function CircuitSchemdrawWorkspace() {
             <ArrowLeft className="h-4 w-4" />
             Back to Catalog
           </button>
-          {typeof resolvedDefinitionId === "number" ? (
+          {resolvedDefinitionId !== null ? (
             <button
               type="button"
               onClick={() => {
@@ -451,14 +456,17 @@ export function CircuitSchemdrawWorkspace() {
                   disabled={isDefinitionsLoading || isNavigating}
                   placeholder={isDefinitionsLoading ? "Loading schemas..." : "No linked schema"}
                   onChange={(nextValue) => {
-                    replaceDefinitionId(nextValue ? Number(nextValue) : null);
+                    replaceDefinitionId(nextValue || null);
                   }}
                   options={[
                     { value: "", label: "No linked schema" },
                     ...(definitions ?? []).map((definition) => ({
                       value: String(definition.definition_id),
                       label: definition.name,
-                      description: `Definition #${definition.definition_id}`,
+                      description: buildSchemaIdentityDescription({
+                        definitionId: definition.definition_id,
+                        createdAt: definition.created_at,
+                      }),
                     })),
                   ]}
                 />
@@ -467,7 +475,9 @@ export function CircuitSchemdrawWorkspace() {
 
             <div className="flex flex-wrap gap-2 text-[11px]">
               <SurfaceTag tone="default">
-                Definition {resolvedDefinitionId === null ? "--" : `#${resolvedDefinitionId}`}
+                {resolvedDefinitionId === null
+                  ? "Schema ID --"
+                  : formatSchemaIdLabel(resolvedDefinitionId)}
               </SurfaceTag>
               <SurfaceTag tone={selectionRecovery ? "warning" : resolvedDefinitionId === null ? "default" : "primary"}>
                 {isDefinitionTransitioning
@@ -489,6 +499,16 @@ export function CircuitSchemdrawWorkspace() {
           <span className="rounded-full border border-border px-3 py-1">
             {selectedDefinitionSummary?.name ?? "No linked schema"}
           </span>
+          {selectedDefinitionSummary ? (
+            <span className="rounded-full border border-border px-3 py-1">
+              {formatSchemaIdLabel(selectedDefinitionSummary.definition_id)}
+            </span>
+          ) : null}
+          {selectedDefinitionSummary ? (
+            <span className="rounded-full border border-border px-3 py-1">
+              {selectedDefinitionSummary.created_at}
+            </span>
+          ) : null}
           <span className="rounded-full border border-border px-3 py-1">
             {activeDefinition?.element_count ?? 0} elements
           </span>

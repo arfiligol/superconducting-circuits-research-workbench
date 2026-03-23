@@ -168,11 +168,15 @@ const tasksApiSource = readFileSync(
   fileURLToPath(new URL("../src/lib/api/tasks.ts", import.meta.url)),
   "utf8",
 );
+const PRIMARY_SCHEMA_ID = "7f3a2c91-1d7f-4a55-9cfd-0f0b7d5c1001";
+const SECONDARY_SCHEMA_ID = "51cfd0e2-1a2f-4c1e-86d9-33f6b2d91003";
+const TERTIARY_SCHEMA_ID = "3a61a2c7-5d9e-4bc1-8f73-66e9f5ac1004";
+const MISSING_SCHEMA_ID = "f3b7a1c9-8d4e-4a2b-9f7c-55d8e4fb1005";
 
 describe("simulation definition routing helpers", () => {
   const definitions = [
     {
-      definition_id: 18,
+      definition_id: PRIMARY_SCHEMA_ID,
       name: "FloatingQubitWithXYLine",
       created_at: "2026-03-08 18:19:42",
       element_count: 12,
@@ -180,7 +184,7 @@ describe("simulation definition routing helpers", () => {
       preview_artifact_count: 2,
     },
     {
-      definition_id: 24,
+      definition_id: SECONDARY_SCHEMA_ID,
       name: "TransmonControlReference",
       created_at: "2026-03-10 09:22:11",
       element_count: 7,
@@ -189,20 +193,24 @@ describe("simulation definition routing helpers", () => {
     },
   ] as const;
 
-  it("parses numeric simulation definition ids", () => {
-    expect(parseSimulationDefinitionIdParam("24")).toBe(24);
+  it("parses uuid simulation definition ids", () => {
+    expect(parseSimulationDefinitionIdParam(SECONDARY_SCHEMA_ID)).toBe(SECONDARY_SCHEMA_ID);
     expect(parseSimulationDefinitionIdParam("new")).toBeNull();
     expect(parseSimulationDefinitionIdParam(null)).toBeNull();
   });
 
   it("falls back to the first definition when routing is missing or invalid", () => {
-    expect(resolveSimulationDefinitionId(null, definitions)).toBe(18);
-    expect(resolveSimulationDefinitionId("999", definitions)).toBe(18);
+    expect(resolveSimulationDefinitionId(null, definitions)).toBe(PRIMARY_SCHEMA_ID);
+    expect(resolveSimulationDefinitionId(MISSING_SCHEMA_ID, definitions)).toBe(
+      PRIMARY_SCHEMA_ID,
+    );
   });
 
   it("filters the simulation definition catalog and reports invalid route recovery", () => {
     expect(filterSimulationDefinitions(definitions, "trans")).toEqual([definitions[1]]);
-    expect(resolveSimulationSelectionRecovery("bad", 18, definitions)?.title).toBe(
+    expect(
+      resolveSimulationSelectionRecovery("bad", PRIMARY_SCHEMA_ID, definitions)?.title,
+    ).toBe(
       "Invalid URL selection",
     );
   });
@@ -223,7 +231,7 @@ describe("simulation task workflow helpers", () => {
       workspaceSlug: "device-lab",
       visibilityScope: "workspace",
       datasetId: "fluxonium-2025-031",
-      definitionId: 18,
+      definitionId: PRIMARY_SCHEMA_ID,
       summary: "Simulation request for FloatingQubitWithXYLine",
       hasActionAuthority: true,
       allowedActions: {
@@ -246,7 +254,7 @@ describe("simulation task workflow helpers", () => {
       workspaceSlug: "device-lab",
       visibilityScope: "workspace",
       datasetId: "fluxonium-2025-031",
-      definitionId: 18,
+      definitionId: PRIMARY_SCHEMA_ID,
       summary: "Post-processing request for FloatingQubitWithXYLine",
       hasActionAuthority: true,
       allowedActions: {
@@ -285,7 +293,7 @@ describe("simulation task workflow helpers", () => {
     expect(
       buildSimulationRequestSummary({
         kind: "simulation",
-        definitionId: 18,
+        definitionId: PRIMARY_SCHEMA_ID,
         definitionName: "FloatingQubitWithXYLine",
         datasetId: "fluxonium-2025-031",
         datasetName: "Fluxonium sweep 031",
@@ -308,7 +316,7 @@ describe("simulation task workflow helpers", () => {
       searchQuery: "floating",
       scope: "definition",
       statusFilter: "all",
-      selectedDefinitionId: 18,
+      selectedDefinitionId: PRIMARY_SCHEMA_ID,
       activeDatasetId: "fluxonium-2025-031",
     });
 
@@ -337,7 +345,7 @@ describe("simulation task workflow helpers", () => {
         workspaceSlug: "device-lab",
         visibilityScope: "workspace",
         datasetId: "fluxonium-2025-031",
-        definitionId: 18,
+        definitionId: PRIMARY_SCHEMA_ID,
         summary: "Simulation request for FloatingQubitWithXYLine",
         hasActionAuthority: true,
         allowedActions: {
@@ -360,7 +368,7 @@ describe("simulation task workflow helpers", () => {
         workspaceSlug: "device-lab",
         visibilityScope: "workspace",
         datasetId: "fluxonium-2025-031",
-        definitionId: 18,
+        definitionId: PRIMARY_SCHEMA_ID,
         summary: "Post-processing request for FloatingQubitWithXYLine",
         hasActionAuthority: true,
         allowedActions: {
@@ -383,7 +391,7 @@ describe("simulation task workflow helpers", () => {
         workspaceSlug: "device-lab",
         visibilityScope: "workspace",
         datasetId: "fluxonium-2025-999",
-        definitionId: 18,
+        definitionId: PRIMARY_SCHEMA_ID,
         summary: "Simulation request for another dataset",
         hasActionAuthority: true,
         allowedActions: {
@@ -406,7 +414,7 @@ describe("simulation task workflow helpers", () => {
         workspaceSlug: "device-lab",
         visibilityScope: "workspace",
         datasetId: "fluxonium-2025-031",
-        definitionId: 24,
+        definitionId: SECONDARY_SCHEMA_ID,
         summary: "Post-processing request for another definition",
         hasActionAuthority: true,
         allowedActions: {
@@ -418,7 +426,7 @@ describe("simulation task workflow helpers", () => {
       },
     ] as const;
     const pageContext = {
-      definitionId: 18,
+      definitionId: PRIMARY_SCHEMA_ID,
       datasetId: "fluxonium-2025-031",
     } as const;
 
@@ -457,7 +465,7 @@ describe("simulation task workflow helpers", () => {
           workspaceSlug: "device-lab",
           visibilityScope: "workspace",
           datasetId: "fluxonium-2025-031",
-          definitionId: 18,
+          definitionId: PRIMARY_SCHEMA_ID,
           summary: "Simulation request for FloatingQubitWithXYLine",
           hasActionAuthority: true,
           allowedActions: {
@@ -492,7 +500,7 @@ describe("simulation task workflow helpers", () => {
           },
         },
         {
-          definitionId: 18,
+          definitionId: PRIMARY_SCHEMA_ID,
           datasetId: "fluxonium-2025-031",
         },
         "simulation",
@@ -514,7 +522,7 @@ describe("simulation task workflow helpers", () => {
           workspaceSlug: "device-lab",
           visibilityScope: "workspace",
           datasetId: "other-dataset",
-          definitionId: 18,
+          definitionId: PRIMARY_SCHEMA_ID,
           summary: "Simulation request for another dataset",
           hasActionAuthority: true,
           allowedActions: {
@@ -549,7 +557,7 @@ describe("simulation task workflow helpers", () => {
           },
         },
         {
-          definitionId: 18,
+          definitionId: PRIMARY_SCHEMA_ID,
           datasetId: "fluxonium-2025-031",
         },
         "simulation",
@@ -576,7 +584,7 @@ describe("simulation task workflow helpers", () => {
           workspaceSlug: "device-lab",
           visibilityScope: "workspace",
           datasetId: "fluxonium-2025-031",
-          definitionId: 18,
+          definitionId: PRIMARY_SCHEMA_ID,
           summary: "Post-processing request for FloatingQubitWithXYLine",
           hasActionAuthority: true,
           allowedActions: {
@@ -644,7 +652,7 @@ describe("simulation task workflow helpers", () => {
       workspaceSlug: "device-lab",
       visibilityScope: "workspace",
       datasetId: "fluxonium-2025-031",
-      definitionId: 18,
+      definitionId: PRIMARY_SCHEMA_ID,
       summary: "Post-processing request for FloatingQubitWithXYLine",
       hasActionAuthority: true,
       allowedActions: {
@@ -841,7 +849,7 @@ describe("simulation task workflow helpers", () => {
         workspaceSlug: "local-space",
         visibilityScope: "local",
         datasetId: "local-dataset-001",
-        definitionId: 3,
+        definitionId: TERTIARY_SCHEMA_ID,
         summary: "Codex live execution verification",
         hasActionAuthority: true,
         allowedActions: {
@@ -984,7 +992,7 @@ describe("simulation workflow source contract", () => {
   it("stores saved simulation setups as definition-scoped local browser drafts", () => {
     const baselineRecord = createSavedSimulationSetupRecord({
       id: "setup-local-1",
-      definitionId: 18,
+      definitionId: PRIMARY_SCHEMA_ID,
       definitionName: "FloatingQubitWithXYLine",
       name: "Baseline sweep",
       createdAt: "2026-03-18T12:00:00Z",
@@ -1001,7 +1009,7 @@ describe("simulation workflow source contract", () => {
     });
     const otherDefinitionRecord = createSavedSimulationSetupRecord({
       id: "setup-local-2",
-      definitionId: 24,
+      definitionId: SECONDARY_SCHEMA_ID,
       definitionName: "TransmonControlReference",
       name: "Alt definition setup",
       createdAt: "2026-03-18T12:30:00Z",
@@ -1014,10 +1022,17 @@ describe("simulation workflow source contract", () => {
     const serialized = serializeSavedSimulationSetupRecords(allRecords);
     const parsedRecords = readSavedSimulationSetupRecords(serialized);
 
-    expect(filterSavedSimulationSetupsByDefinition(parsedRecords, 18).map((record) => record.name)).toEqual([
+    expect(
+      filterSavedSimulationSetupsByDefinition(parsedRecords, PRIMARY_SCHEMA_ID).map(
+        (record) => record.name,
+      ),
+    ).toEqual([
       "Baseline sweep",
     ]);
-    expect(filterSavedSimulationSetupsByDefinition(parsedRecords, 18)[0]?.values.simulationStartGhz).toBe(3);
+    expect(
+      filterSavedSimulationSetupsByDefinition(parsedRecords, PRIMARY_SCHEMA_ID)[0]?.values
+        .simulationStartGhz,
+    ).toBe(3);
     expect(removeSavedSimulationSetupRecord(parsedRecords, "setup-local-1")).toHaveLength(1);
   });
 
@@ -1543,7 +1558,7 @@ describe("task api detail mapping", () => {
       workspace_slug: "device-lab",
       visibility_scope: "workspace",
       dataset_id: "fluxonium-2025-031",
-      definition_id: 18,
+      definition_id: PRIMARY_SCHEMA_ID,
       summary: "Simulation request for FloatingQubitWithXYLine",
       worker_task_name: "simulation_run_task",
       request_ready: true,
@@ -1812,7 +1827,7 @@ describe("task api detail mapping", () => {
           workspace_slug: "device-lab",
           visibility_scope: "workspace",
           dataset_id: "fluxonium-2025-031",
-          definition_id: 18,
+          definition_id: PRIMARY_SCHEMA_ID,
           summary: "Simulation request for FloatingQubitWithXYLine",
           worker_task_name: "simulation_run_task",
           request_ready: true,
