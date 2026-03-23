@@ -15,9 +15,9 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/schemas 頁面的 circuit schema catalog、搜尋/排序/cursor-based browse，以及建立/開啟/刪除契約"
-version: v0.6.0
-last_updated: 2026-03-14
-updated_by: team
+version: v0.7.0
+last_updated: 2026-03-23
+updated_by: codex
 ---
 
 # Schemas
@@ -34,6 +34,11 @@ updated_by: team
 !!! info "Workspace-scoped catalog"
     Schema catalog 只列出目前 `Active Workspace` 中可見的 definitions。
     `private` schema 只對 owner、workspace owner 與 admin 可見；`workspace` schema 才是共同清單的一部分。
+
+!!! important "Schema identity display"
+    - persisted schema identity 是 UUIDv4-only `definition_id`
+    - UI 不得再把 schema identity 描述成 `Definition #...` 這種 compact sequential 編號
+    - 同名 schema 必須依 short `Schema ID` + `created_at` 區分；必要時補 owner / workspace context
 
 ---
 
@@ -64,7 +69,7 @@ graph LR
 | :--- | :--- | :--- | :--- |
 | **C1** | New Circuit Button | 位於頂部，為主要行動按鈕。 | 導向至 Schema 建立流程。 |
 | **C2** | Filter Bar | 提供名稱搜尋、欄位排序與方向選擇。 | 觸發列表重新查詢。 |
-| **C3** | Schema Item Row | 列表核心，顯示 `name`, `created_at`。 | 支援開啟、編輯與刪除。 |
+| **C3** | Schema Item Row | 列表核心，顯示 `name`、short `Schema ID`、`created_at`。 | 支援開啟、編輯與刪除。 |
 | **C4** | Browse Controls | 位於底部，控制 cursor-based 的前後段瀏覽。 | 驅動分段載入，同步更新總數與 cursor 狀態。 |
 
 ---
@@ -92,6 +97,16 @@ graph LR
 !!! warning "邊界約束"
     Schema Catalog **禁止**在列表階段預載完整的 Definition Payload。其詳細內容應僅在 Editor 或 Detail 流中按需讀取。
 
+## Schema Identity And Ordering Rules
+
+| Concern | Rule |
+|---|---|
+| Persisted identity | catalog row 綁定的是 full UUIDv4 `definition_id` |
+| Visible label | row 可顯示 short `Schema ID`，但這只是 full UUIDv4 的縮寫 display |
+| Same-name rows | 不得用隱含 display order 當唯一區分；至少要顯示 short `Schema ID` + `created_at` |
+| Sorting | 使用 `created_at`、`updated_at`、`name` 等欄位；不得使用 `definition_id` 值排序 |
+| Open / delete / clone | 仍以 full `definition_id` 作為 action binding；不是以 row order 或 visible short ID 綁定 |
+
 ## Workspace And Permission Rules
 
 | Concern | Rule |
@@ -108,7 +123,7 @@ graph LR
 
 === "建立與開啟 (Create/Open)"
     1.  點擊 `New Circuit` → 導向 Editor 建立新檔。
-    2.  點擊 `Edit` 或 Row → 導向 Editor 並帶入選定 `schema_id`。
+    2.  點擊 `Edit` 或 Row → 導向 Editor 並帶入選定的 full UUIDv4 `definition_id`。
 
 === "Workspace Rebinding"
     1. Header 切換 active workspace。
@@ -130,7 +145,7 @@ graph LR
 
 *   **層次分明**: Page Title 的視覺比重必須顯著高於 Subtitle。
 *   **CTA 定位**: `New Circuit` 按鈕應始終位於主要內容區的最上方。
-*   **密度一致**: 無論使用 Table 或 Card，`Created At` 與 Action 按鈕在每列中需維持穩定對齊。
+*   **密度一致**: 無論使用 Table 或 Card，short `Schema ID`、`Created At` 與 Action 按鈕在每列中需維持穩定對齊。
 *   **反饋定位**: Error 或 Mutation Feedback 應在列表區域附近清晰可見。
 
 ---

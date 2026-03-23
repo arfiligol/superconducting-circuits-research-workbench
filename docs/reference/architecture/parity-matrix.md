@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: 目前 App / CLI / Core / Data Formats 的 cross-layer 對齊矩陣
-version: v0.8.0
-last_updated: 2026-03-16
+version: v0.9.0
+last_updated: 2026-03-23
 updated_by: codex
 ---
 
@@ -40,7 +40,8 @@ updated_by: codex
 | Shared task management | [Task Management](../app/frontend/shared-workflow/task-management.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | `partial` | queue / control / runtime state machine 已定義； implementation 仍待 adoption |
 | Simulation workflow | [Circuit Simulation](../app/frontend/research-workflow/circuit-simulation.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Circuit Definitions](../app/backend/circuit-definitions.md) | `partial` | queue 與 attach 已收斂； simulation-specific runtime/result depth 仍待細化 |
 | Characterization workflow | [Characterization](../app/frontend/research-workflow/characterization.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Characterization Results](../app/backend/characterization-results.md) | `partial` | run history 與 shared queue distinction 已定義 |
-| Circuit definition workflow | [Schemas](../app/frontend/definition/schemas.md), [Schema Editor](../app/frontend/definition/schema-editor.md) | [Circuit Definitions](../app/backend/circuit-definitions.md), [Circuit Netlist](../data-formats/circuit-netlist.md) | `partial` | auto-format 與 quick reference 已定義； endpoint payload 細節仍可深化 |
+| Circuit definition workflow | [Schemas](../app/frontend/definition/schemas.md), [Schema Editor](../app/frontend/definition/schema-editor.md) | [Circuit Definitions](../app/backend/circuit-definitions.md), [Circuit Netlist](../data-formats/circuit-netlist.md) | `defined` | UUIDv4-only opaque schema identity、same-name disambiguation 與 cross-page binding 已定義； implementation adoption 仍待全面跟上 |
+| Schema identity across linked flows | [Schemas](../app/frontend/definition/schemas.md), [Schema Editor](../app/frontend/definition/schema-editor.md), [Schemdraw](../app/frontend/research-workflow/schemdraw.md), [Circuit Simulation](../app/frontend/research-workflow/circuit-simulation.md) | [Circuit Definitions](../app/backend/circuit-definitions.md), [Tasks & Execution](../app/backend/tasks-execution.md), [Identity & Workspace Model](../app/shared/identity-workspace-model.md) | `defined` | `definition_id` 現為 UUIDv4-only opaque identity；UI 只能顯示 short `Schema ID`，不可再用 numeric `Definition #` model |
 | Schemdraw live render | [Schemdraw](../app/frontend/research-workflow/schemdraw.md) | [Schemdraw Render](../app/backend/schemdraw-render.md) | `defined` | three-step flow 與 backend authority 已定義 |
 | Worker / processor runtime | Header queue worker summary | [Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | `defined` | processor summary、cancel/terminate semantics 已寫清楚 |
 | Audit logging | queue controls, privileged actions, admin governance | [Audit Logging](../app/shared/audit-logging.md), [Audit Logs](../app/backend/audit-logs.md) | `partial` | separate audit store 與 read surface 已定義； governance UI adoption 仍待完成 |

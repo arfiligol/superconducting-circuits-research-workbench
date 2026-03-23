@@ -15,9 +15,9 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/circuit-definition-editor 的 source 編輯、auto-format、persisted preview 與 netlist quick reference 契約"
-version: v0.5.0
-last_updated: 2026-03-14
-updated_by: team
+version: v0.6.0
+last_updated: 2026-03-23
+updated_by: codex
 ---
 
 # Schema Editor
@@ -31,6 +31,16 @@ updated_by: team
 !!! tip "Shared Shell"
     本頁位於 shared [Header](../shared-shell/header.md) / [Sidebar](../shared-shell/sidebar.md) shell 中。
     page body 可顯示 active schema 與 dirty state，但不得接管 global dataset、task queue 或 user menu。
+
+## Schema Identity Contract
+
+| Concern | Rule |
+|---|---|
+| Persisted identity | active schema 的 canonical identity 是 full UUIDv4 `definition_id` |
+| Header / title display | page 可顯示 short `Schema ID` 輔助辨識，但不得用 `Definition #...` 暗示 numeric sequential identity |
+| Same-name schema handling | 若使用者在 catalog rail 切換到同名 schema，editor 必須以 short `Schema ID` + `created_at` / `updated_at` 保持可分辨 |
+| Route / page binding | editor route state 綁的是 full `definition_id`；不可用 row position 或 compact display token 取代 |
+| Save / delete / publish / clone | mutations 全部以 full `definition_id` 對 persisted definition 發送 |
 
 ## Purpose
 
@@ -115,7 +125,7 @@ flowchart TD
 
     | Data | Source | Why it matters |
     |---|---|---|
-    | definition detail | definition service | 填充 editor 與 page identity |
+    | definition detail | definition service | 填充 editor 與 page identity；其中 `definition_id` 為 UUIDv4 opaque identity |
     | validation notices | persisted definition detail | 顯示 save 後的 validation result |
     | expanded preview | persisted preview payload | 讓使用者檢查 repeat-expansion 後結果 |
     | normalized output | persisted preview payload | 顯示後端派生 canonical output |

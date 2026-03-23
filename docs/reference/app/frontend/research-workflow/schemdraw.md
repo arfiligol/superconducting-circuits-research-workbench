@@ -15,8 +15,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/circuit-schemdraw 的 linked schema context、source editor、SVG live preview、backend diagnostics 與 advanced mapping disclosure 契約"
-version: v0.8.0
-last_updated: 2026-03-18
+version: v0.9.0
+last_updated: 2026-03-23
 updated_by: codex
 ---
 
@@ -55,6 +55,16 @@ updated_by: codex
 | active workspace | linked schema search 與 render authorization 必須受目前 active workspace 限定 |
 | active dataset | 非必要；本頁不以 active dataset 作為 primary authority |
 | linked schema | 若提供 linked schema，必須是目前 active workspace 中可見的 persisted definition |
+
+## Linked Schema Identity Rules
+
+| Concern | Rule |
+|---|---|
+| Persisted identity | linked schema 綁定的是 full UUIDv4 `definition_id` |
+| Visible context | UI 可顯示 short `Schema ID`，但不得用 `Definition #...` 或任何 numeric-order wording 暗示 identity shape |
+| Same-name linked schemas | 必須依 short `Schema ID` + `created_at` 區分；必要時加 owner / workspace context |
+| Selection order | linked schema dropdown / chooser 應依 `name`、`created_at`、`updated_at` 等欄位排序，不得按 `definition_id` 值排序 |
+| Render request binding | frontend 送給 backend 的 linked schema reference 仍必須是 full UUIDv4 `definition_id` |
 
 ## Layout Structure
 

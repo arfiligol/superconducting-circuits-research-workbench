@@ -10,8 +10,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Backend task queue read model、control actions、worker summary、event history 與 result attachment surface
-version: v0.14.0
-last_updated: 2026-03-21
+version: v0.15.0
+last_updated: 2026-03-23
 updated_by: codex
 ---
 
@@ -112,7 +112,7 @@ task submit response 至少必須提供：
 | `status` | 初始 lifecycle status |
 | `visibility_scope` | `local` / `workspace` / `private` |
 | `owner_user_id` | task owner |
-| `dataset_id` / `definition_id` / design context | 與 page context 相關的 binding |
+| `dataset_id` / `definition_id` / design context | 與 page context 相關的 binding；其中 `definition_id` 是 full UUIDv4 schema identity |
 
 ### Local Submit Delivery Rules
 
@@ -181,7 +181,7 @@ task detail 的 `dispatch` 至少必須能表達：
 | Field | Meaning |
 |---|---|
 | `dataset_id` | active dataset |
-| `definition_id` | selected canonical definition |
+| `definition_id` | selected canonical definition；full UUIDv4 schema identity，opaque、不可作為人類排序依據 |
 | `task_kind` | simulation lane task；`post_processing` 也走同一條 simulation worker lane |
 | `setup` | frequency sweep、parameter sweeps、solver、sources 與 persisted `ptc` 設定 |
 | `post_processing_plan` | optional，若同時聲明後處理需求 |
@@ -388,7 +388,7 @@ attached task detail 至少必須提供：
     ```json
     {
       "dataset_id": "ds_xy_001",
-      "definition_id": "def_lc_12",
+      "definition_id": "7b1e4c65-8c3b-4dd0-9a02-7f1cf0cf0f3e",
       "task_kind": "simulation",
       "setup": {
         "frequency_sweep": {
@@ -433,7 +433,7 @@ attached task detail 至少必須提供：
         "visibility_scope": "private",
         "owner_user_id": "user_12",
         "dataset_id": "ds_xy_001",
-        "definition_id": "def_lc_12"
+        "definition_id": "7b1e4c65-8c3b-4dd0-9a02-7f1cf0cf0f3e"
       }
     }
     ```

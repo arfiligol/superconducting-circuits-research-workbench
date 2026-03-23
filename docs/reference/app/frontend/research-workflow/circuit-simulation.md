@@ -14,7 +14,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/circuit-simulation 的 canonical definition 選擇、simulation setup、task submission、attached-task review 與 post-processing 契約"
-version: v0.23.0
+version: v0.24.0
 last_updated: 2026-03-23
 updated_by: codex
 ---
@@ -49,6 +49,16 @@ updated_by: codex
 | active dataset | submit simulation task 前必須已解析到有效 active dataset，除非明確定義該 lane 可 dataset-null |
 | active definition | 必須屬於目前 active workspace 且對 session 可見 |
 | attached task | 若 workspace switch 後不再可見，必須解除附著並提示 |
+
+## Definition Identity Rules
+
+| Concern | Rule |
+|---|---|
+| Persisted identity | simulation workflow 綁定的是 full UUIDv4 `definition_id` |
+| Visible selector label | definition chooser 可顯示 short `Schema ID`，但不得再使用 `Definition #...` 式 wording |
+| Same-name definitions | 必須依 short `Schema ID` + `created_at` 區分；必要時再補 owner / workspace context |
+| Ordering | definition selection 應依 `name`、`created_at`、`updated_at` 排序，不得從 `definition_id` 推導順序 |
+| Task binding | `Run Simulation` 與 downstream task lineage 都必須保留 full UUIDv4 `definition_id` 作為 persisted binding |
 
 ## User Mental Model
 

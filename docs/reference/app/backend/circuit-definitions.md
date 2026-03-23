@@ -11,9 +11,9 @@ status: draft
 owner: docs-team
 audience: team
 scope: Circuit definition catalog、detail、mutation 與 persisted inspection read model 的 backend reference surface。
-version: v0.5.0
-last_updated: 2026-03-14
-updated_by: team
+version: v0.6.0
+last_updated: 2026-03-23
+updated_by: codex
 ---
 
 # Circuit Definitions
@@ -26,6 +26,16 @@ updated_by: team
 
 !!! tip "Primary Consumers"
     主要消費者是 [Schemas](../frontend/definition/schemas.md)、[Schema Editor](../frontend/definition/schema-editor.md)、[Schemdraw](../frontend/research-workflow/schemdraw.md) 與 [Circuit Simulation](../frontend/research-workflow/circuit-simulation.md)。
+
+!!! important "UUIDv4-only Schema Identity"
+    - `definition_id` 是 persisted schema identity，必須是 full UUIDv4
+    - identity 是 opaque，不可從值本身推論建立順序、穩定 display order 或 human ranking
+    - UI 若需 readability，可顯示 short `Schema ID`，但 canonical persisted identity 仍是 full UUIDv4
+    - 同名 schema 的辨識必須依 short `Schema ID`、`created_at`，以及必要時的 owner / workspace context
+
+!!! warning "No transition period"
+    目前 SoT 不承認 legacy numeric definition identity，也不承認 dual-ID compatibility。
+    任何 catalog cache、editor route、linked-schema selection、simulation binding 或 task draft，若仍依賴舊 numeric identity，都必須直接 rebuild 成 UUIDv4-only model。
 
 ---
 
@@ -63,7 +73,7 @@ updated_by: team
     | `sort_by` / `sort_order` | optional |
     | `limit` | optional |
     | `after` / `before` | optional，cursor-based browse 位置 |
-    | `rows[]` | `definition_id`, `name`, `created_at`, `visibility_scope`, `owner_display_name`, `allowed_actions` |
+    | `rows[]` | `definition_id`, `name`, `created_at`, optional `updated_at`, `visibility_scope`, `owner_display_name`, `allowed_actions` |
     | `meta.next_cursor` / `meta.prev_cursor` | cursor-based browse meta |
     | `total_count` | 總數摘要 |
 
@@ -82,9 +92,10 @@ updated_by: team
 
     | Field | Meaning |
     |---|---|
-    | `definition_id` | persisted identity |
+    | `definition_id` | persisted schema identity；full UUIDv4 |
     | `workspace_id` / `visibility_scope` | shared visibility boundary；local mode 可固定為 `Local Space` / `local` |
     | `allowed_actions` | `update`, `delete`, `publish`, `clone` 等 |
+    | `created_at` | identity disambiguation 與 stable ordering metadata |
     | `updated_at` | concurrency / freshness summary |
 
 === "Mutation"
@@ -105,6 +116,16 @@ updated_by: team
     | `publish_to_workspace` | `definition_id` |
     | `clone_private_copy` | `definition_id`, optional `name` |
 
+## Identity And Ordering Contract
+
+| Concern | Contract |
+|---|---|
+| `definition_id` | full UUIDv4 persisted identity；opaque、不可排序推論 |
+| `Schema ID` display | UI convenience only；可取 UUID prefix，但不得取代 full `definition_id` |
+| Human ordering | 必須使用 `created_at`、`updated_at`、`name` 等欄位；不得用 `definition_id` 值排序 |
+| Same-name disambiguation | 至少顯示 short `Schema ID` + `created_at`；必要時再加 owner / workspace context |
+| Selection / mutation binding | catalog、editor、schemdraw、simulation、task submit 全部以 full `definition_id` 綁定 |
+
 ## Workspace And Visibility Rules
 
 | Rule | Meaning |
@@ -117,6 +138,10 @@ updated_by: team
 !!! warning "Catalog is Summary-only"
     definition catalog **不得**把完整 definition payload 當成列表回應的一部分。
     list path 只提供 `id`、`name`、`created_at` 與等價 summary 欄位。
+
+!!! warning "Do not use schema identity as display order"
+    `definition_id` 的 UUIDv4 值不具人類排序意義。
+    若 UI 需要顯示「最新」或「較舊」schema，必須依 `created_at` / `updated_at` 等時間欄位計算。
 
 !!! warning "Persisted Preview Authority"
     `validation notices`、`normalized output` 與 `preview artifacts` 只代表**最後一次成功儲存後**的 persisted state。
@@ -150,9 +175,10 @@ updated_by: team
       "data": {
         "rows": [
           {
-            "definition_id": "def_lc_12",
+            "definition_id": "7b1e4c65-8c3b-4dd0-9a02-7f1cf0cf0f3e",
             "name": "Series LC Resonator",
             "created_at": "2026-03-14T09:20:00Z",
+            "updated_at": "2026-03-14T10:15:00Z",
             "visibility_scope": "private",
             "owner_display_name": "Ari",
             "allowed_actions": {
@@ -172,7 +198,7 @@ updated_by: team
     Request:
     ```json
     {
-      "definition_id": "def_lc_12",
+      "definition_id": "7b1e4c65-8c3b-4dd0-9a02-7f1cf0cf0f3e",
       "source_text": "{...canonical source...}",
       "name": "Series LC Resonator",
       "concurrency_token": "etag_4"
@@ -184,7 +210,7 @@ updated_by: team
     {
       "ok": true,
       "data": {
-        "definition_id": "def_lc_12",
+        "definition_id": "7b1e4c65-8c3b-4dd0-9a02-7f1cf0cf0f3e",
         "workspace_id": "ws_lab_a",
         "visibility_scope": "private",
         "updated_at": "2026-03-14T10:15:00Z",

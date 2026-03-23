@@ -11,8 +11,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Schemdraw render service 的 three-step flow、request/response、diagnostics、authoritative syntax/live preview 與 advanced mapping envelope 契約
-version: v0.6.0
-last_updated: 2026-03-16
+version: v0.7.0
+last_updated: 2026-03-23
 updated_by: codex
 ---
 
@@ -65,7 +65,7 @@ linked schema object baseline：
 
 | Field | Meaning |
 |---|---|
-| `definition_id` | persisted definition identity |
+| `definition_id` | persisted schema identity；full UUIDv4 |
 | `workspace_id` | visibility boundary summary |
 | `name` | display label |
 | `source_hash` | optional freshness hint |
@@ -138,7 +138,7 @@ linked schema object baseline：
         }
       },
       "linked_schema": {
-        "definition_id": "def_lc_12",
+        "definition_id": "7b1e4c65-8c3b-4dd0-9a02-7f1cf0cf0f3e",
         "workspace_id": "ws_lab_a",
         "name": "Series LC Resonator"
       },
