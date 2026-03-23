@@ -14,8 +14,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/circuit-simulation 的 canonical definition 選擇、simulation setup、task submission、attached-task review 與 post-processing 契約"
-version: v0.22.0
-last_updated: 2026-03-18
+version: v0.23.0
+last_updated: 2026-03-23
 updated_by: codex
 ---
 
@@ -99,9 +99,9 @@ graph TD
 |---|---|---|
 | `Definition / Netlist Context` | 回答這次要模擬什麼 | canonical definition、可讀 netlist / expanded snapshot、與 simulation 直接相關的 context |
 | `Simulation Setup` | 配置 runnable simulation stage | frequency sweep、parameter sweeps、solver、sources、advanced options、`Run Simulation` |
-| `Simulation Result` | 承接 simulation stage output | stage status、latest run summary、simulation result surface |
+| `Simulation Result` | 承接 simulation stage output | stage status、latest run summary、simulation result explorer、`Save Traces` |
 | `Post Processing Setup` | 配置 downstream stage | post-processing config、blocking reason、`Run Post Processing` |
-| `Post Processing Result` | 承接 downstream output | stage status、post-processing result、與 upstream simulation result 的關聯 |
+| `Post Processing Result` | 承接 downstream output | stage status、post-processing result explorer、`Save Traces`、與 upstream simulation result 的關聯 |
 
 ## Simulation Setup Contract
 
@@ -163,6 +163,43 @@ graph TD
 | `PTC` downstream capability | `PTC` source 是否可選，必須根據 upstream simulation run 的 persisted result / metadata 決定，而不是依賴 page-local draft state |
 | Export / compare | 應附著在對應的 result stage，而不是 task diagnostics 區塊 |
 | Re-entry | refresh / reattach 後，頁面必須能回到正確 stage result，而不是只剩 generic task detail |
+
+## Result Explorer Contract
+
+| Concern | Contract |
+|---|---|
+| Result explorer owner | `Simulation Result` 與 `Post Processing Result` 都以 explorer-first browse 為主，而不是 task-level save card |
+| Compare model | parameter sweep 只允許一個 compare axis；其餘 axes 必須固定到單一值 |
+| Single-axis sweep behavior | 單一 sweep 軸可顯示所有 compare traces，或聚焦 active trace |
+| Multi-axis sweep behavior | 先選一個 compare axis；其餘 sweep axes 固定成單一值後才可形成 visible traces |
+| Active trace meaning | compare mode 中仍保留一條 canonical current trace；它是 explorer 目前的主 trace，不因多 trace 顯示而消失 |
+| Metric / view state | family、source、metric、port、plot/table 只是 explorer view state，不會重新定義 trace identity |
+| Save control placement | `Save Traces` 應直接掛在 result explorer controls 附近，不另做大型 stage-level save wall |
+
+!!! warning "Do not redefine trace identity from view state"
+    切換 metric、plot/table 或 compare 顯示方式，只會改變 explorer view。
+    它不會把同一筆 canonical trace 變成另一個 trace identity。
+
+## Save Traces Contract
+
+`Simulation Result` 與 `Post Processing Result` 共用同一份 `Save Traces` 規格。
+
+| Situation | Required behavior |
+|---|---|
+| 只有一條 visible trace | 儲存一條 canonical trace |
+| 有多條 visible traces | 每條 visible trace 都必須個別儲存成獨立 canonical trace |
+| save target | active dataset 內、目前使用者選定的 design |
+| saved output shape | 儲存結果仍是 individual trace records，不是整張 plot blob 或 compare snapshot |
+| parameter naming | 儲存時允許使用者輸入 parameter 名稱；多條 trace 時它作為此次保存的命名基底 |
+| publication boundary | save semantics 只看 explorer-visible traces，不由 page 其他 stage state 重新定義 |
+
+!!! info "Visible traces means explorer-visible traces"
+    `Save Traces` 使用的是 result explorer 目前可見的 trace 集合。
+    在 compare mode 下，這可能是一條 active trace，也可能是同一個 compare axis 上的多條 visible traces。
+
+!!! warning "Legend hide/show is not part of the contract"
+    目前文件只把 explorer 的 compare / visible trace model 納入正式規格。
+    Plotly legend 的手動 hide/show 尚未被定義為 save selection authority，文件不得承諾 hidden legend traces 會被排除。
 
 ## Post-processing Direction
 
@@ -235,6 +272,13 @@ graph TD
     2. 若 simulation result 已可用，`Post Processing Setup` 解鎖。
     3. 當 post-processing 完成時，`Post Processing Result` 顯示 downstream result，並明確標示 upstream simulation relation。
 
+??? example "Flow D: Save visible traces"
+    1. 使用者在 `Simulation Result` 或 `Post Processing Result` explorer 中選定 family / source / metric / ports。
+    2. 若存在 parameter sweep，使用者先決定 compare axis 與其餘固定值，形成目前 visible traces。
+    3. 點擊 `Save Traces`。
+    4. 使用者選擇 active dataset 內的 target design，並輸入 parameter 名稱。
+    5. backend 將每條 visible trace 各自保存為 canonical trace records。
+
 ## Acceptance Checklist
 
 | Check | Requirement |
@@ -244,6 +288,11 @@ graph TD
 | Task integration | task 可見，但只能以 stage-local execution summary 出現 |
 | Blocking clarity | blocked stage 必須有短原因與明確 next action |
 | Result ownership | simulation result 與 post-processing result 必須有明確 stage 邊界 |
+| Result explorer wording | `Simulation Result` 與 `Post Processing Result` 都必須以 visible traces / active trace 的 explorer 語意描述，而不是舊的 current-trace-only wording |
+| Compare model | 單一 sweep 軸可顯示 all visible traces 或聚焦 active trace；多軸 sweep 只能選一個 compare axis，其他軸固定 |
+| Save behavior | `Save Traces` 必須反映目前 visible traces；一條 visible trace 存一條，多條 visible traces 各自存成 individual canonical traces |
+| Save target | 保存目標仍是 active dataset 內選定 design，不得描述成 plot blob publish |
+| Trace identity | metric / view state 不得被描述成重新定義 trace identity |
 | Recovery language | 使用 workflow-oriented wording，不以 infrastructure wording 主導 |
 | Shared boundary | global queue / worker / deep task control 必須回到 `Global Context` |
 | `PTC` contract | `PTC` 必須被視為 persisted `Simulation Setup` 的一部分，不得再被描述成長期 browser-local only |
