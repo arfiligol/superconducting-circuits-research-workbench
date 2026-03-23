@@ -203,7 +203,7 @@ def test_circuit_simulation_page_smoke_loads_compare_axis_and_saves_visible_trac
     simulation_stack: dict[str, str | int],
 ) -> None:
     frontend_base_url = str(simulation_stack["frontend_base_url"])
-    definition_id = int(simulation_stack["definition_id"])
+    definition_id = str(simulation_stack["definition_id"])
     simulation_task_id = int(simulation_stack["simulation_task_id"])
     screenshot_path = Path(str(simulation_stack["screenshot_path"]))
     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
