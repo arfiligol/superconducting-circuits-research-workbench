@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   ArrowRight,
+  Check,
   Copy,
   Globe,
+  Minus,
   Plus,
   Search,
   Trash2,
@@ -29,8 +31,10 @@ import { ConfirmActionDialog } from "@/lib/confirm-action-dialog";
 type PendingCatalogAction =
   | Readonly<{
       kind: "delete";
-      definitionId: number;
-      definitionName: string;
+      definitions: readonly Readonly<{
+        definitionId: number;
+        definitionName: string;
+      }>[];
     }>
   | null;
 
@@ -50,13 +54,16 @@ export function CircuitDefinitionCatalogWorkspace() {
   const [, startTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState<CircuitDefinitionCatalogSort>("recent");
+  const [selectedDefinitionIds, setSelectedDefinitionIds] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
   const [pendingAction, setPendingAction] = useState<PendingCatalogAction>(null);
   const {
     definitions,
     definitionsTotalCount,
     definitionsError,
     isDefinitionsLoading,
-    removeDefinition,
+    removeDefinitions,
     publishDefinition,
     cloneDefinition,
     mutationStatus,
@@ -67,6 +74,43 @@ export function CircuitDefinitionCatalogWorkspace() {
     () => filterCircuitDefinitionCatalog(definitions, searchQuery, sortMode),
     [definitions, searchQuery, sortMode],
   );
+  const visibleRows = useMemo(
+    () =>
+      visibleDefinitions.map((definition) => ({
+        definition,
+        actionState: summarizeCatalogDefinitionActionState(definition),
+      })),
+    [visibleDefinitions],
+  );
+  const selectableDefinitionIds = useMemo(
+    () =>
+      visibleRows
+        .filter((row) => row.actionState.delete.enabled)
+        .map((row) => row.definition.definition_id),
+    [visibleRows],
+  );
+  const selectedDefinitions = useMemo(
+    () =>
+      visibleRows
+        .filter((row) => selectedDefinitionIds.has(row.definition.definition_id))
+        .map((row) => row.definition),
+    [selectedDefinitionIds, visibleRows],
+  );
+  const allSelectableVisibleSelected =
+    selectableDefinitionIds.length > 0 &&
+    selectableDefinitionIds.every((definitionId) => selectedDefinitionIds.has(definitionId));
+
+  useEffect(() => {
+    setSelectedDefinitionIds((current) => {
+      const next = new Set<number>();
+      for (const definitionId of current) {
+        if (selectableDefinitionIds.includes(definitionId)) {
+          next.add(definitionId);
+        }
+      }
+      return next.size === current.size ? current : next;
+    });
+  }, [selectableDefinitionIds]);
 
   function openEditor(definitionId: number | "new") {
     startTransition(() => {
@@ -79,7 +123,18 @@ export function CircuitDefinitionCatalogWorkspace() {
       return;
     }
 
-    await removeDefinition(pendingAction.definitionId);
+    const result = await removeDefinitions(
+      pendingAction.definitions.map((definition) => definition.definitionId),
+    );
+    if (result.deletedIds.length > 0) {
+      setSelectedDefinitionIds((current) => {
+        const next = new Set(current);
+        for (const definitionId of result.deletedIds) {
+          next.delete(definitionId);
+        }
+        return next;
+      });
+    }
     setPendingAction(null);
   }
 
@@ -90,6 +145,34 @@ export function CircuitDefinitionCatalogWorkspace() {
   async function handleClone(definitionId: number) {
     const clonedDetail = await cloneDefinition(definitionId);
     openEditor(clonedDetail.definition_id);
+  }
+
+  function toggleDefinitionSelection(definitionId: number) {
+    setSelectedDefinitionIds((current) => {
+      const next = new Set(current);
+      if (next.has(definitionId)) {
+        next.delete(definitionId);
+      } else {
+        next.add(definitionId);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedDefinitionIds((current) => {
+      const next = new Set(current);
+      if (allSelectableVisibleSelected) {
+        for (const definitionId of selectableDefinitionIds) {
+          next.delete(definitionId);
+        }
+      } else {
+        for (const definitionId of selectableDefinitionIds) {
+          next.add(definitionId);
+        }
+      }
+      return next;
+    });
   }
 
   return (
@@ -178,6 +261,50 @@ export function CircuitDefinitionCatalogWorkspace() {
           </span>
         </div>
 
+        <div className="mt-4 flex flex-col gap-3 rounded-[0.9rem] border border-border bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleSelectAllVisible}
+              disabled={isMutationPending || selectableDefinitionIds.length === 0}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {allSelectableVisibleSelected ? (
+                <Minus className="h-4 w-4" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              {allSelectableVisibleSelected ? "Clear visible selection" : "Select visible"}
+            </button>
+            <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+              {selectedDefinitions.length > 0
+                ? `${selectedDefinitions.length} selected`
+                : `${selectableDefinitionIds.length} deletable in view`}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedDefinitions.length === 0) {
+                return;
+              }
+              setPendingAction({
+                kind: "delete",
+                definitions: selectedDefinitions.map((definition) => ({
+                  definitionId: definition.definition_id,
+                  definitionName: definition.name,
+                })),
+              });
+            }}
+            disabled={isMutationPending || selectedDefinitions.length === 0}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-rose-500/30 px-3 py-2 text-sm text-rose-700 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-rose-300"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete selected
+          </button>
+        </div>
+
         {isDefinitionsLoading && !definitions ? (
           <div className="mt-4 rounded-[0.9rem] border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
             Loading circuit schema catalog...
@@ -186,71 +313,100 @@ export function CircuitDefinitionCatalogWorkspace() {
 
         {visibleDefinitions.length > 0 ? (
           <div className="mt-4 space-y-3">
-            {visibleDefinitions.map((definition) => {
-              const actionState = summarizeCatalogDefinitionActionState(definition);
+            {visibleRows.map(({ definition, actionState }) => {
+              const isSelected = selectedDefinitionIds.has(definition.definition_id);
               return (
                 <article
                   key={definition.definition_id}
-                  className="rounded-[1rem] border border-border bg-background px-4 py-4"
+                  className={cx(
+                    "rounded-[1rem] border bg-background px-4 py-4 transition",
+                    isSelected ? "border-primary/45 shadow-[0_0_0_1px_rgba(59,130,246,0.14)]" : "border-border",
+                  )}
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            openEditor(definition.definition_id);
-                          }}
-                          className="truncate text-left text-base font-semibold text-foreground transition hover:text-primary"
-                        >
-                          {definition.name}
-                        </button>
-                        <span
-                          className={cx(
-                            "rounded-full border px-3 py-1 text-[11px] font-medium",
-                            visibilityTone(definition.visibility_scope),
-                          )}
-                        >
-                          {definition.visibility_scope ?? "private"}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                        <span className="rounded-full border border-border px-3 py-1">
-                          Definition #{definition.definition_id}
-                        </span>
-                        <span className="rounded-full border border-border px-3 py-1">
-                          Owner {definition.owner_display_name ?? "Unknown"}
-                        </span>
-                        <span
-                          className={cx(
-                            "rounded-full border px-3 py-1",
-                            definition.visibility_scope === "local"
-                              ? "border-primary/30 text-foreground"
+                    <div className="flex min-w-0 gap-3">
+                      <button
+                        type="button"
+                        aria-label={`${isSelected ? "Deselect" : "Select"} ${definition.name}`}
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          toggleDefinitionSelection(definition.definition_id);
+                        }}
+                        disabled={isMutationPending || !actionState.delete.enabled}
+                        title={
+                          actionState.delete.enabled
+                            ? `${isSelected ? "Deselect" : "Select"} ${definition.name} for batch actions.`
+                            : actionState.delete.reason
+                        }
+                        className={cx(
+                          "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition",
+                          actionState.delete.enabled
+                            ? "cursor-pointer border-border bg-surface text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-foreground"
+                            : "cursor-not-allowed border-border/70 bg-surface/80 text-muted-foreground/60 opacity-60",
+                          isSelected && "border-primary/45 bg-primary/12 text-primary",
+                        )}
+                      >
+                        {isSelected ? <Check className="h-4 w-4" /> : null}
+                      </button>
+
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              openEditor(definition.definition_id);
+                            }}
+                            className="truncate text-left text-base font-semibold text-foreground transition hover:text-primary"
+                          >
+                            {definition.name}
+                          </button>
+                          <span
+                            className={cx(
+                              "rounded-full border px-3 py-1 text-[11px] font-medium",
+                              visibilityTone(definition.visibility_scope),
+                            )}
+                          >
+                            {definition.visibility_scope ?? "private"}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                          <span className="rounded-full border border-border px-3 py-1">
+                            Definition #{definition.definition_id}
+                          </span>
+                          <span className="rounded-full border border-border px-3 py-1">
+                            Owner {definition.owner_display_name ?? "Unknown"}
+                          </span>
+                          <span
+                            className={cx(
+                              "rounded-full border px-3 py-1",
+                              definition.visibility_scope === "local"
+                                ? "border-primary/30 text-foreground"
+                                : definition.allowed_actions?.publish
+                                  ? "border-emerald-500/30 text-emerald-950 dark:text-emerald-100"
+                                  : "border-border text-muted-foreground",
+                            )}
+                          >
+                            {definition.visibility_scope === "local"
+                              ? "Local only"
                               : definition.allowed_actions?.publish
-                                ? "border-emerald-500/30 text-emerald-950 dark:text-emerald-100"
+                                ? "Publish allowed"
+                                : "Publish blocked"}
+                          </span>
+                          <span
+                            className={cx(
+                              "rounded-full border px-3 py-1",
+                              definition.allowed_actions?.clone
+                                ? "border-primary/30 text-primary"
                                 : "border-border text-muted-foreground",
-                          )}
-                        >
-                          {definition.visibility_scope === "local"
-                            ? "Local only"
-                            : definition.allowed_actions?.publish
-                              ? "Publish allowed"
-                              : "Publish blocked"}
-                        </span>
-                        <span
-                          className={cx(
-                            "rounded-full border px-3 py-1",
-                            definition.allowed_actions?.clone
-                              ? "border-primary/30 text-primary"
-                              : "border-border text-muted-foreground",
-                          )}
-                        >
-                          {definition.allowed_actions?.clone ? "Clone allowed" : "Clone blocked"}
-                        </span>
+                            )}
+                          >
+                            {definition.allowed_actions?.clone ? "Clone allowed" : "Clone blocked"}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          Created: {definition.created_at}
+                        </p>
                       </div>
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        Created: {definition.created_at}
-                      </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -306,8 +462,12 @@ export function CircuitDefinitionCatalogWorkspace() {
                         onClick={() => {
                           setPendingAction({
                             kind: "delete",
-                            definitionId: definition.definition_id,
-                            definitionName: definition.name,
+                            definitions: [
+                              {
+                                definitionId: definition.definition_id,
+                                definitionName: definition.name,
+                              },
+                            ],
                           });
                         }}
                         disabled={isMutationPending || !actionState.delete.enabled}
@@ -337,13 +497,23 @@ export function CircuitDefinitionCatalogWorkspace() {
 
       <ConfirmActionDialog
         open={pendingAction?.kind === "delete"}
-        title="Delete persisted definition?"
+        title={
+          pendingAction?.kind === "delete" && pendingAction.definitions.length > 1
+            ? "Delete selected definitions?"
+            : "Delete persisted definition?"
+        }
         description={
           pendingAction?.kind === "delete"
-            ? `Delete "${pendingAction.definitionName}" from the persisted catalog. This action cannot be undone.`
+            ? pendingAction.definitions.length > 1
+              ? `Delete ${pendingAction.definitions.length} persisted definitions from the catalog. This action cannot be undone.`
+              : `Delete "${pendingAction.definitions[0]?.definitionName}" from the persisted catalog. This action cannot be undone.`
             : ""
         }
-        confirmLabel="Delete definition"
+        confirmLabel={
+          pendingAction?.kind === "delete" && pendingAction.definitions.length > 1
+            ? "Delete selected"
+            : "Delete definition"
+        }
         tone="destructive"
         isPending={mutationStatus.state === "deleting"}
         onCancel={() => {

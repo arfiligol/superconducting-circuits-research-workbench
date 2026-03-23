@@ -808,6 +808,9 @@ describe("circuit definition workspace boundaries", () => {
     expect(schemasPageSource).not.toContain("CircuitDefinitionEditorWorkspace");
     expect(catalogWorkspaceSource).toContain("New Circuit");
     expect(catalogWorkspaceSource).toContain("Persisted schema list");
+    expect(catalogWorkspaceSource).toContain("Select visible");
+    expect(catalogWorkspaceSource).toContain("Delete selected");
+    expect(catalogWorkspaceSource).toContain("removeDefinitions");
     expect(catalogWorkspaceSource).toContain("Open");
     expect(catalogWorkspaceSource).toContain("Clone");
     expect(catalogWorkspaceSource).toContain("Publish");

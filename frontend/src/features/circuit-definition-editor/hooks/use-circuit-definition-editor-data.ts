@@ -104,22 +104,68 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
   }
 
   async function removeDefinition(definitionId: number) {
+    const result = await removeDefinitions([definitionId]);
+    if (result.failedIds.length > 0) {
+      throw new Error("Unable to delete the circuit definition.");
+    }
+  }
+
+  async function removeDefinitions(definitionIds: readonly number[]) {
+    const uniqueDefinitionIds = [...new Set(definitionIds)];
+    if (uniqueDefinitionIds.length === 0) {
+      return {
+        deletedIds: [] as number[],
+        failedIds: [] as number[],
+      };
+    }
+
     setMutationStatus({ state: "deleting", message: null });
 
-    try {
-      await deleteCircuitDefinition(definitionId);
-      await Promise.all([
-        mutate(circuitDefinitionsListKey),
-        mutate(circuitDefinitionsCatalogKey),
+    const settled = await Promise.allSettled(
+      uniqueDefinitionIds.map(async (definitionId) => {
+        await deleteCircuitDefinition(definitionId);
+        return definitionId;
+      }),
+    );
+    const deletedIds = settled
+      .filter((result): result is PromiseFulfilledResult<number> => result.status === "fulfilled")
+      .map((result) => result.value);
+    const failedIds = uniqueDefinitionIds.filter(
+      (definitionId) => !deletedIds.includes(definitionId),
+    );
+
+    await Promise.all([
+      mutate(circuitDefinitionsListKey),
+      mutate(circuitDefinitionsCatalogKey),
+      ...uniqueDefinitionIds.map((definitionId) =>
         mutate(circuitDefinitionDetailKey(definitionId), undefined, { revalidate: false }),
-      ]);
-      setMutationStatus({ state: "success", message: "Circuit definition removed." });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to delete the circuit definition.";
-      setMutationStatus({ state: "error", message });
-      throw error;
+      ),
+    ]);
+
+    if (failedIds.length === 0) {
+      setMutationStatus({
+        state: "success",
+        message:
+          deletedIds.length === 1
+            ? "Circuit definition removed."
+            : `Removed ${deletedIds.length} circuit definitions.`,
+      });
+    } else {
+      setMutationStatus({
+        state: "error",
+        message:
+          deletedIds.length > 0
+            ? `Removed ${deletedIds.length} circuit definitions. ${failedIds.length} could not be deleted.`
+            : uniqueDefinitionIds.length === 1
+              ? "Unable to delete the circuit definition."
+              : "Unable to delete the selected circuit definitions.",
+      });
     }
+
+    return {
+      deletedIds,
+      failedIds,
+    };
   }
 
   async function publishDefinition(definitionId: number) {
@@ -191,6 +237,7 @@ export function useCircuitDefinitionEditorData(selectedDefinitionId: number | "n
     publishDefinition,
     cloneDefinition,
     removeDefinition,
+    removeDefinitions,
     clearMutationStatus,
   };
 }
