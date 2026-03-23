@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import pytest
 from fastapi.testclient import TestClient
 from src.app.domain.tasks import TaskLifecycleUpdate
+from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
 from src.app.infrastructure.runtime import (
     get_rewrite_app_state_repository,
     get_task_service,
@@ -84,7 +85,7 @@ def _simulation_setup_payload(
 
 def _submit_local_simulation(
     *,
-    definition_id: int = 3,
+    definition_id: str = LOCAL_SPACE_RESONATOR_DEFINITION_ID,
     ptc_enabled: bool = True,
     parameter_sweeps: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
@@ -155,7 +156,7 @@ def _trace_key(
     return "|".join(parts)
 
 
-def _create_sweepable_definition(name: str) -> int:
+def _create_sweepable_definition(name: str) -> str:
     response = client.post(
         "/circuit-definitions",
         json={

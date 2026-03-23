@@ -175,7 +175,7 @@ class RewriteCircuitDefinitionRecord(RewriteMetadataBase):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    definition_id: Mapped[int] = mapped_column(nullable=False)
+    definition_id: Mapped[str] = mapped_column(String(36), nullable=False)
     workspace_id: Mapped[str] = mapped_column(String(64), nullable=False)
     visibility_scope: Mapped[str] = mapped_column(String(32), nullable=False)
     lifecycle_state: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -203,7 +203,7 @@ class RewriteCircuitDefinitionRecord(RewriteMetadataBase):
         nullable=False,
         default=list,
     )
-    lineage_parent_id: Mapped[int | None]
+    lineage_parent_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(
         nullable=False,
         server_default=func.current_timestamp(),
@@ -281,7 +281,7 @@ class RewriteTaskRecord(RewriteMetadataBase):
     workspace_slug: Mapped[str] = mapped_column(String(64), nullable=False)
     visibility_scope: Mapped[str] = mapped_column(String(32), nullable=False)
     dataset_id: Mapped[str | None] = mapped_column(String(128))
-    definition_id: Mapped[int | None]
+    definition_id: Mapped[str | None] = mapped_column(String(36))
     summary: Mapped[str] = mapped_column(String(255), nullable=False)
     queue_backend: Mapped[str] = mapped_column(String(64), nullable=False)
     worker_task_name: Mapped[str] = mapped_column(String(64), nullable=False)

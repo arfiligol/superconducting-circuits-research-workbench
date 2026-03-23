@@ -96,7 +96,7 @@ def _simulation_setup_payload(
     }
 
 
-def _create_two_port_sweepable_definition(name: str) -> int:
+def _create_two_port_sweepable_definition(name: str) -> str:
     response = client.post(
         "/circuit-definitions",
         json={
@@ -125,12 +125,12 @@ def _create_two_port_sweepable_definition(name: str) -> int:
         },
     )
     assert response.status_code == 201
-    return int(response.json()["data"]["definition"]["definition_id"])
+    return str(response.json()["data"]["definition"]["definition_id"])
 
 
 def _submit_simulation_and_wait(
     *,
-    definition_id: int,
+    definition_id: str,
     parameter_sweeps: list[dict[str, object]],
 ) -> dict[str, object]:
     response = client.post(

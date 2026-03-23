@@ -10,6 +10,7 @@ from src.app.domain.tasks import (
     TaskLifecycleUpdate,
     TaskSubmissionDraft,
 )
+from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
 from src.app.infrastructure.runtime import (
     get_execution_recovery_service,
     get_rewrite_app_state_repository,
@@ -568,13 +569,13 @@ def test_local_catalog_and_definitions_use_local_visibility_scope() -> None:
     assert datasets[0]["dataset_id"] == "local-dataset-001"
     assert datasets[0]["visibility_scope"] == "local"
     assert datasets[0]["allowed_actions"]["publish"] is False
-    assert definitions[0]["definition_id"] == 3
+    assert definitions[0]["definition_id"] == LOCAL_SPACE_RESONATOR_DEFINITION_ID
     assert definitions[0]["visibility_scope"] == "local"
     assert definitions[0]["allowed_actions"]["publish"] is False
 
 
 def test_publish_definition_is_unavailable_in_local_mode() -> None:
-    response = client.post("/circuit-definitions/3/publish")
+    response = client.post(f"/circuit-definitions/{LOCAL_SPACE_RESONATOR_DEFINITION_ID}/publish")
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "definition_publish_online_only"
@@ -653,7 +654,7 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
         "owner_display_name": "Local Operator",
         "visibility_scope": "local",
         "dataset_id": "local-dataset-001",
-        "definition_id": 3,
+        "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
         "updated_at": "2026-03-17 08:50:00",
         "result_availability": "pending",
         "allowed_actions": {
@@ -1086,7 +1087,7 @@ def test_submit_simulation_task_persists_structured_setup_for_rehydration() -> N
     task = _submit_task_and_optionally_drain(
         {
             "kind": "simulation",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Fluxonium sweep with HB setup.",
             "simulation_setup": simulation_setup,
         },
@@ -1123,7 +1124,7 @@ def test_post_processing_task_persists_upstream_lineage_and_downstream_reference
     upstream_task = _submit_task_and_optionally_drain(
         {
             "kind": "simulation",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Upstream simulation for fit bundle.",
             "simulation_setup": simulation_setup,
         },
@@ -1182,7 +1183,7 @@ def test_submit_simulation_task_rejects_invalid_ptc_payload() -> None:
         "/tasks",
         json={
             "kind": "simulation",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Reject malformed ptc payload.",
             "simulation_setup": simulation_setup,
         },
@@ -1202,7 +1203,7 @@ def test_simulation_task_detail_exposes_disabled_ptc_capability_state() -> None:
         "/tasks",
         json={
             "kind": "simulation",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Simulation with disabled ptc.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=False, mode="manual")
@@ -1233,7 +1234,7 @@ def test_submit_local_simulation_task_executes_to_terminal_with_materialized_res
         {
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Local execution lane proof.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=False, mode="manual")
@@ -1288,7 +1289,7 @@ def test_local_simulation_submit_does_not_leave_queue_stuck_or_worker_summary_mi
         {
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Queue truthfulness proof.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=False, mode="manual")
@@ -1327,7 +1328,7 @@ def test_retry_local_simulation_executes_to_terminal_in_routes() -> None:
         {
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Retry route truthfulness proof.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=False, mode="manual")
@@ -1352,7 +1353,7 @@ def test_runtime_bootstrap_recovers_stranded_local_simulation_task() -> None:
         {
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Bootstrap recovery proof.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=False, mode="manual")
@@ -1423,7 +1424,7 @@ def test_runtime_bootstrap_recovers_stranded_local_post_processing_task() -> Non
         {
             "kind": "simulation",
             "dataset_id": "local-dataset-001",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Upstream simulation for post-processing recovery.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=False, mode="manual")

@@ -10,7 +10,12 @@ from src.app.domain.datasets import (
     TraceBrowseQuery,
 )
 from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
-from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
+from src.app.infrastructure.rewrite_catalog_repository import (
+    COUPLER_DETUNING_DEMO_DEFINITION_ID,
+    FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,
+    FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
+    InMemoryRewriteCatalogRepository,
+)
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
 from src.app.services.dataset_service import DatasetService
@@ -503,7 +508,11 @@ def test_list_circuit_definitions_returns_seeded_summaries() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert [row["definition_id"] for row in payload["data"]["rows"]] == [18, 12, 7]
+    assert [row["definition_id"] for row in payload["data"]["rows"]] == [
+        FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,
+        FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
+        COUPLER_DETUNING_DEMO_DEFINITION_ID,
+    ]
     assert payload["data"]["rows"][0]["name"] == "FloatingQubitWithXYLine"
     assert payload["data"]["rows"][0]["visibility_scope"] == "private"
     assert payload["data"]["rows"][0]["allowed_actions"] == {
@@ -529,11 +538,11 @@ def test_list_circuit_definitions_supports_search_and_sort() -> None:
 
 
 def test_get_circuit_definition_returns_detail_payload() -> None:
-    response = client.get("/circuit-definitions/18")
+    response = client.get(f"/circuit-definitions/{FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID}")
 
     assert response.status_code == 200
     payload = response.json()["data"]
-    assert payload["definition_id"] == 18
+    assert payload["definition_id"] == FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID
     assert payload["workspace_id"] == "ws-device-lab"
     assert payload["visibility_scope"] == "private"
     assert payload["allowed_actions"] == {
@@ -568,7 +577,7 @@ def test_create_update_publish_clone_and_delete_circuit_definition_flow() -> Non
 
     assert created.status_code == 201
     created_payload = created.json()["data"]
-    definition_id = int(created_payload["definition"]["definition_id"])
+    definition_id = created_payload["definition"]["definition_id"]
     assert created_payload["operation"] == "created"
     assert created_payload["definition"]["name"] == "ReadoutPreview"
     assert created_payload["definition"]["visibility_scope"] == "private"
@@ -649,7 +658,7 @@ def test_schemdraw_render_returns_svg_preview_and_diagnostics() -> None:
                 "probe_points": [{"name": "P1", "x": 14.0, "y": 18.0}],
             },
             "linked_schema": {
-                "definition_id": 18,
+                "definition_id": FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,
                 "workspace_id": "ws-device-lab",
                 "name": "FloatingQubitWithXYLine",
             },
@@ -669,7 +678,10 @@ def test_schemdraw_render_returns_svg_preview_and_diagnostics() -> None:
     assert "FloatingQubitWithXYLine" in payload["svg"]
     assert payload["cursor_position"] == {"x": 12.0, "y": 18.0}
     assert payload["probe_points"] == [{"name": "P1", "x": 14.0, "y": 18.0}]
-    assert payload["preview_metadata"]["linked_definition_id"] == 18
+    assert (
+        payload["preview_metadata"]["linked_definition_id"]
+        == FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID
+    )
     assert payload["preview_metadata"]["width"] > 0
     assert payload["preview_metadata"]["height"] > 0
     assert payload["preview_metadata"]["view_box"]

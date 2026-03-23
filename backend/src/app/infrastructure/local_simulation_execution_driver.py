@@ -29,7 +29,7 @@ class TaskListingRepository(TaskDetailRepository, Protocol):
 
 
 class CircuitDefinitionRepository(Protocol):
-    def get_circuit_definition(self, definition_id: int) -> object | None: ...
+    def get_circuit_definition(self, definition_id: str) -> object | None: ...
 
 
 class CharacterizationDatasetRepository(Protocol):

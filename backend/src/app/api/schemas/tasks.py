@@ -111,7 +111,7 @@ class TaskSummaryResponse(BaseModel):
     workspace_slug: str
     visibility_scope: Literal["local", "workspace", "owned"]
     dataset_id: str | None
-    definition_id: int | None
+    definition_id: str | None
     summary: str
 
 
@@ -131,7 +131,7 @@ class TaskSubmissionRequest(BaseModel):
 
     kind: Literal["simulation", "post_processing", "characterization"]
     dataset_id: str | None = Field(default=None, min_length=1)
-    definition_id: int | None = Field(default=None, ge=1)
+    definition_id: str | None = Field(default=None, min_length=1)
     summary: str | None = Field(default=None, min_length=1)
 
 

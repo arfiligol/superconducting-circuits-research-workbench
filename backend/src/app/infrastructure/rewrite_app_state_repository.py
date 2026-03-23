@@ -37,6 +37,11 @@ from src.app.domain.workspace_collaboration import (
     WorkspaceInvitationDelivery,
     WorkspaceMemberRecord,
 )
+from src.app.infrastructure.rewrite_catalog_repository import (
+    FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,
+    FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
+    LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+)
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
     build_result_handle_ref,
@@ -1594,7 +1599,7 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             workspace_slug="local-space",
             visibility_scope="local",
             dataset_id="local-dataset-001",
-            definition_id=3,
+            definition_id=LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             summary="Local Space preview simulation is running.",
             queue_backend="rq_redis",
             worker_task_name="simulation_run_task",
@@ -1621,7 +1626,7 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             workspace_slug="device-lab",
             visibility_scope="workspace",
             dataset_id="fluxonium-2025-031",
-            definition_id=18,
+            definition_id=FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,
             summary="Fluxonium parameter sweep is running.",
             queue_backend="rq_redis",
             worker_task_name="simulation_run_task",
@@ -1702,7 +1707,7 @@ def build_seed_tasks() -> tuple[TaskDetail, ...]:
             workspace_slug="device-lab",
             visibility_scope="owned",
             dataset_id="fluxonium-2025-031",
-            definition_id=12,
+            definition_id=FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
             summary="Private simulation draft remains owner-only.",
             queue_backend="rq_redis",
             worker_task_name="simulation_probe_task",

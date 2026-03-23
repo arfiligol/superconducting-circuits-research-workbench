@@ -136,7 +136,7 @@ class TaskDatasetRepository(Protocol):
 
 
 class TaskCircuitDefinitionRepository(Protocol):
-    def get_circuit_definition(self, definition_id: int) -> object | None: ...
+    def get_circuit_definition(self, definition_id: str) -> object | None: ...
 
 
 class TaskSessionRepository(Protocol):
@@ -271,7 +271,7 @@ class TaskService:
             ),
         )
 
-    def get_circuit_definition(self, definition_id: int | None) -> object | None:
+    def get_circuit_definition(self, definition_id: str | None) -> object | None:
         if definition_id is None:
             return None
         return self._circuit_definition_repository.get_circuit_definition(definition_id)

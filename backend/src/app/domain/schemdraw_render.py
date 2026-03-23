@@ -14,7 +14,7 @@ SchemdrawDiagnosticSource = Literal[
 
 @dataclass(frozen=True)
 class SchemdrawLinkedSchema:
-    definition_id: int
+    definition_id: str
     workspace_id: str
     name: str
     source_hash: str | None = None
@@ -47,7 +47,7 @@ class SchemdrawPreviewMetadata:
     height: int
     view_box: str
     source_line_count: int
-    linked_definition_id: int | None
+    linked_definition_id: str | None
 
 
 @dataclass(frozen=True)

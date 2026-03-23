@@ -7,6 +7,7 @@ VisibilityScope = Literal["local", "private", "workspace"]
 LifecycleState = Literal["active", "archived", "deleted"]
 ValidationSeverity = Literal["error", "warning", "info"]
 ValidationStatus = Literal["valid", "warning", "invalid"]
+DefinitionId = str
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,7 @@ class ValidationSummary:
 
 @dataclass(frozen=True)
 class CircuitDefinitionRecord:
-    definition_id: int
+    definition_id: DefinitionId
     workspace_id: str
     visibility_scope: VisibilityScope
     lifecycle_state: LifecycleState
@@ -52,12 +53,12 @@ class CircuitDefinitionRecord:
     validation_notices: tuple[ValidationNotice, ...]
     validation_summary: ValidationSummary
     preview_artifacts: tuple[str, ...]
-    lineage_parent_id: int | None = None
+    lineage_parent_id: DefinitionId | None = None
 
 
 @dataclass(frozen=True)
 class CircuitDefinitionSummary:
-    definition_id: int
+    definition_id: DefinitionId
     name: str
     created_at: str
     visibility_scope: VisibilityScope
@@ -67,7 +68,7 @@ class CircuitDefinitionSummary:
 
 @dataclass(frozen=True)
 class CircuitDefinitionDetail:
-    definition_id: int
+    definition_id: DefinitionId
     workspace_id: str
     visibility_scope: VisibilityScope
     lifecycle_state: LifecycleState
@@ -84,7 +85,7 @@ class CircuitDefinitionDetail:
     validation_notices: tuple[ValidationNotice, ...]
     validation_summary: ValidationSummary
     preview_artifacts: tuple[str, ...]
-    lineage_parent_id: int | None = None
+    lineage_parent_id: DefinitionId | None = None
 
 
 @dataclass(frozen=True)

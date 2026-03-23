@@ -24,7 +24,7 @@ from src.app.services.service_errors import service_error
 
 
 class SchemdrawDefinitionRepository(Protocol):
-    def get_circuit_definition(self, definition_id: int) -> CircuitDefinitionRecord | None: ...
+    def get_circuit_definition(self, definition_id: str) -> CircuitDefinitionRecord | None: ...
 
 
 class SchemdrawSessionRepository(Protocol):
@@ -360,7 +360,7 @@ def _extract_preview_metadata(
     svg: str,
     *,
     source_line_count: int,
-    linked_definition_id: int | None,
+    linked_definition_id: str | None,
 ) -> SchemdrawPreviewMetadata:
     root = ElementTree.fromstring(svg)
     width = _svg_dimension_to_int(root.attrib.get("width", "0"))

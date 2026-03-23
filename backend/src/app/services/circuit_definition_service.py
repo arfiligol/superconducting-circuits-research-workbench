@@ -13,6 +13,7 @@ from src.app.domain.circuit_definitions import (
     CircuitDefinitionRecord,
     CircuitDefinitionSummary,
     CircuitDefinitionUpdate,
+    DefinitionId,
 )
 from src.app.domain.session import SessionState
 from src.app.infrastructure.audit_records import build_audit_record
@@ -26,7 +27,10 @@ logger = logging.getLogger(__name__)
 class CircuitDefinitionRepository(Protocol):
     def list_circuit_definitions(self) -> Sequence[CircuitDefinitionRecord]: ...
 
-    def get_circuit_definition(self, definition_id: int) -> CircuitDefinitionRecord | None: ...
+    def get_circuit_definition(
+        self,
+        definition_id: DefinitionId,
+    ) -> CircuitDefinitionRecord | None: ...
 
     def create_circuit_definition(
         self,
@@ -39,26 +43,26 @@ class CircuitDefinitionRepository(Protocol):
 
     def update_circuit_definition(
         self,
-        definition_id: int,
+        definition_id: DefinitionId,
         update: CircuitDefinitionUpdate,
     ) -> CircuitDefinitionRecord | None: ...
 
     def publish_circuit_definition(
         self,
-        definition_id: int,
+        definition_id: DefinitionId,
     ) -> CircuitDefinitionRecord | None: ...
 
     def clone_circuit_definition(
         self,
         *,
-        source_definition_id: int,
+        source_definition_id: DefinitionId,
         workspace_id: str,
         owner_user_id: str,
         owner_display_name: str,
         draft: CircuitDefinitionCloneDraft,
     ) -> CircuitDefinitionRecord | None: ...
 
-    def delete_circuit_definition(self, definition_id: int) -> bool: ...
+    def delete_circuit_definition(self, definition_id: DefinitionId) -> bool: ...
 
 
 class CircuitDefinitionSessionRepository(Protocol):
@@ -113,7 +117,7 @@ class CircuitDefinitionService:
             has_more=has_more,
         )
 
-    def get_circuit_definition(self, definition_id: int) -> CircuitDefinitionDetail:
+    def get_circuit_definition(self, definition_id: DefinitionId) -> CircuitDefinitionDetail:
         session = self._session_repository.get_session_state()
         record = self._repository.get_circuit_definition(definition_id)
         if record is None:
@@ -165,7 +169,7 @@ class CircuitDefinitionService:
 
     def update_circuit_definition(
         self,
-        definition_id: int,
+        definition_id: DefinitionId,
         update: CircuitDefinitionUpdate,
     ) -> CircuitDefinitionDetail:
         session = self._session_repository.get_session_state()
@@ -224,7 +228,7 @@ class CircuitDefinitionService:
         )
         return _build_detail(record, self._allowed_actions(record, session))
 
-    def publish_circuit_definition(self, definition_id: int) -> CircuitDefinitionDetail:
+    def publish_circuit_definition(self, definition_id: DefinitionId) -> CircuitDefinitionDetail:
         session = self._session_repository.get_session_state()
         if session.runtime_mode == "local":
             raise service_error(
@@ -273,7 +277,7 @@ class CircuitDefinitionService:
 
     def clone_circuit_definition(
         self,
-        definition_id: int,
+        definition_id: DefinitionId,
         draft: CircuitDefinitionCloneDraft,
     ) -> CircuitDefinitionDetail:
         session = self._session_repository.get_session_state()
@@ -314,7 +318,7 @@ class CircuitDefinitionService:
         )
         return _build_detail(record, self._allowed_actions(record, session))
 
-    def delete_circuit_definition(self, definition_id: int) -> None:
+    def delete_circuit_definition(self, definition_id: DefinitionId) -> None:
         session = self._session_repository.get_session_state()
         current = self._repository.get_circuit_definition(definition_id)
         if current is None:

@@ -509,14 +509,14 @@ def _parse_submission_payload(payload: object) -> TaskSubmissionDraft:
     raw_definition_id = body.get("definition_id")
     if raw_definition_id is None:
         definition_id = None
-    elif isinstance(raw_definition_id, int):
-        definition_id = raw_definition_id
+    elif isinstance(raw_definition_id, str) and len(raw_definition_id.strip()) > 0:
+        definition_id = raw_definition_id.strip()
     else:
         raise service_error(
             400,
             code="request_validation_failed",
             category="validation_error",
-            message="definition_id must be an integer or null.",
+            message="definition_id must be a non-empty string or null.",
         )
     raw_upstream_task_id = body.get("upstream_task_id")
     if raw_upstream_task_id is None:

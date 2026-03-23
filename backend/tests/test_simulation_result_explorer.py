@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.domain.tasks import PostProcessingOperation, TaskLifecycleUpdate
 from src.app.infrastructure import persisted_runtime
+from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
 from src.app.infrastructure.runtime import (
     get_rewrite_app_state_repository,
     get_task_service,
@@ -77,7 +78,7 @@ def _simulation_setup_payload(
 
 def _submit_local_simulation(
     *,
-    definition_id: int = 3,
+    definition_id: str = LOCAL_SPACE_RESONATOR_DEFINITION_ID,
     ptc_enabled: bool,
     parameter_sweeps: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
@@ -131,7 +132,7 @@ def _post_processing_setup_payload(
 
 def _submit_local_post_processing(
     *,
-    definition_id: int = 3,
+    definition_id: str = LOCAL_SPACE_RESONATOR_DEFINITION_ID,
     trace_family: str = "z_matrix",
     representation: str = "real",
     operations: list[dict[str, object]] | None = None,
@@ -496,7 +497,7 @@ def test_pending_or_failed_simulation_task_gets_truthful_explorer_error() -> Non
         json={
             "kind": "simulation",
             "dataset_id": "fluxonium-2025-031",
-            "definition_id": 3,
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             "summary": "Pending online simulation.",
             "simulation_setup": _simulation_setup_payload(
                 ptc=_simulation_ptc_payload(enabled=False)

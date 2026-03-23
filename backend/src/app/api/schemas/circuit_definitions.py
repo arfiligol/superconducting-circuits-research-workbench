@@ -9,7 +9,7 @@ class ValidationNoticeResponse(BaseModel):
 
 
 class CircuitDefinitionSummaryResponse(BaseModel):
-    definition_id: int
+    definition_id: str
     name: str
     created_at: str
     element_count: int

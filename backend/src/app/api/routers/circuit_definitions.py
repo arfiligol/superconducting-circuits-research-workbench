@@ -86,7 +86,7 @@ def list_circuit_definitions(
 
 @definitions_router.get("/{definition_id}")
 def get_circuit_definition(
-    definition_id: int,
+    definition_id: str,
     definition_service: Annotated[
         CircuitDefinitionService,
         Depends(get_circuit_definition_service),
@@ -123,7 +123,7 @@ def create_circuit_definition(
 
 @definitions_router.put("/{definition_id}")
 def update_circuit_definition(
-    definition_id: int,
+    definition_id: str,
     payload: Annotated[object, Body(...)],
     definition_service: Annotated[
         CircuitDefinitionService,
@@ -145,7 +145,7 @@ def update_circuit_definition(
 
 @definitions_router.post("/{definition_id}/publish")
 def publish_circuit_definition(
-    definition_id: int,
+    definition_id: str,
     definition_service: Annotated[
         CircuitDefinitionService,
         Depends(get_circuit_definition_service),
@@ -165,7 +165,7 @@ def publish_circuit_definition(
 
 @definitions_router.post("/{definition_id}/clone")
 def clone_circuit_definition(
-    definition_id: int,
+    definition_id: str,
     definition_service: Annotated[
         CircuitDefinitionService,
         Depends(get_circuit_definition_service),
@@ -188,7 +188,7 @@ def clone_circuit_definition(
 
 @definitions_router.delete("/{definition_id}")
 def delete_circuit_definition(
-    definition_id: int,
+    definition_id: str,
     definition_service: Annotated[
         CircuitDefinitionService,
         Depends(get_circuit_definition_service),
@@ -275,7 +275,7 @@ def _parse_schemdraw_request(payload: object) -> SchemdrawRenderRequest:
     if linked_schema_payload is not None:
         linked_schema_mapping = _as_mapping(linked_schema_payload)
         linked_schema = SchemdrawLinkedSchema(
-            definition_id=_required_int(linked_schema_mapping, "definition_id"),
+            definition_id=_required_string(linked_schema_mapping, "definition_id"),
             workspace_id=_required_string(linked_schema_mapping, "workspace_id"),
             name=_required_string(linked_schema_mapping, "name"),
             source_hash=_optional_string(linked_schema_mapping.get("source_hash")),

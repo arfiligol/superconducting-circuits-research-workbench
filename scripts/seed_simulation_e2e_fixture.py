@@ -57,7 +57,7 @@ def _wait_for_task_ready(
     )
 
 
-def _seed_fixture() -> dict[str, int]:
+def _seed_fixture() -> dict[str, object]:
     reset_runtime_state()
     client = TestClient(app)
     client.cookies.clear()
@@ -90,7 +90,7 @@ def _seed_fixture() -> dict[str, int]:
         },
     )
     definition_response.raise_for_status()
-    definition_id = int(definition_response.json()["data"]["definition"]["definition_id"])
+    definition_id = str(definition_response.json()["data"]["definition"]["definition_id"])
 
     simulation_response = client.post(
         "/tasks",

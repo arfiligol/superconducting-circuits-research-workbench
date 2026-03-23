@@ -2,15 +2,18 @@ import json
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Protocol
+from uuid import uuid4
 
 from src.app.domain.circuit_definitions import (
     CircuitDefinitionCloneDraft,
     CircuitDefinitionDraft,
     CircuitDefinitionRecord,
     CircuitDefinitionUpdate,
+    DefinitionId,
     ValidationNotice,
     ValidationSummary,
 )
@@ -81,6 +84,12 @@ class DurableCircuitDefinitionRepository(Protocol):
     def save_circuit_definition(self, record: CircuitDefinitionRecord) -> None: ...
 
 
+LOCAL_SPACE_RESONATOR_DEFINITION_ID = "c8f08463-bf18-4f8e-a5d5-735f3d7b0d6e"
+FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID = "8f2e5b78-7d1f-4c4f-9f3a-4be4f9e63211"
+FLUXONIUM_READOUT_CHAIN_DEFINITION_ID = "3c412c9f-3304-4efe-9f7f-1d0c9a2b7d44"
+COUPLER_DETUNING_DEMO_DEFINITION_ID = "f4b9ac3e-8ef1-4a8d-b7ae-6f9d24804d1a"
+
+
 class InMemoryRewriteCatalogRepository:
     def __init__(
         self,
@@ -116,11 +125,7 @@ class InMemoryRewriteCatalogRepository:
         self._durable_characterization_repository = durable_characterization_repository
         self._task_repository = task_repository
         self._next_dataset_id = 100
-        all_definition_ids = {
-            *self._circuit_definitions.keys(),
-            *(definition.definition_id for definition in durable_definitions),
-        }
-        self._next_definition_id = (max(all_definition_ids) + 1) if all_definition_ids else 1
+        self._next_definition_sequence = len(self._circuit_definitions) + 1
 
     def list_dataset_details(self) -> list[DatasetDetail]:
         return list(self._datasets.values())
@@ -864,7 +869,10 @@ class InMemoryRewriteCatalogRepository:
     def list_circuit_definitions(self) -> list[CircuitDefinitionRecord]:
         return list(self._circuit_definitions.values())
 
-    def get_circuit_definition(self, definition_id: int) -> CircuitDefinitionRecord | None:
+    def get_circuit_definition(
+        self,
+        definition_id: DefinitionId,
+    ) -> CircuitDefinitionRecord | None:
         return self._circuit_definitions.get(definition_id)
 
     def create_circuit_definition(
@@ -875,26 +883,28 @@ class InMemoryRewriteCatalogRepository:
         owner_display_name: str,
         draft: CircuitDefinitionDraft,
     ) -> CircuitDefinitionRecord:
+        definition_id = _build_definition_id()
+        created_at = _timestamp_for_definition_sequence(self._next_definition_sequence)
         definition = _build_circuit_definition_record(
-            definition_id=self._next_definition_id,
+            definition_id=definition_id,
             workspace_id=workspace_id,
             visibility_scope=draft.visibility_scope,
             owner_user_id=owner_user_id,
             owner_display_name=owner_display_name,
             name=draft.name,
-            created_at=_timestamp_for_definition(self._next_definition_id),
-            updated_at=_timestamp_for_definition(self._next_definition_id),
-            concurrency_token=f"etag_{self._next_definition_id}_1",
+            created_at=created_at,
+            updated_at=created_at,
+            concurrency_token=f"etag_{definition_id}_1",
             source_text=draft.source_text,
         )
         self._circuit_definitions[definition.definition_id] = definition
         self._persist_circuit_definition(definition)
-        self._next_definition_id += 1
+        self._next_definition_sequence += 1
         return definition
 
     def update_circuit_definition(
         self,
-        definition_id: int,
+        definition_id: DefinitionId,
         update: CircuitDefinitionUpdate,
     ) -> CircuitDefinitionRecord | None:
         definition = self._circuit_definitions.get(definition_id)
@@ -910,7 +920,7 @@ class InMemoryRewriteCatalogRepository:
         updated_definition = replace(
             definition,
             name=update.name or definition.name,
-            updated_at=_timestamp_for_definition(definition.definition_id + 100),
+            updated_at=_advance_definition_timestamp(definition.updated_at, minutes=1),
             concurrency_token=_next_concurrency_token(definition.concurrency_token),
             source_text=update.source_text,
             source_hash=_source_hash(update.source_text),
@@ -924,7 +934,7 @@ class InMemoryRewriteCatalogRepository:
 
     def publish_circuit_definition(
         self,
-        definition_id: int,
+        definition_id: DefinitionId,
     ) -> CircuitDefinitionRecord | None:
         definition = self._circuit_definitions.get(definition_id)
         if definition is None:
@@ -932,7 +942,7 @@ class InMemoryRewriteCatalogRepository:
         published_definition = replace(
             definition,
             visibility_scope="workspace",
-            updated_at=_timestamp_for_definition(definition.definition_id + 200),
+            updated_at=_advance_definition_timestamp(definition.updated_at, minutes=2),
             concurrency_token=_next_concurrency_token(definition.concurrency_token),
         )
         self._circuit_definitions[definition_id] = published_definition
@@ -942,7 +952,7 @@ class InMemoryRewriteCatalogRepository:
     def clone_circuit_definition(
         self,
         *,
-        source_definition_id: int,
+        source_definition_id: DefinitionId,
         workspace_id: str,
         owner_user_id: str,
         owner_display_name: str,
@@ -951,31 +961,33 @@ class InMemoryRewriteCatalogRepository:
         source_definition = self._circuit_definitions.get(source_definition_id)
         if source_definition is None:
             return None
+        definition_id = _build_definition_id()
+        created_at = _timestamp_for_definition_sequence(self._next_definition_sequence)
         cloned_definition = _build_circuit_definition_record(
-            definition_id=self._next_definition_id,
+            definition_id=definition_id,
             workspace_id=workspace_id,
             visibility_scope="local" if workspace_id == "local-space" else "private",
             owner_user_id=owner_user_id,
             owner_display_name=owner_display_name,
             name=draft.name or f"{source_definition.name} Copy",
-            created_at=_timestamp_for_definition(self._next_definition_id),
-            updated_at=_timestamp_for_definition(self._next_definition_id),
-            concurrency_token=f"etag_{self._next_definition_id}_1",
+            created_at=created_at,
+            updated_at=created_at,
+            concurrency_token=f"etag_{definition_id}_1",
             source_text=source_definition.source_text,
             lineage_parent_id=source_definition.definition_id,
         )
         self._circuit_definitions[cloned_definition.definition_id] = cloned_definition
         self._persist_circuit_definition(cloned_definition)
-        self._next_definition_id += 1
+        self._next_definition_sequence += 1
         return cloned_definition
 
-    def delete_circuit_definition(self, definition_id: int) -> bool:
+    def delete_circuit_definition(self, definition_id: DefinitionId) -> bool:
         existing = self._circuit_definitions.pop(definition_id, None)
         if existing is not None:
             deleted_definition = replace(
                 existing,
                 lifecycle_state="deleted",
-                updated_at=_timestamp_for_definition(existing.definition_id + 300),
+                updated_at=_advance_definition_timestamp(existing.updated_at, minutes=3),
                 concurrency_token=_next_concurrency_token(existing.concurrency_token),
             )
             self._persist_circuit_definition(deleted_definition)
@@ -988,7 +1000,7 @@ class InMemoryRewriteCatalogRepository:
 
 
 def _build_circuit_definition_record(
-    definition_id: int,
+    definition_id: DefinitionId,
     workspace_id: str,
     visibility_scope: str,
     owner_user_id: str,
@@ -999,7 +1011,7 @@ def _build_circuit_definition_record(
     concurrency_token: str,
     source_text: str,
     *,
-    lineage_parent_id: int | None = None,
+    lineage_parent_id: DefinitionId | None = None,
 ) -> CircuitDefinitionRecord:
     inspection = _inspect_circuit_definition(source_text)
     return CircuitDefinitionRecord(
@@ -1466,9 +1478,21 @@ def _next_concurrency_token(current_token: str) -> str:
     return f"{current_token}_next"
 
 
-def _timestamp_for_definition(definition_id: int) -> str:
-    minute = 10 + (definition_id % 40)
-    return f"2026-03-15T09:{minute:02d}:00Z"
+def _build_definition_id() -> DefinitionId:
+    return str(uuid4())
+
+
+def _timestamp_for_definition_sequence(sequence: int) -> str:
+    minute_offset = max(sequence - 1, 0)
+    timestamp = datetime(2026, 3, 18, 9, 0, tzinfo=UTC) + timedelta(minutes=minute_offset)
+    return timestamp.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _advance_definition_timestamp(current_timestamp: str, *, minutes: int) -> str:
+    parsed = datetime.fromisoformat(current_timestamp.replace("Z", "+00:00"))
+    return (parsed + timedelta(minutes=minutes)).astimezone(UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 def _seed_datasets() -> tuple[DatasetDetail, ...]:
@@ -2914,7 +2938,7 @@ def _seed_circuit_definitions() -> tuple[CircuitDefinitionRecord, ...]:
 }"""
     return (
         _build_circuit_definition_record(
-            definition_id=3,
+            definition_id=LOCAL_SPACE_RESONATOR_DEFINITION_ID,
             workspace_id="local-space",
             visibility_scope="local",
             owner_user_id="local-operator",
@@ -2922,11 +2946,11 @@ def _seed_circuit_definitions() -> tuple[CircuitDefinitionRecord, ...]:
             name="LocalSpaceResonator",
             created_at="2026-03-17T08:15:00Z",
             updated_at="2026-03-17T08:15:00Z",
-            concurrency_token="etag_3_1",
+            concurrency_token=f"etag_{LOCAL_SPACE_RESONATOR_DEFINITION_ID}_1",
             source_text=local_resonator_source,
         ),
         _build_circuit_definition_record(
-            definition_id=18,
+            definition_id=FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,
             workspace_id="ws-device-lab",
             visibility_scope="private",
             owner_user_id="researcher-01",
@@ -2934,11 +2958,11 @@ def _seed_circuit_definitions() -> tuple[CircuitDefinitionRecord, ...]:
             name="FloatingQubitWithXYLine",
             created_at="2026-03-08T18:19:42Z",
             updated_at="2026-03-14T08:30:00Z",
-            concurrency_token="etag_18_3",
+            concurrency_token=f"etag_{FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID}_3",
             source_text=floating_qubit_source,
         ),
         _build_circuit_definition_record(
-            definition_id=12,
+            definition_id=FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
             workspace_id="ws-device-lab",
             visibility_scope="workspace",
             owner_user_id="researcher-01",
@@ -2946,11 +2970,11 @@ def _seed_circuit_definitions() -> tuple[CircuitDefinitionRecord, ...]:
             name="FluxoniumReadoutChain",
             created_at="2026-03-05T11:14:03Z",
             updated_at="2026-03-14T07:42:00Z",
-            concurrency_token="etag_12_2",
+            concurrency_token=f"etag_{FLUXONIUM_READOUT_CHAIN_DEFINITION_ID}_2",
             source_text=readout_chain_source,
         ),
         _build_circuit_definition_record(
-            definition_id=7,
+            definition_id=COUPLER_DETUNING_DEMO_DEFINITION_ID,
             workspace_id="ws-device-lab",
             visibility_scope="workspace",
             owner_user_id="collaborator-02",
@@ -2958,7 +2982,7 @@ def _seed_circuit_definitions() -> tuple[CircuitDefinitionRecord, ...]:
             name="CouplerDetuningDemo",
             created_at="2026-02-25T09:43:18Z",
             updated_at="2026-03-13T16:10:00Z",
-            concurrency_token="etag_7_4",
+            concurrency_token=f"etag_{COUPLER_DETUNING_DEMO_DEFINITION_ID}_4",
             source_text=coupler_demo_source,
         ),
     )

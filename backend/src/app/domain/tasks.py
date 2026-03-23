@@ -453,7 +453,7 @@ class TaskSummary:
     workspace_slug: str
     visibility_scope: TaskVisibilityScope
     dataset_id: str | None
-    definition_id: int | None
+    definition_id: str | None
     summary: str
 
 
@@ -640,7 +640,7 @@ class TaskQueueRow:
     owner_display_name: str
     visibility_scope: TaskVisibilityScope
     dataset_id: str | None
-    definition_id: int | None
+    definition_id: str | None
     updated_at: str
     result_availability: TaskResultAvailability
     allowed_actions: TaskAllowedActions
@@ -710,7 +710,7 @@ class TaskHistoryView:
 class TaskSubmissionDraft:
     kind: TaskKind
     dataset_id: str | None
-    definition_id: int | None
+    definition_id: str | None
     summary: str | None
     simulation_setup: SimulationSetup | None = None
     post_processing_setup: PostProcessingSetup | None = None
@@ -729,7 +729,7 @@ class TaskCreateDraft:
     workspace_slug: str
     visibility_scope: TaskVisibilityScope
     dataset_id: str | None
-    definition_id: int | None
+    definition_id: str | None
     summary: str
     worker_task_name: WorkerTaskName
     request_ready: bool

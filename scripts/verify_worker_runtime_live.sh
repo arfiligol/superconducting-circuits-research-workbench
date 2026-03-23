@@ -19,6 +19,7 @@ export SC_APP_PORT="${SC_APP_PORT:-8010}"
 export SC_APP_BASE_URL="${SC_APP_BASE_URL:-http://${SC_APP_HOST}:${SC_APP_PORT}}"
 APP_URL="$(platform_app_url)"
 APP_PORT="$(platform_app_port)"
+LOCAL_SIMULATION_DEFINITION_ID="c8f08463-bf18-4f8e-a5d5-735f3d7b0d6e"
 
 cleanup() {
   platform_stop_service "$PID_DIR" app "runtime-verify-stop"
@@ -132,7 +133,7 @@ fi
 SIM_RESPONSE="$(submit_task '{
   "kind": "simulation",
   "dataset_id": "local-dataset-001",
-  "definition_id": 3,
+  "definition_id": "'"$LOCAL_SIMULATION_DEFINITION_ID"'",
   "summary": "Runtime verification simulation",
   "simulation_setup": {
     "frequency_sweep": {"start_ghz": 4.0, "stop_ghz": 8.0, "point_count": 1601, "spacing": "linear"},

@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
 from tests.worker_runtime_harness import drain_lane_queue
@@ -122,7 +123,7 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     created_payload = created_response.json()
     assert created_payload["ok"] is True
     created_detail = created_payload["data"]["definition"]
-    created_definition_id = int(created_detail["definition_id"])
+    created_definition_id = created_detail["definition_id"]
     assert created_payload["data"]["operation"] == "created"
     assert created_detail["name"] == "RewriteDefinitionAuthoringSmoke"
     assert created_detail["source_text"] == _sample_definition_source(
@@ -185,7 +186,7 @@ def test_local_definition_persists_across_runtime_reset_and_can_submit_simulatio
 
     assert create_response.status_code == 201
     created_detail = create_response.json()["data"]["definition"]
-    definition_id = int(created_detail["definition_id"])
+    definition_id = created_detail["definition_id"]
 
     reset_runtime_state()
     client.cookies.clear()
@@ -219,3 +220,24 @@ def test_local_definition_persists_across_runtime_reset_and_can_submit_simulatio
     completed = client.get(f"/tasks/{task['task_id']}").json()["data"]
     assert completed["definition_id"] == definition_id
     assert completed["status"] == "completed"
+
+
+def test_simulation_submit_rejects_numeric_definition_id() -> None:
+    switch_response = client.patch("/session/runtime-mode", json={"runtime_mode": "local"})
+    assert switch_response.status_code == 200
+
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "definition_id": 3,
+            "simulation_setup": _simulation_setup_payload(),
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "request_validation_failed"
+    assert payload["error"]["message"] == "definition_id must be a non-empty string or null."
+    visible = client.get(f"/circuit-definitions/{LOCAL_SPACE_RESONATOR_DEFINITION_ID}")
+    assert visible.status_code == 200

@@ -19,7 +19,8 @@ class SqliteCircuitDefinitionRepository:
         with self._session_factory() as session:
             rows = session.scalars(
                 select(RewriteCircuitDefinitionRecord).order_by(
-                    RewriteCircuitDefinitionRecord.definition_id.asc()
+                    RewriteCircuitDefinitionRecord.created_at_iso.asc(),
+                    RewriteCircuitDefinitionRecord.definition_id.asc(),
                 )
             ).all()
             return tuple(_to_record(row) for row in rows)
