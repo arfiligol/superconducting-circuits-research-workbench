@@ -284,6 +284,8 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("Delete Selected");
     expect(rawDataWorkspaceSource).toContain("TraceEditDialog");
     expect(rawDataWorkspaceSource).toContain("ConfirmActionDialog");
+    expect(rawDataWorkspaceSource).toContain("DeleteScopeCard");
+    expect(rawDataWorkspaceSource).toContain("DeleteScopeList");
     expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.edit");
     expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.delete");
     expect(rawDataHookSource).toContain("const [focusedTraceId, setFocusedTraceId] = useState<string | null>");
@@ -301,6 +303,23 @@ describe("page-boundary source contracts", () => {
     expect(rawDataHookSource).toContain("setFocusedTraceId((current) =>");
     expect(rawDataHookSource).toContain("setSelectedTraceIds((current) =>");
     expect(rawDataHookSource).toContain("deletedTraceIds.has(current) ? null : current");
+  });
+
+  it("rebinds the updated backend design row immediately after delete", () => {
+    expect(rawDataHookSource).toContain("await designsQuery.mutate(");
+    expect(rawDataHookSource).toContain("current && result.design");
+    expect(rawDataHookSource).toContain("row.design_id === result.design?.design_id ? result.design : row");
+    expect(rawDataWorkspaceSource).toContain("selectedDesign.trace_count");
+    expect(rawDataWorkspaceSource).toContain("selectedDesign.compare_readiness");
+  });
+
+  it("shows destructive delete scope context for single and batch delete", () => {
+    expect(rawDataWorkspaceSource).toContain("Trace ID");
+    expect(rawDataWorkspaceSource).toContain("Context");
+    expect(rawDataWorkspaceSource).toContain("Delete Scope");
+    expect(rawDataWorkspaceSource).toContain("+{hiddenCount} more selected traces");
+    expect(rawDataHookSource).toContain("trace: {");
+    expect(rawDataHookSource).toContain("traces: selectedTraceRows.map");
   });
 
   it("rebuilds single trace preview as plot and table views over one payload", () => {

@@ -42,11 +42,20 @@ type PendingDeleteRequest =
   | Readonly<{
       kind: "single";
       traceIds: readonly string[];
-      label: string;
+      trace: Readonly<{
+        traceId: string;
+        parameter: string;
+        provenanceSummary: string;
+      }>;
     }>
   | Readonly<{
       kind: "batch";
       traceIds: readonly string[];
+      traces: readonly Readonly<{
+        traceId: string;
+        parameter: string;
+        provenanceSummary: string;
+      }>[];
     }>
   | null;
 
@@ -242,14 +251,19 @@ export function useRawDataBrowserData() {
     setPendingDeleteRequest({
       kind: "single",
       traceIds: [trace.trace_id],
-      label: trace.parameter,
+      trace: {
+        traceId: trace.trace_id,
+        parameter: trace.parameter,
+        provenanceSummary: trace.provenance_summary,
+      },
     });
   }
 
   function requestBatchDeleteSelectedTraces() {
-    const traceIds = deletableVisibleTraceIds.filter((traceId) =>
-      selectedTraceIds.includes(traceId),
+    const selectedTraceRows = traces.filter(
+      (trace) => trace.allowed_actions.delete && selectedTraceIds.includes(trace.trace_id),
     );
+    const traceIds = selectedTraceRows.map((trace) => trace.trace_id);
     if (traceIds.length === 0) {
       return;
     }
@@ -257,6 +271,11 @@ export function useRawDataBrowserData() {
     setPendingDeleteRequest({
       kind: "batch",
       traceIds,
+      traces: selectedTraceRows.map((trace) => ({
+        traceId: trace.trace_id,
+        parameter: trace.parameter,
+        provenanceSummary: trace.provenance_summary,
+      })),
     });
   }
 
@@ -335,6 +354,19 @@ export function useRawDataBrowserData() {
             ? {
                 ...current,
                 rows: current.rows.filter((row) => !deletedTraceIds.has(row.trace_id)),
+              }
+            : current,
+        { revalidate: false },
+      );
+
+      await designsQuery.mutate(
+        (current) =>
+          current && result.design
+            ? {
+                ...current,
+                rows: current.rows.map((row) =>
+                  row.design_id === result.design?.design_id ? result.design : row,
+                ),
               }
             : current,
         { revalidate: false },

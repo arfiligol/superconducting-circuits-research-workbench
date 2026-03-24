@@ -278,15 +278,37 @@ export function RawDataBrowserWorkspace() {
     if (browser.pendingDeleteRequest.kind === "single") {
       return {
         title: "Delete Trace",
-        description: `Delete ${browser.pendingDeleteRequest.label} from this design? This removes the saved trace summary and clears the preview if this trace is focused.`,
+        description:
+          "Delete this saved trace from the current design? This removes the summary row immediately and clears the preview if the focused trace is deleted.",
         confirmLabel: "Delete Trace",
+        details: (
+          <DeleteScopeCard
+            title={browser.pendingDeleteRequest.trace.parameter}
+            items={[
+              {
+                label: "Trace ID",
+                value: browser.pendingDeleteRequest.trace.traceId,
+              },
+              {
+                label: "Context",
+                value: browser.pendingDeleteRequest.trace.provenanceSummary,
+              },
+            ]}
+          />
+        ),
       };
     }
 
     return {
       title: "Delete Selected Traces",
-      description: `Delete ${browser.pendingDeleteRequest.traceIds.length} selected traces from this design? This clears each deleted row from the table and resolves any deleted preview focus safely.`,
+      description: `Delete ${browser.pendingDeleteRequest.traceIds.length} selected traces from this design? This removes each listed row immediately and safely resolves any deleted preview focus.`,
       confirmLabel: `Delete ${browser.pendingDeleteRequest.traceIds.length} Traces`,
+      details: (
+        <DeleteScopeList
+          traces={browser.pendingDeleteRequest.traces}
+          totalCount={browser.pendingDeleteRequest.traceIds.length}
+        />
+      ),
     };
   }, [browser.pendingDeleteRequest]);
 
@@ -741,6 +763,7 @@ export function RawDataBrowserWorkspace() {
           traceDeleteDialog?.description ??
           "Delete the selected traces from this design."
         }
+        details={traceDeleteDialog?.details}
         confirmLabel={traceDeleteDialog?.confirmLabel ?? "Delete Trace"}
         tone="destructive"
         isPending={browser.isDeletePending}
@@ -749,6 +772,72 @@ export function RawDataBrowserWorkspace() {
           void browser.confirmDeleteRequest();
         }}
       />
+    </div>
+  );
+}
+
+function DeleteScopeCard({
+  title,
+  items,
+}: Readonly<{
+  title: string;
+  items: readonly Readonly<{
+    label: string;
+    value: string;
+  }>[];
+}>) {
+  return (
+    <div className="rounded-[0.95rem] border border-border/80 bg-surface px-4 py-4">
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <dl className="mt-3 space-y-2 text-sm">
+        {items.map((item) => (
+          <div key={item.label} className="flex flex-col gap-1">
+            <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              {item.label}
+            </dt>
+            <dd className="break-all text-muted-foreground">{item.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function DeleteScopeList({
+  traces,
+  totalCount,
+}: Readonly<{
+  traces: readonly Readonly<{
+    traceId: string;
+    parameter: string;
+    provenanceSummary: string;
+  }>[];
+  totalCount: number;
+}>) {
+  const visibleTraces = traces.slice(0, 4);
+  const hiddenCount = Math.max(totalCount - visibleTraces.length, 0);
+
+  return (
+    <div className="rounded-[0.95rem] border border-border/80 bg-surface px-4 py-4">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+        Delete Scope
+      </p>
+      <div className="mt-3 space-y-3">
+        {visibleTraces.map((trace) => (
+          <div key={trace.traceId} className="rounded-[0.85rem] border border-border/70 bg-background px-3 py-3">
+            <p className="text-sm font-medium text-foreground">{trace.parameter}</p>
+            <p className="mt-1 break-all text-xs text-muted-foreground">{trace.traceId}</p>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {trace.provenanceSummary}
+            </p>
+          </div>
+        ))}
+        {hiddenCount > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            +{hiddenCount} more selected traces in this delete request.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

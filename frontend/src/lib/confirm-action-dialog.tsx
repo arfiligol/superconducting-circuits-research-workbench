@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { AlertTriangle, LoaderCircle } from "lucide-react";
 
 import { cx } from "@/features/shared/components/surface-kit";
@@ -8,6 +9,7 @@ export type ConfirmActionDialogProps = Readonly<{
   open: boolean;
   title: string;
   description: string;
+  details?: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   tone?: "default" | "destructive";
@@ -20,6 +22,7 @@ export function ConfirmActionDialog({
   open,
   title,
   description,
+  details,
   confirmLabel,
   cancelLabel = "Cancel",
   tone = "default",
@@ -48,6 +51,7 @@ export function ConfirmActionDialog({
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold text-foreground">{title}</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+            {details ? <div className="mt-4">{details}</div> : null}
           </div>
         </div>
 
