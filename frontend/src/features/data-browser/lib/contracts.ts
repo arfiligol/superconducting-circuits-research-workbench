@@ -110,6 +110,53 @@ export type TraceMetadataRow = Readonly<{
   source_kind: TraceSourceKind;
   stage_kind: TraceStageKind;
   provenance_summary: string;
+  allowed_actions: TraceAllowedActions;
+  mutation_policy_summary: string;
+}>;
+
+export type TraceAllowedActions = Readonly<{
+  edit: boolean;
+  delete: boolean;
+}>;
+
+export type TraceEditableMetadata = Readonly<{
+  parameter: string;
+  representation: string;
+  provenance_summary: string;
+}>;
+
+export type TraceImmutableSummary = Readonly<{
+  family: TraceFamily;
+  trace_mode_group: TraceModeGroup;
+  source_kind: TraceSourceKind;
+  stage_kind: TraceStageKind;
+}>;
+
+export type TraceEditDetail = Readonly<{
+  trace_id: string;
+  dataset_id: string;
+  design_id: string;
+  editable_metadata: TraceEditableMetadata;
+  immutable_summary: TraceImmutableSummary;
+  editable_numeric_payload: Readonly<Record<string, unknown>>;
+  allowed_actions: TraceAllowedActions;
+  mutation_policy_summary: string;
+}>;
+
+export type TraceUpdateDraft = Readonly<{
+  parameter?: string | null;
+  representation?: string | null;
+  provenance_summary?: string | null;
+  numeric_payload?: Record<string, unknown> | null;
+}>;
+
+export type TraceUpdateResult = Readonly<{
+  trace: TraceMetadataRow;
+}>;
+
+export type TraceDeleteResult = Readonly<{
+  design: DesignBrowseRow | null;
+  deleted_trace_ids: readonly string[];
 }>;
 
 export type TraceAxis = Readonly<{

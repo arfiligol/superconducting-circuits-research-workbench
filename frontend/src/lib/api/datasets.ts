@@ -1,6 +1,7 @@
 import { apiRequest } from "@/lib/api/client";
 export {
   archiveDataset,
+  batchDeleteTraces,
   createDataset,
   datasetArchiveKey,
   datasetCatalogKey,
@@ -9,7 +10,9 @@ export {
   datasetMetricsKey,
   datasetProfileKey,
   deleteDataset,
+  deleteTrace,
   getDatasetProfile,
+  getTraceEditDetail,
   ingestRawData,
   getTraceDetail,
   listDatasetCatalog,
@@ -17,7 +20,10 @@ export {
   listTaggedCoreMetrics,
   listTraceMetadata,
   traceDetailKey,
+  traceEditDetailKey,
+  traceBatchDeleteKey,
   traceListKey,
+  updateTrace,
   updateDatasetProfile,
 } from "@/features/data-browser/lib/api";
 
@@ -36,7 +42,13 @@ export type {
   RawDataTraceDraft,
   TaggedCoreMetricSummary,
   TraceDetail,
+  TraceDeleteResult,
+  TraceEditDetail,
+  TraceEditableMetadata,
+  TraceImmutableSummary,
   TraceMetadataRow,
+  TraceUpdateDraft,
+  TraceUpdateResult,
 } from "@/features/data-browser/lib/contracts";
 
 import type { DesignBrowseRow } from "@/features/data-browser/lib/contracts";

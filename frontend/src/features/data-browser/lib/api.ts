@@ -13,7 +13,11 @@ import type {
   RawDataIngestionResult,
   TaggedCoreMetricSummary,
   TraceDetail,
+  TraceDeleteResult,
+  TraceEditDetail,
   TraceMetadataRow,
+  TraceUpdateDraft,
+  TraceUpdateResult,
 } from "@/features/data-browser/lib/contracts";
 export {
   buildRawDataBrowseHref,
@@ -107,6 +111,16 @@ export function traceDetailKey(datasetId: string, designId: string, traceId: str
   return `/api/backend/datasets/${encodeURIComponent(datasetId)}/designs/${encodeURIComponent(
     designId,
   )}/traces/${encodeURIComponent(traceId)}`;
+}
+
+export function traceEditDetailKey(datasetId: string, designId: string, traceId: string) {
+  return `${traceDetailKey(datasetId, designId, traceId)}/edit`;
+}
+
+export function traceBatchDeleteKey(datasetId: string, designId: string) {
+  return `/api/backend/datasets/${encodeURIComponent(datasetId)}/designs/${encodeURIComponent(
+    designId,
+  )}/traces/batch-delete`;
 }
 
 export async function listDatasetCatalog(): Promise<PagedRows<DatasetCatalogRow>> {
@@ -240,7 +254,81 @@ export async function getTraceDetail(
   return apiRequest<TraceDetail>(traceDetailKey(datasetId, designId, traceId));
 }
 
+export async function getTraceEditDetail(
+  datasetId: string,
+  designId: string,
+  traceId: string,
+): Promise<TraceEditDetail> {
+  return apiRequest<TraceEditDetail>(traceEditDetailKey(datasetId, designId, traceId));
+}
+
+export async function updateTrace(
+  datasetId: string,
+  designId: string,
+  traceId: string,
+  payload: TraceUpdateDraft,
+): Promise<TraceUpdateResult> {
+  return apiRequest<TraceUpdateResult>(traceDetailKey(datasetId, designId, traceId), {
+    method: "PATCH",
+    body: {
+      parameter: payload.parameter ?? undefined,
+      representation: payload.representation ?? undefined,
+      provenance_summary: payload.provenance_summary ?? undefined,
+      numeric_payload: payload.numeric_payload ?? undefined,
+    },
+  });
+}
+
+export async function deleteTrace(
+  datasetId: string,
+  designId: string,
+  traceId: string,
+): Promise<TraceDeleteResult> {
+  const result = await apiRequest<{
+    design?: TraceDeleteResult["design"];
+    deleted_trace_id?: string;
+    deleted_trace_ids?: readonly string[];
+  }>(traceDetailKey(datasetId, designId, traceId), {
+    method: "DELETE",
+  });
+
+  return normalizeTraceDeleteResult(result);
+}
+
+export async function batchDeleteTraces(
+  datasetId: string,
+  designId: string,
+  traceIds: readonly string[],
+): Promise<TraceDeleteResult> {
+  const result = await apiRequest<{
+    design?: TraceDeleteResult["design"];
+    deleted_trace_ids?: readonly string[];
+  }>(traceBatchDeleteKey(datasetId, designId), {
+    method: "POST",
+    body: {
+      trace_ids: [...traceIds],
+    },
+  });
+
+  return normalizeTraceDeleteResult(result);
+}
+
 function withQuery(path: string, params: URLSearchParams) {
   const query = params.toString();
   return query ? `${path}?${query}` : path;
+}
+
+function normalizeTraceDeleteResult(result: {
+  design?: TraceDeleteResult["design"];
+  deleted_trace_id?: string;
+  deleted_trace_ids?: readonly string[];
+}): TraceDeleteResult {
+  return {
+    design: result.design ?? null,
+    deleted_trace_ids: result.deleted_trace_ids
+      ? [...result.deleted_trace_ids]
+      : result.deleted_trace_id
+        ? [result.deleted_trace_id]
+        : [],
+  };
 }

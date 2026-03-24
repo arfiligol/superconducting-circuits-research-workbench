@@ -10,11 +10,17 @@ import {
   datasetDesignsKey,
   datasetMetricsKey,
   datasetProfileKey,
+  traceBatchDeleteKey,
   traceDetailKey,
+  traceEditDetailKey,
   traceListKey,
 } from "../src/features/data-browser/lib/api";
 import { resolveTracePreviewSemantics } from "../src/features/data-browser/lib/trace-preview";
 import { resolveSelectedDesignId, resolveSelectedTraceId } from "../src/features/data-browser/lib/selection";
+import {
+  resolveEditableNumericGridModel,
+  serializeEditableNumericGridModel,
+} from "../src/features/data-browser/lib/trace-edit-grid";
 import {
   buildUploadFirstIngestionDraft,
   validateUploadFirstCsv,
@@ -75,12 +81,23 @@ describe("data browser api keys", () => {
     ).toBe(
       "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/traces/trace_flux_a_measurement",
     );
+    expect(
+      traceEditDetailKey("fluxonium-2025-031", "design_flux_scan_a", "trace_flux_a_measurement"),
+    ).toBe(
+      "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/traces/trace_flux_a_measurement/edit",
+    );
+    expect(traceBatchDeleteKey("fluxonium-2025-031", "design_flux_scan_a")).toBe(
+      "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/traces/batch-delete",
+    );
   });
 
   it("encodes ids when building nested dataset and trace paths", () => {
     expect(datasetProfileKey("folder/a b")).toBe("/api/backend/datasets/folder%2Fa%20b/profile");
     expect(traceDetailKey("dataset/a", "design b", "trace/c")).toBe(
       "/api/backend/datasets/dataset%2Fa/designs/design%20b/traces/trace%2Fc",
+    );
+    expect(traceEditDetailKey("dataset/a", "design b", "trace/c")).toBe(
+      "/api/backend/datasets/dataset%2Fa/designs/design%20b/traces/trace%2Fc/edit",
     );
   });
 });
@@ -119,6 +136,11 @@ describe("raw-data selection helpers", () => {
       source_kind: "measurement",
       stage_kind: "postprocess",
       provenance_summary: "Measurement · Post-Processed · batch #4",
+      allowed_actions: {
+        edit: true,
+        delete: true,
+      },
+      mutation_policy_summary: "Editable trace with dataset-local delete authority.",
     },
     {
       trace_id: "trace_flux_a_layout",
@@ -131,6 +153,11 @@ describe("raw-data selection helpers", () => {
       source_kind: "layout_simulation",
       stage_kind: "raw",
       provenance_summary: "Layout Simulation · Raw · batch #2",
+      allowed_actions: {
+        edit: true,
+        delete: false,
+      },
+      mutation_policy_summary: "Delete blocked until dependent saved analyses are removed.",
     },
   ] as const;
 
@@ -209,7 +236,7 @@ describe("page-boundary source contracts", () => {
 
   it("keeps raw-data summary-first and metadata-read-only", () => {
     expect(rawDataWorkspaceSource).toContain("Choose a design");
-    expect(rawDataWorkspaceSource).toContain("metadata-only until one row is selected for preview");
+    expect(rawDataWorkspaceSource).toContain("Focused preview stays single-trace");
     expect(rawDataWorkspaceSource).toContain("Single Trace Preview");
     expect(rawDataWorkspaceSource).not.toContain('title="Selected Design Summary"');
     expect(rawDataWorkspaceSource).not.toContain("Active Dataset");
@@ -221,7 +248,7 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("Selected Design");
     expect(rawDataWorkspaceSource).toContain("Browse State");
     expect(rawDataWorkspaceSource).toContain(
-      'grid gap-5 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.1fr)] xl:items-start',
+      'grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.82fr)] xl:items-start',
     );
     expect(rawDataWorkspaceSource).toContain('className="xl:sticky xl:top-5"');
   });
@@ -229,7 +256,7 @@ describe("page-boundary source contracts", () => {
   it("strengthens raw-data search affordance and keeps the wording consistent", () => {
     expect(rawDataWorkspaceSource).toContain("function SearchField");
     expect(rawDataWorkspaceSource).toContain('label="Search Design"');
-    expect(rawDataWorkspaceSource).toContain("Parameter or history");
+    expect(rawDataWorkspaceSource).toContain("Parameter or note");
     expect(rawDataWorkspaceSource).toContain("<Search className=");
   });
 
@@ -253,18 +280,56 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).not.toContain(">Provenance<");
   });
 
+  it("adds row selection and CRUD actions without collapsing preview into batch state", () => {
+    expect(rawDataWorkspaceSource).toContain("Delete Selected");
+    expect(rawDataWorkspaceSource).toContain("TraceEditDialog");
+    expect(rawDataWorkspaceSource).toContain("ConfirmActionDialog");
+    expect(rawDataWorkspaceSource).toContain("DeleteScopeCard");
+    expect(rawDataWorkspaceSource).toContain("DeleteScopeList");
+    expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.edit");
+    expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.delete");
+    expect(rawDataHookSource).toContain("const [focusedTraceId, setFocusedTraceId] = useState<string | null>");
+    expect(rawDataHookSource).toContain("const [selectedTraceIds, setSelectedTraceIds] = useState<readonly string[]>([])");
+    expect(rawDataHookSource).toContain("focusTrace(traceId: string)");
+    expect(rawDataHookSource).toContain("toggleTraceSelection(traceId: string)");
+    expect(rawDataHookSource).toContain("requestBatchDeleteSelectedTraces()");
+    expect(rawDataHookSource).toContain("openEditDialog(traceId: string)");
+  });
+
+  it("keeps focused preview separate from selected rows and cleans up deleted focus safely", () => {
+    expect(rawDataWorkspaceSource).toContain("Focused Trace");
+    expect(rawDataWorkspaceSource).not.toContain("Preview Source");
+    expect(rawDataWorkspaceSource).not.toContain("Preview Series");
+    expect(rawDataHookSource).toContain("setFocusedTraceId((current) =>");
+    expect(rawDataHookSource).toContain("setSelectedTraceIds((current) =>");
+    expect(rawDataHookSource).toContain("deletedTraceIds.has(current) ? null : current");
+  });
+
+  it("rebinds the updated backend design row immediately after delete", () => {
+    expect(rawDataHookSource).toContain("await designsQuery.mutate(");
+    expect(rawDataHookSource).toContain("current && result.design");
+    expect(rawDataHookSource).toContain("row.design_id === result.design?.design_id ? result.design : row");
+    expect(rawDataWorkspaceSource).toContain("selectedDesign.trace_count");
+    expect(rawDataWorkspaceSource).toContain("selectedDesign.compare_readiness");
+  });
+
+  it("shows destructive delete scope context for single and batch delete", () => {
+    expect(rawDataWorkspaceSource).toContain("Trace ID");
+    expect(rawDataWorkspaceSource).toContain("Context");
+    expect(rawDataWorkspaceSource).toContain("Delete Scope");
+    expect(rawDataWorkspaceSource).toContain("+{hiddenCount} more selected traces");
+    expect(rawDataHookSource).toContain("trace: {");
+    expect(rawDataHookSource).toContain("traces: selectedTraceRows.map");
+  });
+
   it("rebuilds single trace preview as plot and table views over one payload", () => {
     expect(rawDataWorkspaceSource).toContain("TracePreviewPlot");
     expect(rawDataWorkspaceSource).toContain("previewMode");
     expect(rawDataWorkspaceSource).toContain("AppSegmentedControl");
     expect(rawDataWorkspaceSource).toContain('ariaLabel="Single trace preview view"');
     expect(rawDataWorkspaceSource).toContain('{ value: "plot", label: "Plot" }');
-    expect(rawDataWorkspaceSource).toContain("Selected Trace");
-    expect(rawDataWorkspaceSource.indexOf("TracePreviewPlot")).toBeLessThan(
-      rawDataWorkspaceSource.indexOf("Preview Source"),
-    );
+    expect(rawDataWorkspaceSource).toContain("Focused Trace");
     expect(rawDataWorkspaceSource).toContain("resolvePreviewHistory");
-    expect(rawDataWorkspaceSource).toContain("overflow-x-auto whitespace-nowrap");
     expect(rawDataWorkspaceSource).toContain("History");
     expect(rawDataWorkspaceSource).not.toContain(
       "Only the selected trace triggers the detail path, so plot and table stay tied to one persisted preview payload at a time.",
@@ -275,9 +340,7 @@ describe("page-boundary source contracts", () => {
 
   it("makes axis semantics explicit instead of mixing point count with units", () => {
     expect(rawDataWorkspaceSource).toContain("X Axis");
-    expect(rawDataWorkspaceSource).toContain("Preview Series");
     expect(rawDataWorkspaceSource).toContain("Point Count");
-    expect(rawDataWorkspaceSource).toContain("previewSemantics.xAxisPointCountLabel");
     expect(rawDataWorkspaceSource).toContain("previewSemantics.tableYAxisLabel");
     expect(rawDataWorkspaceSource).not.toContain("{axis.length} {axis.unit}");
     expect(rawDataWorkspaceSource).not.toContain(">Value<");
@@ -290,10 +353,13 @@ describe("page-boundary source contracts", () => {
     expect(rawDataHookSource).toContain("const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? null");
     expect(rawDataHookSource).toContain("parseRawDataBrowseState(searchParams)");
     expect(rawDataHookSource).toContain("setSelectedDesignId(browseState.designId);");
-    expect(rawDataHookSource).toContain("setSelectedTraceId(browseState.traceId);");
+    expect(rawDataHookSource).toContain("setFocusedTraceId(browseState.traceId);");
     expect(rawDataHookSource).toContain("setDesignSearch(browseState.designQuery ?? \"\");");
-    expect(rawDataHookSource).toContain('activeDatasetId && resolvedDesignId && resolvedTraceId');
-    expect(rawDataHookSource).toContain("getTraceDetail(activeDatasetId, resolvedDesignId, resolvedTraceId)");
+    expect(rawDataHookSource).toContain("getTraceDetail(activeDatasetId, resolvedDesignId, resolvedFocusedTraceId)");
+    expect(rawDataHookSource).toContain("getTraceEditDetail(activeDatasetId, resolvedDesignId, editTraceId)");
+    expect(rawDataHookSource).toContain("updateTrace(activeDatasetId, resolvedDesignId, editTraceId, draft)");
+    expect(rawDataHookSource).toContain("deleteTrace(");
+    expect(rawDataHookSource).toContain("batchDeleteTraces(");
   });
 });
 
@@ -369,6 +435,40 @@ describe("upload-first ingestion helpers", () => {
   });
 });
 
+describe("trace edit grid helpers", () => {
+  it("normalizes tabular payloads and serializes edited cells back into the backend payload shape", () => {
+    const model = resolveEditableNumericGridModel({
+      columns: ["frequency_ghz", "y11_imag"],
+      rows: [
+        [4, 0.11],
+        [4.001, 0.12],
+      ],
+      unit: "GHz",
+    });
+
+    expect(model).not.toBeNull();
+    expect(model?.columns).toEqual(["frequency_ghz", "y11_imag"]);
+    expect(model?.rows).toEqual([
+      ["4", "0.11"],
+      ["4.001", "0.12"],
+    ]);
+
+    expect(
+      serializeEditableNumericGridModel(model!, [
+        ["4.005", "0.21"],
+        ["4.010", "0.24"],
+      ]),
+    ).toEqual({
+      columns: ["frequency_ghz", "y11_imag"],
+      rows: [
+        [4.005, 0.21],
+        [4.01, 0.24],
+      ],
+      unit: "GHz",
+    });
+  });
+});
+
 describe("legacy data-browser route", () => {
   it("redirects to /raw-data", async () => {
     const redirect = vi.fn();
@@ -404,6 +504,11 @@ describe("trace preview semantics helpers", () => {
           source_kind: "measurement",
           stage_kind: "postprocess",
           provenance_summary: "Measurement · Post-Processed · batch #4",
+          allowed_actions: {
+            edit: true,
+            delete: true,
+          },
+          mutation_policy_summary: "Editable trace with dataset-local delete authority.",
         },
       }),
     ).toEqual({
