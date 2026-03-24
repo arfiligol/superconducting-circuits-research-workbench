@@ -21,6 +21,7 @@ from src.app.domain.datasets import (
     RawDataTraceDraft,
     TraceAxis,
     TraceBrowseQuery,
+    TraceUpdateDraft,
 )
 from src.app.infrastructure.request_debug import current_debug_ref
 from src.app.infrastructure.runtime import get_dataset_service
@@ -262,7 +263,7 @@ def list_trace_metadata(
     try:
         resolved_limit = _parse_limit(limit)
         rows = [
-            asdict(row)
+            _serialize_trace_browse_row(row)
             for row in dataset_service.list_trace_metadata(
                 dataset_id,
                 design_id,
@@ -306,15 +307,83 @@ def get_trace_detail(
         detail = dataset_service.get_trace_detail(dataset_id, design_id, trace_id)
     except ServiceError as exc:
         return _service_error_response(exc)
+    return _success_response(data=_serialize_trace_detail(detail))
+
+
+@router.get("/{dataset_id}/designs/{design_id}/traces/{trace_id}/edit")
+def get_trace_edit_detail(
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        detail = dataset_service.get_trace_edit_detail(dataset_id, design_id, trace_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(data=_serialize_trace_edit_detail(detail))
+
+
+@router.patch("/{dataset_id}/designs/{design_id}/traces/{trace_id}")
+def update_trace(
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+    payload: Annotated[object, Body(...)],
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        update = _parse_trace_update_payload(payload)
+        result = dataset_service.update_trace(dataset_id, design_id, trace_id, update)
+    except ServiceError as exc:
+        return _service_error_response(exc)
     return _success_response(
         data={
-            "trace_id": detail.trace_id,
-            "dataset_id": detail.dataset_id,
-            "design_id": detail.design_id,
-            "axes": [asdict(axis) for axis in detail.axes],
-            "preview_payload": detail.preview_payload,
-            "payload_ref": asdict(detail.payload_ref) if detail.payload_ref is not None else None,
-            "result_handles": [asdict(handle) for handle in detail.result_handles],
+            "operation": "updated",
+            "trace": _serialize_trace_browse_row(result.trace),
+        }
+    )
+
+
+@router.delete("/{dataset_id}/designs/{design_id}/traces/{trace_id}")
+def delete_trace(
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        result = dataset_service.delete_trace(dataset_id, design_id, trace_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "deleted",
+            "deleted_trace_id": trace_id,
+            "deleted_count": len(result.deleted_trace_ids),
+            "design": _serialize_design_browse_row(result.design),
+        }
+    )
+
+
+@router.post("/{dataset_id}/designs/{design_id}/traces/batch-delete")
+def batch_delete_traces(
+    dataset_id: str,
+    design_id: str,
+    payload: Annotated[object, Body(...)],
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        trace_ids = _parse_trace_batch_delete_payload(payload)
+        result = dataset_service.delete_traces(dataset_id, design_id, trace_ids)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "deleted",
+            "deleted_trace_ids": list(result.deleted_trace_ids),
+            "deleted_count": len(result.deleted_trace_ids),
+            "design": _serialize_design_browse_row(result.design),
         }
     )
 
@@ -535,6 +604,48 @@ def _serialize_design_browse_row(row: object) -> dict[str, object]:
     return asdict(row)
 
 
+def _serialize_trace_browse_row(row: object) -> dict[str, object]:
+    return {
+        "trace_id": row.trace_id,
+        "dataset_id": row.dataset_id,
+        "design_id": row.design_id,
+        "family": row.family,
+        "parameter": row.parameter,
+        "representation": row.representation,
+        "trace_mode_group": row.trace_mode_group,
+        "source_kind": row.source_kind,
+        "stage_kind": row.stage_kind,
+        "provenance_summary": row.provenance_summary,
+        "allowed_actions": asdict(row.allowed_actions),
+        "mutation_policy_summary": row.mutation_policy_summary,
+    }
+
+
+def _serialize_trace_detail(detail: object) -> dict[str, object]:
+    return {
+        "trace_id": detail.trace_id,
+        "dataset_id": detail.dataset_id,
+        "design_id": detail.design_id,
+        "axes": [asdict(axis) for axis in detail.axes],
+        "preview_payload": detail.preview_payload,
+        "payload_ref": asdict(detail.payload_ref) if detail.payload_ref is not None else None,
+        "result_handles": [asdict(handle) for handle in detail.result_handles],
+    }
+
+
+def _serialize_trace_edit_detail(detail: object) -> dict[str, object]:
+    return {
+        "trace_id": detail.trace_id,
+        "dataset_id": detail.dataset_id,
+        "design_id": detail.design_id,
+        "editable_metadata": asdict(detail.editable_metadata),
+        "immutable_summary": asdict(detail.immutable_summary),
+        "editable_numeric_payload": detail.editable_numeric_payload,
+        "allowed_actions": asdict(detail.allowed_actions),
+        "mutation_policy_summary": detail.mutation_policy_summary,
+    }
+
+
 def _parse_dataset_create_payload(payload: object) -> DatasetCreateDraft:
     body = _as_mapping(payload)
     return DatasetCreateDraft(
@@ -621,6 +732,83 @@ def _parse_raw_data_ingestion_payload(payload: object) -> RawDataIngestionDraft:
         provenance_label=_require_text(body.get("provenance_label"), field="provenance_label"),
         traces=tuple(_parse_raw_trace_payload(item) for item in raw_traces),
     )
+
+
+def _parse_trace_update_payload(payload: object) -> TraceUpdateDraft:
+    body = _as_mapping(payload)
+    if "preview_payload" in body:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=(
+                "preview_payload is preview-only and cannot be submitted "
+                "to the trace edit path."
+            ),
+        )
+    if "axes" in body:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="axes are not directly editable; submit numeric_payload instead.",
+        )
+    numeric_payload = None
+    if "numeric_payload" in body:
+        numeric_payload = body.get("numeric_payload")
+        if not isinstance(numeric_payload, dict):
+            raise service_error(
+                400,
+                code="request_validation_failed",
+                category="validation_error",
+                message="numeric_payload must be an object when provided.",
+            )
+    update = TraceUpdateDraft(
+        parameter=_optional_text(body.get("parameter"), field="parameter"),
+        representation=_optional_text(body.get("representation"), field="representation"),
+        provenance_summary=_optional_text(
+            body.get("provenance_summary"),
+            field="provenance_summary",
+        ),
+        numeric_payload=numeric_payload,
+    )
+    if (
+        update.parameter is None
+        and update.representation is None
+        and update.provenance_summary is None
+        and update.numeric_payload is None
+    ):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=(
+                "Request body must include at least one editable trace field: "
+                "parameter, representation, provenance_summary, or numeric_payload."
+            ),
+        )
+    return update
+
+
+def _parse_trace_batch_delete_payload(payload: object) -> tuple[str, ...]:
+    body = _as_mapping(payload)
+    raw_trace_ids = body.get("trace_ids")
+    if not isinstance(raw_trace_ids, list) or len(raw_trace_ids) == 0:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="trace_ids must be a non-empty array.",
+        )
+    trace_ids = tuple(_require_text(value, field="trace_ids[]") for value in raw_trace_ids)
+    if len(trace_ids) != len(set(trace_ids)):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="trace_ids must not contain duplicates.",
+        )
+    return trace_ids
 
 
 def _parse_raw_trace_payload(payload: object) -> RawDataTraceDraft:

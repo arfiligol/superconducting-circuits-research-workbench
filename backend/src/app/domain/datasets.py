@@ -217,6 +217,28 @@ class TraceMetadataSummary:
 
 
 @dataclass(frozen=True)
+class TraceAllowedActions:
+    edit: bool
+    delete: bool
+
+
+@dataclass(frozen=True)
+class TraceBrowseRow:
+    trace_id: str
+    dataset_id: str
+    design_id: str
+    family: TraceFamily
+    parameter: str
+    representation: str
+    trace_mode_group: TraceModeGroup
+    source_kind: TraceSourceKind
+    stage_kind: TraceStageKind
+    provenance_summary: str
+    allowed_actions: TraceAllowedActions
+    mutation_policy_summary: str
+
+
+@dataclass(frozen=True)
 class TraceBrowseQuery:
     search: str | None = None
     family: TraceFamily | None = None
@@ -241,6 +263,58 @@ class TraceDetail:
     preview_payload: dict[str, object]
     payload_ref: TracePayloadRef | None
     result_handles: tuple[ResultHandleRef, ...]
+
+
+@dataclass(frozen=True)
+class TraceEditableMetadata:
+    parameter: str
+    representation: str
+    provenance_summary: str
+
+
+@dataclass(frozen=True)
+class TraceImmutableSummary:
+    family: TraceFamily
+    trace_mode_group: TraceModeGroup
+    source_kind: TraceSourceKind
+    stage_kind: TraceStageKind
+
+
+@dataclass(frozen=True)
+class TraceEditDetail:
+    trace_id: str
+    dataset_id: str
+    design_id: str
+    editable_metadata: TraceEditableMetadata
+    immutable_summary: TraceImmutableSummary
+    editable_numeric_payload: dict[str, object]
+    allowed_actions: TraceAllowedActions
+    mutation_policy_summary: str
+
+
+@dataclass(frozen=True)
+class TraceMutationPolicy:
+    allowed_actions: TraceAllowedActions
+    summary: str
+
+
+@dataclass(frozen=True)
+class TraceUpdateDraft:
+    parameter: str | None = None
+    representation: str | None = None
+    provenance_summary: str | None = None
+    numeric_payload: dict[str, object] | None = None
+
+
+@dataclass(frozen=True)
+class TraceUpdateResult:
+    trace: TraceBrowseRow
+
+
+@dataclass(frozen=True)
+class TraceDeleteResult:
+    design: DesignBrowseRow
+    deleted_trace_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)

@@ -46,9 +46,17 @@ from src.app.domain.datasets import (
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
     TaggedCoreMetricSummary,
+    TraceAllowedActions,
     TraceAxis,
+    TraceBrowseRow,
     TraceDetail,
+    TraceEditableMetadata,
+    TraceEditDetail,
+    TraceImmutableSummary,
     TraceMetadataSummary,
+    TraceMutationPolicy,
+    TraceUpdateDraft,
+    TraceUpdateResult,
 )
 from src.app.domain.result_traces import ResultTraceSelection, build_trace_parameter
 from src.app.domain.tasks import TaskDetail
@@ -103,6 +111,11 @@ class InMemoryRewriteCatalogRepository:
         self._designs = _seed_designs()
         self._trace_summaries = _seed_trace_summaries()
         self._trace_details = _seed_trace_details()
+        self._trace_edit_payloads = {
+            key: _editable_numeric_payload_from_detail(detail)
+            for key, detail in self._trace_details.items()
+        }
+        self._mutable_trace_keys: set[tuple[str, str, str]] = set()
         self._characterization_analysis_registry = _seed_characterization_analysis_registry()
         self._characterization_run_history = _seed_characterization_run_history()
         self._characterization_results = _seed_characterization_results()
@@ -242,6 +255,13 @@ class InMemoryRewriteCatalogRepository:
                 result_handles=(),
             )
             self._trace_details[(dataset_id, design_id, trace_id)] = detail
+            self._trace_edit_payloads[(dataset_id, design_id, trace_id)] = (
+                _editable_numeric_payload_from_preview_payload(
+                    trace.axes,
+                    trace.preview_payload,
+                )
+            )
+            self._mutable_trace_keys.add((dataset_id, design_id, trace_id))
             trace_rows = [row for row in trace_rows if row.trace_id != trace_id]
             trace_rows.append(summary)
             ingested_trace_rows.append(summary)
@@ -563,6 +583,209 @@ class InMemoryRewriteCatalogRepository:
             design_id,
             trace_id,
         )
+
+    def get_trace_mutation_policy(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> TraceMutationPolicy | None:
+        key = (dataset_id, design_id, trace_id)
+        if key in self._mutable_trace_keys and key in self._trace_details:
+            return TraceMutationPolicy(
+                allowed_actions=TraceAllowedActions(edit=True, delete=True),
+                summary="Manually ingested raw trace.",
+            )
+        if not any(
+            row.trace_id == trace_id
+            for row in self.list_trace_metadata(dataset_id, design_id)
+        ):
+            return None
+        return TraceMutationPolicy(
+            allowed_actions=TraceAllowedActions(edit=False, delete=False),
+            summary=(
+                "Provenance-bearing or system-generated trace; mutate from the "
+                "source workflow."
+            ),
+        )
+
+    def get_trace_edit_detail(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> TraceEditDetail | None:
+        summary = next(
+            (
+                row
+                for row in self.list_trace_metadata(dataset_id, design_id)
+                if row.trace_id == trace_id
+            ),
+            None,
+        )
+        detail = self.get_trace_detail(dataset_id, design_id, trace_id)
+        policy = self.get_trace_mutation_policy(dataset_id, design_id, trace_id)
+        if summary is None or detail is None or policy is None:
+            return None
+        edit_payload = self._trace_edit_payloads.get(
+            (dataset_id, design_id, trace_id),
+            _editable_numeric_payload_from_detail(detail),
+        )
+        return TraceEditDetail(
+            trace_id=detail.trace_id,
+            dataset_id=detail.dataset_id,
+            design_id=detail.design_id,
+            editable_metadata=TraceEditableMetadata(
+                parameter=summary.parameter,
+                representation=summary.representation,
+                provenance_summary=summary.provenance_summary,
+            ),
+            immutable_summary=TraceImmutableSummary(
+                family=summary.family,
+                trace_mode_group=summary.trace_mode_group,
+                source_kind=summary.source_kind,
+                stage_kind=summary.stage_kind,
+            ),
+            editable_numeric_payload=edit_payload,
+            allowed_actions=policy.allowed_actions,
+            mutation_policy_summary=policy.summary,
+        )
+
+    def update_trace(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+        update: TraceUpdateDraft,
+    ) -> TraceUpdateResult | None:
+        key = (dataset_id, design_id, trace_id)
+        if key not in self._mutable_trace_keys:
+            return None
+        current_detail = self._trace_details.get(key)
+        current_edit_payload = self._trace_edit_payloads.get(key)
+        current_rows = list(self._trace_summaries.get((dataset_id, design_id), ()))
+        current_summary = next((row for row in current_rows if row.trace_id == trace_id), None)
+        if current_detail is None or current_summary is None or current_edit_payload is None:
+            return None
+        updated_at = _current_timestamp()
+        updated_edit_payload = (
+            update.numeric_payload if update.numeric_payload is not None else current_edit_payload
+        )
+        updated_preview_payload = _preview_payload_from_numeric_payload(updated_edit_payload)
+        updated_axes = _axes_with_numeric_payload(current_detail.axes, updated_edit_payload)
+        updated_payload_ref = current_detail.payload_ref
+        axis_lengths = _numeric_payload_axis_lengths(updated_edit_payload)
+        if updated_payload_ref is not None and axis_lengths is not None:
+            updated_payload_ref = replace(
+                updated_payload_ref,
+                shape=axis_lengths,
+                chunk_shape=axis_lengths,
+            )
+        updated_detail = replace(
+            current_detail,
+            axes=updated_axes,
+            preview_payload=updated_preview_payload,
+            payload_ref=updated_payload_ref,
+        )
+        updated_summary = replace(
+            current_summary,
+            parameter=(
+                update.parameter if update.parameter is not None else current_summary.parameter
+            ),
+            representation=(
+                update.representation
+                if update.representation is not None
+                else current_summary.representation
+            ),
+            provenance_summary=(
+                update.provenance_summary
+                if update.provenance_summary is not None
+                else current_summary.provenance_summary
+            ),
+        )
+        self._trace_details[key] = updated_detail
+        self._trace_edit_payloads[key] = updated_edit_payload
+        self._trace_summaries[(dataset_id, design_id)] = tuple(
+            sorted(
+                (
+                    updated_summary if row.trace_id == trace_id else row
+                    for row in current_rows
+                ),
+                key=lambda row: row.trace_id,
+            )
+        )
+        self._refresh_design_row(dataset_id, design_id, updated_at=updated_at)
+        self._refresh_dataset(dataset_id, updated_at=updated_at)
+        policy = self.get_trace_mutation_policy(dataset_id, design_id, trace_id)
+        if policy is None:
+            return None
+        return TraceUpdateResult(
+            trace=_build_trace_browse_row(updated_summary, policy),
+        )
+
+    def delete_traces(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_ids: Sequence[str],
+    ) -> tuple[str, ...] | None:
+        keys = tuple((dataset_id, design_id, trace_id) for trace_id in trace_ids)
+        if any(key not in self._mutable_trace_keys for key in keys):
+            return None
+        current_rows = list(self._trace_summaries.get((dataset_id, design_id), ()))
+        if any(
+            key not in self._trace_details
+            or not any(row.trace_id == key[2] for row in current_rows)
+            for key in keys
+        ):
+            return None
+        trace_id_set = {trace_id for _, _, trace_id in keys}
+        for key in keys:
+            self._trace_details.pop(key, None)
+            self._trace_edit_payloads.pop(key, None)
+            self._mutable_trace_keys.discard(key)
+        self._trace_summaries[(dataset_id, design_id)] = tuple(
+            row for row in current_rows if row.trace_id not in trace_id_set
+        )
+        updated_at = _current_timestamp()
+        self._refresh_design_row(dataset_id, design_id, updated_at=updated_at)
+        self._refresh_dataset(dataset_id, updated_at=updated_at)
+        return tuple(trace_ids)
+
+    def _refresh_design_row(
+        self,
+        dataset_id: str,
+        design_id: str,
+        *,
+        updated_at: str,
+    ) -> None:
+        design_rows = list(self._designs.get(dataset_id, ()))
+        current_design = next((row for row in design_rows if row.design_id == design_id), None)
+        if current_design is None:
+            return
+        trace_rows = self._trace_summaries.get((dataset_id, design_id), ())
+        source_coverage = _build_source_coverage(trace_rows)
+        refreshed_design = replace(
+            current_design,
+            source_coverage=source_coverage,
+            compare_readiness=_compare_readiness_for(source_coverage),
+            trace_count=len(trace_rows),
+            updated_at=updated_at,
+        )
+        design_rows = [row for row in design_rows if row.design_id != design_id]
+        design_rows.append(refreshed_design)
+        self._designs[dataset_id] = tuple(sorted(design_rows, key=lambda row: row.design_id))
+
+    def _refresh_dataset(
+        self,
+        dataset_id: str,
+        *,
+        updated_at: str,
+    ) -> None:
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None:
+            return
+        self._datasets[dataset_id] = replace(dataset, updated_at=updated_at)
 
     def get_simulation_result_publication_record(
         self,
@@ -1052,6 +1275,106 @@ def _build_design_id(name: str) -> str:
 
 def _build_trace_id(*, kind: str, parameter: str, index: int) -> str:
     return f"trace_{_slugify(kind)}_{_slugify(parameter)}_{index}"
+
+
+def _current_timestamp() -> str:
+    return datetime.now(UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _build_trace_browse_row(
+    summary: TraceMetadataSummary,
+    policy: TraceMutationPolicy,
+) -> TraceBrowseRow:
+    return TraceBrowseRow(
+        trace_id=summary.trace_id,
+        dataset_id=summary.dataset_id,
+        design_id=summary.design_id,
+        family=summary.family,
+        parameter=summary.parameter,
+        representation=summary.representation,
+        trace_mode_group=summary.trace_mode_group,
+        source_kind=summary.source_kind,
+        stage_kind=summary.stage_kind,
+        provenance_summary=summary.provenance_summary,
+        allowed_actions=policy.allowed_actions,
+        mutation_policy_summary=policy.summary,
+    )
+
+
+def _editable_numeric_payload_from_detail(detail: TraceDetail) -> dict[str, object]:
+    return _editable_numeric_payload_from_preview_payload(detail.axes, detail.preview_payload)
+
+
+def _editable_numeric_payload_from_preview_payload(
+    axes: tuple[TraceAxis, ...],
+    preview_payload: dict[str, object],
+) -> dict[str, object]:
+    axis = axes[0] if len(axes) > 0 else TraceAxis(name="axis", unit="", length=0)
+    points = preview_payload.get("points")
+    if isinstance(points, list):
+        rows = []
+        for point in points:
+            if isinstance(point, (list, tuple)) and len(point) >= 2:
+                rows.append({axis.name: point[0], "value": point[1]})
+        return {
+            "kind": "series_table",
+            "columns": [
+                {"key": axis.name, "label": axis.name.title(), "unit": axis.unit, "role": "axis"},
+                {"key": "value", "label": "Value", "unit": None, "role": "value"},
+            ],
+            "rows": rows,
+        }
+    return {
+        "kind": "series_table",
+        "columns": [
+            {"key": axis.name, "label": axis.name.title(), "unit": axis.unit, "role": "axis"},
+            {"key": "value", "label": "Value", "unit": None, "role": "value"},
+        ],
+        "rows": [],
+    }
+
+
+def _preview_payload_from_numeric_payload(numeric_payload: dict[str, object]) -> dict[str, object]:
+    rows = numeric_payload.get("rows")
+    if not isinstance(rows, list):
+        return {"kind": "sampled_series", "points": []}
+    axis_key = _numeric_payload_axis_key(numeric_payload)
+    points = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if axis_key not in row or "value" not in row:
+            continue
+        points.append([row[axis_key], row["value"]])
+    return {"kind": "sampled_series", "points": points}
+
+
+def _numeric_payload_axis_key(numeric_payload: dict[str, object]) -> str:
+    columns = numeric_payload.get("columns")
+    if isinstance(columns, list):
+        for column in columns:
+            if isinstance(column, dict) and column.get("role") == "axis":
+                key = column.get("key")
+                if isinstance(key, str) and key:
+                    return key
+    return "frequency"
+
+
+def _numeric_payload_axis_lengths(numeric_payload: dict[str, object]) -> tuple[int, ...] | None:
+    rows = numeric_payload.get("rows")
+    if not isinstance(rows, list):
+        return None
+    return (len(rows),)
+
+
+def _axes_with_numeric_payload(
+    axes: tuple[TraceAxis, ...],
+    numeric_payload: dict[str, object],
+) -> tuple[TraceAxis, ...]:
+    lengths = _numeric_payload_axis_lengths(numeric_payload)
+    if lengths is None or len(axes) == 0:
+        return axes
+    return (replace(axes[0], length=lengths[0]), *axes[1:])
 
 
 def _build_source_coverage(
