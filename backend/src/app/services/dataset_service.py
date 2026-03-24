@@ -30,8 +30,10 @@ from src.app.domain.datasets import (
     RawDataIngestionResult,
     TaggedCoreMetricSummary,
     TraceBrowseQuery,
+    TraceBrowseRow,
     TraceDeleteResult,
     TraceDetail,
+    TraceEditDetail,
     TraceMetadataSummary,
     TraceMutationPolicy,
     TraceUpdateDraft,
@@ -114,6 +116,13 @@ class DatasetRepository(Protocol):
         design_id: str,
         trace_id: str,
     ) -> TraceMutationPolicy | None: ...
+
+    def get_trace_edit_detail(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> TraceEditDetail | None: ...
 
     def update_trace(
         self,
@@ -494,7 +503,7 @@ class DatasetService:
         dataset_id: str,
         design_id: str,
         query: TraceBrowseQuery,
-    ) -> list[TraceMetadataSummary]:
+    ) -> list[TraceBrowseRow]:
         self._require_visible_dataset(dataset_id)
         rows = list(self._repository.list_trace_metadata(dataset_id, design_id))
         filtered = rows
@@ -514,7 +523,7 @@ class DatasetService:
             filtered = [row for row in filtered if row.source_kind == query.source_kind]
         if query.trace_mode_group is not None:
             filtered = [row for row in filtered if row.trace_mode_group == query.trace_mode_group]
-        return filtered
+        return [self._build_trace_browse_row(dataset_id, design_id, row) for row in filtered]
 
     def get_trace_detail(
         self,
@@ -524,6 +533,23 @@ class DatasetService:
     ) -> TraceDetail:
         self._require_visible_dataset(dataset_id)
         detail = self._repository.get_trace_detail(dataset_id, design_id, trace_id)
+        if detail is None:
+            raise service_error(
+                404,
+                code="trace_not_found",
+                category="not_found",
+                message="The requested trace is not available in the selected design scope.",
+            )
+        return detail
+
+    def get_trace_edit_detail(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> TraceEditDetail:
+        self._require_visible_dataset(dataset_id)
+        detail = self._repository.get_trace_edit_detail(dataset_id, design_id, trace_id)
         if detail is None:
             raise service_error(
                 404,
@@ -924,7 +950,7 @@ class DatasetService:
                 category="not_found",
                 message="The requested trace is not available in the selected design scope.",
             )
-        allowed = policy.update if allow_update else policy.delete
+        allowed = policy.allowed_actions.edit if allow_update else policy.allowed_actions.delete
         if allowed:
             return
         raise service_error(
@@ -945,11 +971,38 @@ class DatasetService:
             updated_fields.append("representation")
         if update.provenance_summary is not None:
             updated_fields.append("provenance_summary")
-        if update.axes is not None:
-            updated_fields.append("axes")
-        if update.preview_payload is not None:
-            updated_fields.append("preview_payload")
+        if update.numeric_payload is not None:
+            updated_fields.append("numeric_payload")
         return updated_fields
+
+    def _build_trace_browse_row(
+        self,
+        dataset_id: str,
+        design_id: str,
+        row: TraceMetadataSummary,
+    ) -> TraceBrowseRow:
+        policy = self._repository.get_trace_mutation_policy(dataset_id, design_id, row.trace_id)
+        if policy is None:
+            raise service_error(
+                404,
+                code="trace_not_found",
+                category="not_found",
+                message="The requested trace is not available in the selected design scope.",
+            )
+        return TraceBrowseRow(
+            trace_id=row.trace_id,
+            dataset_id=row.dataset_id,
+            design_id=row.design_id,
+            family=row.family,
+            parameter=row.parameter,
+            representation=row.representation,
+            trace_mode_group=row.trace_mode_group,
+            source_kind=row.source_kind,
+            stage_kind=row.stage_kind,
+            provenance_summary=row.provenance_summary,
+            allowed_actions=policy.allowed_actions,
+            mutation_policy_summary=policy.summary,
+        )
 
     def _is_dataset_manageable_in_context(
         self,

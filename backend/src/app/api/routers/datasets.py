@@ -263,7 +263,7 @@ def list_trace_metadata(
     try:
         resolved_limit = _parse_limit(limit)
         rows = [
-            asdict(row)
+            _serialize_trace_browse_row(row)
             for row in dataset_service.list_trace_metadata(
                 dataset_id,
                 design_id,
@@ -310,6 +310,20 @@ def get_trace_detail(
     return _success_response(data=_serialize_trace_detail(detail))
 
 
+@router.get("/{dataset_id}/designs/{design_id}/traces/{trace_id}/edit")
+def get_trace_edit_detail(
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        detail = dataset_service.get_trace_edit_detail(dataset_id, design_id, trace_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(data=_serialize_trace_edit_detail(detail))
+
+
 @router.patch("/{dataset_id}/designs/{design_id}/traces/{trace_id}")
 def update_trace(
     dataset_id: str,
@@ -326,8 +340,7 @@ def update_trace(
     return _success_response(
         data={
             "operation": "updated",
-            "trace": asdict(result.trace),
-            "detail": _serialize_trace_detail(result.detail),
+            "trace": _serialize_trace_browse_row(result.trace),
         }
     )
 
@@ -346,7 +359,7 @@ def delete_trace(
     return _success_response(
         data={
             "operation": "deleted",
-            "trace_id": trace_id,
+            "deleted_trace_id": trace_id,
             "deleted_count": len(result.deleted_trace_ids),
             "design": _serialize_design_browse_row(result.design),
         }
@@ -368,7 +381,7 @@ def batch_delete_traces(
     return _success_response(
         data={
             "operation": "deleted",
-            "trace_ids": list(result.deleted_trace_ids),
+            "deleted_trace_ids": list(result.deleted_trace_ids),
             "deleted_count": len(result.deleted_trace_ids),
             "design": _serialize_design_browse_row(result.design),
         }
@@ -591,6 +604,23 @@ def _serialize_design_browse_row(row: object) -> dict[str, object]:
     return asdict(row)
 
 
+def _serialize_trace_browse_row(row: object) -> dict[str, object]:
+    return {
+        "trace_id": row.trace_id,
+        "dataset_id": row.dataset_id,
+        "design_id": row.design_id,
+        "family": row.family,
+        "parameter": row.parameter,
+        "representation": row.representation,
+        "trace_mode_group": row.trace_mode_group,
+        "source_kind": row.source_kind,
+        "stage_kind": row.stage_kind,
+        "provenance_summary": row.provenance_summary,
+        "allowed_actions": asdict(row.allowed_actions),
+        "mutation_policy_summary": row.mutation_policy_summary,
+    }
+
+
 def _serialize_trace_detail(detail: object) -> dict[str, object]:
     return {
         "trace_id": detail.trace_id,
@@ -600,6 +630,19 @@ def _serialize_trace_detail(detail: object) -> dict[str, object]:
         "preview_payload": detail.preview_payload,
         "payload_ref": asdict(detail.payload_ref) if detail.payload_ref is not None else None,
         "result_handles": [asdict(handle) for handle in detail.result_handles],
+    }
+
+
+def _serialize_trace_edit_detail(detail: object) -> dict[str, object]:
+    return {
+        "trace_id": detail.trace_id,
+        "dataset_id": detail.dataset_id,
+        "design_id": detail.design_id,
+        "editable_metadata": asdict(detail.editable_metadata),
+        "immutable_summary": asdict(detail.immutable_summary),
+        "editable_numeric_payload": detail.editable_numeric_payload,
+        "allowed_actions": asdict(detail.allowed_actions),
+        "mutation_policy_summary": detail.mutation_policy_summary,
     }
 
 
@@ -693,26 +736,32 @@ def _parse_raw_data_ingestion_payload(payload: object) -> RawDataIngestionDraft:
 
 def _parse_trace_update_payload(payload: object) -> TraceUpdateDraft:
     body = _as_mapping(payload)
-    axes: tuple[TraceAxis, ...] | None = None
-    if "axes" in body:
-        raw_axes = body.get("axes")
-        if not isinstance(raw_axes, list) or len(raw_axes) == 0:
-            raise service_error(
-                400,
-                code="request_validation_failed",
-                category="validation_error",
-                message="axes must be a non-empty array when provided.",
-            )
-        axes = tuple(_parse_trace_axis(axis) for axis in raw_axes)
-    preview_payload = None
     if "preview_payload" in body:
-        preview_payload = body.get("preview_payload")
-        if not isinstance(preview_payload, dict):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message=(
+                "preview_payload is preview-only and cannot be submitted "
+                "to the trace edit path."
+            ),
+        )
+    if "axes" in body:
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="axes are not directly editable; submit numeric_payload instead.",
+        )
+    numeric_payload = None
+    if "numeric_payload" in body:
+        numeric_payload = body.get("numeric_payload")
+        if not isinstance(numeric_payload, dict):
             raise service_error(
                 400,
                 code="request_validation_failed",
                 category="validation_error",
-                message="preview_payload must be an object when provided.",
+                message="numeric_payload must be an object when provided.",
             )
     update = TraceUpdateDraft(
         parameter=_optional_text(body.get("parameter"), field="parameter"),
@@ -721,15 +770,13 @@ def _parse_trace_update_payload(payload: object) -> TraceUpdateDraft:
             body.get("provenance_summary"),
             field="provenance_summary",
         ),
-        axes=axes,
-        preview_payload=preview_payload,
+        numeric_payload=numeric_payload,
     )
     if (
         update.parameter is None
         and update.representation is None
         and update.provenance_summary is None
-        and update.axes is None
-        and update.preview_payload is None
+        and update.numeric_payload is None
     ):
         raise service_error(
             400,
@@ -737,7 +784,7 @@ def _parse_trace_update_payload(payload: object) -> TraceUpdateDraft:
             category="validation_error",
             message=(
                 "Request body must include at least one editable trace field: "
-                "parameter, representation, provenance_summary, axes, or preview_payload."
+                "parameter, representation, provenance_summary, or numeric_payload."
             ),
         )
     return update
