@@ -12,7 +12,7 @@ owner: docs-team
 audience: team
 scope: 系統目前 published canonical contracts 的 owner、SoT 與主要消費者
 version: v0.10.0
-last_updated: 2026-03-23
+last_updated: 2026-03-24
 updated_by: codex
 ---
 
@@ -33,7 +33,7 @@ updated_by: codex
 | Contract | Canonical owner | Source of truth | Primary consumers | Compatibility rule |
 |---|---|---|---|---|
 | App Runtime Modes | app/shared + backend + frontend | [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md), [App / Frontend / Header](../app/frontend/shared-shell/header.md), [App / Frontend / Auth Entry](../app/frontend/shared-shell/auth-entry.md) | shell, auth entry, session management | local / online 必須是同一個 App 的兩種 mode，不可分叉成兩套產品 |
-| Circuit Definition / Netlist | `sc_core` + app/backend definition surface | [Data Formats / Circuit Netlist](../data-formats/circuit-netlist.md), [App / Backend / Circuit Definitions](../app/backend/circuit-definitions.md) | backend, CLI, definition workflows, schemdraw, simulation workflows, task binding | persisted schema identity is UUIDv4-only opaque `definition_id`；no numeric / dual-ID compatibility |
+| Circuit Definition / Netlist | `sc_core` + app/backend definition surface | [Data Formats / Circuit Netlist](../data-formats/circuit-netlist.md), [App / Backend / Circuit Definitions](../app/backend/circuit-definitions.md) | backend, CLI, definition workflows, schemdraw, simulation workflows, task binding | persisted schema identity is UUIDv4-only opaque `definition_id`；no numeric / dual-ID compatibility；backend metadata DB versioning is Alembic-governed and breaking identity upgrades must land as Alembic revisions |
 | App Session / Workspace Context | app/shared + backend | [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Shared / Identity & Workspace Model](../app/shared/identity-workspace-model.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md) | frontend shell, workspace pages | active dataset / workspace semantics 必須跨頁一致；mode switch 必須清掉舊 context |
 | App Resource Ownership / Visibility | app/shared + backend | [App / Shared / Resource Ownership & Visibility](../app/shared/resource-ownership-and-visibility.md), [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md) | datasets, definitions, tasks, results, audit logging | 每筆 resource 只屬於一個 workspace；local mode 以 implicit local workspace 保持相容 |
 | App Authentication / Authorization Context | app/shared + backend | [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Shared / Authentication & Authorization](../app/shared/authentication-and-authorization.md) | Header user menu, task queue controls, backend session surface, admin surfaces | auth / authz 只在 online mode 強制；capability shape 仍需保持可解讀 |
