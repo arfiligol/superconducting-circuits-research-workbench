@@ -1,292 +1,95 @@
 # Local Mode Research Usability Sprint
 
-This file is an execution overlay for the current planning baseline.
-It does not replace `Plans/plan-artifact-v1.md`.
-Its purpose is narrower: drive the rewrite to a Local Mode state where one researcher can complete a real research loop without needing Online Mode.
+This file is the remaining execution overlay for Local Mode research usability.
+It does not replace `docs/reference/**`.
+It exists only to track the still-open product work after the major simulation, post-processing, save-traces, characterization, UUID-identity, and workflow-test slices already landed on `main`.
 
 ## 0) Task Information
 
 - Agent: `Planning Agent`
 - Task ID / Topic: `L8-Local-Mode-Research-Usability`
-- Status: `Active planning checkpoint 2026-03-19`
-
-## 0.1) Execution Checkpoint (2026-03-19)
-
-- Merged on `main`:
-  - backend explicit dataset-scoped design creation
-  - simulation publication support for explicit `design_id` targets
-  - frontend `Save to Design` adoption with design dropdown + `New Design` dialog
-  - simulation-result task-surface cleanup that removes the misleading task-heavy wall
-  - backend characterization submit parsing, local runner, and persisted result reconstruction
-  - frontend characterization run workbench for the first Local Mode runnable analysis path
-  - characterization attach/recovery state restoration for explicit attached-task flows
-- Immediate consequence:
-  - `LM1` is now effectively merged on `main` across backend and frontend
-  - `LM2` is merged far enough to materially clean the page and remove misleading task wording
-  - `LM4` is now merged for the first runnable path
-  - `LM5` is partially merged via `admittance_extraction`
-  - the next active needs shift to `LM3` raw-data continuity/copy truthfulness and `LM6` live end-to-end Local Mode verification
-
-## 0.2) Execution Checkpoint (2026-03-20)
-
-- New product correction recorded:
-  - `Simulation Result` and `Post Processing Result` should save the current selected trace, not bulk-publish the whole task bundle
-  - `Post Processing Setup` should no longer own `Raw / PTC` source selection
-  - `Post Processing Result` should own result-source browsing and expose `Raw` and `PTC` truthfully
-- Planning consequence:
-  - previous `Save to Design` completion on `main` is no longer the final product model
-  - the next active execution slice is now the result-browse/current-trace-save correction
-  - see `Plans/result-browse-current-trace-save-model.md`
-
-## 0.3) Execution Checkpoint (2026-03-20 merge-pass)
-
-- Merged on `main`:
-  - backend trace-scoped result publication via explorer `trace_key`
-  - frontend explorer-local `Save Current Trace` for `Simulation Result`
-  - frontend explorer-local `Save Current Trace` for `Post Processing Result`
-  - `Post Processing Setup` re-scoped to process authoring only
-  - `Post Processing Result` re-scoped to authoritative `Raw / PTC` result browsing
-  - merge-pass frontend client fix to use the new trace-scoped publish route
-- Immediate consequence:
-  - the result-browse/current-trace-save correction is now merged on `main`
-  - `Simulation Result` and `Post Processing Result` now follow the same trace-first save model
-  - the next active needs shift back to `LM3` raw-data continuity/copy truthfulness and `LM6` live end-to-end Local Mode verification
+- Status: `Active backlog cleanup 2026-03-24`
 
 ## 1) Goal
 
-- Reach a Local Mode workflow where a researcher can:
-  1. choose a circuit definition and run a simulation
-  2. save the useful simulation result into an explicit design inside the active dataset
-  3. open the saved traces in Raw Data
-  4. choose the same design in Characterization
-  5. run at least one basic characterization analysis
-  6. inspect the persisted result and apply identify tags when needed
+Reach a Local Mode workflow where one researcher can complete a truthful research loop without relying on Online Mode:
 
-## 2) Scope
+1. choose a circuit definition and run a simulation
+2. browse simulation and post-processing results
+3. save visible traces into a design inside the active dataset
+4. open the saved traces in Raw Data
+5. select the same design in Characterization
+6. run a real analysis
+7. reopen the persisted result after refresh and continue working
 
-### In Scope
+## 2) Already Landed On `main`
 
-- `Circuit Simulation`
-- `Raw Data`
-- `Characterization`
-- Local shell/task behavior only where it directly affects the research workflow
+- worker-backed local runtime with queue-backed submit path
+- simulation result explorer and post-processing result explorer
+- `Save Traces` visible-trace publication model
+- post-processing browse/source correction
+- first runnable Local Mode characterization path: `admittance_extraction`
+- backend integration coverage and frontend browser smoke coverage for the simulation workflow
+- schema identity UUIDv4 cutover across backend, frontend, docs, and DB migration
 
-### Out of Scope For This Sprint
+## 3) Remaining Product Work
 
-- `Online Mode`
-- auth/session provider decisions
-- workspace collaboration
-- generic task-management expansion inside workflow pages
-- large page-local infrastructure diagnostics
+### LM3 Raw Data continuity and copy truthfulness
 
-## 3) Current Verified State
+- Goal:
+  make saved traces feel obvious and truthful once the user opens `Raw Data`.
+- Still open:
+  - ensure saved-trace continuity is easy to follow from `Circuit Simulation` into `Raw Data`
+  - correct any UI copy that implies backend search/filter capability the backend does not actually support
+  - keep the surface compact and browse-first
 
-### Already usable enough to build from
+### LM6 Live Local Mode end-to-end verification
 
-- Local shell/runtime shape already exists and follows the `Local Mode` baseline closely enough to keep the user inside one app shell.
-- `Circuit Simulation` already supports simulation submission, attached run recovery, result exploration, and persisted result publication at the backend contract level.
-- Persisted simulation publication already materializes dataset/design-owned traces that the Raw Data backend can browse.
-- `Raw Data` already has a design list, trace-summary list, and single-trace preview flow.
-- `Characterization` already has:
-  - design browse
-  - persisted result list
-  - run history
-  - result detail
-  - identify/tagging
+- Goal:
+  prove the real Local Mode loop against the live backend/runtime, not only seeded or partial smoke paths.
+- Still open:
+  - live Redis + `sc-app` + workers browser-driven flow
+  - submit simulation from the UI
+  - wait for completion
+  - submit post-processing from the UI
+  - browse result
+  - save traces
+  - reopen in Raw Data
+  - run Characterization and reopen persisted result
 
-### Current main-branch gaps
+### LM7 Characterization durable tagging continuity
 
-#### 1. Explorer-local current-trace save is now merged for `Simulation Result` and `Post Processing Result`
+- Goal:
+  ensure newly generated local characterization results preserve tagging/identify continuity after refresh and reopen.
+- Still open:
+  - verify newly created local results keep tagging state across persisted reload
+  - confirm the behavior in real integrated flow, not only in-session state
 
-- `main` now supports the corrected result-save model:
-  - explorer-local `Save Current Trace`
-  - existing design selection + `New Design`
-  - publish by explicit `design_id`
-  - trace-scoped backend publication via stable explorer `trace_key`
-- `Post Processing Setup` no longer owns `Raw / PTC`; Stage 5 now owns result-source browsing.
-- The active remaining concern is continuity:
-  - saved traces should feel obvious and truthful when opened in `Raw Data`
-  - live integrated verification still needs to prove the full loop against the real backend
+### LM8 Next characterization analysis path
 
-#### 2. Simulation task presentation is improved, but global task-selection work remains open
+- Goal:
+  expand beyond `admittance_extraction` with one additional research-useful runnable analysis.
+- Still open:
+  - choose the next analysis based on actual research value
+  - keep unsupported analyses truthful instead of implying they are runnable
 
-- `main` no longer shows the previous task-heavy summary wall in `Simulation Result`.
-- Misleading `View Task` wording has been removed in favor of truth-based attach wording.
-- Remaining gap:
-  - page-level task presentation is cleaner, but `Global Context` still does not yet own the broader task selection / inspection flow the user wants
-  - compatible task switching across workflow pages remains a later shell-and-workflow integration slice
+## 4) Non-blocking UX Follow-ups
 
-#### 3. Raw Data continuity is partially present, but the cleanup slice is not final on `main`
+- `Global Context` may later own deeper task browsing/switching for compatible simulation tasks.
+- This is still a valid direction, but it is not the main blocker for the Local Mode research loop.
 
-- Main already has the improved top-down layout, but trace-summary filter copy and density cleanup are still unfinished on `main`.
-- The reviewed frontend slice improves this area, but one copy mismatch remains:
-  - the new placeholder suggests search by `source` and `trace ID`
-  - backend search still filters by `parameter` and `provenance_summary` only
+## 5) Recommended Execution Order
 
-#### 4. Characterization is now runnable, but the first shipped path is intentionally narrow
+1. `LM3` Raw Data continuity and copy truthfulness
+2. `LM6` live Local Mode end-to-end verification
+3. `LM7` characterization durable tagging continuity
+4. `LM8` next runnable characterization analysis
 
-- The rewrite implementation now supports the first complete Local Mode flow:
-  - `Choose Design -> Select Traces -> Run Analysis -> Review Latest Run -> Review Persisted Result`
-- The shipped runnable analysis path is currently:
-  - `Admittance Extraction`
-- The characterization processor is now configured in Local Mode and no longer reports `offline/not_configured/capacity 0`.
-- Remaining gaps are narrower and more concrete:
-  - only `admittance_extraction` is runnable today
-  - live browser verification against a real backend still needs an end-to-end pass
-  - newly generated local characterization results can be tagged in-session, but durable tagging continuity for those generated results still needs follow-up validation
+## 6) Exit Condition
 
-## 4) Planning Judgement
+This planning note can be retired once:
 
-- The current formal baseline in `Plans/plan-artifact-v1.md` is still dominated by session/auth/workspace rebaseline work.
-- That baseline remains valid as the broad rewrite plan.
-- For near-term product value, Local Mode research usability should now be treated as the active execution focus for workflow surfaces.
-- The fastest path is not to build more shell/task UI first.
-- The fastest path is to complete the actual research loop first, while keeping shell-owned context in the shell.
-
-## 5) Local Mode Research Loop Definition
-
-### The loop is considered complete only when all of the following are true
-
-1. A simulation result can be saved into an explicitly chosen design in the active dataset.
-2. Creating a new design does not rely on typing the final target name into the main card.
-3. The saved design appears in Raw Data immediately and is easy to open.
-4. Characterization can select that design and submit at least one basic analysis.
-5. Characterization results persist and can be reopened after refresh.
-6. Workflow pages remain result-first and analysis-first, not task-wall-first.
-
-## 6) Implementation Slices
-
-### LM1 Simulation save target finalization
-
-- Goal: replace the current free-text save model with an explicit design-target workflow.
-- Required behavior:
-  - existing designs come from the active dataset browse model
-  - the save card uses a dropdown for design selection
-  - `New Design` opens a small dialog
-  - dialog creation returns a real design row that becomes selectable immediately
-  - the main save action publishes by `design_id`, not by guessed slug
-- Backend status:
-  - delivered on `main`
-- Frontend status:
-  - delivered on `main`
-- Mainline result:
-  - the simulation publication flow now uses a design dropdown
-  - `New Design` uses a dialog-backed explicit create flow
-  - publish-by-`design_id` is the primary user path
-
-### LM2 Simulation task-surface cleanup
-
-- Goal: make `Simulation Result` read as a clean workflow stage instead of a task dashboard.
-- Required behavior:
-  - remove or demote `View Task` from the page unless it truly opens a distinct task surface
-  - shrink page-local task state to concise tags or short inline metadata
-  - move task switching and deeper task inspection into `Global Context`
-  - keep `SimulationResultExplorer` as the visual primary surface
-- Status on `main`:
-  - partially merged
-  - the page is materially cleaner and the misleading task-heavy wall is removed
-  - deeper `Global Context` ownership of task switching still remains for a later slice
-
-### LM3 Raw Data continuity and density cleanup
-
-- Goal: make published simulation output visibly arrive in Raw Data without extra interpretation cost.
-- Required behavior:
-  - compact trace-summary labels and filters
-  - correct the search placeholder to match backend truth
-  - preserve the master-detail structure already on `main`
-  - provide a clear path from saved simulation result to the saved design in Raw Data
-
-### LM4 Characterization runnable workflow
-
-- Goal: turn Characterization from a persisted-result browser into a runnable Local Mode analysis workbench.
-- Required behavior:
-  - choose design from the active dataset
-  - choose compatible traces
-  - choose analysis
-  - provide only the minimum config fields needed for that analysis
-  - submit a characterization task
-  - show compact latest-run state
-  - reopen persisted results and tagging after completion
-- Required cross-layer work:
-  - add characterization submission contract to frontend typing
-  - add characterization submission parsing/domain contract on the backend
-  - keep latest-run state compact and shell-compatible
-- Backend status:
-  - delivered on `main`
-- Frontend status:
-  - delivered on `main`
-- Mainline result:
-  - Characterization is now run-first in Local Mode
-  - the page can choose a saved design, select traces, choose an analysis, run it, and reopen the completed result
-  - attach/recovery state now restores the characterization setup from task detail
-
-### LM5 Characterization minimum analysis set
-
-- Goal: land a small but real analysis set that is enough for Local Mode research work.
-- Planning direction:
-  - first runnable candidate should be `Admittance Extraction`
-    - it already exists in the rewrite characterization registry, run-history fixtures, and persisted result detail fixtures
-  - second candidate should be chosen by reconciling rewrite and NiceGUI legacy value
-    - likely candidates to review:
-      - `S21 Resonance Fit`
-      - `SQUID Fitting`
-      - `Y11 Response Fit`
-      - current rewrite-side `Sideband Comparison`
-- Rule:
-  - do not try to port every legacy analysis in one slice
-  - ship one stable analysis path first, then add the next most research-useful path
-- Status on `main`:
-  - partially delivered
-  - `admittance_extraction` is runnable
-  - remaining characterization analyses must stay truthful about unavailable or unsupported status
-
-### LM6 Local Mode research verification
-
-- Goal: verify the end-to-end research loop in Local Mode, not only isolated UI pieces.
-- Required checks:
-  - simulation run -> save to design -> raw data browse
-  - raw data design -> characterization selection
-  - characterization run -> persisted result detail -> identify tagging
-  - refresh recovery for saved design and persisted characterization result
-  - live browser verification against the real backend contract, not only route-mocked UI smoke
-
-## 7) Recommended Execution Order
-
-1. `LM3` raw-data continuity + copy truthfulness
-2. `LM6` Local Mode end-to-end verification on the live backend
-3. characterization follow-up for durable tagging continuity on newly generated local results
-4. `LM5` expansion to the next research-useful runnable analysis path
-
-## 8) Immediate Next Implementation Recommendation
-
-- The result-browse/current-trace-save correction is now merged on `main`.
-- The next implementation should move to `LM3` and `LM6`.
-- Reason:
-  - researchers can now save the current selected trace, but the saved-trace continuity in `Raw Data` still needs a cleaner, more truthful surface
-  - the Local Mode loop still needs one real browser pass against the live backend rather than mocked route smoke
-- Concrete target:
-  - clean up raw-data trace summary wording and saved-trace continuity
-  - run a live end-to-end verification:
-    - simulation run
-    - current-trace save
-    - raw-data open
-    - characterization run
-    - persisted result recovery after refresh
-
-## 9) Notes On Existing Reviewed Frontend Delivery
-
-- Reviewed commit:
-  - `7e815bac29e6de513e17fe525419a6954232a767`
-- Current judgement:
-  - useful reference for trace-summary cleanup
-  - no longer the active reference for simulation save-target UX now that `L8` is merged on `main`
-  - its remaining planning value is mainly the Raw Data cleanup direction, not the final `Save to Design` implementation
-
-## 10) Verification Commands
-
-- Frontend:
-  - `npm run typecheck --prefix frontend`
-  - `npm run test --prefix frontend`
-- Backend:
-  - `cd backend && uv run pytest -q`
-  - `cd backend && uv run ruff check`
+- the live Local Mode loop is browser-verified end to end
+- Raw Data continuity is truthful and low-friction
+- characterization tagging continuity for generated local results is verified
+- the next characterization analysis path is either shipped or explicitly deprioritized
