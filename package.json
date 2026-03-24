@@ -10,7 +10,7 @@
     "openapi:export": "cd backend && uv run python ../scripts/export_openapi.py",
     "openapi:check": "cd backend && uv run python ../scripts/check_openapi_drift.py",
     "rewrite:install": "npm run platform:install",
-    "rewrite:check": "npm run platform:check",
+    "rewrite:check": "./scripts/rewrite_check.sh",
     "rewrite:build": "npm run platform:build",
     "rewrite:dev": "npm run platform:dev",
     "rewrite:stop": "npm run platform:stop",

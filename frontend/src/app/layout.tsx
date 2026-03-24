@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { Providers } from "@/components/providers";
@@ -17,7 +18,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Providers>{children}</Providers>
+        <Suspense fallback={<div className="min-h-screen bg-app" />}>
+          <Providers>{children}</Providers>
+        </Suspense>
       </body>
     </html>
   );

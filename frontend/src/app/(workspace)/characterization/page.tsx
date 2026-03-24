@@ -4,7 +4,13 @@ import { CharacterizationWorkspace } from "@/features/characterization/component
 
 export default function CharacterizationPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <div className="rounded-[1rem] border border-border bg-card px-5 py-5 text-sm text-muted-foreground">
+          Loading characterization workspace...
+        </div>
+      }
+    >
       <CharacterizationWorkspace />
     </Suspense>
   );

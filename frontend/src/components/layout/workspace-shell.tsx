@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Menu } from "lucide-react";
 
 import { WorkspaceHeader } from "@/components/layout/workspace-header";
@@ -103,7 +103,9 @@ export function WorkspaceShell({ children }: WorkspaceShellProps) {
             <Menu size={18} strokeWidth={2} />
           </button>
 
-          <WorkspaceHeader />
+          <Suspense fallback={<div className="min-w-0 flex-1" />}>
+            <WorkspaceHeader />
+          </Suspense>
         </div>
       </header>
 
