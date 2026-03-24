@@ -45,7 +45,105 @@ using .ReusableComponents
 
 const GHz = 1e9
 const mm = 1e-3
+const um = 1e-6
 const fF = 1e-15
+
+# =============================================================================
+# 2A. User-Editable Coupled-Window Parameterization
+# =============================================================================
+#
+# We support two equivalent input styles for the coupled window:
+#
+# 1. `:modal`
+#    Provide:
+#    - Zeven
+#    - Zodd
+#    - neven
+#    - nodd
+#
+# 2. `:q2d_rlgc`
+#    Provide:
+#    - L matrix per unit length
+#    - C matrix per unit length from Q2D / 2D Extractor
+#
+# Both represent the same coupled-line physics.
+# The difference is only the parameterization:
+#
+# - modal view is natural for microwave design / EM modal extraction
+# - mutual RLGC view is natural for circuit netlist stamping
+#
+# In the Q2D path below, we assume the capacitance matrix is the `cG` / Maxwell
+# form with negative off-diagonal terms, and convert it into the positive
+# cross-capacitance mutual form required by `CoupledWindowSpec`.
+
+const COUPLED_WINDOW_INPUT_MODE = :q2d_rlgc
+# valid values:
+#   :modal
+#   :q2d_rlgc
+
+# Main geometry knobs
+const LEFT_READOUT_LENGTH_M = 3462.732 * um
+const PURCELL_FILTER_LENGTH_M = 8500.32 * um
+const RIGHT_READOUT_LENGTH_M = 3462.732 * um
+const QUARTER_WAVE_LENGTH_M = 4731.6735 * um
+
+const PF_COUPLING_CAP_IN_F = 41.06185 * fF
+const PF_COUPLING_CAP_OUT_F = 125.2587 * fF
+
+const COUPLED_WINDOW_LENGTH_M = 300 * um
+
+# Discretization knobs
+#
+# Instead of specifying the number of sections directly, we specify the target
+# segment length Δz. The script will then derive `n_sections` automatically.
+#
+# Because the physical line length is generally not an exact integer multiple
+# of the requested Δz, the actual section length used in the simulation is:
+#
+#     Δz_actual = length / ceil(length / Δz_target)
+#
+# so `Δz_actual` is guaranteed to be <= `Δz_target`.
+
+const LEFT_READOUT_TARGET_DZ_M = 50.0 * um
+const PURCELL_FILTER_TARGET_DZ_M = 50.0 * um
+const RIGHT_READOUT_TARGET_DZ_M = 50.0 * um
+const QUARTER_WAVE_TARGET_DZ_M = 50.0 * um
+const COUPLED_WINDOW_TARGET_DZ_M = 5.0 * um
+
+const PF_WINDOW_START_M = 2200 * um
+const PF_WINDOW_STOP_M = PF_WINDOW_START_M + COUPLED_WINDOW_LENGTH_M
+const QWR_WINDOW_START_M = 10 * um
+const QWR_WINDOW_STOP_M = QWR_WINDOW_START_M + COUPLED_WINDOW_LENGTH_M
+
+# Modal coupled-line inputs
+const COUPLED_WINDOW_ZEVEN_OHM = 56.0
+const COUPLED_WINDOW_ZODD_OHM = 44.0
+const COUPLED_WINDOW_NEVEN = 2.45
+const COUPLED_WINDOW_NODD = 2.60
+
+# Q2D / RLGC matrix inputs
+#
+# Example values below follow the screenshots you shared:
+# - inductance in nH/m
+# - capacitance in pF/m
+#
+# L is used directly as the mutual inductance matrix.
+# C is assumed to be the Q2D `cG` / Maxwell matrix and will be converted with
+# `JosephsonCircuits.maxwell_to_mutual(...)`.
+
+const Q2D_L11_PER_M_H = 410.86374e-9
+const Q2D_L22_PER_M_H = 410.85454e-9
+const Q2D_M_PER_M_H = 19.08527e-9
+
+const Q2D_C11_MAXWELL_PER_M_F = 170.29805e-12
+const Q2D_C22_MAXWELL_PER_M_F = 170.29538e-12
+const Q2D_C12_MAXWELL_PER_M_F = -8.09678e-12
+const Q2D_C21_MAXWELL_PER_M_F = -8.09678e-12
+
+const Q2D_R11_PER_M_OHM = 0.0
+const Q2D_R22_PER_M_OHM = 0.0
+const Q2D_G11_PER_M_S = 0.0
+const Q2D_G22_PER_M_S = 0.0
 
 # =============================================================================
 # 3. Shared CPW RLGC Data
@@ -66,14 +164,50 @@ const fF = 1e-15
 # The coupled-window section will later replace one local span of the Purcell
 # filter line and one local span of the resonator line.
 
-common_l_per_m = 4.202913385827e-7
-common_c_per_m = 1.681169291339e-10
+common_l_per_m = 404.313e-9
+common_c_per_m = 179.86e-12
 common_r_per_m = 0.0
 common_g_per_m = 0.0
 
+function section_count_from_target_dz(length_m, target_dz_m; label)
+    target_dz_m > 0 || error("target Δz for $(label) must be positive.")
+    length_m > 0 || error("length for $(label) must be positive.")
+    return max(1, ceil(Int, length_m / target_dz_m))
+end
+
+left_readout_n_sections = section_count_from_target_dz(
+    LEFT_READOUT_LENGTH_M,
+    LEFT_READOUT_TARGET_DZ_M;
+    label="left readout",
+)
+
+purcell_filter_n_sections = section_count_from_target_dz(
+    PURCELL_FILTER_LENGTH_M,
+    PURCELL_FILTER_TARGET_DZ_M;
+    label="Purcell filter",
+)
+
+right_readout_n_sections = section_count_from_target_dz(
+    RIGHT_READOUT_LENGTH_M,
+    RIGHT_READOUT_TARGET_DZ_M;
+    label="right readout",
+)
+
+quarter_wave_n_sections = section_count_from_target_dz(
+    QUARTER_WAVE_LENGTH_M,
+    QUARTER_WAVE_TARGET_DZ_M;
+    label="quarter-wave resonator",
+)
+
+coupled_window_n_sections = section_count_from_target_dz(
+    COUPLED_WINDOW_LENGTH_M,
+    COUPLED_WINDOW_TARGET_DZ_M;
+    label="coupled window",
+)
+
 left_readout_spec = RLGCSpec(
-    length_m=2.5 * mm,
-    n_sections=20,
+    length_m=LEFT_READOUT_LENGTH_M,
+    n_sections=left_readout_n_sections,
     l_per_m_h=common_l_per_m,
     c_per_m_f=common_c_per_m,
     r_per_m_ohm=common_r_per_m,
@@ -81,8 +215,8 @@ left_readout_spec = RLGCSpec(
 )
 
 purcell_filter_spec = RLGCSpec(
-    length_m=10.0 * mm,
-    n_sections=48,
+    length_m=PURCELL_FILTER_LENGTH_M,
+    n_sections=purcell_filter_n_sections,
     l_per_m_h=common_l_per_m,
     c_per_m_f=common_c_per_m,
     r_per_m_ohm=common_r_per_m,
@@ -90,8 +224,8 @@ purcell_filter_spec = RLGCSpec(
 )
 
 right_readout_spec = RLGCSpec(
-    length_m=2.5 * mm,
-    n_sections=20,
+    length_m=RIGHT_READOUT_LENGTH_M,
+    n_sections=right_readout_n_sections,
     l_per_m_h=common_l_per_m,
     c_per_m_f=common_c_per_m,
     r_per_m_ohm=common_r_per_m,
@@ -99,8 +233,8 @@ right_readout_spec = RLGCSpec(
 )
 
 quarter_wave_spec = RLGCSpec(
-    length_m=5.0 * mm,
-    n_sections=25,
+    length_m=QUARTER_WAVE_LENGTH_M,
+    n_sections=quarter_wave_n_sections,
     l_per_m_h=common_l_per_m,
     c_per_m_f=common_c_per_m,
     r_per_m_ohm=common_r_per_m,
@@ -151,8 +285,8 @@ left_readout = add_readout_line_component!(
 purcell_filter = add_half_wave_purcell_filter_component!(
     draft;
     id="purcell_filter",
-    left_coupling_cap_f=12.0 * fF,
-    right_coupling_cap_f=12.0 * fF,
+    left_coupling_cap_f=PF_COUPLING_CAP_IN_F,
+    right_coupling_cap_f=PF_COUPLING_CAP_OUT_F,
     line_spec=purcell_filter_spec,
 )
 
@@ -213,42 +347,144 @@ qwr = add_hanging_quarter_wave_resonator_component!(
 # 8. Define the Coupled-Window Physics
 # =============================================================================
 #
-# We use `JosephsonCircuits.even_odd_to_mutual(...)` to convert modal data:
+# We allow two input paths here:
 #
-# - Zeven
-# - Zodd
-# - neven
-# - nodd
+# 1. modal input
+#    `Zeven`, `Zodd`, `neven`, `nodd`
 #
-# into the mutual-form per-unit-length matrices needed by `CoupledWindowSpec`.
+# 2. Q2D / RLGC matrix input
+#    `L matrix` + `C matrix`
+#
+# Internally we always end up in the same place:
+# a `CoupledWindowSpec` written in mutual-form per-unit-length parameters.
 #
 # The chosen physical spans are:
 #
-# - Purcell filter internal line:      4.2 mm -> 5.4 mm
-# - Quarter-wave resonator internal line: 3.6 mm -> 4.8 mm
+# - Purcell filter internal line:      `PF_WINDOW_START_M -> PF_WINDOW_STOP_M`
+# - Quarter-wave resonator internal line: `QWR_WINDOW_START_M -> QWR_WINDOW_STOP_M`
 #
-# Both spans are 1.2 mm long, matching the `length_m` of the coupled-window
+# Both spans are `COUPLED_WINDOW_LENGTH_M` long, matching the `length_m` of the coupled-window
 # model.
 
-window_mutual = JosephsonCircuits.even_odd_to_mutual(
-    56.0,  # Zeven
-    44.0,  # Zodd
-    2.45,  # neven
-    2.60,  # nodd
-)
+function build_coupled_window_spec()
+    if COUPLED_WINDOW_INPUT_MODE == :modal
+        window_mutual = JosephsonCircuits.even_odd_to_mutual(
+            COUPLED_WINDOW_ZEVEN_OHM,
+            COUPLED_WINDOW_ZODD_OHM,
+            COUPLED_WINDOW_NEVEN,
+            COUPLED_WINDOW_NODD,
+        )
 
-coupled_window_spec = CoupledWindowSpec(
-    length_m=1.2 * mm,
-    n_sections=6,
-    l11_per_m_h=window_mutual.L[1, 1],
-    l22_per_m_h=window_mutual.L[2, 2],
-    lm_per_m_h=window_mutual.L[1, 2],
-    c1g_per_m_f=window_mutual.C[1, 1],
-    c2g_per_m_f=window_mutual.C[2, 2],
-    cm_per_m_f=window_mutual.C[1, 2],
-)
+        return (
+            spec=CoupledWindowSpec(
+                length_m=COUPLED_WINDOW_LENGTH_M,
+                n_sections=coupled_window_n_sections,
+                l11_per_m_h=window_mutual.L[1, 1],
+                l22_per_m_h=window_mutual.L[2, 2],
+                lm_per_m_h=window_mutual.L[1, 2],
+                c1g_per_m_f=window_mutual.C[1, 1],
+                c2g_per_m_f=window_mutual.C[2, 2],
+                cm_per_m_f=window_mutual.C[1, 2],
+            ),
+            source_label="modal",
+        )
+    elseif COUPLED_WINDOW_INPUT_MODE == :q2d_rlgc
+        l_matrix = [
+            Q2D_L11_PER_M_H Q2D_M_PER_M_H
+            Q2D_M_PER_M_H Q2D_L22_PER_M_H
+        ]
+
+        c_maxwell = [
+            Q2D_C11_MAXWELL_PER_M_F Q2D_C12_MAXWELL_PER_M_F
+            Q2D_C21_MAXWELL_PER_M_F Q2D_C22_MAXWELL_PER_M_F
+        ]
+
+        c_mutual = JosephsonCircuits.maxwell_to_mutual(c_maxwell)
+
+        return (
+            spec=CoupledWindowSpec(
+                length_m=COUPLED_WINDOW_LENGTH_M,
+                n_sections=coupled_window_n_sections,
+                l11_per_m_h=l_matrix[1, 1],
+                l22_per_m_h=l_matrix[2, 2],
+                lm_per_m_h=l_matrix[1, 2],
+                c1g_per_m_f=c_mutual[1, 1],
+                c2g_per_m_f=c_mutual[2, 2],
+                cm_per_m_f=c_mutual[1, 2],
+                r1_per_m_ohm=Q2D_R11_PER_M_OHM,
+                r2_per_m_ohm=Q2D_R22_PER_M_OHM,
+                g1_per_m_s=Q2D_G11_PER_M_S,
+                g2_per_m_s=Q2D_G22_PER_M_S,
+            ),
+            source_label="q2d_rlgc",
+        )
+    end
+
+    error("Unsupported COUPLED_WINDOW_INPUT_MODE=$(COUPLED_WINDOW_INPUT_MODE). Use :modal or :q2d_rlgc.")
+end
+
+coupled_window_input = build_coupled_window_spec()
+coupled_window_spec = coupled_window_input.spec
 
 window_section = coupled_window_section_values(coupled_window_spec)
+
+println("Coupled-window input mode: ", coupled_window_input.source_label)
+println("Discretization summary:")
+@printf(
+    "  left readout    : target Δz = %.3f um, n = %d, actual Δz = %.3f um\n",
+    LEFT_READOUT_TARGET_DZ_M / um,
+    left_readout_spec.n_sections,
+    left_readout_spec.length_m / left_readout_spec.n_sections / um,
+)
+@printf(
+    "  Purcell filter  : target Δz = %.3f um, n = %d, actual Δz = %.3f um\n",
+    PURCELL_FILTER_TARGET_DZ_M / um,
+    purcell_filter_spec.n_sections,
+    purcell_filter_spec.length_m / purcell_filter_spec.n_sections / um,
+)
+@printf(
+    "  right readout   : target Δz = %.3f um, n = %d, actual Δz = %.3f um\n",
+    RIGHT_READOUT_TARGET_DZ_M / um,
+    right_readout_spec.n_sections,
+    right_readout_spec.length_m / right_readout_spec.n_sections / um,
+)
+@printf(
+    "  QWR             : target Δz = %.3f um, n = %d, actual Δz = %.3f um\n",
+    QUARTER_WAVE_TARGET_DZ_M / um,
+    quarter_wave_spec.n_sections,
+    quarter_wave_spec.length_m / quarter_wave_spec.n_sections / um,
+)
+@printf(
+    "  coupled window  : target Δz = %.3f um, n = %d, actual Δz = %.3f um\n",
+    COUPLED_WINDOW_TARGET_DZ_M / um,
+    coupled_window_spec.n_sections,
+    coupled_window_spec.length_m / coupled_window_spec.n_sections / um,
+)
+if COUPLED_WINDOW_INPUT_MODE == :modal
+    @printf(
+        "Modal inputs: Zeven=%.3f Ohm, Zodd=%.3f Ohm, neven=%.3f, nodd=%.3f\n",
+        COUPLED_WINDOW_ZEVEN_OHM,
+        COUPLED_WINDOW_ZODD_OHM,
+        COUPLED_WINDOW_NEVEN,
+        COUPLED_WINDOW_NODD,
+    )
+elseif COUPLED_WINDOW_INPUT_MODE == :q2d_rlgc
+    println("Q2D / RLGC matrix inputs:")
+    @printf(
+        "  L per meter: [[%.6e, %.6e], [%.6e, %.6e]] H/m\n",
+        Q2D_L11_PER_M_H,
+        Q2D_M_PER_M_H,
+        Q2D_M_PER_M_H,
+        Q2D_L22_PER_M_H,
+    )
+    @printf(
+        "  C(maxwell) per meter: [[%.6e, %.6e], [%.6e, %.6e]] F/m\n",
+        Q2D_C11_MAXWELL_PER_M_F,
+        Q2D_C12_MAXWELL_PER_M_F,
+        Q2D_C21_MAXWELL_PER_M_F,
+        Q2D_C22_MAXWELL_PER_M_F,
+    )
+end
 
 @printf(
     "Coupled window per section: L1=%.3e H, L2=%.3e H, M=%.3e H, k=%.4f, Cg1=%.3e F, Cg2=%.3e F, Cm=%.3e F\n",
@@ -287,9 +523,9 @@ window_placement = apply_coupled_window!(
     draft;
     prefix="pf_qwr_window",
     line_a=purcell_filter,
-    span_a=LineSpan(4.2 * mm, 5.4 * mm),
+    span_a=LineSpan(PF_WINDOW_START_M, PF_WINDOW_STOP_M),
     line_b=qwr,
-    span_b=LineSpan(3.6 * mm, 4.8 * mm),
+    span_b=LineSpan(QWR_WINDOW_START_M, QWR_WINDOW_STOP_M),
     spec=coupled_window_spec,
 )
 
@@ -352,7 +588,7 @@ end
 # The same simulation logic is used as before; only the authoring surface has
 # changed.
 
-ws = 2π .* (5.0:0.01:7.0) .* GHz
+ws = 2π .* (5.0:0.0001:7.0) .* GHz
 wp = (2π * 8.001 * GHz,)
 sources = [(mode=(1,), port=1, current=0.0)]
 Npumpharmonics = (1,)
