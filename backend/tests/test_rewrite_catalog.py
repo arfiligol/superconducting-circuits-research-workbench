@@ -74,6 +74,51 @@ def dataset_service(
     )
 
 
+def _create_ingested_trace_design(*, trace_count: int = 1) -> tuple[str, str, list[str]]:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": f"Trace CRUD Dataset {trace_count}",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": "Trace CRUD Target",
+            "provenance_label": "measurement-batch",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": f"Y11_{index}",
+                    "representation": "complex",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": f"Measurement trace {index}",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.10 * index], [5.2, 0.15 * index]],
+                    },
+                }
+                for index in range(1, trace_count + 1)
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    return (
+        dataset_id,
+        payload["design"]["design_id"],
+        [trace["trace_id"] for trace in payload["traces"]],
+    )
+
+
 def test_dataset_service_lists_visible_catalog_rows_for_active_workspace(
     dataset_service: DatasetService,
 ) -> None:
@@ -375,6 +420,123 @@ def test_local_seed_single_trace_preview_uses_full_series_for_one_dimensional_pr
     assert trace_detail is not None
     assert trace_detail.preview_payload["kind"] == "series"
     assert len(trace_detail.preview_payload["points"]) == trace_detail.axes[0].length
+
+
+def test_ingested_trace_can_be_updated_without_changing_identity() -> None:
+    dataset_id, design_id, trace_ids = _create_ingested_trace_design()
+    trace_id = trace_ids[0]
+
+    response = client.patch(
+        f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}",
+        json={
+            "parameter": "Y11_edited",
+            "representation": "real",
+            "provenance_summary": "Edited measurement trace",
+            "axes": [{"name": "frequency", "unit": "GHz", "length": 3}],
+            "preview_payload": {
+                "kind": "sampled_series",
+                "points": [[5.0, 0.21], [5.1, 0.25], [5.2, 0.27]],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["operation"] == "updated"
+    assert payload["trace"]["trace_id"] == trace_id
+    assert payload["trace"]["parameter"] == "Y11_edited"
+    assert payload["trace"]["representation"] == "real"
+    assert payload["trace"]["provenance_summary"] == "Edited measurement trace"
+    assert payload["detail"]["trace_id"] == trace_id
+    assert payload["detail"]["axes"] == [{"name": "frequency", "unit": "GHz", "length": 3}]
+    assert payload["detail"]["preview_payload"]["points"] == [
+        [5.0, 0.21],
+        [5.1, 0.25],
+        [5.2, 0.27],
+    ]
+
+    rows = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()["data"]["rows"]
+    assert rows == [
+        {
+            "trace_id": trace_id,
+            "dataset_id": dataset_id,
+            "design_id": design_id,
+            "family": "y_matrix",
+            "parameter": "Y11_edited",
+            "representation": "real",
+            "trace_mode_group": "base",
+            "source_kind": "measurement",
+            "stage_kind": "raw",
+            "provenance_summary": "Edited measurement trace",
+        }
+    ]
+
+
+def test_seeded_trace_update_and_delete_are_rejected_when_trace_is_read_only() -> None:
+    update = client.patch(
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/traces/trace_flux_a_measurement",
+        json={"parameter": "forbidden-edit"},
+    )
+    assert update.status_code == 409
+    assert update.json()["error"]["code"] == "trace_update_denied"
+
+    delete = client.delete(
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/traces/trace_flux_a_measurement"
+    )
+    assert delete.status_code == 409
+    assert delete.json()["error"]["code"] == "trace_delete_denied"
+
+
+def test_ingested_trace_can_be_deleted_from_a_design() -> None:
+    dataset_id, design_id, trace_ids = _create_ingested_trace_design()
+    trace_id = trace_ids[0]
+
+    response = client.delete(f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload == {
+        "operation": "deleted",
+        "trace_id": trace_id,
+        "deleted_count": 1,
+        "design": {
+            "design_id": design_id,
+            "dataset_id": dataset_id,
+            "name": "Trace CRUD Target",
+            "source_coverage": {
+                "measurement": 0,
+                "layout_simulation": 0,
+                "circuit_simulation": 0,
+            },
+            "compare_readiness": "blocked",
+            "trace_count": 0,
+            "updated_at": payload["design"]["updated_at"],
+        },
+    }
+    rows = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()["data"]["rows"]
+    assert rows == []
+    detail = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}")
+    assert detail.status_code == 404
+    assert detail.json()["error"]["code"] == "trace_not_found"
+
+
+def test_ingested_traces_support_batch_delete() -> None:
+    dataset_id, design_id, trace_ids = _create_ingested_trace_design(trace_count=2)
+
+    response = client.post(
+        f"/datasets/{dataset_id}/designs/{design_id}/traces/batch-delete",
+        json={"trace_ids": trace_ids},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["operation"] == "deleted"
+    assert payload["trace_ids"] == trace_ids
+    assert payload["deleted_count"] == 2
+    assert payload["design"]["design_id"] == design_id
+    assert payload["design"]["trace_count"] == 0
+    rows = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()["data"]["rows"]
+    assert rows == []
 
 
 def test_dataset_service_exposes_characterization_result_summary_and_detail_surfaces(

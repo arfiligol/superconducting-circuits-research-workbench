@@ -244,6 +244,34 @@ class TraceDetail:
 
 
 @dataclass(frozen=True)
+class TraceMutationPolicy:
+    update: bool
+    delete: bool
+    summary: str
+
+
+@dataclass(frozen=True)
+class TraceUpdateDraft:
+    parameter: str | None = None
+    representation: str | None = None
+    provenance_summary: str | None = None
+    axes: tuple[TraceAxis, ...] | None = None
+    preview_payload: dict[str, object] | None = None
+
+
+@dataclass(frozen=True)
+class TraceUpdateResult:
+    trace: TraceMetadataSummary
+    detail: TraceDetail
+
+
+@dataclass(frozen=True)
+class TraceDeleteResult:
+    design: DesignBrowseRow
+    deleted_trace_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class CharacterizationResultSummary:
     result_id: str
     dataset_id: str

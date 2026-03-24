@@ -49,6 +49,9 @@ from src.app.domain.datasets import (
     TraceAxis,
     TraceDetail,
     TraceMetadataSummary,
+    TraceMutationPolicy,
+    TraceUpdateDraft,
+    TraceUpdateResult,
 )
 from src.app.domain.result_traces import ResultTraceSelection, build_trace_parameter
 from src.app.domain.tasks import TaskDetail
@@ -103,6 +106,7 @@ class InMemoryRewriteCatalogRepository:
         self._designs = _seed_designs()
         self._trace_summaries = _seed_trace_summaries()
         self._trace_details = _seed_trace_details()
+        self._mutable_trace_keys: set[tuple[str, str, str]] = set()
         self._characterization_analysis_registry = _seed_characterization_analysis_registry()
         self._characterization_run_history = _seed_characterization_run_history()
         self._characterization_results = _seed_characterization_results()
@@ -242,6 +246,7 @@ class InMemoryRewriteCatalogRepository:
                 result_handles=(),
             )
             self._trace_details[(dataset_id, design_id, trace_id)] = detail
+            self._mutable_trace_keys.add((dataset_id, design_id, trace_id))
             trace_rows = [row for row in trace_rows if row.trace_id != trace_id]
             trace_rows.append(summary)
             ingested_trace_rows.append(summary)
@@ -563,6 +568,163 @@ class InMemoryRewriteCatalogRepository:
             design_id,
             trace_id,
         )
+
+    def get_trace_mutation_policy(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> TraceMutationPolicy | None:
+        key = (dataset_id, design_id, trace_id)
+        if key in self._mutable_trace_keys and key in self._trace_details:
+            return TraceMutationPolicy(
+                update=True,
+                delete=True,
+                summary=(
+                    "Only dataset-ingested raw traces are mutable in the current backend "
+                    "implementation."
+                ),
+            )
+        if self.get_trace_detail(dataset_id, design_id, trace_id) is None:
+            return None
+        return TraceMutationPolicy(
+            update=False,
+            delete=False,
+            summary=(
+                "Published, seeded, and provenance-bearing traces remain read-only in the "
+                "current backend implementation."
+            ),
+        )
+
+    def update_trace(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+        update: TraceUpdateDraft,
+    ) -> TraceUpdateResult | None:
+        key = (dataset_id, design_id, trace_id)
+        if key not in self._mutable_trace_keys:
+            return None
+        current_detail = self._trace_details.get(key)
+        current_rows = list(self._trace_summaries.get((dataset_id, design_id), ()))
+        current_summary = next((row for row in current_rows if row.trace_id == trace_id), None)
+        if current_detail is None or current_summary is None:
+            return None
+        updated_at = _current_timestamp()
+        updated_payload_ref = current_detail.payload_ref
+        if updated_payload_ref is not None and update.axes is not None:
+            axis_lengths = tuple(axis.length for axis in update.axes)
+            updated_payload_ref = replace(
+                updated_payload_ref,
+                shape=axis_lengths,
+                chunk_shape=axis_lengths,
+            )
+        updated_detail = replace(
+            current_detail,
+            axes=update.axes if update.axes is not None else current_detail.axes,
+            preview_payload=(
+                update.preview_payload
+                if update.preview_payload is not None
+                else current_detail.preview_payload
+            ),
+            payload_ref=updated_payload_ref,
+        )
+        updated_summary = replace(
+            current_summary,
+            parameter=(
+                update.parameter if update.parameter is not None else current_summary.parameter
+            ),
+            representation=(
+                update.representation
+                if update.representation is not None
+                else current_summary.representation
+            ),
+            provenance_summary=(
+                update.provenance_summary
+                if update.provenance_summary is not None
+                else current_summary.provenance_summary
+            ),
+        )
+        self._trace_details[key] = updated_detail
+        self._trace_summaries[(dataset_id, design_id)] = tuple(
+            sorted(
+                (
+                    updated_summary if row.trace_id == trace_id else row
+                    for row in current_rows
+                ),
+                key=lambda row: row.trace_id,
+            )
+        )
+        self._refresh_design_row(dataset_id, design_id, updated_at=updated_at)
+        self._refresh_dataset(dataset_id, updated_at=updated_at)
+        return TraceUpdateResult(
+            trace=updated_summary,
+            detail=updated_detail,
+        )
+
+    def delete_traces(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_ids: Sequence[str],
+    ) -> tuple[str, ...] | None:
+        keys = tuple((dataset_id, design_id, trace_id) for trace_id in trace_ids)
+        if any(key not in self._mutable_trace_keys for key in keys):
+            return None
+        current_rows = list(self._trace_summaries.get((dataset_id, design_id), ()))
+        if any(
+            key not in self._trace_details
+            or not any(row.trace_id == key[2] for row in current_rows)
+            for key in keys
+        ):
+            return None
+        trace_id_set = {trace_id for _, _, trace_id in keys}
+        for key in keys:
+            self._trace_details.pop(key, None)
+            self._mutable_trace_keys.discard(key)
+        self._trace_summaries[(dataset_id, design_id)] = tuple(
+            row for row in current_rows if row.trace_id not in trace_id_set
+        )
+        updated_at = _current_timestamp()
+        self._refresh_design_row(dataset_id, design_id, updated_at=updated_at)
+        self._refresh_dataset(dataset_id, updated_at=updated_at)
+        return tuple(trace_ids)
+
+    def _refresh_design_row(
+        self,
+        dataset_id: str,
+        design_id: str,
+        *,
+        updated_at: str,
+    ) -> None:
+        design_rows = list(self._designs.get(dataset_id, ()))
+        current_design = next((row for row in design_rows if row.design_id == design_id), None)
+        if current_design is None:
+            return
+        trace_rows = self._trace_summaries.get((dataset_id, design_id), ())
+        source_coverage = _build_source_coverage(trace_rows)
+        refreshed_design = replace(
+            current_design,
+            source_coverage=source_coverage,
+            compare_readiness=_compare_readiness_for(source_coverage),
+            trace_count=len(trace_rows),
+            updated_at=updated_at,
+        )
+        design_rows = [row for row in design_rows if row.design_id != design_id]
+        design_rows.append(refreshed_design)
+        self._designs[dataset_id] = tuple(sorted(design_rows, key=lambda row: row.design_id))
+
+    def _refresh_dataset(
+        self,
+        dataset_id: str,
+        *,
+        updated_at: str,
+    ) -> None:
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None:
+            return
+        self._datasets[dataset_id] = replace(dataset, updated_at=updated_at)
 
     def get_simulation_result_publication_record(
         self,
@@ -1052,6 +1214,10 @@ def _build_design_id(name: str) -> str:
 
 def _build_trace_id(*, kind: str, parameter: str, index: int) -> str:
     return f"trace_{_slugify(kind)}_{_slugify(parameter)}_{index}"
+
+
+def _current_timestamp() -> str:
+    return datetime.now(UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _build_source_coverage(
