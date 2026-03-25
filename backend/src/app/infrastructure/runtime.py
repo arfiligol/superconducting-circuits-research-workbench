@@ -58,14 +58,28 @@ from src.app.services.dataset_characterization_service import (
 from src.app.services.dataset_service import DatasetService
 from src.app.services.dataset_trace_service import DatasetTraceService
 from src.app.services.health_service import HealthService
+from src.app.services.result_trace_publication_service import (
+    ResultTracePublicationService,
+)
 from src.app.services.schemdraw_render_service import SchemdrawRenderService
 from src.app.services.session_service import SessionService
+from src.app.services.simulation_result_explorer_query_service import (
+    SimulationResultExplorerQueryService,
+)
 from src.app.services.simulation_result_explorer_service import (
     SimulationResultExplorerService,
 )
+from src.app.services.simulation_result_explorer_view_service import (
+    SimulationResultExplorerViewService,
+)
+from src.app.services.simulation_result_publication_service import (
+    SimulationResultPublicationService,
+)
+from src.app.services.task_control_service import TaskControlService
 from src.app.services.task_mutation_service import TaskMutationService
 from src.app.services.task_publication_service import TaskPublicationService
 from src.app.services.task_service import TaskService
+from src.app.services.task_submission_service import TaskSubmissionService
 from src.app.services.workspace_collaboration_service import WorkspaceCollaborationService
 from src.app.settings import get_settings
 
@@ -297,20 +311,38 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
     audit_repository = get_task_audit_repository()
     queue_dispatcher = get_task_queue_dispatcher()
     mutation_service = TaskMutationService(
-        repository=task_repository,
-        session_repository=session_repository,
-        dataset_repository=dataset_repository,
-        circuit_definition_repository=circuit_definition_repository,
-        authorization_service=authorization_service,
-        audit_repository=audit_repository,
-        queue_dispatcher=queue_dispatcher,
+        submission_service=TaskSubmissionService(
+            repository=task_repository,
+            session_repository=session_repository,
+            dataset_repository=dataset_repository,
+            circuit_definition_repository=circuit_definition_repository,
+            authorization_service=authorization_service,
+            audit_repository=audit_repository,
+            queue_dispatcher=queue_dispatcher,
+        ),
+        control_service=TaskControlService(
+            repository=task_repository,
+            session_repository=session_repository,
+            authorization_service=authorization_service,
+            audit_repository=audit_repository,
+            queue_dispatcher=queue_dispatcher,
+        ),
     )
     publication_service = TaskPublicationService(
-        repository=task_repository,
-        dataset_repository=dataset_repository,
-        session_repository=session_repository,
-        authorization_service=authorization_service,
-        audit_repository=audit_repository,
+        simulation_result_service=SimulationResultPublicationService(
+            repository=task_repository,
+            dataset_repository=dataset_repository,
+            session_repository=session_repository,
+            authorization_service=authorization_service,
+            audit_repository=audit_repository,
+        ),
+        result_trace_service=ResultTracePublicationService(
+            repository=task_repository,
+            dataset_repository=dataset_repository,
+            session_repository=session_repository,
+            authorization_service=authorization_service,
+            audit_repository=audit_repository,
+        ),
     )
     task_service = TaskService(
         repository=task_repository,
@@ -382,7 +414,11 @@ def get_task_service() -> TaskService:
 
 @lru_cache(maxsize=1)
 def get_simulation_result_explorer_service() -> SimulationResultExplorerService:
-    return SimulationResultExplorerService(get_task_service())
+    task_service = get_task_service()
+    return SimulationResultExplorerService(
+        query_service=SimulationResultExplorerQueryService(task_service),
+        view_service=SimulationResultExplorerViewService(),
+    )
 
 
 def get_task_execution_runtime() -> TaskExecutionRuntime:

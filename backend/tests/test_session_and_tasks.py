@@ -1124,7 +1124,7 @@ def test_submit_task_returns_stable_queue_failure_with_persisted_task_identity(
             )
 
     monkeypatch.setattr(
-        get_task_service()._mutation_service,
+        get_task_service()._mutation_service._submission_service,
         "_queue_dispatcher",
         FailingDispatcher(),
     )

@@ -14,7 +14,7 @@ from src.app.infrastructure.runtime import (
     reset_runtime_state,
 )
 from src.app.main import app
-from src.app.services import simulation_result_explorer_service
+from src.app.services import simulation_result_explorer_view_service
 from tests.worker_runtime_harness import drain_lane_queue
 
 client = TestClient(app)
@@ -813,7 +813,7 @@ def test_simulation_view_avoids_bundle_materialization_for_compare_axis_requests
         raise AssertionError("simulation compare-axis view should not materialize full bundles")
 
     monkeypatch.setattr(
-        simulation_result_explorer_service,
+        simulation_result_explorer_view_service,
         "load_task_family_bundle",
         fail_bundle_materialization,
     )

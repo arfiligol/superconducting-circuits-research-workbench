@@ -12,11 +12,19 @@ from src.app.services.dataset_characterization_service import (
 )
 from src.app.services.dataset_service import DatasetService
 from src.app.services.dataset_trace_service import DatasetTraceService
+from src.app.services.result_trace_publication_service import (
+    ResultTracePublicationService,
+)
 from src.app.services.service_errors import ServiceError
 from src.app.services.session_service import SessionService
+from src.app.services.simulation_result_publication_service import (
+    SimulationResultPublicationService,
+)
+from src.app.services.task_control_service import TaskControlService
 from src.app.services.task_mutation_service import TaskMutationService
 from src.app.services.task_publication_service import TaskPublicationService
 from src.app.services.task_service import TaskService
+from src.app.services.task_submission_service import TaskSubmissionService
 
 
 def _enter_online_owner_session(repository: InMemoryRewriteAppStateRepository) -> None:
@@ -61,15 +69,28 @@ def _build_task_service(
         dataset_repository=catalog_repository,
         circuit_definition_repository=catalog_repository,
         mutation_service=TaskMutationService(
-            repository=app_state_repository,
-            session_repository=app_state_repository,
-            dataset_repository=catalog_repository,
-            circuit_definition_repository=catalog_repository,
+            submission_service=TaskSubmissionService(
+                repository=app_state_repository,
+                session_repository=app_state_repository,
+                dataset_repository=catalog_repository,
+                circuit_definition_repository=catalog_repository,
+            ),
+            control_service=TaskControlService(
+                repository=app_state_repository,
+                session_repository=app_state_repository,
+            ),
         ),
         publication_service=TaskPublicationService(
-            repository=app_state_repository,
-            dataset_repository=catalog_repository,
-            session_repository=app_state_repository,
+            simulation_result_service=SimulationResultPublicationService(
+                repository=app_state_repository,
+                dataset_repository=catalog_repository,
+                session_repository=app_state_repository,
+            ),
+            result_trace_service=ResultTracePublicationService(
+                repository=app_state_repository,
+                dataset_repository=catalog_repository,
+                session_repository=app_state_repository,
+            ),
         ),
     )
 
