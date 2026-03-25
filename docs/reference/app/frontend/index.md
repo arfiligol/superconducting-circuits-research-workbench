@@ -12,15 +12,15 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
-version: v0.22.0
-last_updated: 2026-03-18
+scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace 與 research workflow surfaces
+version: v0.23.1
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
 # Frontend Reference
 
-本區收錄 frontend app layer 的可查詢規格，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces。
+本區收錄 frontend app layer 的可查詢規格，涵蓋 shared shell、shared workflow、workspace 與 research workflow surfaces。
 
 !!! info "How To Read Frontend App Docs"
     先讀 shared surfaces 了解 global context 與 shared workflow，再讀各 page specs。
@@ -71,7 +71,7 @@ updated_by: codex
     | [Dataset](workspace/dataset.md) | `Dashboard` | visible dataset catalog、active dataset switch、profile edit、lifecycle actions | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
     | [Tasks](workspace/tasks.md) | `Dashboard` | standalone queue browse、worker inspection、history、task detail、control actions | [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md) |
     | [Data Ingestion](workspace/data-ingestion.md) | `Pipeline` | upload-first raw-data intake、validation、preprocess、import handoff | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
-    | [Raw Data Browser](workspace/raw-data-browser.md) | `Pipeline` | design list、trace preview、compare readiness、summary-only browse | [Backend / Datasets & Results](../backend/datasets-results.md) |
+    | [Raw Data Browser](workspace/raw-data-browser.md) | `Pipeline` | design list、trace summary CRUD、single-trace preview、batch delete | [Backend / Datasets & Results](../backend/datasets-results.md) |
 
 === "Definition"
 

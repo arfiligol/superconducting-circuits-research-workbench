@@ -10,8 +10,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Backend app reference 索引，收錄 frontend 與 app-shared model 依賴的 runtime-mode-aware backend authority surfaces
-version: v0.9.0
-last_updated: 2026-03-16
+version: v0.9.1
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
@@ -39,7 +39,7 @@ updated_by: codex
     |---|---|---|
     | [Session & Workspace](session-workspace.md) | Header, Auth Entry, Dashboard, Raw Data Browser, Task Management | runtime mode、session、workspace、user summary、active dataset、capabilities |
     | [Circuit Definitions](circuit-definitions.md) | Schemas, Schema Editor, Schemdraw, Circuit Simulation | catalog、detail、mutation、persisted preview |
-    | [Datasets & Results](datasets-results.md) | Header, Dashboard, Raw Data Browser, Characterization, Circuit Simulation | dataset catalog、dataset profile、design browse、trace preview、tagged metrics summary、result handles |
+    | [Datasets & Results](datasets-results.md) | Header, Dashboard, Raw Data Browser, Characterization, Circuit Simulation | dataset catalog、dataset profile、design browse、trace summaries、trace preview / edit payload、trace mutation gating、tagged metrics summary、result handles |
     | [Audit Logs](audit-logs.md) | governance surfaces, admin tools | audit query、detail、export summary |
 
 === "Workflow"
