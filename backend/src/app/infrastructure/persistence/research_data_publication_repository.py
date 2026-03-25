@@ -31,6 +31,7 @@ from src.app.domain.tasks import SimulationSetup, TaskDetail
 from src.app.infrastructure.persisted_runtime import (
     available_sources_for_task_family,
     build_trace_preview_payload,
+    delete_trace_payload_store,
     extract_selection_trace_data,
     write_complex_trace_payload,
 )
@@ -524,6 +525,56 @@ class SqliteResearchDataPublicationRepository:
                 payload_ref=payload_ref,
                 result_handles=((result_handle,) if result_handle is not None else ()),
             )
+
+    def delete_traces(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_ids: tuple[str, ...],
+    ) -> tuple[str, ...] | None:
+        requested = tuple(dict.fromkeys(trace_ids))
+        if len(requested) == 0:
+            return ()
+        cleanup_refs: list[tuple[str, str]] = []
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(RewritePublishedSimulationTraceRecord)
+                .where(
+                    RewritePublishedSimulationTraceRecord.dataset_id == dataset_id,
+                    RewritePublishedSimulationTraceRecord.design_id == design_id,
+                    RewritePublishedSimulationTraceRecord.trace_id.in_(requested),
+                )
+                .order_by(RewritePublishedSimulationTraceRecord.id.asc())
+            ).all()
+            rows_by_trace_id = {row.trace_id: row for row in rows}
+            if len(rows_by_trace_id) != len(requested):
+                return None
+            publication_ids = {row.publication_id for row in rows}
+            for trace_id in requested:
+                row = rows_by_trace_id[trace_id]
+                cleanup_refs.append((row.payload_store_key, row.result_handle_id))
+                session.delete(row)
+            session.flush()
+            for publication_id in publication_ids:
+                remaining = session.scalar(
+                    select(RewritePublishedSimulationTraceRecord.id).where(
+                        RewritePublishedSimulationTraceRecord.publication_id == publication_id
+                    )
+                )
+                if remaining is not None:
+                    continue
+                publication_row = session.get(
+                    RewritePublishedSimulationResultRecord,
+                    publication_id,
+                )
+                if publication_row is not None:
+                    session.delete(publication_row)
+            session.commit()
+        for payload_store_key, result_handle_id in cleanup_refs:
+            self._storage_metadata_repository.delete_result_handle(result_handle_id)
+            self._storage_metadata_repository.delete_trace_payload(payload_store_key)
+            delete_trace_payload_store(payload_store_key)
+        return requested
 
     def _persist_materialized_trace_storage(
         self,

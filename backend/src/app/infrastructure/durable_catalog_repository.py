@@ -51,7 +51,10 @@ from src.app.infrastructure.persisted_characterization_runtime import (
     CharacterizationTaggingResultPayload,
     PersistedCharacterizationRepository,
 )
-from src.app.infrastructure.persisted_runtime import write_complex_trace_payload
+from src.app.infrastructure.persisted_runtime import (
+    delete_trace_payload_store,
+    write_complex_trace_payload,
+)
 from src.app.infrastructure.persistence.models import (
     RewriteCharacterizationRegistryRecord,
     RewriteDatasetRecord,
@@ -391,10 +394,10 @@ class DurableCatalogRepository:
         if published is None:
             return None
         return TraceMutationPolicy(
-            allowed_actions=TraceAllowedActions(edit=False, delete=False),
+            allowed_actions=TraceAllowedActions(edit=False, delete=True),
             summary=(
-                "Provenance-bearing or system-generated trace; mutate from the "
-                "source workflow."
+                "Provenance-bearing or system-generated trace; delete is allowed, "
+                "but edit from the source workflow."
             ),
         )
 
@@ -519,21 +522,55 @@ class DurableCatalogRepository:
         requested = tuple(dict.fromkeys(trace_ids))
         if len(requested) == 0:
             return ()
+        raw_rows_by_trace_id = {
+            row.trace_id: row
+            for row in self._list_raw_trace_rows(dataset_id=dataset_id, design_id=design_id)
+            if row.trace_id in requested
+        }
+        raw_rows_to_delete: list[RewriteDatasetTraceRecord] = []
+        published_trace_ids: list[str] = []
+        for trace_id in requested:
+            raw_row = raw_rows_by_trace_id.get(trace_id)
+            if raw_row is not None:
+                if not raw_row.editable:
+                    return None
+                raw_rows_to_delete.append(raw_row)
+                continue
+            published = self._publication_repository.get_trace_detail(
+                dataset_id,
+                design_id,
+                trace_id,
+            )
+            if published is None:
+                return None
+            published_trace_ids.append(trace_id)
+
         with self._session_factory() as session:
             rows = session.scalars(
                 select(RewriteDatasetTraceRecord).where(
                     RewriteDatasetTraceRecord.dataset_id == dataset_id,
                     RewriteDatasetTraceRecord.design_id == design_id,
-                    RewriteDatasetTraceRecord.trace_id.in_(requested),
+                    RewriteDatasetTraceRecord.trace_id.in_(
+                        [row.trace_id for row in raw_rows_to_delete]
+                    ),
                 )
             ).all()
-            if len(rows) != len(requested):
-                return None
-            if any(not row.editable for row in rows):
-                return None
             for row in rows:
                 session.delete(row)
             session.commit()
+        for row in raw_rows_to_delete:
+            for handle_id in row.result_handle_ids_json:
+                self._storage_metadata_repository.delete_result_handle(handle_id)
+            self._storage_metadata_repository.delete_trace_payload(row.payload_store_key)
+            delete_trace_payload_store(row.payload_store_key)
+        if len(published_trace_ids) > 0:
+            deleted = self._publication_repository.delete_traces(
+                dataset_id,
+                design_id,
+                tuple(published_trace_ids),
+            )
+            if deleted is None:
+                return None
         updated_at = _current_timestamp()
         self._touch_design(dataset_id, design_id, updated_at)
         self._touch_dataset(dataset_id, updated_at)

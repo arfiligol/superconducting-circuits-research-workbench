@@ -1,11 +1,13 @@
-from src.app.infrastructure.durable_runtime_seed import seed_durable_runtime_state
-from src.app.infrastructure.runtime import reset_runtime_state
+from src.app.infrastructure.durable_runtime_seed import rebuild_durable_runtime_state
 
 
 def main() -> None:
-    reset_runtime_state()
-    seed_durable_runtime_state()
-    print("Seeded durable backend runtime state.")
+    reset_result = rebuild_durable_runtime_state()
+    print("Rebuilt and seeded durable backend runtime state.")
+    print(f"metadata_db={reset_result.metadata_database_path}")
+    print(f"audit_db={reset_result.audit_database_path}")
+    print(f"trace_store={reset_result.trace_store_path}")
+    print(f"artifacts={reset_result.artifacts_path}")
 
 
 if __name__ == "__main__":

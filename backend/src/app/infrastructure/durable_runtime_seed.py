@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import shutil
 from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
 
 from src.app.domain.datasets import (
     CharacterizationResultDetail,
@@ -24,6 +27,73 @@ from src.app.infrastructure.rewrite_catalog_repository import (
     _seed_trace_details,
     _seed_trace_summaries,
 )
+
+
+@dataclass(frozen=True)
+class DurableRuntimeResetResult:
+    metadata_database_path: Path
+    audit_database_path: Path
+    trace_store_path: Path
+    artifacts_path: Path
+    removed_paths: tuple[Path, ...]
+    missing_paths: tuple[Path, ...]
+
+
+def reset_durable_runtime_state() -> DurableRuntimeResetResult:
+    from core.shared.persistence.trace_store import get_trace_store_path
+
+    from src.app.infrastructure.audit_store import (
+        bootstrap_audit_store,
+        resolve_audit_database_path,
+    )
+    from src.app.infrastructure.persistence.database import (
+        bootstrap_metadata_schema,
+        resolve_metadata_database_path,
+    )
+    from src.app.infrastructure.runtime import reset_runtime_state
+    from src.app.settings import get_settings
+
+    reset_runtime_state()
+    settings = get_settings()
+    metadata_database_path = resolve_metadata_database_path(settings.database_path)
+    audit_database_path = resolve_audit_database_path(settings.audit_database_path)
+    trace_store_path = get_trace_store_path()
+    artifacts_path = metadata_database_path.resolve().parent / "artifacts"
+
+    removed_paths: list[Path] = []
+    missing_paths: list[Path] = []
+    reset_paths = (
+        metadata_database_path,
+        metadata_database_path.with_name(f"{metadata_database_path.name}-shm"),
+        metadata_database_path.with_name(f"{metadata_database_path.name}-wal"),
+        audit_database_path,
+        audit_database_path.with_name(f"{audit_database_path.name}-shm"),
+        audit_database_path.with_name(f"{audit_database_path.name}-wal"),
+        trace_store_path,
+        artifacts_path,
+    )
+    for path in reset_paths:
+        if path.is_dir():
+            shutil.rmtree(path)
+            removed_paths.append(path)
+            continue
+        if path.exists():
+            path.unlink()
+            removed_paths.append(path)
+            continue
+        missing_paths.append(path)
+
+    bootstrap_metadata_schema(settings.database_path)
+    bootstrap_audit_store(settings.audit_database_path)
+    reset_runtime_state()
+    return DurableRuntimeResetResult(
+        metadata_database_path=metadata_database_path,
+        audit_database_path=audit_database_path,
+        trace_store_path=trace_store_path,
+        artifacts_path=artifacts_path,
+        removed_paths=tuple(removed_paths),
+        missing_paths=tuple(missing_paths),
+    )
 
 
 def seed_durable_runtime_state() -> None:
@@ -83,6 +153,12 @@ def seed_durable_runtime_state() -> None:
     for task in build_seed_tasks():
         task_snapshot_repository.save_task_snapshot(task)
         _persist_result_refs(storage_metadata_repository, task.result_refs)
+
+
+def rebuild_durable_runtime_state() -> DurableRuntimeResetResult:
+    reset_result = reset_durable_runtime_state()
+    seed_durable_runtime_state()
+    return reset_result
 
 
 def _seed_characterization_results_into_runtime(

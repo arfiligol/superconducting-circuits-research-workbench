@@ -184,6 +184,51 @@ def _create_sweepable_definition(name: str) -> str:
     return response.json()["data"]["definition"]["definition_id"]
 
 
+def _create_ingested_trace_design(*, trace_count: int = 1) -> tuple[str, str, list[str]]:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": f"Published Delete Dataset {trace_count}",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": "Published Delete Target",
+            "provenance_label": "measurement-batch",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": f"Y11_{index}",
+                    "representation": "complex",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": f"Measurement trace {index}",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.10 * index], [5.2, 0.15 * index]],
+                    },
+                }
+                for index in range(1, trace_count + 1)
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    return (
+        dataset_id,
+        payload["design"]["design_id"],
+        [trace["trace_id"] for trace in payload["traces"]],
+    )
+
+
 @contextmanager
 def _bind_client_app_context(test_client: TestClient):
     app_context_id = test_client.cookies.get("sc_app_context")
@@ -542,6 +587,119 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
         f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
     ).json()["data"]["rows"]
     assert [row["trace_id"] for row in repeated_rows] == [payload["trace"]["trace_id"]]
+
+
+def test_published_trace_can_be_deleted_and_stays_deleted_after_restart() -> None:
+    created_design = client.post(
+        "/datasets/local-dataset-001/designs",
+        json={"name": "Published Trace Delete Target"},
+    )
+    assert created_design.status_code == 201
+    design = created_design.json()["data"]["design"]
+
+    task = _submit_local_simulation(ptc_enabled=True)
+    publish = client.post(
+        f"/tasks/{task['task_id']}/result-traces/publish",
+        json={
+            "design_id": design["design_id"],
+            "trace_key": _trace_key(family="y_matrix", source="ptc", z0_ohm=50),
+            "metric": "imag",
+            "parameter_name": "Deletable Published Trace",
+        },
+    )
+    assert publish.status_code == 200
+    trace_id = publish.json()["data"]["trace"]["trace_id"]
+
+    rows = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
+    ).json()["data"]["rows"]
+    published_row = next(row for row in rows if row["trace_id"] == trace_id)
+    assert published_row["allowed_actions"] == {"edit": False, "delete": True}
+
+    delete = client.delete(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/{trace_id}"
+    )
+    assert delete.status_code == 200
+    assert delete.json()["data"]["deleted_trace_id"] == trace_id
+
+    rows_after_delete = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
+    ).json()["data"]["rows"]
+    assert [row["trace_id"] for row in rows_after_delete] == []
+
+    reset_runtime_state()
+    client.cookies.clear()
+
+    rows_after_restart = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
+    ).json()["data"]["rows"]
+    assert rows_after_restart == []
+    detail = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/{trace_id}"
+    )
+    assert detail.status_code == 404
+
+
+def test_batch_delete_supports_mixed_raw_and_published_traces() -> None:
+    created_design = client.post(
+        "/datasets/local-dataset-001/designs",
+        json={"name": "Mixed Delete Target"},
+    )
+    assert created_design.status_code == 201
+    design = created_design.json()["data"]["design"]
+    ingestion = client.post(
+        "/datasets/local-dataset-001/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": design["name"],
+            "design_id": design["design_id"],
+            "provenance_label": "measurement-batch",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11_raw",
+                    "representation": "complex",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Mixed delete raw trace",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.1], [5.2, 0.15]],
+                    },
+                }
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    raw_trace_id = ingestion.json()["data"]["traces"][0]["trace_id"]
+
+    task = _submit_local_simulation(ptc_enabled=True)
+    publish = client.post(
+        f"/tasks/{task['task_id']}/result-traces/publish",
+        json={
+            "design_id": design["design_id"],
+            "trace_key": _trace_key(family="y_matrix", source="ptc", z0_ohm=50),
+            "metric": "imag",
+            "parameter_name": "Mixed Delete Published Trace",
+        },
+    )
+    assert publish.status_code == 200
+    published_trace_id = publish.json()["data"]["trace"]["trace_id"]
+
+    delete = client.post(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/batch-delete",
+        json={"trace_ids": [raw_trace_id, published_trace_id]},
+    )
+    assert delete.status_code == 200
+    payload = delete.json()["data"]
+    assert payload["deleted_trace_ids"] == [raw_trace_id, published_trace_id]
+    assert payload["deleted_count"] == 2
+
+    rows = client.get(
+        f"/datasets/local-dataset-001/designs/{design['design_id']}/traces"
+    ).json()["data"]["rows"]
+    assert rows == []
 
 
 def test_trace_scoped_publish_supports_post_processing_tasks() -> None:

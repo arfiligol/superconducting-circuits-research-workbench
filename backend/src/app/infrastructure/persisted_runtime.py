@@ -5,6 +5,7 @@ import copy
 import json
 import math
 import re
+import shutil
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -630,6 +631,18 @@ def write_complex_trace_payload(
         write_result.store_ref,
         payload_role="dataset_primary",
     )
+
+
+def delete_trace_payload_store(store_key: str) -> None:
+    trace_store_root = Path(_core_symbols()["get_trace_store_path"]()).resolve()
+    store_path = (trace_store_root / store_key).resolve()
+    if not store_path.is_relative_to(trace_store_root):
+        raise ValueError("trace payload store_key escapes the configured trace store root")
+    if store_path.is_dir():
+        shutil.rmtree(store_path)
+        return
+    if store_path.exists():
+        store_path.unlink()
 
 
 def _cached_simulation_runtime(
