@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的技術選型、desktop 包裝方向與共享工具規範。
-version: v2.4.0
-last_updated: 2026-03-21
+version: v2.4.1
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
@@ -162,6 +162,8 @@ updated_by: codex
 - metadata DB：
   - current baseline: `SQLite`
   - service target: `PostgreSQL`
+  - schema versioning baseline: `Alembic`
+  - detailed migration/version authority: [App / Backend / Circuit Definitions](../../app/backend/circuit-definitions.md)
 - numeric traces：
   - baseline: `Zarr`
   - backend abstraction required for future extension
@@ -224,6 +226,7 @@ updated_by: codex
     - Vitest / Playwright when frontend exists
 - **Storage direction**:
     - metadata DB: SQLite now, PostgreSQL target
+    - metadata DB schema versioning: Alembic; detailed rules live in App / Backend / Circuit Definitions
     - numeric trace store: Zarr
 - New UI work should target Next.js, not the legacy UI layer.
 - Desktop packaging should use Electron around the frontend instead of reviving legacy-UI-native desktop assumptions.
