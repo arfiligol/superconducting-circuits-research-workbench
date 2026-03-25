@@ -602,11 +602,14 @@ def write_complex_trace_payload(
     trace_id: str,
     frequencies_ghz: Sequence[float],
     values: np.ndarray,
+    store_key: str | None = None,
 ) -> Any:
     trace_store = _core_symbols()["LocalZarrTraceStore"](
         root_path=_core_symbols()["get_trace_store_path"]()
     )
-    store_key = f"datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr"
+    resolved_store_key = (
+        store_key or f"datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr"
+    )
     write_result = trace_store.write_trace(
         design_id=_stable_positive_int(dataset_id, design_id),
         batch_id=_stable_positive_int(trace_id, dataset_id),
@@ -619,7 +622,7 @@ def write_complex_trace_payload(
                 "values": np.asarray(tuple(float(value) for value in frequencies_ghz)),
             },
         ),
-        store_key=store_key,
+        store_key=resolved_store_key,
         payload_role="raw",
         writer_version="local_runtime.trace_publish",
     )

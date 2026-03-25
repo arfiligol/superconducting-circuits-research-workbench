@@ -49,8 +49,11 @@ def test_alembic_upgrade_creates_rewrite_storage_tables_and_supports_round_trip(
     inspector = inspect(engine)
     assert sorted(inspector.get_table_names()) == [
         "alembic_version",
+        "rewrite_characterization_registry_records",
         "rewrite_circuit_definitions",
         "rewrite_dataset_designs",
+        "rewrite_dataset_records",
+        "rewrite_dataset_traces",
         "rewrite_published_simulation_results",
         "rewrite_published_simulation_traces",
         "rewrite_result_handles",
@@ -470,8 +473,11 @@ def test_bootstrap_metadata_schema_migrates_legacy_numeric_definition_ids_to_uui
     inspector = inspect(engine)
     assert sorted(inspector.get_table_names()) == [
         "alembic_version",
+        "rewrite_characterization_registry_records",
         "rewrite_circuit_definitions",
         "rewrite_dataset_designs",
+        "rewrite_dataset_records",
+        "rewrite_dataset_traces",
         "rewrite_published_simulation_results",
         "rewrite_published_simulation_traces",
         "rewrite_result_handles",
@@ -513,7 +519,7 @@ def test_bootstrap_metadata_schema_migrates_legacy_numeric_definition_ids_to_uui
     assert task.definition_id == child_definition.definition_id
     assert event is not None
     assert event.metadata_json["definition_id"] == child_definition.definition_id
-    assert session_scalar_text(engine, "SELECT version_num FROM alembic_version") == "20260324_0006"
+    assert session_scalar_text(engine, "SELECT version_num FROM alembic_version") == "20260325_0007"
 
 
 def _build_alembic_config(database_path: Path) -> Config:

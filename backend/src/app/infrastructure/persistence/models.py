@@ -126,6 +126,34 @@ class RewritePublishedSimulationResultRecord(RewriteMetadataBase):
     )
 
 
+class RewriteDatasetRecord(RewriteMetadataBase):
+    __tablename__ = "rewrite_dataset_records"
+    __table_args__ = (
+        Index("ix_rewrite_dataset_records_dataset_id", "dataset_id", unique=True),
+        Index("ix_rewrite_dataset_records_workspace_id", "workspace_id"),
+        Index("ix_rewrite_dataset_records_lifecycle_state", "lifecycle_state"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    family: Mapped[str] = mapped_column(String(64), nullable=False)
+    owner_display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    owner_user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    visibility_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    device_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    capabilities_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
 class RewriteDatasetDesignRecord(RewriteMetadataBase):
     __tablename__ = "rewrite_dataset_designs"
     __table_args__ = (
@@ -149,6 +177,107 @@ class RewriteDatasetDesignRecord(RewriteMetadataBase):
     normalized_name: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     updated_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
+class RewriteDatasetTraceRecord(RewriteMetadataBase):
+    __tablename__ = "rewrite_dataset_traces"
+    __table_args__ = (
+        Index(
+            "ix_rewrite_dataset_traces_dataset_design_trace",
+            "dataset_id",
+            "design_id",
+            "trace_id",
+            unique=True,
+        ),
+        Index(
+            "ix_rewrite_dataset_traces_dataset_design",
+            "dataset_id",
+            "design_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    design_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    trace_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    family: Mapped[str] = mapped_column(String(32), nullable=False)
+    parameter: Mapped[str] = mapped_column(String(128), nullable=False)
+    representation: Mapped[str] = mapped_column(String(64), nullable=False)
+    trace_mode_group: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    stage_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    provenance_summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    axes_json: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    preview_payload_json: Mapped[dict[str, object]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    numeric_payload_json: Mapped[dict[str, object]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    payload_store_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    result_handle_ids_json: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    editable: Mapped[bool] = mapped_column(nullable=False, default=False)
+    mutation_policy_summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    updated_at: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
+class RewriteCharacterizationRegistryRecord(RewriteMetadataBase):
+    __tablename__ = "rewrite_characterization_registry_records"
+    __table_args__ = (
+        Index(
+            "ix_rewrite_characterization_registry_dataset_design_analysis",
+            "dataset_id",
+            "design_id",
+            "analysis_id",
+            unique=True,
+        ),
+        Index(
+            "ix_rewrite_characterization_registry_dataset_design_sort",
+            "dataset_id",
+            "design_id",
+            "sort_order",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    design_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    analysis_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    availability_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    required_config_fields_json: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    matched_trace_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    recommended_trace_modes_json: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         nullable=False,
         server_default=func.current_timestamp(),

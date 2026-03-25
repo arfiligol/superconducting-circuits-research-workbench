@@ -13,10 +13,7 @@ from src.app.domain.tasks import (
     TaskLifecycleUpdate,
     TaskResultRefs,
 )
-from src.app.infrastructure.rewrite_app_state_repository import (
-    build_pending_result_refs,
-    build_seed_tasks,
-)
+from src.app.infrastructure.rewrite_app_state_repository import build_pending_result_refs
 
 
 class StorageMetadataRepository(Protocol):
@@ -79,9 +76,6 @@ class PersistedRewriteTaskRepository:
     ) -> None:
         self._task_snapshot_repository = task_snapshot_repository
         self._storage_metadata_repository = storage_metadata_repository
-        self._seed_tasks = build_seed_tasks()
-        self._ensure_seed_task_snapshots()
-        self._ensure_seed_storage_metadata()
 
     def list_tasks(self) -> tuple[TaskDetail, ...]:
         return tuple(
@@ -170,17 +164,6 @@ class PersistedRewriteTaskRepository:
     ) -> None:
         self._task_snapshot_repository.append_task_event(task_id, event)
 
-    def _ensure_seed_task_snapshots(self) -> None:
-        if self._task_snapshot_repository.has_tasks():
-            return
-
-        for task in self._seed_tasks:
-            self._task_snapshot_repository.save_task_snapshot(task)
-
-    def _ensure_seed_storage_metadata(self) -> None:
-        for task in self._seed_tasks:
-            self._ensure_result_refs(task.result_refs)
-
     def _persist_result_refs(self, result_refs: TaskResultRefs) -> None:
         for record in result_refs.metadata_records:
             self._storage_metadata_repository.save_storage_record(record)
@@ -195,30 +178,6 @@ class PersistedRewriteTaskRepository:
 
         for result_handle in result_refs.result_handles:
             self._storage_metadata_repository.save_result_handle(result_handle)
-
-    def _ensure_result_refs(self, result_refs: TaskResultRefs) -> None:
-        for record in result_refs.metadata_records:
-            if self._storage_metadata_repository.get_storage_record(record.record_id) is None:
-                self._storage_metadata_repository.save_storage_record(record)
-
-        trace_owner_record = _trace_owner_record(result_refs)
-        if (
-            result_refs.trace_payload is not None
-            and trace_owner_record is not None
-            and self._storage_metadata_repository.get_trace_payload_for_owner_record(
-                trace_owner_record.record_id
-            )
-            is None
-        ):
-            self._storage_metadata_repository.save_trace_payload(
-                trace_owner_record,
-                result_refs.trace_payload,
-                writer_version="rewrite-backend.runtime",
-            )
-
-        for result_handle in result_refs.result_handles:
-            if self._storage_metadata_repository.get_result_handle(result_handle.handle_id) is None:
-                self._storage_metadata_repository.save_result_handle(result_handle)
 
     def _hydrate_task(self, task: TaskDetail) -> TaskDetail:
         persisted_result_handles = self._storage_metadata_repository.list_result_handles_for_task(

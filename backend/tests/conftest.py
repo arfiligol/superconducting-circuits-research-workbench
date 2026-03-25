@@ -2,6 +2,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+from src.app.infrastructure.durable_runtime_seed import seed_durable_runtime_state
 from src.app.infrastructure.runtime import get_task_audit_repository, reset_runtime_state
 
 
@@ -15,6 +16,7 @@ def reset_runtime_dependencies(
     monkeypatch.setenv("SC_TRACE_STORE_ROOT", str(tmp_path / "trace_store"))
     monkeypatch.setenv("SC_RQ_REDIS_URL", f"fakeredis://{tmp_path.name}")
     reset_runtime_state()
+    seed_durable_runtime_state()
     get_task_audit_repository().clear()
     yield
     reset_runtime_state()

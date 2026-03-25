@@ -9,8 +9,11 @@ from src.app.infrastructure.persistence.database import (
     resolve_metadata_database_path,
 )
 from src.app.infrastructure.persistence.models import (
+    RewriteCharacterizationRegistryRecord,
     RewriteCircuitDefinitionRecord,
     RewriteDatasetDesignRecord,
+    RewriteDatasetRecord,
+    RewriteDatasetTraceRecord,
     RewriteMetadataBase,
     RewritePublishedSimulationResultRecord,
     RewritePublishedSimulationTraceRecord,
@@ -32,8 +35,11 @@ from src.app.infrastructure.persistence.task_snapshot_repository import (
 )
 
 __all__ = [
+    "RewriteCharacterizationRegistryRecord",
     "RewriteCircuitDefinitionRecord",
     "RewriteDatasetDesignRecord",
+    "RewriteDatasetRecord",
+    "RewriteDatasetTraceRecord",
     "RewriteMetadataBase",
     "RewritePublishedSimulationResultRecord",
     "RewritePublishedSimulationTraceRecord",
