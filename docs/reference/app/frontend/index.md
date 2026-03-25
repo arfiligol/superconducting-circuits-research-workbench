@@ -12,7 +12,7 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace 與 research workflow surfaces
+scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
 version: v0.23.1
 last_updated: 2026-03-25
 updated_by: codex
@@ -20,7 +20,7 @@ updated_by: codex
 
 # Frontend Reference
 
-本區收錄 frontend app layer 的可查詢規格，涵蓋 shared shell、shared workflow、workspace 與 research workflow surfaces。
+本區收錄 frontend app layer 的可查詢規格，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces。
 
 !!! info "How To Read Frontend App Docs"
     先讀 shared surfaces 了解 global context 與 shared workflow，再讀各 page specs。
