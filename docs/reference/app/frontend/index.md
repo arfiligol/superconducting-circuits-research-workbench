@@ -12,7 +12,7 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces
+scope: Frontend app reference 索引，涵蓋 shared shell、shared workflow、workspace 與 research workflow surfaces
 version: v0.23.1
 last_updated: 2026-03-25
 updated_by: codex
@@ -20,14 +20,14 @@ updated_by: codex
 
 # Frontend Reference
 
-本區收錄 frontend app layer 的可查詢規格，涵蓋 shared shell、shared workflow、workspace、definition 與 research workflow surfaces。
+本區收錄 frontend app layer 的可查詢規格，涵蓋 shared shell、shared workflow、workspace 與 research workflow surfaces。
 
 !!! info "How To Read Frontend App Docs"
     先讀 shared surfaces 了解 global context 與 shared workflow，再讀各 page specs。
     若你要問的是 layout、control action、權限或 result handoff，先確認它是不是 shared surface，而不是直接埋在單頁裡。
 
 !!! warning "IA Groups Are Not Pages"
-    `Shared Shell`、`Shared Workflow`、`Workspace`、`Definition`、`Research Workflow` 是資訊架構分組，不是可點的實作頁。
+    `Shared Shell`、`Shared Workflow`、`Workspace`、`Research Workflow`、`Data Pipeline`、`Circuit Simulation` 是資訊架構分組，不是可點的實作頁。
     本頁只列真正存在的 frontend reference pages。
 
 !!! warning "Do Not Rewrite Sidebar Taxonomy In Implementation"
@@ -47,6 +47,22 @@ updated_by: codex
 | `Pipeline` | data-analysis flow；item order 具有 UX 引導含義 | 放 `Data Ingestion`、`Raw Data`、`Characterization` 等流程節點，不放 system / task infra management page |
 | `CIRCUIT SIMULATION` | definition-driven modeling / simulation flow | 放 schema、schemdraw、simulation 等建模工作頁 |
 
+## Documentation IA Rule
+
+frontend docs 的功能分組應盡量對齊產品可見的 sidebar taxonomy。
+
+目前的整理原則是：
+
+- `Workspace`：承接 workspace-level overview / operations surfaces
+- `Research Workflow`：承接功能工作流
+- `Research Workflow` 之下再以目前 sidebar 語言收斂成：
+  - `Data Pipeline`
+  - `Circuit Simulation`
+
+!!! info "Docs IA can be slightly more compact than the visible sidebar"
+    文件可以把可見 sidebar groups 收斂成更穩定的閱讀分組。
+    但分組語意仍必須與 `Dashboard`、`Pipeline`、`Circuit Simulation` 這三個產品語言一致。
+
 ## Page Map
 
 === "Shared Shell"
@@ -63,30 +79,30 @@ updated_by: codex
     |---|---|---|
     | [Task Management](shared-workflow/task-management.md) | runtime-mode-aware `Global Context` queue section、attach、cancel、terminate、retry、refresh recovery | [App / Shared / Runtime Modes](../shared/runtime-modes.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Resource Ownership & Visibility](../shared/resource-ownership-and-visibility.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Audit Logging](../shared/audit-logging.md) |
 
-=== "Workspace / Pipeline Pages"
+=== "Workspace"
 
     | Page | Sidebar group | Core focus | Authority pair |
     |---|---|---|---|
     | [Dashboard](workspace/dashboard.md) | `Dashboard` | summary-first landing page；目前 dataset context、tagged core metrics 與 dedicated page entry points | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Characterization Results](../backend/characterization-results.md) |
     | [Dataset](workspace/dataset.md) | `Dashboard` | visible dataset catalog、active dataset switch、profile edit、lifecycle actions | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
     | [Tasks](workspace/tasks.md) | `Dashboard` | standalone queue browse、worker inspection、history、task detail、control actions | [Backend / Tasks & Execution](../backend/tasks-execution.md), [App / Shared / Task Runtime & Processors](../shared/task-runtime-and-processors.md), [App / Shared / Authentication & Authorization](../shared/authentication-and-authorization.md) |
+
+=== "Research Workflow / Data Pipeline"
+
+    | Page | Sidebar group | Core focus | Authority pair |
+    |---|---|---|---|
     | [Data Ingestion](workspace/data-ingestion.md) | `Pipeline` | upload-first raw-data intake、validation、preprocess、import handoff | [Backend / Session & Workspace](../backend/session-workspace.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
     | [Raw Data Browser](workspace/raw-data-browser.md) | `Pipeline` | design list、trace summary CRUD、single-trace preview、batch delete | [Backend / Datasets & Results](../backend/datasets-results.md) |
+    | [Characterization](research-workflow/characterization.md) | `Pipeline` | design scope、run analysis、latest run summary、run history、result view | [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Characterization Results](../backend/characterization-results.md) |
 
-=== "Definition"
+=== "Research Workflow / Circuit Simulation"
 
-    | Page | Core focus | Authority pair |
-    |---|---|---|
-    | [Schemas](definition/schemas.md) | circuit schema catalog、search、sort、cursor-based browse | [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
-    | [Schema Editor](definition/schema-editor.md) | canonical source editing、auto-format、persisted validation、quick reference hints | [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
-
-=== "Research Workflow"
-
-    | Page | Core focus | Authority pair |
-    |---|---|---|
-    | [Schemdraw](research-workflow/schemdraw.md) | linked schema context、source editor、SVG live preview、backend-owned diagnostics/render | [Backend / Schemdraw Render](../backend/schemdraw-render.md), [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
-    | [Circuit Simulation](research-workflow/circuit-simulation.md) | pipeline-first simulation workflow、stage-local run state、simulation result、post-processing result | [Backend / Circuit Definitions](../backend/circuit-definitions.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
-    | [Characterization](research-workflow/characterization.md) | design scope、run analysis、latest run summary、run history、result view | [Backend / Datasets & Results](../backend/datasets-results.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Characterization Results](../backend/characterization-results.md) |
+    | Page | Sidebar group | Core focus | Authority pair |
+    |---|---|---|---|
+    | [Schemas](definition/schemas.md) | `Circuit Simulation` | circuit schema catalog、search、sort、cursor-based browse | [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
+    | [Schema Editor](definition/schema-editor.md) | `Circuit Simulation` | canonical source editing、auto-format、persisted validation、quick reference hints | [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
+    | [Schemdraw](research-workflow/schemdraw.md) | `Circuit Simulation` | linked schema context、source editor、SVG live preview、backend-owned diagnostics/render | [Backend / Schemdraw Render](../backend/schemdraw-render.md), [Backend / Circuit Definitions](../backend/circuit-definitions.md) |
+    | [Circuit Simulation](research-workflow/circuit-simulation.md) | `Circuit Simulation` | pipeline-first simulation workflow、stage-local run state、simulation result、post-processing result | [Backend / Circuit Definitions](../backend/circuit-definitions.md), [Backend / Tasks & Execution](../backend/tasks-execution.md), [Backend / Datasets & Results](../backend/datasets-results.md) |
 
 ## Surface Pairing
 

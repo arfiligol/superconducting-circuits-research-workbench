@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: 同一個 App 的 Local Mode / Online Mode、frontend/backend mode pairing 與 mode-switch isolation contract
-version: v0.3.0
-last_updated: 2026-03-21
+version: v0.4.0
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
@@ -44,6 +44,17 @@ updated_by: codex
 |---|---|
 | `local` | frontend 連到本機 backend；資料與 task runtime 都在本地；不需要 Authentication / Authorization；shell context 固定落在 `Local Space` |
 | `online` | frontend 連到遠端 server；需要 Authentication / Authorization；支援 workspace collaboration |
+
+## Desktop Runtime Profile Overlay
+
+| Desktop runtime profile | Paired app mode | Required meaning |
+|---|---|---|
+| `local_managed` | `local` | desktop shell 管理本地 Redis、`sc-app` 與 worker sidecars；shell 自身不是 solver host |
+| `remote_server` | `online` | desktop shell 只連遠端 server target；不得啟動本地 heavy runtime 作為隱性依賴 |
+
+!!! info "Profile and mode are different terms"
+    `local_managed` / `remote_server` 只用於 desktop packaging 與 runtime orchestration。
+    正式 app mode vocabulary 仍是 `local` / `online`。
 
 ## Shared Product Rules
 
@@ -133,6 +144,23 @@ updated_by: codex
 | Failure handling | target 驗證失敗時，mode switch 應被拒絕，並保留目前 active mode，不可進入半切換狀態 |
 | Auth relation | target 驗證成功後才進 auth entry；target config 本身不等於 authenticated session |
 
+## Desktop Startup Preference Contract
+
+| Field | Meaning |
+|---|---|
+| `startup_behavior` | `restore_last_mode`、`always_local`、`always_online`、`ask_on_launch` |
+| `last_runtime_mode` | 最近一次成功建立的 `local` / `online` mode |
+| `last_online_target` | 最近一次成功使用的 online target summary |
+| `auto_start_local_runtime` | 進入 local desktop profile 時是否自動啟動本地 sidecars |
+
+| Rule | Required behavior |
+|---|---|
+| Local app config only | startup preference 與 remembered target 儲存在 app-local connection config，不寫進 remote workspace state |
+| Restoring mode is allowed | desktop shell 可在啟動時依 `startup_behavior` 自動進入上次 mode |
+| Restore does not imply auth reuse | 回到 `online` mode 不等於無條件恢復先前 authenticated session |
+| Remote validation first | 若要 restore `online` mode，必須先驗證 target reachability / compatibility，再建立新的 online session shell |
+| Local shell first | restore `local` mode 時，desktop shell 應可先顯示，再由 supervisor 背景啟動本地 runtime |
+
 ## Server Target Summary Shape
 
 | Field | Meaning |
@@ -152,6 +180,16 @@ updated_by: codex
 | failed-surface actions | 使用者必須能 `Retry`、重新指定 `IP:Port` / target，或切回 `Local Mode` |
 | presentation | failure state 應優先呈現 concise connection status，再提供可恢復動作 |
 | debug detail | 若需顯示 technical detail，依 `Developer Mode` 規則控制密度 |
+
+## Desktop Startup Restore Rules
+
+| Situation | Required behavior |
+|---|---|
+| `startup_behavior = restore_last_mode` and last mode = `local` | shell 可直接回到 `Local Mode`，並由 desktop supervisor 啟動本地 runtime |
+| `startup_behavior = restore_last_mode` and last mode = `online` | shell 先還原 target summary，再做 target validation；驗證成功後才建立 online session shell |
+| remembered online target invalid | 保持 shell 可互動，允許 Retry、改 target，或切回 `Local Mode` |
+| `startup_behavior = ask_on_launch` | shell 啟動後要求使用者選擇 `Local Mode` 或 `Online Mode` |
+| `auto_start_local_runtime = false` | shell 可先進入 local shell context，但本地 runtime 啟動需由使用者明確觸發 |
 
 !!! tip "Connection target is parallel to Local Space"
     `Local Space` 解決的是 local mode 的 workspace shape。

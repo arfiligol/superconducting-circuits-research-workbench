@@ -11,9 +11,9 @@ status: draft
 owner: docs-team
 audience: team
 scope: 理解導向概念解說索引，涵蓋 Qubit/JPA 共通物理與架構
-version: v0.3.0
-last_updated: 2026-02-27
-updated_by: docs-team
+version: v0.4.0
+last_updated: 2026-03-25
+updated_by: codex
 ---
 
 # Explanation
@@ -31,6 +31,8 @@ updated_by: docs-team
 - [Pipeline](architecture/pipeline/index.md)
 - [Circuit Simulation](architecture/circuit-simulation/index.md)
 - [Visualization Backend](architecture/design-decisions/visualization-backend.md)
+- [Desktop Runtime Supervisor](architecture/desktop-runtime-supervisor.md)
+- [Observability Taxonomy](architecture/observability-taxonomy.md)
 
 ## Related
 

@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: persisted audit trail、separate audit store、query/redaction/retention contract
-version: v0.4.0
-last_updated: 2026-03-14
+version: v0.5.0
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
@@ -26,6 +26,18 @@ updated_by: codex
 
 !!! warning "Separate Audit Store"
     audit logs 不得與 app operational database 共用同一個資料庫。
+
+## Boundary With Other Observability Layers
+
+| Layer | What it answers | What it must not replace |
+|---|---|---|
+| Audit logging | 誰對哪種資源做了什麼治理意義的動作 | workflow task timeline、product telemetry |
+| Workflow observability | request / task / queue / worker / result 經過哪些 runtime stage | actor-centric governance trail |
+| Product telemetry | 哪種 flow 常用、哪裡慢、哪裡值得優化 | audit trail、single-task debug record |
+
+!!! info "Shared identifiers are allowed"
+    `correlation_id` 可以同時出現在 audit row 與 workflow timeline。
+    這不表示 audit logging 可以取代 workflow observability。
 
 ## Required Record Fields
 
@@ -79,6 +91,7 @@ updated_by: codex
 
 ## Related
 
+* [Observability Model](observability-model.md)
 * [Authentication & Authorization](authentication-and-authorization.md)
 * [Task Runtime & Processors](task-runtime-and-processors.md)
 * [Backend / Tasks & Execution](../backend/tasks-execution.md)

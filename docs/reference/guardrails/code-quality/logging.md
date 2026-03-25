@@ -9,9 +9,9 @@ status: stable
 owner: docs-team
 audience: team
 scope: "日誌記錄規範：分級、顏色、使用方式"
-version: v1.1.0
-last_updated: 2026-03-14
-updated_by: docs-team
+version: v1.1.1
+last_updated: 2026-03-25
+updated_by: codex
 ---
 
 # Logging Standards
@@ -20,6 +20,7 @@ updated_by: docs-team
 
 !!! info "Use this page for runtime logging"
     這頁管的是開發與執行期 logging，不是 app-level audit logging。需要 actor/action/resource 的治理記錄時，應看 `App > Shared / Audit Logging`。
+    若要區分 audit logging、workflow observability 與 product telemetry 的責任，應看 `App > Shared / Observability Model`。
 
 ## Logging Map
 

@@ -9,9 +9,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Architecture 說明索引，涵蓋 Clean Architecture、Data Storage、Trace Platform Plan、Pipeline、Circuit Simulation
-version: v0.3.0
-last_updated: 2026-03-08
+scope: Architecture 說明索引，涵蓋 Clean Architecture、Data Storage、Trace Platform Plan、Desktop、Observability、Pipeline、Circuit Simulation
+version: v0.4.0
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
@@ -27,6 +27,10 @@ updated_by: codex
   `DesignRecord / TraceRecord / TraceBatchRecord / TraceStore` 的責任分層。
 - [Trace Platform Implementation Plan](trace-platform-implementation-plan.md)
   docs-first 後的實作切分、驗收條件與 multi-agent 分工。
+- [Desktop Runtime Supervisor](desktop-runtime-supervisor.md)
+  為什麼 desktop shell 應採 Electron + runtime profile supervisor，而不是讓 main process 承擔 solver work。
+- [Observability Taxonomy](observability-taxonomy.md)
+  為什麼 audit logging、workflow observability 與 product telemetry 必須分層。
 - [Pipeline](pipeline/index.md)
   分析與可視化一體化的資料與執行流程。
 - [Circuit Simulation](circuit-simulation/index.md)

@@ -10,9 +10,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: App 共享模型，涵蓋 runtime modes、workspace、resource scope、auth、runtime 與 audit
-version: v0.2.0
-last_updated: 2026-03-16
+scope: App 共享模型，涵蓋 runtime modes、workspace、resource scope、auth、runtime、observability 與 audit
+version: v0.4.0
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
@@ -32,19 +32,51 @@ updated_by: codex
     本區也負責同一個 App 在 `Local Mode` 與 `Online Mode` 之間共享的 mode model。
     若某個 contract 需要回答「local 是否 bypass auth」、「online 是否需要 collaboration」，通常都屬於這裡。
 
+## Grouping Principle
+
+本區優先依 **責任類型** 分組，而不是依 `Local Mode` / `Online Mode` 分樹。
+
+原因是：
+
+- 多數 shared contracts 同時適用於 `local` 與 `online`
+- 差異通常是 applicability 或 authority semantics，不是 owner 真的換了一套
+- 若直接拆成 mode-based folder / nav，反而容易長出兩份互相重複的 SoT
+
+!!! info "Mode is an applicability dimension"
+    `Local Mode` / `Online Mode` 應優先在各頁 contract 內表達 applicability 與差異語意。
+    Shared index 與 nav 則優先回答「這份 contract 在管什麼責任」。
+
 ## Page Map
 
-| Page | Core focus |
-|---|---|
-| [Runtime Modes](runtime-modes.md) | 同一個 App 的 `Local Mode` / `Online Mode`、mode switch 與 isolation rules |
-| [Mode Feature Matrix](mode-feature-matrix.md) | 各 shared surfaces / workflows 在 `Local Mode` 與 `Online Mode` 下的 support matrix |
-| [Identity & Workspace Model](identity-workspace-model.md) | user、session、active workspace、active dataset 的最小模型 |
-| [Resource Ownership & Visibility](resource-ownership-and-visibility.md) | dataset / schema / task / result 的 workspace ownership 與 sharing rules |
-| [Authentication & Authorization](authentication-and-authorization.md) | workspace membership、capabilities、queue permissions |
-| [Response & Error Contract](response-and-error-contract.md) | success / error envelope、common error families、frontend display contract |
-| [Outbound Email Delivery](outbound-email-delivery.md) | workspace invitation 的 SMTP baseline 與 mail delivery contract |
-| [Task Runtime & Processors](task-runtime-and-processors.md) | worker / processor status、task state machine、cancel / terminate |
-| [Audit Logging](audit-logging.md) | actor-centric audit trail 與 separate audit store |
+=== "Foundations / Cross-Mode"
+
+    | Page | Core focus |
+    |---|---|
+    | [Runtime Modes](runtime-modes.md) | 同一個 App 的 `Local Mode` / `Online Mode`、desktop runtime profile overlay、mode switch 與 isolation rules |
+    | [Mode Feature Matrix](mode-feature-matrix.md) | 各 shared surfaces / workflows 在 `Local Mode` 與 `Online Mode` 下的 support matrix |
+    | [Response & Error Contract](response-and-error-contract.md) | success / error envelope、common error families、frontend display contract |
+
+=== "Identity / Access / Collaboration"
+
+    | Page | Core focus |
+    |---|---|
+    | [Identity & Workspace Model](identity-workspace-model.md) | user、session、active workspace、active dataset 的最小模型 |
+    | [Resource Ownership & Visibility](resource-ownership-and-visibility.md) | dataset / schema / task / result 的 workspace ownership 與 sharing rules |
+    | [Authentication & Authorization](authentication-and-authorization.md) | workspace membership、capabilities、queue permissions |
+    | [Outbound Email Delivery](outbound-email-delivery.md) | workspace invitation 的 SMTP baseline 與 mail delivery contract |
+
+=== "Execution Runtime"
+
+    | Page | Core focus |
+    |---|---|
+    | [Task Runtime & Processors](task-runtime-and-processors.md) | worker / processor status、task state machine、cancel / terminate、local runtime topology |
+
+=== "Governance / Observability"
+
+    | Page | Core focus |
+    |---|---|
+    | [Observability Model](observability-model.md) | audit logging、workflow observability、product telemetry 的 shared taxonomy |
+    | [Audit Logging](audit-logging.md) | actor-centric audit trail 與 separate audit store |
 
 ## Related
 

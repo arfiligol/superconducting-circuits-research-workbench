@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的技術選型、desktop 包裝方向與共享工具規範。
-version: v2.4.1
+version: v2.5.0
 last_updated: 2026-03-25
 updated_by: codex
 ---
@@ -107,9 +107,12 @@ updated_by: codex
 ### Desktop
 
 - Electron 可作為 desktop shell
-- Electron main/preload 層只處理桌面能力、視窗生命週期與安全 IPC
+- Electron main/preload 層只處理桌面能力、視窗生命週期、安全 IPC 與 runtime supervisor
 - 不可把業務流程塞進 Electron main process
 - desktop 包裝不改變 canonical frontend/backend/CLI 邊界
+- desktop runtime profile 採：
+  - `local_managed`：監管本地 `redis`、`sc-app`、workers sidecars
+  - `remote_server`：只連 remote backend target，不啟動本地 heavy runtime
 
 ### Backend
 
@@ -125,6 +128,7 @@ updated_by: codex
 - simulation lane worker: `uv run sc-worker-simulation`
 - characterization lane worker: `uv run sc-worker-characterization`
 - queue backend: `rq` + `redis`
+- desktop-managed local runtime 需把 `redis` 視為 app-supervised private sidecar，而不是使用者自行維護的外部必要前提
 - Redis URL: `SC_RQ_REDIS_URL`（preferred） / `SC_REDIS_URL`（fallback alias）
 - queue names: `SC_SIMULATION_QUEUE_NAME`、`SC_CHARACTERIZATION_QUEUE_NAME`
 - lane mapping:
@@ -210,6 +214,7 @@ updated_by: codex
     - `uv run sc-app`
     - `uv run sc-worker-simulation`
     - `uv run sc-worker-characterization`
+    - desktop local-managed profile supervises Redis + app + worker sidecars; remote-server profile does not start local heavy runtime
 - **CLI**:
     - Typer
     - must remain first-class, not a second-tier wrapper

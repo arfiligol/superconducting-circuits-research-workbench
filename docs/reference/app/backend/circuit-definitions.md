@@ -11,7 +11,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Circuit definition catalog、detail、mutation 與 persisted inspection read model 的 backend reference surface。
-version: v0.6.0
+version: v0.6.1
 last_updated: 2026-03-24
 updated_by: codex
 ---
@@ -34,14 +34,15 @@ updated_by: codex
     - 同名 schema 的辨識必須依 short `Schema ID`、`created_at`，以及必要時的 owner / workspace context
 
 !!! warning "No transition period"
-    目前 SoT 不承認 legacy numeric definition identity，也不承認 dual-ID compatibility。
-    任何 catalog cache、editor route、linked-schema selection、simulation binding 或 task draft，若仍依賴舊 numeric identity，都必須升級到 UUIDv4-only model；不得在 runtime path 保留 dual-ID compatibility。
+    - 目前 SoT 不承認 legacy numeric definition identity
+    - runtime path 不得保留 dual-ID compatibility
+    - catalog、editor、schemdraw、simulation 與 task binding 一律以 UUIDv4-only `definition_id` 運作
 
 !!! important "Database version control uses Alembic"
-    - backend metadata DB schema 由 Alembic 管理，`bootstrap_metadata_schema()` 會在啟動時執行 `alembic upgrade head`
-    - schema identity 的 numeric -> UUIDv4 cutover 由 Alembic revision `20260324_0006_definition_identity_uuid_cutover` 升級既有 metadata rows
-    - `alembic_version` 是 metadata DB 的 schema-version authority；不得再把 `create_all` 或 ad hoc reset 當成正式版控機制
-    - `reset_backend_definition_identity_state.py` 若仍存在，只能視為 development recovery / local rebuild tool，不是 canonical migration strategy
+    - backend metadata DB schema versioning 由 Alembic 管理
+    - `bootstrap_metadata_schema()` 在 app startup 執行 `alembic upgrade head`
+    - schema identity 的 numeric -> UUIDv4 cutover 由 revision `20260324_0006_definition_identity_uuid_cutover` 升級既有 metadata rows
+    - `alembic_version` 是 metadata DB 的 schema-version authority；reset / rebuild tools 不是 canonical migration strategy
 
 ## Persistence And Migration Contract
 
@@ -49,8 +50,8 @@ updated_by: codex
 |---|---|
 | Metadata DB schema versioning | Alembic revision chain is authoritative |
 | App startup bootstrap | `bootstrap_metadata_schema()` runs Alembic upgrade to `head` before repositories/services consume the DB |
-| Breaking persisted identity change | must ship as Alembic migration or equally explicit versioned DB migration path |
-| Legacy numeric `definition_id` rows | upgraded in-place to UUIDv4 by Alembic revision `20260324_0006` |
+| Breaking persisted identity change | must ship as an Alembic revision recorded in the metadata DB migration chain |
+| Legacy numeric `definition_id` rows | upgraded in-place to UUIDv4 by revision `20260324_0006_definition_identity_uuid_cutover` |
 | Reset / rebuild tools | development-only recovery path; not the canonical production or team migration story |
 
 ---

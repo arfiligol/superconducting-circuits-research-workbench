@@ -70,11 +70,11 @@ graph TD
     Header[Workspace Header]
     Sidebar[Unified Sidebar]
     Main[Main Content]
-
+    
     Page --> Header
     Page --> Sidebar
     Page --> Main
-
+    
     subgraph Browser_Workflow
         Main --> H_Design["1. Design Scopes"]
         H_Design --> Pagination["Design Browse Controls"]

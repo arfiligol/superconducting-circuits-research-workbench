@@ -11,8 +11,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Backend audit log query、detail、export summary 與 governance read surface
-version: v0.1.0
-last_updated: 2026-03-14
+version: v0.1.1
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
@@ -159,6 +159,7 @@ updated_by: codex
 
 ## Related
 
+- [Shared / Observability Model](../shared/observability-model.md)
 - [Shared / Audit Logging](../shared/audit-logging.md)
 - [Shared / Response & Error Contract](../shared/response-and-error-contract.md)
 - [Session & Workspace](session-workspace.md)

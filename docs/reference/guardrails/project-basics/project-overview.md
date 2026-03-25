@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 定義 rewrite branch 的產品使命、功能範疇、desktop 支援與 migration 方向。
-version: v2.3.0
-last_updated: 2026-03-14
+version: v2.4.0
+last_updated: 2026-03-25
 updated_by: codex
 ---
 
@@ -79,6 +79,7 @@ updated_by: codex
 - `sc_core` 成為 canonical contracts 與共享計算邏輯的中心
 - frontend 只保留 draft state / interaction state / view state，不保存 canonical computation state
 - Electron 只作為 desktop shell，不改變系統邊界
+- desktop shell 應可同時承載 managed local runtime 與 remote server client 兩種 profile，而不是分裂成兩個產品
 - task / dataset / result 可在 refresh、reconnect、重開後重新 attach 與重建
 
 !!! success "Success bar"
@@ -110,6 +111,7 @@ updated_by: codex
 - API：以 **FastAPI** 為主
 - CLI：維持一級公民，與 API/核心服務共用規則而非複製邏輯
 - Desktop：允許使用 **Electron** 包裝 frontend，形成可本地執行的 desktop app
+- Desktop runtime direction：同一個 shell 可進入 managed local runtime 或 remote server client profile
 - Legacy：既有 NiceGUI 僅作為 migration 參考，不再作為新功能預設實作層
 
 ??? note "CLI position"
