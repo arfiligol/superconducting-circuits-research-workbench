@@ -501,7 +501,7 @@ export function RawDataBrowserWorkspace() {
             </div>
           ) : null}
           <div className="rounded-[1rem] border border-border bg-surface px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.95fr)]">
+            <div className="space-y-4">
               <div className="min-w-0">
                 <p className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   <Search className="h-3.5 w-3.5" />
@@ -522,30 +522,32 @@ export function RawDataBrowserWorkspace() {
                   />
                 </div>
               </div>
-              <TraceFilterSelect
-                label="Family"
-                value={browser.filters.family}
-                onChange={(value) => {
-                  browser.setFilters((current) => ({ ...current, family: value }));
-                }}
-                options={["", "s_matrix", "y_matrix", "z_matrix"]}
-              />
-              <TraceFilterSelect
-                label="View"
-                value={browser.filters.representation}
-                onChange={(value) => {
-                  browser.setFilters((current) => ({ ...current, representation: value }));
-                }}
-                options={["", "real", "imaginary", "magnitude", "phase"]}
-              />
-              <TraceFilterSelect
-                label="Source"
-                value={browser.filters.sourceKind}
-                onChange={(value) => {
-                  browser.setFilters((current) => ({ ...current, sourceKind: value }));
-                }}
-                options={["", "measurement", "layout_simulation", "circuit_simulation"]}
-              />
+              <div className="grid gap-4 md:grid-cols-3">
+                <TraceFilterSelect
+                  label="Family"
+                  value={browser.filters.family}
+                  onChange={(value) => {
+                    browser.setFilters((current) => ({ ...current, family: value }));
+                  }}
+                  options={["", "s_matrix", "y_matrix", "z_matrix"]}
+                />
+                <TraceFilterSelect
+                  label="View"
+                  value={browser.filters.representation}
+                  onChange={(value) => {
+                    browser.setFilters((current) => ({ ...current, representation: value }));
+                  }}
+                  options={["", "real", "imaginary", "magnitude", "phase"]}
+                />
+                <TraceFilterSelect
+                  label="Source"
+                  value={browser.filters.sourceKind}
+                  onChange={(value) => {
+                    browser.setFilters((current) => ({ ...current, sourceKind: value }));
+                  }}
+                  options={["", "measurement", "layout_simulation", "circuit_simulation"]}
+                />
+              </div>
             </div>
           </div>
 
@@ -555,7 +557,7 @@ export function RawDataBrowserWorkspace() {
             </div>
           ) : browser.traces.length > 0 ? (
             <div className="mt-4 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-border bg-surface px-4 py-4">
+              <div className="grid gap-3 rounded-[1rem] border border-border bg-surface px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                 <div className="min-w-0">
                   <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                     Batch Selection
@@ -566,7 +568,7 @@ export function RawDataBrowserWorkspace() {
                       : "Select deletable rows without affecting the single-trace preview."}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap justify-start gap-2 md:justify-end">
                   <SurfaceActionButton
                     onClick={browser.toggleSelectAllVisibleTraces}
                     disabled={!browser.canSelectVisibleTraces}
@@ -652,7 +654,7 @@ export function RawDataBrowserWorkspace() {
           )}
         </SurfacePanel>
 
-        <SurfacePanel title="Single Trace Preview" className="xl:sticky xl:top-5">
+        <SurfacePanel className="xl:sticky xl:top-[calc(var(--shell-header-height)+1rem)] xl:self-start" title="Single Trace Preview">
           {browser.traceDetailError ? (
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
               Unable to load trace preview. {browser.traceDetailError.message}
@@ -748,12 +750,18 @@ export function RawDataBrowserWorkspace() {
               )}
 
               <div className="rounded-[0.95rem] border border-border/80 bg-background px-4 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-4">
                   <div className="min-w-0">
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       History
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">{previewHistory.summary}</p>
+                  </div>
+
+                  <div className="rounded-[0.85rem] border border-border/70 bg-surface px-4 py-4">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Context
+                    </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <SurfaceTag tone="default">
                         {hasSampledPreview ? "Preview" : "Point Count"} · {previewPointCountLabel}
@@ -765,13 +773,25 @@ export function RawDataBrowserWorkspace() {
                       ))}
                     </div>
                   </div>
+
                   {previewHistory.steps.length > 0 ? (
-                    <div className="flex flex-wrap justify-end gap-2">
-                      {previewHistory.steps.map((step, index) => (
-                        <SurfaceTag key={`${step}:${index}`} tone="default">
-                          {index + 1}. {step}
-                        </SurfaceTag>
-                      ))}
+                    <div className="rounded-[0.85rem] border border-border/70 bg-surface px-4 py-4">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Process
+                      </p>
+                      <ol className="mt-3 space-y-2">
+                        {previewHistory.steps.map((step, index) => (
+                          <li
+                            key={`${step}:${index}`}
+                            className="flex items-center gap-3 rounded-[0.8rem] border border-border/70 bg-background px-3 py-3"
+                          >
+                            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-border/80 bg-card px-2 text-sm font-semibold text-foreground">
+                              {index + 1}
+                            </span>
+                            <span className="text-sm text-foreground">{step}</span>
+                          </li>
+                        ))}
+                      </ol>
                     </div>
                   ) : null}
                 </div>

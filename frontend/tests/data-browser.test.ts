@@ -280,7 +280,9 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain(
       'grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.82fr)] xl:items-start',
     );
-    expect(rawDataWorkspaceSource).toContain('className="xl:sticky xl:top-5"');
+    expect(rawDataWorkspaceSource).toContain(
+      'className="xl:sticky xl:top-[calc(var(--shell-header-height)+1rem)] xl:self-start"',
+    );
   });
 
   it("strengthens raw-data search affordance and keeps the wording consistent", () => {
@@ -293,7 +295,10 @@ describe("page-boundary source contracts", () => {
   it("keeps trace-summary filters in one dense unified block instead of fragmented mini cards", () => {
     expect(rawDataWorkspaceSource).toContain("function TraceFilterSelect");
     expect(rawDataWorkspaceSource).toContain(
-      'grid gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.95fr)]',
+      'space-y-4',
+    );
+    expect(rawDataWorkspaceSource).toContain(
+      'grid gap-4 md:grid-cols-3',
     );
     expect(rawDataWorkspaceSource).toContain('label="Family"');
     expect(rawDataWorkspaceSource).toContain('label="View"');
@@ -343,6 +348,11 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("title={trace.mutation_policy_summary}");
   });
 
+  it("keeps batch actions in a stable trailing action group instead of shifting with helper copy", () => {
+    expect(rawDataWorkspaceSource).toContain("md:grid-cols-[minmax(0,1fr)_auto] md:items-end");
+    expect(rawDataWorkspaceSource).toContain("md:justify-end");
+  });
+
   it("keeps focused preview separate from selected rows and cleans up deleted focus safely", () => {
     expect(rawDataWorkspaceSource).toContain("Focused Trace");
     expect(rawDataWorkspaceSource).not.toContain("Preview Source");
@@ -379,6 +389,8 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("resolveTracePreviewContextTags");
     expect(rawDataWorkspaceSource).toContain("resolvePreviewHistory");
     expect(rawDataWorkspaceSource).toContain("History");
+    expect(rawDataWorkspaceSource).toContain("Context");
+    expect(rawDataWorkspaceSource).toContain("Process");
     expect(rawDataWorkspaceSource).not.toContain("Preview Source");
     expect(rawDataWorkspaceSource).not.toContain("Preview Series");
     expect(rawDataWorkspaceSource).not.toContain(
@@ -395,6 +407,13 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("previewSemantics.yAxisTitle");
     expect(rawDataWorkspaceSource).not.toContain("{axis.length} {axis.unit}");
     expect(rawDataWorkspaceSource).not.toContain(">Value<");
+  });
+
+  it("keeps the single-trace preview on a sticky rail under the shell header", () => {
+    expect(rawDataWorkspaceSource).toContain(
+      'className="xl:sticky xl:top-[calc(var(--shell-header-height)+1rem)] xl:self-start"',
+    );
+    expect(rawDataWorkspaceSource).not.toContain("xl:overflow-y-auto");
   });
 
   it("keeps dashboard and raw-data hooks bound to the shared active dataset", () => {
