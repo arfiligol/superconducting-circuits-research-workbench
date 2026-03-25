@@ -26,6 +26,8 @@ This is the quantity that directly follows from the floating-qubit reduction pip
 
 - `common.jl`
   Shared circuit-construction and analysis helpers.
+- `progress_helpers.jl`
+  Terminal progress helpers built on `ProgressLogging + TerminalLoggers`.
 - `run_loss_decomposition_study.jl`
   Main Julia runner for the study.
 - `fit_readout_s21_vector_fitting.py`
@@ -513,6 +515,15 @@ From the repo root:
 ```bash
 julia --project=. sandbox/legacy_circuit_model_analysis/floating_qubit_loss_study/run_loss_decomposition_study.jl
 ```
+
+During simulation, terminal progress now uses nested `ProgressLogging + TerminalLoggers` bars:
+
+- root study progress
+  stage-level progress across the full study
+- nested sweep progress
+  `Lq` sweeps, readout-candidate sweeps, and coupled-window sweeps
+
+The bar labels are intentionally updated with the current `Lq`, coupled-window length, or `C_rq` candidate so you can see which parameter-space point is being solved.
 
 The script will keep the PlotlyJS server alive until you press Enter.
 

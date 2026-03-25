@@ -6,6 +6,7 @@ using DataFrames
 include(joinpath(@__DIR__, "..", "Reusable Component", "ReusableComponents.jl"))
 using .ReusableComponents
 
+include(joinpath(@__DIR__, "progress_helpers.jl"))
 include(joinpath(@__DIR__, "common.jl"))
 
 # =============================================================================
@@ -239,8 +240,21 @@ function config_without_xy(cfg::StudyConfig)
     return updated_config(cfg; c_xy1_f=0.0, c_xy2_f=0.0)
 end
 
-function simulate_best_near_target(base_cfg::StudyConfig, target_f_ghz; lq_values_h, label_prefix)
-    sweep_df = scan_lq_values(base_cfg, lq_values_h; label_prefix=label_prefix)
+function simulate_best_near_target(
+    base_cfg::StudyConfig,
+    target_f_ghz;
+    lq_values_h,
+    label_prefix,
+    progress_name::AbstractString="",
+    progress_parentid=ROOT_PROGRESS_PARENT,
+)
+    sweep_df = scan_lq_values(
+        base_cfg,
+        lq_values_h;
+        label_prefix=label_prefix,
+        progress_name=progress_name,
+        progress_parentid=progress_parentid,
+    )
     best_row = select_nearest_frequency(sweep_df, target_f_ghz)
     cfg = updated_config(base_cfg; l_q_h=best_row.lq_nh * nH)
     result = simulate_case(cfg; label=label_prefix)
@@ -259,508 +273,546 @@ function run_vector_fitting_helper(raw_csv_path, model_csv_path, resonance_csv_p
     run(cmd)
 end
 
-# =============================================================================
-# 3. Reference Cases
-# =============================================================================
+function run_loss_decomposition_study()
+    total_stages = 6
 
-println("============================================================")
-println("Floating-Qubit Loss Decomposition Study")
-println("============================================================")
-println("PTC -> CT -> Kron reduction is always applied on the qubit ports only.")
-println("PF and QWR resonant lengths are fixed; only coupled-window length and C_rq1/C_rq2 are swept on the readout side.")
-println()
+    println("============================================================")
+    println("Floating-Qubit Loss Decomposition Study")
+    println("============================================================")
+    println("PTC -> CT -> Kron reduction is always applied on the qubit ports only.")
+    println("PF and QWR resonant lengths are fixed; only coupled-window length and C_rq1/C_rq2 are swept on the readout side.")
+    println()
 
-xy_only_cfg = updated_config(base_cfg; c_rq1_f=0.0, c_rq2_f=0.0)
+    xy_only_cfg = updated_config(base_cfg; c_rq1_f=0.0, c_rq2_f=0.0)
 
-xy_baseline = simulate_best_near_target(
-    xy_only_cfg,
-    BASELINE_TARGET_F_GHZ;
-    lq_values_h=LQ_SWEEP_VALUES_H,
-    label_prefix="xy_only_baseline",
-)
+    with_progress_scope("Loss decomposition study") do study_progress_id
+        update_progress!(study_progress_id, 0, total_stages; name="Stage 1/6: XY-only baseline reference sweep")
+        xy_baseline = simulate_best_near_target(
+            xy_only_cfg,
+            BASELINE_TARGET_F_GHZ;
+            lq_values_h=LQ_SWEEP_VALUES_H,
+            label_prefix="xy_only_baseline",
+            progress_name="XY-only baseline Lq sweep",
+            progress_parentid=study_progress_id,
+        )
+        update_progress!(study_progress_id, 1, total_stages; name="Stage 2/6: XY-only matched-frequency sweep")
 
-xy_matched = simulate_best_near_target(
-    xy_only_cfg,
-    MATCHED_TARGET_F_GHZ;
-    lq_values_h=LQ_SWEEP_VALUES_H,
-    label_prefix="xy_only_matched",
-)
-
-G_xy_baseline = xy_baseline.result.G_resonance_s
-G_xy_matched = xy_matched.result.G_resonance_s
-LQ_BASELINE_H = xy_baseline.result.config.l_q_h
-
-@printf(
-    "XY-only baseline  : Lq = %.3f nH, fq = %.6f GHz, Re(Ydm) = %.6e S\n",
-    LQ_BASELINE_H / nH,
-    xy_baseline.result.fq_ghz,
-    G_xy_baseline,
-)
-@printf(
-    "XY-only matched   : Lq = %.3f nH, fq = %.6f GHz, Re(Ydm) = %.6e S\n",
-    xy_matched.result.config.l_q_h / nH,
-    xy_matched.result.fq_ghz,
-    G_xy_matched,
-)
-println()
-
-# =============================================================================
-# 4. Readout Candidate Sweep
-# =============================================================================
-
-candidate_rows = NamedTuple[]
-for coupled_window_length_m in COUPLED_WINDOW_LENGTH_CANDIDATES_M
-    window_cfg = config_with_coupled_window_length(base_cfg, coupled_window_length_m)
-    for coupling_candidate in READOUT_COUPLING_CANDIDATES
-        readout_cfg = config_with_readout_coupling(window_cfg, coupling_candidate)
-
-        ro_case = simulate_best_near_target(
-            config_without_xy(readout_cfg),
+        xy_matched = simulate_best_near_target(
+            xy_only_cfg,
             MATCHED_TARGET_F_GHZ;
             lq_values_h=LQ_SWEEP_VALUES_H,
-            label_prefix="readout_only_window_$(coupled_window_length_m / um)_$(coupling_candidate.label)",
+            label_prefix="xy_only_matched",
+            progress_name="XY-only matched Lq sweep",
+            progress_parentid=study_progress_id,
+        )
+        update_progress!(study_progress_id, 2, total_stages; name="Stage 3/6: Readout candidate sweep")
+
+        G_xy_baseline = xy_baseline.result.G_resonance_s
+        G_xy_matched = xy_matched.result.G_resonance_s
+        LQ_BASELINE_H = xy_baseline.result.config.l_q_h
+
+        @printf(
+            "XY-only baseline  : Lq = %.3f nH, fq = %.6f GHz, Re(Ydm) = %.6e S\n",
+            LQ_BASELINE_H / nH,
+            xy_baseline.result.fq_ghz,
+            G_xy_baseline,
+        )
+        @printf(
+            "XY-only matched   : Lq = %.3f nH, fq = %.6f GHz, Re(Ydm) = %.6e S\n",
+            xy_matched.result.config.l_q_h / nH,
+            xy_matched.result.fq_ghz,
+            G_xy_matched,
+        )
+        println()
+
+        candidate_rows = NamedTuple[]
+        total_candidates = length(COUPLED_WINDOW_LENGTH_CANDIDATES_M) * length(READOUT_COUPLING_CANDIDATES)
+        with_progress_scope("Readout candidate sweep"; parentid=study_progress_id) do candidate_progress_id
+            candidate_index = 0
+            for coupled_window_length_m in COUPLED_WINDOW_LENGTH_CANDIDATES_M
+                window_cfg = config_with_coupled_window_length(base_cfg, coupled_window_length_m)
+                for coupling_candidate in READOUT_COUPLING_CANDIDATES
+                    candidate_index += 1
+                    readout_cfg = config_with_readout_coupling(window_cfg, coupling_candidate)
+
+                    ro_case = simulate_best_near_target(
+                        config_without_xy(readout_cfg),
+                        MATCHED_TARGET_F_GHZ;
+                        lq_values_h=LQ_SWEEP_VALUES_H,
+                        label_prefix="readout_only_window_$(coupled_window_length_m / um)_$(coupling_candidate.label)",
+                        progress_name=@sprintf(
+                            "Candidate %d/%d Lq sweep",
+                            candidate_index,
+                            total_candidates,
+                        ),
+                        progress_parentid=candidate_progress_id,
+                    )
+
+                    full_case_cfg = updated_config(readout_cfg; l_q_h=LQ_BASELINE_H)
+                    full_case = simulate_case(
+                        full_case_cfg;
+                        label="full_coupled_window_$(coupled_window_length_m / um)_$(coupling_candidate.label)",
+                    )
+
+                    push!(
+                        candidate_rows,
+                        (
+                            window_label=@sprintf("window_%.0f_um", coupled_window_length_m / um),
+                            coupling_label=String(coupling_candidate.label),
+                            coupled_window_length_um=coupled_window_length_m / um,
+                            c_rq1_ff=coupling_candidate.c_rq1_f / fF,
+                            c_rq2_ff=coupling_candidate.c_rq2_f / fF,
+                            readout_only_lq_nh=ro_case.result.config.l_q_h / nH,
+                            readout_only_fq_ghz=ro_case.result.fq_ghz,
+                            readout_only_re_y_s=ro_case.result.G_resonance_s,
+                            readout_to_xy_ratio=ro_case.result.G_resonance_s / G_xy_matched,
+                            full_baseline_lq_fq_ghz=full_case.fq_ghz,
+                            full_baseline_lq_re_y_s=full_case.G_resonance_s,
+                            full_baseline_lq_normalized=full_case.G_resonance_s / G_xy_baseline,
+                        ),
+                    )
+
+                    update_progress!(
+                        candidate_progress_id,
+                        candidate_index,
+                        total_candidates;
+                        name=@sprintf(
+                            "Readout candidate sweep | window = %.0f um | coupling = %s",
+                            coupled_window_length_m / um,
+                            coupling_candidate.label,
+                        ),
+                        parentid=study_progress_id,
+                    )
+                end
+            end
+        end
+        update_progress!(study_progress_id, 3, total_stages; name="Stage 4/6: Selected readout-only and full-coupled cases")
+
+        candidate_df = DataFrame(candidate_rows)
+
+        ratio_mask = (READOUT_RATIO_ACCEPTABLE_MIN .<= candidate_df.readout_to_xy_ratio) .&
+                     (candidate_df.readout_to_xy_ratio .<= READOUT_RATIO_ACCEPTABLE_MAX)
+        freq_mask = abs.(candidate_df.readout_only_fq_ghz .- MATCHED_TARGET_F_GHZ) .<= READOUT_MATCH_TOLERANCE_GHZ
+        ratio_and_matched_mask = ratio_mask .& freq_mask
+
+        selection_note = ""
+        if any(ratio_and_matched_mask)
+            selected_row = choose_best_candidate(candidate_df[ratio_and_matched_mask, :])
+            selection_note = "ratio window and matched frequency"
+        elseif any(freq_mask)
+            selected_row = choose_best_candidate(candidate_df[freq_mask, :])
+            selection_note = "matched frequency only; ratio-window requirement relaxed"
+        elseif any(ratio_mask)
+            selected_row = choose_best_candidate(candidate_df[ratio_mask, :])
+            selection_note = "ratio window only; matched-frequency requirement unavailable"
+        else
+            selected_row = choose_best_candidate(candidate_df)
+            selection_note = "closest overall candidate"
+        end
+
+        selected_coupling = only(filter(c -> c.label == selected_row.coupling_label, READOUT_COUPLING_CANDIDATES))
+        selected_base_cfg = config_with_readout_coupling(
+            config_with_coupled_window_length(base_cfg, selected_row.coupled_window_length_um * um),
+            selected_coupling,
         )
 
-        full_case_cfg = updated_config(readout_cfg; l_q_h=LQ_BASELINE_H)
-        full_case = simulate_case(full_case_cfg; label="full_coupled_window_$(coupled_window_length_m / um)_$(coupling_candidate.label)")
+        println("Readout-candidate sweep summary:")
+        @printf("  selected coupled-window     = %.1f um\n", selected_row.coupled_window_length_um)
+        @printf("  selected coupling candidate = %s\n", selected_row.coupling_label)
+        @printf("  selection rule              = %s\n", selection_note)
+        @printf("  readout-only / xy-only      = %.4f\n", selected_row.readout_to_xy_ratio)
+        @printf("  readout-only fq             = %.6f GHz\n", selected_row.readout_only_fq_ghz)
+        @printf("  selected C_rq1, C_rq2       = %.3f fF, %.3f fF\n", selected_row.c_rq1_ff, selected_row.c_rq2_ff)
+        println()
 
-        push!(
-            candidate_rows,
-            (
-                window_label=@sprintf("window_%.0f_um", coupled_window_length_m / um),
-                coupling_label=String(coupling_candidate.label),
-                coupled_window_length_um=coupled_window_length_m / um,
-                c_rq1_ff=coupling_candidate.c_rq1_f / fF,
-                c_rq2_ff=coupling_candidate.c_rq2_f / fF,
-                readout_only_lq_nh=ro_case.result.config.l_q_h / nH,
-                readout_only_fq_ghz=ro_case.result.fq_ghz,
-                readout_only_re_y_s=ro_case.result.G_resonance_s,
-                readout_to_xy_ratio=ro_case.result.G_resonance_s / G_xy_matched,
-                full_baseline_lq_fq_ghz=full_case.fq_ghz,
-                full_baseline_lq_re_y_s=full_case.G_resonance_s,
-                full_baseline_lq_normalized=full_case.G_resonance_s / G_xy_baseline,
+        readout_selected = simulate_best_near_target(
+            config_without_xy(selected_base_cfg),
+            MATCHED_TARGET_F_GHZ;
+            lq_values_h=LQ_SWEEP_VALUES_H,
+            label_prefix="readout_only_selected",
+            progress_name="Selected RO-only Lq sweep",
+            progress_parentid=study_progress_id,
+        )
+
+        full_shift_cfg = updated_config(selected_base_cfg; l_q_h=LQ_BASELINE_H)
+        full_shift = simulate_case(full_shift_cfg; label="full_coupled_baseline_lq")
+
+        full_matched = simulate_best_near_target(
+            selected_base_cfg,
+            MATCHED_TARGET_F_GHZ;
+            lq_values_h=LQ_SWEEP_VALUES_H,
+            label_prefix="full_coupled_matched",
+            progress_name="Selected full-coupled Lq sweep",
+            progress_parentid=study_progress_id,
+        )
+        update_progress!(study_progress_id, 4, total_stages; name="Stage 5/6: Diagnostic sweeps")
+
+        G_readout = readout_selected.result.G_resonance_s
+        G_full_shift = full_shift.G_resonance_s
+        G_full_matched = full_matched.result.G_resonance_s
+
+        ideal_additive_G = G_xy_matched + G_readout
+        cross_shift_G = G_full_shift - ideal_additive_G
+        cross_matched_G = G_full_matched - ideal_additive_G
+
+        summary_rows = [
+            make_case_summary_row(
+                xy_baseline.result;
+                normalized_loss=1.0,
+                note="reference XY-only at 4.00 GHz",
+                window_label="xy_only",
+                coupling_label="xy_only",
             ),
+            make_case_summary_row(
+                xy_matched.result;
+                normalized_loss=G_xy_matched / G_xy_baseline,
+                note="pure frequency retuning by Lq",
+                window_label="xy_only",
+                coupling_label="xy_only",
+            ),
+            make_case_summary_row(
+                readout_selected.result;
+                normalized_loss=G_readout / G_xy_baseline,
+                note="readout-only standalone contribution",
+                window_label=selected_row.window_label,
+                coupling_label=selected_row.coupling_label,
+            ),
+            (
+                case="ideal_additive_reference",
+                lq_nh=NaN,
+                c_xy1_ff=xy_matched.result.config.c_xy1_f / fF,
+                c_xy2_ff=xy_matched.result.config.c_xy2_f / fF,
+                c_rq1_ff=selected_row.c_rq1_ff,
+                c_rq2_ff=selected_row.c_rq2_ff,
+                coupled_window_length_um=selected_row.coupled_window_length_um,
+                qwr_length_um=QWR_LENGTH_M / um,
+                pf_length_um=PURCELL_FILTER_LENGTH_M / um,
+                window_label=selected_row.window_label,
+                coupling_label=selected_row.coupling_label,
+                fq_ghz=MATCHED_TARGET_F_GHZ,
+                re_y_dm_s=ideal_additive_G,
+                normalized_loss=ideal_additive_G / G_xy_baseline,
+                crossed=true,
+                note="G_xy_matched + G_readout_only",
+            ),
+            make_case_summary_row(
+                full_shift;
+                normalized_loss=G_full_shift / G_xy_baseline,
+                note="same bare Lq as XY baseline; frequency shift induced by coupling",
+                window_label=selected_row.window_label,
+                coupling_label=selected_row.coupling_label,
+            ),
+            make_case_summary_row(
+                full_matched.result;
+                normalized_loss=G_full_matched / G_xy_baseline,
+                note="full coupled retuned back to matched frequency",
+                window_label=selected_row.window_label,
+                coupling_label=selected_row.coupling_label,
+            ),
+            (
+                case="cross_term_baseline_lq",
+                lq_nh=LQ_BASELINE_H / nH,
+                c_xy1_ff=xy_matched.result.config.c_xy1_f / fF,
+                c_xy2_ff=xy_matched.result.config.c_xy2_f / fF,
+                c_rq1_ff=selected_row.c_rq1_ff,
+                c_rq2_ff=selected_row.c_rq2_ff,
+                coupled_window_length_um=selected_row.coupled_window_length_um,
+                qwr_length_um=QWR_LENGTH_M / um,
+                pf_length_um=PURCELL_FILTER_LENGTH_M / um,
+                window_label=selected_row.window_label,
+                coupling_label=selected_row.coupling_label,
+                fq_ghz=full_shift.fq_ghz,
+                re_y_dm_s=cross_shift_G,
+                normalized_loss=cross_shift_G / G_xy_baseline,
+                crossed=true,
+                note="G_full_shift - G_xy_matched - G_readout_only",
+            ),
+            (
+                case="cross_term_matched_full",
+                lq_nh=full_matched.result.config.l_q_h / nH,
+                c_xy1_ff=full_matched.result.config.c_xy1_f / fF,
+                c_xy2_ff=full_matched.result.config.c_xy2_f / fF,
+                c_rq1_ff=selected_row.c_rq1_ff,
+                c_rq2_ff=selected_row.c_rq2_ff,
+                coupled_window_length_um=selected_row.coupled_window_length_um,
+                qwr_length_um=QWR_LENGTH_M / um,
+                pf_length_um=PURCELL_FILTER_LENGTH_M / um,
+                window_label=selected_row.window_label,
+                coupling_label=selected_row.coupling_label,
+                fq_ghz=full_matched.result.fq_ghz,
+                re_y_dm_s=cross_matched_G,
+                normalized_loss=cross_matched_G / G_xy_baseline,
+                crossed=true,
+                note="G_full_matched - G_xy_matched - G_readout_only",
+            ),
+        ]
+        summary_df = DataFrame(summary_rows)
+
+        xy_lq_sweep_df = scan_lq_values(
+            xy_only_cfg,
+            LQ_SWEEP_VALUES_H;
+            label_prefix="xy_only_curve",
+            progress_name="Diagnostic XY-only Lq sweep",
+            progress_parentid=study_progress_id,
         )
+        xy_lq_sweep_df[!, :setup] .= "XY only"
+
+        full_lq_sweep_df = scan_lq_values(
+            selected_base_cfg,
+            LQ_SWEEP_VALUES_H;
+            label_prefix="full_selected_curve",
+            progress_name="Diagnostic XY + Readout Lq sweep",
+            progress_parentid=study_progress_id,
+        )
+        full_lq_sweep_df[!, :setup] .= "XY + Readout"
+
+        window_length_rows = NamedTuple[]
+        total_window_lengths = length(COUPLED_WINDOW_LENGTH_CANDIDATES_M)
+        with_progress_scope("Diagnostic coupled-window sweep"; parentid=study_progress_id) do window_progress_id
+            for (window_index, coupled_window_length_m) in enumerate(COUPLED_WINDOW_LENGTH_CANDIDATES_M)
+                cfg = config_with_readout_coupling(
+                    config_with_coupled_window_length(base_cfg, coupled_window_length_m),
+                    selected_coupling,
+                )
+                matched_case = simulate_best_near_target(
+                    cfg,
+                    MATCHED_TARGET_F_GHZ;
+                    lq_values_h=LQ_SWEEP_VALUES_H,
+                    label_prefix="window_length_curve_$(coupled_window_length_m / um)",
+                    progress_name=@sprintf(
+                        "Window-length candidate %d/%d Lq sweep",
+                        window_index,
+                        total_window_lengths,
+                    ),
+                    progress_parentid=window_progress_id,
+                )
+                push!(
+                    window_length_rows,
+                    (
+                        coupled_window_length_um=coupled_window_length_m / um,
+                        lq_nh=matched_case.result.config.l_q_h / nH,
+                        fq_ghz=matched_case.result.fq_ghz,
+                        re_y_dm_s=matched_case.result.G_resonance_s,
+                    ),
+                )
+                update_progress!(
+                    window_progress_id,
+                    window_index,
+                    total_window_lengths;
+                    name=@sprintf(
+                        "Diagnostic coupled-window sweep | window = %.0f um",
+                        coupled_window_length_m / um,
+                    ),
+                    parentid=study_progress_id,
+                )
+            end
+        end
+        window_length_df = DataFrame(window_length_rows)
+        update_progress!(study_progress_id, 5, total_stages; name="Stage 6/6: Readout-line S21 vector fitting")
+
+        readout_characterization_cfg = config_without_xy(
+            updated_config(selected_base_cfg; c_rq1_f=0.0, c_rq2_f=0.0),
+        )
+
+        selected_readout_response = simulate_readout_sparameters(
+            readout_characterization_cfg;
+            sweep_start_ghz=READOUT_S21_SWEEP_START_GHZ,
+            sweep_stop_ghz=READOUT_S21_SWEEP_STOP_GHZ,
+            sweep_step_ghz=READOUT_S21_SWEEP_STEP_GHZ,
+        )
+
+        output_dir = @__DIR__
+        readout_s21_raw_csv_path = joinpath(output_dir, "selected_readout_s21_raw.csv")
+        readout_s21_model_csv_path = joinpath(output_dir, "selected_readout_s21_vf_model.csv")
+        readout_s21_resonance_csv_path = joinpath(output_dir, "selected_readout_s21_vf_resonances.csv")
+
+        readout_s21_raw_df = DataFrame(
+            frequency_hz=selected_readout_response.freqs_ghz .* GHz,
+            frequency_ghz=selected_readout_response.freqs_ghz,
+            S21_real=real.(selected_readout_response.s21),
+            S21_imag=imag.(selected_readout_response.s21),
+            S21_mag=abs.(selected_readout_response.s21),
+            S11_real=real.(selected_readout_response.s11),
+            S11_imag=imag.(selected_readout_response.s11),
+            S11_mag=abs.(selected_readout_response.s11),
+        )
+        CSV.write(readout_s21_raw_csv_path, readout_s21_raw_df)
+
+        run_vector_fitting_helper(
+            readout_s21_raw_csv_path,
+            readout_s21_model_csv_path,
+            readout_s21_resonance_csv_path,
+        )
+
+        readout_s21_model_df = CSV.read(readout_s21_model_csv_path, DataFrame)
+        readout_s21_resonance_df = CSV.read(readout_s21_resonance_csv_path, DataFrame)
+        update_progress!(study_progress_id, 6, total_stages; name="All simulation stages completed")
+
+        candidate_csv_path = joinpath(output_dir, "readout_candidate_sweep_summary.csv")
+        summary_csv_path = joinpath(output_dir, "selected_loss_decomposition_summary.csv")
+        lq_sweep_csv_path = joinpath(output_dir, "selected_setup_lq_sweep_summary.csv")
+        window_length_csv_path = joinpath(output_dir, "selected_coupled_window_length_sweep_summary.csv")
+
+        CSV.write(candidate_csv_path, candidate_df)
+        CSV.write(summary_csv_path, summary_df)
+        CSV.write(lq_sweep_csv_path, vcat(xy_lq_sweep_df, full_lq_sweep_df; cols=:union))
+        CSV.write(window_length_csv_path, window_length_df)
+
+        readout_s21_vf_plot = build_plot(
+            [
+                scatter(
+                    mode="markers",
+                    x=readout_s21_raw_df.frequency_ghz,
+                    y=readout_s21_raw_df.S21_mag,
+                    name="Readout S21 raw",
+                ),
+                scatter(
+                    mode="lines",
+                    x=readout_s21_model_df.frequency_ghz,
+                    y=readout_s21_model_df.S21_model_mag,
+                    name="Vector fitting model",
+                ),
+            ],
+            "Readout Line S21 With Vector Fitting",
+            "Frequency (GHz)",
+            "|S21|";
+            legend_title="Trace",
+        )
+
+        lq_sweep_plot = build_plot(
+            [
+                scatter(
+                    mode="lines+markers",
+                    x=xy_lq_sweep_df.lq_nh,
+                    y=xy_lq_sweep_df.g_resonance_s,
+                    text=[@sprintf("fq = %.6f GHz", fq) for fq in xy_lq_sweep_df.fq_ghz],
+                    hovertemplate="Setup: XY only<br>Lq: %{x:.3f} nH<br>Re(Ydm): %{y:.6e} S<br>%{text}<extra></extra>",
+                    name="XY only",
+                ),
+                scatter(
+                    mode="lines+markers",
+                    x=full_lq_sweep_df.lq_nh,
+                    y=full_lq_sweep_df.g_resonance_s,
+                    text=[@sprintf("fq = %.6f GHz", fq) for fq in full_lq_sweep_df.fq_ghz],
+                    hovertemplate="Setup: XY + Readout<br>Lq: %{x:.3f} nH<br>Re(Ydm): %{y:.6e} S<br>%{text}<extra></extra>",
+                    name="XY + Readout",
+                ),
+            ],
+            "Sweep Lq: Re(Ydm,in) For Two Setups",
+            "Lq (nH)",
+            "Re(Ydm,in) (S)";
+            legend_title="Setup",
+        )
+
+        window_length_plot = build_plot(
+            [
+                scatter(
+                    mode="lines+markers",
+                    x=window_length_df.coupled_window_length_um,
+                    y=window_length_df.re_y_dm_s,
+                    text=[@sprintf("fq = %.6f GHz, Lq = %.3f nH", row.fq_ghz, row.lq_nh) for row in eachrow(window_length_df)],
+                    hovertemplate="Setup: XY + Readout<br>Coupled window: %{x:.1f} um<br>Re(Ydm): %{y:.6e} S<br>%{text}<extra></extra>",
+                    name="XY + Readout",
+                ),
+            ],
+            "XY + Readout: Re(Ydm,in) vs Coupled Window Length",
+            "Coupled Window Length (um)",
+            "Re(Ydm,in) (S)";
+            legend_title="Setup",
+        )
+
+        selected_yin_plot = build_plot(
+            [
+                scatter(
+                    mode="markers+text",
+                    x=[
+                        xy_baseline.result.fq_ghz,
+                        xy_matched.result.fq_ghz,
+                        readout_selected.result.fq_ghz,
+                        full_shift.fq_ghz,
+                        full_matched.result.fq_ghz,
+                    ],
+                    y=[
+                        xy_baseline.result.G_resonance_s,
+                        xy_matched.result.G_resonance_s,
+                        readout_selected.result.G_resonance_s,
+                        full_shift.G_resonance_s,
+                        full_matched.result.G_resonance_s,
+                    ],
+                    text=[
+                        "XY baseline",
+                        "XY matched",
+                        "RO only",
+                        "Full shift",
+                        "Full matched",
+                    ],
+                    textposition="top center",
+                    marker=attr(size=12),
+                    name="Re(Ydm) at extracted resonance",
+                ),
+            ],
+            "Selected Cases: Re(Ydm,in) At Extracted Resonance",
+            "Extracted Qubit Resonance Frequency (GHz)",
+            "Re(Ydm,in) (S)";
+            legend_title="Case",
+        )
+
+        display(readout_s21_vf_plot)
+        display(lq_sweep_plot)
+        display(window_length_plot)
+        display(selected_yin_plot)
+
+        if HOLD_AFTER_PLOTTING
+            println()
+            println("Plots are being served from a temporary local PlotlyJS server.")
+            println("Press Enter to end the script after you finish viewing the plots...")
+            readline()
+        end
+
+        println("Vector-fitting resonance summary:")
+        for row in eachrow(readout_s21_resonance_df)
+            @printf(
+                "  %-18s fr = %.6f GHz | Ql = %.3f | BW = %.3f MHz\n",
+                row.role,
+                row.fr_ghz,
+                row.Ql,
+                row.bw_mhz,
+            )
+        end
+        println()
+
+        println("Selected-case summary:")
+        @printf(
+            "  selected coupled window = %.1f um | selected coupling = %s\n",
+            selected_row.coupled_window_length_um,
+            selected_row.coupling_label,
+        )
+        for row in eachrow(summary_df)
+            @printf(
+                "  %-26s fq = %7.4f GHz | Re(Ydm) = % .6e S | normalized = % .4f | window = %5.1f um | C_rq = (%5.2f, %5.2f) fF | %s\n",
+                row.case,
+                row.fq_ghz,
+                row.re_y_dm_s,
+                row.normalized_loss,
+                row.coupled_window_length_um,
+                row.c_rq1_ff,
+                row.c_rq2_ff,
+                row.note,
+            )
+        end
+
+        println()
+        println("Saved outputs:")
+        println("  ", candidate_csv_path)
+        println("  ", summary_csv_path)
+        println("  ", lq_sweep_csv_path)
+        println("  ", window_length_csv_path)
+        println("  ", readout_s21_raw_csv_path)
+        println("  ", readout_s21_model_csv_path)
+        println("  ", readout_s21_resonance_csv_path)
     end
 end
 
-candidate_df = DataFrame(candidate_rows)
-
-ratio_mask = (READOUT_RATIO_ACCEPTABLE_MIN .<= candidate_df.readout_to_xy_ratio) .&
-             (candidate_df.readout_to_xy_ratio .<= READOUT_RATIO_ACCEPTABLE_MAX)
-freq_mask = abs.(candidate_df.readout_only_fq_ghz .- MATCHED_TARGET_F_GHZ) .<= READOUT_MATCH_TOLERANCE_GHZ
-ratio_and_matched_mask = ratio_mask .& freq_mask
-
-selection_note = ""
-if any(ratio_and_matched_mask)
-    selected_row = choose_best_candidate(candidate_df[ratio_and_matched_mask, :])
-    selection_note = "ratio window and matched frequency"
-elseif any(freq_mask)
-    selected_row = choose_best_candidate(candidate_df[freq_mask, :])
-    selection_note = "matched frequency only; ratio-window requirement relaxed"
-elseif any(ratio_mask)
-    selected_row = choose_best_candidate(candidate_df[ratio_mask, :])
-    selection_note = "ratio window only; matched-frequency requirement unavailable"
-else
-    selected_row = choose_best_candidate(candidate_df)
-    selection_note = "closest overall candidate"
+with_terminal_logger() do
+    run_loss_decomposition_study()
 end
-
-selected_coupling = only(filter(c -> c.label == selected_row.coupling_label, READOUT_COUPLING_CANDIDATES))
-selected_base_cfg = config_with_readout_coupling(
-    config_with_coupled_window_length(base_cfg, selected_row.coupled_window_length_um * um),
-    selected_coupling,
-)
-
-println("Readout-candidate sweep summary:")
-@printf("  selected coupled-window     = %.1f um\n", selected_row.coupled_window_length_um)
-@printf("  selected coupling candidate = %s\n", selected_row.coupling_label)
-@printf("  selection rule              = %s\n", selection_note)
-@printf("  readout-only / xy-only      = %.4f\n", selected_row.readout_to_xy_ratio)
-@printf("  readout-only fq             = %.6f GHz\n", selected_row.readout_only_fq_ghz)
-@printf("  selected C_rq1, C_rq2       = %.3f fF, %.3f fF\n", selected_row.c_rq1_ff, selected_row.c_rq2_ff)
-println()
-
-# =============================================================================
-# 5. Final Selected Cases
-# =============================================================================
-
-readout_selected = simulate_best_near_target(
-    config_without_xy(selected_base_cfg),
-    MATCHED_TARGET_F_GHZ;
-    lq_values_h=LQ_SWEEP_VALUES_H,
-    label_prefix="readout_only_selected",
-)
-
-full_shift_cfg = updated_config(selected_base_cfg; l_q_h=LQ_BASELINE_H)
-full_shift = simulate_case(full_shift_cfg; label="full_coupled_baseline_lq")
-
-full_matched = simulate_best_near_target(
-    selected_base_cfg,
-    MATCHED_TARGET_F_GHZ;
-    lq_values_h=LQ_SWEEP_VALUES_H,
-    label_prefix="full_coupled_matched",
-)
-
-G_readout = readout_selected.result.G_resonance_s
-G_full_shift = full_shift.G_resonance_s
-G_full_matched = full_matched.result.G_resonance_s
-
-ideal_additive_G = G_xy_matched + G_readout
-cross_shift_G = G_full_shift - ideal_additive_G
-cross_matched_G = G_full_matched - ideal_additive_G
-
-summary_rows = [
-    make_case_summary_row(
-        xy_baseline.result;
-        normalized_loss=1.0,
-        note="reference XY-only at 4.00 GHz",
-        window_label="xy_only",
-        coupling_label="xy_only",
-    ),
-    make_case_summary_row(
-        xy_matched.result;
-        normalized_loss=G_xy_matched / G_xy_baseline,
-        note="pure frequency retuning by Lq",
-        window_label="xy_only",
-        coupling_label="xy_only",
-    ),
-    make_case_summary_row(
-        readout_selected.result;
-        normalized_loss=G_readout / G_xy_baseline,
-        note="readout-only standalone contribution",
-        window_label=selected_row.window_label,
-        coupling_label=selected_row.coupling_label,
-    ),
-    (
-        case="ideal_additive_reference",
-        lq_nh=NaN,
-        c_xy1_ff=xy_matched.result.config.c_xy1_f / fF,
-        c_xy2_ff=xy_matched.result.config.c_xy2_f / fF,
-        c_rq1_ff=selected_row.c_rq1_ff,
-        c_rq2_ff=selected_row.c_rq2_ff,
-        coupled_window_length_um=selected_row.coupled_window_length_um,
-        qwr_length_um=QWR_LENGTH_M / um,
-        pf_length_um=PURCELL_FILTER_LENGTH_M / um,
-        window_label=selected_row.window_label,
-        coupling_label=selected_row.coupling_label,
-        fq_ghz=MATCHED_TARGET_F_GHZ,
-        re_y_dm_s=ideal_additive_G,
-        normalized_loss=ideal_additive_G / G_xy_baseline,
-        crossed=true,
-        note="G_xy_matched + G_readout_only",
-    ),
-    make_case_summary_row(
-        full_shift;
-        normalized_loss=G_full_shift / G_xy_baseline,
-        note="same bare Lq as XY baseline; frequency shift induced by coupling",
-        window_label=selected_row.window_label,
-        coupling_label=selected_row.coupling_label,
-    ),
-    make_case_summary_row(
-        full_matched.result;
-        normalized_loss=G_full_matched / G_xy_baseline,
-        note="full coupled retuned back to matched frequency",
-        window_label=selected_row.window_label,
-        coupling_label=selected_row.coupling_label,
-    ),
-    (
-        case="cross_term_baseline_lq",
-        lq_nh=LQ_BASELINE_H / nH,
-        c_xy1_ff=xy_matched.result.config.c_xy1_f / fF,
-        c_xy2_ff=xy_matched.result.config.c_xy2_f / fF,
-        c_rq1_ff=selected_row.c_rq1_ff,
-        c_rq2_ff=selected_row.c_rq2_ff,
-        coupled_window_length_um=selected_row.coupled_window_length_um,
-        qwr_length_um=QWR_LENGTH_M / um,
-        pf_length_um=PURCELL_FILTER_LENGTH_M / um,
-        window_label=selected_row.window_label,
-        coupling_label=selected_row.coupling_label,
-        fq_ghz=full_shift.fq_ghz,
-        re_y_dm_s=cross_shift_G,
-        normalized_loss=cross_shift_G / G_xy_baseline,
-        crossed=true,
-        note="G_full_shift - G_xy_matched - G_readout_only",
-    ),
-    (
-        case="cross_term_matched_full",
-        lq_nh=full_matched.result.config.l_q_h / nH,
-        c_xy1_ff=full_matched.result.config.c_xy1_f / fF,
-        c_xy2_ff=full_matched.result.config.c_xy2_f / fF,
-        c_rq1_ff=selected_row.c_rq1_ff,
-        c_rq2_ff=selected_row.c_rq2_ff,
-        coupled_window_length_um=selected_row.coupled_window_length_um,
-        qwr_length_um=QWR_LENGTH_M / um,
-        pf_length_um=PURCELL_FILTER_LENGTH_M / um,
-        window_label=selected_row.window_label,
-        coupling_label=selected_row.coupling_label,
-        fq_ghz=full_matched.result.fq_ghz,
-        re_y_dm_s=cross_matched_G,
-        normalized_loss=cross_matched_G / G_xy_baseline,
-        crossed=true,
-        note="G_full_matched - G_xy_matched - G_readout_only",
-    ),
-]
-summary_df = DataFrame(summary_rows)
-
-# =============================================================================
-# 6. Additional Sweeps For Inspection
-# =============================================================================
-
-xy_lq_sweep_df = scan_lq_values(
-    xy_only_cfg,
-    LQ_SWEEP_VALUES_H;
-    label_prefix="xy_only_curve",
-)
-xy_lq_sweep_df[!, :setup] .= "XY only"
-
-full_lq_sweep_df = scan_lq_values(
-    selected_base_cfg,
-    LQ_SWEEP_VALUES_H;
-    label_prefix="full_selected_curve",
-)
-full_lq_sweep_df[!, :setup] .= "XY + Readout"
-
-window_length_rows = NamedTuple[]
-for coupled_window_length_m in COUPLED_WINDOW_LENGTH_CANDIDATES_M
-    cfg = config_with_readout_coupling(
-        config_with_coupled_window_length(base_cfg, coupled_window_length_m),
-        selected_coupling,
-    )
-    matched_case = simulate_best_near_target(
-        cfg,
-        MATCHED_TARGET_F_GHZ;
-        lq_values_h=LQ_SWEEP_VALUES_H,
-        label_prefix="window_length_curve_$(coupled_window_length_m / um)",
-    )
-    push!(
-        window_length_rows,
-        (
-            coupled_window_length_um=coupled_window_length_m / um,
-            lq_nh=matched_case.result.config.l_q_h / nH,
-            fq_ghz=matched_case.result.fq_ghz,
-            re_y_dm_s=matched_case.result.G_resonance_s,
-        ),
-    )
-end
-window_length_df = DataFrame(window_length_rows)
-
-# =============================================================================
-# 7. Readout S21 And Vector Fitting
-# =============================================================================
-
-# For identifying the Purcell-filter mode and readout-resonator mode on the
-# readout line itself, we characterize the selected readout structure with the
-# qubit disconnected from the readout branch. This keeps the selected coupled
-# window but avoids mixing qubit loading into the readout-line modal picture.
-readout_characterization_cfg = config_without_xy(
-    updated_config(selected_base_cfg; c_rq1_f=0.0, c_rq2_f=0.0),
-)
-
-selected_readout_response = simulate_readout_sparameters(
-    readout_characterization_cfg;
-    sweep_start_ghz=READOUT_S21_SWEEP_START_GHZ,
-    sweep_stop_ghz=READOUT_S21_SWEEP_STOP_GHZ,
-    sweep_step_ghz=READOUT_S21_SWEEP_STEP_GHZ,
-)
-
-output_dir = @__DIR__
-readout_s21_raw_csv_path = joinpath(output_dir, "selected_readout_s21_raw.csv")
-readout_s21_model_csv_path = joinpath(output_dir, "selected_readout_s21_vf_model.csv")
-readout_s21_resonance_csv_path = joinpath(output_dir, "selected_readout_s21_vf_resonances.csv")
-
-readout_s21_raw_df = DataFrame(
-    frequency_hz=selected_readout_response.freqs_ghz .* GHz,
-    frequency_ghz=selected_readout_response.freqs_ghz,
-    S21_real=real.(selected_readout_response.s21),
-    S21_imag=imag.(selected_readout_response.s21),
-    S21_mag=abs.(selected_readout_response.s21),
-    S11_real=real.(selected_readout_response.s11),
-    S11_imag=imag.(selected_readout_response.s11),
-    S11_mag=abs.(selected_readout_response.s11),
-)
-CSV.write(readout_s21_raw_csv_path, readout_s21_raw_df)
-
-run_vector_fitting_helper(
-    readout_s21_raw_csv_path,
-    readout_s21_model_csv_path,
-    readout_s21_resonance_csv_path,
-)
-
-readout_s21_model_df = CSV.read(readout_s21_model_csv_path, DataFrame)
-readout_s21_resonance_df = CSV.read(readout_s21_resonance_csv_path, DataFrame)
-
-# =============================================================================
-# 8. Save Outputs
-# =============================================================================
-
-candidate_csv_path = joinpath(output_dir, "readout_candidate_sweep_summary.csv")
-summary_csv_path = joinpath(output_dir, "selected_loss_decomposition_summary.csv")
-lq_sweep_csv_path = joinpath(output_dir, "selected_setup_lq_sweep_summary.csv")
-window_length_csv_path = joinpath(output_dir, "selected_coupled_window_length_sweep_summary.csv")
-
-CSV.write(candidate_csv_path, candidate_df)
-CSV.write(summary_csv_path, summary_df)
-CSV.write(lq_sweep_csv_path, vcat(xy_lq_sweep_df, full_lq_sweep_df; cols=:union))
-CSV.write(window_length_csv_path, window_length_df)
-
-# =============================================================================
-# 9. Plots
-# =============================================================================
-
-readout_s21_vf_plot = build_plot(
-    [
-        scatter(
-            mode="markers",
-            x=readout_s21_raw_df.frequency_ghz,
-            y=readout_s21_raw_df.S21_mag,
-            name="Readout S21 raw",
-        ),
-        scatter(
-            mode="lines",
-            x=readout_s21_model_df.frequency_ghz,
-            y=readout_s21_model_df.S21_model_mag,
-            name="Vector fitting model",
-        ),
-    ],
-    "Readout Line S21 With Vector Fitting",
-    "Frequency (GHz)",
-    "|S21|";
-    legend_title="Trace",
-)
-
-lq_sweep_plot = build_plot(
-    [
-        scatter(
-            mode="lines+markers",
-            x=xy_lq_sweep_df.lq_nh,
-            y=xy_lq_sweep_df.g_resonance_s,
-            text=[@sprintf("fq = %.6f GHz", fq) for fq in xy_lq_sweep_df.fq_ghz],
-            hovertemplate="Setup: XY only<br>Lq: %{x:.3f} nH<br>Re(Ydm): %{y:.6e} S<br>%{text}<extra></extra>",
-            name="XY only",
-        ),
-        scatter(
-            mode="lines+markers",
-            x=full_lq_sweep_df.lq_nh,
-            y=full_lq_sweep_df.g_resonance_s,
-            text=[@sprintf("fq = %.6f GHz", fq) for fq in full_lq_sweep_df.fq_ghz],
-            hovertemplate="Setup: XY + Readout<br>Lq: %{x:.3f} nH<br>Re(Ydm): %{y:.6e} S<br>%{text}<extra></extra>",
-            name="XY + Readout",
-        ),
-    ],
-    "Sweep Lq: Re(Ydm,in) For Two Setups",
-    "Lq (nH)",
-    "Re(Ydm,in) (S)";
-    legend_title="Setup",
-)
-
-window_length_plot = build_plot(
-    [
-        scatter(
-            mode="lines+markers",
-            x=window_length_df.coupled_window_length_um,
-            y=window_length_df.re_y_dm_s,
-            text=[@sprintf("fq = %.6f GHz, Lq = %.3f nH", row.fq_ghz, row.lq_nh) for row in eachrow(window_length_df)],
-            hovertemplate="Setup: XY + Readout<br>Coupled window: %{x:.1f} um<br>Re(Ydm): %{y:.6e} S<br>%{text}<extra></extra>",
-            name="XY + Readout",
-        ),
-    ],
-    "XY + Readout: Re(Ydm,in) vs Coupled Window Length",
-    "Coupled Window Length (um)",
-    "Re(Ydm,in) (S)";
-    legend_title="Setup",
-)
-
-selected_yin_plot = build_plot(
-    [
-        scatter(
-            mode="markers+text",
-            x=[
-                xy_baseline.result.fq_ghz,
-                xy_matched.result.fq_ghz,
-                readout_selected.result.fq_ghz,
-                full_shift.fq_ghz,
-                full_matched.result.fq_ghz,
-            ],
-            y=[
-                xy_baseline.result.G_resonance_s,
-                xy_matched.result.G_resonance_s,
-                readout_selected.result.G_resonance_s,
-                full_shift.G_resonance_s,
-                full_matched.result.G_resonance_s,
-            ],
-            text=[
-                "XY baseline",
-                "XY matched",
-                "RO only",
-                "Full shift",
-                "Full matched",
-            ],
-            textposition="top center",
-            marker=attr(size=12),
-            name="Re(Ydm) at extracted resonance",
-        ),
-    ],
-    "Selected Cases: Re(Ydm,in) At Extracted Resonance",
-    "Extracted Qubit Resonance Frequency (GHz)",
-    "Re(Ydm,in) (S)";
-    legend_title="Case",
-)
-
-display(readout_s21_vf_plot)
-display(lq_sweep_plot)
-display(window_length_plot)
-display(selected_yin_plot)
-
-if HOLD_AFTER_PLOTTING
-    println()
-    println("Plots are being served from a temporary local PlotlyJS server.")
-    println("Press Enter to end the script after you finish viewing the plots...")
-    readline()
-end
-
-# =============================================================================
-# 10. Terminal Summary
-# =============================================================================
-
-println("Vector-fitting resonance summary:")
-for row in eachrow(readout_s21_resonance_df)
-    @printf(
-        "  %-18s fr = %.6f GHz | Ql = %.3f | BW = %.3f MHz\n",
-        row.role,
-        row.fr_ghz,
-        row.Ql,
-        row.bw_mhz,
-    )
-end
-println()
-
-println("Selected-case summary:")
-@printf(
-    "  selected coupled window = %.1f um | selected coupling = %s\n",
-    selected_row.coupled_window_length_um,
-    selected_row.coupling_label,
-)
-for row in eachrow(summary_df)
-    @printf(
-        "  %-26s fq = %7.4f GHz | Re(Ydm) = % .6e S | normalized = % .4f | window = %5.1f um | C_rq = (%5.2f, %5.2f) fF | %s\n",
-        row.case,
-        row.fq_ghz,
-        row.re_y_dm_s,
-        row.normalized_loss,
-        row.coupled_window_length_um,
-        row.c_rq1_ff,
-        row.c_rq2_ff,
-        row.note,
-    )
-end
-
-println()
-println("Saved outputs:")
-println("  ", candidate_csv_path)
-println("  ", summary_csv_path)
-println("  ", lq_sweep_csv_path)
-println("  ", window_length_csv_path)
-println("  ", readout_s21_raw_csv_path)
-println("  ", readout_s21_model_csv_path)
-println("  ", readout_s21_resonance_csv_path)

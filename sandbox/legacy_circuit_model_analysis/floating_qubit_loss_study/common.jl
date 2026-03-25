@@ -531,21 +531,50 @@ function simulate_readout_sparameters(
     )
 end
 
-function scan_lq_values(base_cfg::StudyConfig, lq_values_h; label_prefix)
+function scan_lq_values(
+    base_cfg::StudyConfig,
+    lq_values_h;
+    label_prefix,
+    progress_name::AbstractString="",
+    progress_parentid=ROOT_PROGRESS_PARENT,
+)
     rows = NamedTuple[]
-    for lq_h in lq_values_h
-        cfg = updated_config(base_cfg; l_q_h=lq_h)
-        result = simulate_case(cfg; label="$(label_prefix)_$(lq_h / nH) nH")
-        push!(
-            rows,
-            (
-                lq_nh=lq_h / nH,
-                fq_ghz=result.fq_ghz,
-                g_resonance_s=result.G_resonance_s,
-                crossed=result.crossed,
-            ),
-        )
+    total_points = length(lq_values_h)
+
+    function solve_all_lq_points(progress_id=nothing)
+        for (point_index, lq_h) in enumerate(lq_values_h)
+            cfg = updated_config(base_cfg; l_q_h=lq_h)
+            result = simulate_case(cfg; label="$(label_prefix)_$(lq_h / nH) nH")
+            push!(
+                rows,
+                (
+                    lq_nh=lq_h / nH,
+                    fq_ghz=result.fq_ghz,
+                    g_resonance_s=result.G_resonance_s,
+                    crossed=result.crossed,
+                ),
+            )
+            if !isempty(progress_name)
+                update_progress!(
+                    progress_id,
+                    point_index,
+                    total_points;
+                    name=@sprintf("%s | Lq = %.3f nH", progress_name, lq_h / nH),
+                    parentid=progress_parentid,
+                )
+            end
+        end
+        return nothing
     end
+
+    if isempty(progress_name)
+        solve_all_lq_points()
+    else
+        with_progress_scope(progress_name; parentid=progress_parentid) do progress_id
+            solve_all_lq_points(progress_id)
+        end
+    end
+
     return DataFrame(rows)
 end
 
