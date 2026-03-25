@@ -19,7 +19,12 @@ import {
   resolveTracePreviewContextTags,
   resolveTracePreviewSemantics,
 } from "../src/features/data-browser/lib/trace-preview";
-import { resolveSelectedDesignId, resolveSelectedTraceId } from "../src/features/data-browser/lib/selection";
+import {
+  emptyTraceRows,
+  resolveSelectableTraceIds,
+  resolveSelectedDesignId,
+  resolveSelectedTraceId,
+} from "../src/features/data-browser/lib/selection";
 import {
   resolveEditableNumericGridModel,
   serializeEditableNumericGridModel,
@@ -176,6 +181,24 @@ describe("raw-data selection helpers", () => {
     expect(resolveSelectedTraceId("missing", traces)).toBe("trace_flux_a_measurement");
     expect(resolveSelectedDesignId("missing", [])).toBeNull();
     expect(resolveSelectedTraceId("missing", [])).toBeNull();
+  });
+
+  it("keeps selected trace ids stable when the visible deletable set is unchanged", () => {
+    const selectedTraceIds = ["trace_flux_a_measurement"];
+    const emptySelectedTraceIds: readonly string[] = [];
+
+    expect(resolveSelectableTraceIds(selectedTraceIds, traces)).toBe(selectedTraceIds);
+    expect(resolveSelectableTraceIds(emptySelectedTraceIds, traces)).toBe(emptySelectedTraceIds);
+  });
+
+  it("drops missing or non-deletable selected trace ids only when needed", () => {
+    expect(
+      resolveSelectableTraceIds(
+        ["trace_flux_a_measurement", "trace_flux_a_layout", "trace_missing"],
+        traces,
+      ),
+    ).toEqual(["trace_flux_a_measurement"]);
+    expect(resolveSelectableTraceIds(["trace_flux_a_measurement"], emptyTraceRows)).toEqual([]);
   });
 
   it("builds and parses raw-data browse hrefs for published research-data destinations", () => {
@@ -376,6 +399,8 @@ describe("page-boundary source contracts", () => {
     expect(rawDataHookSource).toContain("setSelectedDesignId(browseState.designId);");
     expect(rawDataHookSource).toContain("setFocusedTraceId(browseState.traceId);");
     expect(rawDataHookSource).toContain("setDesignSearch(browseState.designQuery ?? \"\");");
+    expect(rawDataHookSource).toContain("const traces = tracesQuery.data?.rows ?? emptyTraceRows");
+    expect(rawDataHookSource).toContain("resolveSelectableTraceIds(current, traces)");
     expect(rawDataHookSource).toContain("getTraceDetail(activeDatasetId, resolvedDesignId, resolvedFocusedTraceId)");
     expect(rawDataHookSource).toContain("getTraceEditDetail(activeDatasetId, resolvedDesignId, editTraceId)");
     expect(rawDataHookSource).toContain("updateTrace(activeDatasetId, resolvedDesignId, editTraceId, draft)");

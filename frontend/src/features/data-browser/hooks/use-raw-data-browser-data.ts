@@ -18,7 +18,12 @@ import {
 } from "@/lib/api/datasets";
 import { useActiveDataset } from "@/lib/app-state/active-dataset";
 import { parseRawDataBrowseState } from "@/features/data-browser/lib/browse-state";
-import { resolveSelectedDesignId, resolveSelectedTraceId } from "@/features/data-browser/lib/selection";
+import {
+  emptyTraceRows,
+  resolveSelectableTraceIds,
+  resolveSelectedDesignId,
+  resolveSelectedTraceId,
+} from "@/features/data-browser/lib/selection";
 
 import type {
   TraceMetadataRow,
@@ -145,7 +150,7 @@ export function useRawDataBrowserData() {
         : Promise.resolve(undefined),
   );
 
-  const traces = tracesQuery.data?.rows ?? [];
+  const traces = tracesQuery.data?.rows ?? emptyTraceRows;
   const deletableVisibleTraceIds = useMemo(
     () =>
       traces
@@ -168,11 +173,7 @@ export function useRawDataBrowserData() {
   }, [tracesQuery.data?.rows]);
 
   useEffect(() => {
-    setSelectedTraceIds((current) =>
-      current.filter((traceId) =>
-        traces.some((trace) => trace.trace_id === traceId && trace.allowed_actions.delete),
-      ),
-    );
+    setSelectedTraceIds((current) => resolveSelectableTraceIds(current, traces));
   }, [traces]);
 
   useEffect(() => {
