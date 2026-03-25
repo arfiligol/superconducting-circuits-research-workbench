@@ -545,13 +545,17 @@ function scan_lq_values(
         for (point_index, lq_h) in enumerate(lq_values_h)
             cfg = updated_config(base_cfg; l_q_h=lq_h)
             result = simulate_case(cfg; label="$(label_prefix)_$(lq_h / nH) nH")
+            fq_ghz = result.crossed ? result.fq_ghz : NaN
+            g_resonance_s = result.crossed ? result.G_resonance_s : NaN
             push!(
                 rows,
                 (
                     lq_nh=lq_h / nH,
-                    fq_ghz=result.fq_ghz,
-                    g_resonance_s=result.G_resonance_s,
+                    fq_ghz=fq_ghz,
+                    g_resonance_s=g_resonance_s,
                     crossed=result.crossed,
+                    fallback_fq_ghz=result.fq_ghz,
+                    fallback_g_resonance_s=result.G_resonance_s,
                 ),
             )
             if !isempty(progress_name)
@@ -559,7 +563,7 @@ function scan_lq_values(
                     progress_id,
                     point_index,
                     total_points;
-                    name=@sprintf("%s | Lq = %.3f nH", progress_name, lq_h / nH),
+                    name=@sprintf("Lq = %.3f nH", lq_h / nH),
                     parentid=progress_parentid,
                 )
             end
@@ -579,8 +583,11 @@ function scan_lq_values(
 end
 
 function select_nearest_frequency(df::DataFrame, target_f_ghz)
-    idx = argmin(abs.(df.fq_ghz .- target_f_ghz))
-    return df[idx, :]
+    valid_mask = df.crossed .& .!isnan.(df.fq_ghz)
+    any(valid_mask) || error("No Im(Ydm)=0 crossing was found in the requested Lq sweep.")
+    valid_df = df[valid_mask, :]
+    idx = argmin(abs.(valid_df.fq_ghz .- target_f_ghz))
+    return valid_df[idx, :]
 end
 
 function make_case_summary_row(result; normalized_loss=nothing, note="", window_label="", coupling_label="")

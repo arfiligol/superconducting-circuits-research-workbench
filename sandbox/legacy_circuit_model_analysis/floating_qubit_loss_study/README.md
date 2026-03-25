@@ -4,7 +4,7 @@
 
 This sandbox studies one specific question:
 
-- if the floating qubit moves from about `4.00 GHz` to about `3.95 GHz`, is the loss change the same when:
+- if the floating qubit moves away from its XY-only baseline frequency because of readout loading, is the loss change the same when:
   - the frequency shift is created by changing the qubit inductance `Lq`
   - the frequency shift is created by attaching the readout environment
 
@@ -27,7 +27,7 @@ This is the quantity that directly follows from the floating-qubit reduction pip
 - `common.jl`
   Shared circuit-construction and analysis helpers.
 - `progress_helpers.jl`
-  Terminal progress helpers built on `ProgressLogging + TerminalLoggers`.
+  Terminal progress helpers built on `ProgressMeter.jl`, keeping one inline status line active during each sweep.
 - `run_loss_decomposition_study.jl`
   Main Julia runner for the study.
 - `fit_readout_s21_vector_fitting.py`
@@ -154,22 +154,15 @@ The Julia runner performs the following sequence.
 
 ### 6.1 Build the XY-only references
 
-Two reference cases are built using only the XY environment:
+The study starts from one XY-only baseline case:
 
 1. `xy_only_baseline`
    - `C_rq1 = 0`
    - `C_rq2 = 0`
    - sweep `Lq`
    - choose the `Lq` that makes the extracted qubit resonance closest to `4.00 GHz`
-2. `xy_only_matched`
-   - `C_rq1 = 0`
-   - `C_rq2 = 0`
-   - sweep `Lq`
-   - choose the `Lq` that makes the extracted qubit resonance closest to `3.95 GHz`
 
-These two cases isolate:
-
-- what happens when the qubit frequency is changed by retuning `Lq`, while the environment is still only XY
+This defines the shared bare qubit inductance used by the readout comparisons.
 
 ### 6.2 Sweep the readout-side candidates
 
@@ -182,37 +175,34 @@ For each candidate pair:
 
 1. build `readout_only`
    - remove the XY couplings by setting `C_xy1 = 0`, `C_xy2 = 0`
-   - sweep `Lq`
-   - pick the `Lq` that makes the extracted qubit resonance closest to `3.95 GHz`
-2. build `full_coupled_baseline_lq`
-   - keep both XY and readout present
-   - keep the same bare `Lq` that was chosen for `xy_only_baseline`
-3. compute:
+   - keep the same bare `Lq` chosen by `xy_only_baseline`
+2. compute:
    - `readout_only / xy_only` loss ratio
-   - the full-coupled result with baseline `Lq`
 
 The candidate-selection logic prefers:
 
 1. a candidate whose `readout_only / xy_only` ratio falls inside the requested comparison window
-2. a candidate whose readout-only extracted qubit frequency is still close to `3.95 GHz`
+2. among those candidates, the one whose ratio is closest to the requested comparison target
 
-If no candidate satisfies both, the script relaxes the selection rule and chooses the nearest available candidate.
+If no candidate satisfies the ratio window, the script chooses the closest ratio overall.
 
 ### 6.3 Build the final selected cases
 
 After one readout candidate is selected, the script builds:
 
 1. `readout_only_selected`
+   - same bare `Lq` as the XY-only baseline
 2. `full_coupled_baseline_lq`
-3. `full_coupled_matched`
-   - sweep `Lq` again
-   - choose the `Lq` that makes the full-coupled extracted qubit resonance closest to `3.95 GHz`
+   - same bare `Lq` as the XY-only baseline
+3. `xy_only_matched`
+   - first do a coarse `Lq` sweep
+   - then do a fine `Lq` sweep around the coarse best point
+   - target the extracted qubit resonance frequency produced by `full_coupled_baseline_lq`
 
 It then reports:
 
 - `ideal_additive_reference = G_xy_matched + G_readout_only`
-- `cross_term_baseline_lq = G_full_shift - G_xy_matched - G_readout_only`
-- `cross_term_matched_full = G_full_matched - G_xy_matched - G_readout_only`
+- `cross_term_full_shift = G_full_shift - G_xy_matched - G_readout_only`
 
 where:
 
@@ -222,27 +212,24 @@ where:
 
 For the selected full setup:
 
-1. keep the `full_coupled_matched` configuration
-2. sweep the readout line `S21` from the input readout port to the output readout port
-3. write the raw complex `S21` data to CSV
-4. run vector fitting with:
+1. keep the selected PF / coupled-window / QWR configuration
+2. disconnect the qubit from the readout branch by setting `C_rq1 = 0`, `C_rq2 = 0`
+3. disconnect the XY branch by setting `C_xy1 = 0`, `C_xy2 = 0`
+4. characterize the readout line itself
+5. sweep the readout line `S21` from the input readout port to the output readout port
+6. write the raw complex `S21` data to CSV
+7. run vector fitting with:
    - `scikit-rf.VectorFitting`
    - `2` complex resonators
    - `2` real background poles
-5. reconstruct the fitted `S21` model on the same frequency grid
-6. extract resonance poles
-7. compute:
+8. reconstruct the fitted `S21` model on the same frequency grid
+9. extract resonance poles
+10. compute:
    - `f_r`
    - `Q_l`
    - `BW = f_r / Q_l`
 
-Current classification rule:
-
-- among the VF resonances that lie inside the sweep window
-- the one with the larger bandwidth is labeled `Purcell filter`
-- the narrower one is labeled `Readout resonator`
-
-This follows the current design expectation for this study.
+This keeps the readout-line modal picture separate from qubit loading.
 
 ---
 
@@ -250,22 +237,31 @@ This follows the current design expectation for this study.
 
 The top of `run_loss_decomposition_study.jl` is the only block you need to edit for most experiments.
 
-### 7.1 Qubit targets
+### 7.1 Qubit targets and matching controls
 
 - `BASELINE_TARGET_F_GHZ`
-- `MATCHED_TARGET_F_GHZ`
+- `XY_MATCH_FINE_HALF_WINDOW_H`
+- `XY_MATCH_FINE_STEP_H`
+- `USE_THREADED_CANDIDATE_SWEEP`
 
-These set the qubit frequencies used by the reference and matched comparisons.
+These set:
+
+- the XY-only baseline target frequency
+- the fine-search window and resolution used when matching XY-only to the shifted `XY + Readout` frequency
+- whether the RO-only candidate sweep parallelizes across Julia threads
+
+Important note:
+
+- `USE_THREADED_CANDIDATE_SWEEP = true` only speeds up the sweep when Julia itself is started with more than one thread
 
 ### 7.2 Readout-candidate selection targets
 
 - `READOUT_RATIO_COMPARISON_TARGET`
 - `READOUT_RATIO_ACCEPTABLE_MIN`
 - `READOUT_RATIO_ACCEPTABLE_MAX`
-- `READOUT_MATCH_TOLERANCE_GHZ`
 
 These do **not** change the circuit directly.
-They only change which candidate is considered the preferred comparison case.
+They only change which readout candidate is considered the preferred comparison case.
 
 ### 7.3 Floating-qubit parameters
 
@@ -288,24 +284,31 @@ These define the qubit and XY branch.
 - `PF_WINDOW_START_M`
 - `QWR_WINDOW_START_M`
 
-These are the fixed resonant-structure parameters.
+These set the fixed readout branch geometry.
 
-### 7.5 Coupled-window sweep
+### 7.5 Coupled-window candidates
 
 - `COUPLED_WINDOW_LENGTH_CANDIDATES_M`
-
-This is the main readout-line leakage-control sweep in the current experiment.
-
-### 7.6 Explicit qubit-readout couplings
-
 - `READOUT_COUPLING_CANDIDATES`
 
-Each candidate explicitly writes:
+These are the two actual candidate-sweep axes.
 
-- `C_rq1`
-- `C_rq2`
+### 7.6 Discretization and sweep ranges
 
-No hidden global scale is applied.
+- `LEFT_READOUT_TARGET_DZ_M`
+- `PURCELL_FILTER_TARGET_DZ_M`
+- `RIGHT_READOUT_TARGET_DZ_M`
+- `QWR_TARGET_DZ_M`
+- `COUPLED_WINDOW_TARGET_DZ_M`
+- `LQ_SWEEP_VALUES_H`
+- `QUBIT_SWEEP_START_GHZ`
+- `QUBIT_SWEEP_STOP_GHZ`
+- `QUBIT_SWEEP_STEP_GHZ`
+- `READOUT_S21_SWEEP_START_GHZ`
+- `READOUT_S21_SWEEP_STOP_GHZ`
+- `READOUT_S21_SWEEP_STEP_GHZ`
+
+These control numerical resolution.
 
 ### 7.7 RLGC and Q2D / modal inputs
 
@@ -385,23 +388,24 @@ For each point:
 This plot answers:
 
 - how `Re(Ydm,in)` evolves with `Lq`
-- whether adding the readout branch changes that `Lq -> loss` trend
+- whether adding the readout branch changes that `Lq -> loss` trend when the bare qubit inductance is shared
+- where the solver stops finding a true `Im(Ydm)=0` crossing inside the requested frequency window
 
 ### Plot C: `XY + Readout: Re(Ydm,in) vs Coupled Window Length`
 
 For the selected `C_rq1/C_rq2` pair:
 
 - sweep the coupled-window length
-- retune `Lq` each time so the extracted qubit resonance stays near `3.95 GHz`
+- keep the same bare baseline `Lq`
 
 For each point:
 
 - x-axis:
   coupled-window length
 - y-axis:
-  `Re(Ydm,in)` at the matched extracted resonance
+  `Re(Ydm,in)` at the extracted resonance
 - hover:
-  extracted qubit frequency and selected `Lq`
+  extracted qubit frequency and the fixed baseline `Lq`
 
 This plot answers:
 
@@ -421,43 +425,33 @@ Each point uses:
 The points are:
 
 - `XY baseline`
-- `XY matched`
 - `RO only`
 - `Full shift`
-- `Full matched`
+- `XY matched`
+- `Ideal additive`
 
 ---
 
 ## 9. Current Result From The Latest Run
 
-With the currently checked-in parameters, the script selected:
+This study logic was updated so that:
 
-- coupled-window length: `600 um`
-- coupling candidate: `C_rq1 = 100.0 fF`, `C_rq2 = 92.0 fF`
+- `RO only` and `XY + Readout` are both evaluated at the same bare `Lq` found from the XY-only baseline
+- `XY-only matched` is no longer tied to a fixed `3.95 GHz`
+- instead, the XY-only case is retuned to the actual shifted frequency produced by `XY + Readout`
 
-Important outcome:
+This is the physically relevant comparison if the question is:
 
-- under the current constraint of keeping PF / QWR resonant lengths fixed
-- and only sweeping coupled-window length plus `C_rq1/C_rq2`
-- the readout-only contribution still stays very small near `3.95 GHz`
+- does changing qubit frequency by retuning `Lq`
+- produce the same loss effect as changing qubit frequency through external readout loading
 
-In the latest run:
+Because the logic changed, the checked-in CSV outputs should be regenerated from the updated script before treating any specific numbers as current reference values.
 
-- `XY-only matched`:
-  - `fq ≈ 3.9559 GHz`
-  - `Re(Ydm,in) ≈ 2.916e-10 S`
-- `Readout-only selected`:
-  - `fq ≈ 3.9498 GHz`
-  - `Re(Ydm,in) ≈ 1.122e-13 S`
-  - ratio vs XY-only is only about `3.8e-4`
+Also note:
 
-This means:
-
-- with PF and QWR resonant frequencies held fixed near the current readout design
-- the readout branch is still too far detuned to become a large standalone loss channel at the qubit frequency
-
-This is physically important.
-It says the readout branch can still distort the full coupled behavior, but its standalone admittance sampled at the qubit resonance remains weak in this parameter region.
+- if a particular `Lq` point does not produce an `Im(Ydm)=0` crossing inside the requested sweep range
+- that point is now written as `NaN` in the sweep CSV and appears as a gap in the sweep plot
+- the closest-imaginary-value fallback is still kept in separate diagnostic columns, but it is no longer treated as a physical resonance for matching
 
 ---
 
@@ -513,17 +507,17 @@ The mode shape and admittance loading change when both are present together.
 From the repo root:
 
 ```bash
-julia --project=. sandbox/legacy_circuit_model_analysis/floating_qubit_loss_study/run_loss_decomposition_study.jl
+julia -t auto --project=. sandbox/legacy_circuit_model_analysis/floating_qubit_loss_study/run_loss_decomposition_study.jl
 ```
 
-During simulation, terminal progress now uses nested `ProgressLogging + TerminalLoggers` bars:
+During simulation, each sweep uses `ProgressMeter.jl` to keep a single inline status line active in the terminal.
 
-- root study progress
-  stage-level progress across the full study
-- nested sweep progress
-  `Lq` sweeps, readout-candidate sweeps, and coupled-window sweeps
+The status line shows:
 
-The bar labels are intentionally updated with the current `Lq`, coupled-window length, or `C_rq` candidate so you can see which parameter-space point is being solved.
+- the current sweep name
+- solved points / total points
+- percentage
+- the current parameter-space point, such as `Lq = ...`, `window = ...`, or `coupling = ...`
 
 The script will keep the PlotlyJS server alive until you press Enter.
 
