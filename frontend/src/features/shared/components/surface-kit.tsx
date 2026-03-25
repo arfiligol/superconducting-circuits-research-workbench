@@ -24,6 +24,16 @@ type SurfaceTagProps = Readonly<{
   tone?: "default" | "primary" | "success" | "warning" | "error";
 }>;
 
+type SurfaceActionButtonProps = Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  "children"
+> & {
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+  tone?: "default" | "destructive";
+  shape?: "soft" | "pill";
+};
+
 export type SurfaceInsetTone = "default" | "primary" | "success" | "warning" | "error";
 export type SurfaceTagTone = SurfaceInsetTone;
 
@@ -132,5 +142,35 @@ export function SurfaceTag({ children, tone = "default" }: SurfaceTagProps) {
     >
       {children}
     </span>
+  );
+}
+
+export function SurfaceActionButton({
+  children,
+  icon,
+  tone = "default",
+  shape = "pill",
+  className,
+  disabled = false,
+  type = "button",
+  ...props
+}: SurfaceActionButtonProps) {
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      className={cx(
+        "inline-flex cursor-pointer items-center justify-center gap-2 border font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed",
+        shape === "pill" ? "rounded-full px-3.5 py-2 text-sm" : "rounded-md px-3 py-2 text-sm",
+        tone === "destructive"
+          ? "border-rose-700/70 bg-rose-600 text-white shadow-[0_12px_26px_rgba(225,29,72,0.2)] hover:border-rose-800 hover:bg-rose-700 focus-visible:ring-rose-500/35 disabled:border-rose-300/50 disabled:bg-rose-200/70 disabled:text-rose-800/65 disabled:shadow-none"
+          : "border-border bg-background text-foreground hover:border-primary/30 hover:bg-primary/10 focus-visible:ring-primary/25 disabled:opacity-60",
+        className,
+      )}
+      {...props}
+    >
+      {icon}
+      {children}
+    </button>
   );
 }

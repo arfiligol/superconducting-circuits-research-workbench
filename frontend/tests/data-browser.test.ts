@@ -46,6 +46,10 @@ const rawDataWorkspaceSource = readFileSync(
   ),
   "utf8",
 );
+const surfaceKitSource = readFileSync(
+  fileURLToPath(new URL("../src/features/shared/components/surface-kit.tsx", import.meta.url)),
+  "utf8",
+);
 const datasetWorkspaceSource = readFileSync(
   fileURLToPath(
     new URL("../src/features/data-browser/components/dataset-workspace.tsx", import.meta.url),
@@ -325,8 +329,11 @@ describe("page-boundary source contracts", () => {
   });
 
   it("makes enabled delete affordances clearly destructive without changing gating", () => {
-    expect(rawDataWorkspaceSource).toContain("bg-rose-600 text-white");
-    expect(rawDataWorkspaceSource).toContain("hover:bg-rose-700");
+    expect(rawDataWorkspaceSource).toContain("SurfaceActionButton");
+    expect(surfaceKitSource).toContain("export function SurfaceActionButton");
+    expect(surfaceKitSource).toContain("cursor-pointer");
+    expect(surfaceKitSource).toContain("bg-rose-600 text-white");
+    expect(surfaceKitSource).toContain("hover:bg-rose-700");
     expect(rawDataWorkspaceSource).toContain("Edit unavailable");
     expect(rawDataWorkspaceSource).toContain("Delete trace");
     expect(rawDataWorkspaceSource).toContain("disabled={!trace.allowed_actions.edit}");

@@ -14,6 +14,7 @@ import {
 import { AppInlineSelect } from "@/features/shared/components/app-select";
 import { AppSegmentedControl } from "@/features/shared/components/app-segmented-control";
 import {
+  SurfaceActionButton,
   SurfaceHeader,
   SurfacePanel,
   SurfaceTag,
@@ -388,7 +389,7 @@ export function RawDataBrowserWorkspace() {
                     browser.setSelectedDesignId(design.design_id);
                   }}
                   className={cx(
-                    "w-full rounded-xl border px-4 py-4 text-left transition",
+                    "w-full cursor-pointer rounded-xl border px-4 py-4 text-left transition",
                     design.design_id === browser.selectedDesignId
                       ? "border-primary/40 bg-primary/10"
                       : "border-border bg-surface hover:border-primary/25",
@@ -454,22 +455,20 @@ export function RawDataBrowserWorkspace() {
             )}
 
             <div className="flex items-center justify-between gap-3 pt-1 text-sm">
-              <button
-                type="button"
+              <SurfaceActionButton
                 onClick={browser.goToPrevDesignPage}
                 disabled={!browser.designsMeta?.prev_cursor}
-                className="rounded-md border border-border px-3 py-2 disabled:opacity-50"
+                shape="soft"
               >
                 Previous
-              </button>
-              <button
-                type="button"
+              </SurfaceActionButton>
+              <SurfaceActionButton
                 onClick={browser.goToNextDesignPage}
                 disabled={!browser.designsMeta?.next_cursor}
-                className="rounded-md border border-border px-3 py-2 disabled:opacity-50"
+                shape="soft"
               >
                 Next
-              </button>
+              </SurfaceActionButton>
             </div>
           </div>
         ) : (
@@ -568,31 +567,26 @@ export function RawDataBrowserWorkspace() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
+                  <SurfaceActionButton
                     onClick={browser.toggleSelectAllVisibleTraces}
                     disabled={!browser.canSelectVisibleTraces}
-                    className="rounded-full border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {browser.allVisibleDeletableTracesSelected ? "Clear Visible" : "Select Visible"}
-                  </button>
-                  <button
-                    type="button"
+                  </SurfaceActionButton>
+                  <SurfaceActionButton
                     onClick={browser.clearSelectedTraceIds}
                     disabled={!hasAnySelections}
-                    className="rounded-full border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Clear
-                  </button>
-                  <button
-                    type="button"
+                  </SurfaceActionButton>
+                  <SurfaceActionButton
                     onClick={browser.requestBatchDeleteSelectedTraces}
                     disabled={!hasAnySelections}
-                    className="inline-flex items-center gap-2 rounded-full border border-rose-700/70 bg-rose-600 px-3.5 py-2 text-sm font-medium text-white shadow-[0_12px_26px_rgba(225,29,72,0.2)] transition hover:border-rose-800 hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-rose-300/50 disabled:bg-rose-200/70 disabled:text-rose-800/65 disabled:shadow-none"
+                    tone="destructive"
+                    icon={<Trash2 className="h-4 w-4" />}
                   >
-                    <Trash2 className="h-4 w-4" />
                     Delete Selected
-                  </button>
+                  </SurfaceActionButton>
                 </div>
               </div>
 
@@ -634,22 +628,20 @@ export function RawDataBrowserWorkspace() {
                   </tbody>
                 </table>
                 <div className="flex items-center justify-between gap-3 border-t border-border bg-surface px-4 py-3 text-sm">
-                  <button
-                    type="button"
+                  <SurfaceActionButton
                     onClick={browser.goToPrevTracePage}
                     disabled={!browser.tracesMeta?.prev_cursor}
-                    className="rounded-md border border-border px-3 py-2 disabled:opacity-50"
+                    shape="soft"
                   >
                     Previous
-                  </button>
-                  <button
-                    type="button"
+                  </SurfaceActionButton>
+                  <SurfaceActionButton
                     onClick={browser.goToNextTracePage}
                     disabled={!browser.tracesMeta?.next_cursor}
-                    className="rounded-md border border-border px-3 py-2 disabled:opacity-50"
+                    shape="soft"
                   >
                     Next
-                  </button>
+                  </SurfaceActionButton>
                 </div>
               </div>
             </div>
