@@ -527,7 +527,7 @@ class RewriteAuthAccountRecord(RewriteMetadataBase):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    password: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     user_id: Mapped[str | None] = mapped_column(String(64))
     prototype_state_json: Mapped[dict[str, object]] = mapped_column(
         JSON,

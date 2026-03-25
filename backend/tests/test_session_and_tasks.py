@@ -3,6 +3,7 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from src.app.domain.tasks import (
     CharacterizationSetup,
     TaskDispatchReceipt,
@@ -10,6 +11,8 @@ from src.app.domain.tasks import (
     TaskLifecycleUpdate,
     TaskSubmissionDraft,
 )
+from src.app.infrastructure.persistence.database import create_metadata_session_factory
+from src.app.infrastructure.persistence.models import RewriteAuthenticatedSessionRecord
 from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
 from src.app.infrastructure.runtime import (
     get_execution_recovery_service,
@@ -21,6 +24,7 @@ from src.app.infrastructure.runtime import (
     reset_runtime_state,
 )
 from src.app.main import app
+from src.app.settings import get_settings
 from tests.worker_runtime_harness import (
     clear_queue_jobs,
     drain_lane_queue,
@@ -186,6 +190,10 @@ def _bind_client_app_context(test_client: TestClient):
         yield
     finally:
         repository.reset_request_app_context_id(binding)
+
+
+def _metadata_session_factory():
+    return create_metadata_session_factory(get_settings().database_path)
 
 
 def test_get_session_returns_local_space_baseline_without_cookie() -> None:
@@ -451,6 +459,34 @@ def test_active_workspace_switch_survives_backend_restart() -> None:
     payload = response.json()["data"]
     assert payload["workspace"]["id"] == "ws-modeling"
     assert payload["active_dataset"]["id"] == "transmon-coupler-014"
+
+
+def test_authenticated_session_creation_uses_durable_workspace_default_dataset() -> None:
+    repository = get_rewrite_app_state_repository()
+    repository.upsert_workspace_default_dataset(
+        workspace_id="ws-device-lab",
+        default_dataset_id="durable-default-dataset",
+    )
+
+    session_state = repository.create_authenticated_session(
+        email="rewrite.local@example.com",
+        password="rewrite-local-password",
+    )
+
+    assert session_state is not None
+    assert session_state.active_dataset_id == "durable-default-dataset"
+
+    with _metadata_session_factory()() as session:
+        session_row = session.scalar(
+            select(RewriteAuthenticatedSessionRecord).where(
+                RewriteAuthenticatedSessionRecord.session_id == session_state.session_id
+            )
+        )
+        assert session_row is not None
+        assert (
+            session_row.last_active_dataset_ids_json["ws-device-lab"]
+            == "durable-default-dataset"
+        )
 
 
 def test_active_dataset_binding_survives_backend_restart() -> None:

@@ -1,11 +1,15 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from src.app.infrastructure.persistence.database import create_metadata_session_factory
+from src.app.infrastructure.persistence.models import RewriteAuthAccountRecord
 from src.app.infrastructure.runtime import (
     get_task_audit_repository,
     get_workspace_collaboration_service,
     reset_runtime_state,
 )
 from src.app.main import app
+from src.app.settings import get_settings
 
 client = TestClient(app)
 
@@ -45,6 +49,35 @@ def _cookie_value(name: str) -> str | None:
             continue
         value = cookie.value
     return value
+
+
+def _metadata_session_factory():
+    return create_metadata_session_factory(get_settings().database_path)
+
+
+def test_seeded_auth_accounts_store_password_hashes_and_verify_login() -> None:
+    with _metadata_session_factory()() as session:
+        account_row = session.scalar(
+            select(RewriteAuthAccountRecord).where(
+                RewriteAuthAccountRecord.email == "rewrite.local@example.com"
+            )
+        )
+        assert account_row is not None
+        assert account_row.password_hash.startswith("pbkdf2_sha256$")
+        assert account_row.password_hash != "rewrite-local-password"
+        assert "rewrite-local-password" not in account_row.password_hash
+
+    session = _login()
+
+    assert session["auth"]["state"] == "authenticated"
+
+    _logout()
+    failed_login = client.post(
+        "/session/login",
+        json={"email": "rewrite.local@example.com", "password": "wrong-password"},
+    )
+    assert failed_login.status_code == 401
+    assert failed_login.json()["error"]["code"] == "auth_invalid_credentials"
 
 
 def test_refresh_rotates_refresh_token_and_restores_authenticated_session() -> None:

@@ -91,7 +91,7 @@ def upgrade() -> None:
             "rewrite_auth_account_records",
             sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
             sa.Column("email", sa.String(length=255), nullable=False),
-            sa.Column("password", sa.String(length=255), nullable=False),
+            sa.Column("password_hash", sa.String(length=255), nullable=False),
             sa.Column("user_id", sa.String(length=64), nullable=True),
             sa.Column("prototype_state_json", sa.JSON(), nullable=False),
             sa.Column(

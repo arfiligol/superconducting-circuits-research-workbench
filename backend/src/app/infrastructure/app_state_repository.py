@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import Mapping, Sequence
 from contextvars import ContextVar, Token
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
-from secrets import token_urlsafe
+from hashlib import pbkdf2_hmac
+from hmac import compare_digest
+from secrets import token_bytes, token_urlsafe
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -36,6 +39,9 @@ from src.app.infrastructure.persistence.models import (
 )
 
 DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS = 60 * 60 * 24 * 14
+PASSWORD_HASH_SCHEME = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 600_000
+PASSWORD_HASH_SALT_BYTES = 16
 DEFAULT_APP_CONTEXT_ID = "app-context:default"
 _REQUEST_SESSION_STATE: ContextVar[SessionState | None] = ContextVar(
     "request_session_state",
@@ -242,11 +248,12 @@ class AppStateRepository:
                     RewriteAuthAccountRecord.email == normalized_email
                 )
             )
-            if account_row is None or account_row.password != password:
+            if account_row is None or not _verify_password(password, account_row.password_hash):
                 return None
 
             prototype = _session_state_from_json(account_row.prototype_state_json)
             current_state = self._current_app_context_state()
+            default_dataset_ids = self._workspace_default_dataset_ids(session)
             session_id = f"auth-session:{token_urlsafe(16)}"
             session_state = replace(
                 prototype,
@@ -256,8 +263,19 @@ class AppStateRepository:
                 auth_mode="jwt_refresh_cookie",
                 server_target_origin=current_state.server_target_origin,
                 server_target_label=current_state.server_target_label,
+                active_dataset_id=_resolve_authenticated_default_dataset_id(
+                    prototype=prototype,
+                    default_dataset_ids=default_dataset_ids,
+                ),
             )
-            last_active_dataset_ids = dict(build_workspace_default_dataset_ids())
+            last_active_dataset_ids = dict(default_dataset_ids)
+            if (
+                len(session_state.workspace_id) > 0
+                and session_state.active_dataset_id is not None
+            ):
+                last_active_dataset_ids[session_state.workspace_id] = (
+                    session_state.active_dataset_id
+                )
             self._save_authenticated_session_row(
                 session,
                 session_state=session_state,
@@ -1148,14 +1166,14 @@ class AppStateRepository:
         if row is None:
             row = RewriteAuthAccountRecord(
                 email=normalized_email,
-                password=password,
+                password_hash=_hash_password(password),
                 user_id=prototype.user.user_id if prototype.user is not None else None,
                 prototype_state_json=_session_state_to_json(prototype),
             )
             session.add(row)
             session.flush()
             return row
-        row.password = password
+        row.password_hash = _hash_password(password)
         row.user_id = prototype.user.user_id if prototype.user is not None else None
         row.prototype_state_json = _session_state_to_json(prototype)
         return row
@@ -1662,6 +1680,59 @@ def _resolve_rebound_dataset_id(
     if rebound_dataset_id is not None:
         return rebound_dataset_id
     return default_dataset_ids.get(target_workspace_id)
+
+
+def _resolve_authenticated_default_dataset_id(
+    *,
+    prototype: SessionState,
+    default_dataset_ids: Mapping[str, str],
+) -> str | None:
+    if len(prototype.workspace_id) == 0:
+        return prototype.active_dataset_id
+    return default_dataset_ids.get(prototype.workspace_id, prototype.active_dataset_id)
+
+
+def _hash_password(password: str) -> str:
+    salt = token_bytes(PASSWORD_HASH_SALT_BYTES)
+    digest = pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PASSWORD_HASH_ITERATIONS,
+    )
+    return (
+        f"{PASSWORD_HASH_SCHEME}${PASSWORD_HASH_ITERATIONS}$"
+        f"{_urlsafe_b64encode(salt)}${_urlsafe_b64encode(digest)}"
+    )
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    try:
+        scheme, iterations_text, salt_text, digest_text = password_hash.split("$", 3)
+    except ValueError:
+        return False
+    if scheme != PASSWORD_HASH_SCHEME:
+        return False
+    try:
+        iterations = int(iterations_text)
+    except ValueError:
+        return False
+    try:
+        salt = urlsafe_b64decode(salt_text.encode("ascii"))
+        expected_digest = urlsafe_b64decode(digest_text.encode("ascii"))
+    except (ValueError, TypeError):
+        return False
+    computed_digest = pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        iterations,
+    )
+    return compare_digest(computed_digest, expected_digest)
+
+
+def _urlsafe_b64encode(value: bytes) -> str:
+    return urlsafe_b64encode(value).decode("ascii")
 
 
 SqliteAppStateRepository = AppStateRepository
