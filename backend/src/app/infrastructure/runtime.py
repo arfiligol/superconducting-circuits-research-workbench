@@ -51,13 +51,20 @@ from src.app.infrastructure.worker_runtime.settings import (
 from src.app.services.audit_log_service import AuditLogService
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.circuit_definition_service import CircuitDefinitionService
+from src.app.services.dataset_catalog_service import DatasetCatalogService
+from src.app.services.dataset_characterization_service import (
+    DatasetCharacterizationService,
+)
 from src.app.services.dataset_service import DatasetService
+from src.app.services.dataset_trace_service import DatasetTraceService
 from src.app.services.health_service import HealthService
 from src.app.services.schemdraw_render_service import SchemdrawRenderService
 from src.app.services.session_service import SessionService
 from src.app.services.simulation_result_explorer_service import (
     SimulationResultExplorerService,
 )
+from src.app.services.task_mutation_service import TaskMutationService
+from src.app.services.task_publication_service import TaskPublicationService
 from src.app.services.task_service import TaskService
 from src.app.services.workspace_collaboration_service import WorkspaceCollaborationService
 from src.app.settings import get_settings
@@ -205,11 +212,28 @@ def get_session_token_transport() -> SessionJwtTransport:
 
 @lru_cache(maxsize=1)
 def get_dataset_service() -> DatasetService:
+    catalog_repository = get_catalog_repository()
+    session_repository = get_app_state_repository()
+    authorization_service = get_authorization_service()
+    audit_repository = get_task_audit_repository()
     return DatasetService(
-        repository=get_catalog_repository(),
-        session_repository=get_app_state_repository(),
-        authorization_service=get_authorization_service(),
-        audit_repository=get_task_audit_repository(),
+        catalog_service=DatasetCatalogService(
+            repository=catalog_repository,
+            session_repository=session_repository,
+            authorization_service=authorization_service,
+            audit_repository=audit_repository,
+        ),
+        trace_service=DatasetTraceService(
+            repository=catalog_repository,
+            session_repository=session_repository,
+            authorization_service=authorization_service,
+            audit_repository=audit_repository,
+        ),
+        characterization_service=DatasetCharacterizationService(
+            repository=catalog_repository,
+            session_repository=session_repository,
+            authorization_service=authorization_service,
+        ),
     )
 
 
@@ -265,42 +289,65 @@ def get_audit_log_service() -> AuditLogService:
 
 @lru_cache(maxsize=1)
 def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
+    task_repository = get_task_repository()
+    session_repository = get_app_state_repository()
+    dataset_repository = get_catalog_repository()
+    circuit_definition_repository = get_circuit_definition_persistence_repository()
+    authorization_service = get_authorization_service()
+    audit_repository = get_task_audit_repository()
+    queue_dispatcher = get_task_queue_dispatcher()
+    mutation_service = TaskMutationService(
+        repository=task_repository,
+        session_repository=session_repository,
+        dataset_repository=dataset_repository,
+        circuit_definition_repository=circuit_definition_repository,
+        authorization_service=authorization_service,
+        audit_repository=audit_repository,
+        queue_dispatcher=queue_dispatcher,
+    )
+    publication_service = TaskPublicationService(
+        repository=task_repository,
+        dataset_repository=dataset_repository,
+        session_repository=session_repository,
+        authorization_service=authorization_service,
+        audit_repository=audit_repository,
+    )
     task_service = TaskService(
-        repository=get_task_repository(),
-        audit_repository=get_task_audit_repository(),
+        repository=task_repository,
         processor_summary_repository=get_processor_runtime_repository(),
-        session_repository=get_app_state_repository(),
-        dataset_repository=get_catalog_repository(),
-        circuit_definition_repository=get_circuit_definition_persistence_repository(),
-        authorization_service=get_authorization_service(),
-        queue_dispatcher=get_task_queue_dispatcher(),
+        session_repository=session_repository,
+        dataset_repository=dataset_repository,
+        circuit_definition_repository=circuit_definition_repository,
+        mutation_service=mutation_service,
+        publication_service=publication_service,
+        authorization_service=authorization_service,
     )
     execution_runtime = TaskExecutionRuntime(
         task_service=task_service,
-        task_repository=get_task_repository(),
-        audit_repository=get_task_audit_repository(),
+        task_repository=task_repository,
+        audit_repository=audit_repository,
         processor_runtime_repository=get_processor_runtime_repository(),
     )
     simulation_execution_driver = LocalSimulationExecutionDriver(
-        task_repository=get_task_repository(),
-        circuit_definition_repository=get_circuit_definition_persistence_repository(),
+        task_repository=task_repository,
+        circuit_definition_repository=circuit_definition_repository,
         execution_runtime_factory=lambda: execution_runtime,
     )
     post_processing_execution_driver = LocalPostProcessingExecutionDriver(
-        task_repository=get_task_repository(),
+        task_repository=task_repository,
         execution_runtime_factory=lambda: execution_runtime,
     )
     characterization_execution_driver = LocalCharacterizationExecutionDriver(
-        task_repository=get_task_repository(),
-        dataset_repository=get_catalog_repository(),
+        task_repository=task_repository,
+        dataset_repository=dataset_repository,
         characterization_repository=get_persisted_characterization_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
     recovery_service = LocalExecutionRecoveryService(
-        task_repository=get_task_repository(),
+        task_repository=task_repository,
         execution_runtime=execution_runtime,
         processor_repository=get_processor_runtime_repository(),
-        queue_dispatcher=get_task_queue_dispatcher(),
+        queue_dispatcher=queue_dispatcher,
     )
     return _TaskRuntimeBundle(
         task_service=task_service,
@@ -308,7 +355,7 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
         simulation_execution_driver=simulation_execution_driver,
         post_processing_execution_driver=post_processing_execution_driver,
         characterization_execution_driver=characterization_execution_driver,
-        queue_dispatcher=get_task_queue_dispatcher(),
+        queue_dispatcher=queue_dispatcher,
         recovery_service=recovery_service,
     )
 

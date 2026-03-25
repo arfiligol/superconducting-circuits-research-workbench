@@ -18,7 +18,12 @@ from src.app.infrastructure.rewrite_catalog_repository import (
 )
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
+from src.app.services.dataset_catalog_service import DatasetCatalogService
+from src.app.services.dataset_characterization_service import (
+    DatasetCharacterizationService,
+)
 from src.app.services.dataset_service import DatasetService
+from src.app.services.dataset_trace_service import DatasetTraceService
 from src.app.services.service_errors import ServiceError
 
 client = TestClient(app)
@@ -69,8 +74,18 @@ def dataset_service(
     catalog_repository: InMemoryRewriteCatalogRepository,
 ) -> DatasetService:
     return DatasetService(
-        repository=catalog_repository,
-        session_repository=app_state_repository,
+        catalog_service=DatasetCatalogService(
+            repository=catalog_repository,
+            session_repository=app_state_repository,
+        ),
+        trace_service=DatasetTraceService(
+            repository=catalog_repository,
+            session_repository=app_state_repository,
+        ),
+        characterization_service=DatasetCharacterizationService(
+            repository=catalog_repository,
+            session_repository=app_state_repository,
+        ),
     )
 
 
