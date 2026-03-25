@@ -194,31 +194,50 @@ function TraceRowActionButton({
   icon,
   onClick,
   tone = "default",
+  showLabelHint = true,
 }: Readonly<{
   label: string;
   disabled?: boolean;
   icon: ReactNode;
   onClick: () => void;
   tone?: "default" | "destructive";
+  showLabelHint?: boolean;
 }>) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
-      className={cx(
-        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
-        tone === "destructive"
-          ? "border-rose-500/25 bg-rose-500/8 text-rose-700 hover:border-rose-500/40 hover:bg-rose-500/12 dark:text-rose-200"
-          : "border-border bg-surface text-foreground hover:border-primary/30 hover:bg-primary/10",
-      )}
-    >
-      {icon}
-      {label}
-    </button>
+    <div className="group relative">
+      <button
+        type="button"
+        title={label}
+        aria-label={label}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick();
+        }}
+        className={cx(
+          "inline-flex h-9 w-9 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+          disabled
+            ? "cursor-not-allowed border-border/80 bg-muted/40 text-muted-foreground/65 shadow-none"
+            : tone === "destructive"
+              ? "cursor-pointer border-rose-700/70 bg-rose-600 text-white shadow-[0_10px_22px_rgba(225,29,72,0.24)] hover:border-rose-800 hover:bg-rose-700 active:scale-[0.97] focus-visible:ring-rose-500/35"
+              : "cursor-pointer border-border/90 bg-surface text-foreground shadow-[0_8px_16px_rgba(15,23,42,0.08)] hover:border-primary/35 hover:bg-primary/10 hover:text-foreground active:scale-[0.97] focus-visible:ring-primary/25",
+        )}
+      >
+        {icon}
+      </button>
+      {showLabelHint ? (
+        <span
+          className={cx(
+            "pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 rounded-full border border-border/80 bg-card px-2 py-1 text-[11px] font-medium text-foreground shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition",
+            disabled
+              ? "opacity-0"
+              : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+          )}
+        >
+          {label}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -569,7 +588,7 @@ export function RawDataBrowserWorkspace() {
                     type="button"
                     onClick={browser.requestBatchDeleteSelectedTraces}
                     disabled={!hasAnySelections}
-                    className="inline-flex items-center gap-2 rounded-full border border-rose-500/25 bg-rose-500/8 px-3 py-2 text-sm font-medium text-rose-700 transition hover:border-rose-500/40 hover:bg-rose-500/12 disabled:cursor-not-allowed disabled:opacity-60 dark:text-rose-200"
+                    className="inline-flex items-center gap-2 rounded-full border border-rose-700/70 bg-rose-600 px-3.5 py-2 text-sm font-medium text-white shadow-[0_12px_26px_rgba(225,29,72,0.2)] transition hover:border-rose-800 hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:border-rose-300/50 disabled:bg-rose-200/70 disabled:text-rose-800/65 disabled:shadow-none"
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete Selected
@@ -949,40 +968,38 @@ function TraceSummaryRow({
       </td>
       <td className="px-4 py-3 align-top">
         {hasRowActions ? (
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {trace.allowed_actions.edit ? (
-                <TraceRowActionButton
-                  label="Edit"
-                  icon={<Pencil className="h-3.5 w-3.5" />}
-                  onClick={() => {
-                    onEdit(trace.trace_id);
-                  }}
-                />
-              ) : null}
-              {trace.allowed_actions.delete ? (
-                <TraceRowActionButton
-                  label="Delete"
-                  tone="destructive"
-                  icon={<Trash2 className="h-3.5 w-3.5" />}
-                  onClick={() => {
-                    onDelete(trace);
-                  }}
-                />
-              ) : null}
-            </div>
-            <p className="text-xs leading-5 text-muted-foreground">
-              {trace.mutation_policy_summary}
-            </p>
+          <div className="flex min-h-9 flex-wrap items-center gap-2">
+            <TraceRowActionButton
+              label={trace.allowed_actions.edit ? "Edit trace" : "Edit unavailable"}
+              disabled={!trace.allowed_actions.edit}
+              icon={<Pencil className="h-3.5 w-3.5" />}
+              onClick={() => {
+                if (!trace.allowed_actions.edit) {
+                  return;
+                }
+                onEdit(trace.trace_id);
+              }}
+            />
+            {trace.allowed_actions.delete ? (
+              <TraceRowActionButton
+                label="Delete trace"
+                tone="destructive"
+                icon={<Trash2 className="h-3.5 w-3.5" />}
+                onClick={() => {
+                  onDelete(trace);
+                }}
+              />
+            ) : null}
           </div>
         ) : (
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="flex min-h-9 items-center">
+            <span
+              title={trace.mutation_policy_summary}
+              aria-label={`Locked: ${trace.mutation_policy_summary}`}
+              className="inline-flex items-center rounded-full border border-border/80 bg-muted/40 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground"
+            >
               Locked
-            </p>
-            <p className="text-xs leading-5 text-muted-foreground">
-              {trace.mutation_policy_summary}
-            </p>
+            </span>
           </div>
         )}
       </td>

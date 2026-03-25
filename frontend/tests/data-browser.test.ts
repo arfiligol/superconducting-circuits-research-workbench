@@ -291,12 +291,26 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("DeleteScopeList");
     expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.edit");
     expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.delete");
+    expect(rawDataWorkspaceSource).toContain("title={label}");
+    expect(rawDataWorkspaceSource).toContain("aria-label={label}");
     expect(rawDataHookSource).toContain("const [focusedTraceId, setFocusedTraceId] = useState<string | null>");
     expect(rawDataHookSource).toContain("const [selectedTraceIds, setSelectedTraceIds] = useState<readonly string[]>([])");
     expect(rawDataHookSource).toContain("focusTrace(traceId: string)");
     expect(rawDataHookSource).toContain("toggleTraceSelection(traceId: string)");
     expect(rawDataHookSource).toContain("requestBatchDeleteSelectedTraces()");
     expect(rawDataHookSource).toContain("openEditDialog(traceId: string)");
+  });
+
+  it("makes enabled delete affordances clearly destructive without changing gating", () => {
+    expect(rawDataWorkspaceSource).toContain("bg-rose-600 text-white");
+    expect(rawDataWorkspaceSource).toContain("hover:bg-rose-700");
+    expect(rawDataWorkspaceSource).toContain("Edit unavailable");
+    expect(rawDataWorkspaceSource).toContain("Delete trace");
+    expect(rawDataWorkspaceSource).toContain("disabled={!trace.allowed_actions.edit}");
+    expect(rawDataWorkspaceSource).toContain("if (!trace.allowed_actions.edit) {");
+    expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.delete ? (");
+    expect(rawDataWorkspaceSource).not.toContain('<p className="text-xs leading-5 text-muted-foreground">');
+    expect(rawDataWorkspaceSource).toContain("title={trace.mutation_policy_summary}");
   });
 
   it("keeps focused preview separate from selected rows and cleans up deleted focus safely", () => {
