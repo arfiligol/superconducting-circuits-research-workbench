@@ -15,7 +15,10 @@ import {
   traceEditDetailKey,
   traceListKey,
 } from "../src/features/data-browser/lib/api";
-import { resolveTracePreviewSemantics } from "../src/features/data-browser/lib/trace-preview";
+import {
+  resolveTracePreviewContextTags,
+  resolveTracePreviewSemantics,
+} from "../src/features/data-browser/lib/trace-preview";
 import { resolveSelectedDesignId, resolveSelectedTraceId } from "../src/features/data-browser/lib/selection";
 import {
   resolveEditableNumericGridModel,
@@ -329,8 +332,11 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain('ariaLabel="Single trace preview view"');
     expect(rawDataWorkspaceSource).toContain('{ value: "plot", label: "Plot" }');
     expect(rawDataWorkspaceSource).toContain("Focused Trace");
+    expect(rawDataWorkspaceSource).toContain("resolveTracePreviewContextTags");
     expect(rawDataWorkspaceSource).toContain("resolvePreviewHistory");
     expect(rawDataWorkspaceSource).toContain("History");
+    expect(rawDataWorkspaceSource).not.toContain("Preview Source");
+    expect(rawDataWorkspaceSource).not.toContain("Preview Series");
     expect(rawDataWorkspaceSource).not.toContain(
       "Only the selected trace triggers the detail path, so plot and table stay tied to one persisted preview payload at a time.",
     );
@@ -338,10 +344,11 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain('hasSampledPreview ? "Preview" : "Point Count"');
   });
 
-  it("makes axis semantics explicit instead of mixing point count with units", () => {
+  it("keeps preview semantics tied to the saved payload instead of extra axis cards", () => {
     expect(rawDataWorkspaceSource).toContain("X Axis");
     expect(rawDataWorkspaceSource).toContain("Point Count");
     expect(rawDataWorkspaceSource).toContain("previewSemantics.tableYAxisLabel");
+    expect(rawDataWorkspaceSource).toContain("previewSemantics.yAxisTitle");
     expect(rawDataWorkspaceSource).not.toContain("{axis.length} {axis.unit}");
     expect(rawDataWorkspaceSource).not.toContain(">Value<");
   });
@@ -493,6 +500,17 @@ describe("trace preview semantics helpers", () => {
             length: 51,
           },
         ],
+        previewPayload: {
+          y_axis: {
+            label: "Imaginary",
+            unit: "S",
+          },
+          context: {
+            family_label: "Y Matrix",
+            metric_label: "Imaginary",
+            metric_unit: "S",
+          },
+        },
         traceSummary: {
           trace_id: "trace_flux_a_measurement",
           dataset_id: "fluxonium-2025-031",
@@ -518,12 +536,12 @@ describe("trace preview semantics helpers", () => {
       xAxisTitle: "Frequency (GHz)",
       xAxisPointCount: 51,
       xAxisPointCountLabel: "51 points",
-      previewSeriesLabel: "Y11 · Imaginary",
+      previewSeriesLabel: "Imaginary",
       previewSeriesDetail: "Y Matrix",
-      previewSeriesUnitLabel: "Unit unavailable",
-      yAxisTitle: "Y11 · Imaginary",
+      previewSeriesUnitLabel: "S",
+      yAxisTitle: "Imaginary (S)",
       tableXAxisLabel: "Frequency (GHz)",
-      tableYAxisLabel: "Y11 · Imaginary",
+      tableYAxisLabel: "Imaginary (S)",
     });
   });
 
@@ -537,6 +555,7 @@ describe("trace preview semantics helpers", () => {
             length: 4001,
           },
         ],
+        previewPayload: null,
         traceSummary: null,
         fallbackSeriesLabel: "trace_flux_a_measurement",
       }),
@@ -549,5 +568,27 @@ describe("trace preview semantics helpers", () => {
       previewSeriesLabel: "Trace Flux A Measurement",
       previewSeriesUnitLabel: "Unit unavailable",
     });
+  });
+
+  it("derives history context tags from saved preview payload metadata", () => {
+    expect(
+      resolveTracePreviewContextTags({
+        previewPayload: {
+          context: {
+            origin_label: "Circuit sim",
+            source_label: "PTC",
+            metric_label: "Imaginary",
+            metric_unit: "S",
+            port_label: "Port 1 -> Port 1",
+          },
+        },
+        traceSummary: null,
+      }),
+    ).toEqual([
+      { label: "Origin", value: "Circuit sim" },
+      { label: "Source", value: "PTC" },
+      { label: "Metric", value: "Imaginary (S)" },
+      { label: "Ports", value: "Port 1 -> Port 1" },
+    ]);
   });
 });

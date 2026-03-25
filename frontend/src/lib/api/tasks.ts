@@ -849,6 +849,7 @@ export type SimulationResultExplorerQuery = Readonly<{
 }>;
 export type SimulationResultTracePublicationDraft = Readonly<{
   traceKeys: readonly string[];
+  metric: string;
   parameterName?: string | null;
   designName?: string | null;
   designId?: string | null;
@@ -1825,6 +1826,7 @@ export async function publishSimulationResultTraces(
       method: "POST",
       body: {
         trace_keys: [...payload.traceKeys],
+        metric: payload.metric,
         design_id: payload.designId,
         parameter_name: payload.parameterName ?? undefined,
       },

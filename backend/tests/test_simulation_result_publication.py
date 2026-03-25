@@ -483,6 +483,7 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
         json={
             "design_id": design["design_id"],
             "trace_key": trace_key,
+            "metric": "imag",
             "parameter_name": "Readout Admittance",
         },
     )
@@ -506,6 +507,7 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
     rows = trace_rows.json()["data"]["rows"]
     assert [row["trace_id"] for row in rows] == [payload["trace"]["trace_id"]]
     assert rows[0]["parameter"] == "Readout Admittance"
+    assert rows[0]["representation"] == "imaginary"
 
     trace_detail = client.get(
         f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/{payload['trace']['trace_id']}"
@@ -515,14 +517,21 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
     assert trace_payload["preview_payload"]["kind"] == "series"
     assert trace_payload["preview_payload"]["parameter"] == "Readout Admittance"
     assert trace_payload["preview_payload"]["default_parameter"] == "Y11"
+    assert trace_payload["preview_payload"]["metric"] == "imag"
+    assert trace_payload["preview_payload"]["y_axis"] == {
+        "label": "Imaginary",
+        "unit": "S",
+    }
     assert trace_payload["preview_payload"]["history_steps"] == ["PTC"]
     assert len(trace_payload["preview_payload"]["points"]) == trace_payload["axes"][0]["length"]
+    assert len(trace_payload["preview_payload"]["points"][0]) == 2
 
     second = client.post(
         f"/tasks/{task['task_id']}/result-traces/publish",
         json={
             "design_id": design["design_id"],
             "trace_key": trace_key,
+            "metric": "imag",
             "parameter_name": "Readout Admittance",
         },
     )
@@ -576,6 +585,7 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
         json={
             "design_id": design["design_id"],
             "trace_key": trace_key,
+            "metric": "imag",
             "parameter_name": "Processed Z11",
         },
     )
@@ -585,6 +595,7 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
     assert payload["operation"] == "published"
     assert payload["trace"]["stage_kind"] == "postprocess"
     assert payload["trace"]["parameter"] == "Processed Z11"
+    assert payload["trace"]["representation"] == "imaginary"
     assert payload["trace"]["trace_id"] == (
         f"trace_task_{task['task_id']}_processed-z11_z_matrix_raw_o1_i1_mode_0_mode_0_z0_50"
     )
@@ -593,6 +604,10 @@ def test_trace_scoped_publish_supports_post_processing_tasks() -> None:
     )
     assert trace_detail.status_code == 200
     assert trace_detail.json()["data"]["preview_payload"]["history_steps"] == ["Raw"]
+    assert trace_detail.json()["data"]["preview_payload"]["y_axis"] == {
+        "label": "Imaginary",
+        "unit": "ohm",
+    }
 
 
 def test_visible_trace_publish_materializes_each_visible_trace_as_a_saved_trace() -> None:
@@ -634,6 +649,7 @@ def test_visible_trace_publish_materializes_each_visible_trace_as_a_saved_trace(
         json={
             "design_id": design["design_id"],
             "trace_keys": trace_keys,
+            "metric": "magnitude_db",
             "parameter_name": "Readout Admittance",
         },
     )
@@ -663,6 +679,7 @@ def test_visible_trace_publish_materializes_each_visible_trace_as_a_saved_trace(
         "Readout Admittance · Lj = 1000 pH",
         "Readout Admittance · Lj = 1150 pH",
     }
+    assert {row["representation"] for row in rows} == {"magnitude"}
     assert {row["trace_id"] for row in rows} == {
         trace["trace_id"] for trace in payload["traces"]
     }
@@ -672,6 +689,7 @@ def test_visible_trace_publish_materializes_each_visible_trace_as_a_saved_trace(
         json={
             "design_id": design["design_id"],
             "trace_keys": trace_keys,
+            "metric": "magnitude_db",
             "parameter_name": "Readout Admittance",
         },
     )

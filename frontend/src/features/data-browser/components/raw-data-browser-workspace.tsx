@@ -8,6 +8,7 @@ import { TracePreviewPlot } from "@/features/data-browser/components/trace-previ
 import { useRawDataBrowserData } from "@/features/data-browser/hooks/use-raw-data-browser-data";
 import {
   humanizeTraceLabel,
+  resolveTracePreviewContextTags,
   resolveTracePreviewSemantics,
 } from "@/features/data-browser/lib/trace-preview";
 import { AppInlineSelect } from "@/features/shared/components/app-select";
@@ -248,10 +249,18 @@ export function RawDataBrowserWorkspace() {
     () =>
       resolveTracePreviewSemantics({
         axes: browser.traceDetail?.axes ?? [],
+        previewPayload:
+          (browser.traceDetail?.preview_payload as Readonly<Record<string, unknown>> | undefined) ??
+          null,
         traceSummary: focusedTraceSummary,
         fallbackSeriesLabel: browser.traceDetail?.trace_id ?? null,
       }),
-    [browser.traceDetail?.axes, browser.traceDetail?.trace_id, focusedTraceSummary],
+    [
+      browser.traceDetail?.axes,
+      browser.traceDetail?.preview_payload,
+      browser.traceDetail?.trace_id,
+      focusedTraceSummary,
+    ],
   );
   const previewPointCount = previewPoints.length;
   const hasSampledPreview =
@@ -268,6 +277,16 @@ export function RawDataBrowserWorkspace() {
         focusedTraceSummary?.provenance_summary ?? null,
       ),
     [browser.traceDetail?.preview_payload, focusedTraceSummary?.provenance_summary],
+  );
+  const previewContextTags = useMemo(
+    () =>
+      resolveTracePreviewContextTags({
+        previewPayload:
+          (browser.traceDetail?.preview_payload as Readonly<Record<string, unknown>> | undefined) ??
+          null,
+        traceSummary: focusedTraceSummary,
+      }),
+    [browser.traceDetail?.preview_payload, focusedTraceSummary],
   );
   const hasAnySelections = browser.selectedTraceCount > 0;
   const traceDeleteDialog = useMemo(() => {
@@ -724,6 +743,16 @@ export function RawDataBrowserWorkspace() {
                       History
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">{previewHistory.summary}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <SurfaceTag tone="default">
+                        {hasSampledPreview ? "Preview" : "Point Count"} · {previewPointCountLabel}
+                      </SurfaceTag>
+                      {previewContextTags.map((tag) => (
+                        <SurfaceTag key={`${tag.label}:${tag.value}`} tone="default">
+                          {tag.label} · {tag.value}
+                        </SurfaceTag>
+                      ))}
+                    </div>
                   </div>
                   {previewHistory.steps.length > 0 ? (
                     <div className="flex flex-wrap justify-end gap-2">

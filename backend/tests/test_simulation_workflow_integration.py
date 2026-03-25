@@ -280,6 +280,7 @@ def test_simulation_workflow_integration_covers_submit_explorer_and_bulk_save() 
                     "&sweep_index=0&compare_axis_index=0"
                 ),
             ),
+            "metric": "magnitude_db",
             "parameter_name": "Readout Admittance",
         },
     )
@@ -368,7 +369,7 @@ def test_post_processing_workflow_integration_covers_kron_kept_ports_and_single_
 
     post_processing_view = client.get(
         f"/tasks/{post_processing_task['task_id']}/simulation-results/view"
-        "?family=z_matrix&source=raw&metric=real&z0=50&output_port=1&input_port=1"
+        "?family=z_matrix&source=raw&metric=imag&z0=50&output_port=1&input_port=1"
     )
     assert post_processing_view.status_code == 200
     post_processing_payload = post_processing_view.json()["data"]
@@ -379,7 +380,7 @@ def test_post_processing_workflow_integration_covers_kron_kept_ports_and_single_
     single_design_id = _create_design("Post Processing Visible Trace Save")
     visible_trace_keys = _trace_keys_from_view(
         int(post_processing_task["task_id"]),
-        "?family=z_matrix&source=raw&metric=real&z0=50&output_port=1&input_port=1",
+        "?family=z_matrix&source=raw&metric=imag&z0=50&output_port=1&input_port=1",
     )
     assert len(visible_trace_keys) >= 1
     single_publish = client.post(
@@ -387,6 +388,7 @@ def test_post_processing_workflow_integration_covers_kron_kept_ports_and_single_
         json={
             "design_id": single_design_id,
             "trace_keys": [visible_trace_keys[0]],
+            "metric": "imag",
             "parameter_name": "Reduced Z11",
         },
     )
@@ -395,4 +397,5 @@ def test_post_processing_workflow_integration_covers_kron_kept_ports_and_single_
     assert single_payload["operation"] == "published"
     assert len(single_payload["traces"]) == 1
     assert single_payload["traces"][0]["parameter"] == "Reduced Z11"
+    assert single_payload["traces"][0]["representation"] == "imaginary"
     assert single_payload["traces"][0]["stage_kind"] == "postprocess"

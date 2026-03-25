@@ -27,6 +27,7 @@ type CurrentTraceSaveControlProps = Readonly<{
   task: TaskDetail;
   activeDatasetId: string | null;
   traceKeys: readonly string[];
+  metric: string;
   traceLabel: string | null;
   traceCount: number;
   defaultParameter: string | null;
@@ -119,6 +120,7 @@ export function CurrentTraceSaveControl({
   task,
   activeDatasetId,
   traceKeys,
+  metric,
   traceLabel,
   traceCount,
   defaultParameter,
@@ -252,6 +254,7 @@ export function CurrentTraceSaveControl({
     try {
       const result = await publishSimulationResultTraces(task.taskId, {
         traceKeys,
+        metric,
         designId: selectedDesignId,
         parameterName: normalizedParameterName,
       });

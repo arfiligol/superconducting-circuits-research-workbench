@@ -239,6 +239,31 @@ export type TraceDetail = Readonly<{
     history_steps?: readonly string[];
     history_summary?: string;
     source?: string;
+    metric?: string;
+    preferred_series_id?: string;
+    x_axis?: Readonly<{
+      label?: string;
+      unit?: string | null;
+      values?: readonly number[];
+    }>;
+    y_axis?: Readonly<{
+      label?: string;
+      unit?: string | null;
+    }>;
+    context?: Readonly<{
+      family?: string;
+      family_label?: string;
+      origin_kind?: string;
+      origin_label?: string;
+      source?: string;
+      source_label?: string;
+      metric?: string;
+      metric_label?: string;
+      metric_unit?: string | null;
+      output_port?: number;
+      input_port?: number;
+      port_label?: string;
+    }>;
     points?: number[][] | number;
   }>;
   payload_ref: TracePayloadRef | null;

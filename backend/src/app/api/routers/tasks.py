@@ -336,6 +336,7 @@ def publish_result_trace(
             ResultTracePublicationDraft(
                 design_id=parsed_payload["design_id"],
                 trace_keys=parsed_payload["trace_keys"],
+                metric=parsed_payload["metric"],
                 parameter_name=parsed_payload["parameter_name"],
             ),
         )
@@ -1235,6 +1236,10 @@ def _parse_result_trace_publication_payload(payload: object) -> dict[str, object
             field_name="result_trace_publication.design_id",
         ),
         "trace_keys": tuple(trace_keys),
+        "metric": _required_string(
+            body.get("metric"),
+            field_name="result_trace_publication.metric",
+        ),
         "parameter_name": _optional_string(
             body.get("parameter_name"),
             field_name="result_trace_publication.parameter_name",

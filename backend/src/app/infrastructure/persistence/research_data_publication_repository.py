@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from typing import cast
@@ -298,10 +299,11 @@ class SqliteResearchDataPublicationRepository:
                 dataset_id=dataset.dataset_id,
                 design_id=design.design_id,
                 selection=request.selection,
+                metric=draft.metric,
                 trace_id=request.trace_id,
                 saved_parameter=request.parameter_name,
                 summary_parameter=request.parameter_name,
-                summary_representation="complex",
+                summary_representation=None,
                 result_handle_key=request.trace_id,
                 result_handle_label=(
                     f"Published {request.parameter_name} {request.selection.source.upper()} trace"
@@ -641,6 +643,15 @@ class _MaterializedPublishedTrace:
     detail: TraceDetail
 
 
+@dataclass(frozen=True)
+class _PublishedMetricSpec:
+    metric: str
+    series_id: str
+    representation: str
+    y_label: str
+    y_unit: str | None
+
+
 def _build_requested_trace_publications(
     *,
     task: TaskDetail,
@@ -810,6 +821,7 @@ def _build_published_trace_preview_payload(
     *,
     task: TaskDetail,
     selection: ResultTraceSelection,
+    metric_spec: _PublishedMetricSpec | None,
     saved_parameter: str,
     trace_data,
 ) -> dict[str, object]:
@@ -827,16 +839,47 @@ def _build_published_trace_preview_payload(
     preview["trace_mode_group"] = selection.trace_mode_group
     preview["output_mode"] = selection.output_mode
     preview["input_mode"] = selection.input_mode
+    if metric_spec is not None:
+        preview["metric"] = metric_spec.metric
+        preview["preferred_series_id"] = metric_spec.series_id
+        preview["y_axis"] = {
+            "label": metric_spec.y_label,
+            "unit": metric_spec.y_unit,
+        }
+        preview["context"] = {
+            "family": selection.family,
+            "family_label": _family_label(selection.family),
+            "origin_kind": trace_data.source_kind,
+            "origin_label": _origin_kind_label(cast(str, trace_data.source_kind)),
+            "source": selection.source,
+            "source_label": _selection_source_label(selection.source),
+            "metric": metric_spec.metric,
+            "metric_label": metric_spec.y_label,
+            "metric_unit": metric_spec.y_unit,
+            "output_port": selection.output_port,
+            "input_port": selection.input_port,
+            "port_label": f"Port {selection.output_port} -> Port {selection.input_port}",
+        }
     preview["history_steps"] = _build_trace_history_steps(task=task, selection=selection)
     preview["history_summary"] = " -> ".join(preview["history_steps"])
-    preview["points"] = [
-        [float(frequency), float(value.real), float(value.imag)]
-        for frequency, value in zip(
-            trace_data.frequencies_ghz,
-            trace_data.values,
-            strict=True,
-        )
-    ]
+    if metric_spec is None:
+        preview["points"] = [
+            [float(frequency), float(value.real), float(value.imag)]
+            for frequency, value in zip(
+                trace_data.frequencies_ghz,
+                trace_data.values,
+                strict=True,
+            )
+        ]
+    else:
+        preview["points"] = [
+            [float(frequency), _metric_value_for_trace(metric_spec, value)]
+            for frequency, value in zip(
+                trace_data.frequencies_ghz,
+                trace_data.values,
+                strict=True,
+            )
+        ]
     return preview
 
 
@@ -872,6 +915,7 @@ def _build_persisted_simulation_publication_trace(
         dataset_id=dataset_id,
         design_id=design_id,
         selection=selection,
+        metric=None,
         trace_id=f"trace_simulation_task_{task.task_id}_{family}_{source}",
         saved_parameter=build_trace_parameter(selection),
         summary_parameter=source,
@@ -925,10 +969,11 @@ def _materialize_published_trace(
     dataset_id: str,
     design_id: str,
     selection: ResultTraceSelection,
+    metric: str | None,
     trace_id: str,
     saved_parameter: str,
     summary_parameter: str,
-    summary_representation: str,
+    summary_representation: str | None,
     result_handle_key: str,
     result_handle_label: str,
     provenance_summary: str,
@@ -937,6 +982,14 @@ def _materialize_published_trace(
         source_task,
         basis_task=basis_task,
         selection=selection,
+    )
+    metric_spec = (
+        _resolve_published_metric_spec(
+            family=selection.family,
+            metric=metric,
+        )
+        if metric is not None
+        else None
     )
     payload_ref = write_complex_trace_payload(
         dataset_id=dataset_id,
@@ -986,6 +1039,7 @@ def _materialize_published_trace(
         preview_payload=_build_published_trace_preview_payload(
             task=source_task,
             selection=selection,
+            metric_spec=metric_spec,
             saved_parameter=saved_parameter,
             trace_data=trace_data,
         ),
@@ -998,13 +1052,119 @@ def _materialize_published_trace(
         design_id=design_id,
         family=selection.family,
         parameter=summary_parameter,
-        representation=summary_representation,
+        representation=summary_representation
+        or (metric_spec.representation if metric_spec is not None else "complex"),
         trace_mode_group=selection.trace_mode_group,
         source_kind=cast(str, trace_data.source_kind),
         stage_kind=cast(str, trace_data.stage_kind),
         provenance_summary=provenance_summary,
     )
     return _MaterializedPublishedTrace(summary=summary, detail=detail)
+
+
+def _resolve_published_metric_spec(*, family: str, metric: str) -> _PublishedMetricSpec:
+    if family == "s_matrix":
+        if metric == "magnitude_db":
+            return _PublishedMetricSpec(
+                metric=metric,
+                series_id="magnitude_db",
+                representation="magnitude",
+                y_label="Magnitude",
+                y_unit="dB",
+            )
+        if metric == "phase_deg":
+            return _PublishedMetricSpec(
+                metric=metric,
+                series_id="phase_deg",
+                representation="phase",
+                y_label="Phase",
+                y_unit="deg",
+            )
+        if metric == "real":
+            return _PublishedMetricSpec(
+                metric=metric,
+                series_id="real",
+                representation="real",
+                y_label="Real",
+                y_unit="unitless",
+            )
+        if metric == "imag":
+            return _PublishedMetricSpec(
+                metric=metric,
+                series_id="imaginary",
+                representation="imaginary",
+                y_label="Imaginary",
+                y_unit="unitless",
+            )
+    if family in {"y_matrix", "z_matrix"}:
+        unit = "S" if family == "y_matrix" else "ohm"
+        if metric == "magnitude":
+            return _PublishedMetricSpec(
+                metric=metric,
+                series_id="magnitude",
+                representation="magnitude",
+                y_label="Magnitude",
+                y_unit=unit,
+            )
+        if metric == "real":
+            return _PublishedMetricSpec(
+                metric=metric,
+                series_id="real",
+                representation="real",
+                y_label="Real",
+                y_unit=unit,
+            )
+        if metric == "imag":
+            return _PublishedMetricSpec(
+                metric=metric,
+                series_id="imaginary",
+                representation="imaginary",
+                y_label="Imaginary",
+                y_unit=unit,
+            )
+    raise ValueError(f"Unsupported published metric '{metric}' for family '{family}'.")
+
+
+def _metric_value_for_trace(metric_spec: _PublishedMetricSpec, value: complex) -> float:
+    if metric_spec.metric == "real":
+        return float(value.real)
+    if metric_spec.metric == "imag":
+        return float(value.imag)
+    if metric_spec.metric == "magnitude":
+        return float(abs(value))
+    if metric_spec.metric == "magnitude_db":
+        return float(20 * math.log10(max(abs(value), 1e-12)))
+    if metric_spec.metric == "phase_deg":
+        return float(math.degrees(math.atan2(value.imag, value.real)))
+    raise ValueError(f"Unsupported published metric '{metric_spec.metric}'.")
+
+
+def _family_label(family: str) -> str:
+    if family == "s_matrix":
+        return "S Matrix"
+    if family == "y_matrix":
+        return "Y Matrix"
+    if family == "z_matrix":
+        return "Z Matrix"
+    return family
+
+
+def _selection_source_label(source: str) -> str:
+    if source == "ptc":
+        return "PTC"
+    if source == "raw":
+        return "Raw"
+    return source
+
+
+def _origin_kind_label(source_kind: str) -> str:
+    if source_kind == "circuit_simulation":
+        return "Circuit sim"
+    if source_kind == "layout_simulation":
+        return "Layout sim"
+    if source_kind == "measurement":
+        return "Measurement"
+    return source_kind
 
 
 def _to_publication_record(

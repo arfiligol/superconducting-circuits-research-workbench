@@ -264,6 +264,7 @@ export function SimulationResultExplorer({
               task={task}
               activeDatasetId={activeDatasetId}
               traceKeys={visibleTraceKeys}
+              metric={selection.metric}
               traceLabel={
                 visibleTraceKeys.length > 1
                   ? `${visibleTraceKeys.length} visible traces`

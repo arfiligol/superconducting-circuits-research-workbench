@@ -1406,6 +1406,7 @@ describe("simulation workflow source contract", () => {
     expect(currentTraceSaveDialogSource).toContain("New Design");
     expect(tasksApiSource).toContain("/result-traces/publish");
     expect(tasksApiSource).toContain("trace_keys: [...payload.traceKeys]");
+    expect(tasksApiSource).toContain("metric: payload.metric");
     expect(tasksApiSource).toContain("parameter_name: payload.parameterName ?? undefined");
     expect(tasksApiSource).toContain("compare_axis_index");
     expect(currentTraceSaveControlSource).toContain("dataset_design_conflict");
