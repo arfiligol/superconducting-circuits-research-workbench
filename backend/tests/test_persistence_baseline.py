@@ -49,16 +49,27 @@ def test_alembic_upgrade_creates_rewrite_storage_tables_and_supports_round_trip(
     inspector = inspect(engine)
     assert sorted(inspector.get_table_names()) == [
         "alembic_version",
+        "rewrite_app_context_records",
+        "rewrite_auth_account_records",
+        "rewrite_authenticated_session_records",
+        "rewrite_characterization_registry_records",
         "rewrite_circuit_definitions",
         "rewrite_dataset_designs",
+        "rewrite_dataset_records",
+        "rewrite_dataset_traces",
+        "rewrite_pending_invitation_acceptance_records",
         "rewrite_published_simulation_results",
         "rewrite_published_simulation_traces",
+        "rewrite_refresh_token_records",
         "rewrite_result_handles",
+        "rewrite_server_target_records",
         "rewrite_storage_records",
         "rewrite_task_dispatch_records",
         "rewrite_task_event_records",
         "rewrite_task_records",
         "rewrite_trace_payloads",
+        "rewrite_workspace_default_dataset_records",
+        "rewrite_workspace_invitation_records",
     ]
 
     dataset_record = build_metadata_record_ref(
@@ -470,16 +481,27 @@ def test_bootstrap_metadata_schema_migrates_legacy_numeric_definition_ids_to_uui
     inspector = inspect(engine)
     assert sorted(inspector.get_table_names()) == [
         "alembic_version",
+        "rewrite_app_context_records",
+        "rewrite_auth_account_records",
+        "rewrite_authenticated_session_records",
+        "rewrite_characterization_registry_records",
         "rewrite_circuit_definitions",
         "rewrite_dataset_designs",
+        "rewrite_dataset_records",
+        "rewrite_dataset_traces",
+        "rewrite_pending_invitation_acceptance_records",
         "rewrite_published_simulation_results",
         "rewrite_published_simulation_traces",
+        "rewrite_refresh_token_records",
         "rewrite_result_handles",
+        "rewrite_server_target_records",
         "rewrite_storage_records",
         "rewrite_task_dispatch_records",
         "rewrite_task_event_records",
         "rewrite_task_records",
         "rewrite_trace_payloads",
+        "rewrite_workspace_default_dataset_records",
+        "rewrite_workspace_invitation_records",
     ]
 
     definition_columns = {
@@ -513,7 +535,7 @@ def test_bootstrap_metadata_schema_migrates_legacy_numeric_definition_ids_to_uui
     assert task.definition_id == child_definition.definition_id
     assert event is not None
     assert event.metadata_json["definition_id"] == child_definition.definition_id
-    assert session_scalar_text(engine, "SELECT version_num FROM alembic_version") == "20260324_0006"
+    assert session_scalar_text(engine, "SELECT version_num FROM alembic_version") == "20260325_0008"
 
 
 def _build_alembic_config(database_path: Path) -> Config:

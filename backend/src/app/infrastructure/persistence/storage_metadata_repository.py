@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.app.domain.storage import (
@@ -107,6 +107,18 @@ class SqliteRewriteStorageMetadataRepository:
                 return None
             return _to_trace_payload_ref(row)
 
+    def delete_trace_payload(self, store_key: str) -> bool:
+        with self._session_factory() as session:
+            row = session.scalar(_select_trace_payload_by_store_key(store_key))
+            if row is None:
+                return False
+            owner_record_id = row.owner_record_id
+            session.delete(row)
+            session.flush()
+            self._cleanup_storage_record_if_orphan(session, owner_record_id)
+            session.commit()
+            return True
+
     def save_result_handle(self, result_handle: ResultHandleRef) -> ResultHandleRef:
         with self._session_factory() as session:
             metadata_row = self._upsert_storage_record(session, result_handle.metadata_record)
@@ -183,6 +195,29 @@ class SqliteRewriteStorageMetadataRepository:
             ).all()
             return tuple(self._load_result_handle(session, row) for row in rows)
 
+    def delete_result_handle(self, handle_id: str) -> bool:
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(RewriteResultHandleRecord).where(
+                    RewriteResultHandleRecord.handle_id == handle_id
+                )
+            )
+            if row is None:
+                return False
+            metadata_record_id = row.metadata_record_id
+            trace_batch_record_id = row.trace_batch_record_id
+            analysis_run_record_id = row.analysis_run_record_id
+            session.delete(row)
+            session.flush()
+            for record_id in (
+                metadata_record_id,
+                trace_batch_record_id,
+                analysis_run_record_id,
+            ):
+                self._cleanup_storage_record_if_orphan(session, record_id)
+            session.commit()
+            return True
+
     def _upsert_storage_record(
         self,
         session: Session,
@@ -214,6 +249,37 @@ class SqliteRewriteStorageMetadataRepository:
         return session.scalar(
             select(RewriteStorageRecord).where(RewriteStorageRecord.record_id == record_id)
         )
+
+    def _cleanup_storage_record_if_orphan(
+        self,
+        session: Session,
+        storage_record_id: int | None,
+    ) -> None:
+        if storage_record_id is None:
+            return
+        row = session.get(RewriteStorageRecord, storage_record_id)
+        if row is None:
+            return
+        has_trace_payload = session.scalar(
+            select(RewriteTracePayloadRecord.id).where(
+                RewriteTracePayloadRecord.owner_record_id == storage_record_id
+            )
+        )
+        if has_trace_payload is not None:
+            return
+        has_result_handle = session.scalar(
+            select(RewriteResultHandleRecord.id).where(
+                or_(
+                    RewriteResultHandleRecord.metadata_record_id == storage_record_id,
+                    RewriteResultHandleRecord.trace_batch_record_id == storage_record_id,
+                    RewriteResultHandleRecord.analysis_run_record_id == storage_record_id,
+                )
+            )
+        )
+        if has_result_handle is not None:
+            return
+        session.delete(row)
+        session.flush()
 
     def _load_result_handle(
         self,

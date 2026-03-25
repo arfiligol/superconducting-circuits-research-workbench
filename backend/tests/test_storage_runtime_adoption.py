@@ -5,6 +5,7 @@ import pytest
 from sc_core.execution import TaskExecutionResult, TaskResultHandle
 from sqlalchemy import update
 from src.app.api.schemas.tasks import TaskDispatchResponse, TaskEventResponse
+from src.app.domain.datasets import DatasetCreateDraft
 from src.app.domain.tasks import (
     CharacterizationSetup,
     TaskEventHistoryQuery,
@@ -13,12 +14,14 @@ from src.app.domain.tasks import (
     TaskResultRefs,
     TaskSubmissionDraft,
 )
+from src.app.infrastructure.durable_runtime_seed import rebuild_durable_runtime_state
 from src.app.infrastructure.persistence import (
     RewriteTaskDispatchRecord,
     RewriteTaskEventRecord,
     create_metadata_session_factory,
 )
 from src.app.infrastructure.runtime import (
+    get_catalog_repository,
     get_rewrite_app_state_repository,
     get_rewrite_task_repository,
     get_storage_metadata_repository,
@@ -175,6 +178,33 @@ def test_runtime_bootstrap_persists_seeded_trace_payload_and_materialized_handle
     assert storage_repository.get_result_handle("result:fluxonium-2025-031:fit-summary") == (
         task.result_refs.result_handles[0]
     )
+
+
+def test_rebuild_durable_runtime_state_resets_persisted_catalog_before_reseeding() -> None:
+    catalog_repository = get_catalog_repository()
+    seeded_dataset_ids = [row.dataset_id for row in catalog_repository.list_dataset_details()]
+    created = catalog_repository.create_dataset(
+        workspace_id="workspace-local",
+        visibility_scope="local",
+        owner_user_id="user-local",
+        owner_display_name="Local Operator",
+        draft=DatasetCreateDraft(
+            name="Transient Runtime Dataset",
+            family="fluxonium",
+            device_type="Fluxonium",
+            source="measurement",
+        ),
+    )
+
+    assert catalog_repository.get_dataset(created.dataset_id) is not None
+
+    rebuild_durable_runtime_state()
+
+    catalog_repository = get_catalog_repository()
+    assert catalog_repository.get_dataset(created.dataset_id) is None
+    assert [
+        row.dataset_id for row in catalog_repository.list_dataset_details()
+    ] == seeded_dataset_ids
 
 
 def test_task_service_uses_persisted_task_repository_not_app_state_seeds() -> None:

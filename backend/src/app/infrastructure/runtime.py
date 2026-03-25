@@ -3,13 +3,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from src.app.infrastructure.app_state_repository import InMemoryAppStateRepository
+from src.app.infrastructure.app_state_repository import AppStateRepository
 from src.app.infrastructure.audit_store import (
     SqliteAuditLogRepository,
     bootstrap_audit_store,
     create_audit_session_factory,
 )
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
+from src.app.infrastructure.durable_catalog_repository import DurableCatalogRepository
 from src.app.infrastructure.invitation_delivery import WorkspaceInvitationDeliveryService
 from src.app.infrastructure.local_simulation_execution_driver import (
     LocalCharacterizationExecutionDriver,
@@ -31,7 +32,6 @@ from src.app.infrastructure.processor_runtime_repository import (
     RedisProcessorRuntimeRepository,
 )
 from src.app.infrastructure.request_debug import configure_backend_logging
-from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
 from src.app.infrastructure.rewrite_task_repository import PersistedRewriteTaskRepository
 from src.app.infrastructure.session_jwt_transport import SessionJwtTransport
 from src.app.infrastructure.task_execution_runtime import TaskExecutionRuntime
@@ -104,19 +104,25 @@ def get_circuit_definition_persistence_repository() -> SqliteCircuitDefinitionRe
 
 
 @lru_cache(maxsize=1)
-def get_catalog_repository() -> InMemoryRewriteCatalogRepository:
-    return InMemoryRewriteCatalogRepository(
-        durable_definition_repository=get_circuit_definition_persistence_repository(),
-        durable_publication_repository=get_research_data_publication_repository(),
-        durable_characterization_repository=get_persisted_characterization_repository(),
+def get_catalog_repository() -> DurableCatalogRepository:
+    settings = get_settings()
+    bootstrap_metadata_schema(settings.database_path)
+    return DurableCatalogRepository(
+        session_factory=create_metadata_session_factory(settings.database_path),
+        storage_metadata_repository=get_storage_metadata_repository(),
+        publication_repository=get_research_data_publication_repository(),
+        characterization_repository=get_persisted_characterization_repository(),
+        circuit_definition_repository=get_circuit_definition_persistence_repository(),
         task_repository=get_task_repository(),
     )
 
 
 @lru_cache(maxsize=1)
-def get_app_state_repository() -> InMemoryAppStateRepository:
-    return InMemoryAppStateRepository(
-        seed_tasks=False,
+def get_app_state_repository() -> AppStateRepository:
+    settings = get_settings()
+    bootstrap_metadata_schema(settings.database_path)
+    return AppStateRepository(
+        create_metadata_session_factory(settings.database_path)
     )
 
 
@@ -210,7 +216,7 @@ def get_dataset_service() -> DatasetService:
 @lru_cache(maxsize=1)
 def get_circuit_definition_service() -> CircuitDefinitionService:
     return CircuitDefinitionService(
-        repository=get_catalog_repository(),
+        repository=get_circuit_definition_persistence_repository(),
         session_repository=get_app_state_repository(),
         authorization_service=get_authorization_service(),
         audit_repository=get_task_audit_repository(),
@@ -220,7 +226,7 @@ def get_circuit_definition_service() -> CircuitDefinitionService:
 @lru_cache(maxsize=1)
 def get_schemdraw_render_service() -> SchemdrawRenderService:
     return SchemdrawRenderService(
-        definition_repository=get_catalog_repository(),
+        definition_repository=get_circuit_definition_persistence_repository(),
         session_repository=get_app_state_repository(),
     )
 
@@ -265,7 +271,7 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
         processor_summary_repository=get_processor_runtime_repository(),
         session_repository=get_app_state_repository(),
         dataset_repository=get_catalog_repository(),
-        circuit_definition_repository=get_catalog_repository(),
+        circuit_definition_repository=get_circuit_definition_persistence_repository(),
         authorization_service=get_authorization_service(),
         queue_dispatcher=get_task_queue_dispatcher(),
     )
@@ -277,7 +283,7 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
     )
     simulation_execution_driver = LocalSimulationExecutionDriver(
         task_repository=get_task_repository(),
-        circuit_definition_repository=get_catalog_repository(),
+        circuit_definition_repository=get_circuit_definition_persistence_repository(),
         execution_runtime_factory=lambda: execution_runtime,
     )
     post_processing_execution_driver = LocalPostProcessingExecutionDriver(

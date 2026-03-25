@@ -306,6 +306,49 @@ class PersistedCharacterizationRepository:
             tagged_metric=tagged_metric,
         )
 
+    def upsert_seed_result(
+        self,
+        *,
+        summary: CharacterizationResultSummary,
+        run_history: CharacterizationRunHistoryRow,
+        detail: CharacterizationResultDetail,
+    ) -> None:
+        existing = self._find_run(summary.dataset_id, summary.design_id, summary.result_id)
+        payload = {
+            "result_id": summary.result_id,
+            "result_summary": _summary_to_payload(summary),
+            "run_history_row": _run_history_to_payload(run_history),
+            "result_detail": _detail_to_payload(detail),
+        }
+        if existing is not None:
+            existing.summary_payload = payload
+            _save_analysis_run(existing)
+            return
+
+        updated_at = datetime.fromisoformat(summary.updated_at.replace("Z", "+00:00"))
+        analysis_run_record = _core_symbols()["AnalysisRunRecord"](
+            dataset_id=_stable_positive_int(summary.dataset_id),
+            design_id=_stable_positive_int(summary.dataset_id, summary.design_id),
+            analysis_id=summary.analysis_id,
+            analysis_label=summary.title,
+            run_id=run_history.run_id,
+            status=summary.status,
+            input_trace_ids=[
+                _stable_positive_int(summary.dataset_id, summary.design_id, trace_id)
+                for trace_id in detail.input_trace_ids
+            ],
+            input_batch_ids=[],
+            input_scope="seeded_catalog",
+            trace_mode_group="base",
+            config_payload={},
+            summary_payload=payload,
+            created_at=updated_at,
+            completed_at=updated_at,
+        )
+        with _core_symbols()["get_unit_of_work"]() as uow:
+            uow.result_bundles.analysis_runs.add(analysis_run_record)
+            uow.commit()
+
     def _find_run(
         self,
         dataset_id: str,

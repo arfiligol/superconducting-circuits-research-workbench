@@ -5,6 +5,7 @@ import copy
 import json
 import math
 import re
+import shutil
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -602,11 +603,14 @@ def write_complex_trace_payload(
     trace_id: str,
     frequencies_ghz: Sequence[float],
     values: np.ndarray,
+    store_key: str | None = None,
 ) -> Any:
     trace_store = _core_symbols()["LocalZarrTraceStore"](
         root_path=_core_symbols()["get_trace_store_path"]()
     )
-    store_key = f"datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr"
+    resolved_store_key = (
+        store_key or f"datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr"
+    )
     write_result = trace_store.write_trace(
         design_id=_stable_positive_int(dataset_id, design_id),
         batch_id=_stable_positive_int(trace_id, dataset_id),
@@ -619,7 +623,7 @@ def write_complex_trace_payload(
                 "values": np.asarray(tuple(float(value) for value in frequencies_ghz)),
             },
         ),
-        store_key=store_key,
+        store_key=resolved_store_key,
         payload_role="raw",
         writer_version="local_runtime.trace_publish",
     )
@@ -627,6 +631,18 @@ def write_complex_trace_payload(
         write_result.store_ref,
         payload_role="dataset_primary",
     )
+
+
+def delete_trace_payload_store(store_key: str) -> None:
+    trace_store_root = Path(_core_symbols()["get_trace_store_path"]()).resolve()
+    store_path = (trace_store_root / store_key).resolve()
+    if not store_path.is_relative_to(trace_store_root):
+        raise ValueError("trace payload store_key escapes the configured trace store root")
+    if store_path.is_dir():
+        shutil.rmtree(store_path)
+        return
+    if store_path.exists():
+        store_path.unlink()
 
 
 def _cached_simulation_runtime(
