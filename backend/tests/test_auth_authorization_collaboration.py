@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from src.app.infrastructure.runtime import (
     get_task_audit_repository,
@@ -7,6 +8,12 @@ from src.app.infrastructure.runtime import (
 from src.app.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def reset_auth_state() -> None:
+    reset_runtime_state()
+    client.cookies.clear()
 
 
 def _login(
@@ -60,6 +67,20 @@ def test_refresh_rotates_refresh_token_and_restores_authenticated_session() -> N
     assert stale_refresh.json()["error"]["code"] == "auth_refresh_invalid"
 
 
+def test_refresh_rotation_survives_backend_restart() -> None:
+    _login()
+    old_refresh_token = _cookie_value("sc_session_refresh")
+    assert old_refresh_token is not None
+
+    reset_runtime_state()
+
+    response = client.post("/session/refresh")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["auth"]["state"] == "authenticated"
+    assert client.cookies.get("sc_session_refresh") != old_refresh_token
+
+
 def test_logout_revokes_refresh_family() -> None:
     _login()
     old_refresh_token = _cookie_value("sc_session_refresh")
@@ -68,6 +89,22 @@ def test_logout_revokes_refresh_family() -> None:
     logout_response = client.post("/session/logout")
 
     assert logout_response.status_code == 200
+    client.cookies.set("sc_session_refresh", old_refresh_token)
+    refresh_response = client.post("/session/refresh")
+    assert refresh_response.status_code == 401
+    assert refresh_response.json()["error"]["code"] == "auth_refresh_invalid"
+
+
+def test_logout_revocation_survives_backend_restart() -> None:
+    _login()
+    old_refresh_token = _cookie_value("sc_session_refresh")
+    assert old_refresh_token is not None
+
+    logout_response = client.post("/session/logout")
+    assert logout_response.status_code == 200
+
+    reset_runtime_state()
+
     client.cookies.set("sc_session_refresh", old_refresh_token)
     refresh_response = client.post("/session/refresh")
     assert refresh_response.status_code == 401
@@ -355,6 +392,54 @@ def test_unauthenticated_invitation_acceptance_can_resume_after_login() -> None:
     assert resumed_payload["requires_authentication"] is False
     assert resumed_payload["invitation"]["state"] == "accepted"
     assert client.cookies.get("sc_pending_invitation") is None
+
+
+def test_workspace_invitation_acceptance_survives_backend_restart() -> None:
+    _login()
+    invitation_response = client.post(
+        "/session/workspace-invitations",
+        json={
+            "workspace_id": "ws-device-lab",
+            "email": "collaborator.local@example.com",
+            "role": "member",
+        },
+    )
+    invite_token = invitation_response.json()["data"]["invitation"]["invite_token"]
+    _logout()
+    reset_runtime_state()
+
+    _login(email="collaborator.local@example.com", password="collaborator-local-password")
+    accept_response = client.post(
+        "/session/workspace-invitations/accept",
+        json={"invite_token": invite_token},
+    )
+
+    assert accept_response.status_code == 200
+    payload = accept_response.json()["data"]
+    assert payload["invitation"]["state"] == "accepted"
+    assert any(membership["id"] == "ws-device-lab" for membership in payload["memberships"])
+
+
+def test_workspace_invitation_revoke_survives_backend_restart() -> None:
+    _login()
+    created = client.post(
+        "/session/workspace-invitations",
+        json={
+            "workspace_id": "ws-device-lab",
+            "email": "collaborator.local@example.com",
+            "role": "viewer",
+        },
+    )
+    invite_id = created.json()["data"]["invitation"]["invite_id"]
+
+    reset_runtime_state()
+
+    revoked = client.post(f"/session/workspace-invitations/{invite_id}/revoke")
+    assert revoked.status_code == 200
+
+    detail = client.get(f"/session/workspace-invitations/{invite_id}")
+    assert detail.status_code == 200
+    assert detail.json()["data"]["state"] == "revoked"
 
 
 def test_invitation_delivery_failure_uses_canonical_state_and_audit(

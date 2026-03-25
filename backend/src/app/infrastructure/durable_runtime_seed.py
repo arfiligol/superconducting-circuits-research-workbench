@@ -15,6 +15,13 @@ from src.app.domain.datasets import (
 )
 from src.app.domain.storage import MetadataRecordRef
 from src.app.domain.tasks import TaskResultRefs
+from src.app.infrastructure.app_state_repository import (
+    DEFAULT_APP_CONTEXT_ID,
+    build_local_session_state,
+    build_seed_auth_accounts,
+    build_seed_server_targets,
+    build_workspace_default_dataset_ids,
+)
 from src.app.infrastructure.rewrite_app_state_repository import build_seed_tasks
 from src.app.infrastructure.rewrite_catalog_repository import (
     _seed_characterization_analysis_registry,
@@ -98,6 +105,7 @@ def reset_durable_runtime_state() -> DurableRuntimeResetResult:
 
 def seed_durable_runtime_state() -> None:
     from src.app.infrastructure.runtime import (
+        get_app_state_repository,
         get_catalog_repository,
         get_circuit_definition_persistence_repository,
         get_persisted_characterization_repository,
@@ -105,11 +113,35 @@ def seed_durable_runtime_state() -> None:
         get_task_snapshot_repository,
     )
 
+    app_state_repository = get_app_state_repository()
     catalog_repository = get_catalog_repository()
     circuit_definition_repository = get_circuit_definition_persistence_repository()
     characterization_repository = get_persisted_characterization_repository()
     storage_metadata_repository = get_storage_metadata_repository()
     task_snapshot_repository = get_task_snapshot_repository()
+
+    app_state_repository.upsert_seed_app_context(
+        app_context_id=DEFAULT_APP_CONTEXT_ID,
+        state=build_local_session_state(),
+    )
+    for workspace_id, default_dataset_id in build_workspace_default_dataset_ids().items():
+        app_state_repository.upsert_workspace_default_dataset(
+            workspace_id=workspace_id,
+            default_dataset_id=default_dataset_id,
+        )
+    for target in build_seed_server_targets():
+        app_state_repository.upsert_seed_server_target(
+            origin=target.origin,
+            label=target.label,
+            validation_status=target.validation_status,
+            last_checked_at=target.last_checked_at,
+        )
+    for account in build_seed_auth_accounts():
+        app_state_repository.upsert_seed_auth_account(
+            email=account.email,
+            password=account.password,
+            prototype=account.prototype,
+        )
 
     for definition in _seed_circuit_definitions():
         circuit_definition_repository.save_circuit_definition(definition)

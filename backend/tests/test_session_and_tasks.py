@@ -387,7 +387,7 @@ def test_session_mutations_require_authenticated_session() -> None:
     assert response.json()["error"]["category"] == "auth_required"
 
 
-def test_get_session_returns_degraded_when_continuity_cannot_be_restored() -> None:
+def test_get_session_restores_authenticated_continuity_after_backend_restart() -> None:
     _login()
     reset_runtime_state()
 
@@ -396,17 +396,17 @@ def test_get_session_returns_degraded_when_continuity_cannot_be_restored() -> No
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["data"]["runtime_mode"] == "local"
+    assert payload["data"]["runtime_mode"] == "online"
     assert payload["data"]["auth"] == {
-        "state": "local_bypass",
-        "mode": "local_bypass",
+        "state": "authenticated",
+        "mode": "jwt_refresh_cookie",
         "reason": None,
     }
-    assert payload["data"]["workspace"]["id"] == "local-space"
-    assert payload["data"]["capabilities"]["can_submit_tasks"] is True
+    assert payload["data"]["workspace"]["id"] == "ws-device-lab"
+    assert payload["data"]["active_dataset"]["id"] == "fluxonium-2025-031"
 
 
-def test_session_mutations_reject_degraded_continuity() -> None:
+def test_session_mutations_preserve_authenticated_continuity_after_backend_restart() -> None:
     _login()
     reset_runtime_state()
 
@@ -414,8 +414,75 @@ def test_session_mutations_reject_degraded_continuity() -> None:
 
     assert response.status_code == 200
     payload = response.json()["data"]
-    assert payload["runtime_mode"] == "local"
+    assert payload["runtime_mode"] == "online"
+    assert payload["auth"]["state"] == "authenticated"
     assert payload["active_dataset"] is None
+
+
+def test_remembered_server_targets_survive_backend_restart() -> None:
+    created = client.post(
+        "/session/server-targets",
+        json={
+            "server_origin": "https://lab.example.com:8443",
+            "label": "Device Lab Remote",
+        },
+    )
+    assert created.status_code == 201
+
+    reset_runtime_state()
+
+    response = client.get("/session/server-targets")
+
+    assert response.status_code == 200
+    rows = response.json()["data"]["targets"]
+    assert any(row["origin"] == "https://lab.example.com:8443" for row in rows)
+
+
+def test_active_workspace_switch_survives_backend_restart() -> None:
+    _login()
+    switched = client.patch("/session/active-workspace", json={"workspace_id": "ws-modeling"})
+    assert switched.status_code == 200
+
+    reset_runtime_state()
+
+    response = client.get("/session")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["workspace"]["id"] == "ws-modeling"
+    assert payload["active_dataset"]["id"] == "transmon-coupler-014"
+
+
+def test_active_dataset_binding_survives_backend_restart() -> None:
+    _login()
+    cleared = client.patch("/session/active-dataset", json={"dataset_id": None})
+    assert cleared.status_code == 200
+
+    reset_runtime_state()
+
+    response = client.get("/session")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["runtime_mode"] == "online"
+    assert payload["auth"]["state"] == "authenticated"
+    assert payload["active_dataset"] is None
+
+
+def test_runtime_mode_switch_remains_coherent_after_backend_restart() -> None:
+    _login()
+    switched = client.patch("/session/runtime-mode", json={"runtime_mode": "local"})
+    assert switched.status_code == 200
+
+    reset_runtime_state()
+
+    response = client.get("/session")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["runtime_mode"] == "local"
+    assert payload["auth"]["state"] == "local_bypass"
+    assert payload["workspace"]["id"] == "local-space"
 
 
 def test_get_session_requires_context_rebind_when_active_dataset_is_archived() -> None:

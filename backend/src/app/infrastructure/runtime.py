@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from src.app.infrastructure.app_state_repository import InMemoryAppStateRepository
+from src.app.infrastructure.app_state_repository import AppStateRepository
 from src.app.infrastructure.audit_store import (
     SqliteAuditLogRepository,
     bootstrap_audit_store,
@@ -118,9 +118,11 @@ def get_catalog_repository() -> DurableCatalogRepository:
 
 
 @lru_cache(maxsize=1)
-def get_app_state_repository() -> InMemoryAppStateRepository:
-    return InMemoryAppStateRepository(
-        seed_tasks=False,
+def get_app_state_repository() -> AppStateRepository:
+    settings = get_settings()
+    bootstrap_metadata_schema(settings.database_path)
+    return AppStateRepository(
+        create_metadata_session_factory(settings.database_path)
     )
 
 
