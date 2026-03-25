@@ -309,6 +309,8 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("disabled={!trace.allowed_actions.edit}");
     expect(rawDataWorkspaceSource).toContain("if (!trace.allowed_actions.edit) {");
     expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.delete ? (");
+    expect(rawDataWorkspaceSource).not.toContain('<p className="text-xs leading-5 text-muted-foreground">');
+    expect(rawDataWorkspaceSource).toContain("title={trace.mutation_policy_summary}");
   });
 
   it("keeps focused preview separate from selected rows and cleans up deleted focus safely", () => {

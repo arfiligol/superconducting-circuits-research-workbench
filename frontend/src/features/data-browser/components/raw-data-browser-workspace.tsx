@@ -968,42 +968,38 @@ function TraceSummaryRow({
       </td>
       <td className="px-4 py-3 align-top">
         {hasRowActions ? (
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
+          <div className="flex min-h-9 flex-wrap items-center gap-2">
+            <TraceRowActionButton
+              label={trace.allowed_actions.edit ? "Edit trace" : "Edit unavailable"}
+              disabled={!trace.allowed_actions.edit}
+              icon={<Pencil className="h-3.5 w-3.5" />}
+              onClick={() => {
+                if (!trace.allowed_actions.edit) {
+                  return;
+                }
+                onEdit(trace.trace_id);
+              }}
+            />
+            {trace.allowed_actions.delete ? (
               <TraceRowActionButton
-                label={trace.allowed_actions.edit ? "Edit trace" : "Edit unavailable"}
-                disabled={!trace.allowed_actions.edit}
-                icon={<Pencil className="h-3.5 w-3.5" />}
+                label="Delete trace"
+                tone="destructive"
+                icon={<Trash2 className="h-3.5 w-3.5" />}
                 onClick={() => {
-                  if (!trace.allowed_actions.edit) {
-                    return;
-                  }
-                  onEdit(trace.trace_id);
+                  onDelete(trace);
                 }}
               />
-              {trace.allowed_actions.delete ? (
-                <TraceRowActionButton
-                  label="Delete trace"
-                  tone="destructive"
-                  icon={<Trash2 className="h-3.5 w-3.5" />}
-                  onClick={() => {
-                    onDelete(trace);
-                  }}
-                />
-              ) : null}
-            </div>
-            <p className="text-xs leading-5 text-muted-foreground">
-              {trace.mutation_policy_summary}
-            </p>
+            ) : null}
           </div>
         ) : (
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="flex min-h-9 items-center">
+            <span
+              title={trace.mutation_policy_summary}
+              aria-label={`Locked: ${trace.mutation_policy_summary}`}
+              className="inline-flex items-center rounded-full border border-border/80 bg-muted/40 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground"
+            >
               Locked
-            </p>
-            <p className="text-xs leading-5 text-muted-foreground">
-              {trace.mutation_policy_summary}
-            </p>
+            </span>
           </div>
         )}
       </td>
