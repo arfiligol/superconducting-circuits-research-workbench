@@ -563,279 +563,269 @@ export function CharacterizationWorkspace() {
         </SurfacePanel>
       ) : (
         <div className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.9fr)]">
-            <SurfacePanel
-              title="Select Data Scope"
-              description="Choose a design and the traces that define this analysis."
-            >
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <SurfaceTag tone="default">{activeDatasetState.activeDataset.name}</SurfaceTag>
-                  <SurfaceTag tone="default">
-                    {activeDatasetState.activeDataset.datasetId}
-                  </SurfaceTag>
-                  {selectedDesign ? (
-                    <SurfaceTag
-                      tone={
-                        selectedDesign.compare_readiness === "ready" ? "success" : "default"
-                      }
-                    >
-                      {selectedDesign.compare_readiness}
-                    </SurfaceTag>
-                  ) : null}
-                </div>
-
-                <AppSelectField
-                  label="Design"
-                  value={selectedDesignId ?? ""}
-                  onChange={setSelectedDesignId}
-                  options={designs.map((design) => ({
-                    value: design.design_id,
-                    label: design.name,
-                    description: `${design.trace_count} traces · ${formatCoverageLabel(
-                      design.source_coverage,
-                    )}`,
-                  }))}
-                  placeholder={isDesignsLoading ? "Loading designs" : "Select a design"}
-                />
+          <SurfacePanel
+            title="Select Data Scope"
+            description="Choose a design and the traces that define this analysis."
+          >
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <SurfaceTag tone="default">{activeDatasetState.activeDataset.name}</SurfaceTag>
+                <SurfaceTag tone="default">
+                  {activeDatasetState.activeDataset.datasetId}
+                </SurfaceTag>
                 {selectedDesign ? (
-                  <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <SurfaceTag tone="default">{selectedDesign.design_id}</SurfaceTag>
-                      <p className="text-sm font-medium text-foreground">
-                        {selectedDesign.trace_count} traces in view
-                      </p>
-                    </div>
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      {formatCoverageLabel(selectedDesign.source_coverage)}
-                    </p>
-                  </div>
-                ) : null}
-                {designsErrorNotice ? (
-                  <SectionNotice
-                    title={designsErrorNotice.summary}
-                    detail={designsErrorNotice.detail}
-                  />
-                ) : null}
-
-                <div className="rounded-[1rem] border border-border bg-background px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Trace Selection
-                      </p>
-                      <p className="mt-2 text-sm text-muted-foreground">{traceSelectionSummary}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <SurfaceActionButton
-                        type="button"
-                        onClick={selectAllTraces}
-                        className="px-3 py-1.5 text-xs"
-                      >
-                        All
-                      </SurfaceActionButton>
-                      <SurfaceActionButton
-                        type="button"
-                        onClick={selectBaseTraces}
-                        className="px-3 py-1.5 text-xs"
-                      >
-                        Base
-                      </SurfaceActionButton>
-                      <SurfaceActionButton
-                        type="button"
-                        onClick={clearTraceSelection}
-                        className="px-3 py-1.5 text-xs"
-                      >
-                        Clear
-                      </SurfaceActionButton>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 overflow-x-auto rounded-[0.95rem] border border-border">
-                    <table className="min-w-full table-fixed text-left text-sm">
-                      <thead className="bg-surface text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                        <tr>
-                          <th className="w-14 px-3 py-3">Use</th>
-                          <th className="min-w-[220px] px-3 py-3">Trace</th>
-                          <th className="w-28 px-3 py-3">Family</th>
-                          <th className="w-28 px-3 py-3">View</th>
-                          <th className="w-24 px-3 py-3">Source</th>
-                          <th className="w-24 px-3 py-3">Mode</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border bg-background">
-                        {traces.map((trace) => {
-                          const isSelected = selectedTraceIds.includes(trace.trace_id);
-                          return (
-                            <tr
-                              key={trace.trace_id}
-                              className={cx(
-                                "cursor-pointer transition hover:bg-primary/[0.05]",
-                                isSelected && "bg-primary/[0.08]",
-                              )}
-                              onClick={() => {
-                                toggleTraceSelection(trace.trace_id);
-                              }}
-                            >
-                              <td className="px-3 py-3 align-top">
-                                <input
-                                  checked={isSelected}
-                                  readOnly
-                                  type="checkbox"
-                                  className="mt-1 h-4 w-4 rounded border-border text-primary"
-                                />
-                              </td>
-                              <td className="px-3 py-3 align-top">
-                                <p className="font-medium text-foreground">{trace.parameter}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {trace.trace_id}
-                                </p>
-                                <p className="mt-2 text-xs text-muted-foreground">
-                                  {trace.provenance_summary}
-                                </p>
-                              </td>
-                              <td className="px-3 py-3 align-top text-muted-foreground">
-                                {trace.family.replaceAll("_", " ")}
-                              </td>
-                              <td className="px-3 py-3 align-top text-muted-foreground">
-                                {formatRepresentationLabel(trace.representation)}
-                              </td>
-                              <td className="px-3 py-3 align-top text-muted-foreground">
-                                {formatSourceLabel(trace.source_kind)}
-                              </td>
-                              <td className="px-3 py-3 align-top text-muted-foreground">
-                                {formatModeLabel(trace.trace_mode_group)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {!isTracesLoading && traces.length === 0 ? (
-                    <p className="mt-4 rounded-[0.95rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                      No visible traces are indexed for this design yet.
-                    </p>
-                  ) : null}
-                  {tracesErrorNotice ? (
-                    <div className="mt-4">
-                      <SectionNotice
-                        title={tracesErrorNotice.summary}
-                        detail={tracesErrorNotice.detail}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </SurfacePanel>
-
-            <SurfacePanel
-              title="Choose Analysis & Setup"
-              description="Pick an analysis for this scope, then fill the required setup."
-            >
-              <div className="space-y-4">
-                <AppSelectField
-                  label="Analysis"
-                  value={selectedAnalysisId ?? ""}
-                  onChange={setSelectedAnalysisId}
-                  options={analysisOptions}
-                  placeholder={
-                    isAnalysisRegistryLoading
-                      ? "Loading analyses"
-                      : noRunnableAnalyses
-                        ? "None available"
-                        : "Select an analysis"
-                  }
-                />
-                <SectionNotice
-                  title={analysisExplanation.title}
-                  detail={analysisExplanation.detail}
-                  tone={analysisExplanation.tone}
-                />
-                {selectedAnalysis ? (
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <SurfaceTag tone={analysisAvailabilityTone(selectedAnalysis.availabilityState)}>
-                      {selectedAnalysis.availabilityState}
-                    </SurfaceTag>
-                    <SurfaceTag tone="default">{selectedAnalysis.analysisId}</SurfaceTag>
-                  </div>
-                ) : null}
-                {analysisRegistryErrorNotice ? (
-                  <SectionNotice
-                    title={analysisRegistryErrorNotice.summary}
-                    detail={analysisRegistryErrorNotice.detail}
-                  />
-                ) : null}
-
-                {selectedAnalysis?.requiredConfigFields.length ? (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {selectedAnalysis.requiredConfigFields.map((field) => (
-                      <label
-                        key={field}
-                        className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3"
-                      >
-                        <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          {formatConfigLabel(field)}
-                        </p>
-                        <input
-                          value={analysisConfigValues[field] ?? ""}
-                          onChange={(event) => {
-                            updateAnalysisConfigValue(field, event.target.value);
-                          }}
-                          placeholder={configPlaceholder(field)}
-                          className="w-full rounded-[0.8rem] border border-border/85 bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                ) : null}
-
-                {taskMutationState.message ? (
-                  <div
-                    className={cx(
-                      "rounded-[0.95rem] border px-4 py-3 text-sm",
-                      resolveSurfaceInsetToneClass(taskMutationTone),
-                    )}
+                  <SurfaceTag
+                    tone={selectedDesign.compare_readiness === "ready" ? "success" : "default"}
                   >
-                    {taskMutationState.message}
-                  </div>
+                    {selectedDesign.compare_readiness}
+                  </SurfaceTag>
                 ) : null}
+              </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-4">
+              <AppSelectField
+                label="Design"
+                value={selectedDesignId ?? ""}
+                onChange={setSelectedDesignId}
+                options={designs.map((design) => ({
+                  value: design.design_id,
+                  label: design.name,
+                  description: `${design.trace_count} traces · ${formatCoverageLabel(
+                    design.source_coverage,
+                  )}`,
+                }))}
+                placeholder={isDesignsLoading ? "Loading designs" : "Select a design"}
+              />
+              {selectedDesign ? (
+                <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SurfaceTag tone="default">{selectedDesign.design_id}</SurfaceTag>
+                    <p className="text-sm font-medium text-foreground">
+                      {selectedDesign.trace_count} traces in view
+                    </p>
+                  </div>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    {formatCoverageLabel(selectedDesign.source_coverage)}
+                  </p>
+                </div>
+              ) : null}
+              {designsErrorNotice ? (
+                <SectionNotice title={designsErrorNotice.summary} detail={designsErrorNotice.detail} />
+              ) : null}
+
+              <div className="rounded-[1rem] border border-border bg-background px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Run Analysis
+                      Trace Selection
                     </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {selectedAnalysis
-                        ? `${selectedAnalysis.label} · ${traceSelectionSummary}`
-                        : "Choose an analysis to continue."}
-                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">{traceSelectionSummary}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleRunAnalysis();
-                    }}
-                    disabled={
-                      taskMutationState.state === "submitting" ||
-                      !selectedDesignId ||
-                      !selectedAnalysis ||
-                      selectedAnalysis.availabilityState === "unavailable" ||
-                      selectedTraceIds.length === 0
-                    }
-                    className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {taskMutationState.state === "submitting" ? (
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
-                    ) : null}
-                    Run Analysis
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <SurfaceActionButton
+                      type="button"
+                      onClick={selectAllTraces}
+                      className="px-3 py-1.5 text-xs"
+                    >
+                      All
+                    </SurfaceActionButton>
+                    <SurfaceActionButton
+                      type="button"
+                      onClick={selectBaseTraces}
+                      className="px-3 py-1.5 text-xs"
+                    >
+                      Base
+                    </SurfaceActionButton>
+                    <SurfaceActionButton
+                      type="button"
+                      onClick={clearTraceSelection}
+                      className="px-3 py-1.5 text-xs"
+                    >
+                      Clear
+                    </SurfaceActionButton>
+                  </div>
                 </div>
+
+                <div className="mt-4 overflow-x-auto rounded-[0.95rem] border border-border">
+                  <table className="min-w-full table-fixed text-left text-sm">
+                    <thead className="bg-surface text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      <tr>
+                        <th className="w-14 px-3 py-3">Use</th>
+                        <th className="min-w-[220px] px-3 py-3">Trace</th>
+                        <th className="w-28 px-3 py-3">Family</th>
+                        <th className="w-28 px-3 py-3">View</th>
+                        <th className="w-24 px-3 py-3">Source</th>
+                        <th className="w-24 px-3 py-3">Mode</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border bg-background">
+                      {traces.map((trace) => {
+                        const isSelected = selectedTraceIds.includes(trace.trace_id);
+                        return (
+                          <tr
+                            key={trace.trace_id}
+                            className={cx(
+                              "cursor-pointer transition hover:bg-primary/[0.05]",
+                              isSelected && "bg-primary/[0.08]",
+                            )}
+                            onClick={() => {
+                              toggleTraceSelection(trace.trace_id);
+                            }}
+                          >
+                            <td className="px-3 py-3 align-top">
+                              <input
+                                checked={isSelected}
+                                readOnly
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 rounded border-border text-primary"
+                              />
+                            </td>
+                            <td className="px-3 py-3 align-top">
+                              <p className="font-medium text-foreground">{trace.parameter}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {trace.trace_id}
+                              </p>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                {trace.provenance_summary}
+                              </p>
+                            </td>
+                            <td className="px-3 py-3 align-top text-muted-foreground">
+                              {trace.family.replaceAll("_", " ")}
+                            </td>
+                            <td className="px-3 py-3 align-top text-muted-foreground">
+                              {formatRepresentationLabel(trace.representation)}
+                            </td>
+                            <td className="px-3 py-3 align-top text-muted-foreground">
+                              {formatSourceLabel(trace.source_kind)}
+                            </td>
+                            <td className="px-3 py-3 align-top text-muted-foreground">
+                              {formatModeLabel(trace.trace_mode_group)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {!isTracesLoading && traces.length === 0 ? (
+                  <p className="mt-4 rounded-[0.95rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                    No visible traces are indexed for this design yet.
+                  </p>
+                ) : null}
+                {tracesErrorNotice ? (
+                  <div className="mt-4">
+                    <SectionNotice title={tracesErrorNotice.summary} detail={tracesErrorNotice.detail} />
+                  </div>
+                ) : null}
               </div>
-            </SurfacePanel>
-          </div>
+            </div>
+          </SurfacePanel>
+
+          <SurfacePanel
+            title="Choose Analysis & Setup"
+            description="Pick an analysis for this scope, then fill the required setup."
+          >
+            <div className="space-y-4">
+              <AppSelectField
+                label="Analysis"
+                value={selectedAnalysisId ?? ""}
+                onChange={setSelectedAnalysisId}
+                options={analysisOptions}
+                placeholder={
+                  isAnalysisRegistryLoading
+                    ? "Loading analyses"
+                    : noRunnableAnalyses
+                      ? "None available"
+                      : "Select an analysis"
+                }
+              />
+              <SectionNotice
+                title={analysisExplanation.title}
+                detail={analysisExplanation.detail}
+                tone={analysisExplanation.tone}
+              />
+              {selectedAnalysis ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <SurfaceTag tone={analysisAvailabilityTone(selectedAnalysis.availabilityState)}>
+                    {selectedAnalysis.availabilityState}
+                  </SurfaceTag>
+                  <SurfaceTag tone="default">{selectedAnalysis.analysisId}</SurfaceTag>
+                </div>
+              ) : null}
+              {analysisRegistryErrorNotice ? (
+                <SectionNotice
+                  title={analysisRegistryErrorNotice.summary}
+                  detail={analysisRegistryErrorNotice.detail}
+                />
+              ) : null}
+
+              {selectedAnalysis?.requiredConfigFields.length ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {selectedAnalysis.requiredConfigFields.map((field) => (
+                    <label
+                      key={field}
+                      className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3"
+                    >
+                      <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        {formatConfigLabel(field)}
+                      </p>
+                      <input
+                        value={analysisConfigValues[field] ?? ""}
+                        onChange={(event) => {
+                          updateAnalysisConfigValue(field, event.target.value);
+                        }}
+                        placeholder={configPlaceholder(field)}
+                        className="w-full rounded-[0.8rem] border border-border/85 bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+                      />
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+
+              {taskMutationState.message ? (
+                <div
+                  className={cx(
+                    "rounded-[0.95rem] border px-4 py-3 text-sm",
+                    resolveSurfaceInsetToneClass(taskMutationTone),
+                  )}
+                >
+                  {taskMutationState.message}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Run Analysis
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {selectedAnalysis
+                      ? `${selectedAnalysis.label} · ${traceSelectionSummary}`
+                      : "Choose an analysis to continue."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleRunAnalysis();
+                  }}
+                  disabled={
+                    taskMutationState.state === "submitting" ||
+                    !selectedDesignId ||
+                    !selectedAnalysis ||
+                    selectedAnalysis.availabilityState === "unavailable" ||
+                    selectedTraceIds.length === 0
+                  }
+                  className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {taskMutationState.state === "submitting" ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : null}
+                  Run Analysis
+                </button>
+              </div>
+            </div>
+          </SurfacePanel>
 
           <SurfacePanel
             title="Inspect Result"

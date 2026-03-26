@@ -320,6 +320,7 @@ describe("characterization source contracts", () => {
     expect(characterizationWorkspaceSource).toContain('title="Select Data Scope"');
     expect(characterizationWorkspaceSource).toContain('title="Choose Analysis & Setup"');
     expect(characterizationWorkspaceSource).toContain('title="Inspect Result"');
+    expect(characterizationWorkspaceSource).toContain('<div className="space-y-6">');
     expect(characterizationWorkspaceSource).toContain("Trace Selection");
     expect(characterizationWorkspaceSource).toContain("Results");
     expect(characterizationWorkspaceSource).toContain("Result Detail");
@@ -343,6 +344,9 @@ describe("characterization source contracts", () => {
     expect(characterizationWorkspaceSource).not.toContain('title="Run Analysis"');
     expect(characterizationWorkspaceSource).not.toContain('title="Latest Analysis"');
     expect(characterizationWorkspaceSource).not.toContain('title="Recent Runs"');
+    expect(characterizationWorkspaceSource).not.toContain(
+      'xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.9fr)]',
+    );
   });
 
   it("binds trace browse, characterization submit, and result continuity to shared app authority", () => {
