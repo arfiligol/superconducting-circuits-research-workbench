@@ -10,7 +10,7 @@ from src.app.infrastructure import persisted_runtime
 from src.app.infrastructure.persisted_runtime import PersistedSimulationTraceGridData
 from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
 from src.app.infrastructure.runtime import (
-    get_rewrite_app_state_repository,
+    get_app_state_repository,
     get_task_service,
     reset_runtime_state,
 )
@@ -202,7 +202,7 @@ def _login() -> None:
 def _bind_client_app_context(test_client: TestClient):
     app_context_id = test_client.cookies.get("sc_app_context")
     assert app_context_id is not None
-    repository = get_rewrite_app_state_repository()
+    repository = get_app_state_repository()
     binding = repository.bind_request_app_context_id(app_context_id)
     try:
         yield

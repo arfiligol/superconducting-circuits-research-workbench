@@ -15,7 +15,7 @@ from src.app.infrastructure.persistence import (
     build_sqlite_database_url,
     create_metadata_session_factory,
 )
-from src.app.infrastructure.rewrite_app_state_repository import build_seed_tasks
+from src.app.infrastructure.task_seed_data import build_seed_tasks
 
 
 def test_sqlite_task_snapshot_repository_round_trips_task_rows(tmp_path: Path) -> None:

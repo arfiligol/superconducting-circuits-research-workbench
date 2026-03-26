@@ -22,19 +22,21 @@ from src.app.infrastructure.app_state_repository import (
     build_seed_server_targets,
     build_workspace_default_dataset_ids,
 )
-from src.app.infrastructure.rewrite_app_state_repository import build_seed_tasks
-from src.app.infrastructure.rewrite_catalog_repository import (
-    _seed_characterization_analysis_registry,
-    _seed_characterization_artifact_surfaces,
-    _seed_characterization_result_details,
-    _seed_characterization_results,
-    _seed_characterization_run_history,
-    _seed_circuit_definitions,
-    _seed_datasets,
-    _seed_designs,
-    _seed_trace_details,
-    _seed_trace_summaries,
+from src.app.infrastructure.catalog_seed_data import (
+    build_seed_characterization_analysis_registry,
+    build_seed_characterization_result_details,
+    build_seed_characterization_results,
+    build_seed_characterization_run_history,
+    build_seed_circuit_definitions,
+    build_seed_datasets,
+    build_seed_designs,
+    build_seed_trace_details,
+    build_seed_trace_summaries,
 )
+from src.app.infrastructure.rewrite_catalog_repository import (
+    _seed_characterization_artifact_surfaces,
+)
+from src.app.infrastructure.task_seed_data import build_seed_tasks
 
 
 @dataclass(frozen=True)
@@ -144,25 +146,28 @@ def seed_durable_runtime_state() -> None:
             prototype=account.prototype,
         )
 
-    for definition in _seed_circuit_definitions():
+    for definition in build_seed_circuit_definitions():
         circuit_definition_repository.save_circuit_definition(definition)
 
-    for dataset in _seed_datasets():
+    for dataset in build_seed_datasets():
         catalog_repository.upsert_seed_dataset(dataset)
 
-    for design_rows in _seed_designs().values():
+    for design_rows in build_seed_designs().values():
         for design in design_rows:
             catalog_repository.upsert_seed_design(design)
 
-    for (dataset_id, design_id), rows in _seed_characterization_analysis_registry().items():
+    for (
+        dataset_id,
+        design_id,
+    ), rows in build_seed_characterization_analysis_registry().items():
         catalog_repository.upsert_seed_characterization_analysis_registry(
             dataset_id=dataset_id,
             design_id=design_id,
             rows=rows,
         )
 
-    trace_details = _seed_trace_details()
-    for _key, summaries in _seed_trace_summaries().items():
+    trace_details = build_seed_trace_details()
+    for _key, summaries in build_seed_trace_summaries().items():
         for summary in summaries:
             detail = trace_details.get(
                 (summary.dataset_id, summary.design_id, summary.trace_id)
@@ -178,9 +183,9 @@ def seed_durable_runtime_state() -> None:
 
     _seed_characterization_results_into_runtime(
         repository=characterization_repository,
-        summaries_by_design=_seed_characterization_results(),
-        run_history_by_design=_seed_characterization_run_history(),
-        details_by_key=_seed_characterization_result_details(),
+        summaries_by_design=build_seed_characterization_results(),
+        run_history_by_design=build_seed_characterization_run_history(),
+        details_by_key=build_seed_characterization_result_details(),
         artifact_surfaces_by_key=_seed_characterization_artifact_surfaces(),
     )
 
