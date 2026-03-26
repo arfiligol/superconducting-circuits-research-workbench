@@ -10,15 +10,15 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: build、lint、test、CI、multi-agent workflow 與 migration phase 驗收規範索引。
-version: v1.2.0
-last_updated: 2026-03-14
+scope: build、lint、test、CI、branch/worktree flow、multi-agent workflow 與 migration phase 驗收規範索引。
+version: v1.3.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
 # Execution & Verification
 
-本區定義 rewrite branch 的執行與驗證基準。
+本區定義 workspace delivery 的執行與驗證基準。
 若新規則與現有腳本暫時不一致，應視為 migration task，而不是放棄規則的理由。
 
 !!! info "What belongs here"
@@ -33,6 +33,7 @@ updated_by: codex
 | [Linting & Formatting](./linting.md) | 你要跑 format、lint、typecheck | static quality gates |
 | [Testing](./testing.md) | 你要補單元測試、integration、Playwright | test expectations |
 | [Commit Standards](./commit-standards.md) | 你要整理 commit 邊界與訊息 | commit hygiene |
+| [Branch & Worktree Flow](./branch-and-worktree-flow.md) | 你在定義 delivery branches、worktree isolation 或 agent merge authority | canonical Git/worktree policy |
 | [CI Gates](./ci-gates.md) | 你在改 GitHub Actions 或 merge criteria | pipeline acceptance |
 | [Phase Gates](./phase-gates.md) | 你在推 migration milestone | milestone-level readiness |
 | [Prompt Grading](./prompt-grading.md) | 你在拆 implementation / test slices | task sizing |
@@ -48,7 +49,8 @@ updated_by: codex
 ```markdown
 ## Execution & Verification
 - 定義 build、lint、type-check、test、CI 的 workspace 基線。
+- branch roles、isolated worktree policy 與 merge authority 由 `Branch & Worktree Flow` 定義。
 - 變更程式碼時，優先執行與 touched area 直接相關的檢查。
-- rewrite branch 最終基線包含 frontend、backend、CLI、docs 四條驗證線。
+- workspace delivery baseline 包含 frontend、backend、CLI、desktop、docs 五條驗證線。
 - migration phases 需搭配 Phase Gates、Prompt Grading 與 multi-agent collaboration rules 驗收。
 ```

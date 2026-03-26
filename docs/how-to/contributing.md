@@ -1,16 +1,36 @@
 ---
 aliases:
   - "如何參與貢獻 (Contributing)"
+  - "Contributing"
 tags:
   - diataxis/how-to
-  - status/draft
+  - audience/contributor
+  - sot/true
+  - topic/execution
+status: stable
+owner: docs-team
+audience: contributor
+scope: 建立開發環境、執行基本檢查，以及以短版摘要理解 canonical branch/worktree flow。
+version: v1.0.0
+last_updated: 2026-03-27
+updated_by: codex
 ---
 
 # 如何參與貢獻 (Contributing)
 
-感謝您有興趣參與 **超導量子電路平台** 專案的開發！
+感謝您有興趣參與 **超導量子電路平台** 專案的開發。
 
-本指南將協助您建立開發環境並了解我們的協作流程。我們採用 **Fork & Pull Request** 的模式進行協作。
+本頁只提供 contributor-facing 快速入口：
+
+- 如何建立開發環境
+- 如何執行基本檢查
+- normal contribution 應如何對齊 branch / worktree flow
+
+完整 branch roles、isolated worktree policy、merge authority 與 multi-agent delivery model，
+請以以下兩頁為準：
+
+- [Branch & Worktree Flow](../reference/guardrails/execution-verification/branch-and-worktree-flow.md)
+- [Multiple Agent Collaboration](../reference/guardrails/execution-verification/multi-agent-collaboration.md)
 
 ## 1. 環境建置
 
@@ -45,6 +65,21 @@ tags:
 
 ## 2. 開發流程 (Workflow)
 
+### Branch / Worktree Quick Summary
+
+一般 contributor flow 的短版規則如下：
+
+1. 先從 `develop` 同步最新狀態。
+2. 新工作預設從 `develop` 建立 feature branch。
+3. 若使用 AI agents，**每個 agent / task 都必須使用獨立 worktree**。
+4. normal implementation / docs / test work 的預設 PR target 是 `develop`。
+5. `main` 是 release branch，不是日常 feature work 的預設 landing branch。
+
+!!! info "Canonical policy lives in Reference"
+    本頁不重複完整 Git/worktree policy。
+    若你要確認 `main` / `develop` 的角色、agent merge authority，或 sandbox/example agent 的 bounded write root，
+    請直接閱讀 [Branch & Worktree Flow](../reference/guardrails/execution-verification/branch-and-worktree-flow.md)。
+
 ### 執行測試
 我們使用 `pytest` 確保功能正常。
 ```bash
@@ -77,7 +112,10 @@ uv run --group dev zensical serve
 
 1.  **建立分支 (Branch)**：
     ```bash
-    git checkout -b feature/my-new-feature
+    git fetch origin
+    git switch develop
+    git pull --ff-only origin develop
+    git switch -c feature/my-new-feature
     ```
 2.  **提交變更 (Commit)**：
     我們建議遵循 Conventional Commits 規範 (e.g., `feat:`, `fix:`, `docs:`)。
@@ -90,6 +128,7 @@ uv run --group dev zensical serve
     ```
 4.  **發起 Pull Request**：
     回到原始專案頁面，點擊 "Compare & pull request" 提交您的變更。
+    normal work 的預設 PR target 應為 `develop`；`main` 保留給 verified release promotion。
 
 ### 提交前檢查 (Pre-commit Checks)
 在提交 Pull Request 之前，請確保：
@@ -115,6 +154,8 @@ uv run --group dev zensical serve
 | | [技術堆疊](../reference/guardrails/project-basics/tech-stack.md) | [#agent-rule](../reference/guardrails/project-basics/tech-stack.md#agent-rule) |
 | | [目錄結構](../reference/guardrails/project-basics/folder-structure.md) | [#agent-rule](../reference/guardrails/project-basics/folder-structure.md#agent-rule) |
 | **執行驗證** | [執行指令](../reference/guardrails/execution-verification/build-commands.md) | [#agent-rule](../reference/guardrails/execution-verification/build-commands.md#agent-rule) |
+| | [Branch & Worktree Flow](../reference/guardrails/execution-verification/branch-and-worktree-flow.md) | [#agent-rule](../reference/guardrails/execution-verification/branch-and-worktree-flow.md#agent-rule) |
+| | [Multiple Agent Collaboration](../reference/guardrails/execution-verification/multi-agent-collaboration.md) | [#agent-rule](../reference/guardrails/execution-verification/multi-agent-collaboration.md#agent-rule) |
 | | [Linting](../reference/guardrails/execution-verification/linting.md) | [#agent-rule](../reference/guardrails/execution-verification/linting.md#agent-rule) |
 | | [測試](../reference/guardrails/execution-verification/testing.md) | [#agent-rule](../reference/guardrails/execution-verification/testing.md#agent-rule) |
 | **程式品質** | [程式碼風格](../reference/guardrails/code-quality/code-style.md) | [#agent-rule](../reference/guardrails/code-quality/code-style.md#agent-rule) |

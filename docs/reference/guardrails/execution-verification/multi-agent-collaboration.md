@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: "Documentation / Planning & Reviewing / Implementation / Test Agents 的責任分工、交接順序與並行協作規範"
-version: v2.5.0
-last_updated: 2026-03-16
+version: v2.6.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
@@ -24,7 +24,13 @@ updated_by: codex
     可以同時有多位 Documentation / Implementation / Test Agents，但不可同時有多位 Planning & Reviewing Agents 對同一交付線做最終裁決。
 
 !!! info "Document-first execution"
-    正式流程是：先收斂文件，再由 `Planning & Reviewing Agent` 產出計劃，再做實作，再補 integration / E2E，最後仍由同一類 agent 做整合與主線回收。
+    正式流程是：先收斂文件，再由 `Planning & Reviewing Agent` 產出計劃，再做實作，再補 integration / E2E，
+    最後仍由同一類 agent 做整合與 accepted delivery 回收。
+
+!!! info "Branch roles and merge authority live elsewhere"
+    本頁只定義 agent families、交接順序與 delivery boundaries。
+    `main` / `develop` 的 branch roles、isolated worktree policy、merge authority 與 bounded autonomous write roots，
+    一律以 [Branch & Worktree Flow](./branch-and-worktree-flow.md) 為準。
 
 !!! tip "Give Implementation Agents room"
     `Implementation Agent` 應在明確 SoT、`Allowed Area`、`Do Not Touch` 與驗收條件下自由選擇具體修改點。
@@ -72,7 +78,7 @@ updated_by: codex
 - 回收 implementation / test deliverables 時，負責：
   - conflict resolution
   - final verification
-  - 主線回收與 regression summary
+  - accepted slices 的 integration 回收與 regression summary
   - 重讀 SoT 與實際程式碼脈絡後做實質判斷，而不是只檢查 prompt 是否被逐字遵守
   - 若實作過寬或仍有缺口，透過新的 fixup prompt 收縮，而不是要求第一輪 prompt 過度窄化
   - 對 user-visible frontend 交付執行 Playwright-based smoke 驗證，並用 screenshot / 等價視覺證據確認 layout 與互動沒有跑掉
@@ -113,7 +119,7 @@ updated_by: codex
 
 5. **Planning & Reviewing**
    - Planning & Reviewing Agent 回收所有 deliverables。
-   - 做整合、驗證、主線回收與最終摘要。
+   - 做整合、驗證、accepted slices 回收與最終摘要。
 
 !!! warning "No direct jump from idea to code"
     若需求仍在變、authority boundary 未定、或 SoT 尚未更新，Implementation Agents 不得直接把設計猜進程式碼。
@@ -126,7 +132,7 @@ updated_by: codex
 | Planning & Reviewing (plan pass) | `Plan Artifact`，含 implementation slices 與 test backlog |
 | Implementation | `Delivery Report`，含 commits、changed files、unit test results、known risks |
 | Test | `Test Report`，含 scenarios、evidence、integration / E2E results |
-| Planning & Reviewing (merge pass) | `Review Merge Report`，含 accepted commits、conflicts、final verification、mainline status |
+| Planning & Reviewing (merge pass) | `Review Merge Report`，含 accepted commits、conflicts、final verification、`develop` integration status，必要時再附 release-promotion note |
 
 ## Plan Artifact Minimum Content
 
@@ -164,6 +170,10 @@ Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
 4. `Allowed Area` 與 `Do Not Touch` 必須在 plan 或 merge prompt 中明確列出。
 5. `Allowed Files` 只有在窄範圍 fixup 或高風險手術式改動時才應額外列出。
 
+!!! tip "Read branch policy from the canonical page"
+    branch roles、哪一類 agent 可以 merge 回 `develop`、以及 autonomous sandbox/example agents 的 bounded write roots，
+    請直接看 [Branch & Worktree Flow](./branch-and-worktree-flow.md)。
+
 ## Escalation Rules
 
 | Situation | Required escalation |
@@ -186,6 +196,7 @@ Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
 ## Related
 
 - [Prompt Grading](./prompt-grading.md)
+- [Branch & Worktree Flow](./branch-and-worktree-flow.md)
 - [Agent Handoff Formats](./contributor-reporting.md)
 - [Phase Gates](./phase-gates.md)
 
@@ -206,7 +217,7 @@ Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
     - produce a written plan artifact
     - split implementation slices
     - enumerate missing integration/E2E coverage for Test Agents
-    - own final verification and mainline integration for the delivery line
+    - own final verification and accepted-slice integration for the delivery line
     - may edit `Plans/` artifacts only; if SoT must change, hand off to Documentation Agents
     - define `Allowed Area` + `Do Not Touch` for implementation prompts by default
     - review implementation against SoT and product need, not prompt literalism alone
@@ -223,6 +234,7 @@ Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
 - Test Agents:
     - own integration tests and E2E tests
     - execute against the plan artifact and SoT
+- Branch roles, worktree policy, merge authority, and bounded autonomous write roots are defined in `Branch & Worktree Flow`.
 - Every agent must use an isolated worktree + branch and run `git status --porcelain` before editing.
 - Do not skip the order:
     - docs -> planning/reviewing -> implementation -> test -> planning/reviewing

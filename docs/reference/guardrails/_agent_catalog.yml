@@ -139,6 +139,15 @@ rules:
     triggers: ["ci", "github actions", "workflow", "pipeline", "gate"]
     touched_paths: [".github/**", ".github/workflows/**", "frontend/**", "backend/**", "cli/**", "desktop/**", "docs/**"]
 
+  - id: branch-worktree-flow
+    file: execution-verification/branch-and-worktree-flow.md
+    tier: critical
+    load: on_demand
+    activation_mode: model_decision
+    description: Apply when tasks involve branch roles, worktree isolation, merge authority, or bounded autonomous write roots.
+    triggers: ["branch", "branches", "worktree", "git flow", "merge authority", "develop", "main", "sandbox agent", "example agent"]
+    touched_paths: ["docs/**", "frontend/**", "backend/**", "cli/**", "core/**", "desktop/**", "legacy/**", "src/**", ".github/**"]
+
   - id: multi-agent-collaboration
     file: execution-verification/multi-agent-collaboration.md
     tier: critical

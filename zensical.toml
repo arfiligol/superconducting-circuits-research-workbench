@@ -205,6 +205,7 @@ nav = [
         { "Linting & Formatting" = "reference/guardrails/execution-verification/linting.md" },
         { "Testing" = "reference/guardrails/execution-verification/testing.md" },
         { "Commit Standards" = "reference/guardrails/execution-verification/commit-standards.md" },
+        { "Branch & Worktree Flow" = "reference/guardrails/execution-verification/branch-and-worktree-flow.md" },
         { "CI Gates" = "reference/guardrails/execution-verification/ci-gates.md" },
         { "Phase Gates" = "reference/guardrails/execution-verification/phase-gates.md" },
         { "Prompt Grading" = "reference/guardrails/execution-verification/prompt-grading.md" },

@@ -10,15 +10,16 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: rewrite branch 的 PR 合併品質門檻，含 desktop shell 與 docs route validation。
-version: v2.3.0
-last_updated: 2026-03-14
+scope: develop 日常整合與 main release promotion 的 PR 品質門檻，含 desktop shell 與 docs route validation。
+version: v2.4.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
 # CI Gates
 
 所有 PR 在 merge 前必須通過與 touched area 對應的必要檢查。
+日常 integration 的預設目標是 `develop`；`main` 只接 verified release promotion。
 
 !!! info "How to use this page"
     先依 touched area 找對應 gate，再確認是否還需要 docs 或 desktop 的補充檢查。這頁定的是最低 merge bar，不是每次本地開發都要全跑。
@@ -63,7 +64,10 @@ updated_by: codex
 ## Branch Policy
 
 - `main` 禁止直接 push
-- rewrite branch 的規則變更需同步更新 `.agent/rules`
+- 日常 feature / docs / test work 預設 merge 到 `develop`
+- `main` 只接從 `develop` 進行的 verified release promotion
+- branch roles、isolated worktree 與 merge authority 以 [Branch & Worktree Flow](./branch-and-worktree-flow.md) 為準
+- guardrail source 的規則變更需同步更新 `.agent/rules`
 
 ## Agent Rule { #agent-rule }
 
@@ -84,6 +88,9 @@ updated_by: codex
     - `./scripts/build_docs_sites.sh` when docs are touched
     - `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
 - `main` must not receive direct pushes.
+- Daily feature/docs/test integration targets `develop` by default.
+- `main` only receives verified release promotion from `develop`.
+- Branch roles, worktree policy, and merge authority are defined in `Branch & Worktree Flow`.
 - Guardrail source changes must keep `.agent/rules` in sync.
 - Benign `404` warnings from docs preview builds do not fail CI by themselves.
 - Any failing required check blocks merge.
