@@ -211,8 +211,8 @@ export function resolveCharacterizationSelectionRecovery(input: Readonly<{
   if (input.requestedResultId && !input.resolvedResultId && input.resolvedDesignId) {
     return {
       tone: "default",
-      title: "No persisted result selected",
-      message: "Choose another persisted characterization result to inspect its detail payload and artifacts.",
+      title: "No saved result selected",
+      message: "Choose another saved result to inspect its details, diagnostics, and files.",
     };
   }
 
