@@ -10,8 +10,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Backend dataset catalog、design browse、trace browse / preview / mutation、dataset profile、tagged core metrics 與 provenance-bearing result handles
-version: v0.9.0
-last_updated: 2026-03-25
+version: v0.10.0
+last_updated: 2026-03-26
 updated_by: codex
 ---
 
@@ -92,6 +92,7 @@ backend 必須支援 Dashboard 對應的 profile 讀寫：
 1. `design_id` 只在對應 `dataset_id` 內保證穩定。
 2. design browse 預設為 cursor-based。
 3. 切換 dataset 後，design browse 必須整批 rebinding。
+4. successful trace delete responses 必須同時回傳更新後的 design browse row，讓 Raw Data Browser 可立即同步 `trace_count` 與 compare/browse readiness。
 
 ## Trace Surface Contract
 
@@ -155,7 +156,7 @@ trace surface 必須嚴格拆成以下 path families：
 | Stable identity | `trace_id` 是唯一 trace identity；successful edit 必須維持同一個 `trace_id` |
 | Editable scope | single-trace edit 只允許修改 numeric payload 與 backend 明確允許的 UI-safe summary metadata |
 | Immutable scope | `trace_id`、`dataset_id`、`design_id`、`family`、`trace_mode_group`、`source_kind`、`stage_kind`、`payload_ref` authority handle 與 `result_handles[]` 不可由 mutation 改寫 |
-| Origin restriction | provenance-bearing 或 system-generated traces 可能禁止 edit / delete；frontend 不得自行從 `source_kind` / `stage_kind` 推導，必須依 `allowed_actions` 與 `mutation_policy_summary` 呈現 |
+| Origin restriction | provenance-bearing 或 system-generated traces 可以是 `edit=false`、`delete=true`；frontend 不得自行從 `source_kind` / `stage_kind` 推導，必須依 `allowed_actions` 與 `mutation_policy_summary` 呈現 |
 | Audit semantics | edit / delete 是 in-place mutation + audited operation；trace version lineage 若需要獨立保存，必須由專門 contract 定義 |
 | Batch scope | 目前只支援 batch delete；batch edit 不屬於本頁 SoT |
 
@@ -170,8 +171,8 @@ trace surface 必須嚴格拆成以下 path families：
 ### Mutation result rules
 
 1. single edit 成功後，backend 至少必須回傳更新後的 trace summary，讓 Raw Data Browser 可立即刷新 row 與 focused preview。
-2. single delete 成功後，backend 至少必須回傳 `deleted_trace_id` 與 `deleted_count=1`。
-3. batch delete 成功後，backend 至少必須回傳 `deleted_trace_ids[]` 與 `deleted_count`。
+2. single delete 成功後，backend 至少必須回傳 `deleted_trace_id`、`deleted_count=1` 與更新後的 design browse row。
+3. batch delete 成功後，backend 至少必須回傳 `deleted_trace_ids[]`、`deleted_count` 與更新後的 design browse row。
 4. batch delete 必須是單一 request contract；partial silent delete 不可成為預設行為。
 
 ### Mutation failure family
@@ -336,9 +337,9 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
             "provenance_summary": "Y · Post-Processed · batch #4",
             "allowed_actions": {
               "edit": false,
-              "delete": false
+              "delete": true
             },
-            "mutation_policy_summary": "Post-processed trace; mutate from the source workflow."
+            "mutation_policy_summary": "Provenance-bearing or system-generated trace; delete is allowed, but edit from the source workflow."
           }
         ]
       },
@@ -480,7 +481,19 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
         "dataset_id": "ds_xy_001",
         "design_id": "design_flux_scan_a",
         "deleted_trace_ids": ["trace_manual_014", "trace_manual_015"],
-        "deleted_count": 2
+        "deleted_count": 2,
+        "design": {
+          "design_id": "design_flux_scan_a",
+          "dataset_id": "ds_xy_001",
+          "name": "Flux Scan A",
+          "source_coverage": {
+            "measurement": 1,
+            "layout_simulation": 1
+          },
+          "compare_readiness": "ready",
+          "trace_count": 16,
+          "updated_at": "2026-03-26T03:28:00Z"
+        }
       }
     }
     ```
