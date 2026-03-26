@@ -8,6 +8,9 @@ from typing import cast
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from src.app.domain.characterization_analysis import (
+    evaluate_trace_analysis_capabilities,
+)
 from src.app.domain.datasets import (
     DatasetDetail,
     DesignBrowseRow,
@@ -17,6 +20,7 @@ from src.app.domain.datasets import (
     SimulationResultPublicationDraft,
     SimulationResultPublicationRecord,
     SimulationResultPublicationResult,
+    TraceAnalysisCapability,
     TraceAxis,
     TraceDetail,
     TraceMetadataSummary,
@@ -42,6 +46,11 @@ from src.app.infrastructure.persistence.models import (
 )
 from src.app.infrastructure.persistence.storage_metadata_repository import (
     SqliteRewriteStorageMetadataRepository,
+)
+from src.app.infrastructure.persistence.trace_capability_store import (
+    delete_trace_capabilities,
+    load_trace_capability_map,
+    replace_trace_capabilities,
 )
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
@@ -150,6 +159,7 @@ class SqliteResearchDataPublicationRepository:
         trace_details = tuple(
             _build_persisted_simulation_publication_trace(
                 task=task,
+                dataset_family=dataset.family,
                 dataset_id=dataset.dataset_id,
                 design_id=design_id,
                 family=family,
@@ -222,6 +232,13 @@ class SqliteResearchDataPublicationRepository:
                         result_handle_id=detail.result_handles[0].handle_id,
                         published_at=published_at,
                     )
+                )
+                replace_trace_capabilities(
+                    session,
+                    dataset_id=dataset.dataset_id,
+                    design_id=design_id,
+                    trace_id=detail.trace_id,
+                    capabilities=summary.analysis_capabilities,
                 )
             session.commit()
         return self._load_publication_result(
@@ -297,6 +314,7 @@ class SqliteResearchDataPublicationRepository:
             materialized = _materialize_published_trace(
                 source_task=task,
                 basis_task=basis_task,
+                dataset_family=dataset.family,
                 dataset_id=dataset.dataset_id,
                 design_id=design.design_id,
                 selection=request.selection,
@@ -369,6 +387,13 @@ class SqliteResearchDataPublicationRepository:
                         result_handle_id=detail.result_handles[0].handle_id,
                         published_at=published_at,
                     )
+                )
+                replace_trace_capabilities(
+                    session,
+                    dataset_id=dataset.dataset_id,
+                    design_id=design.design_id,
+                    trace_id=detail.trace_id,
+                    capabilities=summary.analysis_capabilities,
                 )
             session.commit()
         return self._load_result_trace_publication(
@@ -485,7 +510,19 @@ class SqliteResearchDataPublicationRepository:
                 )
                 .order_by(RewritePublishedSimulationTraceRecord.trace_id.asc())
             ).all()
-            return tuple(_to_trace_summary(row) for row in rows)
+            capability_map = load_trace_capability_map(
+                session,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_ids=tuple(row.trace_id for row in rows),
+            )
+            return tuple(
+                _to_trace_summary(
+                    row,
+                    analysis_capabilities=capability_map.get(row.trace_id, ()),
+                )
+                for row in rows
+            )
 
     def get_trace_detail(
         self,
@@ -509,6 +546,12 @@ class SqliteResearchDataPublicationRepository:
             result_handle = self._storage_metadata_repository.get_result_handle(
                 row.result_handle_id
             )
+            capability_map = load_trace_capability_map(
+                session,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_ids=(trace_id,),
+            )
             return TraceDetail(
                 trace_id=row.trace_id,
                 dataset_id=row.dataset_id,
@@ -524,6 +567,7 @@ class SqliteResearchDataPublicationRepository:
                 preview_payload=row.preview_payload_json,
                 payload_ref=payload_ref,
                 result_handles=((result_handle,) if result_handle is not None else ()),
+                analysis_capabilities=capability_map.get(trace_id, ()),
             )
 
     def delete_traces(
@@ -554,6 +598,12 @@ class SqliteResearchDataPublicationRepository:
                 row = rows_by_trace_id[trace_id]
                 cleanup_refs.append((row.payload_store_key, row.result_handle_id))
                 session.delete(row)
+            delete_trace_capabilities(
+                session,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_ids=requested,
+            )
             session.flush()
             for publication_id in publication_ids:
                 remaining = session.scalar(
@@ -611,7 +661,19 @@ class SqliteResearchDataPublicationRepository:
                 .where(RewritePublishedSimulationTraceRecord.publication_id == publication_row.id)
                 .order_by(RewritePublishedSimulationTraceRecord.id.asc())
             ).all()
-            trace_summaries = tuple(_to_trace_summary(row) for row in trace_rows)
+            capability_map = load_trace_capability_map(
+                session,
+                dataset_id=dataset.dataset_id,
+                design_id=publication_row.target_design_id,
+                trace_ids=tuple(row.trace_id for row in trace_rows),
+            )
+            trace_summaries = tuple(
+                _to_trace_summary(
+                    row,
+                    analysis_capabilities=capability_map.get(row.trace_id, ()),
+                )
+                for row in trace_rows
+            )
             return SimulationResultPublicationResult(
                 state=cast(str, state),
                 publication_key=publication_row.publication_key,
@@ -654,7 +716,19 @@ class SqliteResearchDataPublicationRepository:
                 )
                 .order_by(RewritePublishedSimulationTraceRecord.id.asc())
             ).all()
-            trace_summaries = tuple(_to_trace_summary(row) for row in publication_trace_rows)
+            capability_map = load_trace_capability_map(
+                session,
+                dataset_id=dataset.dataset_id,
+                design_id=design.design_id,
+                trace_ids=tuple(row.trace_id for row in publication_trace_rows),
+            )
+            trace_summaries = tuple(
+                _to_trace_summary(
+                    row,
+                    analysis_capabilities=capability_map.get(row.trace_id, ()),
+                )
+                for row in publication_trace_rows
+            )
             trace_rows_by_id = {row.trace_id: row for row in publication_trace_rows}
             requested_trace_rows = [
                 trace_rows_by_id[trace_id] for trace_id in trace_ids if trace_id in trace_rows_by_id
@@ -676,7 +750,13 @@ class SqliteResearchDataPublicationRepository:
                     updated_at=publication_row.published_at,
                 ),
                 trace_keys=trace_keys,
-                traces=tuple(_to_trace_summary(row) for row in requested_trace_rows),
+                traces=tuple(
+                    _to_trace_summary(
+                        row,
+                        analysis_capabilities=capability_map.get(row.trace_id, ()),
+                    )
+                    for row in requested_trace_rows
+                ),
             )
 
 
@@ -948,6 +1028,7 @@ def _legacy_bundle_publication_targets(task: TaskDetail) -> tuple[tuple[str, str
 def _build_persisted_simulation_publication_trace(
     *,
     task: TaskDetail,
+    dataset_family: str,
     dataset_id: str,
     design_id: str,
     family: str,
@@ -963,6 +1044,7 @@ def _build_persisted_simulation_publication_trace(
     materialized = _materialize_published_trace(
         source_task=task,
         basis_task=task,
+        dataset_family=dataset_family,
         dataset_id=dataset_id,
         design_id=design_id,
         selection=selection,
@@ -1017,6 +1099,7 @@ def _materialize_published_trace(
     *,
     source_task: TaskDetail,
     basis_task: TaskDetail,
+    dataset_family: str,
     dataset_id: str,
     design_id: str,
     selection: ResultTraceSelection,
@@ -1076,6 +1159,30 @@ def _materialize_published_trace(
             trace_batch_record=trace_batch_record,
         ),
     )
+    summary = TraceMetadataSummary(
+        trace_id=trace_id,
+        dataset_id=dataset_id,
+        design_id=design_id,
+        family=selection.family,
+        parameter=summary_parameter,
+        representation=summary_representation
+        or (metric_spec.representation if metric_spec is not None else "complex"),
+        trace_mode_group=selection.trace_mode_group,
+        source_kind=cast(str, trace_data.source_kind),
+        stage_kind=cast(str, trace_data.stage_kind),
+        provenance_summary=provenance_summary,
+    )
+    analysis_capabilities = evaluate_trace_analysis_capabilities(
+        dataset_family=dataset_family,
+        trace=summary,
+        axes=(
+            TraceAxis(
+                name="frequency",
+                unit="GHz",
+                length=len(trace_data.frequencies_ghz),
+            ),
+        ),
+    )
     detail = TraceDetail(
         trace_id=trace_id,
         dataset_id=dataset_id,
@@ -1096,21 +1203,12 @@ def _materialize_published_trace(
         ),
         payload_ref=payload_ref,
         result_handles=(result_handle,),
+        analysis_capabilities=analysis_capabilities,
     )
-    summary = TraceMetadataSummary(
-        trace_id=trace_id,
-        dataset_id=dataset_id,
-        design_id=design_id,
-        family=selection.family,
-        parameter=summary_parameter,
-        representation=summary_representation
-        or (metric_spec.representation if metric_spec is not None else "complex"),
-        trace_mode_group=selection.trace_mode_group,
-        source_kind=cast(str, trace_data.source_kind),
-        stage_kind=cast(str, trace_data.stage_kind),
-        provenance_summary=provenance_summary,
+    return _MaterializedPublishedTrace(
+        summary=replace(summary, analysis_capabilities=analysis_capabilities),
+        detail=detail,
     )
-    return _MaterializedPublishedTrace(summary=summary, detail=detail)
 
 
 def _resolve_published_metric_spec(*, family: str, metric: str) -> _PublishedMetricSpec:
@@ -1235,7 +1333,11 @@ def _to_publication_record(
     )
 
 
-def _to_trace_summary(row: RewritePublishedSimulationTraceRecord) -> TraceMetadataSummary:
+def _to_trace_summary(
+    row: RewritePublishedSimulationTraceRecord,
+    *,
+    analysis_capabilities: tuple[TraceAnalysisCapability, ...] = (),
+) -> TraceMetadataSummary:
     return TraceMetadataSummary(
         trace_id=row.trace_id,
         dataset_id=row.dataset_id,
@@ -1247,6 +1349,7 @@ def _to_trace_summary(row: RewritePublishedSimulationTraceRecord) -> TraceMetada
         source_kind=cast(str, row.source_kind),
         stage_kind=cast(str, row.stage_kind),
         provenance_summary=row.provenance_summary,
+        analysis_capabilities=analysis_capabilities,
     )
 
 

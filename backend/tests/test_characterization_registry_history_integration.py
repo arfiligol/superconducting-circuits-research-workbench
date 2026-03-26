@@ -59,28 +59,28 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
     assert payload["data"]["rows"] == [
         {
             "analysis_id": "admittance_extraction",
-            "label": "Admittance Extraction",
+            "label": "Admittance Resonance Extraction",
             "availability_state": "recommended",
             "required_config_fields": ["fit_window", "residual_tolerance"],
             "trace_compatibility": {
                 "matched_trace_count": 2,
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["base"],
-                "summary": "Two compatible base traces are ready for a stable admittance fit.",
+                "summary": "2 selected traces are eligible for admittance resonance extraction.",
             },
         },
         {
             "analysis_id": "sideband_comparison",
             "label": "Sideband Comparison",
-            "availability_state": "available",
+            "availability_state": "unavailable",
             "required_config_fields": ["comparison_window"],
             "trace_compatibility": {
-                "matched_trace_count": 1,
+                "matched_trace_count": 0,
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["sideband"],
                 "summary": (
-                    "One compatible sideband trace is visible, but comparison coverage "
-                    "remains thin."
+                    "2 selected traces are not eligible for sideband comparison "
+                    "because Requires sideband trace mode coverage."
                 ),
             },
         },
@@ -94,8 +94,8 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["base", "sideband"],
                 "summary": (
-                    "No compatible trace bundle currently satisfies the identification "
-                    "prerequisites."
+                    "2 selected traces are not eligible for junction parameter "
+                    "identification because Requires complex representation."
                 ),
             },
         },
@@ -153,7 +153,7 @@ def test_characterization_run_history_supports_analysis_filter_and_cursor_meta()
             "dataset_id": "fluxonium-2025-031",
             "design_id": "design_flux_scan_a",
             "analysis_id": "admittance_extraction",
-            "label": "Flux Scan A admittance fit",
+            "label": "Flux Scan A admittance resonance extraction",
             "status": "completed",
             "scope": "design_traces",
             "trace_count": 2,

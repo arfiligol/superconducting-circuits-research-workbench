@@ -618,6 +618,9 @@ def _serialize_trace_browse_row(row: object) -> dict[str, object]:
         "provenance_summary": row.provenance_summary,
         "allowed_actions": asdict(row.allowed_actions),
         "mutation_policy_summary": row.mutation_policy_summary,
+        "analysis_capabilities": [
+            _serialize_trace_capability(item) for item in row.analysis_capabilities
+        ],
     }
 
 
@@ -630,6 +633,9 @@ def _serialize_trace_detail(detail: object) -> dict[str, object]:
         "preview_payload": detail.preview_payload,
         "payload_ref": asdict(detail.payload_ref) if detail.payload_ref is not None else None,
         "result_handles": [asdict(handle) for handle in detail.result_handles],
+        "analysis_capabilities": [
+            _serialize_trace_capability(item) for item in detail.analysis_capabilities
+        ],
     }
 
 
@@ -643,6 +649,22 @@ def _serialize_trace_edit_detail(detail: object) -> dict[str, object]:
         "editable_numeric_payload": detail.editable_numeric_payload,
         "allowed_actions": asdict(detail.allowed_actions),
         "mutation_policy_summary": detail.mutation_policy_summary,
+        "analysis_capabilities": [
+            _serialize_trace_capability(item) for item in detail.analysis_capabilities
+        ],
+    }
+
+
+def _serialize_trace_capability(capability: object) -> dict[str, object]:
+    return {
+        "capability_id": capability.capability_id,
+        "analysis_id": capability.analysis_id,
+        "analysis_label": capability.analysis_label,
+        "input_role": capability.input_role,
+        "input_role_label": capability.input_role_label,
+        "status": capability.status,
+        "summary": capability.summary,
+        "reasons": [asdict(reason) for reason in capability.reasons],
     }
 
 

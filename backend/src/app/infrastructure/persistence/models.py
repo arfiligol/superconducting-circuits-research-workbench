@@ -241,6 +241,47 @@ class RewriteDatasetTraceRecord(RewriteMetadataBase):
     )
 
 
+class RewriteTraceCapabilityRecord(RewriteMetadataBase):
+    __tablename__ = "rewrite_trace_capability_records"
+    __table_args__ = (
+        Index(
+            "ix_rewrite_trace_capability_dataset_design_trace_capability",
+            "dataset_id",
+            "design_id",
+            "trace_id",
+            "capability_id",
+            unique=True,
+        ),
+        Index(
+            "ix_rewrite_trace_capability_dataset_design_analysis",
+            "dataset_id",
+            "design_id",
+            "analysis_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    dataset_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    design_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    trace_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    capability_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    analysis_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    analysis_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    input_role: Mapped[str] = mapped_column(String(128), nullable=False)
+    input_role_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    reasons_json: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        nullable=False,
+        server_default=func.current_timestamp(),
+    )
+
+
 class RewriteCharacterizationRegistryRecord(RewriteMetadataBase):
     __tablename__ = "rewrite_characterization_registry_records"
     __table_args__ = (

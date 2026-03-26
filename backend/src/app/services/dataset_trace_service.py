@@ -373,6 +373,7 @@ class DatasetTraceService:
             provenance_summary=row.provenance_summary,
             allowed_actions=policy.allowed_actions,
             mutation_policy_summary=policy.summary,
+            analysis_capabilities=row.analysis_capabilities,
         )
 
     def _append_audit_record(

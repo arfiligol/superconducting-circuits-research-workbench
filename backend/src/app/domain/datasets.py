@@ -17,6 +17,7 @@ TraceStageKind = Literal["raw", "preprocess", "postprocess"]
 CharacterizationResultStatus = Literal["completed", "failed", "blocked"]
 CharacterizationTaggingStatus = Literal["applied", "already_applied"]
 CharacterizationAvailabilityState = Literal["recommended", "available", "unavailable"]
+TraceCapabilityStatus = Literal["eligible", "ineligible"]
 RawDataIngestionKind = Literal["measurement", "layout_simulation"]
 SimulationResultPublicationState = Literal["published", "already_published"]
 ResultTracePublicationState = SimulationResultPublicationState
@@ -215,6 +216,26 @@ class TraceMetadataSummary:
     source_kind: TraceSourceKind
     stage_kind: TraceStageKind
     provenance_summary: str
+    analysis_capabilities: tuple[TraceAnalysisCapability, ...] = ()
+
+
+@dataclass(frozen=True)
+class TraceCapabilityReason:
+    code: str
+    message: str
+    evidence: dict[str, object]
+
+
+@dataclass(frozen=True)
+class TraceAnalysisCapability:
+    capability_id: str
+    analysis_id: str
+    analysis_label: str
+    input_role: str
+    input_role_label: str
+    status: TraceCapabilityStatus
+    summary: str
+    reasons: tuple[TraceCapabilityReason, ...]
 
 
 @dataclass(frozen=True)
@@ -237,6 +258,7 @@ class TraceBrowseRow:
     provenance_summary: str
     allowed_actions: TraceAllowedActions
     mutation_policy_summary: str
+    analysis_capabilities: tuple[TraceAnalysisCapability, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -264,6 +286,7 @@ class TraceDetail:
     preview_payload: dict[str, object]
     payload_ref: TracePayloadRef | None
     result_handles: tuple[ResultHandleRef, ...]
+    analysis_capabilities: tuple[TraceAnalysisCapability, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -291,6 +314,7 @@ class TraceEditDetail:
     editable_numeric_payload: dict[str, object]
     allowed_actions: TraceAllowedActions
     mutation_policy_summary: str
+    analysis_capabilities: tuple[TraceAnalysisCapability, ...] = ()
 
 
 @dataclass(frozen=True)

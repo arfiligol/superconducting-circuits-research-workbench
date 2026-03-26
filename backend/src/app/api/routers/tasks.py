@@ -741,6 +741,19 @@ def _serialize_published_trace(trace) -> dict[str, object]:
         "source_kind": trace.source_kind,
         "stage_kind": trace.stage_kind,
         "provenance_summary": trace.provenance_summary,
+        "analysis_capabilities": [
+            {
+                "capability_id": capability.capability_id,
+                "analysis_id": capability.analysis_id,
+                "analysis_label": capability.analysis_label,
+                "input_role": capability.input_role,
+                "input_role_label": capability.input_role_label,
+                "status": capability.status,
+                "summary": capability.summary,
+                "reasons": [dict(reason.__dict__) for reason in capability.reasons],
+            }
+            for capability in trace.analysis_capabilities
+        ],
     }
 
 

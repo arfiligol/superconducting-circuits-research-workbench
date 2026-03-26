@@ -69,11 +69,10 @@ class _LoadedTraceSeries:
 
 @dataclass(frozen=True)
 class _AdmittanceExtractionResult:
-    measurement_trace_ids: tuple[str, ...]
-    simulation_trace_ids: tuple[str, ...]
+    selected_trace_ids: tuple[str, ...]
     frequencies_ghz: tuple[float, ...]
-    averaged_measurement: np.ndarray
-    averaged_simulation: np.ndarray
+    averaged_response: np.ndarray
+    fitted_response: np.ndarray
     residual_series: np.ndarray
     fit_window_ghz: tuple[float, float]
     residual_tolerance: float
@@ -509,32 +508,14 @@ def _run_admittance_extraction(
 ) -> _AdmittanceExtractionResult:
     if task.characterization_setup is None:
         raise ValueError("Characterization setup is missing.")
+    if len(loaded_traces) == 0:
+        raise ValueError("Admittance extraction requires at least one eligible trace.")
 
-    measurement_traces = [
-        trace
-        for trace in loaded_traces
-        if trace.summary.source_kind == "measurement"
-    ]
-    simulation_traces = [
-        trace
-        for trace in loaded_traces
-        if trace.summary.source_kind in {"layout_simulation", "circuit_simulation"}
-    ]
-    if len(measurement_traces) == 0 or len(simulation_traces) == 0:
-        raise ValueError(
-            "Admittance extraction requires both measurement and simulation-backed traces."
-        )
-
-    frequencies = measurement_traces[0].frequencies_ghz
-    averaged_measurement = _average_trace_values(
-        measurement_traces,
+    frequencies = loaded_traces[0].frequencies_ghz
+    averaged_response = _average_trace_values(
+        loaded_traces,
         reference_frequencies=frequencies,
     )
-    averaged_simulation = _average_trace_values(
-        simulation_traces,
-        reference_frequencies=frequencies,
-    )
-    residual_series = averaged_measurement - averaged_simulation
 
     fit_window = _resolve_fit_window(task.characterization_setup.analysis_config)
     residual_tolerance = float(task.characterization_setup.analysis_config["residual_tolerance"])
@@ -547,23 +528,32 @@ def _run_admittance_extraction(
     )
     if not np.any(mask):
         raise ValueError("The selected fit window does not overlap the persisted trace axis.")
-    measurement_window = averaged_measurement[mask]
-    simulation_window = averaged_simulation[mask]
+    response_window = averaged_response[mask]
     window_frequencies = np.asarray(
         [freq for freq, keep in zip(frequencies, mask, strict=False) if keep]
     )
-    residual_window = measurement_window - simulation_window
+    fitted_window = _fit_window_response(
+        window_frequencies=window_frequencies,
+        response_window=response_window,
+    )
+    fitted_response = np.interp(
+        np.asarray(frequencies, dtype=np.float64),
+        window_frequencies,
+        fitted_window,
+    )
+    residual_series = averaged_response - fitted_response
+    residual_window = residual_series[mask]
 
-    f01_ghz = float(window_frequencies[int(np.argmin(np.abs(measurement_window)))])
+    f01_ghz = float(window_frequencies[int(np.argmax(np.abs(response_window)))])
     residual_rms = float(np.sqrt(np.mean(np.square(residual_window))))
     diagnostics = (
         CharacterizationDiagnostic(
             severity="info" if residual_rms <= residual_tolerance else "warning",
-            code="residual_rms_evaluated",
+            code="fit_residual_rms_evaluated",
             message=(
-                "Residual RMS stays within the configured tolerance."
+                "Fit residual RMS stays within the configured tolerance."
                 if residual_rms <= residual_tolerance
-                else "Residual RMS exceeds the configured tolerance but the run completed."
+                else "Fit residual RMS exceeds the configured tolerance but the run completed."
             ),
             blocking=False,
         ),
@@ -578,11 +568,10 @@ def _run_admittance_extraction(
         },
     )
     return _AdmittanceExtractionResult(
-        measurement_trace_ids=tuple(trace.summary.trace_id for trace in measurement_traces),
-        simulation_trace_ids=tuple(trace.summary.trace_id for trace in simulation_traces),
+        selected_trace_ids=tuple(trace.summary.trace_id for trace in loaded_traces),
         frequencies_ghz=frequencies,
-        averaged_measurement=averaged_measurement,
-        averaged_simulation=averaged_simulation,
+        averaged_response=averaged_response,
+        fitted_response=fitted_response,
         residual_series=residual_series,
         fit_window_ghz=fit_window,
         residual_tolerance=residual_tolerance,
@@ -591,10 +580,25 @@ def _run_admittance_extraction(
         fit_table=fit_table,
         diagnostics=diagnostics,
         provenance_summary=_provenance_summary(loaded_traces),
-        sources_summary=(
-            f"Y base {len(measurement_traces) + len(simulation_traces)}"
-        ),
+        sources_summary=f"Y base {len(loaded_traces)}",
     )
+
+
+def _fit_window_response(
+    *,
+    window_frequencies: np.ndarray,
+    response_window: np.ndarray,
+) -> np.ndarray:
+    if len(window_frequencies) < 2:
+        return np.asarray(response_window, dtype=np.float64)
+    polynomial_degree = min(2, len(window_frequencies) - 1)
+    coefficients = np.polyfit(
+        np.asarray(window_frequencies, dtype=np.float64),
+        np.asarray(response_window, dtype=np.float64),
+        deg=polynomial_degree,
+    )
+    polynomial = np.poly1d(coefficients)
+    return np.asarray(polynomial(window_frequencies), dtype=np.float64)
 
 
 def _average_trace_values(
@@ -661,7 +665,7 @@ def _persist_analysis_run(
         dataset_id=_stable_positive_int(task.dataset_id),
         design_id=_stable_positive_int(task.dataset_id, design.design_id),
         analysis_id=task.characterization_setup.analysis_id,
-        analysis_label="Admittance Extraction",
+        analysis_label="Admittance Resonance Extraction",
         run_id=f"analysis-run-pending-{task.task_id}",
         status="completed",
         input_trace_ids=[
@@ -753,8 +757,7 @@ def _write_artifacts(
                 "f01_ghz": analysis.f01_ghz,
                 "residual_rms": analysis.residual_rms,
                 "fit_window_ghz": list(analysis.fit_window_ghz),
-                "measurement_trace_ids": list(analysis.measurement_trace_ids),
-                "simulation_trace_ids": list(analysis.simulation_trace_ids),
+                "selected_trace_ids": list(analysis.selected_trace_ids),
             },
             indent=2,
         ),
@@ -765,8 +768,8 @@ def _write_artifacts(
     overlay_path.write_text(
         _build_overlay_svg(
             frequencies_ghz=analysis.frequencies_ghz,
-            measurement=analysis.averaged_measurement,
-            simulation=analysis.averaged_simulation,
+            observed=analysis.averaged_response,
+            fitted=analysis.fitted_response,
         ),
         encoding="utf-8",
     )
@@ -785,7 +788,7 @@ def _write_artifacts(
                 artifact_id=f"{result_id}:overlay",
                 category="plot",
                 view_kind="plot",
-                title="Measurement vs simulation overlay",
+                title="Resonance fit overlay",
                 payload_format="svg",
                 payload_locator=_artifact_locator(overlay_path),
             ),
@@ -845,9 +848,11 @@ def _build_persisted_run_payload(
         dataset_id=task.dataset_id,
         design_id=task.characterization_setup.design_id,
         analysis_id=task.characterization_setup.analysis_id,
-        title=f"{design.name} admittance extraction",
+        title=f"{design.name} admittance resonance extraction",
         status="completed",
-        freshness_summary="Persisted admittance extraction completed from saved design traces.",
+        freshness_summary=(
+            "Persisted admittance resonance extraction completed from saved design traces."
+        ),
         provenance_summary=analysis.provenance_summary,
         trace_count=len(task.characterization_setup.selected_trace_ids),
         updated_at=updated_at,
@@ -1170,15 +1175,15 @@ def _detail_to_payload(detail: CharacterizationResultDetail) -> dict[str, object
 def _build_overlay_svg(
     *,
     frequencies_ghz: Sequence[float],
-    measurement: np.ndarray,
-    simulation: np.ndarray,
+    observed: np.ndarray,
+    fitted: np.ndarray,
 ) -> str:
     width = 640
     height = 280
     padding_x = 48
     padding_y = 20
     x_values = np.asarray(frequencies_ghz, dtype=np.float64)
-    y_values = np.concatenate((measurement, simulation))
+    y_values = np.concatenate((observed, fitted))
     min_x = float(np.min(x_values))
     max_x = float(np.max(x_values))
     min_y = float(np.min(y_values))
@@ -1205,11 +1210,11 @@ def _build_overlay_svg(
         f'<line x1="{padding_x}" y1="{padding_y}" x2="{padding_x}" '
         f'y2="{height - padding_y}" stroke="#8892a0" stroke-width="1"/>'
         f'<polyline fill="none" stroke="#1f77b4" stroke-width="2" '
-        f'points="{_project(measurement)}"/>'
+        f'points="{_project(observed)}"/>'
         f'<polyline fill="none" stroke="#d62728" stroke-width="2" '
-        f'points="{_project(simulation)}"/>'
-        f'<text x="{padding_x}" y="16" font-size="12" fill="#111827">Measurement</text>'
-        f'<text x="{padding_x + 110}" y="16" font-size="12" fill="#111827">Simulation</text>'
+        f'points="{_project(fitted)}"/>'
+        f'<text x="{padding_x}" y="16" font-size="12" fill="#111827">Observed</text>'
+        f'<text x="{padding_x + 92}" y="16" font-size="12" fill="#111827">Fitted</text>'
         "</svg>"
     )
 

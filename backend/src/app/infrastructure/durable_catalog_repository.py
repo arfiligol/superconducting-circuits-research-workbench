@@ -10,6 +10,9 @@ import numpy as np
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from src.app.domain.characterization_analysis import (
+    evaluate_trace_analysis_capabilities,
+)
 from src.app.domain.circuit_definitions import CircuitDefinitionRecord
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
@@ -35,6 +38,7 @@ from src.app.domain.datasets import (
     SimulationResultPublicationResult,
     TaggedCoreMetricSummary,
     TraceAllowedActions,
+    TraceAnalysisCapability,
     TraceAxis,
     TraceBrowseRow,
     TraceDetail,
@@ -65,6 +69,11 @@ from src.app.infrastructure.persistence.research_data_publication_repository imp
 )
 from src.app.infrastructure.persistence.storage_metadata_repository import (
     SqliteRewriteStorageMetadataRepository,
+)
+from src.app.infrastructure.persistence.trace_capability_store import (
+    delete_trace_capabilities,
+    load_trace_capability_map,
+    replace_trace_capabilities,
 )
 from src.app.infrastructure.storage_reference_factory import build_metadata_record_ref
 
@@ -229,6 +238,23 @@ class DurableCatalogRepository:
                 trace_id=trace_id,
                 payload_ref=payload_ref,
             )
+            summary = TraceMetadataSummary(
+                trace_id=trace_id,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                family=trace.family,
+                parameter=trace.parameter,
+                representation=trace.representation,
+                trace_mode_group=trace.trace_mode_group,
+                source_kind=draft.kind,
+                stage_kind=trace.stage_kind,
+                provenance_summary=trace.provenance_summary,
+            )
+            analysis_capabilities = evaluate_trace_analysis_capabilities(
+                dataset_family=dataset.family,
+                trace=summary,
+                axes=trace.axes,
+            )
             self._upsert_raw_trace(
                 _RawTraceRecordDraft(
                     dataset_id=dataset_id,
@@ -249,22 +275,10 @@ class DurableCatalogRepository:
                     editable=True,
                     mutation_policy_summary="Manually ingested raw trace.",
                     updated_at=updated_at,
-                )
+                ),
+                analysis_capabilities=analysis_capabilities,
             )
-            traces.append(
-                TraceMetadataSummary(
-                    trace_id=trace_id,
-                    dataset_id=dataset_id,
-                    design_id=design_id,
-                    family=trace.family,
-                    parameter=trace.parameter,
-                    representation=trace.representation,
-                    trace_mode_group=trace.trace_mode_group,
-                    source_kind=draft.kind,
-                    stage_kind=trace.stage_kind,
-                    provenance_summary=trace.provenance_summary,
-                )
-            )
+            traces.append(replace(summary, analysis_capabilities=analysis_capabilities))
         updated_dataset = self._touch_dataset(dataset_id, updated_at) or dataset
         design = self.get_design(dataset_id, design_id)
         if design is None:
@@ -360,8 +374,17 @@ class DurableCatalogRepository:
                 design_id,
             )
         }
-        for trace_row in self._list_raw_trace_rows(dataset_id=dataset_id, design_id=design_id):
-            rows[trace_row.trace_id] = _to_trace_summary(trace_row)
+        raw_rows = self._list_raw_trace_rows(dataset_id=dataset_id, design_id=design_id)
+        capability_map = self._load_trace_capability_map(
+            dataset_id=dataset_id,
+            design_id=design_id,
+            trace_ids=tuple(row.trace_id for row in raw_rows),
+        )
+        for trace_row in raw_rows:
+            rows[trace_row.trace_id] = _to_trace_summary(
+                trace_row,
+                analysis_capabilities=capability_map.get(trace_row.trace_id, ()),
+            )
         return tuple(sorted(rows.values(), key=lambda row: row.trace_id))
 
     def get_trace_detail(
@@ -443,6 +466,7 @@ class DurableCatalogRepository:
             editable_numeric_payload=editable_numeric_payload,
             allowed_actions=policy.allowed_actions,
             mutation_policy_summary=policy.summary,
+            analysis_capabilities=summary.analysis_capabilities,
         )
 
     def update_trace(
@@ -452,6 +476,9 @@ class DurableCatalogRepository:
         trace_id: str,
         update: TraceUpdateDraft,
     ) -> TraceUpdateResult | None:
+        dataset = self.get_dataset(dataset_id)
+        if dataset is None:
+            return None
         raw_row = self._get_raw_trace_row(dataset_id, design_id, trace_id)
         if raw_row is None or not raw_row.editable:
             return None
@@ -493,6 +520,23 @@ class DurableCatalogRepository:
         raw_row.numeric_payload_json = numeric_payload
         raw_row.payload_store_key = payload_ref.store_key
         raw_row.updated_at = updated_at
+        updated_summary = TraceMetadataSummary(
+            trace_id=raw_row.trace_id,
+            dataset_id=raw_row.dataset_id,
+            design_id=raw_row.design_id,
+            family=raw_row.family,
+            parameter=raw_row.parameter,
+            representation=raw_row.representation,
+            trace_mode_group=raw_row.trace_mode_group,
+            source_kind=raw_row.source_kind,
+            stage_kind=raw_row.stage_kind,
+            provenance_summary=raw_row.provenance_summary,
+        )
+        analysis_capabilities = evaluate_trace_analysis_capabilities(
+            dataset_family=dataset.family,
+            trace=updated_summary,
+            axes=axes,
+        )
         with self._session_factory() as session:
             persisted = session.scalar(
                 select(RewriteDatasetTraceRecord).where(
@@ -502,10 +546,17 @@ class DurableCatalogRepository:
             if persisted is None:
                 return None
             _apply_raw_trace_row(persisted, raw_row)
+            replace_trace_capabilities(
+                session,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_id=trace_id,
+                capabilities=analysis_capabilities,
+            )
             session.commit()
         self._touch_design(dataset_id, design_id, updated_at)
         self._touch_dataset(dataset_id, updated_at)
-        summary = _to_trace_summary(raw_row)
+        summary = replace(updated_summary, analysis_capabilities=analysis_capabilities)
         policy = self.get_trace_mutation_policy(dataset_id, design_id, trace_id)
         if policy is None:
             return None
@@ -557,6 +608,12 @@ class DurableCatalogRepository:
             ).all()
             for row in rows:
                 session.delete(row)
+            delete_trace_capabilities(
+                session,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_ids=[row.trace_id for row in raw_rows_to_delete],
+            )
             session.commit()
         for row in raw_rows_to_delete:
             for handle_id in row.result_handle_ids_json:
@@ -638,37 +695,7 @@ class DurableCatalogRepository:
         dataset_id: str,
         design_id: str,
     ) -> tuple[CharacterizationAnalysisRegistryRow, ...]:
-        seeded_rows = self._list_persisted_characterization_registry(dataset_id, design_id)
-        if len(seeded_rows) > 0:
-            return seeded_rows
-        trace_rows = self.list_trace_metadata(dataset_id, design_id)
-        compatible_traces = tuple(
-            trace
-            for trace in trace_rows
-            if trace.family == "y_matrix" and trace.trace_mode_group == "base"
-        )
-        source_kinds = {trace.source_kind for trace in compatible_traces}
-        if len(compatible_traces) < 2 or "measurement" not in source_kinds or not (
-            {"layout_simulation", "circuit_simulation"} & source_kinds
-        ):
-            return ()
-        return (
-            CharacterizationAnalysisRegistryRow(
-                analysis_id="admittance_extraction",
-                label="Admittance Extraction",
-                availability_state="recommended",
-                required_config_fields=("fit_window", "residual_tolerance"),
-                trace_compatibility=CharacterizationAnalysisTraceCompatibility(
-                    matched_trace_count=len(compatible_traces),
-                    selected_trace_count=0,
-                    recommended_trace_modes=("base",),
-                    summary=(
-                        f"{len(compatible_traces)} compatible base traces are ready for "
-                        "a stable admittance fit."
-                    ),
-                ),
-            ),
-        )
+        return self._list_persisted_characterization_registry(dataset_id, design_id)
 
     def list_characterization_run_history(
         self,
@@ -792,6 +819,14 @@ class DurableCatalogRepository:
             detail.axes,
             detail.preview_payload,
         )
+        dataset = self.get_dataset(summary.dataset_id)
+        if dataset is None:
+            raise LookupError("Durable dataset row was not materialized.")
+        analysis_capabilities = evaluate_trace_analysis_capabilities(
+            dataset_family=dataset.family,
+            trace=summary,
+            axes=detail.axes,
+        )
         payload_ref = _materialize_trace_payload(
             dataset_id=summary.dataset_id,
             design_id=summary.design_id,
@@ -827,7 +862,8 @@ class DurableCatalogRepository:
                 editable=editable,
                 mutation_policy_summary=mutation_policy_summary,
                 updated_at=_current_timestamp(),
-            )
+            ),
+            analysis_capabilities=analysis_capabilities,
         )
 
     def _persist_raw_trace_storage(
@@ -904,7 +940,12 @@ class DurableCatalogRepository:
             session.commit()
             return _to_dataset_detail(row)
 
-    def _upsert_raw_trace(self, draft: _RawTraceRecordDraft) -> None:
+    def _upsert_raw_trace(
+        self,
+        draft: _RawTraceRecordDraft,
+        *,
+        analysis_capabilities: Sequence[TraceAnalysisCapability],
+    ) -> None:
         with self._session_factory() as session:
             row = session.scalar(
                 select(RewriteDatasetTraceRecord).where(
@@ -921,6 +962,13 @@ class DurableCatalogRepository:
                 )
                 session.add(row)
             _apply_raw_trace_row(row, draft)
+            replace_trace_capabilities(
+                session,
+                dataset_id=draft.dataset_id,
+                design_id=draft.design_id,
+                trace_id=draft.trace_id,
+                capabilities=analysis_capabilities,
+            )
             session.commit()
 
     def _list_raw_trace_rows(
@@ -970,6 +1018,11 @@ class DurableCatalogRepository:
             return {row.design_id: row.name for row in rows}
 
     def _to_trace_detail(self, row: RewriteDatasetTraceRecord) -> TraceDetail:
+        analysis_capabilities = self._load_trace_capabilities(
+            row.dataset_id,
+            row.design_id,
+            row.trace_id,
+        )
         payload_ref = self._storage_metadata_repository.get_trace_payload(row.payload_store_key)
         result_handles = tuple(
             handle
@@ -987,7 +1040,35 @@ class DurableCatalogRepository:
             preview_payload=dict(row.preview_payload_json),
             payload_ref=payload_ref,
             result_handles=result_handles,
+            analysis_capabilities=analysis_capabilities,
         )
+
+    def _load_trace_capabilities(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> tuple[TraceAnalysisCapability, ...]:
+        return self._load_trace_capability_map(
+            dataset_id=dataset_id,
+            design_id=design_id,
+            trace_ids=(trace_id,),
+        ).get(trace_id, ())
+
+    def _load_trace_capability_map(
+        self,
+        *,
+        dataset_id: str,
+        design_id: str,
+        trace_ids: Sequence[str],
+    ) -> dict[str, tuple[TraceAnalysisCapability, ...]]:
+        with self._session_factory() as session:
+            return load_trace_capability_map(
+                session,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_ids=trace_ids,
+            )
 
     def _list_persisted_characterization_registry(
         self,
@@ -1152,7 +1233,11 @@ def _apply_raw_trace_row(
     row.updated_at = draft.updated_at
 
 
-def _to_trace_summary(row: RewriteDatasetTraceRecord) -> TraceMetadataSummary:
+def _to_trace_summary(
+    row: RewriteDatasetTraceRecord,
+    *,
+    analysis_capabilities=(),
+) -> TraceMetadataSummary:
     return TraceMetadataSummary(
         trace_id=row.trace_id,
         dataset_id=row.dataset_id,
@@ -1164,6 +1249,7 @@ def _to_trace_summary(row: RewriteDatasetTraceRecord) -> TraceMetadataSummary:
         source_kind=row.source_kind,
         stage_kind=row.stage_kind,
         provenance_summary=row.provenance_summary,
+        analysis_capabilities=analysis_capabilities,
     )
 
 
@@ -1184,6 +1270,7 @@ def _build_trace_browse_row(
         provenance_summary=summary.provenance_summary,
         allowed_actions=policy.allowed_actions,
         mutation_policy_summary=policy.summary,
+        analysis_capabilities=summary.analysis_capabilities,
     )
 
 
