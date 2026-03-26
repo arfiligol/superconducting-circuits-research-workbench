@@ -106,6 +106,46 @@ def _create_ineligible_local_characterization_trace() -> tuple[str, str, str]:
     return dataset_id, payload["design"]["design_id"], payload["traces"][0]["trace_id"]
 
 
+def _create_unsupported_local_characterization_trace() -> tuple[str, str, str]:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Local Unsupported Characterization Dataset",
+            "family": "resonator",
+            "device_type": "Resonator",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": "Local Unsupported Characterization Design",
+            "provenance_label": "unsupported-measurement-batch",
+            "traces": [
+                {
+                    "family": "s_matrix",
+                    "parameter": "S21_temperature",
+                    "representation": "magnitude",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Temperature sweep resonator trace",
+                    "axes": [{"name": "temperature", "unit": "K", "length": 3}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[0.01, 0.91], [0.03, 0.84], [0.05, 0.79]],
+                    },
+                }
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    return dataset_id, payload["design"]["design_id"], payload["traces"][0]["trace_id"]
+
+
 def test_local_characterization_registry_exposes_admittance_for_compatible_saved_design() -> None:
     response = client.get(
         "/datasets/local-dataset-001/designs/design_local_flux_playground/"
@@ -270,6 +310,51 @@ def test_local_characterization_submit_rejects_ineligible_selected_trace() -> No
     error = response.json()["error"]
     assert error["code"] == "characterization_trace_selection_incompatible"
     assert "not eligible for admittance resonance extraction" in error["message"]
+
+
+def test_local_registry_marks_compatible_but_unsupported_analysis_as_unavailable() -> None:
+    dataset_id, design_id, trace_id = _create_unsupported_local_characterization_trace()
+
+    registry_response = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/characterization-analysis-registry",
+        params=[("selected_trace_ids", trace_id)],
+    )
+
+    assert registry_response.status_code == 200
+    assert registry_response.json()["data"]["rows"] == [
+        {
+            "analysis_id": "quality_factor_fit",
+            "label": "Quality Factor Fit",
+            "availability_state": "unavailable",
+            "required_config_fields": ["temperature_window"],
+            "trace_compatibility": {
+                "matched_trace_count": 1,
+                "selected_trace_count": 1,
+                "recommended_trace_modes": ["base"],
+                "summary": (
+                    "1 selected trace is compatible with quality factor fit, "
+                    "but the current runtime does not yet support executing this analysis."
+                ),
+            },
+        }
+    ]
+
+    submit_response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "dataset_id": dataset_id,
+            "characterization_setup": {
+                "design_id": design_id,
+                "analysis_id": "quality_factor_fit",
+                "selected_trace_ids": [trace_id],
+                "analysis_config": {"temperature_window": [0.01, 0.05]},
+            },
+        },
+    )
+
+    assert submit_response.status_code == 409
+    assert submit_response.json()["error"]["code"] == "characterization_analysis_unsupported"
 
 
 def test_online_characterization_submit_rejects_recognized_but_unsupported_analysis() -> None:

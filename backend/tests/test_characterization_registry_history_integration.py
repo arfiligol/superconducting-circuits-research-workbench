@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from src.app.infrastructure.runtime import reset_runtime_state
+from src.app.domain.datasets import (
+    CharacterizationAnalysisRegistryRow,
+    CharacterizationAnalysisTraceCompatibility,
+)
+from src.app.infrastructure.runtime import get_catalog_repository, reset_runtime_state
 from src.app.main import app
 
 client = TestClient(app)
@@ -99,7 +103,65 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
                 ),
             },
         },
+        {
+            "analysis_id": "screening_summary",
+            "label": "Screening Summary",
+            "availability_state": "unavailable",
+            "required_config_fields": ["screening_mode"],
+            "trace_compatibility": {
+                "matched_trace_count": 0,
+                "selected_trace_count": 2,
+                "recommended_trace_modes": ["base"],
+                "summary": (
+                    "2 selected traces are not eligible for screening summary "
+                    "because Requires s matrix traces."
+                ),
+            },
+        },
     ]
+
+
+def test_characterization_registry_ignores_incomplete_legacy_row_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = get_catalog_repository()
+    monkeypatch.setattr(
+        repository,
+        "list_characterization_analysis_registry",
+        lambda dataset_id, design_id: (
+            CharacterizationAnalysisRegistryRow(
+                analysis_id="sideband_comparison",
+                label="Legacy Sideband Only",
+                availability_state="available",
+                required_config_fields=("comparison_window",),
+                trace_compatibility=CharacterizationAnalysisTraceCompatibility(
+                    matched_trace_count=99,
+                    selected_trace_count=0,
+                    recommended_trace_modes=("sideband",),
+                    summary="legacy row should not drive active registry inclusion",
+                ),
+            ),
+        ),
+    )
+
+    response = client.get(
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
+        "characterization-analysis-registry",
+        params=[
+            ("selected_trace_ids", "trace_flux_a_measurement"),
+            ("selected_trace_ids", "trace_flux_a_layout"),
+        ],
+    )
+
+    assert response.status_code == 200
+    rows = response.json()["data"]["rows"]
+    assert [row["analysis_id"] for row in rows] == [
+        "admittance_extraction",
+        "sideband_comparison",
+        "junction_parameter_identification",
+        "screening_summary",
+    ]
+    assert rows[1]["label"] == "Sideband Comparison"
 
 
 def test_characterization_run_history_supports_analysis_filter_and_cursor_meta() -> None:

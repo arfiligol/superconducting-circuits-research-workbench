@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from src.app.domain.datasets import (
@@ -359,6 +359,7 @@ def build_characterization_registry_rows(
     included_analysis_ids: tuple[str, ...],
     traces: tuple[TraceMetadataSummary, ...],
     selected_trace_ids: tuple[str, ...],
+    enforce_runtime_support: bool = False,
 ) -> tuple[CharacterizationAnalysisRegistryRow, ...]:
     rows: list[CharacterizationAnalysisRegistryRow] = []
     for analysis_id in included_analysis_ids:
@@ -370,6 +371,8 @@ def build_characterization_registry_rows(
             traces=traces,
             selected_trace_ids=selected_trace_ids,
         )
+        if enforce_runtime_support:
+            evaluation = _enforce_runtime_support(spec=spec, evaluation=evaluation)
         rows.append(
             CharacterizationAnalysisRegistryRow(
                 analysis_id=spec.analysis_id,
@@ -717,6 +720,53 @@ def _selected_scope_summary(
     if len(issues) == 0:
         return spec.unavailable_summary
     return ". ".join(issues).rstrip(".") + "."
+
+
+def _enforce_runtime_support(
+    *,
+    spec: CharacterizationAnalysisSpec,
+    evaluation: CharacterizationAnalysisScopeEvaluation,
+) -> CharacterizationAnalysisScopeEvaluation:
+    if spec.local_runtime_supported:
+        return evaluation
+    if len(evaluation.missing_selected_trace_ids) > 0:
+        return evaluation
+    if len(evaluation.incompatible_selected_trace_ids) > 0:
+        return evaluation
+    if evaluation.matched_trace_count == 0:
+        return evaluation
+
+    summary = _runtime_unsupported_summary(spec=spec, evaluation=evaluation)
+    return replace(
+        evaluation,
+        availability_state="unavailable",
+        summary=summary,
+        selected_scope_ready=False,
+    )
+
+
+def _runtime_unsupported_summary(
+    *,
+    spec: CharacterizationAnalysisSpec,
+    evaluation: CharacterizationAnalysisScopeEvaluation,
+) -> str:
+    if evaluation.selected_scope_ready:
+        count = (
+            evaluation.selected_trace_count
+            if evaluation.selected_trace_count > 0
+            else evaluation.matched_trace_count
+        )
+        scope = "selected" if evaluation.selected_trace_count > 0 else "design"
+        noun = "trace" if count == 1 else "traces"
+        verb = "is" if count == 1 else "are"
+        return (
+            f"{count} {scope} {noun} {verb} compatible with {spec.label.lower()}, "
+            "but the current runtime does not yet support executing this analysis."
+        )
+    return (
+        evaluation.summary.rstrip(".")
+        + ". The current runtime does not yet support executing this analysis."
+    )
 
 
 def _first_incompatible_reason(

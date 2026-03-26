@@ -125,11 +125,13 @@ class DatasetCharacterizationService:
         query: CharacterizationAnalysisRegistryQuery,
     ) -> list[CharacterizationAnalysisRegistryRow]:
         self._require_visible_dataset(dataset_id)
-        rows = list(self._repository.list_characterization_analysis_registry(dataset_id, design_id))
         trace_rows = tuple(self._repository.list_trace_metadata(dataset_id, design_id))
         if len(trace_rows) == 0 or all(
             len(trace.analysis_capabilities) == 0 for trace in trace_rows
         ):
+            rows = list(
+                self._repository.list_characterization_analysis_registry(dataset_id, design_id)
+            )
             if len(query.selected_trace_ids) == 0:
                 return rows
 
@@ -150,16 +152,13 @@ class DatasetCharacterizationService:
                 for row in rows
             ]
 
-        included_analysis_ids = (
-            tuple(row.analysis_id for row in rows)
-            if len(rows) > 0
-            else derive_characterization_analysis_ids(trace_rows)
-        )
+        included_analysis_ids = derive_characterization_analysis_ids(trace_rows)
         return list(
             build_characterization_registry_rows(
                 included_analysis_ids=included_analysis_ids,
                 traces=trace_rows,
                 selected_trace_ids=query.selected_trace_ids,
+                enforce_runtime_support=True,
             )
         )
 
