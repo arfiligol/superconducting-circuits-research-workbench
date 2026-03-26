@@ -390,6 +390,64 @@ def build_characterization_registry_rows(
     return tuple(rows)
 
 
+def project_legacy_characterization_registry_rows(
+    *,
+    legacy_rows: tuple[CharacterizationAnalysisRegistryRow, ...],
+    selected_trace_ids: tuple[str, ...],
+    enforce_runtime_support: bool = False,
+) -> tuple[CharacterizationAnalysisRegistryRow, ...]:
+    selected_trace_count = len(selected_trace_ids)
+    selected_scope_requested = selected_trace_count > 0
+    projected_rows: list[CharacterizationAnalysisRegistryRow] = []
+
+    for row in legacy_rows:
+        spec = get_characterization_analysis_spec(row.analysis_id)
+        availability_state = row.availability_state
+        matched_trace_count = row.trace_compatibility.matched_trace_count
+        summary = row.trace_compatibility.summary
+
+        if selected_scope_requested:
+            availability_state = "unavailable"
+            matched_trace_count = 0
+            summary = _legacy_selected_scope_fallback_summary(spec)
+        elif (
+            enforce_runtime_support
+            and spec is not None
+            and not spec.local_runtime_supported
+            and (
+                row.availability_state != "unavailable"
+                or row.trace_compatibility.matched_trace_count > 0
+            )
+        ):
+            availability_state = "unavailable"
+            summary = _legacy_runtime_unsupported_fallback_summary(spec)
+
+        projected_rows.append(
+            CharacterizationAnalysisRegistryRow(
+                analysis_id=row.analysis_id,
+                label=spec.label if spec is not None else row.label,
+                availability_state=availability_state,
+                required_config_fields=(
+                    spec.required_config_fields
+                    if spec is not None
+                    else row.required_config_fields
+                ),
+                trace_compatibility=CharacterizationAnalysisTraceCompatibility(
+                    matched_trace_count=matched_trace_count,
+                    selected_trace_count=selected_trace_count,
+                    recommended_trace_modes=(
+                        spec.recommended_trace_modes
+                        if spec is not None
+                        else row.trace_compatibility.recommended_trace_modes
+                    ),
+                    summary=summary,
+                ),
+            )
+        )
+
+    return tuple(projected_rows)
+
+
 def evaluate_characterization_analysis_scope(
     *,
     spec: CharacterizationAnalysisSpec,
@@ -766,6 +824,30 @@ def _runtime_unsupported_summary(
     return (
         evaluation.summary.rstrip(".")
         + ". The current runtime does not yet support executing this analysis."
+    )
+
+
+def _legacy_selected_scope_fallback_summary(
+    spec: CharacterizationAnalysisSpec | None,
+) -> str:
+    base = (
+        "Selected trace compatibility could not be re-evaluated because this design "
+        "does not yet carry durable trace capability markings."
+    )
+    if spec is None or spec.local_runtime_supported:
+        return base
+    return (
+        base
+        + " The current runtime does not yet support executing this analysis."
+    )
+
+
+def _legacy_runtime_unsupported_fallback_summary(
+    spec: CharacterizationAnalysisSpec,
+) -> str:
+    return (
+        f"Legacy trace coverage suggests {spec.label.lower()} may be relevant, but "
+        "the current runtime does not yet support executing this analysis."
     )
 
 

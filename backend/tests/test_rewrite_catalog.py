@@ -705,13 +705,23 @@ def test_dataset_service_exposes_characterization_analysis_registry_and_run_hist
         "sideband_comparison",
         "junction_parameter_identification",
     ]
-    assert registry_rows[0].availability_state == "recommended"
+    assert registry_rows[0].availability_state == "unavailable"
     assert registry_rows[0].required_config_fields == (
         "fit_window",
         "residual_tolerance",
     )
     assert registry_rows[0].trace_compatibility.selected_trace_count == 2
-    assert registry_rows[0].trace_compatibility.matched_trace_count == 2
+    assert registry_rows[0].trace_compatibility.matched_trace_count == 0
+    assert registry_rows[0].trace_compatibility.summary == (
+        "Selected trace compatibility could not be re-evaluated because this design "
+        "does not yet carry durable trace capability markings."
+    )
+    assert registry_rows[1].availability_state == "unavailable"
+    assert registry_rows[1].trace_compatibility.summary == (
+        "Selected trace compatibility could not be re-evaluated because this design "
+        "does not yet carry durable trace capability markings. The current runtime "
+        "does not yet support executing this analysis."
+    )
 
     assert [row.run_id for row in run_rows] == ["run-flux-a-003"]
     assert run_rows[0].dataset_id == "fluxonium-2025-031"
