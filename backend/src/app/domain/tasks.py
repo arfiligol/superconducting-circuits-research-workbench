@@ -594,8 +594,8 @@ class TaskPublicationSummary:
 @dataclass(frozen=True)
 class WorkerLaneSummary:
     lane: TaskLane
-    healthy_processors: int
-    busy_processors: int
+    idle_processors: int
+    running_processors: int
     degraded_processors: int
     draining_processors: int
     offline_processors: int
@@ -617,7 +617,7 @@ class TaskQueueAggregateSummary:
 class TaskProcessorDetail:
     processor_id: str
     lane: TaskLane
-    state: Literal["healthy", "busy", "degraded", "draining", "offline"]
+    state: Literal["idle", "running", "degraded", "draining", "offline"]
     current_task_id: int | None
     last_heartbeat_at: str
     runtime_metadata: dict[str, object]

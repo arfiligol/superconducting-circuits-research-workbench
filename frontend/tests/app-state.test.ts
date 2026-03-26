@@ -1101,16 +1101,16 @@ describe("task queue store", () => {
     expect(
       mapWorkerLaneSummaryResponse({
         lane: "simulation",
-        healthy_processors: 1,
-        busy_processors: 2,
+        idle_processors: 1,
+        running_processors: 2,
         degraded_processors: 3,
         draining_processors: 4,
         offline_processors: 5,
       }),
     ).toEqual({
       lane: "simulation",
-      healthyProcessors: 1,
-      busyProcessors: 2,
+      idleProcessors: 1,
+      runningProcessors: 2,
       degradedProcessors: 3,
       drainingProcessors: 4,
       offlineProcessors: 5,
@@ -1148,8 +1148,8 @@ describe("task queue store", () => {
           worker_summary: [
             {
               lane: "characterization",
-              healthy_processors: 1,
-              busy_processors: 0,
+              idle_processors: 1,
+              running_processors: 0,
               degraded_processors: 0,
               draining_processors: 0,
               offline_processors: 0,
@@ -1199,8 +1199,8 @@ describe("task queue store", () => {
       workerSummary: [
         {
           lane: "characterization",
-          healthyProcessors: 1,
-          busyProcessors: 0,
+          idleProcessors: 1,
+          runningProcessors: 0,
           degradedProcessors: 0,
           drainingProcessors: 0,
           offlineProcessors: 0,

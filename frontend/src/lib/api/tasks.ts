@@ -141,8 +141,8 @@ type LiveTaskQueueRowResponseShape = Readonly<{
 }>;
 type WorkerLaneSummaryResponseShape = Readonly<{
   lane: string;
-  healthy_processors: number;
-  busy_processors: number;
+  idle_processors: number;
+  running_processors: number;
   degraded_processors: number;
   draining_processors: number;
   offline_processors: number;
@@ -708,8 +708,8 @@ export type TaskSummaryLike = Omit<TaskSummary, "hasActionAuthority" | "allowedA
   >;
 export type WorkerLaneSummary = Readonly<{
   lane: string;
-  healthyProcessors: number;
-  busyProcessors: number;
+  idleProcessors: number;
+  runningProcessors: number;
   degradedProcessors: number;
   drainingProcessors: number;
   offlineProcessors: number;
@@ -1438,8 +1438,8 @@ export function mapWorkerLaneSummaryResponse(
 ): WorkerLaneSummary {
   return {
     lane: payload.lane,
-    healthyProcessors: payload.healthy_processors,
-    busyProcessors: payload.busy_processors,
+    idleProcessors: payload.idle_processors,
+    runningProcessors: payload.running_processors,
     degradedProcessors: payload.degraded_processors,
     drainingProcessors: payload.draining_processors,
     offlineProcessors: payload.offline_processors,

@@ -270,15 +270,15 @@ function summarizeWorkerRuntime(workerSummary: readonly WorkerLaneSummary[]) {
 
   const totals = workerSummary.reduce(
     (summary, lane) => ({
-      healthy: summary.healthy + lane.healthyProcessors,
-      busy: summary.busy + lane.busyProcessors,
+      idle: summary.idle + lane.idleProcessors,
+      running: summary.running + lane.runningProcessors,
       degraded: summary.degraded + lane.degradedProcessors,
       draining: summary.draining + lane.drainingProcessors,
       offline: summary.offline + lane.offlineProcessors,
     }),
     {
-      healthy: 0,
-      busy: 0,
+      idle: 0,
+      running: 0,
       degraded: 0,
       draining: 0,
       offline: 0,
@@ -287,8 +287,24 @@ function summarizeWorkerRuntime(workerSummary: readonly WorkerLaneSummary[]) {
 
   return {
     value: `${workerSummary.length} lane${workerSummary.length === 1 ? "" : "s"} reported`,
-    detail: `${totals.healthy} healthy · ${totals.busy} busy · ${totals.degraded} degraded · ${totals.draining} draining · ${totals.offline} offline`,
+    detail: `${totals.idle} idle · ${totals.running} running · ${totals.degraded} degraded · ${totals.draining} draining · ${totals.offline} offline`,
   } as const;
+}
+
+function summarizeLaneRuntimeStatus(laneSummary: WorkerLaneSummary) {
+  if (laneSummary.offlineProcessors > 0 || laneSummary.degradedProcessors > 0) {
+    return "Needs attention";
+  }
+  if (laneSummary.drainingProcessors > 0) {
+    return "Draining";
+  }
+  if (laneSummary.runningProcessors > 0) {
+    return "Running";
+  }
+  if (laneSummary.idleProcessors > 0) {
+    return "Idle";
+  }
+  return "Pending";
 }
 
 function isRetryableError(error: Error | undefined): boolean {
@@ -1223,24 +1239,24 @@ export function WorkspaceStatusStrip({
                               </p>
                             </div>
                             <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                              {laneSummary.healthyProcessors > 0 ? "Healthy" : "Needs attention"}
+                              {summarizeLaneRuntimeStatus(laneSummary)}
                             </span>
                           </div>
                           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                             <div>
                               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Healthy
+                                Idle
                               </p>
                               <p className="mt-1 font-semibold text-foreground">
-                                {laneSummary.healthyProcessors}
+                                {laneSummary.idleProcessors}
                               </p>
                             </div>
                             <div>
                               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Busy
+                                Running
                               </p>
                               <p className="mt-1 font-semibold text-foreground">
-                                {laneSummary.busyProcessors}
+                                {laneSummary.runningProcessors}
                               </p>
                             </div>
                             <div>

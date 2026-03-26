@@ -31,7 +31,7 @@ from src.app.domain.tasks import TaskDetail
 from src.app.infrastructure.audit_records import build_audit_record
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
-from src.app.services.service_errors import service_error
+from src.app.services.service_errors import ServiceError, service_error
 
 TokenVerificationStatus = Literal["valid", "expired", "invalid"]
 RefreshVerificationStatus = Literal["valid", "expired", "invalid"]
@@ -767,6 +767,7 @@ class SessionService:
         )
 
     def _build_local_session(self, state: SessionState) -> AppSession:
+        state, active_dataset = self._resolve_local_active_dataset_context(state)
         membership = _membership_for_workspace(state, state.workspace_id)
         if membership is None:
             membership = state.memberships[0]
@@ -804,7 +805,7 @@ class SessionService:
                 default_task_scope=membership.default_task_scope,
                 allowed_actions=membership.allowed_actions,
             ),
-            active_dataset=self._build_active_dataset_context(state),
+            active_dataset=active_dataset,
             capabilities=capabilities,
             connection=SessionConnectionContext(target=None),
         )
@@ -893,6 +894,18 @@ class SessionService:
             visibility_scope=dataset.visibility_scope,
             lifecycle_state=dataset.lifecycle_state,
         )
+
+    def _resolve_local_active_dataset_context(
+        self,
+        state: SessionState,
+    ) -> tuple[SessionState, ActiveDatasetContext | None]:
+        try:
+            return state, self._build_active_dataset_context(state)
+        except ServiceError as exc:
+            if exc.code != "context_rebind_required":
+                raise
+        cleared_state = self._repository.set_active_dataset_id(None)
+        return cleared_state, None
 
     def _active_target(self) -> ServerTargetSummary | None:
         return next(

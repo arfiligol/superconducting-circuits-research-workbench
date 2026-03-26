@@ -825,15 +825,15 @@ export function TasksWorkspace() {
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Healthy
+                      Idle
                     </p>
-                    <p className="mt-1 font-semibold text-foreground">{lane.healthyProcessors}</p>
+                    <p className="mt-1 font-semibold text-foreground">{lane.idleProcessors}</p>
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Busy
+                      Running
                     </p>
-                    <p className="mt-1 font-semibold text-foreground">{lane.busyProcessors}</p>
+                    <p className="mt-1 font-semibold text-foreground">{lane.runningProcessors}</p>
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">

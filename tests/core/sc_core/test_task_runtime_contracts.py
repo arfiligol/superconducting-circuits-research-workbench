@@ -124,14 +124,14 @@ def test_post_processing_lane_and_processor_summary_are_lane_scoped() -> None:
         build_processor_heartbeat(
             processor_id="sim-1",
             lane="simulation",
-            state="healthy",
+            state="idle",
             last_heartbeat_at=now - timedelta(seconds=10),
             runtime_metadata={"version": "1.2.0", "host": {"name": "secret-host"}},
         ),
         build_processor_heartbeat(
             processor_id="sim-2",
             lane="simulation",
-            state="busy",
+            state="running",
             current_task_id=88,
             last_heartbeat_at=now - timedelta(seconds=15),
             runtime_metadata={"capacity": 2},
@@ -139,7 +139,7 @@ def test_post_processing_lane_and_processor_summary_are_lane_scoped() -> None:
         build_processor_heartbeat(
             processor_id="char-1",
             lane="characterization",
-            state="healthy",
+            state="idle",
             last_heartbeat_at=now - timedelta(seconds=180),
             runtime_metadata={"build": "abc123"},
         ),
@@ -158,8 +158,8 @@ def test_post_processing_lane_and_processor_summary_are_lane_scoped() -> None:
         recorded_at=now,
         offline_after_seconds=90,
     )
-    assert simulation_summary.healthy_processors == 1
-    assert simulation_summary.busy_processors == 1
+    assert simulation_summary.idle_processors == 1
+    assert simulation_summary.running_processors == 1
     assert simulation_summary.degraded_processors == 1
     assert simulation_summary.offline_processors == 0
 
@@ -169,8 +169,8 @@ def test_post_processing_lane_and_processor_summary_are_lane_scoped() -> None:
         recorded_at=now,
         offline_after_seconds=90,
     )
-    assert characterization_summary.offline_processors == 1
-    assert characterization_summary.healthy_processors == 0
+    assert characterization_summary.offline_processors == 0
+    assert characterization_summary.idle_processors == 1
 
     summaries = build_lane_processor_summaries(
         heartbeats,
@@ -533,7 +533,7 @@ def test_processor_snapshot_projection_preserves_lane_scope() -> None:
         {
             "processor_id": "sim-1",
             "lane": "simulation",
-            "state": "busy",
+            "state": "running",
             "current_task_id": "12",
             "last_heartbeat_at": (now - timedelta(seconds=15)).isoformat(),
             "runtime_metadata": {"host": {"name": "hidden"}},
@@ -541,7 +541,7 @@ def test_processor_snapshot_projection_preserves_lane_scope() -> None:
         {
             "processor_id": "post-1",
             "lane": "simulation",
-            "state": "healthy",
+            "state": "idle",
             "last_heartbeat_at": now,
             "runtime_metadata": {"version": "1.0.0"},
         },
@@ -556,7 +556,7 @@ def test_processor_snapshot_projection_preserves_lane_scope() -> None:
         {
             "processor_id": "sim-2",
             "lane": "simulation",
-            "state": "healthy",
+            "state": "idle",
             "last_heartbeat_at": "2026-03-16T12:00:00",
             "runtime_metadata": {},
         }
@@ -569,8 +569,8 @@ def test_processor_snapshot_projection_preserves_lane_scope() -> None:
         offline_after_seconds=90,
     )
     assert [summary.lane for summary in summaries] == ["simulation"]
-    assert summaries[0].busy_processors == 1
-    assert summaries[0].healthy_processors == 1
+    assert summaries[0].running_processors == 1
+    assert summaries[0].idle_processors == 1
 
 
 def _task_history_context(*, task_status: str) -> object:

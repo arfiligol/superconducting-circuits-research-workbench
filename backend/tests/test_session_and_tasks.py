@@ -1,8 +1,9 @@
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from rq.utils import utcformat
 from sqlalchemy import select
 from src.app.domain.tasks import (
     CharacterizationSetup,
@@ -505,6 +506,24 @@ def test_active_dataset_binding_survives_backend_restart() -> None:
     assert payload["active_dataset"] is None
 
 
+def test_get_session_clears_stale_local_active_dataset_instead_of_failing_context_rebind() -> None:
+    repository = get_rewrite_app_state_repository()
+    bootstrap = client.get("/session")
+    assert bootstrap.status_code == 200
+    with _bind_client_app_context(client):
+        repository.set_active_dataset_id("missing-local-dataset")
+
+    response = client.get("/session")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["runtime_mode"] == "local"
+    assert payload["auth"]["state"] == "local_bypass"
+    assert payload["active_dataset"] is None
+    with _bind_client_app_context(client):
+        assert repository.get_session_state().active_dataset_id is None
+
+
 def test_runtime_mode_switch_remains_coherent_after_backend_restart() -> None:
     _login()
     switched = client.patch("/session/runtime-mode", json={"runtime_mode": "local"})
@@ -773,7 +792,16 @@ def test_list_tasks_returns_backend_owned_queue_read_model() -> None:
             "reason": None,
         },
     }
-    assert payload["data"]["worker_summary"] == []
+    assert payload["data"]["worker_summary"] == [
+        {
+            "lane": "simulation",
+            "idle_processors": 0,
+            "running_processors": 0,
+            "degraded_processors": 0,
+            "draining_processors": 0,
+            "offline_processors": 1,
+        }
+    ]
     assert payload["data"]["aggregate_summary"] == {
         "total": 1,
         "pending": 0,
@@ -898,7 +926,7 @@ def test_list_runtime_processors_returns_standalone_worker_detail() -> None:
         {
             "processor_id": "sc-worker-characterization:4102",
             "lane": "characterization",
-            "state": "healthy",
+            "state": "idle",
             "current_task_id": None,
             "last_heartbeat_at": payload["data"]["processors"][0]["last_heartbeat_at"],
             "runtime_metadata": {
@@ -912,7 +940,7 @@ def test_list_runtime_processors_returns_standalone_worker_detail() -> None:
         {
             "processor_id": "sc-worker-simulation:4101",
             "lane": "simulation",
-            "state": "healthy",
+            "state": "idle",
             "current_task_id": None,
             "last_heartbeat_at": payload["data"]["processors"][1]["last_heartbeat_at"],
             "runtime_metadata": {
@@ -927,16 +955,16 @@ def test_list_runtime_processors_returns_standalone_worker_detail() -> None:
     assert payload["data"]["worker_summary"] == [
         {
             "lane": "characterization",
-            "healthy_processors": 1,
-            "busy_processors": 0,
+            "idle_processors": 1,
+            "running_processors": 0,
             "degraded_processors": 0,
             "draining_processors": 0,
             "offline_processors": 0,
         },
         {
             "lane": "simulation",
-            "healthy_processors": 1,
-            "busy_processors": 0,
+            "idle_processors": 1,
+            "running_processors": 0,
             "degraded_processors": 0,
             "draining_processors": 0,
             "offline_processors": 0,
@@ -946,6 +974,86 @@ def test_list_runtime_processors_returns_standalone_worker_detail() -> None:
         "lane": None,
         "lane_filter": None,
     }
+
+
+def test_list_runtime_processors_keeps_stale_idle_worker_out_of_offline_summary() -> None:
+    stale_at = utcformat(datetime.now(UTC) - timedelta(minutes=15))
+
+    with registered_worker("simulation", name="sc-worker-simulation:4301") as worker:
+        worker.connection.hset(worker.key, "last_heartbeat", stale_at)
+        response = client.get("/tasks/runtime/processors?lane_filter=simulation")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["processors"] == [
+        {
+            "processor_id": "sc-worker-simulation:4301",
+            "lane": "simulation",
+            "state": "idle",
+            "current_task_id": None,
+            "last_heartbeat_at": payload["processors"][0]["last_heartbeat_at"],
+            "runtime_metadata": {
+                "authority": "rq_redis",
+                "execution_mode": "worker_process",
+                "lane": "simulation",
+                "queue_names": ["simulation"],
+                "worker_pid": 4301,
+            },
+        }
+    ]
+    assert payload["worker_summary"] == [
+        {
+            "lane": "simulation",
+            "idle_processors": 1,
+            "running_processors": 0,
+            "degraded_processors": 0,
+            "draining_processors": 0,
+            "offline_processors": 0,
+        }
+    ]
+
+
+def test_list_runtime_processors_reports_offline_lane_when_local_work_has_no_worker() -> None:
+    _submit_task_and_optionally_drain(
+        {
+            "kind": "simulation",
+            "dataset_id": "local-dataset-001",
+            "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+            "summary": "Offline worker lane truthfulness proof.",
+            "simulation_setup": _simulation_setup_payload(
+                ptc=_simulation_ptc_payload(enabled=False, mode="manual")
+            ),
+        }
+    )
+
+    runtime_response = client.get("/tasks/runtime/processors?lane_filter=simulation")
+    queue_response = client.get("/tasks?lane_filter=simulation")
+
+    assert runtime_response.status_code == 200
+    assert runtime_response.json()["data"] == {
+        "processors": [],
+        "worker_summary": [
+            {
+                "lane": "simulation",
+                "idle_processors": 0,
+                "running_processors": 0,
+                "degraded_processors": 0,
+                "draining_processors": 0,
+                "offline_processors": 1,
+            }
+        ],
+    }
+    assert queue_response.status_code == 200
+    assert queue_response.json()["data"]["worker_summary"] == [
+        {
+            "lane": "simulation",
+            "idle_processors": 0,
+            "running_processors": 0,
+            "degraded_processors": 0,
+            "draining_processors": 0,
+            "offline_processors": 1,
+        }
+    ]
 
 
 def test_list_runtime_processors_supports_lane_filter_for_online_workspace() -> None:
@@ -1411,7 +1519,16 @@ def test_local_simulation_submit_does_not_leave_queue_stuck_or_worker_summary_mi
 
     assert submitted_row["status"] == "queued"
     assert submitted_row["result_availability"] == "pending"
-    assert queue_before_drain["worker_summary"] == []
+    assert queue_before_drain["worker_summary"] == [
+        {
+            "lane": "simulation",
+            "idle_processors": 0,
+            "running_processors": 0,
+            "degraded_processors": 0,
+            "draining_processors": 0,
+            "offline_processors": 1,
+        }
+    ]
 
     drain_lane_queue("simulation")
 
@@ -1421,8 +1538,8 @@ def test_local_simulation_submit_does_not_leave_queue_stuck_or_worker_summary_mi
     assert runtime["worker_summary"] == [
         {
             "lane": "simulation",
-            "healthy_processors": 1,
-            "busy_processors": 0,
+            "idle_processors": 1,
+            "running_processors": 0,
             "degraded_processors": 0,
             "draining_processors": 0,
             "offline_processors": 0,

@@ -9,12 +9,22 @@ from rq.job import Job
 from sc_core.tasking import (
     LaneName,
     ProcessorHeartbeat,
-    build_lane_processor_summaries,
     build_processor_heartbeat,
 )
 
 from src.app.domain.tasks import TaskDetail, TaskLane, WorkerLaneSummary
 from src.app.infrastructure.worker_runtime.settings import WorkerRuntimeSettings
+
+_ACTIVE_TASK_STATUSES = frozenset(
+    {
+        "queued",
+        "dispatching",
+        "running",
+        "cancellation_requested",
+        "cancelling",
+        "termination_requested",
+    }
+)
 
 
 class TaskListingRepository(Protocol):
@@ -37,23 +47,39 @@ class RedisProcessorRuntimeRepository:
 
     def list_lane_summaries(self, workspace_id: str) -> tuple[WorkerLaneSummary, ...]:
         heartbeats = self.list_heartbeats(workspace_id)
-        if len(heartbeats) == 0:
+        active_lanes = self._list_active_lanes(workspace_id)
+        lanes = tuple(sorted({heartbeat.lane for heartbeat in heartbeats} | active_lanes))
+        if len(lanes) == 0:
             return ()
-        recorded_at = datetime.now(UTC)
+        summary_counts: dict[TaskLane, dict[str, int]] = {
+            lane: {
+                "idle": 0,
+                "running": 0,
+                "degraded": 0,
+                "draining": 0,
+                "offline": 0,
+            }
+            for lane in lanes
+        }
+        # RQ worker registration proves the processor key is still present in Redis.
+        # SimpleWorker can stay heartbeat-quiet while idle, so live summaries count
+        # registered workers by their declared state instead of heartbeat age alone.
+        for heartbeat in heartbeats:
+            summary_counts[heartbeat.lane][heartbeat.state] += 1
+        for lane in active_lanes:
+            if _has_live_lane_presence(summary_counts[lane]):
+                continue
+            summary_counts[lane]["offline"] = 1
         return tuple(
             WorkerLaneSummary(
-                lane=summary.lane,
-                healthy_processors=summary.healthy_processors,
-                busy_processors=summary.busy_processors,
-                degraded_processors=summary.degraded_processors,
-                draining_processors=summary.draining_processors,
-                offline_processors=summary.offline_processors,
+                lane=lane,
+                idle_processors=summary_counts[lane]["idle"],
+                running_processors=summary_counts[lane]["running"],
+                degraded_processors=summary_counts[lane]["degraded"],
+                draining_processors=summary_counts[lane]["draining"],
+                offline_processors=summary_counts[lane]["offline"],
             )
-            for summary in build_lane_processor_summaries(
-                heartbeats,
-                recorded_at=recorded_at,
-                offline_after_seconds=self._settings.stale_after_seconds,
-            )
+            for lane in lanes
         )
 
     def list_heartbeats(self, workspace_id: str | None = None) -> tuple[ProcessorHeartbeat, ...]:
@@ -141,6 +167,13 @@ class RedisProcessorRuntimeRepository:
             return None
         return self._task_repository.get_task(task_id)
 
+    def _list_active_lanes(self, workspace_id: str) -> set[TaskLane]:
+        return {
+            task.lane
+            for task in self._task_repository.list_tasks()
+            if task.workspace_id == workspace_id and task.status in _ACTIVE_TASK_STATUSES
+        }
+
 
 def _resolve_worker_lane(
     worker: Worker,
@@ -182,12 +215,12 @@ def _resolve_last_heartbeat(worker: Worker) -> datetime:
 
 def _resolve_worker_state(task: TaskDetail | None) -> str:
     if task is None:
-        return "healthy"
+        return "idle"
     if task.status in {"cancellation_requested", "cancelling"}:
         return "draining"
     if task.status == "termination_requested":
         return "degraded"
-    return "busy"
+    return "running"
 
 
 def _build_runtime_metadata(
@@ -215,3 +248,10 @@ def _parse_worker_pid(worker_name: str) -> int | None:
     if not suffix.isdigit():
         return None
     return int(suffix)
+
+
+def _has_live_lane_presence(summary_counts: dict[str, int]) -> bool:
+    return any(
+        summary_counts[state] > 0
+        for state in ("idle", "running", "degraded", "draining")
+    )

@@ -190,8 +190,8 @@ describe("tasks browse helpers", () => {
       workerSummary: [
         {
           lane: "simulation",
-          healthyProcessors: 1,
-          busyProcessors: 1,
+          idleProcessors: 1,
+          runningProcessors: 1,
           degradedProcessors: 0,
           drainingProcessors: 0,
           offlineProcessors: 0,
@@ -215,8 +215,8 @@ describe("tasks browse helpers", () => {
     expect(buildWorkerLaneInspectionRows(queue.workerSummary, queue.rows)).toEqual([
       {
         lane: "simulation",
-        healthyProcessors: 1,
-        busyProcessors: 1,
+        idleProcessors: 1,
+        runningProcessors: 1,
         degradedProcessors: 0,
         drainingProcessors: 0,
         offlineProcessors: 0,

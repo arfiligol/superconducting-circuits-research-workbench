@@ -221,7 +221,7 @@ def test_local_characterization_registry_exposes_admittance_for_compatible_saved
     ]
 
 
-def test_local_characterization_runtime_summary_is_configured_and_healthy() -> None:
+def test_local_characterization_runtime_summary_reports_idle_worker_presence() -> None:
     with registered_worker(
         "characterization",
         name="sc-worker-characterization:4311",
@@ -235,7 +235,7 @@ def test_local_characterization_runtime_summary_is_configured_and_healthy() -> N
         if item["lane"] == "characterization"
     )
     assert processor["processor_id"] == "sc-worker-characterization:4311"
-    assert processor["state"] == "healthy"
+    assert processor["state"] == "idle"
     assert processor["current_task_id"] is None
     assert processor["runtime_metadata"] == {
         "authority": "rq_redis",

@@ -681,8 +681,8 @@ def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[
 def _serialize_worker_summary(summary) -> dict[str, object]:
     return {
         "lane": summary.lane,
-        "healthy_processors": summary.healthy_processors,
-        "busy_processors": summary.busy_processors,
+        "idle_processors": summary.idle_processors,
+        "running_processors": summary.running_processors,
         "degraded_processors": summary.degraded_processors,
         "draining_processors": summary.draining_processors,
         "offline_processors": summary.offline_processors,

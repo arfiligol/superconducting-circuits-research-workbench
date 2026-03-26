@@ -39,8 +39,8 @@ export type TasksWorkspaceSummary = Readonly<{
 
 export type WorkerLaneInspectionRow = Readonly<{
   lane: string;
-  healthyProcessors: number;
-  busyProcessors: number;
+  idleProcessors: number;
+  runningProcessors: number;
   degradedProcessors: number;
   drainingProcessors: number;
   offlineProcessors: number;
@@ -190,8 +190,8 @@ export function buildWorkerLaneInspectionRows(
 
     return {
       lane: laneSummary.lane,
-      healthyProcessors: laneSummary.healthyProcessors,
-      busyProcessors: laneSummary.busyProcessors,
+      idleProcessors: laneSummary.idleProcessors,
+      runningProcessors: laneSummary.runningProcessors,
       degradedProcessors: laneSummary.degradedProcessors,
       drainingProcessors: laneSummary.drainingProcessors,
       offlineProcessors: laneSummary.offlineProcessors,

@@ -279,8 +279,8 @@ describe("workspace shell source contracts", () => {
     expect(statusStripSource).toContain('label="Failed"');
     expect(statusStripSource).toContain('label="Cancelled"');
     expect(statusStripSource).toContain('label="Terminated"');
-    expect(statusStripSource).toContain("laneSummary.healthyProcessors");
-    expect(statusStripSource).toContain("laneSummary.busyProcessors");
+    expect(statusStripSource).toContain("laneSummary.idleProcessors");
+    expect(statusStripSource).toContain("laneSummary.runningProcessors");
     expect(statusStripSource).toContain("laneSummary.degradedProcessors");
     expect(statusStripSource).toContain("laneSummary.drainingProcessors");
     expect(statusStripSource).toContain("laneSummary.offlineProcessors");

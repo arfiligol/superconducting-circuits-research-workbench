@@ -28,7 +28,7 @@ TaskControlRejectionReason = Literal[
     "task_already_terminal",
     "task_retry_denied",
 ]
-ProcessorState = Literal["healthy", "busy", "degraded", "draining", "offline"]
+ProcessorState = Literal["idle", "running", "degraded", "draining", "offline"]
 ProcessorRuntimeMetadataValue = str | int | bool | None | list[str]
 
 TASK_RUNTIME_CONTRACT_VERSION = "sc_task_runtime.v1"
@@ -174,8 +174,8 @@ class ProcessorHeartbeat:
         recorded_at: datetime,
         offline_after_seconds: int,
     ) -> ProcessorState:
-        if (recorded_at - self.last_heartbeat_at).total_seconds() > offline_after_seconds:
-            return "offline"
+        del recorded_at
+        del offline_after_seconds
         return self.state
 
     def to_payload(
@@ -209,8 +209,8 @@ class LaneProcessorSummary:
     """Canonical processor summary derived per workflow lane."""
 
     lane: LaneName
-    healthy_processors: int = 0
-    busy_processors: int = 0
+    idle_processors: int = 0
+    running_processors: int = 0
     degraded_processors: int = 0
     draining_processors: int = 0
     offline_processors: int = 0
@@ -219,8 +219,8 @@ class LaneProcessorSummary:
         return {
             "contract_version": TASK_RUNTIME_CONTRACT_VERSION,
             "lane": self.lane,
-            "healthy_processors": self.healthy_processors,
-            "busy_processors": self.busy_processors,
+            "idle_processors": self.idle_processors,
+            "running_processors": self.running_processors,
             "degraded_processors": self.degraded_processors,
             "draining_processors": self.draining_processors,
             "offline_processors": self.offline_processors,
@@ -336,8 +336,8 @@ def summarize_lane_processors(
 ) -> LaneProcessorSummary:
     """Summarize processor health counts for one specific lane only."""
     counts = {
-        "healthy": 0,
-        "busy": 0,
+        "idle": 0,
+        "running": 0,
         "degraded": 0,
         "draining": 0,
         "offline": 0,
@@ -353,8 +353,8 @@ def summarize_lane_processors(
         ] += 1
     return LaneProcessorSummary(
         lane=lane,
-        healthy_processors=counts["healthy"],
-        busy_processors=counts["busy"],
+        idle_processors=counts["idle"],
+        running_processors=counts["running"],
         degraded_processors=counts["degraded"],
         draining_processors=counts["draining"],
         offline_processors=counts["offline"],
@@ -564,7 +564,7 @@ def _coerce_lane_name(value: object) -> LaneName:
 
 
 def _coerce_processor_state(value: object) -> ProcessorState:
-    if value in {"healthy", "busy", "degraded", "draining", "offline"}:
+    if value in {"idle", "running", "degraded", "draining", "offline"}:
         return value
     raise ValueError("Expected supported processor state value.")
 

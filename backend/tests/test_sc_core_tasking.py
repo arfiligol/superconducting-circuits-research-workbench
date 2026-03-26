@@ -95,7 +95,7 @@ def test_lane_scoped_processor_summary_contract_is_redaction_safe() -> None:
         build_processor_heartbeat(
             processor_id="sim-1",
             lane="simulation",
-            state="busy",
+            state="running",
             current_task_id=12,
             last_heartbeat_at=now - timedelta(seconds=5),
             runtime_metadata={"version": "1.0.0"},
@@ -103,7 +103,7 @@ def test_lane_scoped_processor_summary_contract_is_redaction_safe() -> None:
         build_processor_heartbeat(
             processor_id="sim-2",
             lane="simulation",
-            state="healthy",
+            state="idle",
             last_heartbeat_at=now - timedelta(seconds=120),
             runtime_metadata={"host": {"name": "private"}},
         ),
@@ -117,8 +117,9 @@ def test_lane_scoped_processor_summary_contract_is_redaction_safe() -> None:
 
     assert len(summaries) == 1
     assert summaries[0].lane == "simulation"
-    assert summaries[0].busy_processors == 1
-    assert summaries[0].offline_processors == 1
+    assert summaries[0].running_processors == 1
+    assert summaries[0].idle_processors == 1
+    assert summaries[0].offline_processors == 0
     assert heartbeats[1].to_payload(recorded_at=now, offline_after_seconds=90)[
         "runtime_metadata"
     ] == {"host": REDACTED_RUNTIME_METADATA_VALUE}
