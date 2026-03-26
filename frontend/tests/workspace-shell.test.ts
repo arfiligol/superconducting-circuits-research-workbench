@@ -48,12 +48,25 @@ const schemaCatalogSource = readFileSync(
   ),
   "utf8",
 );
-const rawDataSource = readFileSync(
+const rawDataWorkspaceSource = readFileSync(
   fileURLToPath(
     new URL("../src/features/data-browser/components/raw-data-browser-workspace.tsx", import.meta.url),
   ),
   "utf8",
 );
+const rawDataTraceSummariesSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/raw-data-trace-summaries-panel.tsx", import.meta.url),
+  ),
+  "utf8",
+);
+const rawDataControlsSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/raw-data-browser-controls.tsx", import.meta.url),
+  ),
+  "utf8",
+);
+const rawDataSource = [rawDataWorkspaceSource, rawDataTraceSummariesSource, rawDataControlsSource].join("\n");
 const datasetWorkspaceSource = readFileSync(
   fileURLToPath(
     new URL("../src/features/data-browser/components/dataset-workspace.tsx", import.meta.url),

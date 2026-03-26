@@ -10,6 +10,7 @@ import {
   primeSimulationResultExplorerViewCache,
   resolveSimulationExplorerSweepAxes,
 } from "../src/features/simulation/lib/simulation-result-explorer-state";
+import { formatExplorerAxisTitle } from "../src/features/simulation/lib/simulation-result-explorer-labels";
 import type {
   SimulationResultExplorerBootstrapPayload,
   SimulationResultExplorerPayload,
@@ -140,6 +141,12 @@ function buildExplorerPayload(taskId: number): SimulationResultExplorerPayload {
 }
 
 describe("simulation result explorer state helpers", () => {
+  it("avoids duplicating units when an axis label already contains them", () => {
+    expect(formatExplorerAxisTitle("Magnitude", "dB")).toBe("Magnitude (dB)");
+    expect(formatExplorerAxisTitle("Magnitude (dB)", "dB")).toBe("Magnitude (dB)");
+    expect(formatExplorerAxisTitle("Impedance [Ohm]", "Ohm")).toBe("Impedance [Ohm]");
+  });
+
   it("builds task-bound cache keys and view queries from normalized selection", () => {
     const selection = buildEditableSelection(buildExplorerPayload(31).selection);
 

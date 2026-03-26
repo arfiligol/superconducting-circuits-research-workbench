@@ -46,6 +46,44 @@ const rawDataWorkspaceSource = readFileSync(
   ),
   "utf8",
 );
+const rawDataDesignScopesSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/raw-data-design-scopes-panel.tsx", import.meta.url),
+  ),
+  "utf8",
+);
+const rawDataTraceSummariesSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/raw-data-trace-summaries-panel.tsx", import.meta.url),
+  ),
+  "utf8",
+);
+const rawDataTracePreviewSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/raw-data-trace-preview-panel.tsx", import.meta.url),
+  ),
+  "utf8",
+);
+const rawDataControlsSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/components/raw-data-browser-controls.tsx", import.meta.url),
+  ),
+  "utf8",
+);
+const rawDataPreviewDrawerHookSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/data-browser/hooks/use-raw-data-preview-drawer.ts", import.meta.url),
+  ),
+  "utf8",
+);
+const rawDataUiSource = [
+  rawDataWorkspaceSource,
+  rawDataDesignScopesSource,
+  rawDataTraceSummariesSource,
+  rawDataTracePreviewSource,
+  rawDataControlsSource,
+  rawDataPreviewDrawerHookSource,
+].join("\n");
 const surfaceKitSource = readFileSync(
   fileURLToPath(new URL("../src/features/shared/components/surface-kit.tsx", import.meta.url)),
   "utf8",
@@ -243,9 +281,9 @@ describe("page-boundary source contracts", () => {
     expect(datasetWorkspaceSource).toContain("activeDatasetState.activeDatasetError");
     expect(datasetWorkspaceSource).toContain("Unable to switch the active dataset.");
     expect(datasetWorkspaceSource).not.toContain("not exposed through the current frontend-visible backend contract");
-    expect(rawDataWorkspaceSource).not.toContain("saveProfile(");
-    expect(rawDataWorkspaceSource).not.toContain("Save Profile");
-    expect(rawDataWorkspaceSource).not.toContain("Dataset Profile");
+    expect(rawDataUiSource).not.toContain("saveProfile(");
+    expect(rawDataUiSource).not.toContain("Save Profile");
+    expect(rawDataUiSource).not.toContain("Dataset Profile");
   });
 
   it("rebuilds data ingestion as an upload-first surface instead of exposing backend DTO fields", () => {
@@ -265,66 +303,71 @@ describe("page-boundary source contracts", () => {
   });
 
   it("keeps raw-data summary-first and metadata-read-only", () => {
-    expect(rawDataWorkspaceSource).toContain("Choose a design");
-    expect(rawDataWorkspaceSource).toContain("Focused preview stays single-trace");
-    expect(rawDataWorkspaceSource).toContain("Single Trace Preview");
-    expect(rawDataWorkspaceSource).not.toContain('title="Selected Design Summary"');
-    expect(rawDataWorkspaceSource).not.toContain("Active Dataset");
-    expect(rawDataWorkspaceSource).not.toContain("setActiveDataset(");
+    expect(rawDataUiSource).toContain("Choose a design");
+    expect(rawDataUiSource).toContain("Focused preview stays single-trace");
+    expect(rawDataUiSource).toContain("Single Trace Preview");
+    expect(rawDataUiSource).not.toContain('title="Selected Design Summary"');
+    expect(rawDataUiSource).not.toContain("Active Dataset");
+    expect(rawDataUiSource).not.toContain("setActiveDataset(");
   });
 
-  it("reflows raw-data around a top design owner and lower master-detail preview", () => {
-    expect(rawDataWorkspaceSource).toContain('title="Design Scopes"');
-    expect(rawDataWorkspaceSource).toContain("Selected Design");
-    expect(rawDataWorkspaceSource).toContain("Browse State");
-    expect(rawDataWorkspaceSource).toContain(
-      'grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.82fr)] xl:items-start',
+  it("reflows raw-data around extracted layout owners instead of one mega workspace file", () => {
+    expect(rawDataWorkspaceSource).toContain("RawDataDesignScopesPanel");
+    expect(rawDataWorkspaceSource).toContain("RawDataTraceSummariesPanel");
+    expect(rawDataWorkspaceSource).toContain("RawDataTracePreviewPanel");
+    expect(rawDataWorkspaceSource).toContain("useRawDataPreviewDrawer");
+    expect(rawDataDesignScopesSource).toContain('title="Design Scopes"');
+    expect(rawDataDesignScopesSource).toContain("Selected Design");
+    expect(rawDataDesignScopesSource).toContain("Browse State");
+    expect(rawDataDesignScopesSource).toContain(
+      'xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]',
     );
+    expect(rawDataDesignScopesSource).toContain('xl:max-w-[22rem] xl:justify-self-end');
     expect(rawDataWorkspaceSource).toContain(
-      'className="xl:sticky xl:top-[calc(var(--shell-header-height)+1rem)] xl:self-start"',
+      '"xl:grid xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start xl:gap-5 xl:space-y-0"',
     );
+    expect(rawDataWorkspaceSource.split("\n").length).toBeLessThan(400);
   });
 
   it("strengthens raw-data search affordance and keeps the wording consistent", () => {
-    expect(rawDataWorkspaceSource).toContain("function SearchField");
-    expect(rawDataWorkspaceSource).toContain('label="Search Design"');
-    expect(rawDataWorkspaceSource).toContain("Parameter or note");
-    expect(rawDataWorkspaceSource).toContain("<Search className=");
+    expect(rawDataControlsSource).toContain("function SearchField");
+    expect(rawDataDesignScopesSource).toContain('label="Search Design"');
+    expect(rawDataTraceSummariesSource).toContain("Parameter or note");
+    expect(rawDataControlsSource).toContain("<Search className=");
   });
 
   it("keeps trace-summary filters in one dense unified block instead of fragmented mini cards", () => {
-    expect(rawDataWorkspaceSource).toContain("function TraceFilterSelect");
-    expect(rawDataWorkspaceSource).toContain(
+    expect(rawDataControlsSource).toContain("function TraceFilterSelect");
+    expect(rawDataTraceSummariesSource).toContain(
       'space-y-4',
     );
-    expect(rawDataWorkspaceSource).toContain(
+    expect(rawDataTraceSummariesSource).toContain(
       'grid gap-4 md:grid-cols-3',
     );
-    expect(rawDataWorkspaceSource).toContain('label="Family"');
-    expect(rawDataWorkspaceSource).toContain('label="View"');
-    expect(rawDataWorkspaceSource).toContain('label="Source"');
-    expect(rawDataWorkspaceSource).toContain("AppInlineSelect");
-    expect(rawDataWorkspaceSource).not.toContain("function FilterSelect");
+    expect(rawDataTraceSummariesSource).toContain('label="Family"');
+    expect(rawDataTraceSummariesSource).toContain('label="View"');
+    expect(rawDataTraceSummariesSource).toContain('label="Source"');
+    expect(rawDataControlsSource).toContain("AppInlineSelect");
+    expect(rawDataUiSource).not.toContain("function FilterSelect");
   });
 
   it("shortens trace-summary table copy without hiding the browsing meaning", () => {
-    expect(rawDataWorkspaceSource).toContain(">View<");
-    expect(rawDataWorkspaceSource).toContain(">Origin<");
-    expect(rawDataWorkspaceSource).not.toContain(">History<");
-    expect(rawDataWorkspaceSource).not.toContain(">Representation<");
-    expect(rawDataWorkspaceSource).not.toContain(">Provenance<");
+    expect(rawDataTraceSummariesSource).toContain(">View<");
+    expect(rawDataTraceSummariesSource).toContain(">Origin<");
+    expect(rawDataTraceSummariesSource).not.toContain(">Representation<");
+    expect(rawDataTraceSummariesSource).not.toContain(">Provenance<");
   });
 
   it("adds row selection and CRUD actions without collapsing preview into batch state", () => {
-    expect(rawDataWorkspaceSource).toContain("Delete Selected");
+    expect(rawDataTraceSummariesSource).toContain("Delete Selected");
     expect(rawDataWorkspaceSource).toContain("TraceEditDialog");
     expect(rawDataWorkspaceSource).toContain("ConfirmActionDialog");
     expect(rawDataWorkspaceSource).toContain("DeleteScopeCard");
     expect(rawDataWorkspaceSource).toContain("DeleteScopeList");
-    expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.edit");
-    expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.delete");
-    expect(rawDataWorkspaceSource).toContain("title={label}");
-    expect(rawDataWorkspaceSource).toContain("aria-label={label}");
+    expect(rawDataTraceSummariesSource).toContain("trace.allowed_actions.edit");
+    expect(rawDataTraceSummariesSource).toContain("trace.allowed_actions.delete");
+    expect(rawDataControlsSource).toContain("title={label}");
+    expect(rawDataControlsSource).toContain("aria-label={label}");
     expect(rawDataHookSource).toContain("const [focusedTraceId, setFocusedTraceId] = useState<string | null>");
     expect(rawDataHookSource).toContain("const [selectedTraceIds, setSelectedTraceIds] = useState<readonly string[]>([])");
     expect(rawDataHookSource).toContain("focusTrace(traceId: string)");
@@ -334,29 +377,38 @@ describe("page-boundary source contracts", () => {
   });
 
   it("makes enabled delete affordances clearly destructive without changing gating", () => {
-    expect(rawDataWorkspaceSource).toContain("SurfaceActionButton");
+    expect(rawDataTraceSummariesSource).toContain("SurfaceActionButton");
     expect(surfaceKitSource).toContain("export function SurfaceActionButton");
     expect(surfaceKitSource).toContain("cursor-pointer");
     expect(surfaceKitSource).toContain("bg-rose-600 text-white");
     expect(surfaceKitSource).toContain("hover:bg-rose-700");
-    expect(rawDataWorkspaceSource).toContain("Edit unavailable");
-    expect(rawDataWorkspaceSource).toContain("Delete trace");
-    expect(rawDataWorkspaceSource).toContain("disabled={!trace.allowed_actions.edit}");
-    expect(rawDataWorkspaceSource).toContain("if (!trace.allowed_actions.edit) {");
-    expect(rawDataWorkspaceSource).toContain("trace.allowed_actions.delete ? (");
-    expect(rawDataWorkspaceSource).not.toContain('<p className="text-xs leading-5 text-muted-foreground">');
-    expect(rawDataWorkspaceSource).toContain("title={trace.mutation_policy_summary}");
+    expect(rawDataTraceSummariesSource).toContain("Edit unavailable");
+    expect(rawDataTraceSummariesSource).toContain("Delete trace");
+    expect(rawDataTraceSummariesSource).toContain("disabled={!trace.allowed_actions.edit}");
+    expect(rawDataTraceSummariesSource).toContain("if (!trace.allowed_actions.edit) {");
+    expect(rawDataTraceSummariesSource).toContain("trace.allowed_actions.delete ? (");
+    expect(rawDataTraceSummariesSource).not.toContain('<p className="text-xs leading-5 text-muted-foreground">');
+    expect(rawDataTraceSummariesSource).toContain("title={trace.mutation_policy_summary}");
   });
 
   it("keeps batch actions in a stable trailing action group instead of shifting with helper copy", () => {
-    expect(rawDataWorkspaceSource).toContain("md:grid-cols-[minmax(0,1fr)_auto] md:items-end");
-    expect(rawDataWorkspaceSource).toContain("md:justify-end");
+    expect(rawDataTraceSummariesSource).toContain("md:grid-cols-[minmax(0,1fr)_auto] md:items-end");
+    expect(rawDataTraceSummariesSource).toContain("md:justify-end");
+  });
+
+  it("makes pagination limits explicit for design scopes and trace summaries", () => {
+    expect(rawDataDesignScopesSource).toContain("Up to {designsMeta?.limit ?? 6} design scopes per page");
+    expect(rawDataTraceSummariesSource).toContain("Up to {tracesMeta?.limit ?? 12} traces per page");
+    expect(rawDataHookSource).toContain("const DESIGN_SCOPE_PAGE_LIMIT = 6;");
+    expect(rawDataHookSource).toContain("const TRACE_SUMMARY_PAGE_LIMIT = 12;");
+    expect(rawDataHookSource).toContain("limit: DESIGN_SCOPE_PAGE_LIMIT");
+    expect(rawDataHookSource).toContain("limit: TRACE_SUMMARY_PAGE_LIMIT");
   });
 
   it("keeps focused preview separate from selected rows and cleans up deleted focus safely", () => {
-    expect(rawDataWorkspaceSource).toContain("Focused Trace");
-    expect(rawDataWorkspaceSource).not.toContain("Preview Source");
-    expect(rawDataWorkspaceSource).not.toContain("Preview Series");
+    expect(rawDataTracePreviewSource).toContain("Focused Trace");
+    expect(rawDataUiSource).not.toContain("Preview Source");
+    expect(rawDataUiSource).not.toContain("Preview Series");
     expect(rawDataHookSource).toContain("setFocusedTraceId((current) =>");
     expect(rawDataHookSource).toContain("setSelectedTraceIds((current) =>");
     expect(rawDataHookSource).toContain("deletedTraceIds.has(current) ? null : current");
@@ -366,8 +418,8 @@ describe("page-boundary source contracts", () => {
     expect(rawDataHookSource).toContain("await designsQuery.mutate(");
     expect(rawDataHookSource).toContain("current && result.design");
     expect(rawDataHookSource).toContain("row.design_id === result.design?.design_id ? result.design : row");
-    expect(rawDataWorkspaceSource).toContain("selectedDesign.trace_count");
-    expect(rawDataWorkspaceSource).toContain("selectedDesign.compare_readiness");
+    expect(rawDataDesignScopesSource).toContain("selectedDesign.trace_count");
+    expect(rawDataDesignScopesSource).toContain("selectedDesign.compare_readiness");
   });
 
   it("shows destructive delete scope context for single and batch delete", () => {
@@ -380,40 +432,71 @@ describe("page-boundary source contracts", () => {
   });
 
   it("rebuilds single trace preview as plot and table views over one payload", () => {
-    expect(rawDataWorkspaceSource).toContain("TracePreviewPlot");
+    expect(rawDataTracePreviewSource).toContain("TracePreviewPlot");
     expect(rawDataWorkspaceSource).toContain("previewMode");
-    expect(rawDataWorkspaceSource).toContain("AppSegmentedControl");
-    expect(rawDataWorkspaceSource).toContain('ariaLabel="Single trace preview view"');
-    expect(rawDataWorkspaceSource).toContain('{ value: "plot", label: "Plot" }');
-    expect(rawDataWorkspaceSource).toContain("Focused Trace");
-    expect(rawDataWorkspaceSource).toContain("resolveTracePreviewContextTags");
-    expect(rawDataWorkspaceSource).toContain("resolvePreviewHistory");
-    expect(rawDataWorkspaceSource).toContain("History");
-    expect(rawDataWorkspaceSource).toContain("Context");
-    expect(rawDataWorkspaceSource).toContain("Process");
-    expect(rawDataWorkspaceSource).not.toContain("Preview Source");
-    expect(rawDataWorkspaceSource).not.toContain("Preview Series");
-    expect(rawDataWorkspaceSource).not.toContain(
+    expect(rawDataTracePreviewSource).toContain("AppSegmentedControl");
+    expect(rawDataTracePreviewSource).toContain('ariaLabel="Single trace preview view"');
+    expect(rawDataTracePreviewSource).toContain('{ value: "plot", label: "Plot" }');
+    expect(rawDataTracePreviewSource).toContain("Focused Trace");
+    expect(rawDataTracePreviewSource).toContain("resolveTracePreviewContextTags");
+    expect(rawDataTracePreviewSource).toContain("resolvePreviewHistory");
+    expect(rawDataTracePreviewSource).toContain("History");
+    expect(rawDataTracePreviewSource).toContain("Context");
+    expect(rawDataTracePreviewSource).toContain("Process");
+    expect(rawDataUiSource).not.toContain("Preview Source");
+    expect(rawDataUiSource).not.toContain("Preview Series");
+    expect(rawDataUiSource).not.toContain(
       "Only the selected trace triggers the detail path, so plot and table stay tied to one persisted preview payload at a time.",
     );
-    expect(rawDataWorkspaceSource).not.toContain("Result Handles");
-    expect(rawDataWorkspaceSource).toContain('hasSampledPreview ? "Preview" : "Point Count"');
+    expect(rawDataUiSource).not.toContain("Result Handles");
+    expect(rawDataTracePreviewSource).toContain('hasSampledPreview ? "Preview" : "Point Count"');
   });
 
   it("keeps preview semantics tied to the saved payload instead of extra axis cards", () => {
-    expect(rawDataWorkspaceSource).toContain("X Axis");
-    expect(rawDataWorkspaceSource).toContain("Point Count");
-    expect(rawDataWorkspaceSource).toContain("previewSemantics.tableYAxisLabel");
-    expect(rawDataWorkspaceSource).toContain("previewSemantics.yAxisTitle");
-    expect(rawDataWorkspaceSource).not.toContain("{axis.length} {axis.unit}");
-    expect(rawDataWorkspaceSource).not.toContain(">Value<");
+    expect(rawDataTracePreviewSource).toContain("X Axis");
+    expect(rawDataTracePreviewSource).toContain("Point Count");
+    expect(rawDataTracePreviewSource).toContain("previewSemantics.tableYAxisLabel");
+    expect(rawDataTracePreviewSource).toContain("previewSemantics.yAxisTitle");
+    expect(rawDataTracePreviewSource).not.toContain("{axis.length} {axis.unit}");
+    expect(rawDataTracePreviewSource).not.toContain(">Value<");
   });
 
-  it("keeps the single-trace preview on a sticky rail under the shell header", () => {
-    expect(rawDataWorkspaceSource).toContain(
-      'className="xl:sticky xl:top-[calc(var(--shell-header-height)+1rem)] xl:self-start"',
+  it("switches the desktop single-trace preview into a fixed drawer only after the trace section is reached", () => {
+    expect(rawDataPreviewDrawerHookSource).toContain(
+      'const traceSummariesSectionRef = useRef<HTMLElement | null>(null);',
     );
-    expect(rawDataWorkspaceSource).not.toContain("xl:overflow-y-auto");
+    expect(rawDataPreviewDrawerHookSource).toContain(
+      'const desktopPreviewRailRef = useRef<HTMLDivElement | null>(null);',
+    );
+    expect(rawDataPreviewDrawerHookSource).toContain("const [isDesktopPreviewDrawerPinned, setIsDesktopPreviewDrawerPinned] = useState(false);");
+    expect(rawDataPreviewDrawerHookSource).toContain("const [desktopPreviewDrawerFrame, setDesktopPreviewDrawerFrame] =");
+    expect(rawDataWorkspaceSource).toContain("desktopPreviewDrawerTop,");
+    expect(rawDataPreviewDrawerHookSource).toContain("resolvePreviewDrawerTopOffset()");
+    expect(rawDataPreviewDrawerHookSource).toContain("const PREVIEW_DRAWER_MIN_VISIBLE_HEIGHT = 220;");
+    expect(rawDataPreviewDrawerHookSource).toContain("const PREVIEW_DRAWER_EXIT_HYSTERESIS = 12;");
+    expect(rawDataWorkspaceSource).toContain('ref={traceSummariesSectionRef}');
+    expect(rawDataWorkspaceSource).toContain('ref={desktopPreviewRailRef}');
+    expect(rawDataWorkspaceSource).toContain("shouldShowDesktopPreviewDrawer");
+    expect(rawDataWorkspaceSource).toContain("transition-[opacity,transform] duration-200 ease-out");
+    expect(rawDataWorkspaceSource).toContain("pointer-events-none translate-y-1 opacity-0");
+    expect(rawDataWorkspaceSource).toContain("translate-y-3 opacity-0");
+    expect(rawDataWorkspaceSource).toContain("inert={shouldShowDesktopPreviewDrawer}");
+    expect(rawDataWorkspaceSource).toContain("inert={!shouldShowDesktopPreviewDrawer}");
+    expect(rawDataWorkspaceSource).toContain("left: `${desktopPreviewDrawerFrame.left}px`");
+    expect(rawDataWorkspaceSource).toContain("top: `${desktopPreviewDrawerTop}px`");
+    expect(rawDataWorkspaceSource).toContain("width: `${desktopPreviewDrawerFrame.width}px`");
+    expect(rawDataWorkspaceSource).toContain(
+      'pointer-events-none fixed z-30 hidden transition-[opacity,transform] duration-200 ease-out xl:block',
+    );
+    expect(rawDataWorkspaceSource).toContain(
+      'className="pointer-events-auto rounded-[1.1rem] shadow-[0_18px_42px_rgba(15,23,42,0.14)]"',
+    );
+    expect(rawDataWorkspaceSource).toContain(
+      'className="max-h-[calc(100vh-var(--shell-header-height)-2rem)] overflow-y-auto rounded-[1.1rem]"',
+    );
+    expect(rawDataWorkspaceSource).toContain('className="xl:hidden"');
+    expect(rawDataHookSource).toContain("function clearFocusedTrace()");
+    expect(rawDataHookSource).toContain("clearFocusedTrace,");
   });
 
   it("keeps dashboard and raw-data hooks bound to the shared active dataset", () => {

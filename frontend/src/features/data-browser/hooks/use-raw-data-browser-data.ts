@@ -72,6 +72,9 @@ const defaultFilters: TraceFilters = {
   traceModeGroup: "",
 };
 
+const DESIGN_SCOPE_PAGE_LIMIT = 6;
+const TRACE_SUMMARY_PAGE_LIMIT = 12;
+
 export function useRawDataBrowserData() {
   const searchParams = useSearchParams();
   const activeDatasetState = useActiveDataset();
@@ -92,12 +95,15 @@ export function useRawDataBrowserData() {
   const [isDeletePending, setIsDeletePending] = useState(false);
 
   const designsQuery = useSWR(
-    activeDatasetId ? ["designs", activeDatasetId, designSearch, designCursor] : null,
+    activeDatasetId
+      ? ["designs", activeDatasetId, designSearch, designCursor, DESIGN_SCOPE_PAGE_LIMIT]
+      : null,
     () =>
       activeDatasetId
         ? listDesignBrowseRows(activeDatasetId, {
             search: designSearch || null,
             cursor: designCursor,
+            limit: DESIGN_SCOPE_PAGE_LIMIT,
           })
         : Promise.resolve(undefined),
   );
@@ -108,6 +114,7 @@ export function useRawDataBrowserData() {
     activeDatasetId && resolvedDesignId
       ? traceListKey(activeDatasetId, resolvedDesignId, {
           cursor: traceCursor,
+          limit: TRACE_SUMMARY_PAGE_LIMIT,
           search: filters.search || null,
           family: filters.family || null,
           representation: filters.representation || null,
@@ -119,6 +126,7 @@ export function useRawDataBrowserData() {
       activeDatasetId && resolvedDesignId
         ? listTraceMetadata(activeDatasetId, resolvedDesignId, {
             cursor: traceCursor,
+            limit: TRACE_SUMMARY_PAGE_LIMIT,
             search: filters.search || null,
             family: filters.family || null,
             representation: filters.representation || null,
@@ -205,6 +213,10 @@ export function useRawDataBrowserData() {
 
   function focusTrace(traceId: string) {
     setFocusedTraceId(traceId);
+  }
+
+  function clearFocusedTrace() {
+    setFocusedTraceId(null);
   }
 
   function toggleTraceSelection(traceId: string) {
@@ -433,6 +445,7 @@ export function useRawDataBrowserData() {
     focusedTraceId: resolvedFocusedTraceId,
     focusedTraceSummary,
     focusTrace,
+    clearFocusedTrace,
     goToNextTracePage() {
       setTraceCursor(tracesQuery.data?.meta?.next_cursor ?? null);
     },
@@ -467,3 +480,5 @@ export function useRawDataBrowserData() {
     isDeletePending,
   };
 }
+
+export type RawDataBrowserState = ReturnType<typeof useRawDataBrowserData>;

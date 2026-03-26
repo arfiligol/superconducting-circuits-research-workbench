@@ -10,6 +10,7 @@ import {
   ResultSourcePanel,
   ResultViewPanel,
 } from "@/features/simulation/components/simulation-result-explorer-sections";
+import { formatExplorerAxisTitle } from "@/features/simulation/lib/simulation-result-explorer-labels";
 import { useSimulationResultExplorer } from "@/features/simulation/hooks/use-simulation-result-explorer";
 import { resolveSimulationExplorerSweepAxes } from "@/features/simulation/lib/simulation-result-explorer-state";
 import {
@@ -26,10 +27,6 @@ type SimulationResultExplorerProps = Readonly<{
 }>;
 
 type ExplorerViewMode = "plot" | "table";
-
-function formatAxisTitle(label: string, unit: string) {
-  return unit ? `${label} (${unit})` : label;
-}
 
 function resolveDefaultTraceParameter(
   family: string,
@@ -198,10 +195,10 @@ export function SimulationResultExplorer({
   }, [payload?.selection.traceKey, visiblePlotSeries]);
   const hasSeries = visiblePlotSeries.length > 0;
   const xAxisTitle = payload
-    ? formatAxisTitle(payload.plot.xAxis.label, payload.plot.xAxis.unit)
+    ? formatExplorerAxisTitle(payload.plot.xAxis.label, payload.plot.xAxis.unit)
     : "Frequency";
   const yAxisTitle = payload
-    ? formatAxisTitle(payload.plot.yAxis.label, payload.plot.yAxis.unit)
+    ? formatExplorerAxisTitle(payload.plot.yAxis.label, payload.plot.yAxis.unit)
     : "Result";
   const showZ0Control = selection?.family !== "s_matrix";
   const resultViewDescription =

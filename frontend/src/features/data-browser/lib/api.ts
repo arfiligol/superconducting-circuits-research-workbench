@@ -54,13 +54,21 @@ export function datasetMetricsKey(datasetId: string) {
   return `/api/backend/datasets/${encodeURIComponent(datasetId)}/metrics-summary`;
 }
 
-export function datasetDesignsKey(datasetId: string, search?: string | null, cursor?: string | null) {
+export function datasetDesignsKey(
+  datasetId: string,
+  search?: string | null,
+  cursor?: string | null,
+  limit?: number | null,
+) {
   const params = new URLSearchParams();
   if (search) {
     params.set("search", search);
   }
   if (cursor) {
     params.set("cursor", cursor);
+  }
+  if (typeof limit === "number") {
+    params.set("limit", String(limit));
   }
   return withQuery(
     `/api/backend/datasets/${encodeURIComponent(datasetId)}/designs`,
@@ -73,6 +81,7 @@ export function traceListKey(
   designId: string,
   options?: Readonly<{
     cursor?: string | null;
+    limit?: number | null;
     search?: string | null;
     family?: string | null;
     representation?: string | null;
@@ -83,6 +92,9 @@ export function traceListKey(
   const params = new URLSearchParams();
   if (options?.cursor) {
     params.set("cursor", options.cursor);
+  }
+  if (typeof options?.limit === "number") {
+    params.set("limit", String(options.limit));
   }
   if (options?.search) {
     params.set("search", options.search);
@@ -208,13 +220,14 @@ export async function listDesignBrowseRows(
   options?: Readonly<{
     search?: string | null;
     cursor?: string | null;
+    limit?: number | null;
   }>,
 ): Promise<PagedRows<DesignBrowseRow>> {
   const response = await apiRequestEnvelope<
     { rows: DesignBrowseRow[] },
     PagedRows<DesignBrowseRow>["meta"]
   >(
-    datasetDesignsKey(datasetId, options?.search, options?.cursor),
+    datasetDesignsKey(datasetId, options?.search, options?.cursor, options?.limit),
   );
   return {
     rows: response.data.rows,
@@ -227,6 +240,7 @@ export async function listTraceMetadata(
   designId: string,
   options?: Readonly<{
     cursor?: string | null;
+    limit?: number | null;
     search?: string | null;
     family?: string | null;
     representation?: string | null;
