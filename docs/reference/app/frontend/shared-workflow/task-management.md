@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend runtime-mode-aware shared header task queue、task attachment、worker summary、control actions、refresh recovery 與 standalone tasks-page boundary contract
-version: v0.15.0
-last_updated: 2026-03-21
+version: v0.16.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
@@ -155,11 +155,16 @@ updated_by: codex
 | Field | Required meaning |
 |---|---|
 | `lane` | 對應獨立 worker lane；`simulation` lane 承接 `simulation` + `post_processing`，`characterization` lane 承接 `characterization` |
-| `healthy_processors` | 正常可接任務數量 |
-| `busy_processors` | 正在執行任務數量 |
-| `degraded_processors` | 狀態異常但仍可見數量 |
+| `idle_processors` | worker alive 且可接新 task，但目前沒有在執行 task 的數量 |
+| `running_processors` | worker alive 且目前正在執行 task 的數量 |
+| `degraded_processors` | worker alive，但 health / liveness evidence 已出現有意義異常的數量 |
 | `draining_processors` | 不再接新任務、等待收尾數量 |
-| `offline_processors` | 已離線或 heartbeat 超時數量 |
+| `offline_processors` | absent、unreachable、shut down，或經 backend 判定為 effectively unavailable 的數量 |
+
+!!! warning "Worker summary is not task truth"
+    frontend 必須把 worker liveness 與 task lifecycle 分開。
+    `idle` 代表 worker alive and available，不代表 `offline`；
+    queue row / attached task 的 lifecycle authority 仍只來自 task detail 與 queue read model。
 
 ## Management Actions
 

@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: 同一個 App 的 Local Mode / Online Mode、frontend/backend mode pairing 與 mode-switch isolation contract
-version: v0.4.0
-last_updated: 2026-03-25
+version: v0.5.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
@@ -247,6 +247,11 @@ updated_by: codex
 | closing `sc-app` only in local mode | 若 local workers 仍在，task 應繼續執行；重開 app 後可透過 queue recovery / reattach 重新觀察 |
 | stopping the whole local runtime stack | 若 `sc-app` 與 local workers 一起停止，local tasks 才可能終止或進入 reconcile-required state |
 | app close in online mode | remote tasks 繼續由 server runtime 管理；重新打開 app 後再透過 queue recovery 取得狀態 |
+
+!!! info "Worker summary uses liveness vocabulary"
+    local / online task surfaces 若顯示 worker summary，應使用 `idle / running / draining / degraded / offline`。
+    這組詞回答的是 worker liveness，不是 task lifecycle。
+    `idle` 代表 worker alive and available；不得被 mode-aware shell 語意誤讀成 `offline`。
 
 ## Data Transition Rules
 

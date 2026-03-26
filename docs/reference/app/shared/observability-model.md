@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: audit logging、workflow observability 與 product telemetry 的 shared taxonomy、責任邊界與 correlation vocabulary。
-version: v0.1.0
-last_updated: 2026-03-25
+version: v0.2.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
@@ -58,6 +58,29 @@ updated_by: codex
 | `workspace_id` | workspace-scoped governance / visibility boundary |
 | `actor_user_id` | remote governance 與 actor-centric lookup |
 | `runtime_mode` | `local` 或 `online`；不可被 desktop profile 術語取代 |
+
+## Worker Liveness Vocabulary
+
+| State | Meaning |
+|---|---|
+| `idle` | worker alive and available，但目前未執行 task |
+| `running` | worker alive and currently executing a task |
+| `draining` | worker alive，但正在清空或收尾，不再接受新 work |
+| `degraded` | worker alive，但 health / liveness evidence / runtime 狀態已有明確異常 |
+| `offline` | worker absent、unreachable、shut down，或經 backend 判定為 effectively unavailable |
+
+!!! warning "Do not collapse worker liveness into task status"
+    task `running` 是 execution lifecycle。
+    worker `running` 是 worker availability / execution occupancy。
+    worker `idle` 代表 live-and-available，不得被 shell、queue summary 或 support tooling 簡化成 `offline`。
+
+## Task / Worker / Queue Semantics
+
+| Surface | Canonical question |
+|---|---|
+| task lifecycle | 這筆 task 的 execution 現在在哪個狀態？ |
+| worker liveness | 這個 worker 現在可不可用、是否正在執行 work？ |
+| queue read model | 目前全域可見的是哪些 task，以及它們的 quick summary / actions 是什麼？ |
 
 ## Mode Applicability
 

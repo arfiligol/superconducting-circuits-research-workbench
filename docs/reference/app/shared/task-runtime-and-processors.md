@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: worker / processor health、task state machine、cancel / terminate / retry runtime contract
-version: v0.5.0
-last_updated: 2026-03-21
+version: v0.6.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
@@ -72,11 +72,11 @@ updated_by: codex
 | Field | Meaning |
 |---|---|
 | `lane` | worker lane identity；`simulation` lane 承接 `simulation` + `post_processing`，`characterization` lane 承接 `characterization` |
-| `healthy_processors` | 可接任務且 heartbeat 正常的 processors 數量 |
-| `busy_processors` | 目前正在執行 task 的 processors 數量 |
-| `degraded_processors` | heartbeat 仍有回應但狀態不穩定的 processors 數量 |
+| `idle_processors` | worker alive 且可接新 task，但目前沒有在執行 task 的 processors 數量 |
+| `running_processors` | worker alive 且目前正在執行 task 的 processors 數量 |
+| `degraded_processors` | worker alive，但 liveness / health / runtime 狀態已有明確異常的 processors 數量 |
 | `draining_processors` | 不再接新任務、等待現有任務結束的 processors 數量 |
-| `offline_processors` | heartbeat 超時或已下線的 processors 數量 |
+| `offline_processors` | absent、unreachable、shut down，或經 backend liveness evaluation 判定為 effectively unavailable 的 processors 數量 |
 
 ## Processor Heartbeat Contract
 
@@ -84,7 +84,7 @@ updated_by: codex
 |---|---|
 | `processor_id` | 單一 processor / worker identity |
 | `lane` | 該 processor 服務的 worker lane；不是 page stage 名稱 |
-| `state` | `healthy`, `busy`, `degraded`, `draining`, `offline` |
+| `state` | `idle`, `running`, `draining`, `degraded`, `offline` |
 | `current_task_id` | 若正在執行 task，指出目前 task |
 | `last_heartbeat_at` | 最近一次 heartbeat 時間 |
 | `runtime_metadata` | redaction-safe 的 capacity / version / host summary |
@@ -93,15 +93,30 @@ updated_by: codex
 
 | Rule | Contract |
 |---|---|
-| Shared offline threshold | `last_heartbeat_at` 超過 90 秒未更新即視為 `offline` |
-| Shared summary rule | backend queue summary、detail processor view、frontend worker summary 都必須用同一個 90 秒 threshold |
-| No separate time-only degraded threshold | `degraded` 是 runtime-reported anomaly state，不是另一個獨立的 timeout bucket |
-| Degraded still expires to offline | 若 processor 已是 `degraded`，且 `last_heartbeat_at` 再超過 90 秒未更新，仍必須轉成 `offline` |
-| Busy / healthy / draining all expire the same way | 任何非 terminal processor state，只要 heartbeat 超過 90 秒未更新，都不得繼續顯示成 live processor |
+| Shared liveness evaluation | backend queue summary、detail processor view、frontend worker summary 都必須使用同一套 backend-owned worker liveness evaluation |
+| `idle` is a live state | worker alive 且可接新 task、但目前未執行 task 時，必須顯示為 `idle`，不是 `offline` |
+| Stale heartbeat is not identical to `offline` | `last_heartbeat_at` 只是 liveness evaluation 的一部分；不得因 heartbeat 舊了就把一個 merely idle 的 worker 直接寫成 `offline` |
+| `degraded` means alive but impaired | `degraded` 用於 worker 仍活著，但 health、runtime 狀態或 liveness evidence 已出現有意義異常時 |
+| `offline` means unavailable | `offline` 只用於 worker absent、unreachable、shut down，或經 backend 明確判定為 effectively unavailable 的情況 |
+| macOS `SimpleWorker` note | 若 idle worker 在 macOS `SimpleWorker` 下產生較稀疏 heartbeat，backend liveness evaluation 必須吸收這個差異；frontend 不得把這種 idle worker 誤讀為 `offline` |
 
 !!! tip "Two time windows, two meanings"
-    `90s` 是 processor heartbeat/offline threshold。
-    stale task reconcile 則使用較長的 task-staleness timeout，兩者不可混成同一個概念。
+    worker liveness evaluation 與 stale task reconcile 是兩個不同概念。
+    前者回答 worker 現在是 `idle / running / draining / degraded / offline`；
+    後者回答 persisted task 是否需要 recovery / failure convergence，兩者不可混成同一個概念。
+
+## Task / Worker / Queue State Distinction
+
+| Concern | Authority question |
+|---|---|
+| task lifecycle | 這筆 task 現在在 `queued / dispatching / running / completed / failed ...` 的哪個 execution state？ |
+| worker state | 這個 worker 現在是 `idle / running / draining / degraded / offline` 中的哪個 liveness / availability state？ |
+| queue read model | 目前全域可見的是哪些 task rows，對應哪些 lanes 與可用 actions？ |
+
+!!! warning "Do not project worker state onto task truth"
+    worker `running` 不等於任何特定 attached task 一定是 `running`。
+    worker `idle` 也不等於 runtime unavailable。
+    task lifecycle、worker liveness 與 queue browse 是三個不同問題。
 
 ## Task Runtime State Machine
 
@@ -143,26 +158,28 @@ stateDiagram-v2
 
 | Processor state | Meaning |
 |---|---|
-| `healthy` | heartbeat 正常，可接新 task |
-| `busy` | 正在執行 task |
-| `degraded` | heartbeat 尚可，但 runtime 狀態異常 |
+| `idle` | worker alive，可接新 task，但目前沒有在執行 task |
+| `running` | worker alive，正在執行 task |
+| `degraded` | worker alive，但 runtime 狀態異常或 liveness evidence 不穩定 |
 | `draining` | 不再接新 task，等待現有 task 結束 |
-| `offline` | heartbeat 超時或已下線 |
+| `offline` | worker unavailable；已下線、不可達、或被 backend 判定為 effectively unavailable |
 
 ## Processor State Transitions
 
 ```mermaid
 stateDiagram-v2
-    [*] --> healthy
-    healthy --> busy
-    busy --> healthy
-    healthy --> degraded
-    busy --> degraded
-    healthy --> draining
-    busy --> draining
+    [*] --> idle
+    idle --> running
+    running --> idle
+    idle --> degraded
+    running --> degraded
+    idle --> draining
+    running --> draining
+    draining --> idle
+    degraded --> idle
     draining --> offline
     degraded --> offline
-    offline --> healthy
+    offline --> idle
 ```
 
 ## Runtime Delivery Rules
@@ -172,6 +189,7 @@ stateDiagram-v2
 | Queue summary follows persisted task state | Header 與 task detail 必須能從 persisted state 重建 |
 | Processor summary is lane-scoped | summary 需按 lane 聚合，而不是只給全域總數 |
 | Processor summary reflects real worker processes | local mode 下的 summary 必須對應獨立 worker processes，而不是 app-local thread 假象 |
+| Worker summary follows worker liveness truth | `idle / running / draining / degraded / offline` 回答的是 worker availability，不是 task lifecycle echo |
 | Cancel and terminate are auditable | 兩者都必須進 audit trail |
 | Terminal states stay immutable | `completed` / `failed` / `cancelled` / `terminated` 不可被覆寫成其他 terminal state |
 

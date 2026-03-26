@@ -15,8 +15,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/tasks 的 extended queue browse、worker inspection、task detail、history 與 control-action 契約"
-version: v0.1.0
-last_updated: 2026-03-18
+version: v0.2.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
@@ -88,7 +88,7 @@ flowchart TD
 | `C4` | Tasks Table | master list | 顯示 persisted task rows，支援排序、選取與 cursor-based browse |
 | `C5` | Task Detail Panel | detail surface | 顯示 selected task 的 lifecycle、context、result attachment 與 allowed actions |
 | `C6` | Event Timeline | diagnostics drill-down | 顯示 selected task 的 append-only event history |
-| `C7` | Worker / Lane Detail | extended operational detail | 提供比 Header 更完整的 lane-level worker inspection |
+| `C7` | Worker / Lane Detail | extended operational detail | 提供比 Header 更完整的 lane-level worker inspection，並以 `idle / running / draining / degraded / offline` 呈現 liveness semantics |
 
 ## Data & State Contract
 

@@ -13,8 +13,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend shared header 的 shell identity、runtime mode entry、global context entry、account surface、developer mode 與 shell-side panel contract
-version: v0.10.0
-last_updated: 2026-03-18
+version: v0.11.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
@@ -157,7 +157,8 @@ updated_by: codex
     | open behavior | 點擊後打開右側 shell-side panel 的 `Global Context` queue section |
     | queue section | 展示 queue rows、worker summary、filter (`Workspace` / `Mine`)；非 selected sections 只留在 cards 摘要 |
     | mode behavior | local mode 顯示 local runtime tasks；online mode 顯示 workspace-visible shared tasks |
-    | worker summary | 在 drawer 內可看到各 lane 的 `healthy / busy / degraded / draining / offline` 摘要；header 只保留 compact summary |
+    | worker summary | 在 drawer 內可看到各 lane 的 `idle / running / degraded / draining / offline` 摘要；header 只保留 compact summary |
+    | liveness wording | `idle` 代表 worker alive and available；`offline` 只代表 unavailable，不得把 merely idle worker 或被動 heartbeat 稀疏的 worker 誤標成 `offline` |
     | row action entry | 每列至少支援 `Attach`，並依權限顯示 `Cancel` / `Terminate` / `Retry` |
     | default ordering | active tasks 優先，之後按 `updated_at desc` 顯示最近 terminal tasks |
     | extended browse | 若產品提供 standalone [`Tasks`](../workspace/tasks.md) page，queue trigger 仍負責 quick management；較長 history / deeper inspect 應導向該 page，而不是把 panel 變成第二個 full task center |

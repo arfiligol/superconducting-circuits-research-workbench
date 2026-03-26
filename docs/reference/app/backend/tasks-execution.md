@@ -10,8 +10,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Backend task queue read model、control actions、worker summary、event history 與 result attachment surface
-version: v0.15.0
-last_updated: 2026-03-23
+version: v0.16.0
+last_updated: 2026-03-27
 updated_by: codex
 ---
 
@@ -88,7 +88,22 @@ updated_by: codex
 |---|---|
 | `lane` | worker lane identity；只回答這筆 task 會由哪條 worker lane 處理 |
 | `task_kind` | task execution kind / workflow semantics；回答 `simulation`、`post_processing`、`characterization` 等執行語意 |
+| `worker_state` | worker liveness / availability semantics；回答 `idle`、`running`、`draining`、`degraded`、`offline` |
+| queue row `status` | task lifecycle 的 discovery echo；不是 worker liveness summary |
 | page stage / page step | workflow page 的 UI stage semantics；不得借用 `lane` 表達 |
+
+## Task / Worker / Queue Distinction
+
+| Surface | Canonical question |
+|---|---|
+| task detail `status` | 這筆 task 的 execution lifecycle 現在在哪個狀態？ |
+| worker summary / processor heartbeat | 這條 lane 上的 worker 現在是 `idle`、`running`、`draining`、`degraded`、`offline` 的哪個 liveness state？ |
+| queue rows | 目前全域可見的是哪些 task，以及它們的 attach / browse / quick-action summary 是什麼？ |
+
+!!! warning "Do not conflate worker liveness with task lifecycle"
+    worker `running` 不等於 queue 內某一列 task 一定就是 attached page 的 authority。
+    worker `idle` 也不等於 runtime unavailable。
+    task、worker、queue 各自回答不同問題。
 
 ## State Precedence
 
@@ -353,6 +368,7 @@ attached task detail 至少必須提供：
 |---|---|
 | Queue consistency | active task status 與 worker summary 不得互相矛盾 |
 | Lane visibility | queue 至少能辨識 task 所屬 worker lane；`post_processing` 與 `simulation` 共用 simulation lane |
+| Liveness vocabulary | worker summary 必須使用 `idle / running / draining / degraded / offline`；不得把 merely idle worker 誤表達成 `offline` |
 | Control permissions | `allowed_actions` 必須依 [Authentication & Authorization](../shared/authentication-and-authorization.md) 計算 |
 | Workspace boundary | online mode 的 queue query 不得跨出 active workspace，除非明確是 admin-scoped governance surface |
 | Local boundary | local mode 的 queue query 只看 `Local Space`，不支援 `mine` / workspace membership 語意 |
@@ -522,8 +538,8 @@ attached task detail 至少必須提供：
         "worker_summary": [
           {
             "lane": "simulation",
-            "healthy_processors": 1,
-            "busy_processors": 1,
+            "idle_processors": 0,
+            "running_processors": 1,
             "degraded_processors": 0,
             "draining_processors": 0,
             "offline_processors": 0
@@ -575,8 +591,8 @@ attached task detail 至少必須提供：
         "worker_summary": [
           {
             "lane": "characterization",
-            "healthy_processors": 1,
-            "busy_processors": 1,
+            "idle_processors": 0,
+            "running_processors": 1,
             "degraded_processors": 0,
             "draining_processors": 0,
             "offline_processors": 0
