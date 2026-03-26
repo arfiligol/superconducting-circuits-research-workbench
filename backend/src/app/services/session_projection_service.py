@@ -129,6 +129,7 @@ class SessionProjectionService:
         )
 
     def build_local_session(self, state: SessionState) -> AppSession:
+        state, active_dataset = self._resolve_local_active_dataset_context(state)
         membership = membership_for_workspace(state, state.workspace_id)
         if membership is None:
             membership = state.memberships[0]
@@ -166,7 +167,7 @@ class SessionProjectionService:
                 default_task_scope=membership.default_task_scope,
                 allowed_actions=membership.allowed_actions,
             ),
-            active_dataset=self.build_active_dataset_context(state),
+            active_dataset=active_dataset,
             capabilities=capabilities,
             connection=SessionConnectionContext(target=None),
         )
@@ -244,17 +245,7 @@ class SessionProjectionService:
                 category="conflict",
                 message="Session context must be rebound before continuing.",
             )
-        return ActiveDatasetContext(
-            dataset_id=dataset.dataset_id,
-            name=dataset.name,
-            family=dataset.family,
-            status=dataset.status,
-            owner_user_id=dataset.owner_user_id,
-            owner_display_name=dataset.owner,
-            workspace_id=dataset.workspace_id,
-            visibility_scope=dataset.visibility_scope,
-            lifecycle_state=dataset.lifecycle_state,
-        )
+        return self._build_active_dataset_context(dataset)
 
     def active_target(self) -> ServerTargetSummary | None:
         return next(
@@ -285,6 +276,33 @@ class SessionProjectionService:
             and not self._authorization_service.is_visible_task(task, next_state)
         ]
         return tuple(sorted(detached))
+
+    def _resolve_local_active_dataset_context(
+        self,
+        state: SessionState,
+    ) -> tuple[SessionState, ActiveDatasetContext | None]:
+        if state.active_dataset_id is None:
+            return state, None
+        dataset = self._dataset_repository.get_dataset(state.active_dataset_id)
+        if dataset is None or not self._authorization_service.is_visible_dataset(dataset, state):
+            return self._repository.set_active_dataset_id(None), None
+        return state, self._build_active_dataset_context(dataset)
+
+    def _build_active_dataset_context(
+        self,
+        dataset: DatasetDetail,
+    ) -> ActiveDatasetContext:
+        return ActiveDatasetContext(
+            dataset_id=dataset.dataset_id,
+            name=dataset.name,
+            family=dataset.family,
+            status=dataset.status,
+            owner_user_id=dataset.owner_user_id,
+            owner_display_name=dataset.owner,
+            workspace_id=dataset.workspace_id,
+            visibility_scope=dataset.visibility_scope,
+            lifecycle_state=dataset.lifecycle_state,
+        )
 
 
 def workspace_resource(workspace_id: str):

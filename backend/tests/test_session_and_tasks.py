@@ -540,6 +540,37 @@ def test_runtime_mode_switch_remains_coherent_after_backend_restart() -> None:
     assert payload["workspace"]["id"] == "local-space"
 
 
+def test_get_session_clears_stale_local_active_dataset_context() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Temporary Local Session Dataset",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+
+    selected = client.patch("/session/active-dataset", json={"dataset_id": dataset_id})
+    assert selected.status_code == 200
+    assert selected.json()["data"]["active_dataset"]["id"] == dataset_id
+
+    catalog_repository = get_catalog_repository()
+    catalog_repository.set_dataset_lifecycle_state(dataset_id, "archived")
+
+    response = client.get("/session")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["runtime_mode"] == "local"
+    assert payload["auth"]["state"] == "local_bypass"
+    assert payload["active_dataset"] is None
+    with _bind_client_app_context(client):
+        assert get_app_state_repository().get_session_state().active_dataset_id is None
+
+
 def test_get_session_requires_context_rebind_when_active_dataset_is_archived() -> None:
     _login()
     catalog_repository = get_catalog_repository()
