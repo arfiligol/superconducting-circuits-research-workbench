@@ -4,7 +4,7 @@
 
 - Agent: `Planning Agent`
 - Task ID / Topic: `M5-In-Memory-Runtime-Removal-And-Rewrite-Cutover`
-- Status: `draft`
+- Status: `Active follow-up cleanup after major cutover landed on main 2026-03-26`
 
 ## 1) Goal
 
@@ -31,28 +31,21 @@
 
 ## 3) Current Implementation State
 
-- Existing code paths:
-  - `backend/src/app/infrastructure/runtime.py`
-    active composition root still wires `get_catalog_repository()` to `InMemoryRewriteCatalogRepository`.
-  - `backend/src/app/infrastructure/rewrite_catalog_repository.py`
-    still owns seeded datasets, designs, raw-data trace summaries/details, characterization registry/history/results, and in-memory circuit definition cache.
-  - `backend/src/app/infrastructure/rewrite_app_state_repository.py`
-    still owns app context, runtime mode switch state, authenticated sessions, refresh tokens, workspace invitations, and default dataset memory.
-  - `backend/src/app/infrastructure/rewrite_task_repository.py`
-    is persisted, but still auto-seeds task snapshots/storage metadata on empty startup.
-  - `backend/src/app/infrastructure/persistence/research_data_publication_repository.py`
-    already provides durable design / published-trace ownership for part of Raw Data, but only as one side of a mixed-source surface.
-- Current gaps:
-  - Dataset / Design / Trace CRUD is not fully DB-first.
-  - Characterization browse/result/tagging surfaces are still partially fed by in-memory seed payloads.
-  - Circuit Definitions writes are persisted, but runtime authority still passes through an in-memory cache/repository owner.
-  - Session/auth/workspace state is still backend authority in RAM.
-  - Startup seed behavior is implicit and constructor-driven instead of explicit and versioned.
-  - `Rewrite` naming still appears in active runtime owners, which no longer matches the intended canonical architecture.
+- Landed on `main`:
+  - active runtime scientific/data authority no longer depends on in-memory catalog ownership
+  - durable dataset / design / trace / characterization / circuit-definition cutover landed
+  - durable published-trace delete and deterministic seed reset landed
+  - durable session / auth / app-state cutover landed
+  - backend service-slimming slices reduced the largest task/dataset/explorer hotspots
+- Remaining gaps:
+  - non-active `Rewrite*` / `InMemory*` residue still exists and should be cleaned up deliberately
+  - naming cleanup is still incomplete even though active ownership changed
+  - restart-stable browser/runtime verification still matters for confidence beyond backend tests
+  - request-debug/logging hardening remains tracked separately in `Plans/backend-request-debug-logging-followup.md`
 
 ## 4) Implementation Slices
 
-### Backend Persistence Cutover
+### Backend Persistence Cutover `[Landed on main]`
 
 - Allowed Area:
   - `backend/src/app/infrastructure/**`
@@ -72,7 +65,7 @@
   - characterization registry/history/results/tagging
   - circuit definition list/detail/mutation read path
 
-### Session / Auth / Workspace State Cutover
+### Session / Auth / Workspace State Cutover `[Landed on main]`
 
 - Allowed Area:
   - `backend/src/app/infrastructure/**`
@@ -85,7 +78,7 @@
 - Goal:
   decide and implement which backend session/app-context/workspace state must become durable instead of process-local memory.
 
-### Naming / Topology Cleanup
+### Naming / Topology Cleanup `[Remaining]`
 
 - Allowed Area:
   - backend runtime / infrastructure naming
@@ -98,7 +91,7 @@
   - `InMemory*Repository`
   where those names no longer represent intended canonical ownership.
 
-### Seed Strategy Cutover
+### Seed Strategy Cutover `[Landed on main]`
 
 - Allowed Area:
   - backend seed scripts
@@ -154,12 +147,10 @@
 
 ## 8) Recommended Execution Order
 
-1. Durable Raw Data / dataset / design authority
-2. Durable characterization authority
-3. Circuit definition authority cutover away from catalog in-memory layer
-4. Session/auth/workspace state decision and cutover
-5. Explicit seed command path
-6. `Rewrite` / `InMemory` naming cleanup after active runtime no longer depends on them
+1. Remove remaining non-active `Rewrite*` / `InMemory*` residue where ownership already moved
+2. Re-check docs / code naming parity after the cleanup
+3. Run live restart-stable browser/runtime verification on the durable path
+4. Retire this plan once only archival residue remains
 
 ## 9) Exit Condition
 

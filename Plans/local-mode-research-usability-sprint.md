@@ -28,20 +28,27 @@ Reach a Local Mode workflow where one researcher can complete a truthful researc
 - simulation result explorer and post-processing result explorer
 - `Save Traces` visible-trace publication model
 - post-processing browse/source correction
+- Raw Data continuity and truthfulness:
+  - design-first browsing
+  - trace-summary CRUD
+  - single-trace preview/drawer behavior
+  - explicit pagination
+  - saved-trace continuity from simulation into Raw Data
 - first runnable Local Mode characterization path: `admittance_extraction`
 - backend integration coverage and frontend browser smoke coverage for the simulation workflow
 - schema identity UUIDv4 cutover across backend, frontend, docs, and DB migration
 
 ## 3) Remaining Product Work
 
-### LM3 Raw Data continuity and copy truthfulness
+### LM5 Characterization workflow surface cleanup
 
 - Goal:
-  make saved traces feel obvious and truthful once the user opens `Raw Data`.
+  make `Characterization` feel as coherent and truthful as the newly cleaned-up `Raw Data` surface.
 - Still open:
-  - ensure saved-trace continuity is easy to follow from `Circuit Simulation` into `Raw Data`
-  - correct any UI copy that implies backend search/filter capability the backend does not actually support
-  - keep the surface compact and browse-first
+  - audit the current Characterization information hierarchy and control density
+  - reduce confusing or backend-leaking copy
+  - make selected design / trace / analysis flow easier to follow
+  - preserve current backend contract and durable continuity while improving UX
 
 ### LM6 Live Local Mode end-to-end verification
 
@@ -80,7 +87,7 @@ Reach a Local Mode workflow where one researcher can complete a truthful researc
 
 ## 5) Recommended Execution Order
 
-1. `LM3` Raw Data continuity and copy truthfulness
+1. `LM5` Characterization workflow surface cleanup
 2. `LM6` live Local Mode end-to-end verification
 3. `LM7` characterization durable tagging continuity
 4. `LM8` next runnable characterization analysis
@@ -90,6 +97,7 @@ Reach a Local Mode workflow where one researcher can complete a truthful researc
 This planning note can be retired once:
 
 - the live Local Mode loop is browser-verified end to end
-- Raw Data continuity is truthful and low-friction
+- Raw Data continuity remains truthful and low-friction
+- Characterization workflow UX is coherent enough for the same loop
 - characterization tagging continuity for generated local results is verified
 - the next characterization analysis path is either shipped or explicitly deprioritized
