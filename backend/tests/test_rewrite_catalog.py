@@ -134,6 +134,15 @@ def _create_ingested_trace_design(*, trace_count: int = 1) -> tuple[str, str, li
     )
 
 
+def _capabilities_by_analysis(
+    capabilities: list[dict[str, object]],
+) -> dict[str, dict[str, object]]:
+    return {
+        capability["analysis_id"]: capability
+        for capability in capabilities
+    }
+
+
 def test_dataset_service_lists_visible_catalog_rows_for_active_workspace(
     dataset_service: DatasetService,
 ) -> None:
@@ -474,6 +483,19 @@ def test_ingested_trace_can_be_updated_without_changing_identity() -> None:
     assert payload["trace"]["provenance_summary"] == "Edited measurement trace"
     assert payload["trace"]["allowed_actions"] == {"edit": True, "delete": True}
     assert payload["trace"]["mutation_policy_summary"] == "Manually ingested raw trace."
+    updated_capabilities = _capabilities_by_analysis(payload["trace"]["analysis_capabilities"])
+    assert updated_capabilities["admittance_extraction"]["status"] == "eligible"
+    assert (
+        updated_capabilities["admittance_extraction"]["summary"]
+        == "Eligible as admittance resonance source."
+    )
+    assert updated_capabilities["junction_parameter_identification"]["status"] == (
+        "ineligible"
+    )
+    assert (
+        updated_capabilities["junction_parameter_identification"]["summary"]
+        == "Requires complex representation."
+    )
 
     preview = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}")
     assert preview.status_code == 200
@@ -486,22 +508,24 @@ def test_ingested_trace_can_be_updated_without_changing_identity() -> None:
     ]
 
     rows = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()["data"]["rows"]
-    assert rows == [
-        {
-            "trace_id": trace_id,
-            "dataset_id": dataset_id,
-            "design_id": design_id,
-            "family": "y_matrix",
-            "parameter": "Y11_edited",
-            "representation": "real",
-            "trace_mode_group": "base",
-            "source_kind": "measurement",
-            "stage_kind": "raw",
-            "provenance_summary": "Edited measurement trace",
-            "allowed_actions": {"edit": True, "delete": True},
-            "mutation_policy_summary": "Manually ingested raw trace.",
-        }
-    ]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["trace_id"] == trace_id
+    assert row["dataset_id"] == dataset_id
+    assert row["design_id"] == design_id
+    assert row["family"] == "y_matrix"
+    assert row["parameter"] == "Y11_edited"
+    assert row["representation"] == "real"
+    assert row["trace_mode_group"] == "base"
+    assert row["source_kind"] == "measurement"
+    assert row["stage_kind"] == "raw"
+    assert row["provenance_summary"] == "Edited measurement trace"
+    assert row["allowed_actions"] == {"edit": True, "delete": True}
+    assert row["mutation_policy_summary"] == "Manually ingested raw trace."
+    row_capabilities = _capabilities_by_analysis(row["analysis_capabilities"])
+    assert row_capabilities["admittance_extraction"]["status"] == "eligible"
+    assert row_capabilities["sideband_comparison"]["status"] == "ineligible"
+    assert row_capabilities["screening_summary"]["status"] == "ineligible"
 
 
 def test_trace_list_rows_materialize_backend_mutation_gating() -> None:
@@ -540,6 +564,9 @@ def test_trace_edit_path_returns_dedicated_edit_payload() -> None:
     assert payload["editable_numeric_payload"]["kind"] == "series_table"
     assert payload["allowed_actions"] == {"edit": True, "delete": True}
     assert payload["mutation_policy_summary"] == "Manually ingested raw trace."
+    capability_map = _capabilities_by_analysis(payload["analysis_capabilities"])
+    assert capability_map["admittance_extraction"]["status"] == "eligible"
+    assert capability_map["sideband_comparison"]["status"] == "ineligible"
 
 
 def test_trace_update_rejects_preview_payload_as_edit_authority() -> None:
@@ -678,13 +705,23 @@ def test_dataset_service_exposes_characterization_analysis_registry_and_run_hist
         "sideband_comparison",
         "junction_parameter_identification",
     ]
-    assert registry_rows[0].availability_state == "recommended"
+    assert registry_rows[0].availability_state == "unavailable"
     assert registry_rows[0].required_config_fields == (
         "fit_window",
         "residual_tolerance",
     )
     assert registry_rows[0].trace_compatibility.selected_trace_count == 2
-    assert registry_rows[0].trace_compatibility.matched_trace_count == 2
+    assert registry_rows[0].trace_compatibility.matched_trace_count == 0
+    assert registry_rows[0].trace_compatibility.summary == (
+        "Selected trace compatibility could not be re-evaluated because this design "
+        "does not yet carry durable trace capability markings."
+    )
+    assert registry_rows[1].availability_state == "unavailable"
+    assert registry_rows[1].trace_compatibility.summary == (
+        "Selected trace compatibility could not be re-evaluated because this design "
+        "does not yet carry durable trace capability markings. The current runtime "
+        "does not yet support executing this analysis."
+    )
 
     assert [row.run_id for row in run_rows] == ["run-flux-a-003"]
     assert run_rows[0].dataset_id == "fluxonium-2025-031"

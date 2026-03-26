@@ -66,6 +66,86 @@ def _submit_characterization_task() -> dict[str, object]:
     return response.json()["data"]["task"]
 
 
+def _create_ineligible_local_characterization_trace() -> tuple[str, str, str]:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Local Incompatible Characterization Dataset",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": "Local Incompatible Characterization Design",
+            "provenance_label": "incompatible-measurement-batch",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11_sideband",
+                    "representation": "imaginary",
+                    "trace_mode_group": "sideband",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Sideband-only measurement trace",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.11], [5.2, 0.15]],
+                    },
+                }
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    return dataset_id, payload["design"]["design_id"], payload["traces"][0]["trace_id"]
+
+
+def _create_unsupported_local_characterization_trace() -> tuple[str, str, str]:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Local Unsupported Characterization Dataset",
+            "family": "resonator",
+            "device_type": "Resonator",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": "Local Unsupported Characterization Design",
+            "provenance_label": "unsupported-measurement-batch",
+            "traces": [
+                {
+                    "family": "s_matrix",
+                    "parameter": "S21_temperature",
+                    "representation": "magnitude",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Temperature sweep resonator trace",
+                    "axes": [{"name": "temperature", "unit": "K", "length": 3}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[0.01, 0.91], [0.03, 0.84], [0.05, 0.79]],
+                    },
+                }
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    return dataset_id, payload["design"]["design_id"], payload["traces"][0]["trace_id"]
+
+
 def test_local_characterization_registry_exposes_admittance_for_compatible_saved_design() -> None:
     response = client.get(
         "/datasets/local-dataset-001/designs/design_local_flux_playground/"
@@ -81,16 +161,63 @@ def test_local_characterization_registry_exposes_admittance_for_compatible_saved
     assert payload["data"]["rows"] == [
         {
             "analysis_id": "admittance_extraction",
-            "label": "Admittance Extraction",
+            "label": "Admittance Resonance Extraction",
             "availability_state": "recommended",
             "required_config_fields": ["fit_window", "residual_tolerance"],
             "trace_compatibility": {
                 "matched_trace_count": 2,
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["base"],
-                "summary": "2 compatible base traces are ready for a stable admittance fit.",
+                "summary": (
+                    "2 selected traces are eligible for admittance resonance extraction."
+                ),
             },
-        }
+        },
+        {
+            "analysis_id": "sideband_comparison",
+            "label": "Sideband Comparison",
+            "availability_state": "unavailable",
+            "required_config_fields": ["comparison_window"],
+            "trace_compatibility": {
+                "matched_trace_count": 0,
+                "selected_trace_count": 2,
+                "recommended_trace_modes": ["sideband"],
+                "summary": (
+                    "2 selected traces are not eligible for sideband comparison "
+                    "because Requires sideband trace mode coverage."
+                ),
+            },
+        },
+        {
+            "analysis_id": "junction_parameter_identification",
+            "label": "Junction Parameter Identification",
+            "availability_state": "unavailable",
+            "required_config_fields": ["fit_window", "prior_family"],
+            "trace_compatibility": {
+                "matched_trace_count": 0,
+                "selected_trace_count": 2,
+                "recommended_trace_modes": ["base", "sideband"],
+                "summary": (
+                    "2 selected traces are not eligible for junction parameter "
+                    "identification because Requires complex representation."
+                ),
+            },
+        },
+        {
+            "analysis_id": "screening_summary",
+            "label": "Screening Summary",
+            "availability_state": "unavailable",
+            "required_config_fields": ["screening_mode"],
+            "trace_compatibility": {
+                "matched_trace_count": 0,
+                "selected_trace_count": 2,
+                "recommended_trace_modes": ["base"],
+                "summary": (
+                    "2 selected traces are not eligible for screening summary "
+                    "because Requires s matrix traces."
+                ),
+            },
+        },
     ]
 
 
@@ -138,11 +265,6 @@ def test_local_characterization_runtime_summary_is_configured_and_healthy() -> N
             "characterization_trace_selection_invalid",
         ),
         (
-            _characterization_payload(selected_trace_ids=("trace_local_flux_measurement",)),
-            422,
-            "characterization_trace_selection_incompatible",
-        ),
-        (
             _characterization_payload(fit_window=(5.25, 4.85)),
             422,
             "characterization_config_invalid",
@@ -158,6 +280,81 @@ def test_local_characterization_submit_rejects_invalid_payloads(
 
     assert response.status_code == status_code
     assert response.json()["error"]["code"] == error_code
+
+
+def test_local_characterization_submit_accepts_single_eligible_trace() -> None:
+    response = client.post(
+        "/tasks",
+        json=_characterization_payload(selected_trace_ids=("trace_local_flux_measurement",)),
+    )
+
+    assert response.status_code == 201
+    task = response.json()["data"]["task"]
+    assert task["status"] == "queued"
+    assert task["characterization_setup"]["selected_trace_ids"] == [
+        "trace_local_flux_measurement"
+    ]
+
+
+def test_local_characterization_submit_rejects_ineligible_selected_trace() -> None:
+    dataset_id, design_id, trace_id = _create_ineligible_local_characterization_trace()
+    payload = _characterization_payload(
+        design_id=design_id,
+        selected_trace_ids=(trace_id,),
+    )
+    payload["dataset_id"] = dataset_id
+
+    response = client.post("/tasks", json=payload)
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "characterization_trace_selection_incompatible"
+    assert "not eligible for admittance resonance extraction" in error["message"]
+
+
+def test_local_registry_marks_compatible_but_unsupported_analysis_as_unavailable() -> None:
+    dataset_id, design_id, trace_id = _create_unsupported_local_characterization_trace()
+
+    registry_response = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/characterization-analysis-registry",
+        params=[("selected_trace_ids", trace_id)],
+    )
+
+    assert registry_response.status_code == 200
+    assert registry_response.json()["data"]["rows"] == [
+        {
+            "analysis_id": "quality_factor_fit",
+            "label": "Quality Factor Fit",
+            "availability_state": "unavailable",
+            "required_config_fields": ["temperature_window"],
+            "trace_compatibility": {
+                "matched_trace_count": 1,
+                "selected_trace_count": 1,
+                "recommended_trace_modes": ["base"],
+                "summary": (
+                    "1 selected trace is compatible with quality factor fit, "
+                    "but the current runtime does not yet support executing this analysis."
+                ),
+            },
+        }
+    ]
+
+    submit_response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "dataset_id": dataset_id,
+            "characterization_setup": {
+                "design_id": design_id,
+                "analysis_id": "quality_factor_fit",
+                "selected_trace_ids": [trace_id],
+                "analysis_config": {"temperature_window": [0.01, 0.05]},
+            },
+        },
+    )
+
+    assert submit_response.status_code == 409
+    assert submit_response.json()["error"]["code"] == "characterization_analysis_unsupported"
 
 
 def test_online_characterization_submit_rejects_recognized_but_unsupported_analysis() -> None:

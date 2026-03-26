@@ -7,8 +7,12 @@ from typing import Protocol
 from sc_core.tasking import resolve_worker_task_route
 
 from src.app.domain.audit import AuditRecord
+from src.app.domain.characterization_analysis import (
+    evaluate_characterization_analysis_scope,
+    get_characterization_analysis_spec,
+    validate_characterization_analysis_config,
+)
 from src.app.domain.datasets import (
-    CharacterizationAnalysisRegistryRow,
     DatasetDetail,
     DesignBrowseRow,
     TraceMetadataSummary,
@@ -55,12 +59,6 @@ class TaskSubmissionDatasetRepository(Protocol):
         dataset_id: str,
         design_id: str,
     ) -> Sequence[TraceMetadataSummary]: ...
-
-    def list_characterization_analysis_registry(
-        self,
-        dataset_id: str,
-        design_id: str,
-    ) -> Sequence[CharacterizationAnalysisRegistryRow]: ...
 
 
 class TaskSubmissionCircuitDefinitionRepository(Protocol):
@@ -490,35 +488,15 @@ class TaskSubmissionService:
                     if trace_id in missing_trace_id_set
                 ),
             )
-        registry_rows = tuple(
-            self._dataset_repository.list_characterization_analysis_registry(
-                dataset_id,
-                setup.design_id,
-            )
-        )
-        registry_row = next(
-            (
-                row
-                for row in registry_rows
-                if row.analysis_id.casefold() == setup.analysis_id.casefold()
-            ),
-            None,
-        )
-        if registry_row is None:
+        spec = get_characterization_analysis_spec(setup.analysis_id)
+        if spec is None:
             raise service_error(
                 422,
                 code="characterization_analysis_invalid",
                 category="validation",
                 message="analysis_id is not recognized for the selected design.",
             )
-        if registry_row.availability_state == "unavailable":
-            raise service_error(
-                409,
-                code="characterization_analysis_unavailable",
-                category="conflict",
-                message=registry_row.trace_compatibility.summary,
-            )
-        if setup.analysis_id != "admittance_extraction":
+        if not spec.local_runtime_supported:
             raise service_error(
                 409,
                 code="characterization_analysis_unsupported",
@@ -528,95 +506,28 @@ class TaskSubmissionService:
                     "the admittance_extraction analysis."
                 ),
             )
-        self._validate_admittance_characterization(
-            setup=setup,
-            selected_traces=tuple(traces_by_id[trace_id] for trace_id in setup.selected_trace_ids),
-            registry_row=registry_row,
+        scope_evaluation = evaluate_characterization_analysis_scope(
+            spec=spec,
+            traces=trace_rows,
+            selected_trace_ids=setup.selected_trace_ids,
         )
-
-    def _validate_admittance_characterization(
-        self,
-        *,
-        setup: CharacterizationSetup,
-        selected_traces: tuple[TraceMetadataSummary, ...],
-        registry_row: CharacterizationAnalysisRegistryRow,
-    ) -> None:
-        if len(selected_traces) < 2:
+        if not scope_evaluation.selected_scope_ready:
             raise service_error(
                 422,
                 code="characterization_trace_selection_incompatible",
                 category="validation",
-                message=registry_row.trace_compatibility.summary,
+                message=scope_evaluation.summary,
             )
-        if any(trace.trace_mode_group != "base" for trace in selected_traces):
-            raise service_error(
-                422,
-                code="characterization_trace_selection_incompatible",
-                category="validation",
-                message="Admittance extraction currently requires base-mode traces only.",
-            )
-        if any(trace.family != "y_matrix" for trace in selected_traces):
-            raise service_error(
-                422,
-                code="characterization_trace_selection_incompatible",
-                category="validation",
-                message="Admittance extraction currently requires Y-matrix traces.",
-            )
-        selected_sources = {trace.source_kind for trace in selected_traces}
-        if "measurement" not in selected_sources or not (
-            {"layout_simulation", "circuit_simulation"} & selected_sources
-        ):
-            raise service_error(
-                422,
-                code="characterization_trace_selection_incompatible",
-                category="validation",
-                message=(
-                    "Admittance extraction requires one measurement trace and "
-                    "one compatible simulation trace."
-                ),
-            )
-        if "fit_window" not in setup.analysis_config:
+        config_error = validate_characterization_analysis_config(
+            spec,
+            setup.analysis_config,
+        )
+        if config_error is not None:
             raise service_error(
                 422,
                 code="characterization_config_invalid",
                 category="validation",
-                message="characterization_setup.analysis_config.fit_window is required.",
-            )
-        fit_window = setup.analysis_config.get("fit_window")
-        if (
-            not isinstance(fit_window, list)
-            or len(fit_window) != 2
-            or not all(isinstance(value, int | float) for value in fit_window)
-        ):
-            raise service_error(
-                422,
-                code="characterization_config_invalid",
-                category="validation",
-                message=(
-                    "characterization_setup.analysis_config.fit_window must be "
-                    "an array of two numbers."
-                ),
-            )
-        if float(fit_window[0]) >= float(fit_window[1]):
-            raise service_error(
-                422,
-                code="characterization_config_invalid",
-                category="validation",
-                message=(
-                    "characterization_setup.analysis_config.fit_window must be "
-                    "strictly increasing."
-                ),
-            )
-        residual_tolerance = setup.analysis_config.get("residual_tolerance")
-        if not isinstance(residual_tolerance, int | float) or float(residual_tolerance) <= 0:
-            raise service_error(
-                422,
-                code="characterization_config_invalid",
-                category="validation",
-                message=(
-                    "characterization_setup.analysis_config.residual_tolerance "
-                    "must be a positive number."
-                ),
+                message=config_error,
             )
 
 

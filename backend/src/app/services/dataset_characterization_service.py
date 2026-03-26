@@ -1,10 +1,14 @@
 from collections.abc import Sequence
 from typing import Protocol
 
+from src.app.domain.characterization_analysis import (
+    build_characterization_registry_rows,
+    derive_characterization_analysis_ids,
+    project_legacy_characterization_registry_rows,
+)
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
     CharacterizationAnalysisRegistryRow,
-    CharacterizationAnalysisTraceCompatibility,
     CharacterizationResultBrowseQuery,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
@@ -14,6 +18,7 @@ from src.app.domain.datasets import (
     CharacterizationTaggingResult,
     DatasetDetail,
     TaggedCoreMetricSummary,
+    TraceMetadataSummary,
 )
 from src.app.domain.session import SessionState
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
@@ -40,6 +45,12 @@ class DatasetCharacterizationRepository(Protocol):
         dataset_id: str,
         design_id: str,
     ) -> Sequence[CharacterizationAnalysisRegistryRow]: ...
+
+    def list_trace_metadata(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> Sequence[TraceMetadataSummary]: ...
 
     def list_characterization_run_history(
         self,
@@ -114,26 +125,32 @@ class DatasetCharacterizationService:
         query: CharacterizationAnalysisRegistryQuery,
     ) -> list[CharacterizationAnalysisRegistryRow]:
         self._require_visible_dataset(dataset_id)
-        rows = list(self._repository.list_characterization_analysis_registry(dataset_id, design_id))
-        if len(query.selected_trace_ids) == 0:
-            return rows
-
-        selected_trace_count = len(query.selected_trace_ids)
-        return [
-            CharacterizationAnalysisRegistryRow(
-                analysis_id=row.analysis_id,
-                label=row.label,
-                availability_state=row.availability_state,
-                required_config_fields=row.required_config_fields,
-                trace_compatibility=CharacterizationAnalysisTraceCompatibility(
-                    matched_trace_count=row.trace_compatibility.matched_trace_count,
-                    selected_trace_count=selected_trace_count,
-                    recommended_trace_modes=row.trace_compatibility.recommended_trace_modes,
-                    summary=row.trace_compatibility.summary,
-                ),
+        trace_rows = tuple(self._repository.list_trace_metadata(dataset_id, design_id))
+        if len(trace_rows) == 0 or all(
+            len(trace.analysis_capabilities) == 0 for trace in trace_rows
+        ):
+            return list(
+                project_legacy_characterization_registry_rows(
+                    legacy_rows=tuple(
+                        self._repository.list_characterization_analysis_registry(
+                            dataset_id,
+                            design_id,
+                        )
+                    ),
+                    selected_trace_ids=query.selected_trace_ids,
+                    enforce_runtime_support=True,
+                )
             )
-            for row in rows
-        ]
+
+        included_analysis_ids = derive_characterization_analysis_ids(trace_rows)
+        return list(
+            build_characterization_registry_rows(
+                included_analysis_ids=included_analysis_ids,
+                traces=trace_rows,
+                selected_trace_ids=query.selected_trace_ids,
+                enforce_runtime_support=True,
+            )
+        )
 
     def list_characterization_run_history(
         self,

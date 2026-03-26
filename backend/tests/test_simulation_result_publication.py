@@ -134,6 +134,15 @@ def _published_trace_ids(task_id: int, *, include_ptc: bool) -> list[str]:
     return trace_ids
 
 
+def _capability_by_analysis(
+    capabilities: list[dict[str, object]],
+) -> dict[str, dict[str, object]]:
+    return {
+        capability["analysis_id"]: capability
+        for capability in capabilities
+    }
+
+
 def _trace_key(
     *,
     family: str,
@@ -279,6 +288,16 @@ def test_completed_simulation_task_can_be_published_and_is_queryable() -> None:
     assert payload["task"]["publication_summary"]["state"] == "published"
     assert payload["design"]["design_id"] == "design_fluxonium-simulation-save"
     assert len(payload["traces"]) == 5
+    published_trace_capabilities = _capability_by_analysis(
+        payload["traces"][0]["analysis_capabilities"]
+    )
+    assert "admittance_extraction" in published_trace_capabilities
+    assert published_trace_capabilities["admittance_extraction"]["status"] in {
+        "eligible",
+        "ineligible",
+    }
+    if published_trace_capabilities["admittance_extraction"]["status"] == "ineligible":
+        assert published_trace_capabilities["admittance_extraction"]["reasons"]
 
     reloaded = client.get(f"/tasks/{task['task_id']}").json()["data"]
     assert reloaded["publication_summary"]["state"] == "published"
@@ -553,12 +572,21 @@ def test_trace_scoped_publish_creates_only_selected_trace_and_is_idempotent() ->
     assert [row["trace_id"] for row in rows] == [payload["trace"]["trace_id"]]
     assert rows[0]["parameter"] == "Readout Admittance"
     assert rows[0]["representation"] == "imaginary"
+    row_capabilities = _capability_by_analysis(rows[0]["analysis_capabilities"])
+    assert row_capabilities["admittance_extraction"]["status"] == "eligible"
+    assert row_capabilities["sideband_comparison"]["status"] == "ineligible"
 
     trace_detail = client.get(
         f"/datasets/local-dataset-001/designs/{design['design_id']}/traces/{payload['trace']['trace_id']}"
     )
     assert trace_detail.status_code == 200
     trace_payload = trace_detail.json()["data"]
+    detail_capabilities = _capability_by_analysis(trace_payload["analysis_capabilities"])
+    assert detail_capabilities["admittance_extraction"]["status"] == "eligible"
+    assert (
+        detail_capabilities["junction_parameter_identification"]["summary"]
+        == "Requires complex representation."
+    )
     assert trace_payload["preview_payload"]["kind"] == "series"
     assert trace_payload["preview_payload"]["parameter"] == "Readout Admittance"
     assert trace_payload["preview_payload"]["default_parameter"] == "Y11"

@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from fastapi.testclient import TestClient
-from src.app.infrastructure.runtime import reset_runtime_state
+from src.app.domain.datasets import (
+    CharacterizationAnalysisRegistryRow,
+    CharacterizationAnalysisTraceCompatibility,
+)
+from src.app.infrastructure.runtime import get_catalog_repository, reset_runtime_state
 from src.app.main import app
 
 client = TestClient(app)
@@ -59,28 +65,28 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
     assert payload["data"]["rows"] == [
         {
             "analysis_id": "admittance_extraction",
-            "label": "Admittance Extraction",
+            "label": "Admittance Resonance Extraction",
             "availability_state": "recommended",
             "required_config_fields": ["fit_window", "residual_tolerance"],
             "trace_compatibility": {
                 "matched_trace_count": 2,
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["base"],
-                "summary": "Two compatible base traces are ready for a stable admittance fit.",
+                "summary": "2 selected traces are eligible for admittance resonance extraction.",
             },
         },
         {
             "analysis_id": "sideband_comparison",
             "label": "Sideband Comparison",
-            "availability_state": "available",
+            "availability_state": "unavailable",
             "required_config_fields": ["comparison_window"],
             "trace_compatibility": {
-                "matched_trace_count": 1,
+                "matched_trace_count": 0,
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["sideband"],
                 "summary": (
-                    "One compatible sideband trace is visible, but comparison coverage "
-                    "remains thin."
+                    "2 selected traces are not eligible for sideband comparison "
+                    "because Requires sideband trace mode coverage."
                 ),
             },
         },
@@ -94,12 +100,208 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["base", "sideband"],
                 "summary": (
-                    "No compatible trace bundle currently satisfies the identification "
-                    "prerequisites."
+                    "2 selected traces are not eligible for junction parameter "
+                    "identification because Requires complex representation."
+                ),
+            },
+        },
+        {
+            "analysis_id": "screening_summary",
+            "label": "Screening Summary",
+            "availability_state": "unavailable",
+            "required_config_fields": ["screening_mode"],
+            "trace_compatibility": {
+                "matched_trace_count": 0,
+                "selected_trace_count": 2,
+                "recommended_trace_modes": ["base"],
+                "summary": (
+                    "2 selected traces are not eligible for screening summary "
+                    "because Requires s matrix traces."
                 ),
             },
         },
     ]
+
+
+def test_characterization_registry_ignores_incomplete_legacy_row_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = get_catalog_repository()
+    monkeypatch.setattr(
+        repository,
+        "list_characterization_analysis_registry",
+        lambda dataset_id, design_id: (
+            CharacterizationAnalysisRegistryRow(
+                analysis_id="sideband_comparison",
+                label="Legacy Sideband Only",
+                availability_state="available",
+                required_config_fields=("comparison_window",),
+                trace_compatibility=CharacterizationAnalysisTraceCompatibility(
+                    matched_trace_count=99,
+                    selected_trace_count=0,
+                    recommended_trace_modes=("sideband",),
+                    summary="legacy row should not drive active registry inclusion",
+                ),
+            ),
+        ),
+    )
+
+    response = client.get(
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
+        "characterization-analysis-registry",
+        params=[
+            ("selected_trace_ids", "trace_flux_a_measurement"),
+            ("selected_trace_ids", "trace_flux_a_layout"),
+        ],
+    )
+
+    assert response.status_code == 200
+    rows = response.json()["data"]["rows"]
+    assert [row["analysis_id"] for row in rows] == [
+        "admittance_extraction",
+        "sideband_comparison",
+        "junction_parameter_identification",
+        "screening_summary",
+    ]
+    assert rows[1]["label"] == "Sideband Comparison"
+
+
+def test_characterization_registry_fallback_does_not_overclaim_selected_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = get_catalog_repository()
+    original_trace_rows = tuple(
+        repository.list_trace_metadata("fluxonium-2025-031", "design_flux_scan_a")
+    )
+    monkeypatch.setattr(
+        repository,
+        "list_trace_metadata",
+        lambda dataset_id, design_id: tuple(
+            replace(trace, analysis_capabilities=()) for trace in original_trace_rows
+        ),
+    )
+    monkeypatch.setattr(
+        repository,
+        "list_characterization_analysis_registry",
+        lambda dataset_id, design_id: (
+            CharacterizationAnalysisRegistryRow(
+                analysis_id="admittance_extraction",
+                label="Legacy Admittance Extraction",
+                availability_state="recommended",
+                required_config_fields=("fit_window", "residual_tolerance"),
+                trace_compatibility=CharacterizationAnalysisTraceCompatibility(
+                    matched_trace_count=2,
+                    selected_trace_count=0,
+                    recommended_trace_modes=("base",),
+                    summary="legacy selected scope should not stay recommended",
+                ),
+            ),
+        ),
+    )
+
+    response = client.get(
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
+        "characterization-analysis-registry",
+        params=[
+            ("selected_trace_ids", "trace_flux_a_measurement"),
+            ("selected_trace_ids", "trace_flux_a_layout"),
+        ],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["rows"] == [
+        {
+            "analysis_id": "admittance_extraction",
+            "label": "Admittance Resonance Extraction",
+            "availability_state": "unavailable",
+            "required_config_fields": ["fit_window", "residual_tolerance"],
+            "trace_compatibility": {
+                "matched_trace_count": 0,
+                "selected_trace_count": 2,
+                "recommended_trace_modes": ["base"],
+                "summary": (
+                    "Selected trace compatibility could not be re-evaluated because "
+                    "this design does not yet carry durable trace capability markings."
+                ),
+            },
+        }
+    ]
+
+
+def test_characterization_registry_fallback_marks_unsupported_analysis_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = get_catalog_repository()
+    original_trace_rows = tuple(
+        repository.list_trace_metadata("fluxonium-2025-031", "design_flux_scan_a")
+    )
+    monkeypatch.setattr(
+        repository,
+        "list_trace_metadata",
+        lambda dataset_id, design_id: tuple(
+            replace(trace, analysis_capabilities=()) for trace in original_trace_rows
+        ),
+    )
+    monkeypatch.setattr(
+        repository,
+        "list_characterization_analysis_registry",
+        lambda dataset_id, design_id: (
+            CharacterizationAnalysisRegistryRow(
+                analysis_id="sideband_comparison",
+                label="Legacy Sideband Comparison",
+                availability_state="available",
+                required_config_fields=("comparison_window",),
+                trace_compatibility=CharacterizationAnalysisTraceCompatibility(
+                    matched_trace_count=1,
+                    selected_trace_count=0,
+                    recommended_trace_modes=("sideband",),
+                    summary="legacy sideband row overclaimed local run support",
+                ),
+            ),
+        ),
+    )
+
+    response = client.get(
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
+        "characterization-analysis-registry"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["rows"] == [
+        {
+            "analysis_id": "sideband_comparison",
+            "label": "Sideband Comparison",
+            "availability_state": "unavailable",
+            "required_config_fields": ["comparison_window"],
+            "trace_compatibility": {
+                "matched_trace_count": 1,
+                "selected_trace_count": 0,
+                "recommended_trace_modes": ["sideband"],
+                "summary": (
+                    "Legacy trace coverage suggests sideband comparison may be "
+                    "relevant, but the current runtime does not yet support "
+                    "executing this analysis."
+                ),
+            },
+        }
+    ]
+
+    submit_response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "dataset_id": "fluxonium-2025-031",
+            "characterization_setup": {
+                "design_id": "design_flux_scan_a",
+                "analysis_id": "sideband_comparison",
+                "selected_trace_ids": ["trace_flux_a_phase"],
+                "analysis_config": {"comparison_window": [5.7, 5.9]},
+            },
+        },
+    )
+
+    assert submit_response.status_code == 409
+    assert submit_response.json()["error"]["code"] == "characterization_analysis_unsupported"
 
 
 def test_characterization_run_history_supports_analysis_filter_and_cursor_meta() -> None:
@@ -153,7 +355,7 @@ def test_characterization_run_history_supports_analysis_filter_and_cursor_meta()
             "dataset_id": "fluxonium-2025-031",
             "design_id": "design_flux_scan_a",
             "analysis_id": "admittance_extraction",
-            "label": "Flux Scan A admittance fit",
+            "label": "Flux Scan A admittance resonance extraction",
             "status": "completed",
             "scope": "design_traces",
             "trace_count": 2,

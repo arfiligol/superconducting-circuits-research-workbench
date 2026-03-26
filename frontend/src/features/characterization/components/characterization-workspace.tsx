@@ -8,7 +8,6 @@ import { useCharacterizationWorkflowData } from "@/features/characterization/hoo
 import {
   characterizationStatusTone,
   resolveCharacterizationSelectionRecovery,
-  summarizeCharacterizationResults,
   type CharacterizationResultStatusFilter,
 } from "@/features/characterization/lib/workflow";
 import { AppSelectField } from "@/features/shared/components/app-select";
@@ -42,6 +41,15 @@ function describeApiError(error: Error | undefined) {
   }
 
   return error.message;
+}
+
+function buildSectionError(summary: string, error: Error | undefined) {
+  const detail = describeApiError(error);
+  if (!detail) {
+    return null;
+  }
+
+  return { summary, detail };
 }
 
 function formatCoverageLabel(sourceCoverage: Record<string, number>) {
@@ -222,20 +230,22 @@ function buildCharacterizationSearchHref(
   return nextSearch ? `${pathname}?${nextSearch}` : pathname;
 }
 
-function SummaryTile({
-  label,
-  value,
+function SectionNotice({
+  title,
   detail,
 }: Readonly<{
-  label: string;
-  value: string;
+  title: string;
   detail: string;
 }>) {
   return (
-    <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
-      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-foreground">{value}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+    <div
+      className={cx(
+        "rounded-[0.95rem] border px-4 py-3",
+        resolveSurfaceInsetToneClass("warning"),
+      )}
+    >
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
     </div>
   );
 }
@@ -309,15 +319,29 @@ export function CharacterizationWorkspace() {
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
 
   const selectedDesign = designs.find((design) => design.design_id === selectedDesignId) ?? null;
-  const activeDatasetErrorMessage = describeApiError(activeDatasetState.activeDatasetError);
-  const designsErrorMessage = describeApiError(designsError);
-  const tracesErrorMessage = describeApiError(tracesError);
-  const analysisRegistryErrorMessage = describeApiError(analysisRegistryError);
-  const runHistoryErrorMessage = describeApiError(runHistoryError);
-  const resultsErrorMessage = describeApiError(resultsError);
-  const activeTaskErrorMessage = describeApiError(activeTaskError);
-  const resultDetailErrorMessage = describeApiError(resultDetailError);
-  const resultSummary = summarizeCharacterizationResults(results);
+  const activeDatasetErrorNotice = buildSectionError(
+    "Could not load the active dataset.",
+    activeDatasetState.activeDatasetError,
+  );
+  const designsErrorNotice = buildSectionError("Could not load designs.", designsError);
+  const tracesErrorNotice = buildSectionError("Could not load traces.", tracesError);
+  const analysisRegistryErrorNotice = buildSectionError(
+    "Could not load analyses.",
+    analysisRegistryError,
+  );
+  const runHistoryErrorNotice = buildSectionError(
+    "Could not load recent runs.",
+    runHistoryError,
+  );
+  const resultsErrorNotice = buildSectionError("Could not load saved results.", resultsError);
+  const activeTaskErrorNotice = buildSectionError(
+    "Could not load the latest analysis.",
+    activeTaskError,
+  );
+  const resultDetailErrorNotice = buildSectionError(
+    "Could not load result details.",
+    resultDetailError,
+  );
   const selectionRecovery = resolveCharacterizationSelectionRecovery({
     activeDatasetName: activeDatasetState.activeDataset?.name ?? null,
     requestedDesignId,
@@ -352,6 +376,35 @@ export function CharacterizationWorkspace() {
       : taggingMutationState.state === "error"
         ? "border-amber-500/30 bg-amber-500/10"
         : "border-border bg-surface";
+  const showResultControls =
+    results.length > 0 || resultSearch.trim() !== "" || statusFilter !== "all";
+  const showRunHistoryPagination =
+    runHistory.length > 0 ||
+    Boolean(runHistoryMeta?.prevCursor) ||
+    Boolean(runHistoryMeta?.nextCursor);
+  const latestRunStatusDetail = activeTask
+    ? activeTask.resultHandoff?.availability === "ready"
+      ? {
+          title: "Result ready",
+          message: `Updated ${activeTask.progress.updatedAt}. The latest result is ready below.`,
+        }
+      : activeTask.status === "failed" ||
+          activeTask.status === "terminated" ||
+          activeTask.status === "cancelled"
+        ? {
+            title: "Run ended",
+            message: `Updated ${activeTask.progress.updatedAt}. This run ended before a saved result was available.`,
+          }
+        : activeTask.resultHandoff?.availability === "pending" || activeTask.status === "completed"
+          ? {
+              title: "Saving result",
+              message: `Updated ${activeTask.progress.updatedAt}. The analysis finished and the saved result is still being prepared.`,
+            }
+          : {
+              title: "In progress",
+              message: `Updated ${activeTask.progress.updatedAt}. This analysis is still running.`,
+            }
+    : null;
 
   useEffect(() => {
     const firstSourceParameter = resultDetail?.identifySurface.sourceParameters[0];
@@ -427,7 +480,7 @@ export function CharacterizationWorkspace() {
       <SurfaceHeader
         eyebrow="Research Workflow"
         title="Characterization"
-        description="Choose a design, run a characterization analysis, and keep the latest persisted result in view."
+        description="Choose a design, run a characterization analysis, and keep the latest saved result in view."
         actions={
           <button
             type="button"
@@ -465,9 +518,16 @@ export function CharacterizationWorkspace() {
           description="Choose a dataset before running characterization analyses."
         >
           <p className="text-sm leading-6 text-muted-foreground">
-            {activeDatasetErrorMessage ??
-              "Pick a dataset in the shell to start characterization work."}
+            Pick a dataset in the shell to start characterization work.
           </p>
+          {activeDatasetErrorNotice ? (
+            <div className="mt-4">
+              <SectionNotice
+                title={activeDatasetErrorNotice.summary}
+                detail={activeDatasetErrorNotice.detail}
+              />
+            </div>
+          ) : null}
         </SurfacePanel>
       ) : (
         <div className="space-y-6">
@@ -518,8 +578,11 @@ export function CharacterizationWorkspace() {
                       </p>
                     </div>
                   ) : null}
-                  {designsErrorMessage ? (
-                    <p className="text-sm text-amber-700">{designsErrorMessage}</p>
+                  {designsErrorNotice ? (
+                    <SectionNotice
+                      title={designsErrorNotice.summary}
+                      detail={designsErrorNotice.detail}
+                    />
                   ) : null}
 
                   <AppSelectField
@@ -544,8 +607,11 @@ export function CharacterizationWorkspace() {
                       </p>
                     </div>
                   ) : null}
-                  {analysisRegistryErrorMessage ? (
-                    <p className="text-sm text-amber-700">{analysisRegistryErrorMessage}</p>
+                  {analysisRegistryErrorNotice ? (
+                    <SectionNotice
+                      title={analysisRegistryErrorNotice.summary}
+                      detail={analysisRegistryErrorNotice.detail}
+                    />
                   ) : null}
 
                   {selectedAnalysis?.requiredConfigFields.length ? (
@@ -715,23 +781,28 @@ export function CharacterizationWorkspace() {
                       No visible traces are indexed for this design yet.
                     </p>
                   ) : null}
-                  {tracesErrorMessage ? (
-                    <p className="mt-4 text-sm text-amber-700">{tracesErrorMessage}</p>
+                  {tracesErrorNotice ? (
+                    <div className="mt-4">
+                      <SectionNotice
+                        title={tracesErrorNotice.summary}
+                        detail={tracesErrorNotice.detail}
+                      />
+                    </div>
                   ) : null}
                 </div>
               </div>
             </SurfacePanel>
 
             <SurfacePanel
-              title="Latest Run"
-              description="Compact page-local run state for the attached characterization task."
+              title="Latest Analysis"
+              description="Keep the in-progress or latest analysis in view."
             >
               {activeTask ? (
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-base font-semibold text-foreground">
-                        Task #{activeTask.taskId}
+                        Run #{activeTask.taskId}
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {activeTask.summary}
@@ -755,50 +826,42 @@ export function CharacterizationWorkspace() {
                         style={{ width: `${activeTask.progress.percentComplete}%` }}
                       />
                     </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <SummaryTile
-                      label="Status"
-                      value={activeTask.status}
-                      detail={`Updated ${activeTask.progress.updatedAt}`}
-                    />
-                    <SummaryTile
-                      label="Result"
-                      value={
-                        activeTask.status === "completed"
-                          ? "Ready"
-                          : activeTask.status === "failed"
-                            ? "Failed"
-                            : "Pending"
-                      }
-                      detail={
-                        activeTask.resultHandoff?.tracePayloadAvailable
-                          ? "Persisted outputs are available."
-                          : "Waiting for persisted outputs."
-                      }
-                    />
+                    {latestRunStatusDetail ? (
+                      <div className="mt-4 rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          {latestRunStatusDetail.title}
+                        </p>
+                        <p className="mt-2 text-sm text-foreground">
+                          {latestRunStatusDetail.message}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Queue a run to follow its latest task state here.
+                  Run an analysis to keep the latest progress and saved result in view here.
                 </p>
               )}
 
               {isTaskTransitioning ? (
                 <p className="mt-4 text-sm text-muted-foreground">Loading latest run…</p>
               ) : null}
-              {activeTaskErrorMessage ? (
-                <p className="mt-4 text-sm text-amber-700">{activeTaskErrorMessage}</p>
+              {activeTaskErrorNotice ? (
+                <div className="mt-4">
+                  <SectionNotice
+                    title={activeTaskErrorNotice.summary}
+                    detail={activeTaskErrorNotice.detail}
+                  />
+                </div>
               ) : null}
             </SurfacePanel>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
             <SurfacePanel
-              title="Run History"
-              description="Recent persisted runs for the selected design."
+              title="Recent Runs"
+              description="Recent analysis runs for the selected design."
             >
               <div className="flex flex-wrap items-center gap-2">
                 {selectedAnalysis ? (
@@ -852,95 +915,84 @@ export function CharacterizationWorkspace() {
                     <p className="mt-3 text-sm text-muted-foreground">{run.sourcesSummary}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{run.provenanceSummary}</p>
                     <p className="mt-3 text-xs font-medium text-foreground">
-                      {run.resultId ? "Focus Result" : "No persisted result"}
+                      {run.resultId ? "Open Result" : "No result yet"}
                     </p>
                   </button>
                 ))}
 
                 {!isRunHistoryLoading && runHistory.length === 0 ? (
                   <p className="rounded-[1rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                    No persisted runs are visible for this scope yet.
+                    No recent runs are visible for this scope yet.
                   </p>
                 ) : null}
-                {runHistoryErrorMessage ? (
-                  <p className="text-sm text-amber-700">{runHistoryErrorMessage}</p>
+                {runHistoryErrorNotice ? (
+                  <SectionNotice
+                    title={runHistoryErrorNotice.summary}
+                    detail={runHistoryErrorNotice.detail}
+                  />
                 ) : null}
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-foreground">
-                <span>
-                  {runHistory.length} row{runHistory.length === 1 ? "" : "s"} on this page
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={goToPrevRunHistoryPage}
-                    disabled={!runHistoryMeta?.prevCursor}
-                    className="rounded-full border border-border px-3 py-1.5 font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goToNextRunHistoryPage}
-                    disabled={!runHistoryMeta?.nextCursor}
-                    className="rounded-full border border-border px-3 py-1.5 font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Next
-                  </button>
+              {showRunHistoryPagination ? (
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-foreground">
+                  <span>
+                    {runHistory.length} row{runHistory.length === 1 ? "" : "s"} on this page
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={goToPrevRunHistoryPage}
+                      disabled={!runHistoryMeta?.prevCursor}
+                      className="rounded-full border border-border px-3 py-1.5 font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      onClick={goToNextRunHistoryPage}
+                      disabled={!runHistoryMeta?.nextCursor}
+                      className="rounded-full border border-border px-3 py-1.5 font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </SurfacePanel>
 
             <div className="space-y-6">
               <SurfacePanel
                 title="Results"
-                description="Persisted characterization outputs for the current design."
+                description="Saved analysis results for the current design."
               >
-                <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                  <label className="relative block">
-                    <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <input
-                      value={resultSearch}
-                      onChange={(event) => {
-                        setResultSearch(event.target.value);
+                {showResultControls ? (
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <label className="relative block">
+                      <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <input
+                        value={resultSearch}
+                        onChange={(event) => {
+                          setResultSearch(event.target.value);
+                        }}
+                        placeholder="Search results"
+                        className="w-full rounded-xl border border-border bg-surface py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary/40"
+                      />
+                    </label>
+                    <AppSelectField
+                      className="min-w-[220px]"
+                      triggerClassName="min-h-10"
+                      menuClassName="right-0 left-auto w-[280px]"
+                      label="Status"
+                      value={statusFilter}
+                      onChange={(nextValue) => {
+                        setStatusFilter(nextValue as CharacterizationResultStatusFilter);
                       }}
-                      placeholder="Search results"
-                      className="w-full rounded-xl border border-border bg-surface py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary/40"
+                      options={statusOptions}
                     />
-                  </label>
-                  <AppSelectField
-                    className="min-w-[220px]"
-                    triggerClassName="min-h-10"
-                    menuClassName="right-0 left-auto w-[280px]"
-                    label="Status"
-                    value={statusFilter}
-                    onChange={(nextValue) => {
-                      setStatusFilter(nextValue as CharacterizationResultStatusFilter);
-                    }}
-                    options={statusOptions}
-                  />
-                </div>
+                  </div>
+                ) : null}
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <SummaryTile
-                    label="Results"
-                    value={String(resultSummary.total)}
-                    detail="Persisted rows in view."
-                  />
-                  <SummaryTile
-                    label="Completed"
-                    value={String(resultSummary.completedCount)}
-                    detail="Finished characterization outputs."
-                  />
-                  <SummaryTile
-                    label="Artifacts"
-                    value={String(resultSummary.artifactCount)}
-                    detail="Materialized payload references."
-                  />
-                </div>
-
-                <div className="mt-4 space-y-3">
+                <div className={cx("space-y-3", showResultControls ? "mt-4" : "mt-0")}>
                   {results.map((result) => (
                     <button
                       key={result.resultId}
@@ -985,22 +1037,25 @@ export function CharacterizationWorkspace() {
 
                   {!isResultsLoading && results.length === 0 ? (
                     <p className="rounded-[1rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                      No persisted result matches this scope and filter set.
+                      No saved result matches this scope and filter.
                     </p>
                   ) : null}
-                  {resultsErrorMessage ? (
-                    <p className="text-sm text-amber-700">{resultsErrorMessage}</p>
+                  {resultsErrorNotice ? (
+                    <SectionNotice
+                      title={resultsErrorNotice.summary}
+                      detail={resultsErrorNotice.detail}
+                    />
                   ) : null}
                 </div>
               </SurfacePanel>
 
               <SurfacePanel
                 title="Result Detail"
-                description="Inspect one persisted result, then tag parameters from it."
+                description="Inspect one saved result, then tag parameters from it."
               >
                 {!selectedResultId ? (
                   <p className="rounded-[1rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                    Select a persisted result to inspect its payload, diagnostics, and tags.
+                    Select a saved result to inspect its details, diagnostics, and tags.
                   </p>
                 ) : null}
 
@@ -1101,10 +1156,10 @@ export function CharacterizationWorkspace() {
                     <div className="rounded-2xl border border-border bg-surface px-4 py-4">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Artifact References
+                          Result Files
                         </p>
                         <SurfaceTag tone="default">
-                          {resultDetail.artifactRefs.length} refs
+                          {resultDetail.artifactRefs.length} files
                         </SurfaceTag>
                       </div>
                       <div className="mt-3 space-y-3">
@@ -1122,7 +1177,7 @@ export function CharacterizationWorkspace() {
                               {artifact.title}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {artifact.payloadLocator ?? "No materialized locator available"}
+                              {artifact.payloadLocator ?? "No file path available yet"}
                             </p>
                           </div>
                         ))}
@@ -1131,7 +1186,7 @@ export function CharacterizationWorkspace() {
 
                     <div>
                       <p className="mb-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                        Payload Preview
+                        Result Snapshot
                       </p>
                       <ResultPayloadPreview payload={resultDetail.payload} />
                     </div>
@@ -1249,8 +1304,13 @@ export function CharacterizationWorkspace() {
                 {isResultDetailLoading ? (
                   <p className="mt-4 text-sm text-muted-foreground">Loading result detail…</p>
                 ) : null}
-                {resultDetailErrorMessage ? (
-                  <p className="mt-4 text-sm text-amber-700">{resultDetailErrorMessage}</p>
+                {resultDetailErrorNotice ? (
+                  <div className="mt-4">
+                    <SectionNotice
+                      title={resultDetailErrorNotice.summary}
+                      detail={resultDetailErrorNotice.detail}
+                    />
+                  </div>
                 ) : null}
               </SurfacePanel>
             </div>

@@ -137,7 +137,7 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
             "artifact_id": "artifact-fit-plot-flux-a-01",
             "category": "plot",
             "view_kind": "plot",
-            "title": "Admittance overlay",
+            "title": "Resonance fit overlay",
             "payload_format": "svg",
             "payload_locator": "artifacts/characterization/flux-a-fit-plot.svg",
         },

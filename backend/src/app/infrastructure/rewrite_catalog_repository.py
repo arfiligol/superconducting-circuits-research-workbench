@@ -979,7 +979,7 @@ class InMemoryRewriteCatalogRepository:
         return (
             CharacterizationAnalysisRegistryRow(
                 analysis_id="admittance_extraction",
-                label="Admittance Extraction",
+                label="Admittance Resonance Extraction",
                 availability_state="recommended",
                 required_config_fields=("fit_window", "residual_tolerance"),
                 trace_compatibility=CharacterizationAnalysisTraceCompatibility(
@@ -987,8 +987,8 @@ class InMemoryRewriteCatalogRepository:
                     selected_trace_count=0,
                     recommended_trace_modes=("base",),
                     summary=(
-                        f"{len(compatible_traces)} compatible base traces are ready for "
-                        "a stable admittance fit."
+                        f"{len(compatible_traces)} design traces are eligible for "
+                        "admittance resonance extraction."
                     ),
                 ),
             ),
@@ -2494,14 +2494,14 @@ def _seed_characterization_analysis_registry() -> dict[
         ): (
             CharacterizationAnalysisRegistryRow(
                 analysis_id="admittance_extraction",
-                label="Admittance Extraction",
+                label="Admittance Resonance Extraction",
                 availability_state="recommended",
                 required_config_fields=("fit_window", "residual_tolerance"),
                 trace_compatibility=CharacterizationAnalysisTraceCompatibility(
                     matched_trace_count=2,
                     selected_trace_count=0,
                     recommended_trace_modes=("base",),
-                    summary="Two compatible base traces are ready for a stable admittance fit.",
+                    summary="2 design traces are eligible for admittance resonance extraction.",
                 ),
             ),
             CharacterizationAnalysisRegistryRow(
@@ -2632,7 +2632,7 @@ def _seed_characterization_run_history() -> dict[
                 dataset_id="fluxonium-2025-031",
                 design_id="design_flux_scan_a",
                 analysis_id="admittance_extraction",
-                label="Flux Scan A admittance fit",
+                label="Flux Scan A admittance resonance extraction",
                 status="completed",
                 scope="design_traces",
                 trace_count=2,
@@ -2716,7 +2716,7 @@ def _seed_characterization_results() -> dict[
                 dataset_id="fluxonium-2025-031",
                 design_id="design_flux_scan_a",
                 analysis_id="admittance_extraction",
-                title="Flux Scan A admittance fit",
+                title="Flux Scan A admittance resonance extraction",
                 status="completed",
                 freshness_summary="Materialized 14 minutes ago",
                 provenance_summary="Measurement batch #4 + layout batch #2",
@@ -2809,7 +2809,7 @@ def _seed_characterization_result_details() -> dict[
             dataset_id="fluxonium-2025-031",
             design_id="design_flux_scan_a",
             analysis_id="admittance_extraction",
-            title="Flux Scan A admittance fit",
+            title="Flux Scan A admittance resonance extraction",
             status="completed",
             freshness_summary="Materialized 14 minutes ago",
             provenance_summary="Measurement batch #4 + layout batch #2",
@@ -2847,7 +2847,7 @@ def _seed_characterization_result_details() -> dict[
                     artifact_id="artifact-fit-plot-flux-a-01",
                     category="plot",
                     view_kind="plot",
-                    title="Admittance overlay",
+                    title="Resonance fit overlay",
                     payload_format="svg",
                     payload_locator="artifacts/characterization/flux-a-fit-plot.svg",
                 ),

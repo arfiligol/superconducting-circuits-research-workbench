@@ -277,7 +277,7 @@ class LocalCharacterizationExecutionDriver:
                 recorded_at=started_at + timedelta(seconds=2),
                 summary=(
                     "Characterization worker is running the persisted admittance "
-                    "extraction path."
+                    "resonance extraction path."
                 ),
                 percent_complete=78,
                 stage_label=task.worker_task_name,

@@ -67,6 +67,7 @@ def test_alembic_upgrade_creates_rewrite_storage_tables_and_supports_round_trip(
         "rewrite_task_dispatch_records",
         "rewrite_task_event_records",
         "rewrite_task_records",
+        "rewrite_trace_capability_records",
         "rewrite_trace_payloads",
         "rewrite_workspace_default_dataset_records",
         "rewrite_workspace_invitation_records",
@@ -499,6 +500,7 @@ def test_bootstrap_metadata_schema_migrates_legacy_numeric_definition_ids_to_uui
         "rewrite_task_dispatch_records",
         "rewrite_task_event_records",
         "rewrite_task_records",
+        "rewrite_trace_capability_records",
         "rewrite_trace_payloads",
         "rewrite_workspace_default_dataset_records",
         "rewrite_workspace_invitation_records",
@@ -535,7 +537,7 @@ def test_bootstrap_metadata_schema_migrates_legacy_numeric_definition_ids_to_uui
     assert task.definition_id == child_definition.definition_id
     assert event is not None
     assert event.metadata_json["definition_id"] == child_definition.definition_id
-    assert session_scalar_text(engine, "SELECT version_num FROM alembic_version") == "20260325_0008"
+    assert session_scalar_text(engine, "SELECT version_num FROM alembic_version") == "20260327_0009"
 
 
 def _build_alembic_config(database_path: Path) -> Config:

@@ -498,7 +498,7 @@ export function useCharacterizationWorkflowData({
 
   async function submitTagging(input: CharacterizationTaggingInput) {
     if (!activeDatasetId || !resolvedDesignId || !resolvedResultId) {
-      throw new Error("Select a persisted characterization result before applying identify tags.");
+      throw new Error("Select a saved result before applying identify tags.");
     }
 
     setTaggingMutationState({
@@ -538,7 +538,7 @@ export function useCharacterizationWorkflowData({
 
   async function submitCharacterizationTask() {
     if (!session?.canSubmitTasks) {
-      const error = new Error("This session cannot submit tasks.");
+      const error = new Error("This session cannot start analyses.");
       setTaskMutationState({ state: "error", message: error.message });
       throw error;
     }
@@ -626,7 +626,7 @@ export function useCharacterizationWorkflowData({
 
       setTaskMutationState({
         state: "success",
-        message: `Analysis run #${task.taskId} queued.`,
+        message: `Analysis started. Run #${task.taskId} is now in view.`,
       });
 
       return task;
@@ -648,10 +648,10 @@ export function useCharacterizationWorkflowData({
       }
 
       const message = enqueueFailure?.taskId
-        ? `Run #${enqueueFailure.taskId} was recorded but failed to enqueue${enqueueFailure.dispatch?.lastDispatchErrorCode ? ` (${enqueueFailure.dispatch.lastDispatchErrorCode})` : ""}. Inspect the attached latest run before retrying.`
+        ? `Run #${enqueueFailure.taskId} was recorded but could not start yet${enqueueFailure.dispatch?.lastDispatchErrorCode ? ` (${enqueueFailure.dispatch.lastDispatchErrorCode})` : ""}. Review the latest analysis below before retrying.`
         : error instanceof Error
           ? error.message
-          : "Unable to submit the characterization run.";
+          : "Could not start the analysis.";
       setTaskMutationState({ state: "error", message });
       throw error;
     }
