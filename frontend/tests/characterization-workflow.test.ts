@@ -317,15 +317,17 @@ describe("characterization task helpers", () => {
 
 describe("characterization source contracts", () => {
   it("keeps characterization run-first without duplicating task-management walls", () => {
-    expect(characterizationWorkspaceSource).toContain("Run Analysis");
+    expect(characterizationWorkspaceSource).toContain('title="Select Data Scope"');
+    expect(characterizationWorkspaceSource).toContain('title="Choose Analysis & Setup"');
+    expect(characterizationWorkspaceSource).toContain('title="Inspect Result"');
     expect(characterizationWorkspaceSource).toContain("Trace Selection");
-    expect(characterizationWorkspaceSource).toContain("Latest Analysis");
-    expect(characterizationWorkspaceSource).toContain("Recent Runs");
     expect(characterizationWorkspaceSource).toContain("Results");
     expect(characterizationWorkspaceSource).toContain("Result Detail");
     expect(characterizationWorkspaceSource).toContain("Result Snapshot");
     expect(characterizationWorkspaceSource).toContain("Identify & Tag");
-    expect(characterizationWorkspaceSource).toContain("Open Result");
+    expect(characterizationWorkspaceSource).toContain("Validation Explanation");
+    expect(characterizationWorkspaceSource).toContain("None available");
+    expect(characterizationWorkspaceSource).toContain("SurfaceActionButton");
     expect(characterizationWorkspaceSource).not.toContain("This registry does not submit or attach analyses.");
     expect(characterizationWorkspaceSource).not.toContain("Characterization Task Queue");
     expect(characterizationWorkspaceSource).not.toContain("TaskLifecyclePanel");
@@ -338,6 +340,9 @@ describe("characterization source contracts", () => {
     expect(characterizationWorkspaceSource).not.toContain("Persisted characterization outputs for the current design.");
     expect(characterizationWorkspaceSource).not.toContain("Materialized payload references.");
     expect(characterizationWorkspaceSource).not.toContain("SummaryTile");
+    expect(characterizationWorkspaceSource).not.toContain('title="Run Analysis"');
+    expect(characterizationWorkspaceSource).not.toContain('title="Latest Analysis"');
+    expect(characterizationWorkspaceSource).not.toContain('title="Recent Runs"');
   });
 
   it("binds trace browse, characterization submit, and result continuity to shared app authority", () => {
@@ -383,6 +388,7 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain("applyCharacterizationTagging(");
     expect(characterizationHookSource).toContain("This session cannot start analyses.");
     expect(characterizationHookSource).not.toContain("This session cannot submit tasks.");
+    expect(characterizationHookSource).not.toContain("rows[0]?.analysisId");
     expect(characterizationHookSource).not.toContain(
       "Select a persisted characterization result before applying identify tags.",
     );

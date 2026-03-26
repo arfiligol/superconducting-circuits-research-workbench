@@ -374,7 +374,6 @@ export function useCharacterizationWorkflowData({
       return (
         rows.find((analysis) => analysis.availabilityState === "recommended")?.analysisId ??
         rows.find((analysis) => analysis.availabilityState !== "unavailable")?.analysisId ??
-        rows[0]?.analysisId ??
         null
       );
     });
