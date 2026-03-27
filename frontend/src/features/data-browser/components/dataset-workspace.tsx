@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Archive, LoaderCircle, Plus, Save, Search, Trash2 } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { Archive, LoaderCircle, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
 import { useAppSession } from "@/lib/app-state";
@@ -46,6 +46,11 @@ const emptyCreateForm: CreateDatasetValues = {
   device_type: "",
   source: "manual",
 };
+
+type CreateDialogState = Readonly<{
+  tone: "success" | "warning";
+  message: string;
+}> | null;
 
 type PendingLifecycleAction =
   | Readonly<{
@@ -95,6 +100,154 @@ function filterDatasetRows<
   );
 }
 
+function CreateDatasetDialog({
+  open,
+  isPending,
+  mutationState,
+  form,
+  onClose,
+  onSubmit,
+}: Readonly<{
+  open: boolean;
+  isPending: boolean;
+  mutationState: CreateDialogState;
+  form: UseFormReturn<CreateDatasetValues>;
+  onClose: () => void;
+  onSubmit: (values: CreateDatasetValues) => Promise<void>;
+}>) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-dataset-dialog-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/82 px-4 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-lg rounded-[1.1rem] border border-border bg-card shadow-[0_28px_90px_rgba(0,0,0,0.34)]">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+          <div className="min-w-0">
+            <h2 id="create-dataset-dialog-title" className="text-base font-semibold text-foreground">
+              Create Dataset
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Enter the dataset profile basics, then confirm creation in this dialog.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isPending}
+            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:border-primary/35 hover:bg-primary/10 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form className="space-y-4 px-5 py-5" onSubmit={form.handleSubmit(onSubmit)}>
+          <label className="block">
+            <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              Name
+            </span>
+            <input
+              {...form.register("name")}
+              disabled={isPending}
+              placeholder="Fluxonium sweep 040"
+              className="mt-2 w-full rounded-[0.95rem] border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+            />
+            {form.formState.errors.name?.message ? (
+              <p className="mt-2 text-xs text-amber-600">{form.formState.errors.name.message}</p>
+            ) : null}
+          </label>
+
+          <label className="block">
+            <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+              Family
+            </span>
+            <input
+              {...form.register("family")}
+              disabled={isPending}
+              placeholder="fluxonium"
+              className="mt-2 w-full rounded-[0.95rem] border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+            />
+            {form.formState.errors.family?.message ? (
+              <p className="mt-2 text-xs text-amber-600">{form.formState.errors.family.message}</p>
+            ) : null}
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Device Type
+              </span>
+              <input
+                {...form.register("device_type")}
+                disabled={isPending}
+                placeholder="fluxonium"
+                className="mt-2 w-full rounded-[0.95rem] border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+              />
+              {form.formState.errors.device_type?.message ? (
+                <p className="mt-2 text-xs text-amber-600">
+                  {form.formState.errors.device_type.message}
+                </p>
+              ) : null}
+            </label>
+
+            <label className="block">
+              <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Source
+              </span>
+              <input
+                {...form.register("source")}
+                disabled={isPending}
+                placeholder="manual"
+                className="mt-2 w-full rounded-[0.95rem] border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+              />
+              {form.formState.errors.source?.message ? (
+                <p className="mt-2 text-xs text-amber-600">{form.formState.errors.source.message}</p>
+              ) : null}
+            </label>
+          </div>
+
+          {mutationState ? (
+            <div
+              className={cx(
+                "rounded-[0.95rem] border px-4 py-3 text-sm",
+                mutationState.tone === "success"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-foreground"
+                  : "border-amber-500/30 bg-amber-500/10 text-foreground",
+              )}
+            >
+              {mutationState.message}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isPending}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              {isPending ? "Creating..." : "Create Dataset"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function DatasetWorkspace() {
   const { session } = useAppSession();
   const [saveState, setSaveState] = useState<{
@@ -104,6 +257,8 @@ export function DatasetWorkspace() {
   const [pendingLifecycleAction, setPendingLifecycleAction] = useState<PendingLifecycleAction>(null);
   const [isLifecyclePending, setIsLifecyclePending] = useState(false);
   const [isCreatePending, setIsCreatePending] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [createDialogState, setCreateDialogState] = useState<CreateDialogState>(null);
   const [datasetSearch, setDatasetSearch] = useState("");
   const [isSelectingDataset, startDatasetTransition] = useTransition();
   const {
@@ -180,12 +335,17 @@ export function DatasetWorkspace() {
         ...emptyCreateForm,
         source: values.source.trim(),
       });
+      setCreateDialogState({
+        tone: "success",
+        message: `Dataset ${result.dataset.name} was created and added to the visible catalog.`,
+      });
       setSaveState({
         tone: "success",
         message: `Dataset ${result.dataset.name} was created and added to the visible catalog.`,
       });
+      setIsCreateDialogOpen(false);
     } catch (error) {
-      setSaveState({
+      setCreateDialogState({
         tone: "warning",
         message: error instanceof Error ? error.message : "Unable to create dataset.",
       });
@@ -240,6 +400,25 @@ export function DatasetWorkspace() {
         eyebrow="Dataset Workspace"
         title="Dataset"
         description="Browse visible datasets, switch the active session dataset, and manage dataset profile metadata without pushing shell context or cross-page navigation back into the page body."
+        actions={
+          canManageDatasets ? (
+            <button
+              type="button"
+              onClick={() => {
+                createForm.reset({
+                  ...emptyCreateForm,
+                  source: createForm.getValues("source") || emptyCreateForm.source,
+                });
+                setCreateDialogState(null);
+                setIsCreateDialogOpen(true);
+              }}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15"
+            >
+              <Plus className="h-4 w-4" />
+              Create Dataset
+            </button>
+          ) : undefined
+        }
       />
 
       <div className="grid gap-4 xl:grid-cols-4">
@@ -376,6 +555,46 @@ export function DatasetWorkspace() {
           <SurfacePanel
             title="Dataset Profile"
             description="Edit device type, capability tags, and source metadata here when backend authority allows profile updates."
+            actions={
+              profile ? (
+                <div className="flex flex-wrap gap-2">
+                  {canArchiveDataset ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingLifecycleAction({
+                          kind: "archive",
+                          datasetId: profile.dataset_id,
+                          datasetName: profile.name,
+                        });
+                      }}
+                      disabled={isLifecyclePending}
+                      className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Archive className="h-4 w-4" />
+                      Archive Dataset
+                    </button>
+                  ) : null}
+                  {canDeleteDataset ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingLifecycleAction({
+                          kind: "delete",
+                          datasetId: profile.dataset_id,
+                          datasetName: profile.name,
+                        });
+                      }}
+                      disabled={isLifecyclePending}
+                      className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-500/20 dark:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete Dataset
+                    </button>
+                  ) : null}
+                </div>
+              ) : undefined
+            }
           >
             {profileError ? (
               <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
@@ -423,6 +642,12 @@ export function DatasetWorkspace() {
                     </div>
                   </dl>
                 </div>
+
+                {!canArchiveDataset && !canDeleteDataset ? (
+                  <div className="mb-4 rounded-xl border border-border/80 bg-surface px-4 py-3 text-sm text-muted-foreground">
+                    This dataset does not expose archive or delete actions for the current session.
+                  </div>
+                ) : null}
 
                 <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
                   <div className="grid gap-3 xl:grid-cols-2">
@@ -503,149 +728,6 @@ export function DatasetWorkspace() {
               </div>
             )}
           </SurfacePanel>
-
-          <SurfacePanel
-            title="Dataset Lifecycle"
-            description="Lifecycle actions are driven by backend authority. Create, archive, and delete only appear when the current session and dataset allow them."
-          >
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Create Dataset
-                </p>
-                {canManageDatasets ? (
-                  <form
-                    className="mt-3 space-y-3"
-                    onSubmit={createForm.handleSubmit(onCreateDataset)}
-                  >
-                    <label className="block">
-                      <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                        Name
-                      </span>
-                      <input
-                        {...createForm.register("name")}
-                        disabled={isCreatePending}
-                        placeholder="Fluxonium sweep 040"
-                        className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                        Family
-                      </span>
-                      <input
-                        {...createForm.register("family")}
-                        disabled={isCreatePending}
-                        placeholder="fluxonium"
-                        className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                      />
-                    </label>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Device Type
-                        </span>
-                        <input
-                          {...createForm.register("device_type")}
-                          disabled={isCreatePending}
-                          placeholder="fluxonium"
-                          className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Source
-                        </span>
-                        <input
-                          {...createForm.register("source")}
-                          disabled={isCreatePending}
-                          placeholder="manual"
-                          className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                        />
-                      </label>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={isCreatePending}
-                      className="inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isCreatePending ? (
-                        <LoaderCircle className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Plus className="h-4 w-4" />
-                      )}
-                      Create Dataset
-                    </button>
-                  </form>
-                ) : (
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    Dataset creation is hidden because backend authority does not allow it for this
-                    session.
-                  </p>
-                )}
-              </div>
-
-              <div className="rounded-xl border border-border/80 bg-surface px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Active Dataset Lifecycle
-                </p>
-                {profile ? (
-                  <>
-                    <p className="mt-3 text-sm font-semibold text-foreground">{profile.name}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {profile.dataset_id} · {profile.lifecycle_state}
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {canArchiveDataset ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingLifecycleAction({
-                              kind: "archive",
-                              datasetId: profile.dataset_id,
-                              datasetName: profile.name,
-                            });
-                          }}
-                          disabled={isLifecyclePending}
-                          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Archive className="h-4 w-4" />
-                          Archive Dataset
-                        </button>
-                      ) : null}
-                      {canDeleteDataset ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingLifecycleAction({
-                              kind: "delete",
-                              datasetId: profile.dataset_id,
-                              datasetName: profile.name,
-                            });
-                          }}
-                          disabled={isLifecyclePending}
-                          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-500/20 dark:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete Dataset
-                        </button>
-                      ) : null}
-                    </div>
-                    {!canArchiveDataset && !canDeleteDataset ? (
-                      <p className="mt-4 text-sm text-muted-foreground">
-                        This dataset does not expose archive or delete actions for the current
-                        session.
-                      </p>
-                    ) : null}
-                  </>
-                ) : (
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    Attach a dataset to view lifecycle actions.
-                  </p>
-                )}
-              </div>
-            </div>
-          </SurfacePanel>
         </div>
       </section>
 
@@ -712,6 +794,21 @@ export function DatasetWorkspace() {
         onConfirm={() => {
           void confirmLifecycleAction();
         }}
+      />
+
+      <CreateDatasetDialog
+        open={isCreateDialogOpen}
+        isPending={isCreatePending}
+        mutationState={createDialogState}
+        form={createForm}
+        onClose={() => {
+          if (isCreatePending) {
+            return;
+          }
+          setCreateDialogState(null);
+          setIsCreateDialogOpen(false);
+        }}
+        onSubmit={onCreateDataset}
       />
     </div>
   );

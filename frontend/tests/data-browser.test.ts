@@ -273,9 +273,15 @@ describe("page-boundary source contracts", () => {
     expect(datasetWorkspaceSource).toContain("Save Profile");
     expect(datasetWorkspaceSource).toContain("dedicated dataset management surface");
     expect(datasetWorkspaceSource).toContain("Create Dataset");
+    expect(datasetWorkspaceSource).toContain("CreateDatasetDialog");
+    expect(datasetWorkspaceSource).toContain('aria-labelledby="create-dataset-dialog-title"');
+    expect(datasetWorkspaceSource).toContain("setIsCreateDialogOpen(true);");
     expect(datasetWorkspaceSource).toContain("Archive Dataset");
     expect(datasetWorkspaceSource).toContain("Delete Dataset");
+    expect(datasetWorkspaceSource).toContain('title="Dataset Profile"');
     expect(datasetWorkspaceSource).toContain("cross-page navigation stays in the shell");
+    expect(datasetWorkspaceSource).not.toContain('title="Dataset Lifecycle"');
+    expect(datasetWorkspaceSource).not.toContain("Active Dataset Lifecycle");
     expect(datasetWorkspaceSource).not.toContain("Open Raw Data");
     expect(datasetWorkspaceSource).not.toContain("Open Data Ingestion");
     expect(datasetWorkspaceSource).toContain("activeDatasetState.activeDatasetError");
