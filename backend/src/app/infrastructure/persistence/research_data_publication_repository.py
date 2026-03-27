@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import cast
 
@@ -41,6 +42,7 @@ from src.app.infrastructure.persisted_runtime import (
 )
 from src.app.infrastructure.persistence.models import (
     RewriteDatasetDesignRecord,
+    RewriteDatasetRecord,
     RewritePublishedSimulationResultRecord,
     RewritePublishedSimulationTraceRecord,
 )
@@ -510,11 +512,11 @@ class SqliteResearchDataPublicationRepository:
                 )
                 .order_by(RewritePublishedSimulationTraceRecord.trace_id.asc())
             ).all()
-            capability_map = load_trace_capability_map(
-                session,
+            capability_map = self._load_or_materialize_trace_capability_map(
+                session=session,
                 dataset_id=dataset_id,
                 design_id=design_id,
-                trace_ids=tuple(row.trace_id for row in rows),
+                trace_rows=rows,
             )
             return tuple(
                 _to_trace_summary(
@@ -546,11 +548,11 @@ class SqliteResearchDataPublicationRepository:
             result_handle = self._storage_metadata_repository.get_result_handle(
                 row.result_handle_id
             )
-            capability_map = load_trace_capability_map(
-                session,
+            capability_map = self._load_or_materialize_trace_capability_map(
+                session=session,
                 dataset_id=dataset_id,
                 design_id=design_id,
-                trace_ids=(trace_id,),
+                trace_rows=(row,),
             )
             return TraceDetail(
                 trace_id=row.trace_id,
@@ -661,11 +663,11 @@ class SqliteResearchDataPublicationRepository:
                 .where(RewritePublishedSimulationTraceRecord.publication_id == publication_row.id)
                 .order_by(RewritePublishedSimulationTraceRecord.id.asc())
             ).all()
-            capability_map = load_trace_capability_map(
-                session,
+            capability_map = self._load_or_materialize_trace_capability_map(
+                session=session,
                 dataset_id=dataset.dataset_id,
                 design_id=publication_row.target_design_id,
-                trace_ids=tuple(row.trace_id for row in trace_rows),
+                trace_rows=trace_rows,
             )
             trace_summaries = tuple(
                 _to_trace_summary(
@@ -716,11 +718,11 @@ class SqliteResearchDataPublicationRepository:
                 )
                 .order_by(RewritePublishedSimulationTraceRecord.id.asc())
             ).all()
-            capability_map = load_trace_capability_map(
-                session,
+            capability_map = self._load_or_materialize_trace_capability_map(
+                session=session,
                 dataset_id=dataset.dataset_id,
                 design_id=design.design_id,
-                trace_ids=tuple(row.trace_id for row in publication_trace_rows),
+                trace_rows=publication_trace_rows,
             )
             trace_summaries = tuple(
                 _to_trace_summary(
@@ -758,6 +760,55 @@ class SqliteResearchDataPublicationRepository:
                     for row in requested_trace_rows
                 ),
             )
+
+    def _load_or_materialize_trace_capability_map(
+        self,
+        *,
+        session: Session,
+        dataset_id: str,
+        design_id: str,
+        trace_rows: Sequence[RewritePublishedSimulationTraceRecord],
+    ) -> dict[str, tuple[TraceAnalysisCapability, ...]]:
+        trace_ids = tuple(row.trace_id for row in trace_rows)
+        if len(trace_ids) == 0:
+            return {}
+        capability_map = load_trace_capability_map(
+            session,
+            dataset_id=dataset_id,
+            design_id=design_id,
+            trace_ids=trace_ids,
+        )
+        missing_rows = [row for row in trace_rows if row.trace_id not in capability_map]
+        if len(missing_rows) == 0:
+            return capability_map
+        dataset_row = session.scalar(
+            select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
+        )
+        if dataset_row is None:
+            return capability_map
+        for row in missing_rows:
+            capabilities = evaluate_trace_analysis_capabilities(
+                dataset_family=dataset_row.family,
+                trace=_to_trace_summary(row),
+                axes=tuple(
+                    TraceAxis(
+                        name=str(axis["name"]),
+                        unit=str(axis["unit"]),
+                        length=int(axis["length"]),
+                    )
+                    for axis in row.axes_json
+                ),
+            )
+            replace_trace_capabilities(
+                session,
+                dataset_id=row.dataset_id,
+                design_id=row.design_id,
+                trace_id=row.trace_id,
+                capabilities=capabilities,
+            )
+            capability_map[row.trace_id] = capabilities
+        session.commit()
+        return capability_map
 
 
 @dataclass(frozen=True)
