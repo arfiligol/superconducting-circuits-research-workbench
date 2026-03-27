@@ -78,7 +78,7 @@ _ANALYSIS_SPECS: tuple[CharacterizationAnalysisSpec, ...] = (
     CharacterizationAnalysisSpec(
         analysis_id="admittance_extraction",
         label="Admittance Resonance Extraction",
-        dataset_families=("fluxonium",),
+        dataset_families=("fluxonium", "floatingqubit"),
         config_fields=(
             _CONFIG_RANGE(
                 field_key="fit_window",
@@ -334,11 +334,14 @@ def evaluate_trace_analysis_capabilities(
     trace: TraceMetadataSummary,
     axes: tuple[TraceAxis, ...],
 ) -> tuple[TraceAnalysisCapability, ...]:
-    normalized_family = dataset_family.casefold()
+    normalized_family = _normalize_dataset_family(dataset_family)
     return tuple(
         capability
         for spec in _ANALYSIS_SPECS
-        if normalized_family in spec.dataset_families
+        if normalized_family in {
+            _normalize_dataset_family(family)
+            for family in spec.dataset_families
+        }
         for capability in _evaluate_trace_against_spec(spec=spec, trace=trace, axes=axes)
     )
 
@@ -849,6 +852,10 @@ def _legacy_runtime_unsupported_fallback_summary(
         f"Legacy trace coverage suggests {spec.label.lower()} may be relevant, but "
         "the current runtime does not yet support executing this analysis."
     )
+
+
+def _normalize_dataset_family(value: str) -> str:
+    return "".join(character for character in value.casefold() if character.isalnum())
 
 
 def _first_incompatible_reason(

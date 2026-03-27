@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from src.app.infrastructure.persistence.database import create_metadata_session_factory
+from src.app.infrastructure.persistence.models import RewriteTraceCapabilityRecord
 from src.app.infrastructure.runtime import reset_runtime_state
 from src.app.main import app
+from src.app.settings import get_settings
 from tests.worker_runtime_harness import (
     drain_lane_queue,
     queue_job_count,
@@ -64,6 +68,45 @@ def _submit_characterization_task() -> dict[str, object]:
     response = client.post("/tasks", json=_characterization_payload())
     assert response.status_code == 201
     return response.json()["data"]["task"]
+
+
+def _metadata_session_factory():
+    return create_metadata_session_factory(get_settings().database_path)
+
+
+def _clear_trace_capabilities(
+    dataset_id: str,
+    design_id: str,
+    trace_ids: tuple[str, ...],
+) -> None:
+    with _metadata_session_factory()() as session:
+        session.query(RewriteTraceCapabilityRecord).filter(
+            RewriteTraceCapabilityRecord.dataset_id == dataset_id,
+            RewriteTraceCapabilityRecord.design_id == design_id,
+            RewriteTraceCapabilityRecord.trace_id.in_(trace_ids),
+        ).delete(synchronize_session=False)
+        session.commit()
+
+
+def _load_trace_capability_analysis_ids(
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+) -> tuple[str, ...]:
+    with _metadata_session_factory()() as session:
+        rows = session.scalars(
+            select(RewriteTraceCapabilityRecord)
+            .where(
+                RewriteTraceCapabilityRecord.dataset_id == dataset_id,
+                RewriteTraceCapabilityRecord.design_id == design_id,
+                RewriteTraceCapabilityRecord.trace_id == trace_id,
+            )
+            .order_by(
+                RewriteTraceCapabilityRecord.analysis_id.asc(),
+                RewriteTraceCapabilityRecord.input_role.asc(),
+            )
+        ).all()
+    return tuple(row.analysis_id for row in rows)
 
 
 def _create_ineligible_local_characterization_trace() -> tuple[str, str, str]:
@@ -136,6 +179,46 @@ def _create_unsupported_local_characterization_trace() -> tuple[str, str, str]:
                     "preview_payload": {
                         "kind": "sampled_series",
                         "points": [[0.01, 0.91], [0.03, 0.84], [0.05, 0.79]],
+                    },
+                }
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    return dataset_id, payload["design"]["design_id"], payload["traces"][0]["trace_id"]
+
+
+def _create_legacy_floating_qubit_characterization_trace() -> tuple[str, str, str]:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Legacy Floating Qubit Characterization Dataset",
+            "family": "FloatingQubit",
+            "device_type": "FloatingQubit",
+            "source": "simulation",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "layout_simulation",
+            "design_name": "FloatingQubitWithXY Legacy",
+            "provenance_label": "legacy-floating-qubit-simulation",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Ydm_real",
+                    "representation": "real",
+                    "trace_mode_group": "base",
+                    "stage_kind": "postprocess",
+                    "provenance_summary": "Floating-qubit differential admittance trace",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 3}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.11], [5.2, 0.15], [5.4, 0.18]],
                     },
                 }
             ],
@@ -219,6 +302,93 @@ def test_local_characterization_registry_exposes_admittance_for_compatible_saved
             },
         },
     ]
+
+
+def test_local_trace_registry_read_repair_backfills_legacy_floating_qubit_capabilities() -> None:
+    dataset_id, design_id, trace_id = _create_legacy_floating_qubit_characterization_trace()
+    _clear_trace_capabilities(dataset_id, design_id, (trace_id,))
+
+    trace_response = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces")
+    registry_response = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/characterization-analysis-registry",
+        params=[("selected_trace_ids", trace_id)],
+    )
+
+    assert trace_response.status_code == 200
+    trace_row = next(
+        row
+        for row in trace_response.json()["data"]["rows"]
+        if row["trace_id"] == trace_id
+    )
+    assert trace_row["analysis_capabilities"] != []
+    assert any(
+        capability["analysis_id"] == "admittance_extraction"
+        for capability in trace_row["analysis_capabilities"]
+    )
+
+    assert registry_response.status_code == 200
+    assert registry_response.json()["data"]["rows"] == [
+        {
+            "analysis_id": "admittance_extraction",
+            "label": "Admittance Resonance Extraction",
+            "availability_state": "recommended",
+            "required_config_fields": ["fit_window", "residual_tolerance"],
+            "trace_compatibility": {
+                "matched_trace_count": 1,
+                "selected_trace_count": 1,
+                "recommended_trace_modes": ["base"],
+                "summary": (
+                    "1 selected trace is eligible for admittance resonance extraction."
+                ),
+            },
+        }
+    ]
+    assert _load_trace_capability_analysis_ids(dataset_id, design_id, trace_id) == (
+        "admittance_extraction",
+    )
+
+
+def test_local_registry_read_repair_preserves_selected_scope_truthfulness() -> None:
+    trace_ids = (
+        "trace_local_flux_measurement",
+        "trace_local_flux_preview",
+    )
+    _clear_trace_capabilities("local-dataset-001", "design_local_flux_playground", trace_ids)
+
+    response = client.get(
+        "/datasets/local-dataset-001/designs/design_local_flux_playground/"
+        "characterization-analysis-registry",
+        params=[("selected_trace_ids", trace_id) for trace_id in trace_ids],
+    )
+
+    assert response.status_code == 200
+    rows = response.json()["data"]["rows"]
+    assert rows[0] == {
+        "analysis_id": "admittance_extraction",
+        "label": "Admittance Resonance Extraction",
+        "availability_state": "recommended",
+        "required_config_fields": ["fit_window", "residual_tolerance"],
+        "trace_compatibility": {
+            "matched_trace_count": 2,
+            "selected_trace_count": 2,
+            "recommended_trace_modes": ["base"],
+            "summary": "2 selected traces are eligible for admittance resonance extraction.",
+        },
+    }
+    assert {
+        analysis_id
+        for trace_id in trace_ids
+        for analysis_id in _load_trace_capability_analysis_ids(
+            "local-dataset-001",
+            "design_local_flux_playground",
+            trace_id,
+        )
+    } >= {
+        "admittance_extraction",
+        "junction_parameter_identification",
+        "screening_summary",
+        "sideband_comparison",
+    }
 
 
 def test_local_characterization_runtime_summary_reports_idle_worker_presence() -> None:
@@ -314,6 +484,7 @@ def test_local_characterization_submit_rejects_ineligible_selected_trace() -> No
 
 def test_local_registry_marks_compatible_but_unsupported_analysis_as_unavailable() -> None:
     dataset_id, design_id, trace_id = _create_unsupported_local_characterization_trace()
+    _clear_trace_capabilities(dataset_id, design_id, (trace_id,))
 
     registry_response = client.get(
         f"/datasets/{dataset_id}/designs/{design_id}/characterization-analysis-registry",
@@ -338,6 +509,9 @@ def test_local_registry_marks_compatible_but_unsupported_analysis_as_unavailable
             },
         }
     ]
+    assert _load_trace_capability_analysis_ids(dataset_id, design_id, trace_id) == (
+        "quality_factor_fit",
+    )
 
     submit_response = client.post(
         "/tasks",

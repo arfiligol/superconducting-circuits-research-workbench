@@ -367,6 +367,9 @@ class DurableCatalogRepository:
         dataset_id: str,
         design_id: str,
     ) -> tuple[TraceMetadataSummary, ...]:
+        dataset = self.get_dataset(dataset_id)
+        if dataset is None:
+            return ()
         rows = {
             row.trace_id: row
             for row in self._publication_repository.list_trace_metadata(
@@ -375,10 +378,10 @@ class DurableCatalogRepository:
             )
         }
         raw_rows = self._list_raw_trace_rows(dataset_id=dataset_id, design_id=design_id)
-        capability_map = self._load_trace_capability_map(
-            dataset_id=dataset_id,
+        capability_map = self._load_or_materialize_raw_trace_capability_map(
+            dataset=dataset,
             design_id=design_id,
-            trace_ids=tuple(row.trace_id for row in raw_rows),
+            trace_rows=raw_rows,
         )
         for trace_row in raw_rows:
             rows[trace_row.trace_id] = _to_trace_summary(
@@ -1049,11 +1052,58 @@ class DurableCatalogRepository:
         design_id: str,
         trace_id: str,
     ) -> tuple[TraceAnalysisCapability, ...]:
-        return self._load_trace_capability_map(
-            dataset_id=dataset_id,
+        raw_row = self._get_raw_trace_row(dataset_id, design_id, trace_id)
+        if raw_row is None:
+            return self._load_trace_capability_map(
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_ids=(trace_id,),
+            ).get(trace_id, ())
+        dataset = self.get_dataset(dataset_id)
+        if dataset is None:
+            return ()
+        return self._load_or_materialize_raw_trace_capability_map(
+            dataset=dataset,
             design_id=design_id,
-            trace_ids=(trace_id,),
+            trace_rows=(raw_row,),
         ).get(trace_id, ())
+
+    def _load_or_materialize_raw_trace_capability_map(
+        self,
+        *,
+        dataset: DatasetDetail,
+        design_id: str,
+        trace_rows: Sequence[RewriteDatasetTraceRecord],
+    ) -> dict[str, tuple[TraceAnalysisCapability, ...]]:
+        trace_ids = tuple(row.trace_id for row in trace_rows)
+        if len(trace_ids) == 0:
+            return {}
+        with self._session_factory() as session:
+            capability_map = load_trace_capability_map(
+                session,
+                dataset_id=dataset.dataset_id,
+                design_id=design_id,
+                trace_ids=trace_ids,
+            )
+            missing_rows = [row for row in trace_rows if row.trace_id not in capability_map]
+            if len(missing_rows) == 0:
+                return capability_map
+            for row in missing_rows:
+                capabilities = evaluate_trace_analysis_capabilities(
+                    dataset_family=dataset.family,
+                    trace=_to_trace_summary(row),
+                    axes=tuple(_deserialize_axis(item) for item in row.axes_json),
+                )
+                replace_trace_capabilities(
+                    session,
+                    dataset_id=row.dataset_id,
+                    design_id=row.design_id,
+                    trace_id=row.trace_id,
+                    capabilities=capabilities,
+                )
+                capability_map[row.trace_id] = capabilities
+            session.commit()
+            return capability_map
 
     def _load_trace_capability_map(
         self,
