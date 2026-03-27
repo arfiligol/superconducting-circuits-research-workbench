@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { LoaderCircle, Search } from "lucide-react";
+import { LoaderCircle, Play, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useCharacterizationWorkflowData } from "@/features/characterization/hooks/use-characterization-workflow-data";
@@ -793,37 +793,27 @@ export function CharacterizationWorkspace() {
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Run Analysis
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {selectedAnalysis
-                      ? `${selectedAnalysis.label} · ${traceSelectionSummary}`
-                      : "Choose an analysis to continue."}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleRunAnalysis();
-                  }}
-                  disabled={
-                    taskMutationState.state === "submitting" ||
-                    !selectedDesignId ||
-                    !selectedAnalysis ||
-                    selectedAnalysis.availabilityState === "unavailable" ||
-                    selectedTraceIds.length === 0
-                  }
-                  className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-medium text-foreground transition hover:border-primary/45 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {taskMutationState.state === "submitting" ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : null}
-                  Run Analysis
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleRunAnalysis();
+                }}
+                disabled={
+                  taskMutationState.state === "submitting" ||
+                  !selectedDesignId ||
+                  !selectedAnalysis ||
+                  selectedAnalysis.availabilityState === "unavailable" ||
+                  selectedTraceIds.length === 0
+                }
+                className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {taskMutationState.state === "submitting" ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                Run Analysis
+              </button>
             </div>
           </SurfacePanel>
 
