@@ -97,6 +97,16 @@ def load_trace_capability_map(
     }
 
 
+def trace_capabilities_equal(
+    left: Sequence[TraceAnalysisCapability],
+    right: Sequence[TraceAnalysisCapability],
+) -> bool:
+    return len(left) == len(right) and all(
+        _trace_capability_equal(left_item, right_item)
+        for left_item, right_item in zip(left, right, strict=False)
+    )
+
+
 def _to_trace_capability(row: RewriteTraceCapabilityRecord) -> TraceAnalysisCapability:
     return TraceAnalysisCapability(
         capability_id=row.capability_id,
@@ -119,4 +129,39 @@ def _to_trace_capability(row: RewriteTraceCapabilityRecord) -> TraceAnalysisCapa
             for item in row.reasons_json
             if isinstance(item, dict)
         ),
+    )
+
+
+def _trace_capability_equal(
+    left: TraceAnalysisCapability,
+    right: TraceAnalysisCapability,
+) -> bool:
+    return (
+        left.capability_id == right.capability_id
+        and left.analysis_id == right.analysis_id
+        and left.analysis_label == right.analysis_label
+        and left.input_role == right.input_role
+        and left.input_role_label == right.input_role_label
+        and left.status == right.status
+        and left.summary == right.summary
+        and len(left.reasons) == len(right.reasons)
+        and all(
+            _trace_capability_reason_equal(left_reason, right_reason)
+            for left_reason, right_reason in zip(
+                left.reasons,
+                right.reasons,
+                strict=False,
+            )
+        )
+    )
+
+
+def _trace_capability_reason_equal(
+    left: TraceCapabilityReason,
+    right: TraceCapabilityReason,
+) -> bool:
+    return (
+        left.code == right.code
+        and left.message == right.message
+        and left.evidence == right.evidence
     )

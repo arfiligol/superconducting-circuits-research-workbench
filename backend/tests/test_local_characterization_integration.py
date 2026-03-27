@@ -88,6 +88,76 @@ def _clear_trace_capabilities(
         session.commit()
 
 
+def _overwrite_trace_capabilities_with_analysis_subset(
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+    analysis_ids: tuple[str, ...],
+) -> None:
+    with _metadata_session_factory()() as session:
+        existing_rows = session.scalars(
+            select(RewriteTraceCapabilityRecord)
+            .where(
+                RewriteTraceCapabilityRecord.dataset_id == dataset_id,
+                RewriteTraceCapabilityRecord.design_id == design_id,
+                RewriteTraceCapabilityRecord.trace_id == trace_id,
+            )
+            .order_by(
+                RewriteTraceCapabilityRecord.analysis_id.asc(),
+                RewriteTraceCapabilityRecord.input_role.asc(),
+            )
+        ).all()
+        replacement_rows = [
+            {
+                "capability_id": row.capability_id,
+                "analysis_id": row.analysis_id,
+                "analysis_label": row.analysis_label,
+                "input_role": row.input_role,
+                "input_role_label": row.input_role_label,
+                "status": row.status,
+                "summary": row.summary,
+                "reasons_json": [
+                    {
+                        "code": str(reason.get("code", "")),
+                        "message": str(reason.get("message", "")),
+                        "evidence": (
+                            dict(reason["evidence"])
+                            if isinstance(reason.get("evidence"), dict)
+                            else {}
+                        ),
+                    }
+                    for reason in row.reasons_json
+                    if isinstance(reason, dict)
+                ],
+            }
+            for row in existing_rows
+            if row.analysis_id in analysis_ids
+        ]
+    with _metadata_session_factory()() as session:
+        session.query(RewriteTraceCapabilityRecord).filter(
+            RewriteTraceCapabilityRecord.dataset_id == dataset_id,
+            RewriteTraceCapabilityRecord.design_id == design_id,
+            RewriteTraceCapabilityRecord.trace_id == trace_id,
+        ).delete(synchronize_session=False)
+        for row in replacement_rows:
+            session.add(
+                RewriteTraceCapabilityRecord(
+                    dataset_id=dataset_id,
+                    design_id=design_id,
+                    trace_id=trace_id,
+                    capability_id=row["capability_id"],
+                    analysis_id=row["analysis_id"],
+                    analysis_label=row["analysis_label"],
+                    input_role=row["input_role"],
+                    input_role_label=row["input_role_label"],
+                    status=row["status"],
+                    summary=row["summary"],
+                    reasons_json=row["reasons_json"],
+                )
+            )
+        session.commit()
+
+
 def _load_trace_capability_analysis_ids(
     dataset_id: str,
     design_id: str,
@@ -348,7 +418,16 @@ def test_local_characterization_registry_exposes_admittance_for_compatible_saved
 def test_local_registry_and_submit_use_trace_capability_first_gating_for_transmon_metadata_case(
 ) -> None:
     dataset_id, design_id, trace_id = _create_transmon_metadata_floating_qubit_trace()
-    _clear_trace_capabilities(dataset_id, design_id, (trace_id,))
+    _overwrite_trace_capabilities_with_analysis_subset(
+        dataset_id,
+        design_id,
+        trace_id,
+        ("coupler_shift_fit",),
+    )
+
+    assert set(_load_trace_capability_analysis_ids(dataset_id, design_id, trace_id)) == {
+        "coupler_shift_fit"
+    }
 
     trace_response = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces")
     registry_response = client.get(
