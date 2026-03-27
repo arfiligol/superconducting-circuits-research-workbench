@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
+from core.shared.persistence import database as core_database
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from src.app.infrastructure.persistence.database import create_metadata_session_factory
@@ -72,6 +75,36 @@ def _submit_characterization_task() -> dict[str, object]:
 
 def _metadata_session_factory():
     return create_metadata_session_factory(get_settings().database_path)
+
+
+def _create_legacy_result_bundle_table() -> None:
+    core_database.get_engine.cache_clear()
+    with sqlite3.connect(get_settings().database_path) as connection:
+        connection.execute("DROP TABLE IF EXISTS result_bundle_data_links")
+        connection.execute("DROP TABLE IF EXISTS result_bundle_records")
+        connection.execute(
+            """
+            CREATE TABLE result_bundle_records (
+                id INTEGER PRIMARY KEY,
+                dataset_id INTEGER NOT NULL,
+                bundle_type VARCHAR NOT NULL,
+                source_meta JSON DEFAULT '{}',
+                config_snapshot JSON DEFAULT '{}',
+                result_payload JSON DEFAULT '{}',
+                created_at DATETIME
+            )
+            """
+        )
+        connection.commit()
+    core_database.get_engine.cache_clear()
+
+
+def _result_bundle_columns() -> set[str]:
+    with sqlite3.connect(get_settings().database_path) as connection:
+        return {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(result_bundle_records)")
+        }
 
 
 def _clear_trace_capabilities(
@@ -770,6 +803,29 @@ def test_local_characterization_submit_completes_with_analysis_run_and_result_ha
     )
     assert detail["result_refs"]["result_handles"][0]["kind"] == "characterization_report"
     assert detail["result_refs"]["result_handles"][0]["status"] == "materialized"
+
+
+def test_local_characterization_submit_upgrades_legacy_result_bundle_schema_before_persisting_runs(
+) -> None:
+    _create_legacy_result_bundle_table()
+    assert "design_id" not in _result_bundle_columns()
+
+    task = _submit_characterization_task()
+    drain_lane_queue("characterization")
+
+    detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
+    assert detail["status"] == "completed"
+    assert isinstance(detail["result_refs"]["analysis_run_id"], int)
+    assert detail["result_refs"]["analysis_run_id"] > 0
+    assert {
+        "design_id",
+        "parent_batch_id",
+        "role",
+        "status",
+        "schema_source_hash",
+        "simulation_setup_hash",
+        "completed_at",
+    } <= _result_bundle_columns()
 
 
 def test_local_characterization_result_surfaces_survive_refresh() -> None:

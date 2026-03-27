@@ -64,8 +64,26 @@ def _ensure_legacy_sqlite_compat_columns(engine: Engine) -> None:
             "store_ref": "ALTER TABLE data_records ADD COLUMN store_ref JSON DEFAULT '{}'",
         },
         "result_bundle_records": {
+            "design_id": "ALTER TABLE result_bundle_records ADD COLUMN design_id INTEGER",
             "parent_batch_id": (
                 "ALTER TABLE result_bundle_records ADD COLUMN parent_batch_id INTEGER"
+            ),
+            "role": (
+                "ALTER TABLE result_bundle_records ADD COLUMN role VARCHAR "
+                "DEFAULT 'cache' NOT NULL"
+            ),
+            "status": (
+                "ALTER TABLE result_bundle_records ADD COLUMN status VARCHAR "
+                "DEFAULT 'completed' NOT NULL"
+            ),
+            "schema_source_hash": (
+                "ALTER TABLE result_bundle_records ADD COLUMN schema_source_hash VARCHAR"
+            ),
+            "simulation_setup_hash": (
+                "ALTER TABLE result_bundle_records ADD COLUMN simulation_setup_hash VARCHAR"
+            ),
+            "completed_at": (
+                "ALTER TABLE result_bundle_records ADD COLUMN completed_at DATETIME"
             ),
         },
     }
