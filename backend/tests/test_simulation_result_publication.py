@@ -331,8 +331,11 @@ def test_completed_simulation_task_can_be_published_and_is_queryable() -> None:
     assert payload["task"]["publication_summary"]["state"] == "published"
     assert payload["design"]["design_id"] == "design_fluxonium-simulation-save"
     assert len(payload["traces"]) == 5
+    y_matrix_trace = next(
+        trace for trace in payload["traces"] if trace["family"] == "y_matrix"
+    )
     published_trace_capabilities = _capability_by_analysis(
-        payload["traces"][0]["analysis_capabilities"]
+        y_matrix_trace["analysis_capabilities"]
     )
     assert "admittance_extraction" in published_trace_capabilities
     assert published_trace_capabilities["admittance_extraction"]["status"] in {

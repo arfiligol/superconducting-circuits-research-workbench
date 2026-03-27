@@ -229,6 +229,47 @@ def _create_legacy_floating_qubit_characterization_trace() -> tuple[str, str, st
     return dataset_id, payload["design"]["design_id"], payload["traces"][0]["trace_id"]
 
 
+def _create_transmon_metadata_floating_qubit_trace() -> tuple[str, str, str]:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "FloatingQubit 100",
+            "family": "Transmon",
+            "device_type": "FloatingQubit",
+            "source": "simulation",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "layout_simulation",
+            "design_id": "design_floatingqubitwithxy",
+            "design_name": "FloatingQubitWithXY",
+            "provenance_label": "floating-qubit-transmon-metadata",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Ydm_real",
+                    "representation": "real",
+                    "trace_mode_group": "base",
+                    "stage_kind": "postprocess",
+                    "provenance_summary": "Floating-qubit Y-matrix post-processed trace",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 3}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.11], [5.2, 0.15], [5.4, 0.18]],
+                    },
+                }
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    return dataset_id, payload["design"]["design_id"], payload["traces"][0]["trace_id"]
+
+
 def test_local_characterization_registry_exposes_admittance_for_compatible_saved_design() -> None:
     response = client.get(
         "/datasets/local-dataset-001/designs/design_local_flux_playground/"
@@ -302,6 +343,82 @@ def test_local_characterization_registry_exposes_admittance_for_compatible_saved
             },
         },
     ]
+
+
+def test_local_registry_and_submit_use_trace_capability_first_gating_for_transmon_metadata_case(
+) -> None:
+    dataset_id, design_id, trace_id = _create_transmon_metadata_floating_qubit_trace()
+    _clear_trace_capabilities(dataset_id, design_id, (trace_id,))
+
+    trace_response = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces")
+    registry_response = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/characterization-analysis-registry",
+        params=[("selected_trace_ids", trace_id)],
+    )
+    submit_response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "dataset_id": dataset_id,
+            "characterization_setup": {
+                "design_id": design_id,
+                "analysis_id": "admittance_extraction",
+                "selected_trace_ids": [trace_id],
+                "analysis_config": {
+                    "fit_window": [4.85, 5.25],
+                    "residual_tolerance": 0.015,
+                },
+            },
+        },
+    )
+
+    assert trace_response.status_code == 200
+    trace_row = next(
+        row
+        for row in trace_response.json()["data"]["rows"]
+        if row["trace_id"] == trace_id
+    )
+    admittance_capability = next(
+        capability
+        for capability in trace_row["analysis_capabilities"]
+        if capability["analysis_id"] == "admittance_extraction"
+    )
+    assert admittance_capability["status"] == "eligible"
+    assert admittance_capability["reasons"] == [
+        {
+            "code": "dataset_family_unpreferred",
+            "message": (
+                "Trace structure is compatible, but dataset family metadata is outside "
+                "the preferred families for this analysis."
+            ),
+            "evidence": {
+                "actual_dataset_family": "Transmon",
+                "preferred_dataset_families": ["fluxonium", "floatingqubit"],
+            },
+        }
+    ]
+
+    assert registry_response.status_code == 200
+    assert registry_response.json()["data"]["rows"][0] == {
+        "analysis_id": "admittance_extraction",
+        "label": "Admittance Resonance Extraction",
+        "availability_state": "recommended",
+        "required_config_fields": ["fit_window", "residual_tolerance"],
+        "trace_compatibility": {
+            "matched_trace_count": 1,
+            "selected_trace_count": 1,
+            "recommended_trace_modes": ["base"],
+            "summary": "1 selected trace is eligible for admittance resonance extraction.",
+        },
+    }
+    assert "admittance_extraction" in _load_trace_capability_analysis_ids(
+        dataset_id,
+        design_id,
+        trace_id,
+    )
+
+    assert submit_response.status_code == 201
+    assert submit_response.json()["data"]["operation"] == "submitted"
 
 
 def test_local_trace_registry_read_repair_backfills_legacy_floating_qubit_capabilities() -> None:

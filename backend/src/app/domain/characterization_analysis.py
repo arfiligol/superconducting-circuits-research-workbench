@@ -53,6 +53,7 @@ class CharacterizationAnalysisSpec:
     local_runtime_supported: bool
     input_roles: tuple[CharacterizationAnalysisInputRoleSpec, ...]
     unavailable_summary: str
+    dataset_family_gate_mode: Literal["hard", "advisory"] = "hard"
 
     @property
     def required_config_fields(self) -> tuple[str, ...]:
@@ -79,6 +80,7 @@ _ANALYSIS_SPECS: tuple[CharacterizationAnalysisSpec, ...] = (
         analysis_id="admittance_extraction",
         label="Admittance Resonance Extraction",
         dataset_families=("fluxonium", "floatingqubit"),
+        dataset_family_gate_mode="advisory",
         config_fields=(
             _CONFIG_RANGE(
                 field_key="fit_window",
@@ -334,15 +336,17 @@ def evaluate_trace_analysis_capabilities(
     trace: TraceMetadataSummary,
     axes: tuple[TraceAxis, ...],
 ) -> tuple[TraceAnalysisCapability, ...]:
-    normalized_family = _normalize_dataset_family(dataset_family)
     return tuple(
         capability
         for spec in _ANALYSIS_SPECS
-        if normalized_family in {
-            _normalize_dataset_family(family)
-            for family in spec.dataset_families
-        }
-        for capability in _evaluate_trace_against_spec(spec=spec, trace=trace, axes=axes)
+        if not _dataset_family_is_hard_excluded(spec, dataset_family)
+        if _should_evaluate_spec_for_trace(spec=spec, trace=trace)
+        for capability in _evaluate_trace_against_spec(
+            spec=spec,
+            dataset_family=dataset_family,
+            trace=trace,
+            axes=axes,
+        )
     )
 
 
@@ -615,11 +619,18 @@ def validate_characterization_analysis_config(
 def _evaluate_trace_against_spec(
     *,
     spec: CharacterizationAnalysisSpec,
+    dataset_family: str,
     trace: TraceMetadataSummary,
     axes: tuple[TraceAxis, ...],
 ) -> tuple[TraceAnalysisCapability, ...]:
     return tuple(
-        _evaluate_trace_against_role(spec=spec, role=role, trace=trace, axes=axes)
+        _evaluate_trace_against_role(
+            spec=spec,
+            dataset_family=dataset_family,
+            role=role,
+            trace=trace,
+            axes=axes,
+        )
         for role in spec.input_roles
     )
 
@@ -627,14 +638,34 @@ def _evaluate_trace_against_spec(
 def _evaluate_trace_against_role(
     *,
     spec: CharacterizationAnalysisSpec,
+    dataset_family: str,
     role: CharacterizationAnalysisInputRoleSpec,
     trace: TraceMetadataSummary,
     axes: tuple[TraceAxis, ...],
 ) -> TraceAnalysisCapability:
-    reasons: list[TraceCapabilityReason] = []
+    blocking_reasons: list[TraceCapabilityReason] = []
+    advisory_reasons: list[TraceCapabilityReason] = []
+
+    if (
+        spec.dataset_family_gate_mode == "advisory"
+        and not _dataset_family_matches_spec(spec, dataset_family)
+    ):
+        advisory_reasons.append(
+            _capability_reason(
+                code="dataset_family_unpreferred",
+                message=(
+                    "Trace structure is compatible, but dataset family metadata is outside "
+                    "the preferred families for this analysis."
+                ),
+                evidence={
+                    "actual_dataset_family": dataset_family,
+                    "preferred_dataset_families": list(spec.dataset_families),
+                },
+            )
+        )
 
     if trace.family not in role.accepted_families:
-        reasons.append(
+        blocking_reasons.append(
             _capability_reason(
                 code="family_mismatch",
                 message=f"Requires {_format_token_list(role.accepted_families)} traces.",
@@ -643,9 +674,9 @@ def _evaluate_trace_against_role(
                     "accepted_families": list(role.accepted_families),
                 },
             )
-        )
+    )
     if trace.trace_mode_group not in role.accepted_trace_mode_groups:
-        reasons.append(
+        blocking_reasons.append(
             _capability_reason(
                 code="trace_mode_group_mismatch",
                 message=(
@@ -657,9 +688,9 @@ def _evaluate_trace_against_role(
                     "accepted_trace_mode_groups": list(role.accepted_trace_mode_groups),
                 },
             )
-        )
+    )
     if len(role.accepted_source_kinds) > 0 and trace.source_kind not in role.accepted_source_kinds:
-        reasons.append(
+        blocking_reasons.append(
             _capability_reason(
                 code="source_kind_mismatch",
                 message=(
@@ -676,7 +707,7 @@ def _evaluate_trace_against_role(
         len(role.accepted_representations) > 0
         and trace.representation not in role.accepted_representations
     ):
-        reasons.append(
+        blocking_reasons.append(
             _capability_reason(
                 code="representation_mismatch",
                 message=(
@@ -688,11 +719,11 @@ def _evaluate_trace_against_role(
                     "accepted_representations": list(role.accepted_representations),
                 },
             )
-        )
+    )
     if role.required_axis_name is not None and not any(
         axis.name.casefold() == role.required_axis_name.casefold() for axis in axes
     ):
-        reasons.append(
+        blocking_reasons.append(
             _capability_reason(
                 code="required_axis_missing",
                 message=f"Requires a {role.required_axis_name} axis.",
@@ -703,7 +734,8 @@ def _evaluate_trace_against_role(
             )
         )
 
-    eligible = len(reasons) == 0
+    eligible = len(blocking_reasons) == 0
+    reasons = tuple(blocking_reasons or advisory_reasons)
     return TraceAnalysisCapability(
         capability_id=f"{spec.analysis_id}:{role.capability_key}",
         analysis_id=spec.analysis_id,
@@ -712,11 +744,14 @@ def _evaluate_trace_against_role(
         input_role_label=role.input_role_label,
         status="eligible" if eligible else "ineligible",
         summary=(
-            f"Eligible as {role.input_role_label.lower()}."
+            _eligible_capability_summary(
+                role=role,
+                advisory_reasons=reasons,
+            )
             if eligible
             else reasons[0].message
         ),
-        reasons=tuple(reasons),
+        reasons=reasons,
     )
 
 
@@ -856,6 +891,48 @@ def _legacy_runtime_unsupported_fallback_summary(
 
 def _normalize_dataset_family(value: str) -> str:
     return "".join(character for character in value.casefold() if character.isalnum())
+
+
+def _dataset_family_matches_spec(
+    spec: CharacterizationAnalysisSpec,
+    dataset_family: str,
+) -> bool:
+    normalized_family = _normalize_dataset_family(dataset_family)
+    return normalized_family in {
+        _normalize_dataset_family(family)
+        for family in spec.dataset_families
+    }
+
+
+def _dataset_family_is_hard_excluded(
+    spec: CharacterizationAnalysisSpec,
+    dataset_family: str,
+) -> bool:
+    return (
+        spec.dataset_family_gate_mode == "hard"
+        and not _dataset_family_matches_spec(spec, dataset_family)
+    )
+
+
+def _should_evaluate_spec_for_trace(
+    *,
+    spec: CharacterizationAnalysisSpec,
+    trace: TraceMetadataSummary,
+) -> bool:
+    if spec.dataset_family_gate_mode != "advisory":
+        return True
+    return any(trace.family in role.accepted_families for role in spec.input_roles)
+
+
+def _eligible_capability_summary(
+    *,
+    role: CharacterizationAnalysisInputRoleSpec,
+    advisory_reasons: tuple[TraceCapabilityReason, ...],
+) -> str:
+    summary = f"Eligible as {role.input_role_label.lower()}."
+    if len(advisory_reasons) == 0:
+        return summary
+    return f"{summary} {advisory_reasons[0].message}"
 
 
 def _first_incompatible_reason(
