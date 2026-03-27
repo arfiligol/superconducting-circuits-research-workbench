@@ -156,6 +156,76 @@ def _clear_trace_capabilities(
         session.commit()
 
 
+def _overwrite_trace_capabilities_with_analysis_subset(
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+    analysis_ids: tuple[str, ...],
+) -> None:
+    with _metadata_session_factory()() as session:
+        existing_rows = session.scalars(
+            select(RewriteTraceCapabilityRecord)
+            .where(
+                RewriteTraceCapabilityRecord.dataset_id == dataset_id,
+                RewriteTraceCapabilityRecord.design_id == design_id,
+                RewriteTraceCapabilityRecord.trace_id == trace_id,
+            )
+            .order_by(
+                RewriteTraceCapabilityRecord.analysis_id.asc(),
+                RewriteTraceCapabilityRecord.input_role.asc(),
+            )
+        ).all()
+        replacement_rows = [
+            {
+                "capability_id": row.capability_id,
+                "analysis_id": row.analysis_id,
+                "analysis_label": row.analysis_label,
+                "input_role": row.input_role,
+                "input_role_label": row.input_role_label,
+                "status": row.status,
+                "summary": row.summary,
+                "reasons_json": [
+                    {
+                        "code": str(reason.get("code", "")),
+                        "message": str(reason.get("message", "")),
+                        "evidence": (
+                            dict(reason["evidence"])
+                            if isinstance(reason.get("evidence"), dict)
+                            else {}
+                        ),
+                    }
+                    for reason in row.reasons_json
+                    if isinstance(reason, dict)
+                ],
+            }
+            for row in existing_rows
+            if row.analysis_id in analysis_ids
+        ]
+    with _metadata_session_factory()() as session:
+        session.query(RewriteTraceCapabilityRecord).filter(
+            RewriteTraceCapabilityRecord.dataset_id == dataset_id,
+            RewriteTraceCapabilityRecord.design_id == design_id,
+            RewriteTraceCapabilityRecord.trace_id == trace_id,
+        ).delete(synchronize_session=False)
+        for row in replacement_rows:
+            session.add(
+                RewriteTraceCapabilityRecord(
+                    dataset_id=dataset_id,
+                    design_id=design_id,
+                    trace_id=trace_id,
+                    capability_id=row["capability_id"],
+                    analysis_id=row["analysis_id"],
+                    analysis_label=row["analysis_label"],
+                    input_role=row["input_role"],
+                    input_role_label=row["input_role_label"],
+                    status=row["status"],
+                    summary=row["summary"],
+                    reasons_json=row["reasons_json"],
+                )
+            )
+        session.commit()
+
+
 def _load_trace_capability_analysis_ids(
     dataset_id: str,
     design_id: str,
@@ -508,7 +578,7 @@ def test_published_trace_records_keep_source_task_provenance_and_are_browse_visi
     )
 
 
-def test_published_trace_read_repair_backfills_missing_capabilities() -> None:
+def test_published_trace_read_repair_refreshes_stale_capabilities() -> None:
     task = _submit_local_simulation(ptc_enabled=False)
     publish = client.post(
         f"/tasks/{task['task_id']}/simulation-results/publish",
@@ -520,7 +590,16 @@ def test_published_trace_read_repair_backfills_missing_capabilities() -> None:
     assert publish.status_code == 200
     design_id = "design_published-capability-repair"
     trace_id = _published_trace_ids(task["task_id"], include_ptc=False)[1]
-    _clear_trace_capabilities("local-dataset-001", design_id, (trace_id,))
+    _overwrite_trace_capabilities_with_analysis_subset(
+        "local-dataset-001",
+        design_id,
+        trace_id,
+        ("sideband_comparison",),
+    )
+
+    assert set(
+        _load_trace_capability_analysis_ids("local-dataset-001", design_id, trace_id)
+    ) == {"sideband_comparison"}
 
     traces_response = client.get(f"/datasets/local-dataset-001/designs/{design_id}/traces")
     detail_response = client.get(

@@ -74,6 +74,7 @@ from src.app.infrastructure.persistence.trace_capability_store import (
     delete_trace_capabilities,
     load_trace_capability_map,
     replace_trace_capabilities,
+    trace_capabilities_equal,
 )
 from src.app.infrastructure.storage_reference_factory import build_metadata_record_ref
 
@@ -1085,15 +1086,18 @@ class DurableCatalogRepository:
                 design_id=design_id,
                 trace_ids=trace_ids,
             )
-            missing_rows = [row for row in trace_rows if row.trace_id not in capability_map]
-            if len(missing_rows) == 0:
-                return capability_map
-            for row in missing_rows:
+            refreshed = False
+            for row in trace_rows:
                 capabilities = evaluate_trace_analysis_capabilities(
                     dataset_family=dataset.family,
                     trace=_to_trace_summary(row),
                     axes=tuple(_deserialize_axis(item) for item in row.axes_json),
                 )
+                if trace_capabilities_equal(
+                    capability_map.get(row.trace_id, ()),
+                    capabilities,
+                ):
+                    continue
                 replace_trace_capabilities(
                     session,
                     dataset_id=row.dataset_id,
@@ -1102,7 +1106,9 @@ class DurableCatalogRepository:
                     capabilities=capabilities,
                 )
                 capability_map[row.trace_id] = capabilities
-            session.commit()
+                refreshed = True
+            if refreshed:
+                session.commit()
             return capability_map
 
     def _load_trace_capability_map(
