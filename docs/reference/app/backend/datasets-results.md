@@ -9,9 +9,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Backend dataset catalog、design browse、trace browse / preview / mutation、dataset profile、tagged core metrics 與 provenance-bearing result handles
-version: v0.10.0
-last_updated: 2026-03-26
+scope: Backend dataset catalog、design browse、sweep-aware trace browse / preview / mutation、characterization-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
+version: v0.13.0
+last_updated: 2026-03-30
 updated_by: codex
 ---
 
@@ -20,7 +20,7 @@ updated_by: codex
 本頁定義 Dashboard、Header dataset switcher、Raw Data Browser、Characterization 與部分 Result View 依賴的 dataset / design / trace / result surface。
 
 !!! info "Surface Boundary"
-    本頁負責 dataset catalog、dataset profile、dataset-local design browse、trace metadata list、trace preview / edit payload、trace mutation gating、tagged core metrics summary 與 provenance-bearing result handles。
+    本頁負責 dataset catalog、dataset profile、dataset-local design browse、sweep-aware trace browse / preview / edit payload、trace mutation gating、characterization-facing trace filtering projection、tagged core metrics summary 與 provenance-bearing result handles。
     task lifecycle、analysis-specific artifact manifest 與 audit query 不屬於本頁責任。
 
 !!! tip "Primary Consumers"
@@ -33,7 +33,7 @@ updated_by: codex
 | Dataset Catalog | Header / Dashboard 可見 dataset 列表 |
 | Dataset Profile | Dashboard 唯一正式 metadata write surface |
 | Design Browse | active dataset 內的 dataset-local design scope list |
-| Trace Surface | trace metadata list、single-trace preview、trace edit payload、single / batch delete gating |
+| Trace Surface | trace metadata list、sweep-aware filter projection、single-trace preview、trace edit payload、single / batch delete gating |
 | Tagged Core Metrics Summary | Dashboard 唯讀摘要 |
 | Result Handles | 指向 persisted artifacts / trace payload 的 result refs |
 
@@ -120,6 +120,12 @@ trace surface 必須嚴格拆成以下 path families：
 | `trace_mode_group` | `base`, `sideband`, `all` |
 | `source_kind` | `circuit_simulation`, `layout_simulation`, `measurement` |
 | `stage_kind` | `raw`, `preprocess`, `postprocess` |
+| `ndim` | canonical axis rank summary |
+| `shape` | persisted ND grid shape summary |
+| `axes_summary` | UI-safe axis summary；至少指出 trace 是否為 1D / ND 與可見 axis names |
+| `axis_signature` | deterministic coordinate/hash summary；供 caching / collection derivation / deep-link safety 使用 |
+| `available_sweep_axes[]` | characterization / compare 可用的 structured sweep axis names |
+| `collection_projection` | optional scientific grouping / collection summary；供 Characterization 等 consumer 作為 filter / grouping 提示 |
 | `provenance_summary` | UI-safe provenance label |
 | `allowed_actions` | row-level mutation gating，至少包含 `edit`、`delete` |
 | `mutation_policy_summary` | UI-safe restriction summary；說明為何 row 為 mutable / delete-only / read-only |
@@ -137,6 +143,55 @@ trace surface 必須嚴格拆成以下 path families：
 !!! warning "Summary-first browse"
     trace metadata list path 只能提供 summary-safe 欄位。
     不得在 list query 時一併回傳大型 numeric payload。
+
+## Sweep-aware Trace Browse Rules
+
+| Concern | Rule |
+| --- | --- |
+| Canonical storage | parameter-swept trace 的 authority 仍是 ND `TraceRecord`；trace list 只做 summary / browse projection |
+| Point-level browse | implementation 可提供 point / slice read model，但必須能回指 canonical `trace_id`，不得把 projection 當唯一 persisted authority |
+| Axis discoverability | trace browse 與 trace detail 至少必須讓 consumer 知道 axis names、是否存在 sweep axes，以及哪些 axes 可供 Characterization / explorer 使用 |
+| Structured filtering | backend 應支援以 family、representation、source、stage、axis name、available sweep axes 等 structured characteristics 篩選 traces |
+| Collection projection | backend 可回傳 UI-safe `collection_projection`，表示由 shared axes / lineage 派生的 scientific grouping；但它是 read model，不取代 trace identity |
+| Characterization selection | Characterization 可以從 selected traces 派生 collection；raw checkbox list 不是最終 scientific model |
+
+## Materialized Metadata Summary Rules
+
+query / filter / readiness surface 應依賴 metadata DB / read model 的 materialized summary，而不是每次從 `TraceStore` 打開完整 ND payload。
+
+minimum direction：
+
+| Summary concern | Materialization target |
+| --- | --- |
+| rank / shape | `ndim`、`shape` |
+| axis structure | `axis_names`、`axis_units`、`axis_lengths` |
+| sweep filtering | `available_sweep_axes[]` |
+| coordinate identity | `axis_signature` 或等價 hash / signature summary |
+| scientific typing | `family`、`parameter`、`representation`、`source_kind`、`stage_kind` |
+| grouping inputs | batch / lineage / shared-axis summary |
+
+!!! warning "List paths are summary-first"
+    trace list、design browse、analysis readiness 與 filter suggestion path 不得預設載入完整 ND values。
+    full numeric arrays 與 full coordinate arrays 只應進入 detail / explorer / result path。
+
+## Axis Responsibility Split
+
+| Surface | Responsibility |
+| --- | --- |
+| `TraceRecord.axes` | canonical axis identity、axis names、order、units 與 semantic axis meaning |
+| `TraceStore` | dense numeric values 與 dense coordinate arrays |
+| metadata DB / read model | query-safe axis summary、`ndim`、`shape`、`available_sweep_axes`、`axis_signature` 等 materialized summaries |
+| list / filter / readiness path | 只能依賴 summary surface，不得要求打開 dense coordinate arrays |
+
+## Axis Signature Contract
+
+| Concern | Rule |
+| --- | --- |
+| Semantic role | `axis_signature` 是 canonical axis identity / coordinate structure 的 deterministic summary |
+| Allowed uses | cache safety、collection derivation、grouping compatibility checks、deep-link safety |
+| Non-goal | 不可把 `axis_signature` 當成 user-facing scientific label，也不可拿它取代 full coordinates |
+| Equality meaning | equal signatures 應表示相同 canonical axis structure under this contract |
+| Formula | exact signature formula 可保持 backend-owned，但必須 deterministic、可重建，且只依賴 stable axis inputs |
 
 ### Trace edit minimum fields
 
@@ -159,6 +214,46 @@ trace surface 必須嚴格拆成以下 path families：
 | Origin restriction | provenance-bearing 或 system-generated traces 可以是 `edit=false`、`delete=true`；frontend 不得自行從 `source_kind` / `stage_kind` 推導，必須依 `allowed_actions` 與 `mutation_policy_summary` 呈現 |
 | Audit semantics | edit / delete 是 in-place mutation + audited operation；trace version lineage 若需要獨立保存，必須由專門 contract 定義 |
 | Batch scope | 目前只支援 batch delete；batch edit 不屬於本頁 SoT |
+
+## Characterization-facing Trace Projection
+
+`Characterization` 需要的不只是 generic trace metadata list，還需要可由 persisted trace structure 派生的 selection / filtering projection。
+
+minimum projection direction：
+
+| Field | Meaning |
+| --- | --- |
+| `available_families[]` | 可供 analysis compatibility 使用的 family filter |
+| `available_representations[]` | 可供 analysis compatibility 使用的 representation filter |
+| `available_sweep_axes[]` | 當前 design scope 可見的 structured sweep axis names |
+| `collection_projection[]` | optional；由 shared axes / source batch lineage 派生的 scientific grouping summary |
+| `analysis_readiness` | optional；某 analysis 是否在當前 trace structure 下可形成有效 collection 的摘要 |
+
+!!! tip "Selection remains user-driven"
+    使用者仍可明確勾選 traces。
+    但 backend 在 Characterization submit / result query 時，應以 persisted trace structure 解讀那些 selection，而不是只看 checkbox list 本身。
+
+## Collection Projection Phase-1 Contract
+
+| Concern | Rule |
+| --- | --- |
+| Authority | `collection_projection` 是由 canonical trace structure 派生的 read model，不是獨立 owner |
+| Identity | phase-1 projection 可暴露 deterministic `collection_key`，供 deep-linking、caching 與 UI restoration 使用 |
+| Derivation inputs | `collection_key` 與 projection summary 應來自 dataset/design scope、shared axes / `axis_signature`、lineage / batch grouping 與 scientific compatibility inputs 等可重建資料 |
+| Phase-1 scope | phase-1 不要求 persisted `TraceCollectionRecord` 或可編輯 collection resource |
+| Stronger contract path | 若需可儲存 / bookmark / edit 的 collection，必須另定更強 contract，而不是直接把 projection 當成 authority |
+| Identity discipline | `collection_key` 可作 projection identity，但不得被當成獨立 persisted resource existence proof |
+
+## Query Efficiency Rules
+
+| Concern | Rule |
+| --- | --- |
+| List / filter paths | 必須依賴 materialized metadata summary；不得預設讀 full ND values |
+| Preview path | 應優先回傳 slice / sampled projection，而不是整個 dense tensor |
+| Detail / explorer paths | 只有真正需要時才載入 full coordinate arrays 或 dense numeric slice |
+| Dominant access pattern | 目前應優先對齊 `固定 sweep point -> 讀完整 frequency slice` 與 `固定 result axes -> 讀單一 projection` |
+| Storage access | chunking / retrieval 應服務主要 scientific access pattern，而不是 generic default |
+| Full dense transport | 完整 dense trace payload 不是 list/filter 的預設 contract；只有 detail / export / explicitly defined view 才可回傳 |
 
 ## Trace Mutation Path Contract
 
@@ -334,6 +429,19 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
             "trace_mode_group": "base",
             "source_kind": "measurement",
             "stage_kind": "postprocess",
+            "ndim": 2,
+            "shape": [401, 11],
+            "axes_summary": {
+              "rank": 2,
+              "axis_names": ["frequency", "L_jun"]
+            },
+            "axis_signature": "axsig_freq_ljun_v1",
+            "available_sweep_axes": ["L_jun"],
+            "collection_projection": {
+              "collection_key": "collection_postprocess_batch4_ljun",
+              "kind": "batch_axis_group",
+              "group_label": "Postprocess batch #4 · L_jun sweep"
+            },
             "provenance_summary": "Y · Post-Processed · batch #4",
             "allowed_actions": {
               "edit": false,
@@ -360,10 +468,13 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
       "data": {
         "trace_id": "trace_101",
         "axes": [
-          {"name": "frequency", "unit": "GHz", "length": 401}
+          {"name": "frequency", "unit": "GHz", "length": 401},
+          {"name": "L_jun", "unit": "nH", "length": 11}
         ],
         "preview_payload": {
           "kind": "sampled_series",
+          "slice_axis": "L_jun",
+          "slice_value": 15.0,
           "points": [
             [1.0, 0.014],
             [1.1, 0.018]
@@ -538,3 +649,4 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
 - [Characterization Results](characterization-results.md)
 - [Dataset / Design / Trace Schema](../../data-formats/dataset-record.md)
 - [Analysis Result](../../data-formats/analysis-result.md)
+- [Data Handling](../../guardrails/code-quality/data-handling.md)

@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: 系統目前 published canonical contracts 的 owner、SoT 與主要消費者
-version: v0.11.0
-last_updated: 2026-03-25
+version: v0.12.0
+last_updated: 2026-03-28
 updated_by: codex
 ---
 
@@ -38,8 +38,8 @@ updated_by: codex
 | App Resource Ownership / Visibility | app/shared + backend | [App / Shared / Resource Ownership & Visibility](../app/shared/resource-ownership-and-visibility.md), [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md) | datasets, definitions, tasks, results, audit logging | 每筆 resource 只屬於一個 workspace；local mode 以 implicit local workspace 保持相容 |
 | App Authentication / Authorization Context | app/shared + backend | [App / Shared / Runtime Modes](../app/shared/runtime-modes.md), [App / Shared / Authentication & Authorization](../app/shared/authentication-and-authorization.md) | Header user menu, task queue controls, backend session surface, admin surfaces | auth / authz 只在 online mode 強制；capability shape 仍需保持可解讀 |
 | App Observability Model | app/shared + backend + desktop shell adapter | [App / Shared / Observability Model](../app/shared/observability-model.md), [App / Shared / Audit Logging](../app/shared/audit-logging.md), [App / Backend / Audit Logs](../app/backend/audit-logs.md) | desktop shell, governance surfaces, task/runtime tooling, product analysis | audit logging、workflow observability 與 product telemetry 不得收斂成單一 authority；shared correlation fields 可重用但不改變 ownership |
-| Dataset / Design / Trace Model | data-formats + backend | [Data Formats / Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [App / Backend / Datasets & Results](../app/backend/datasets-results.md) | dashboard, raw data browser, characterization, CLI datasets | `active_dataset` binds dataset；`design_id` is dataset-local |
-| Trace / Result / Provenance | data-formats + backend + `sc_core` | [Data Formats / Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [Data Formats / Analysis Result](../data-formats/analysis-result.md), [App / Backend / Datasets & Results](../app/backend/datasets-results.md) | raw data browser, characterization, worker, CLI results | persisted result / provenance contract 必須 version-aware |
+| Dataset / Design / Trace Model | data-formats + backend | [Data Formats / Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [App / Backend / Datasets & Results](../app/backend/datasets-results.md) | dashboard, raw data browser, characterization, CLI datasets | `active_dataset` binds dataset；`design_id` is dataset-local；parameter sweeps persist as canonical ND traces, not point-row authority |
+| Trace / Result / Provenance | data-formats + backend + `sc_core` | [Data Formats / Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [Data Formats / Analysis Result](../data-formats/analysis-result.md), [App / Backend / Datasets & Results](../app/backend/datasets-results.md), [App / Backend / Characterization Results](../app/backend/characterization-results.md) | raw data browser, characterization, worker, CLI results | persisted result / provenance contract 必須 version-aware；characterization result axes must distinguish input axes from derived axes |
 | App Task Submission / Status / Result | app/backend + app/shared + `sc_core` | [App / Backend / Tasks & Execution](../app/backend/tasks-execution.md), [App / Shared / Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | simulation, characterization, worker | `task_id` immutable；retry 預設新 task |
 | App Processor Runtime Status | app/shared + backend adapter | [App / Shared / Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | Header worker summary, queue controls, runtime operators | health summary 需由 runtime heartbeat 派生 |
 | UI Shell Context | frontend + backend | [App / Frontend / Header](../app/frontend/shared-shell/header.md), [App / Frontend / Sidebar](../app/frontend/shared-shell/sidebar.md), [App / Backend / Session & Workspace](../app/backend/session-workspace.md) | all frontend pages | shell 顯示的 dataset / task / user context 不得分叉 |

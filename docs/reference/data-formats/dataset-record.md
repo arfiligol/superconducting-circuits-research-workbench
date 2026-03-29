@@ -12,8 +12,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: DatasetRecord、dataset-local design scope、TraceRecord、TraceBatchRecord、AnalysisRunRecord、DerivedParameterRecord 與 TraceStore contract
-version: v3.0.0
-last_updated: 2026-03-14
+version: v3.3.0
+last_updated: 2026-03-30
 updated_by: codex
 title: Dataset / Design / Trace Schema
 ---
@@ -145,7 +145,7 @@ DatasetRecord
 | `family` | string | required | `s_matrix`, `y_matrix`, `z_matrix` or equivalent canonical family |
 | `parameter` | string | required | `Y11`, `Y_dm_dm`, `S21` 等 |
 | `representation` | string | required | `real`, `imaginary`, `magnitude`, `phase` |
-| `axes` | JSON | required | axis definitions and order |
+| `axes` | JSON | required | axis definitions、order 與 canonical sweep structure |
 | `trace_meta` | JSON | optional | units、basis labels、source annotations、compare tags |
 | `store_ref` | JSON | required | canonical TraceStore locator |
 | `created_at` | datetime | required | creation time |
@@ -158,6 +158,14 @@ DatasetRecord
   {"name": "L_q", "unit": "nH", "length": 11}
 ]
 ```
+
+| Concern | Rule |
+| --- | --- |
+| Semantic axis authority | `TraceRecord.axes` 擁有 canonical axis identity；至少包含 axis names、order、units 與 semantic axis meaning |
+| Coordinate values | axis definition 必須讓 coordinate values 可 machine-readably 恢復；可 inline 保存，也可透過 backend-controlled store reference 取回，僅有 `length` 並不足夠 |
+| Axis naming | parameter sweep axis 名稱應重用 Circuit Definition / simulation setup 的 canonical parameter name |
+| Axis order | axis order 是 canonical numeric layout 的一部分；consumer 不得自行重排後再回寫為 authority |
+| Responsibility split | dense coordinate arrays 可由 `TraceStore` 持有；metadata/read model 只暴露 query-safe summary，不直接取代 axis authority |
 
 ### TraceStoreRef Contract
 
@@ -177,9 +185,73 @@ DatasetRecord
 
 `store_key` 是 canonical locator；`store_uri` 僅作 backend-controlled opaque locator，不應由 UI 或 app layer 自行解析 local path layout。
 
+!!! tip "Axis coordinates may live beside values"
+    sweep-aware traces 的 axis coordinate arrays 可以與 `values` 一起存在 `TraceStore`。
+    實際欄位命名可由 backend storage contract 控制，但 coordinate values 必須保持 machine-readable，可供 Characterization input collection 與 result explorer 恢復。
+
+### Axis Signature Contract
+
+`axis_signature` 是對 canonical axis identity / coordinate structure 的 deterministic summary。
+
+| Concern | Rule |
+| --- | --- |
+| Primary use | 用於 cache safety、collection derivation、grouping compatibility checks 與 deep-link safety |
+| Non-goal | 它不是 user-facing scientific label，也不是 full coordinate arrays 的替代品 |
+| Equality meaning | 在同一 contract version 下，equal signatures 應表示相同 canonical axis structure |
+| Formula freedom | exact hashing / signature formula 可由 implementation 決定，但必須 deterministic 且可重建 |
+
 !!! important "Canonical ND trace"
     canonical `TraceRecord` 可以是 1D、2D 或 ND。
     sweep point 不是唯一 canonical record 單位；若 UI 需要 point-level rows，應視為 projection。
+
+### Sweep-aware Trace Rules
+
+| Concern | Rule |
+| --- | --- |
+| Canonical swept publication | parameter-swept simulation / post-processing outputs 應以 canonical ND `TraceRecord` 持久化，不以多筆 sweep-point 1D traces 當作唯一 authority |
+| Axis authority | `frequency` 與所有 parameter sweep axes 都必須直接存在 `TraceRecord.axes`，不可只藏在檔名、`parameter` 字串或 provenance prose |
+| Sweep meaning recovery | sweep axis 的語意必須可由 `TraceRecord.axes` 與來源 `TraceBatchRecord.setup_payload` 恢復；不得依賴 free-form label parsing |
+| Point / slice browse | point-level rows、單一 sweep point preview 或 compare slices 只可視為 browse projection，不可反向成為 canonical storage model |
+| Multi-sweep | 多軸 sweep 可直接以 ND trace 表示，例如 `axes = [frequency, L_jun, C_q]` |
+
+!!! tip "Circuit Definition + Simulation Setup authority"
+    哪些參數可被 sweep，來自 Circuit Definition / schema parameter model；
+    實際 sweep 了哪些軸、值與順序，來自 `TraceBatchRecord.setup_payload`。
+    `TraceRecord.axes` 是 published numeric result 的 canonical axis contract。
+
+### Invalid Cell And Mask Semantics
+
+| Concern | Rule |
+| --- | --- |
+| Canonical invalid cell | persisted numeric payload 可使用 `NaN` 表示 canonical ND grid 中沒有有效數值的 cell |
+| `NaN` meaning | `NaN` 代表 invalid / unavailable numeric value，不得被重解釋為 `0` |
+| Mask-first processing | analysis / explorer 應先建立 validity mask，再只對 valid cells 計算，同時保留原始 ND axes / shape |
+| Shape preservation | consumer 不得因為某些 cells 無效，就默默 drop values 後重塑成不同維度的 authority payload |
+| Fully masked slice | 即使整個 slice / sweep point 都無有效 cells，該 axis member 仍必須在 canonical grid 中保持存在，不得因全遮罩而被刪除 |
+| Transport projection | transport / UI 可用 display-safe empty cell、`null` 或 explicit mask summary 呈現 invalid cells，但不得改變 persisted authority 的 `NaN` + mask 語意 |
+
+### Metadata Materialization Direction
+
+query / filter / readiness surface 所需的 trace summary 應 materialize 在 metadata/query 層，而不是每次去打開完整 ND payload。
+
+recommended materialization targets：
+
+| Summary concern | Direction |
+| --- | --- |
+| grid rank / shape | `ndim`、`shape` |
+| axis structure | `axis_names`、`axis_units`、`axis_lengths` |
+| sweep readiness | `available_sweep_axes` |
+| coordinate identity | `axis_signature` 或等價的 coordinate/hash summary |
+| scientific identity | `family`、`parameter`、`representation`、`source_kind`、`stage_kind` |
+| collection derivation | lineage / batch summary、shared-axis summary |
+
+!!! tip "Field names may evolve"
+    最終 metadata DB / read model 的欄位名可以調整；
+    但上述 summary meaning 必須存在於 query-compatible surface，而不能只留在 TraceStore 深處。
+
+!!! warning "Query surfaces do not own dense coordinates"
+    query / filter / readiness surface 只擁有 summary-safe axis information。
+    full coordinate arrays 仍屬於 dense numeric authority，不得要求 list/filter path 打開它們才能判斷相容性。
 
 ## TraceBatchRecord
 
@@ -211,6 +283,24 @@ DatasetRecord
     trace-producing flow 的正式 authority 是 `TraceBatchRecord` + `TraceRecord` + `TraceStore`。
     page-local last result、live memory cache 或 ad-hoc file parser 不得成為唯一 authority。
 
+### Sweep Publication Rules
+
+| Concern | Rule |
+| --- | --- |
+| Sweepable parameter source | `setup_payload` 只可引用 Circuit Definition / simulation setup 已定義為可 sweep 的 parameter axes |
+| Published trace grouping | 同一次 parameter-swept execution 產生的 ND traces，應以 shared `TraceBatchRecord` lineage 與 compatible axes 結構形成 scientific grouping |
+| Browse projection | implementation 可另外產生 sweep-point browse rows、slice thumbnails 或 compare projections，但它們是 read model，不取代 `TraceRecord` / `TraceStore` authority |
+| Provenance wording | provenance / summary payload 可提供人類可讀摘要，但不得成為 sweep axis meaning 的唯一 machine-readable source |
+
+### Query Efficiency Direction
+
+| Concern | Rule |
+| --- | --- |
+| List / filter / readiness | 應優先依賴 materialized metadata summary，不得預設打開完整 ND values 或 full coordinate arrays |
+| Detail / explorer | 只有在 trace detail、explorer 或 result view 真的需要時，才載入 full coordinate arrays 或 dense numeric slices |
+| Storage chunking | `TraceStore` chunking 應對齊主要 scientific access pattern，而不是只用 generic square chunk defaults |
+| Current target pattern | 目前優先支援 `固定 sweep point -> 讀完整 frequency slice`，以及 `固定 result axes -> 讀單一 plot / table projection` |
+
 ## TraceBatchTraceLink
 
 batch 與 trace 的 membership 關聯。
@@ -234,16 +324,37 @@ batch 與 trace 的 membership 關聯。
 | `visibility_scope` | enum | required | inherited `local` / `private` / `workspace` |
 | `lifecycle_state` | enum | required | `active`, `archived`, `deleted` |
 | `analysis_id` | string | required | `admittance_extraction` 等 |
-| `input_trace_ids` | JSON | required | selected trace ids |
+| `input_trace_ids` | JSON | required | user-selected trace ids |
 | `input_batch_ids` | JSON | optional | source batch refs |
+| `input_collection_payload` | JSON | optional | 由 persisted trace structure 派生的 scientific input collection；保留 shared axes、sweep values 與 grouping summary |
 | `config_payload` | JSON | required | analysis config |
 | `status` | string | required | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |
 | `artifact_manifest` | JSON | optional | result artifact summary |
+| `result_axes_manifest` | JSON | optional | analysis-defined input axes、derived axes、metric axes 與 preset view semantics |
 | `created_at` | datetime | required | creation time |
 | `completed_at` | datetime | optional | terminal time |
 
 !!! important "Trace-first authority"
     Characterization 的統一輸入是 `TraceRecord`，不以來源類型區分 circuit/layout/measurement 專用分析流程。
+
+### Characterization Input Collection Rules
+
+| Concern | Rule |
+| --- | --- |
+| Interaction vs scientific authority | `input_trace_ids` 保留使用者互動層的明確 selection；scientific meaning 則由 backend 依 persisted trace structure 派生 `input_collection_payload` |
+| Preserved structure | `input_collection_payload` 至少應保留 selected traces、shared axes、axis labels / units / values、compatible grouping 與 source batch lineage |
+| ND sweep input | 若 source traces 本身是 parameter-swept ND traces，collection contract 應直接保留 sweep axes，而不是先降成散落的 1D point rows |
+| No free-form recovery | collection 的 sweep meaning 不得依賴解析 `parameter` label、檔名或 provenance prose |
+
+### Result Axes Manifest Rules
+
+| Concern | Rule |
+| --- | --- |
+| Input axes | `result_axes_manifest` 必須可指出 analysis 消費了哪些 input axes，例如 `L_jun` |
+| Derived axes | analysis 若產生 derived axes，例如 `mode_index`，必須顯式標示為 derived，不得假裝是 source trace 自帶 axis |
+| Metric axes | table / plot cell metric 例如 `frequency_ghz`，必須可由 manifest 清楚識別 |
+| Explorer presets | 若結果預設支援 table / plot 視圖，row / column / x / y / series 的 axis semantics 應由 manifest 或 artifact query spec 明示 |
+| First-phase mode semantics | `mode_index` 只代表單一 sweep point 內的 ordinal extracted modes；它不是跨 sweep 的 physical mode identity |
 
 ## ResultArtifactRecord
 
@@ -305,6 +416,9 @@ data/trace_store/
 | Can a design exist outside a dataset? | No |
 | Can a resource belong to multiple workspaces? | No |
 | Where do large numeric arrays live? | `TraceStore`, referenced by `store_ref` |
+| What is the canonical model for parameter sweeps? | ND `TraceRecord` axes；point rows are projections |
+| Where does sweep meaning come from? | Circuit Definition / setup payload + `TraceRecord.axes` |
+| Where should query/filter summaries live? | materialized metadata/query surfaces, not only TraceStore |
 
 ## Related
 
@@ -313,3 +427,4 @@ data/trace_store/
 - [Query Indexing Strategy](query-indexing-strategy.md)
 - [Analysis Result](analysis-result.md)
 - [Datasets & Results](../app/backend/datasets-results.md)
+- [Data Handling](../guardrails/code-quality/data-handling.md)

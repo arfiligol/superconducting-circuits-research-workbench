@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: 目前 App / CLI / Core / Data Formats 的 cross-layer 對齊矩陣
-version: v0.10.0
-last_updated: 2026-03-25
+version: v0.11.0
+last_updated: 2026-03-28
 updated_by: codex
 ---
 
@@ -40,13 +40,13 @@ updated_by: codex
 | Shared task management | [Task Management](../app/frontend/shared-workflow/task-management.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | `partial` | queue / control / runtime state machine 已定義； implementation 仍待 adoption |
 | App observability model | audit logs、desktop developer tooling、task/runtime diagnostics | [Observability Model](../app/shared/observability-model.md), [Audit Logging](../app/shared/audit-logging.md), [Audit Logs](../app/backend/audit-logs.md), [Tasks & Execution](../app/backend/tasks-execution.md) | `defined` | audit logging、workflow observability 與 product telemetry 分層已定義；dedicated product surfaces 仍待 adoption |
 | Simulation workflow | [Circuit Simulation](../app/frontend/research-workflow/circuit-simulation.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Circuit Definitions](../app/backend/circuit-definitions.md) | `partial` | queue 與 attach 已收斂； simulation-specific runtime/result depth 仍待細化 |
-| Characterization workflow | [Characterization](../app/frontend/research-workflow/characterization.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Characterization Results](../app/backend/characterization-results.md) | `partial` | run history 與 shared queue distinction 已定義 |
+| Characterization workflow | [Characterization](../app/frontend/research-workflow/characterization.md) | [Tasks & Execution](../app/backend/tasks-execution.md), [Characterization Results](../app/backend/characterization-results.md), [Dataset / Design / Trace Schema](../data-formats/dataset-record.md) | `defined` | sweep-aware input collection、axis-aware result presets 與 first-phase `mode_index` semantics 已定義；implementation adoption 仍待完成 |
 | Circuit definition workflow | [Schemas](../app/frontend/definition/schemas.md), [Schema Editor](../app/frontend/definition/schema-editor.md) | [Circuit Definitions](../app/backend/circuit-definitions.md), [Circuit Netlist](../data-formats/circuit-netlist.md) | `partial` | UUIDv4-only opaque schema identity、same-name disambiguation 與 cross-page binding 已定義；remaining consumer / local-state adoption 仍需持續收斂 |
 | Schema identity across linked flows | [Schemas](../app/frontend/definition/schemas.md), [Schema Editor](../app/frontend/definition/schema-editor.md), [Schemdraw](../app/frontend/research-workflow/schemdraw.md), [Circuit Simulation](../app/frontend/research-workflow/circuit-simulation.md) | [Circuit Definitions](../app/backend/circuit-definitions.md), [Tasks & Execution](../app/backend/tasks-execution.md), [Identity & Workspace Model](../app/shared/identity-workspace-model.md) | `defined` | `definition_id` 現為 UUIDv4-only opaque identity；UI 只能顯示 short `Schema ID`，不可再用 numeric `Definition #` model |
 | Schemdraw live render | [Schemdraw](../app/frontend/research-workflow/schemdraw.md) | [Schemdraw Render](../app/backend/schemdraw-render.md) | `defined` | three-step flow 與 backend authority 已定義 |
 | Worker / processor runtime | Header queue worker summary | [Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | `defined` | processor summary、cancel/terminate semantics 已寫清楚 |
 | Audit logging | queue controls, privileged actions, admin governance | [Audit Logging](../app/shared/audit-logging.md), [Audit Logs](../app/backend/audit-logs.md) | `partial` | separate audit store 與 read surface 已定義； governance UI adoption 仍待完成 |
-| Dataset / Design / Trace model | Dashboard, Raw Data Browser, Characterization, CLI datasets | [Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [Datasets & Results](../app/backend/datasets-results.md) | `partial` | dataset-first + dataset-local design scope 已定義； persistence code adoption 尚未完成 |
+| Dataset / Design / Trace model | Dashboard, Raw Data Browser, Characterization, CLI datasets | [Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [Datasets & Results](../app/backend/datasets-results.md) | `defined` | dataset-first、dataset-local design scope 與 canonical ND sweep trace model 已定義； persistence / consumer adoption 尚未完成 |
 | Standalone CLI runtime | [CLI / Standalone Runtime](../cli/standalone-runtime.md), [sc session](../cli/sc-session.md), [sc tasks](../cli/sc-tasks.md) | [CLI Options](../cli/index.md), [Core / Python Core](../core/python-core.md), [Data Formats](../data-formats/index.md) | `partial` | local context、local run registry 已定義； interchange 與 implementation adoption 仍待完成 |
 | CLI / App interchange | [CLI / Local / App Interchange](../cli/local-app-interchange.md) | [Local / App Interchange](../cli/local-app-interchange.md), [Resource Ownership & Visibility](../app/shared/resource-ownership-and-visibility.md) | `defined` | import/export/copy-with-lineage 邊界已定義；不做 live sync |
 

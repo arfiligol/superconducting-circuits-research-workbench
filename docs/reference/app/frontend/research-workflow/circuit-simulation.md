@@ -14,8 +14,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/circuit-simulation 的 canonical definition 選擇、simulation setup、task submission、attached-task review 與 post-processing 契約"
-version: v0.24.0
-last_updated: 2026-03-23
+version: v0.25.0
+last_updated: 2026-03-28
 updated_by: codex
 ---
 
@@ -201,6 +201,7 @@ graph TD
 | save target | active dataset 內、目前使用者選定的 design |
 | saved output shape | 儲存結果仍是 individual trace records，不是整張 plot blob 或 compare snapshot |
 | parameter naming | 儲存時允許使用者輸入 parameter 名稱；多條 trace 時它作為此次保存的命名基底 |
+| canonical sweep structure | parameter-swept published traces 應保留 simulation setup 對應的 canonical ND axes；point / slice compare views 只可作為 projection |
 | publication boundary | save semantics 只看 explorer-visible traces，不由 page 其他 stage state 重新定義 |
 
 !!! info "Visible traces means explorer-visible traces"
