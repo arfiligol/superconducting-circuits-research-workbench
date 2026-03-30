@@ -965,8 +965,11 @@ describe("circuit schemdraw workspace source contracts", () => {
   });
 
   it("keeps guidance compact and download choices inside one focused dialog", () => {
-    expect(schemdrawGuidanceCardSource).toContain("Authoring Guidance");
-    expect(schemdrawGuidanceCardSource).toContain("The backend is the syntax and render");
+    expect(schemdrawGuidanceCardSource).toContain("Writing Rules");
+    expect(schemdrawGuidanceCardSource).toContain("build_drawing(relation)");
+    expect(schemdrawGuidanceCardSource).toContain("schemdraw.Drawing");
+    expect(schemdrawGuidanceCardSource).toContain("Avoid opaque helper magic");
+    expect(schemdrawGuidanceCardSource).toContain("backend response");
     expect(schemdrawGuidanceCardSource).not.toContain("tutorial");
     expect(schemdrawDownloadDialogSource).toContain("Download Preview");
     expect(schemdrawDownloadDialogSource).toContain("SVG");
