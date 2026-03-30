@@ -7,12 +7,16 @@ import type {
   CharacterizationArtifactAxisDescriptor,
   CharacterizationArtifactAxisSummary,
   CharacterizationArtifactManifestEntry,
+  CharacterizationArtifactManifestViewKind,
   CharacterizationArtifactPayload,
   CharacterizationArtifactPayloadColumn,
   CharacterizationArtifactPayloadSeries,
   CharacterizationArtifactPresetView,
+  CharacterizationArtifactQueryField,
   CharacterizationArtifactQuerySpec,
+  CharacterizationArtifactQueryStyle,
   CharacterizationArtifactViewMode,
+  CharacterizationArtifactViewModeDefault,
   CharacterizationAppliedTag,
   CharacterizationAvailabilityState,
   CharacterizationDesignatedMetricOption,
@@ -112,23 +116,27 @@ type CharacterizationArtifactPresetViewResponse = Readonly<{
 }>;
 
 type CharacterizationArtifactQuerySpecResponse = Readonly<{
+  query_style: CharacterizationArtifactQueryStyle;
+  supported_query_fields: readonly CharacterizationArtifactQueryField[];
   supported_view_modes: readonly CharacterizationArtifactViewMode[];
   supported_preset_ids: readonly string[];
-  default_view_mode: CharacterizationArtifactViewMode;
   default_preset_id: string | null;
+  default_presets_by_view_mode: readonly Readonly<{
+    view_mode: CharacterizationArtifactViewMode;
+    preset_id: string;
+  }>[];
 }>;
 
 type CharacterizationArtifactManifestEntryResponse = Readonly<{
   artifact_id: string;
   category: string;
-  view_kind: CharacterizationArtifactViewMode;
+  view_kind: CharacterizationArtifactManifestViewKind;
   title: string;
   summary: string;
   payload_format: "json" | "markdown" | "svg" | "csv";
   payload_locator: string | null;
   supported_view_modes: readonly CharacterizationArtifactViewMode[];
   supported_preset_ids: readonly string[];
-  default_view_mode: CharacterizationArtifactViewMode;
   default_preset_id: string | null;
   axis_summary: CharacterizationArtifactAxisSummaryResponse;
   preset_views: readonly CharacterizationArtifactPresetViewResponse[];
@@ -460,10 +468,23 @@ function mapCharacterizationArtifactQuerySpec(
   payload: CharacterizationArtifactQuerySpecResponse,
 ): CharacterizationArtifactQuerySpec {
   return {
+    queryStyle: payload.query_style,
+    supportedQueryFields: [...payload.supported_query_fields],
     supportedViewModes: [...payload.supported_view_modes],
     supportedPresetIds: [...payload.supported_preset_ids],
-    defaultViewMode: payload.default_view_mode,
     defaultPresetId: payload.default_preset_id,
+    defaultPresetsByViewMode: payload.default_presets_by_view_mode.map(
+      mapCharacterizationArtifactViewModeDefault,
+    ),
+  };
+}
+
+function mapCharacterizationArtifactViewModeDefault(
+  payload: CharacterizationArtifactQuerySpecResponse["default_presets_by_view_mode"][number],
+): CharacterizationArtifactViewModeDefault {
+  return {
+    viewMode: payload.view_mode,
+    presetId: payload.preset_id,
   };
 }
 
@@ -480,7 +501,6 @@ function mapCharacterizationArtifactManifestEntry(
     payloadLocator: payload.payload_locator,
     supportedViewModes: [...payload.supported_view_modes],
     supportedPresetIds: [...payload.supported_preset_ids],
-    defaultViewMode: payload.default_view_mode,
     defaultPresetId: payload.default_preset_id,
     axisSummary: mapCharacterizationArtifactAxisSummary(payload.axis_summary),
     presetViews: payload.preset_views.map(mapCharacterizationArtifactPresetView),

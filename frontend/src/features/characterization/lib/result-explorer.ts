@@ -41,15 +41,25 @@ export function resolveCharacterizationArtifactViewMode(
     return selectedViewMode;
   }
 
-  if (supportedViewModes.includes(artifact.querySpec.defaultViewMode)) {
-    return artifact.querySpec.defaultViewMode;
+  const defaultViewModes = artifact.querySpec.defaultPresetsByViewMode
+    .map((item) => item.viewMode)
+    .filter((viewMode, index, values) => values.indexOf(viewMode) === index);
+  const firstDefaultViewMode = defaultViewModes.find((viewMode) =>
+    supportedViewModes.includes(viewMode),
+  );
+  if (firstDefaultViewMode) {
+    return firstDefaultViewMode;
+  }
+
+  if (artifact.viewKind !== "preset_query" && supportedViewModes.includes(artifact.viewKind)) {
+    return artifact.viewKind;
   }
 
   if (supportedViewModes.length > 0) {
     return supportedViewModes[0] ?? null;
   }
 
-  return artifact.viewKind;
+  return artifact.viewKind === "preset_query" ? null : artifact.viewKind;
 }
 
 export function resolveCharacterizationArtifactPresetViews(
@@ -97,6 +107,16 @@ export function resolveCharacterizationArtifactPresetId(
     presetViews.some((preset) => preset.presetId === artifact.querySpec.defaultPresetId)
   ) {
     return artifact.querySpec.defaultPresetId;
+  }
+
+  const defaultPresetForViewMode = artifact?.querySpec.defaultPresetsByViewMode.find(
+    (defaultPreset) => defaultPreset.viewMode === viewMode,
+  );
+  if (
+    defaultPresetForViewMode &&
+    presetViews.some((preset) => preset.presetId === defaultPresetForViewMode.presetId)
+  ) {
+    return defaultPresetForViewMode.presetId;
   }
 
   return (

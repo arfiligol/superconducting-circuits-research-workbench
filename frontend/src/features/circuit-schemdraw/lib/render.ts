@@ -3,6 +3,7 @@ import type { CircuitDefinitionDetail } from "@/features/circuit-definition-edit
 import type {
   SchemdrawDiagnostic,
   SchemdrawLinkedSchemaSnapshot,
+  SchemdrawPreviewMetadata,
   SchemdrawRenderRequest,
   SchemdrawRenderResponse,
 } from "@/features/circuit-schemdraw/lib/api";
@@ -54,6 +55,13 @@ export type SchemdrawRenderSurface = Readonly<{
   appliedDocumentVersion: number | null;
   isStale: boolean;
   failureDetail: SchemdrawFailureDetail | null;
+}>;
+
+export type SchemdrawDownloadSnapshot = Readonly<{
+  svg: string;
+  previewMetadata: SchemdrawPreviewMetadata | null;
+  requestId: string;
+  appliedDocumentVersion: number;
 }>;
 
 type BuildRequestInput = Readonly<{
@@ -277,6 +285,26 @@ export function createInitialRenderSurface(): SchemdrawRenderSurface {
     appliedDocumentVersion: null,
     isStale: false,
     failureDetail: null,
+  };
+}
+
+export function resolveSchemdrawDownloadSnapshot(
+  surface: SchemdrawRenderSurface,
+): SchemdrawDownloadSnapshot | null {
+  if (
+    surface.phase !== "rendered" ||
+    !surface.svg ||
+    !surface.requestId ||
+    surface.appliedDocumentVersion === null
+  ) {
+    return null;
+  }
+
+  return {
+    svg: surface.svg,
+    previewMetadata: surface.previewMetadata ?? null,
+    requestId: surface.requestId,
+    appliedDocumentVersion: surface.appliedDocumentVersion,
   };
 }
 

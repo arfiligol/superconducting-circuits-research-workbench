@@ -50,6 +50,11 @@ export type CharacterizationDiagnostic = Readonly<{
 }>;
 
 export type CharacterizationArtifactViewMode = "table" | "plot" | "text" | "json";
+export type CharacterizationArtifactManifestViewKind =
+  | CharacterizationArtifactViewMode
+  | "preset_query";
+export type CharacterizationArtifactQueryStyle = "preset_driven" | "static";
+export type CharacterizationArtifactQueryField = "view_mode" | "preset_id";
 
 export type CharacterizationArtifactAxisDescriptor = Readonly<{
   key: string;
@@ -82,24 +87,30 @@ export type CharacterizationArtifactPresetView = Readonly<{
   axisContract: CharacterizationArtifactAxisContract;
 }>;
 
+export type CharacterizationArtifactViewModeDefault = Readonly<{
+  viewMode: CharacterizationArtifactViewMode;
+  presetId: string;
+}>;
+
 export type CharacterizationArtifactQuerySpec = Readonly<{
+  queryStyle: CharacterizationArtifactQueryStyle;
+  supportedQueryFields: readonly CharacterizationArtifactQueryField[];
   supportedViewModes: readonly CharacterizationArtifactViewMode[];
   supportedPresetIds: readonly string[];
-  defaultViewMode: CharacterizationArtifactViewMode;
   defaultPresetId: string | null;
+  defaultPresetsByViewMode: readonly CharacterizationArtifactViewModeDefault[];
 }>;
 
 export type CharacterizationArtifactManifestEntry = Readonly<{
   artifactId: string;
   category: string;
-  viewKind: CharacterizationArtifactViewMode;
+  viewKind: CharacterizationArtifactManifestViewKind;
   title: string;
   summary: string;
   payloadFormat: "json" | "markdown" | "svg" | "csv";
   payloadLocator: string | null;
   supportedViewModes: readonly CharacterizationArtifactViewMode[];
   supportedPresetIds: readonly string[];
-  defaultViewMode: CharacterizationArtifactViewMode;
   defaultPresetId: string | null;
   axisSummary: CharacterizationArtifactAxisSummary;
   presetViews: readonly CharacterizationArtifactPresetView[];

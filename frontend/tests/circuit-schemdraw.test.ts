@@ -46,8 +46,10 @@ import {
   createSchemdrawSourceTemplate,
   markSchemdrawPreviewStale,
   parseRelationConfigText,
+  resolveSchemdrawDownloadSnapshot,
   shouldApplySchemdrawResponse,
 } from "../src/features/circuit-schemdraw/lib/render";
+import { buildSchemdrawPreviewFilename } from "../src/features/circuit-schemdraw/lib/export";
 
 const schemdrawWorkspaceSource = readFileSync(
   fileURLToPath(
@@ -62,6 +64,24 @@ const schemdrawViewerSource = readFileSync(
   fileURLToPath(
     new URL(
       "../src/features/circuit-schemdraw/components/schemdraw-svg-viewer.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const schemdrawGuidanceCardSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/circuit-schemdraw/components/schemdraw-guidance-card.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const schemdrawDownloadDialogSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/circuit-schemdraw/components/schemdraw-download-dialog.tsx",
       import.meta.url,
     ),
   ),
@@ -498,6 +518,59 @@ describe("circuit schemdraw render helpers", () => {
     )).toBe(false);
   });
 
+  it("only exposes a download snapshot for the latest adopted rendered preview", () => {
+    expect(
+      resolveSchemdrawDownloadSnapshot({
+        ...createInitialRenderSurface(),
+        phase: "rendered",
+        svg: "<svg />",
+        requestId: "req-22",
+        appliedDocumentVersion: 22,
+        previewMetadata: {
+          width: 1200,
+          height: 640,
+          view_box: "0 0 1200 640",
+        },
+      }),
+    ).toEqual({
+      svg: "<svg />",
+      requestId: "req-22",
+      appliedDocumentVersion: 22,
+      previewMetadata: {
+        width: 1200,
+        height: 640,
+        view_box: "0 0 1200 640",
+      },
+    });
+
+    expect(
+      resolveSchemdrawDownloadSnapshot({
+        ...createInitialRenderSurface(),
+        phase: "stale",
+        svg: "<svg />",
+        requestId: "req-22",
+        appliedDocumentVersion: 22,
+      }),
+    ).toBeNull();
+  });
+
+  it("builds stable preview download filenames from the linked schema context", () => {
+    expect(
+      buildSchemdrawPreviewFilename({
+        definitionName: "Fluxonium Readout Chain",
+        requestId: "req-42",
+        format: "svg",
+      }),
+    ).toBe("fluxonium-readout-chain-req-42.svg");
+    expect(
+      buildSchemdrawPreviewFilename({
+        definitionName: null,
+        requestId: "req-42",
+        format: "png",
+      }),
+    ).toBe("schemdraw-preview-req-42.png");
+  });
+
   it("keeps the previous svg when a newer response is not rendered", () => {
     expect(
       buildRenderSurfaceFromResponse(
@@ -848,12 +921,14 @@ describe("circuit schemdraw svg viewer helpers", () => {
 describe("circuit schemdraw workspace source contracts", () => {
   it("keeps linked schema context first, editor/preview as the primary row, then diagnostics and snapshot", () => {
     const linkedIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Context");
+    const guidanceIndex = schemdrawWorkspaceSource.indexOf("<SchemdrawGuidanceCard />");
     const editorIndex = schemdrawWorkspaceSource.indexOf("Schemdraw Source Editor");
     const previewIndex = schemdrawWorkspaceSource.indexOf("SVG Live Preview");
     const diagnosticsIndex = schemdrawWorkspaceSource.indexOf("Render Diagnostics");
     const snapshotIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Snapshot");
 
     expect(linkedIndex).toBeGreaterThan(-1);
+    expect(guidanceIndex).toBeGreaterThan(linkedIndex);
     expect(editorIndex).toBeGreaterThan(linkedIndex);
     expect(previewIndex).toBeGreaterThan(editorIndex);
     expect(diagnosticsIndex).toBeGreaterThan(previewIndex);
@@ -875,6 +950,8 @@ describe("circuit schemdraw workspace source contracts", () => {
 
   it("upgrades the preview pane from a raw svg box to a viewer with explicit controls", () => {
     expect(schemdrawWorkspaceSource).toContain("SchemdrawSvgViewer");
+    expect(schemdrawWorkspaceSource).toContain("Download");
+    expect(schemdrawWorkspaceSource).toContain("SchemdrawDownloadDialog");
     expect(schemdrawViewerSource).toContain("Zoom in");
     expect(schemdrawViewerSource).toContain("Zoom out");
     expect(schemdrawViewerSource).toContain("Fit to view");
@@ -885,6 +962,15 @@ describe("circuit schemdraw workspace source contracts", () => {
     expect(schemdrawViewerSource).toContain("overscroll-contain touch-none");
     expect(schemdrawViewerSource).toContain("event.stopPropagation()");
     expect(schemdrawViewerSource).toContain("dangerouslySetInnerHTML");
+  });
+
+  it("keeps guidance compact and download choices inside one focused dialog", () => {
+    expect(schemdrawGuidanceCardSource).toContain("Authoring Guidance");
+    expect(schemdrawGuidanceCardSource).toContain("The backend is the syntax and render");
+    expect(schemdrawGuidanceCardSource).not.toContain("tutorial");
+    expect(schemdrawDownloadDialogSource).toContain("Download Preview");
+    expect(schemdrawDownloadDialogSource).toContain("SVG");
+    expect(schemdrawDownloadDialogSource).toContain("PNG");
   });
 });
 

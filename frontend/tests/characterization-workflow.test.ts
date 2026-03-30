@@ -261,7 +261,7 @@ describe("characterization explorer helpers", () => {
     {
       artifactId: "artifact_resonance_frequency_matrix",
       category: "matrix",
-      viewKind: "table",
+      viewKind: "preset_query",
       title: "Resonance Matrix",
       summary: "Mode-index by input-axis frequency grid.",
       payloadFormat: "json",
@@ -272,7 +272,6 @@ describe("characterization explorer helpers", () => {
         "plot_mode_profile",
         "plot_sweep_profile",
       ],
-      defaultViewMode: "table",
       defaultPresetId: "table_mode_by_input_axis",
       axisSummary: {
         inputAxes: [{ key: "input_axis", label: "Input Axis", unit: "nH", family: "input_axis" }],
@@ -327,14 +326,25 @@ describe("characterization explorer helpers", () => {
         },
       ],
       querySpec: {
+        queryStyle: "preset_driven",
+        supportedQueryFields: ["view_mode", "preset_id"],
         supportedViewModes: ["table", "plot"],
         supportedPresetIds: [
           "table_mode_by_input_axis",
           "plot_mode_profile",
           "plot_sweep_profile",
         ],
-        defaultViewMode: "table",
         defaultPresetId: "table_mode_by_input_axis",
+        defaultPresetsByViewMode: [
+          {
+            viewMode: "table",
+            presetId: "table_mode_by_input_axis",
+          },
+          {
+            viewMode: "plot",
+            presetId: "plot_mode_profile",
+          },
+        ],
       },
     },
   ] as const;
@@ -391,6 +401,7 @@ describe("characterization explorer helpers", () => {
   it("keeps artifact selection and preset resolution manifest-driven", () => {
     const artifact = resolveCharacterizationArtifactSelection(artifactManifest, null);
     expect(artifact?.artifactId).toBe("artifact_resonance_frequency_matrix");
+    expect(artifact?.viewKind).toBe("preset_query");
     expect(resolveCharacterizationArtifactViewMode(artifact ?? null, null)).toBe("table");
     expect(resolveCharacterizationArtifactPresetId(artifact ?? null, "table", null)).toBe(
       "table_mode_by_input_axis",
