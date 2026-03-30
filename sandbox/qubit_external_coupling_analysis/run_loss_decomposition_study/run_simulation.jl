@@ -1,0 +1,21 @@
+using JosephsonCircuits
+using PlotlyJS
+using Printf
+using CSV
+using DataFrames
+
+include(joinpath(@__DIR__, "..", "src", "QubitExternalCouplingAnalysis.jl"))
+using .QubitExternalCouplingAnalysis
+
+include(joinpath(@__DIR__, "user_editable.jl"))
+include(joinpath(@__DIR__, "circuit_definition.jl"))
+include(joinpath(@__DIR__, "simulation_post_processing.jl"))
+include(joinpath(@__DIR__, "plot_and_data_persisted_saving.jl"))
+
+inputs = build_user_editable_inputs()
+circuit_context = build_study_circuit_context(inputs)
+simulation_results = run_loss_decomposition_simulation(inputs, circuit_context)
+
+println()
+println("Saved raw outputs:")
+println("  ", simulation_results.output_paths.raw_dir)
