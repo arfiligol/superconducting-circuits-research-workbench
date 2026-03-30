@@ -10,10 +10,12 @@ import {
   listCharacterizationAnalysisRegistry,
   listCharacterizationResults,
   listCharacterizationRunHistory,
+  listCharacterizationTraceSelectionRows,
 } from "@/features/characterization/lib/api";
 import type {
   CharacterizationAnalysisRegistryRow,
   CharacterizationTaggingInput,
+  CharacterizationTraceSelectionRow,
 } from "@/features/characterization/lib/contracts";
 import {
   resolveLatestCharacterizationTask,
@@ -24,8 +26,6 @@ import {
 import {
   datasetMetricsKey,
   listDesignBrowseRows,
-  listTraceMetadata,
-  type TraceMetadataRow,
 } from "@/lib/api/datasets";
 import { getTaskEnqueueFailureDetails } from "@/lib/api/client";
 import { useActiveDataset } from "@/lib/app-state/active-dataset";
@@ -159,7 +159,7 @@ function shouldRefreshTask(task: TaskDetail | undefined) {
   );
 }
 
-function defaultSelectedTraceIds(rows: readonly TraceMetadataRow[]) {
+function defaultSelectedTraceIds(rows: readonly CharacterizationTraceSelectionRow[]) {
   const baseTraceIds = rows
     .filter((trace) => trace.trace_mode_group === "base")
     .map((trace) => trace.trace_id);
@@ -269,7 +269,7 @@ export function useCharacterizationWorkflowData({
       : null,
     () =>
       activeDatasetId && resolvedDesignId
-        ? listTraceMetadata(activeDatasetId, resolvedDesignId)
+        ? listCharacterizationTraceSelectionRows(activeDatasetId, resolvedDesignId)
         : Promise.resolve(undefined),
   );
 

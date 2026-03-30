@@ -5,11 +5,23 @@ import { describe, expect, it } from "vitest";
 
 import {
   characterizationAnalysisRegistryKey,
+  characterizationArtifactPayloadKey,
   characterizationResultDetailKey,
   characterizationResultsListKey,
   characterizationRunHistoryKey,
   characterizationTaggingsKey,
 } from "../src/features/characterization/lib/api";
+import {
+  buildCharacterizationArtifactPayloadRequest,
+  resolveCharacterizationArtifactPresetId,
+  resolveCharacterizationArtifactSelection,
+  resolveCharacterizationArtifactViewMode,
+} from "../src/features/characterization/lib/result-explorer";
+import {
+  buildCharacterizationCollectionOptions,
+  buildCharacterizationSweepAxisOptions,
+  filterCharacterizationTraceRows,
+} from "../src/features/characterization/lib/trace-selection";
 import {
   filterCharacterizationTasks,
   resolveLatestCharacterizationTask,
@@ -33,6 +45,24 @@ const characterizationHookSource = readFileSync(
   fileURLToPath(
     new URL(
       "../src/features/characterization/hooks/use-characterization-workflow-data.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const characterizationExplorerHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/characterization/hooks/use-characterization-result-explorer.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const characterizationExplorerSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/characterization/components/characterization-result-explorer.tsx",
       import.meta.url,
     ),
   ),
@@ -68,6 +98,20 @@ describe("characterization api keys", () => {
       ),
     ).toBe(
       "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/characterization-results/char-fit-flux-a-01/taggings",
+    );
+    expect(
+      characterizationArtifactPayloadKey(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        "char-fit-flux-a-01",
+        "artifact_resonance_frequency_matrix",
+        {
+          viewMode: "plot",
+          presetId: "plot_mode_vs_frequency_by_ljun",
+        },
+      ),
+    ).toBe(
+      "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/characterization-results/char-fit-flux-a-01/artifacts/artifact_resonance_frequency_matrix/payload?view_mode=plot&preset_id=plot_mode_vs_frequency_by_ljun",
     );
   });
 
@@ -212,6 +256,181 @@ describe("characterization browse helpers", () => {
   });
 });
 
+describe("characterization explorer helpers", () => {
+  const artifactManifest = [
+    {
+      artifactId: "artifact_resonance_frequency_matrix",
+      category: "matrix",
+      viewKind: "table",
+      title: "Resonance Matrix",
+      summary: "Mode-index by input-axis frequency grid.",
+      payloadFormat: "json",
+      payloadLocator: null,
+      supportedViewModes: ["table", "plot"],
+      supportedPresetIds: [
+        "table_mode_by_input_axis",
+        "plot_mode_profile",
+        "plot_sweep_profile",
+      ],
+      defaultViewMode: "table",
+      defaultPresetId: "table_mode_by_input_axis",
+      axisSummary: {
+        inputAxes: [{ key: "input_axis", label: "Input Axis", unit: "nH", family: "input_axis" }],
+        derivedAxes: [{ key: "mode_index", label: "Mode Index", unit: null, family: "derived_axis" }],
+        metrics: [{ key: "frequency_ghz", label: "Frequency", unit: "GHz", family: "metric" }],
+      },
+      presetViews: [
+        {
+          presetId: "table_mode_by_input_axis",
+          label: "Matrix",
+          description: "Rows mode index, columns input axis.",
+          viewMode: "table",
+          isDefault: true,
+          axisContract: {
+            rowAxis: "mode_index",
+            columnAxis: "input_axis",
+            xAxis: null,
+            yAxis: null,
+            seriesAxis: null,
+            metric: "frequency_ghz",
+          },
+        },
+        {
+          presetId: "plot_mode_profile",
+          label: "Mode Profile",
+          description: "x mode index, series input axis.",
+          viewMode: "plot",
+          isDefault: false,
+          axisContract: {
+            rowAxis: null,
+            columnAxis: null,
+            xAxis: "mode_index",
+            yAxis: "frequency_ghz",
+            seriesAxis: "input_axis",
+            metric: "frequency_ghz",
+          },
+        },
+        {
+          presetId: "plot_sweep_profile",
+          label: "Sweep Profile",
+          description: "x input axis, series mode index.",
+          viewMode: "plot",
+          isDefault: false,
+          axisContract: {
+            rowAxis: null,
+            columnAxis: null,
+            xAxis: "input_axis",
+            yAxis: "frequency_ghz",
+            seriesAxis: "mode_index",
+            metric: "frequency_ghz",
+          },
+        },
+      ],
+      querySpec: {
+        supportedViewModes: ["table", "plot"],
+        supportedPresetIds: [
+          "table_mode_by_input_axis",
+          "plot_mode_profile",
+          "plot_sweep_profile",
+        ],
+        defaultViewMode: "table",
+        defaultPresetId: "table_mode_by_input_axis",
+      },
+    },
+  ] as const;
+
+  const traceRows = [
+    {
+      trace_id: "trace_a",
+      dataset_id: "ds",
+      design_id: "design_a",
+      family: "y_matrix",
+      parameter: "Y11",
+      representation: "real",
+      trace_mode_group: "base",
+      source_kind: "measurement",
+      stage_kind: "raw",
+      provenance_summary: "Measurement batch #1",
+      allowed_actions: { edit: false, delete: false },
+      mutation_policy_summary: "",
+      axesSummary: "Shared axis L_jun",
+      axisSignature: "axis:l_jun",
+      availableSweepAxes: ["L_jun"],
+      collectionProjection: {
+        collectionId: "collection_a",
+        label: "Flux sweep A",
+        summary: "Same sweep axis and lineage",
+        traceCount: 3,
+      },
+    },
+    {
+      trace_id: "trace_b",
+      dataset_id: "ds",
+      design_id: "design_a",
+      family: "y_matrix",
+      parameter: "Y21",
+      representation: "imag",
+      trace_mode_group: "sideband",
+      source_kind: "measurement",
+      stage_kind: "raw",
+      provenance_summary: "Measurement batch #2",
+      allowed_actions: { edit: false, delete: false },
+      mutation_policy_summary: "",
+      axesSummary: "Shared axis C_q",
+      axisSignature: "axis:c_q",
+      availableSweepAxes: ["C_q"],
+      collectionProjection: {
+        collectionId: "collection_b",
+        label: "Coupler sweep B",
+        summary: "Same coupler sweep",
+        traceCount: 2,
+      },
+    },
+  ] as const;
+
+  it("keeps artifact selection and preset resolution manifest-driven", () => {
+    const artifact = resolveCharacterizationArtifactSelection(artifactManifest, null);
+    expect(artifact?.artifactId).toBe("artifact_resonance_frequency_matrix");
+    expect(resolveCharacterizationArtifactViewMode(artifact ?? null, null)).toBe("table");
+    expect(resolveCharacterizationArtifactPresetId(artifact ?? null, "table", null)).toBe(
+      "table_mode_by_input_axis",
+    );
+    expect(resolveCharacterizationArtifactPresetId(artifact ?? null, "plot", null)).toBe(
+      "plot_mode_profile",
+    );
+    expect(
+      buildCharacterizationArtifactPayloadRequest({
+        artifact: artifact ?? null,
+        viewMode: "plot",
+        presetId: "plot_sweep_profile",
+      }),
+    ).toEqual({
+      viewMode: "plot",
+      presetId: "plot_sweep_profile",
+    });
+  });
+
+  it("builds sweep-aware and collection-aware filters without parsing provenance strings", () => {
+    expect(buildCharacterizationSweepAxisOptions(traceRows)).toEqual(["C_q", "L_jun"]);
+    expect(buildCharacterizationCollectionOptions(traceRows)).toEqual([
+      { value: "collection_b", label: "Coupler sweep B" },
+      { value: "collection_a", label: "Flux sweep A" },
+    ]);
+    expect(
+      filterCharacterizationTraceRows(traceRows, {
+        sweepAxis: "L_jun",
+        collection: null,
+      }).map((trace) => trace.trace_id),
+    ).toEqual(["trace_a"]);
+    expect(
+      filterCharacterizationTraceRows(traceRows, {
+        sweepAxis: null,
+        collection: "collection_b",
+      }).map((trace) => trace.trace_id),
+    ).toEqual(["trace_b"]);
+  });
+});
+
 describe("characterization task helpers", () => {
   const tasks = [
     {
@@ -322,9 +541,12 @@ describe("characterization source contracts", () => {
     expect(characterizationWorkspaceSource).toContain('title="Inspect Result"');
     expect(characterizationWorkspaceSource).toContain('<div className="space-y-6">');
     expect(characterizationWorkspaceSource).toContain("Trace Selection");
+    expect(characterizationWorkspaceSource).toContain("Sweep Axis");
+    expect(characterizationWorkspaceSource).toContain("Collection Hint");
     expect(characterizationWorkspaceSource).toContain("Results");
     expect(characterizationWorkspaceSource).toContain("Result Detail");
-    expect(characterizationWorkspaceSource).toContain("Result Snapshot");
+    expect(characterizationWorkspaceSource).toContain("CharacterizationResultExplorer");
+    expect(characterizationWorkspaceSource).toContain("Debug Payload");
     expect(characterizationWorkspaceSource).toContain("Identify & Tag");
     expect(characterizationWorkspaceSource).toContain("Validation Explanation");
     expect(characterizationWorkspaceSource).toContain("None available");
@@ -340,6 +562,7 @@ describe("characterization source contracts", () => {
     expect(characterizationWorkspaceSource).not.toContain("latest persisted result in view");
     expect(characterizationWorkspaceSource).not.toContain("Persisted characterization outputs for the current design.");
     expect(characterizationWorkspaceSource).not.toContain("Materialized payload references.");
+    expect(characterizationWorkspaceSource).not.toContain("artifactRefs");
     expect(characterizationWorkspaceSource).not.toContain("SummaryTile");
     expect(characterizationWorkspaceSource).not.toContain('title="Run Analysis"');
     expect(characterizationWorkspaceSource).not.toContain('title="Latest Analysis"');
@@ -347,6 +570,9 @@ describe("characterization source contracts", () => {
     expect(characterizationWorkspaceSource).not.toContain(
       'xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.9fr)]',
     );
+    expect(characterizationExplorerSource).toContain("Result Explorer");
+    expect(characterizationExplorerSource).toContain("supportedViewModes");
+    expect(characterizationExplorerSource).toContain("availablePresetViews");
   });
 
   it("binds trace browse, characterization submit, and result continuity to shared app authority", () => {
@@ -357,7 +583,9 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain("const taskQueueState = useTaskQueue();");
     expect(characterizationHookSource).toContain("const characterizationTasks = taskQueueState.tasks");
     expect(characterizationHookSource).toContain(".map(normalizeTaskSummary)");
-    expect(characterizationHookSource).toContain("listTraceMetadata(activeDatasetId, resolvedDesignId)");
+    expect(characterizationHookSource).toContain(
+      "listCharacterizationTraceSelectionRows(activeDatasetId, resolvedDesignId)",
+    );
     expect(characterizationHookSource).toContain("const taskKey = resolvedTaskId ? taskDetailKey(resolvedTaskId) : null;");
     expect(characterizationHookSource).toContain("() => (resolvedTaskId ? getTask(resolvedTaskId) : Promise.resolve(undefined))");
     expect(characterizationHookSource).toContain("listDesignBrowseRows(activeDatasetId)");
@@ -391,7 +619,14 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain("focusRunHistoryResult(resultId");
     expect(characterizationHookSource).toContain("applyCharacterizationTagging(");
     expect(characterizationHookSource).toContain("This session cannot start analyses.");
+    expect(characterizationExplorerHookSource).toContain("getCharacterizationArtifactPayload(");
+    expect(characterizationExplorerHookSource).toContain("keepPreviousData: true");
+    expect(characterizationExplorerHookSource).toContain("resolveCharacterizationArtifactPresetId");
+    expect(characterizationExplorerHookSource).toContain(
+      '"characterization-artifact-payload"',
+    );
     expect(characterizationHookSource).not.toContain("This session cannot submit tasks.");
+    expect(characterizationHookSource).not.toContain("listTraceMetadata(");
     expect(characterizationHookSource).not.toContain("rows[0]?.analysisId");
     expect(characterizationHookSource).not.toContain(
       "Select a persisted characterization result before applying identify tags.",

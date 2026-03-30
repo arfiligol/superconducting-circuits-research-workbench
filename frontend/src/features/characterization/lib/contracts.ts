@@ -1,4 +1,4 @@
-import type { DesignBrowseRow } from "@/lib/api/datasets";
+import type { DesignBrowseRow, TraceMetadataRow } from "@/lib/api/datasets";
 
 export type CharacterizationResultStatus = "completed" | "failed" | "blocked";
 export type CharacterizationAvailabilityState =
@@ -12,6 +12,21 @@ export type CharacterizationAnalysisTraceCompatibility = Readonly<{
   recommendedTraceModes: readonly string[];
   summary: string;
 }>;
+
+export type CharacterizationTraceCollectionProjection = Readonly<{
+  collectionId: string | null;
+  label: string;
+  summary: string;
+  traceCount: number;
+}>;
+
+export type CharacterizationTraceSelectionRow = TraceMetadataRow &
+  Readonly<{
+    axesSummary: string;
+    axisSignature: string;
+    availableSweepAxes: readonly string[];
+    collectionProjection: CharacterizationTraceCollectionProjection | null;
+  }>;
 
 export type CharacterizationResultSummary = Readonly<{
   resultId: string;
@@ -34,13 +49,122 @@ export type CharacterizationDiagnostic = Readonly<{
   blocking: boolean;
 }>;
 
-export type CharacterizationArtifactRef = Readonly<{
+export type CharacterizationArtifactViewMode = "table" | "plot" | "text" | "json";
+
+export type CharacterizationArtifactAxisDescriptor = Readonly<{
+  key: string;
+  label: string;
+  unit: string | null;
+  family: "input_axis" | "derived_axis" | "metric";
+}>;
+
+export type CharacterizationArtifactAxisSummary = Readonly<{
+  inputAxes: readonly CharacterizationArtifactAxisDescriptor[];
+  derivedAxes: readonly CharacterizationArtifactAxisDescriptor[];
+  metrics: readonly CharacterizationArtifactAxisDescriptor[];
+}>;
+
+export type CharacterizationArtifactAxisContract = Readonly<{
+  rowAxis: string | null;
+  columnAxis: string | null;
+  xAxis: string | null;
+  yAxis: string | null;
+  seriesAxis: string | null;
+  metric: string | null;
+}>;
+
+export type CharacterizationArtifactPresetView = Readonly<{
+  presetId: string;
+  label: string;
+  description: string;
+  viewMode: CharacterizationArtifactViewMode;
+  isDefault: boolean;
+  axisContract: CharacterizationArtifactAxisContract;
+}>;
+
+export type CharacterizationArtifactQuerySpec = Readonly<{
+  supportedViewModes: readonly CharacterizationArtifactViewMode[];
+  supportedPresetIds: readonly string[];
+  defaultViewMode: CharacterizationArtifactViewMode;
+  defaultPresetId: string | null;
+}>;
+
+export type CharacterizationArtifactManifestEntry = Readonly<{
   artifactId: string;
   category: string;
-  viewKind: "table" | "plot" | "text" | "json";
+  viewKind: CharacterizationArtifactViewMode;
   title: string;
+  summary: string;
   payloadFormat: "json" | "markdown" | "svg" | "csv";
   payloadLocator: string | null;
+  supportedViewModes: readonly CharacterizationArtifactViewMode[];
+  supportedPresetIds: readonly string[];
+  defaultViewMode: CharacterizationArtifactViewMode;
+  defaultPresetId: string | null;
+  axisSummary: CharacterizationArtifactAxisSummary;
+  presetViews: readonly CharacterizationArtifactPresetView[];
+  querySpec: CharacterizationArtifactQuerySpec;
+}>;
+
+export type CharacterizationInputCollectionPayload = Readonly<{
+  sourceTraceIds: readonly string[];
+  availableSweepAxes: readonly string[];
+  sharedAxes: readonly CharacterizationArtifactAxisDescriptor[];
+  groupingSummary: string;
+  readinessState: "ready" | "inspect_only" | "blocked";
+  collectionCount: number;
+}>;
+
+export type CharacterizationArtifactPayloadColumn = Readonly<{
+  key: string;
+  label: string;
+  role:
+    | "row_axis"
+    | "column_axis"
+    | "x_axis"
+    | "y_axis"
+    | "series_axis"
+    | "metric";
+}>;
+
+export type CharacterizationArtifactPayloadSeries = Readonly<{
+  seriesId: string;
+  label: string;
+  values: readonly (number | null)[];
+}>;
+
+export type CharacterizationArtifactPayload = Readonly<{
+  resultId: string;
+  artifactId: string;
+  title: string;
+  summary: string;
+  viewMode: CharacterizationArtifactViewMode;
+  presetId: string | null;
+  axisContract: CharacterizationArtifactAxisContract;
+  presetViews: readonly CharacterizationArtifactPresetView[];
+  warnings: readonly string[];
+  table:
+    | Readonly<{
+        columns: readonly CharacterizationArtifactPayloadColumn[];
+        rows: readonly Readonly<Record<string, string | number | null>>[];
+      }>
+    | null;
+  plot:
+    | Readonly<{
+        xAxis: Readonly<{
+          key: string;
+          label: string;
+          values: readonly (string | number)[];
+        }>;
+        yAxis: Readonly<{
+          key: string;
+          label: string;
+        }>;
+        series: readonly CharacterizationArtifactPayloadSeries[];
+      }>
+    | null;
+  textPayload: string | null;
+  jsonPayload: Readonly<Record<string, unknown>> | readonly unknown[] | null;
 }>;
 
 export type CharacterizationResultDetail = Readonly<{
@@ -55,9 +179,10 @@ export type CharacterizationResultDetail = Readonly<{
   traceCount: number;
   updatedAt: string;
   inputTraceIds: readonly string[];
+  inputCollectionPayload: CharacterizationInputCollectionPayload | null;
   payload: Readonly<Record<string, unknown>>;
   diagnostics: readonly CharacterizationDiagnostic[];
-  artifactRefs: readonly CharacterizationArtifactRef[];
+  artifactManifest: readonly CharacterizationArtifactManifestEntry[];
   identifySurface: CharacterizationIdentifySurface;
 }>;
 
