@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
+    CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
     CharacterizationRunHistoryQuery,
     CharacterizationTaggingRequest,
@@ -411,8 +412,8 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     )
 
     assert [metric.metric_id for metric in metrics] == [
-        "metric-fluxonium-f01",
-        "metric-fluxonium-anharmonicity",
+        "metric-fluxonium-lowest-observed-frequency-ghz",
+        "metric-fluxonium-residual-rms-max",
     ]
     assert [design.design_id for design in designs] == ["design_flux_scan_a"]
     assert designs[0].compare_readiness == "ready"
@@ -693,6 +694,13 @@ def test_dataset_service_exposes_characterization_result_summary_and_detail_surf
         "design_flux_scan_a",
         "char-fit-flux-a-01",
     )
+    artifact_payload = dataset_service.get_characterization_artifact_payload(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        "char-fit-flux-a-01",
+        "char-fit-flux-a-01:mode-frequency-grid",
+        CharacterizationArtifactPayloadQuery(preset_id="mode_by_input_table"),
+    )
 
     assert [row.result_id for row in result_rows] == ["char-fit-flux-a-01"]
     assert result_rows[0].dataset_id == "fluxonium-2025-031"
@@ -706,8 +714,9 @@ def test_dataset_service_exposes_characterization_result_summary_and_detail_surf
         "trace_flux_a_measurement",
         "trace_flux_a_layout",
     )
-    assert result_detail.payload["fit_table"][0]["parameter"] == "f01"
-    assert result_detail.artifact_refs[0].artifact_id == "artifact-fit-table-flux-a-01"
+    assert result_detail.payload["contract_version"] == "admittance_phase1_v1"
+    assert result_detail.artifact_refs[0].artifact_id == "char-fit-flux-a-01:mode-frequency-grid"
+    assert artifact_payload.payload["cells"][0] == [5.612, 5.587, None]
 
 
 def test_dataset_service_exposes_characterization_analysis_registry_and_run_history_surfaces(

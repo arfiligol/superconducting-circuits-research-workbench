@@ -21,6 +21,8 @@ TraceCapabilityStatus = Literal["eligible", "ineligible"]
 RawDataIngestionKind = Literal["measurement", "layout_simulation"]
 SimulationResultPublicationState = Literal["published", "already_published"]
 ResultTracePublicationState = SimulationResultPublicationState
+CharacterizationArtifactViewKind = Literal["table", "plot", "text", "json"]
+CharacterizationArtifactAxisRole = Literal["input", "derived"]
 
 
 @dataclass(frozen=True)
@@ -502,13 +504,64 @@ class CharacterizationDiagnostic:
 
 
 @dataclass(frozen=True)
+class CharacterizationArtifactAxisSpec:
+    axis_key: str
+    label: str
+    role: CharacterizationArtifactAxisRole
+    unit: str | None
+    length: int
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactMetricSpec:
+    metric_key: str
+    label: str
+    unit: str | None
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactPreset:
+    preset_id: str
+    label: str
+    view_kind: Literal["table", "plot"]
+    rows_axis: str | None = None
+    columns_axis: str | None = None
+    cell_metric: str | None = None
+    x_axis: str | None = None
+    y_metric: str | None = None
+    series_axis: str | None = None
+
+
+@dataclass(frozen=True)
 class CharacterizationArtifactRef:
     artifact_id: str
     category: str
-    view_kind: Literal["table", "plot", "text", "json"]
+    view_kind: CharacterizationArtifactViewKind
     title: str
     payload_format: Literal["json", "markdown", "svg", "csv"]
     payload_locator: str | None
+    axes: tuple[CharacterizationArtifactAxisSpec, ...] = ()
+    metric: CharacterizationArtifactMetricSpec | None = None
+    presets: tuple[CharacterizationArtifactPreset, ...] = ()
+    default_preset_id: str | None = None
+    identify_source: bool = False
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactPayloadQuery:
+    preset_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactPayload:
+    artifact_id: str
+    title: str
+    preset_id: str
+    view_kind: CharacterizationArtifactViewKind
+    axes: tuple[CharacterizationArtifactAxisSpec, ...]
+    metric: CharacterizationArtifactMetricSpec | None
+    payload: dict[str, object]
+    diagnostics: tuple[CharacterizationDiagnostic, ...] = ()
 
 
 @dataclass(frozen=True)

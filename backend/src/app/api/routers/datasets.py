@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
+    CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
     CharacterizationRunHistoryQuery,
     CharacterizationTaggingRequest,
@@ -68,8 +69,7 @@ def create_dataset(
             "dataset": _serialize_dataset_profile(result.dataset),
             "catalog_row": _serialize_catalog_row(result.catalog_row),
             "catalog_rows": [
-                _serialize_catalog_row(row)
-                for row in dataset_service.list_dataset_catalog()
+                _serialize_catalog_row(row) for row in dataset_service.list_dataset_catalog()
             ],
         },
         status_code=201,
@@ -123,8 +123,7 @@ def archive_dataset(
             "dataset": _serialize_dataset_profile(result.dataset),
             "catalog_row": _serialize_catalog_row(result.catalog_row),
             "catalog_rows": [
-                _serialize_catalog_row(row)
-                for row in dataset_service.list_dataset_catalog()
+                _serialize_catalog_row(row) for row in dataset_service.list_dataset_catalog()
             ],
         },
         meta={"generated_at": _generated_at()},
@@ -146,8 +145,7 @@ def delete_dataset(
             "dataset": _serialize_dataset_profile(result.dataset),
             "catalog_row": _serialize_catalog_row(result.catalog_row),
             "catalog_rows": [
-                _serialize_catalog_row(row)
-                for row in dataset_service.list_dataset_catalog()
+                _serialize_catalog_row(row) for row in dataset_service.list_dataset_catalog()
             ],
         },
         meta={"generated_at": _generated_at()},
@@ -555,6 +553,32 @@ def get_characterization_result(
     )
 
 
+@router.get(
+    "/{dataset_id}/designs/{design_id}/characterization-results/{result_id}/artifacts/{artifact_id}"
+)
+def get_characterization_artifact_payload(
+    dataset_id: str,
+    design_id: str,
+    result_id: str,
+    artifact_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+    preset_id: Annotated[str | None, Query()] = None,
+) -> JSONResponse:
+    try:
+        payload = dataset_service.get_characterization_artifact_payload(
+            dataset_id,
+            design_id,
+            result_id,
+            artifact_id,
+            CharacterizationArtifactPayloadQuery(
+                preset_id=_normalize_optional_text(preset_id),
+            ),
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(data=asdict(payload))
+
+
 @router.post("/{dataset_id}/designs/{design_id}/characterization-results/{result_id}/taggings")
 def apply_characterization_tagging(
     dataset_id: str,
@@ -818,8 +842,7 @@ def _parse_trace_update_payload(payload: object) -> TraceUpdateDraft:
             code="request_validation_failed",
             category="validation_error",
             message=(
-                "preview_payload is preview-only and cannot be submitted "
-                "to the trace edit path."
+                "preview_payload is preview-only and cannot be submitted to the trace edit path."
             ),
         )
     if "axes" in body:

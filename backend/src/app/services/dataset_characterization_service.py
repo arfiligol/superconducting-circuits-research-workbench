@@ -10,6 +10,8 @@ from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
     CharacterizationAnalysisRegistryResult,
     CharacterizationAnalysisRegistryRow,
+    CharacterizationArtifactPayload,
+    CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
@@ -74,6 +76,15 @@ class DatasetCharacterizationRepository(Protocol):
         design_id: str,
         result_id: str,
     ) -> CharacterizationResultDetail | None: ...
+
+    def get_characterization_artifact_payload(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+        artifact_id: str,
+        query: CharacterizationArtifactPayloadQuery,
+    ) -> CharacterizationArtifactPayload | None: ...
 
     def apply_characterization_tagging(
         self,
@@ -211,6 +222,34 @@ class DatasetCharacterizationService:
                 ),
             )
         return detail
+
+    def get_characterization_artifact_payload(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+        artifact_id: str,
+        query: CharacterizationArtifactPayloadQuery,
+    ) -> CharacterizationArtifactPayload:
+        self._require_visible_dataset(dataset_id)
+        payload = self._repository.get_characterization_artifact_payload(
+            dataset_id,
+            design_id,
+            result_id,
+            artifact_id,
+            query,
+        )
+        if payload is None:
+            raise service_error(
+                404,
+                code="artifact_not_found",
+                category="not_found",
+                message=(
+                    "The requested characterization artifact is not available "
+                    "for the selected persisted result."
+                ),
+            )
+        return payload
 
     def apply_characterization_tagging(
         self,

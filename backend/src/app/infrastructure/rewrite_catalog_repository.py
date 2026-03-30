@@ -8,6 +8,14 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
+from src.app.domain.admittance_result_contract import (
+    AdmittanceResultSurface,
+    annotate_admittance_artifact_refs,
+    build_admittance_artifact_refs,
+    build_admittance_identify_surface,
+    query_admittance_artifact_payload,
+    summarize_admittance_surface,
+)
 from src.app.domain.circuit_definitions import (
     CircuitDefinitionCloneDraft,
     CircuitDefinitionDraft,
@@ -21,6 +29,11 @@ from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     CharacterizationAnalysisTraceCompatibility,
     CharacterizationAppliedTag,
+    CharacterizationArtifactAxisSpec,
+    CharacterizationArtifactMetricSpec,
+    CharacterizationArtifactPayload,
+    CharacterizationArtifactPayloadQuery,
+    CharacterizationArtifactPreset,
     CharacterizationArtifactRef,
     CharacterizationDesignatedMetricOption,
     CharacterizationDiagnostic,
@@ -121,6 +134,7 @@ class InMemoryRewriteCatalogRepository:
         self._characterization_run_history = _seed_characterization_run_history()
         self._characterization_results = _seed_characterization_results()
         self._characterization_result_details = _seed_characterization_result_details()
+        self._characterization_artifact_surfaces = _seed_characterization_artifact_surfaces()
         self._durable_definition_repository = durable_definition_repository
         self._circuit_definitions = {
             definition.definition_id: definition for definition in _seed_circuit_definitions()
@@ -426,8 +440,7 @@ class InMemoryRewriteCatalogRepository:
                 draft=draft,
             )
         selections = tuple(
-            ResultTraceSelection.from_trace_key(trace_key)
-            for trace_key in draft.trace_keys
+            ResultTraceSelection.from_trace_key(trace_key) for trace_key in draft.trace_keys
         )
         if len(selections) == 0:
             raise ValueError("result trace publication requires at least one trace_key")
@@ -614,15 +627,13 @@ class InMemoryRewriteCatalogRepository:
                 summary="Manually ingested raw trace.",
             )
         if not any(
-            row.trace_id == trace_id
-            for row in self.list_trace_metadata(dataset_id, design_id)
+            row.trace_id == trace_id for row in self.list_trace_metadata(dataset_id, design_id)
         ):
             return None
         return TraceMutationPolicy(
             allowed_actions=TraceAllowedActions(edit=False, delete=False),
             summary=(
-                "Provenance-bearing or system-generated trace; mutate from the "
-                "source workflow."
+                "Provenance-bearing or system-generated trace; mutate from the source workflow."
             ),
         )
 
@@ -724,10 +735,7 @@ class InMemoryRewriteCatalogRepository:
         self._trace_edit_payloads[key] = updated_edit_payload
         self._trace_summaries[(dataset_id, design_id)] = tuple(
             sorted(
-                (
-                    updated_summary if row.trace_id == trace_id else row
-                    for row in current_rows
-                ),
+                (updated_summary if row.trace_id == trace_id else row for row in current_rows),
                 key=lambda row: row.trace_id,
             )
         )
@@ -871,9 +879,9 @@ class InMemoryRewriteCatalogRepository:
                 result_id,
             )
             if persisted is not None:
-                self._characterization_result_details[
-                    (dataset_id, design_id, result_id)
-                ] = persisted
+                self._characterization_result_details[(dataset_id, design_id, result_id)] = (
+                    persisted
+                )
                 return persisted
         derived = self._task_derived_characterization_result_detail(
             dataset_id,
@@ -883,6 +891,31 @@ class InMemoryRewriteCatalogRepository:
         if derived is not None:
             self._characterization_result_details[(dataset_id, design_id, result_id)] = derived
         return derived
+
+    def get_characterization_artifact_payload(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+        artifact_id: str,
+        query: CharacterizationArtifactPayloadQuery,
+    ) -> CharacterizationArtifactPayload | None:
+        surface = self._characterization_artifact_surfaces.get((dataset_id, design_id, result_id))
+        if surface is not None:
+            return query_admittance_artifact_payload(
+                surface=surface,
+                artifact_id=artifact_id,
+                preset_id=query.preset_id,
+            )
+        if self._durable_characterization_repository is not None:
+            return self._durable_characterization_repository.get_artifact_payload(
+                dataset_id,
+                design_id,
+                result_id,
+                artifact_id,
+                query,
+            )
+        return None
 
     def apply_characterization_tagging(
         self,
@@ -907,9 +940,9 @@ class InMemoryRewriteCatalogRepository:
                     result_id,
                 )
                 if detail is not None:
-                    self._characterization_result_details[
-                        (dataset_id, design_id, result_id)
-                    ] = detail
+                    self._characterization_result_details[(dataset_id, design_id, result_id)] = (
+                        detail
+                    )
                 return _to_characterization_tagging_result(persisted)
         detail_key = (dataset_id, design_id, result_id)
         detail = self._characterization_result_details[detail_key]
@@ -989,8 +1022,10 @@ class InMemoryRewriteCatalogRepository:
             if trace.family == "y_matrix" and trace.trace_mode_group == "base"
         )
         source_kinds = {trace.source_kind for trace in compatible_traces}
-        if len(compatible_traces) < 2 or "measurement" not in source_kinds or not (
-            {"layout_simulation", "circuit_simulation"} & source_kinds
+        if (
+            len(compatible_traces) < 2
+            or "measurement" not in source_kinds
+            or not ({"layout_simulation", "circuit_simulation"} & source_kinds)
         ):
             return ()
         return (
@@ -1082,11 +1117,7 @@ class InMemoryRewriteCatalogRepository:
             ):
                 continue
             completion_event = next(
-                (
-                    event
-                    for event in reversed(task.events)
-                    if event.event_type == "task_completed"
-                ),
+                (event for event in reversed(task.events) if event.event_type == "task_completed"),
                 None,
             )
             if completion_event is None:
@@ -1362,9 +1393,7 @@ def _enrich_in_memory_trace_detail(
         design_id=detail.design_id,
         family=summary.family if summary is not None else detail.family,
         parameter=summary.parameter if summary is not None else detail.parameter,
-        representation=(
-            summary.representation if summary is not None else detail.representation
-        ),
+        representation=(summary.representation if summary is not None else detail.representation),
         trace_mode_group=(
             summary.trace_mode_group if summary is not None else detail.trace_mode_group
         ),
@@ -1376,9 +1405,7 @@ def _enrich_in_memory_trace_detail(
         detail,
         family=summary.family if summary is not None else detail.family,
         parameter=summary.parameter if summary is not None else detail.parameter,
-        representation=(
-            summary.representation if summary is not None else detail.representation
-        ),
+        representation=(summary.representation if summary is not None else detail.representation),
         trace_mode_group=(
             summary.trace_mode_group if summary is not None else detail.trace_mode_group
         ),
@@ -1694,6 +1721,73 @@ def _parse_characterization_result_detail(
                     if isinstance(item.get("payload_locator"), str)
                     else None
                 ),
+                axes=tuple(
+                    CharacterizationArtifactAxisSpec(
+                        axis_key=str(axis["axis_key"]),
+                        label=str(axis["label"]),
+                        role=str(axis["role"]),
+                        unit=str(axis["unit"]) if isinstance(axis.get("unit"), str) else None,
+                        length=int(axis["length"]),
+                    )
+                    for axis in item.get("axes", ())
+                    if isinstance(axis, dict)
+                ),
+                metric=(
+                    CharacterizationArtifactMetricSpec(
+                        metric_key=str(item["metric"]["metric_key"]),
+                        label=str(item["metric"]["label"]),
+                        unit=(
+                            str(item["metric"]["unit"])
+                            if isinstance(item["metric"].get("unit"), str)
+                            else None
+                        ),
+                    )
+                    if isinstance(item.get("metric"), dict)
+                    else None
+                ),
+                presets=tuple(
+                    CharacterizationArtifactPreset(
+                        preset_id=str(preset["preset_id"]),
+                        label=str(preset["label"]),
+                        view_kind=str(preset["view_kind"]),
+                        rows_axis=(
+                            str(preset["rows_axis"])
+                            if isinstance(preset.get("rows_axis"), str)
+                            else None
+                        ),
+                        columns_axis=(
+                            str(preset["columns_axis"])
+                            if isinstance(preset.get("columns_axis"), str)
+                            else None
+                        ),
+                        cell_metric=(
+                            str(preset["cell_metric"])
+                            if isinstance(preset.get("cell_metric"), str)
+                            else None
+                        ),
+                        x_axis=(
+                            str(preset["x_axis"]) if isinstance(preset.get("x_axis"), str) else None
+                        ),
+                        y_metric=(
+                            str(preset["y_metric"])
+                            if isinstance(preset.get("y_metric"), str)
+                            else None
+                        ),
+                        series_axis=(
+                            str(preset["series_axis"])
+                            if isinstance(preset.get("series_axis"), str)
+                            else None
+                        ),
+                    )
+                    for preset in item.get("presets", ())
+                    if isinstance(preset, dict)
+                ),
+                default_preset_id=(
+                    str(item["default_preset_id"])
+                    if isinstance(item.get("default_preset_id"), str)
+                    else None
+                ),
+                identify_source=bool(item.get("identify_source", False)),
             )
             for item in artifact_refs
             if isinstance(item, dict)
@@ -1753,8 +1847,7 @@ def _slugify(value: str) -> str:
     return "-".join(
         token
         for token in "".join(
-            character.lower() if character.isalnum() else "-"
-            for character in value.strip()
+            character.lower() if character.isalnum() else "-" for character in value.strip()
         ).split("-")
         if token
     )
@@ -1905,9 +1998,7 @@ def _timestamp_for_definition_sequence(sequence: int) -> str:
 
 def _advance_definition_timestamp(current_timestamp: str, *, minutes: int) -> str:
     parsed = datetime.fromisoformat(current_timestamp.replace("Z", "+00:00"))
-    return (parsed + timedelta(minutes=minutes)).astimezone(UTC).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    return (parsed + timedelta(minutes=minutes)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _seed_datasets() -> tuple[DatasetDetail, ...]:
@@ -2012,17 +2103,17 @@ def _seed_tagged_core_metrics() -> dict[str, tuple[TaggedCoreMetricSummary, ...]
         ),
         "fluxonium-2025-031": (
             TaggedCoreMetricSummary(
-                metric_id="metric-fluxonium-f01",
-                label="Qubit Transition",
-                source_parameter="Im(Y11)",
-                designated_metric="f01",
+                metric_id="metric-fluxonium-lowest-observed-frequency-ghz",
+                label="Lowest Observed Frequency",
+                source_parameter="lowest_observed_frequency_ghz",
+                designated_metric="lowest_observed_frequency_ghz",
                 tagged_at="2026-03-14T11:05:00Z",
             ),
             TaggedCoreMetricSummary(
-                metric_id="metric-fluxonium-anharmonicity",
-                label="Anharmonicity",
-                source_parameter="Im(Y12)",
-                designated_metric="alpha",
+                metric_id="metric-fluxonium-residual-rms-max",
+                label="Max Residual RMS",
+                source_parameter="residual_rms_max",
+                designated_metric="residual_rms_max",
                 tagged_at="2026-03-14T11:08:00Z",
             ),
         ),
@@ -2845,7 +2936,7 @@ def _seed_characterization_results() -> dict[
                 freshness_summary="Materialized 14 minutes ago",
                 provenance_summary="Measurement batch #4 + layout batch #2",
                 trace_count=2,
-                artifact_count=2,
+                artifact_count=3,
                 updated_at="2026-03-14T11:12:00Z",
             ),
             CharacterizationResultSummary(
@@ -2940,93 +3031,35 @@ def _seed_characterization_result_details() -> dict[
             trace_count=2,
             updated_at="2026-03-14T11:12:00Z",
             input_trace_ids=("trace_flux_a_measurement", "trace_flux_a_layout"),
-            payload={
-                "fit_table": [
-                    {"parameter": "f01", "value": 5.742, "unit": "GHz"},
-                    {"parameter": "alpha", "value": -0.238, "unit": "GHz"},
-                ],
-                "quality_flags": {
-                    "residual_rms": 0.012,
-                    "fit_status": "converged",
+            payload=summarize_admittance_surface(
+                analysis_run_id=101,
+                analysis_config={
+                    "fit_window": [5.4, 6.0],
+                    "residual_tolerance": 0.02,
                 },
-            },
-            diagnostics=(
-                CharacterizationDiagnostic(
-                    severity="info",
-                    code="fit_residual_checked",
-                    message="Residual RMS stays within the characterization threshold.",
-                    blocking=False,
-                ),
+                surface=_seed_admittance_flux_scan_a_surface(),
             ),
-            artifact_refs=(
-                CharacterizationArtifactRef(
-                    artifact_id="artifact-fit-table-flux-a-01",
-                    category="fit_table",
-                    view_kind="table",
-                    title="Fit table",
-                    payload_format="json",
-                    payload_locator="artifacts/characterization/flux-a-fit-table.json",
-                ),
-                CharacterizationArtifactRef(
-                    artifact_id="artifact-fit-plot-flux-a-01",
-                    category="plot",
-                    view_kind="plot",
-                    title="Resonance fit overlay",
-                    payload_format="svg",
-                    payload_locator="artifacts/characterization/flux-a-fit-plot.svg",
-                ),
+            diagnostics=_seed_admittance_flux_scan_a_surface().diagnostics,
+            artifact_refs=annotate_admittance_artifact_refs(
+                build_admittance_artifact_refs(result_id="char-fit-flux-a-01"),
+                _seed_admittance_flux_scan_a_surface(),
             ),
-            identify_surface=_build_identify_surface(
-                source_parameters=(
-                    CharacterizationSourceParameterOption(
-                        artifact_id="artifact-fit-table-flux-a-01",
-                        source_parameter="f01",
-                        label="f01",
-                        artifact_title="Fit table",
-                        current_designated_metric="f01",
-                    ),
-                    CharacterizationSourceParameterOption(
-                        artifact_id="artifact-fit-table-flux-a-01",
-                        source_parameter="alpha",
-                        label="alpha",
-                        artifact_title="Fit table",
-                        current_designated_metric="alpha",
-                    ),
-                    CharacterizationSourceParameterOption(
-                        artifact_id="artifact-fit-table-flux-a-01",
-                        source_parameter="EJ_fit",
-                        label="EJ fit",
-                        artifact_title="Fit table",
-                        current_designated_metric=None,
-                    ),
-                ),
-                designated_metrics=(
-                    CharacterizationDesignatedMetricOption(
-                        metric_key="f01",
-                        label="Qubit Transition",
-                    ),
-                    CharacterizationDesignatedMetricOption(
-                        metric_key="alpha",
-                        label="Anharmonicity",
-                    ),
-                    CharacterizationDesignatedMetricOption(
-                        metric_key="ej",
-                        label="Josephson Energy",
-                    ),
-                ),
+            identify_surface=build_admittance_identify_surface(
+                result_id="char-fit-flux-a-01",
+                surface=_seed_admittance_flux_scan_a_surface(),
                 applied_tags=(
                     CharacterizationAppliedTag(
-                        artifact_id="artifact-fit-table-flux-a-01",
-                        source_parameter="f01",
-                        designated_metric="f01",
-                        designated_metric_label="Qubit Transition",
+                        artifact_id="char-fit-flux-a-01:identify-summary",
+                        source_parameter="lowest_observed_frequency_ghz",
+                        designated_metric="lowest_observed_frequency_ghz",
+                        designated_metric_label="Lowest Observed Frequency",
                         tagged_at="2026-03-14T11:05:00Z",
                     ),
                     CharacterizationAppliedTag(
-                        artifact_id="artifact-fit-table-flux-a-01",
-                        source_parameter="alpha",
-                        designated_metric="alpha",
-                        designated_metric_label="Anharmonicity",
+                        artifact_id="char-fit-flux-a-01:identify-summary",
+                        source_parameter="residual_rms_max",
+                        designated_metric="residual_rms_max",
+                        designated_metric_label="Max Residual RMS",
                         tagged_at="2026-03-14T11:08:00Z",
                     ),
                 ),
@@ -3295,6 +3328,55 @@ def _seed_characterization_result_details() -> dict[
             ),
         ),
     }
+
+
+def _seed_characterization_artifact_surfaces() -> dict[
+    tuple[str, str, str],
+    AdmittanceResultSurface,
+]:
+    return {
+        (
+            "fluxonium-2025-031",
+            "design_flux_scan_a",
+            "char-fit-flux-a-01",
+        ): _seed_admittance_flux_scan_a_surface(),
+    }
+
+
+def _seed_admittance_flux_scan_a_surface() -> AdmittanceResultSurface:
+    return AdmittanceResultSurface(
+        input_axis_key="flux_bias",
+        input_axis_label="Flux bias",
+        input_axis_unit="mA",
+        input_axis_values=(7.4, 7.6, 7.8),
+        frequency_grid_by_input=(
+            (5.612, 5.846),
+            (5.587, 5.821),
+            (None, None),
+        ),
+        residual_rms_by_input=(0.0118, 0.0131, None),
+        fit_window_ghz=(5.4, 6.0),
+        masked_input_indices=(2,),
+        diagnostics=(
+            CharacterizationDiagnostic(
+                severity="info",
+                code="fit_residual_rms_evaluated",
+                message=(
+                    "All persisted input positions stay within the configured residual tolerance."
+                ),
+                blocking=False,
+            ),
+            CharacterizationDiagnostic(
+                severity="warning",
+                code="masked_input_positions_preserved",
+                message=(
+                    "1 input positions remained fully masked and were preserved "
+                    "in the persisted result surface."
+                ),
+                blocking=False,
+            ),
+        ),
+    )
 
 
 def _build_identify_surface(

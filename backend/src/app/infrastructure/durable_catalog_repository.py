@@ -17,6 +17,11 @@ from src.app.domain.circuit_definitions import CircuitDefinitionRecord
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     CharacterizationAnalysisTraceCompatibility,
+    CharacterizationArtifactAxisSpec,
+    CharacterizationArtifactMetricSpec,
+    CharacterizationArtifactPayload,
+    CharacterizationArtifactPayloadQuery,
+    CharacterizationArtifactPreset,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
     CharacterizationRunHistoryRow,
@@ -123,9 +128,7 @@ class DurableCatalogRepository:
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None:
         with self._session_factory() as session:
             row = session.scalar(
-                select(RewriteDatasetRecord).where(
-                    RewriteDatasetRecord.dataset_id == dataset_id
-                )
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
             )
             return _to_dataset_detail(row) if row is not None else None
 
@@ -139,9 +142,7 @@ class DurableCatalogRepository:
         draft: DatasetCreateDraft,
     ) -> DatasetDetail:
         with self._session_factory() as session:
-            next_counter = (
-                session.scalar(select(func.count(RewriteDatasetRecord.id))) or 0
-            ) + 100
+            next_counter = (session.scalar(select(func.count(RewriteDatasetRecord.id))) or 0) + 100
             dataset_id = _build_dataset_id(
                 workspace_id=workspace_id,
                 name=draft.name,
@@ -174,9 +175,7 @@ class DurableCatalogRepository:
     ) -> DatasetDetail | None:
         with self._session_factory() as session:
             row = session.scalar(
-                select(RewriteDatasetRecord).where(
-                    RewriteDatasetRecord.dataset_id == dataset_id
-                )
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
             )
             if row is None:
                 return None
@@ -194,9 +193,7 @@ class DurableCatalogRepository:
     ) -> DatasetDetail | None:
         with self._session_factory() as session:
             row = session.scalar(
-                select(RewriteDatasetRecord).where(
-                    RewriteDatasetRecord.dataset_id == dataset_id
-                )
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
             )
             if row is None:
                 return None
@@ -587,9 +584,7 @@ class DurableCatalogRepository:
         )
         with self._session_factory() as session:
             persisted = session.scalar(
-                select(RewriteDatasetTraceRecord).where(
-                    RewriteDatasetTraceRecord.id == raw_row.id
-                )
+                select(RewriteDatasetTraceRecord).where(RewriteDatasetTraceRecord.id == raw_row.id)
             )
             if persisted is None:
                 return None
@@ -776,6 +771,25 @@ class DurableCatalogRepository:
         ):
             if summary.result_id == result_id:
                 return detail
+        return None
+
+    def get_characterization_artifact_payload(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+        artifact_id: str,
+        query: CharacterizationArtifactPayloadQuery,
+    ) -> CharacterizationArtifactPayload | None:
+        payload = self._characterization_repository.get_artifact_payload(
+            dataset_id,
+            design_id,
+            result_id,
+            artifact_id,
+            query,
+        )
+        if payload is not None:
+            return payload
         return None
 
     def apply_characterization_tagging(
@@ -978,9 +992,7 @@ class DurableCatalogRepository:
     def _touch_dataset(self, dataset_id: str, updated_at: str) -> DatasetDetail | None:
         with self._session_factory() as session:
             row = session.scalar(
-                select(RewriteDatasetRecord).where(
-                    RewriteDatasetRecord.dataset_id == dataset_id
-                )
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
             )
             if row is None:
                 return None
@@ -1076,9 +1088,7 @@ class DurableCatalogRepository:
         result_handles = tuple(
             handle
             for handle_id in row.result_handle_ids_json
-            if (
-                handle := self._storage_metadata_repository.get_result_handle(handle_id)
-            )
+            if (handle := self._storage_metadata_repository.get_result_handle(handle_id))
             is not None
         )
         return TraceDetail(
@@ -1231,11 +1241,7 @@ class DurableCatalogRepository:
             ):
                 continue
             completion_event = next(
-                (
-                    event
-                    for event in reversed(task.events)
-                    if event.event_type == "task_completed"
-                ),
+                (event for event in reversed(task.events) if event.event_type == "task_completed"),
                 None,
             )
             if completion_event is None:
@@ -1518,8 +1524,7 @@ def _slugify(value: str) -> str:
     return "-".join(
         token
         for token in "".join(
-            character.lower() if character.isalnum() else "-"
-            for character in value.strip()
+            character.lower() if character.isalnum() else "-" for character in value.strip()
         ).split("-")
         if token
     )
@@ -1591,10 +1596,7 @@ def _numeric_payload_from_preview_payload(
             if isinstance(item, list | tuple) and len(item) >= 2:
                 rows.append({axis.name: item[0], "value": item[1]})
     if len(rows) == 0:
-        rows = [
-            {axis.name: float(index), "value": 0.0}
-            for index in range(axis.length)
-        ]
+        rows = [{axis.name: float(index), "value": 0.0} for index in range(axis.length)]
     return {
         "kind": "series_table",
         "columns": [
@@ -1822,6 +1824,73 @@ def _parse_characterization_result_detail(
                     if isinstance(item.get("payload_locator"), str)
                     else None
                 ),
+                axes=tuple(
+                    CharacterizationArtifactAxisSpec(
+                        axis_key=str(axis["axis_key"]),
+                        label=str(axis["label"]),
+                        role=str(axis["role"]),
+                        unit=str(axis["unit"]) if isinstance(axis.get("unit"), str) else None,
+                        length=int(axis["length"]),
+                    )
+                    for axis in item.get("axes", ())
+                    if isinstance(axis, dict)
+                ),
+                metric=(
+                    CharacterizationArtifactMetricSpec(
+                        metric_key=str(item["metric"]["metric_key"]),
+                        label=str(item["metric"]["label"]),
+                        unit=(
+                            str(item["metric"]["unit"])
+                            if isinstance(item["metric"].get("unit"), str)
+                            else None
+                        ),
+                    )
+                    if isinstance(item.get("metric"), dict)
+                    else None
+                ),
+                presets=tuple(
+                    CharacterizationArtifactPreset(
+                        preset_id=str(preset["preset_id"]),
+                        label=str(preset["label"]),
+                        view_kind=str(preset["view_kind"]),
+                        rows_axis=(
+                            str(preset["rows_axis"])
+                            if isinstance(preset.get("rows_axis"), str)
+                            else None
+                        ),
+                        columns_axis=(
+                            str(preset["columns_axis"])
+                            if isinstance(preset.get("columns_axis"), str)
+                            else None
+                        ),
+                        cell_metric=(
+                            str(preset["cell_metric"])
+                            if isinstance(preset.get("cell_metric"), str)
+                            else None
+                        ),
+                        x_axis=(
+                            str(preset["x_axis"]) if isinstance(preset.get("x_axis"), str) else None
+                        ),
+                        y_metric=(
+                            str(preset["y_metric"])
+                            if isinstance(preset.get("y_metric"), str)
+                            else None
+                        ),
+                        series_axis=(
+                            str(preset["series_axis"])
+                            if isinstance(preset.get("series_axis"), str)
+                            else None
+                        ),
+                    )
+                    for preset in item.get("presets", ())
+                    if isinstance(preset, dict)
+                ),
+                default_preset_id=(
+                    str(item["default_preset_id"])
+                    if isinstance(item.get("default_preset_id"), str)
+                    else None
+                ),
+                identify_source=bool(item.get("identify_source", False)),
             )
             for item in artifact_refs
             if isinstance(item, dict)

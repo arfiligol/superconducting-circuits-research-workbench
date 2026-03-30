@@ -1,5 +1,6 @@
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
+    CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
     CharacterizationRunHistoryQuery,
     CharacterizationTaggingRequest,
@@ -174,6 +175,22 @@ class DatasetService:
             dataset_id,
             design_id,
             result_id,
+        )
+
+    def get_characterization_artifact_payload(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+        artifact_id: str,
+        query: CharacterizationArtifactPayloadQuery,
+    ):
+        return self._characterization_service.get_characterization_artifact_payload(
+            dataset_id,
+            design_id,
+            result_id,
+            artifact_id,
+            query,
         )
 
     def apply_characterization_tagging(
