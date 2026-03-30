@@ -26,6 +26,7 @@ from src.app.domain.session import SessionState
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
+from src.app.services.trace_collection_service import TraceCollectionService
 
 
 class DatasetCharacterizationRepository(Protocol):
@@ -93,12 +94,14 @@ class DatasetCharacterizationService:
         repository: DatasetCharacterizationRepository,
         session_repository: DatasetCharacterizationSessionRepository,
         authorization_service: AuthorizationService | None = None,
+        trace_collection_service: TraceCollectionService | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
         self._authorization_service = authorization_service or AuthorizationService(
             CasbinAuthorizationAdapter()
         )
+        self._trace_collection_service = trace_collection_service or TraceCollectionService()
 
     def list_characterization_results(
         self,
@@ -336,14 +339,12 @@ class DatasetCharacterizationService:
     ):
         if len(selected_trace_ids) == 0:
             return None
-        from src.app.services.trace_collection_service import (
-            derive_input_collection_payload_from_trace_details,
-        )
-
         trace_details = []
         for trace_id in selected_trace_ids:
             detail = self._repository.get_trace_detail(dataset_id, design_id, trace_id)
             if detail is None:
                 return None
             trace_details.append(detail)
-        return derive_input_collection_payload_from_trace_details(tuple(trace_details))
+        return self._trace_collection_service.derive_input_collection_payload_from_trace_details(
+            tuple(trace_details)
+        )

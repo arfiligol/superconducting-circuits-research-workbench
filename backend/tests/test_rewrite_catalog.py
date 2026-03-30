@@ -429,6 +429,18 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     assert trace_rows[0].axis_signature == trace_rows[1].axis_signature
     assert trace_rows[0].collection_projection is not None
     collection_key = trace_rows[0].collection_projection.collection_key
+    layout_collection_key = dataset_service.get_trace_detail(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        "trace_flux_a_layout",
+    ).collection_projection.collection_key
+    phase_collection_key = dataset_service.get_trace_detail(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        "trace_flux_a_phase",
+    ).collection_projection.collection_key
+    assert collection_key == layout_collection_key
+    assert phase_collection_key != collection_key
     assert trace_rows[0].allowed_actions.edit is False
     assert trace_rows[0].allowed_actions.delete is False
     assert "source workflow" in trace_rows[0].mutation_policy_summary
@@ -440,7 +452,6 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     assert [row.trace_id for row in filtered_rows] == [
         "trace_flux_a_measurement",
         "trace_flux_a_layout",
-        "trace_flux_a_phase",
     ]
 
     assert trace_detail.trace_id == "trace_flux_a_measurement"

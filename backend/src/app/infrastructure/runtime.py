@@ -35,6 +35,9 @@ from src.app.infrastructure.request_debug import configure_backend_logging
 from src.app.infrastructure.rewrite_task_repository import PersistedRewriteTaskRepository
 from src.app.infrastructure.session_jwt_transport import SessionJwtTransport
 from src.app.infrastructure.task_execution_runtime import TaskExecutionRuntime
+from src.app.infrastructure.trace_store_axis_value_loader import (
+    TraceStoreAxisValueLoader,
+)
 from src.app.infrastructure.worker_runtime.dispatcher import (
     LocalTaskQueueDispatcher,
 )
@@ -80,6 +83,7 @@ from src.app.services.task_mutation_service import TaskMutationService
 from src.app.services.task_publication_service import TaskPublicationService
 from src.app.services.task_service import TaskService
 from src.app.services.task_submission_service import TaskSubmissionService
+from src.app.services.trace_collection_service import TraceCollectionService
 from src.app.services.workspace_collaboration_service import WorkspaceCollaborationService
 from src.app.settings import get_settings
 
@@ -225,6 +229,13 @@ def get_session_token_transport() -> SessionJwtTransport:
 
 
 @lru_cache(maxsize=1)
+def get_trace_collection_service() -> TraceCollectionService:
+    return TraceCollectionService(
+        axis_value_loader=TraceStoreAxisValueLoader(),
+    )
+
+
+@lru_cache(maxsize=1)
 def get_dataset_service() -> DatasetService:
     catalog_repository = get_catalog_repository()
     session_repository = get_app_state_repository()
@@ -247,6 +258,7 @@ def get_dataset_service() -> DatasetService:
             repository=catalog_repository,
             session_repository=session_repository,
             authorization_service=authorization_service,
+            trace_collection_service=get_trace_collection_service(),
         ),
     )
 
@@ -319,6 +331,7 @@ def _get_task_runtime_bundle() -> _TaskRuntimeBundle:
             authorization_service=authorization_service,
             audit_repository=audit_repository,
             queue_dispatcher=queue_dispatcher,
+            trace_collection_service=get_trace_collection_service(),
         ),
         control_service=TaskControlService(
             repository=task_repository,
