@@ -730,7 +730,7 @@ function addSummarySlide(pptx, pageNo) {
   cards.forEach((card) => {
     addPanel(slide, card.x, 1.78, 2.72, 2.0);
     slide.addShape("rect", {
-      x: card.x + 0.24,
+      x: card.x,
       y: 1.78,
       w: 2.72,
       h: 0.18,
