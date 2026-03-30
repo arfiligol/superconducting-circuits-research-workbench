@@ -1334,6 +1334,8 @@ def _enrich_in_memory_trace_summary(
         dataset_id=summary.dataset_id,
         design_id=summary.design_id,
         family=summary.family,
+        parameter=summary.parameter,
+        representation=summary.representation,
         trace_mode_group=summary.trace_mode_group,
         source_kind=summary.source_kind,
         stage_kind=summary.stage_kind,
@@ -1359,6 +1361,10 @@ def _enrich_in_memory_trace_detail(
         dataset_id=detail.dataset_id,
         design_id=detail.design_id,
         family=summary.family if summary is not None else detail.family,
+        parameter=summary.parameter if summary is not None else detail.parameter,
+        representation=(
+            summary.representation if summary is not None else detail.representation
+        ),
         trace_mode_group=(
             summary.trace_mode_group if summary is not None else detail.trace_mode_group
         ),

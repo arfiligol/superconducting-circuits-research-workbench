@@ -34,6 +34,7 @@ from src.app.infrastructure.audit_records import build_audit_record
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import ServiceFieldError, service_error
+from src.app.services.trace_collection_service import TraceCollectionService
 
 
 class TaskSubmissionRepository(Protocol):
@@ -94,6 +95,7 @@ class TaskSubmissionService:
         authorization_service: AuthorizationService | None = None,
         audit_repository: TaskSubmissionAuditRepository | None = None,
         queue_dispatcher: TaskSubmissionQueueDispatcher | None = None,
+        trace_collection_service: TraceCollectionService | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
@@ -104,6 +106,7 @@ class TaskSubmissionService:
         )
         self._audit_repository = audit_repository
         self._queue_dispatcher = queue_dispatcher
+        self._trace_collection_service = trace_collection_service or TraceCollectionService()
 
     def submit_task(self, draft: TaskSubmissionDraft) -> int:
         session = self._session_repository.get_session_state()
@@ -536,10 +539,6 @@ class TaskSubmissionService:
                 category="validation",
                 message=config_error,
             )
-        from src.app.services.trace_collection_service import (
-            derive_input_collection_payload_from_trace_details,
-        )
-
         trace_details = []
         for trace_id in setup.selected_trace_ids:
             detail = self._dataset_repository.get_trace_detail(
@@ -562,8 +561,10 @@ class TaskSubmissionService:
             analysis_id=setup.analysis_id,
             selected_trace_ids=setup.selected_trace_ids,
             analysis_config=dict(setup.analysis_config),
-            input_collection_payload=derive_input_collection_payload_from_trace_details(
-                tuple(trace_details)
+            input_collection_payload=(
+                self._trace_collection_service.derive_input_collection_payload_from_trace_details(
+                    tuple(trace_details)
+                )
             ),
         )
 

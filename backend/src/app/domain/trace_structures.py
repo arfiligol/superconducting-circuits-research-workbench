@@ -15,6 +15,8 @@ from src.app.domain.datasets import (
     TraceCollectionProjection,
 )
 
+MAX_INLINE_SHARED_AXIS_VALUE_COUNT = 32
+
 
 @dataclass(frozen=True)
 class TraceStructureSummarySurface:
@@ -63,6 +65,8 @@ def build_trace_structure_summary(
     dataset_id: str,
     design_id: str,
     family: str,
+    parameter: str,
+    representation: str,
     trace_mode_group: str,
     source_kind: str,
     stage_kind: str,
@@ -100,6 +104,9 @@ def build_trace_structure_summary(
                     "dataset_id": dataset_id,
                     "design_id": design_id,
                     "family": family,
+                    "parameter": parameter,
+                    "representation": representation,
+                    "trace_mode_group": trace_mode_group,
                     "axis_signature": axis_signature,
                 }
             ),
@@ -155,9 +162,9 @@ def derive_input_collection_payload(
                 name=axis.name,
                 unit=axis.unit,
                 length=axis.length,
-                values=axis.values,
+                values=_inline_shared_axis_values(index=index, axis=axis),
             )
-            for axis in shared_axes
+            for index, axis in enumerate(shared_axes)
         ),
         grouping_summary=_grouping_summary(traces),
         collection_projection=collection_projection,
@@ -222,6 +229,20 @@ def _shared_axis(
             length=axis.length,
         ),
     )
+
+
+def _inline_shared_axis_values(
+    *,
+    index: int,
+    axis: _NormalizedAxis,
+) -> tuple[float, ...]:
+    if index == 0:
+        return ()
+    if len(axis.values) == 0:
+        return ()
+    if axis.length > MAX_INLINE_SHARED_AXIS_VALUE_COUNT:
+        return ()
+    return axis.values
 
 
 def _grouping_summary(traces: Sequence[object]) -> str:

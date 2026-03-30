@@ -1184,6 +1184,10 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
     assert task["characterization_setup"]["input_collection_payload"]["shared_axes"][0]["name"] == (
         "frequency"
     )
+    assert (
+        task["characterization_setup"]["input_collection_payload"]["shared_axes"][0]["values"]
+        == []
+    )
     assert task["result_handoff"] == {
         "availability": "pending",
         "primary_result_handle_id": "task-result:306:primary",

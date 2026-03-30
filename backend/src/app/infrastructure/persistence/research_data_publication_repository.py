@@ -1237,6 +1237,11 @@ def _materialize_published_trace(
         dataset_id=dataset_id,
         design_id=design_id,
         family=selection.family,
+        parameter=summary_parameter,
+        representation=(
+            summary_representation
+            or (metric_spec.representation if metric_spec is not None else "complex")
+        ),
         trace_mode_group=selection.trace_mode_group,
         source_kind=cast(str, nd_trace_data.source_kind),
         stage_kind=cast(str, nd_trace_data.stage_kind),
@@ -1456,6 +1461,8 @@ def _published_trace_structure_surface(
         dataset_id=row.dataset_id,
         design_id=row.design_id,
         family=row.family,
+        parameter=row.parameter,
+        representation=row.representation,
         trace_mode_group=row.trace_mode_group,
         source_kind=row.source_kind,
         stage_kind=row.stage_kind,

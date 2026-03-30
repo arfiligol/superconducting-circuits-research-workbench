@@ -803,6 +803,10 @@ def test_local_characterization_submit_completes_with_analysis_run_and_result_ha
         detail["characterization_setup"]["input_collection_payload"]["shared_axes"][0]["name"]
         == "frequency"
     )
+    assert (
+        detail["characterization_setup"]["input_collection_payload"]["shared_axes"][0]["values"]
+        == []
+    )
     assert isinstance(detail["result_refs"]["analysis_run_id"], int)
     assert detail["result_refs"]["analysis_run_id"] > 0
     assert detail["result_refs"]["trace_payload"]["payload_role"] == "analysis_projection"
