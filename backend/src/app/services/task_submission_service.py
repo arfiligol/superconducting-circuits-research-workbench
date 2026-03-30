@@ -60,6 +60,13 @@ class TaskSubmissionDatasetRepository(Protocol):
         design_id: str,
     ) -> Sequence[TraceMetadataSummary]: ...
 
+    def get_trace_detail(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> object | None: ...
+
 
 class TaskSubmissionCircuitDefinitionRepository(Protocol):
     def get_circuit_definition(self, definition_id: str) -> object | None: ...
@@ -194,9 +201,9 @@ class TaskSubmissionService:
                 resolved_dataset_id=resolved_dataset_id,
             )
         if draft.kind == "characterization":
-            self._validate_characterization_submission(
+            draft = self._with_derived_characterization_collection(
                 dataset_id=resolved_dataset_id,
-                setup=draft.characterization_setup,
+                draft=draft,
             )
         self._authorization_service.authorize(
             session,
@@ -440,7 +447,7 @@ class TaskSubmissionService:
         *,
         dataset_id: str | None,
         setup: CharacterizationSetup | None,
-    ) -> None:
+    ) -> CharacterizationSetup:
         if dataset_id is None or setup is None:
             raise service_error(
                 422,
@@ -529,6 +536,57 @@ class TaskSubmissionService:
                 category="validation",
                 message=config_error,
             )
+        from src.app.services.trace_collection_service import (
+            derive_input_collection_payload_from_trace_details,
+        )
+
+        trace_details = []
+        for trace_id in setup.selected_trace_ids:
+            detail = self._dataset_repository.get_trace_detail(
+                dataset_id,
+                setup.design_id,
+                trace_id,
+            )
+            if detail is None:
+                raise service_error(
+                    422,
+                    code="characterization_trace_selection_invalid",
+                    category="validation",
+                    message=(
+                        "Selected traces must belong to the chosen design in the current dataset."
+                    ),
+                )
+            trace_details.append(detail)
+        return CharacterizationSetup(
+            design_id=setup.design_id,
+            analysis_id=setup.analysis_id,
+            selected_trace_ids=setup.selected_trace_ids,
+            analysis_config=dict(setup.analysis_config),
+            input_collection_payload=derive_input_collection_payload_from_trace_details(
+                tuple(trace_details)
+            ),
+        )
+
+    def _with_derived_characterization_collection(
+        self,
+        *,
+        dataset_id: str | None,
+        draft: TaskSubmissionDraft,
+    ) -> TaskSubmissionDraft:
+        derived_setup = self._validate_characterization_submission(
+            dataset_id=dataset_id,
+            setup=draft.characterization_setup,
+        )
+        return TaskSubmissionDraft(
+            kind=draft.kind,
+            dataset_id=draft.dataset_id,
+            definition_id=draft.definition_id,
+            summary=draft.summary,
+            simulation_setup=draft.simulation_setup,
+            post_processing_setup=draft.post_processing_setup,
+            characterization_setup=derived_setup,
+            upstream_task_id=draft.upstream_task_id,
+        )
 
 
 def _default_task_summary(task_kind: TaskKind, dataset_id: str | None) -> str:

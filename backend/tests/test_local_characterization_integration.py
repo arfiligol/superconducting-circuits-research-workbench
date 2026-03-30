@@ -792,9 +792,17 @@ def test_local_characterization_submit_completes_with_analysis_run_and_result_ha
 
     detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
     assert detail["status"] == "completed"
-    assert detail["characterization_setup"] == _characterization_payload()[
-        "characterization_setup"
+    assert detail["characterization_setup"]["design_id"] == "design_local_flux_playground"
+    assert detail["characterization_setup"]["analysis_id"] == "admittance_extraction"
+    assert detail["characterization_setup"]["selected_trace_ids"] == [
+        "trace_local_flux_measurement",
+        "trace_local_flux_preview",
     ]
+    assert detail["characterization_setup"]["input_collection_payload"] is not None
+    assert (
+        detail["characterization_setup"]["input_collection_payload"]["shared_axes"][0]["name"]
+        == "frequency"
+    )
     assert isinstance(detail["result_refs"]["analysis_run_id"], int)
     assert detail["result_refs"]["analysis_run_id"] > 0
     assert detail["result_refs"]["trace_payload"]["payload_role"] == "analysis_projection"

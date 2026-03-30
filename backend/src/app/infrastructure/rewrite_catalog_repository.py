@@ -60,6 +60,7 @@ from src.app.domain.datasets import (
 )
 from src.app.domain.result_traces import ResultTraceSelection, build_trace_parameter
 from src.app.domain.tasks import TaskDetail
+from src.app.domain.trace_structures import build_trace_structure_summary
 from src.app.infrastructure.persisted_characterization_runtime import (
     CharacterizationTaggingResultPayload,
     PersistedCharacterizationRepository,
@@ -561,7 +562,13 @@ class InMemoryRewriteCatalogRepository:
         dataset_id: str,
         design_id: str,
     ) -> tuple[TraceMetadataSummary, ...]:
-        in_memory_rows = self._trace_summaries.get((dataset_id, design_id), ())
+        in_memory_rows = tuple(
+            _enrich_in_memory_trace_summary(
+                summary,
+                self._trace_details.get((dataset_id, design_id, summary.trace_id)),
+            )
+            for summary in self._trace_summaries.get((dataset_id, design_id), ())
+        )
         if self._durable_publication_repository is None:
             return in_memory_rows
         return _merge_trace_summaries(
@@ -577,7 +584,17 @@ class InMemoryRewriteCatalogRepository:
     ) -> TraceDetail | None:
         detail = self._trace_details.get((dataset_id, design_id, trace_id))
         if detail is not None or self._durable_publication_repository is None:
-            return detail
+            if detail is None:
+                return None
+            summary = next(
+                (
+                    row
+                    for row in self.list_trace_metadata(dataset_id, design_id)
+                    if row.trace_id == trace_id
+                ),
+                None,
+            )
+            return _enrich_in_memory_trace_detail(detail, summary=summary)
         return self._durable_publication_repository.get_trace_detail(
             dataset_id,
             design_id,
@@ -1295,9 +1312,78 @@ def _build_trace_browse_row(
         trace_mode_group=summary.trace_mode_group,
         source_kind=summary.source_kind,
         stage_kind=summary.stage_kind,
+        ndim=summary.ndim,
+        shape=summary.shape,
+        axes_summary=summary.axes_summary,
+        axis_signature=summary.axis_signature,
+        available_sweep_axes=summary.available_sweep_axes,
+        collection_projection=summary.collection_projection,
         provenance_summary=summary.provenance_summary,
         allowed_actions=policy.allowed_actions,
         mutation_policy_summary=policy.summary,
+    )
+
+
+def _enrich_in_memory_trace_summary(
+    summary: TraceMetadataSummary,
+    detail: TraceDetail | None,
+) -> TraceMetadataSummary:
+    if detail is None:
+        return summary
+    structure = build_trace_structure_summary(
+        dataset_id=summary.dataset_id,
+        design_id=summary.design_id,
+        family=summary.family,
+        trace_mode_group=summary.trace_mode_group,
+        source_kind=summary.source_kind,
+        stage_kind=summary.stage_kind,
+        axes=tuple(detail.axes),
+    )
+    return replace(
+        summary,
+        ndim=structure.ndim,
+        shape=structure.shape,
+        axes_summary=structure.axes_summary,
+        axis_signature=structure.axis_signature,
+        available_sweep_axes=structure.available_sweep_axes,
+        collection_projection=structure.collection_projection,
+    )
+
+
+def _enrich_in_memory_trace_detail(
+    detail: TraceDetail,
+    *,
+    summary: TraceMetadataSummary | None,
+) -> TraceDetail:
+    structure = build_trace_structure_summary(
+        dataset_id=detail.dataset_id,
+        design_id=detail.design_id,
+        family=summary.family if summary is not None else detail.family,
+        trace_mode_group=(
+            summary.trace_mode_group if summary is not None else detail.trace_mode_group
+        ),
+        source_kind=summary.source_kind if summary is not None else detail.source_kind,
+        stage_kind=summary.stage_kind if summary is not None else detail.stage_kind,
+        axes=tuple(detail.axes),
+    )
+    return replace(
+        detail,
+        family=summary.family if summary is not None else detail.family,
+        parameter=summary.parameter if summary is not None else detail.parameter,
+        representation=(
+            summary.representation if summary is not None else detail.representation
+        ),
+        trace_mode_group=(
+            summary.trace_mode_group if summary is not None else detail.trace_mode_group
+        ),
+        source_kind=summary.source_kind if summary is not None else detail.source_kind,
+        stage_kind=summary.stage_kind if summary is not None else detail.stage_kind,
+        ndim=structure.ndim,
+        shape=structure.shape,
+        axes_summary=structure.axes_summary,
+        axis_signature=structure.axis_signature,
+        available_sweep_axes=structure.available_sweep_axes,
+        collection_projection=structure.collection_projection,
     )
 
 
@@ -2299,6 +2385,38 @@ def _seed_trace_details() -> dict[tuple[str, str, str], TraceDetail]:
                 store_key="datasets/fluxonium-2025-031/designs/design_flux_scan_a/batches/batch_2.zarr",
                 store_uri="trace_store/datasets/fluxonium-2025-031/designs/design_flux_scan_a/batches/batch_2.zarr",
                 group_path="/traces/trace_flux_a_layout",
+                array_path="values",
+                dtype="float64",
+                shape=(401,),
+                chunk_shape=(401,),
+            ),
+            result_handles=(),
+        ),
+        (
+            "fluxonium-2025-031",
+            "design_flux_scan_a",
+            "trace_flux_a_phase",
+        ): TraceDetail(
+            trace_id="trace_flux_a_phase",
+            dataset_id="fluxonium-2025-031",
+            design_id="design_flux_scan_a",
+            axes=(TraceAxis(name="frequency", unit="GHz", length=401),),
+            preview_payload={
+                "kind": "series",
+                "parameter": "Y11",
+                "default_parameter": "Y11",
+                "history_steps": ["Measurement", "Phase Projection"],
+                "history_summary": "Measurement -> Phase Projection",
+                "points": _build_interpolated_series_points(
+                    anchors=((5.71, -0.16), (5.78, -0.02), (5.84, 0.14)),
+                    length=401,
+                ),
+            },
+            payload_ref=build_trace_payload_ref(
+                payload_role="dataset_primary",
+                store_key="datasets/fluxonium-2025-031/designs/design_flux_scan_a/batches/batch_4_phase.zarr",
+                store_uri="trace_store/datasets/fluxonium-2025-031/designs/design_flux_scan_a/batches/batch_4_phase.zarr",
+                group_path="/traces/trace_flux_a_phase",
                 array_path="values",
                 dtype="float64",
                 shape=(401,),

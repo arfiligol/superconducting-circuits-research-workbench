@@ -1174,7 +1174,16 @@ def test_submit_task_returns_persisted_attach_ready_detail_and_audit_record() ->
         "last_dispatch_error_code": None,
     }
     assert task["reconcile"] == {"required": False, "reason": None}
-    assert task["characterization_setup"] == _characterization_setup_payload()
+    assert task["characterization_setup"]["design_id"] == "design_local_flux_playground"
+    assert task["characterization_setup"]["analysis_id"] == "admittance_extraction"
+    assert task["characterization_setup"]["selected_trace_ids"] == [
+        "trace_local_flux_measurement",
+        "trace_local_flux_preview",
+    ]
+    assert task["characterization_setup"]["input_collection_payload"] is not None
+    assert task["characterization_setup"]["input_collection_payload"]["shared_axes"][0]["name"] == (
+        "frequency"
+    )
     assert task["result_handoff"] == {
         "availability": "pending",
         "primary_result_handle_id": "task-result:306:primary",

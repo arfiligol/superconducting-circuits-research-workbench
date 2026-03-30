@@ -33,12 +33,17 @@ from src.app.domain.result_traces import (
     resolve_saved_trace_parameter,
 )
 from src.app.domain.tasks import SimulationSetup, TaskDetail
+from src.app.domain.trace_structures import (
+    build_axis_coordinate_digest,
+    build_trace_structure_summary,
+)
 from src.app.infrastructure.persisted_runtime import (
     available_sources_for_task_family,
     build_trace_preview_payload,
     delete_trace_payload_store,
     extract_selection_trace_data,
-    write_complex_trace_payload,
+    extract_selection_trace_nd_data,
+    write_nd_complex_trace_payload,
 )
 from src.app.infrastructure.persistence.models import (
     RewriteDatasetDesignRecord,
@@ -222,14 +227,7 @@ class SqliteResearchDataPublicationRepository:
                         source_kind=summary.source_kind,
                         stage_kind=summary.stage_kind,
                         provenance_summary=summary.provenance_summary,
-                        axes_json=[
-                            {
-                                "name": axis.name,
-                                "unit": axis.unit,
-                                "length": axis.length,
-                            }
-                            for axis in detail.axes
-                        ],
+                        axes_json=_serialize_published_axes(detail),
                         preview_payload_json=detail.preview_payload,
                         payload_store_key=cast(str, detail.payload_ref.store_key),
                         result_handle_id=detail.result_handles[0].handle_id,
@@ -377,14 +375,7 @@ class SqliteResearchDataPublicationRepository:
                         source_kind=summary.source_kind,
                         stage_kind=summary.stage_kind,
                         provenance_summary=summary.provenance_summary,
-                        axes_json=[
-                            {
-                                "name": axis.name,
-                                "unit": axis.unit,
-                                "length": axis.length,
-                            }
-                            for axis in detail.axes
-                        ],
+                        axes_json=_serialize_published_axes(detail),
                         preview_payload_json=detail.preview_payload,
                         payload_store_key=cast(str, detail.payload_ref.store_key),
                         result_handle_id=detail.result_handles[0].handle_id,
@@ -555,10 +546,17 @@ class SqliteResearchDataPublicationRepository:
                 design_id=design_id,
                 trace_rows=(row,),
             )
+            structure = _published_trace_structure_surface(row)
             return TraceDetail(
                 trace_id=row.trace_id,
                 dataset_id=row.dataset_id,
                 design_id=row.design_id,
+                family=cast(str, row.family),
+                parameter=row.parameter,
+                representation=row.representation,
+                trace_mode_group=cast(str, row.trace_mode_group),
+                source_kind=cast(str, row.source_kind),
+                stage_kind=cast(str, row.stage_kind),
                 axes=tuple(
                     TraceAxis(
                         name=str(axis["name"]),
@@ -567,6 +565,12 @@ class SqliteResearchDataPublicationRepository:
                     )
                     for axis in row.axes_json
                 ),
+                ndim=structure.ndim,
+                shape=structure.shape,
+                axes_summary=structure.axes_summary,
+                axis_signature=structure.axis_signature,
+                available_sweep_axes=structure.available_sweep_axes,
+                collection_projection=structure.collection_projection,
                 preview_payload=row.preview_payload_json,
                 payload_ref=payload_ref,
                 result_handles=((result_handle,) if result_handle is not None else ()),
@@ -1174,6 +1178,11 @@ def _materialize_published_trace(
         basis_task=basis_task,
         selection=selection,
     )
+    nd_trace_data = extract_selection_trace_nd_data(
+        source_task,
+        basis_task=basis_task,
+        selection=selection,
+    )
     metric_spec = (
         _resolve_published_metric_spec(
             family=selection.family,
@@ -1182,12 +1191,12 @@ def _materialize_published_trace(
         if metric is not None
         else None
     )
-    payload_ref = write_complex_trace_payload(
+    payload_ref = write_nd_complex_trace_payload(
         dataset_id=dataset_id,
         design_id=design_id,
         trace_id=trace_id,
-        frequencies_ghz=trace_data.frequencies_ghz,
-        values=trace_data.values,
+        axes=nd_trace_data.axes,
+        values=nd_trace_data.values,
     )
     trace_batch_record = build_metadata_record_ref(
         "trace_batch",
@@ -1216,6 +1225,23 @@ def _materialize_published_trace(
             trace_batch_record=trace_batch_record,
         ),
     )
+    axes = tuple(
+        TraceAxis(
+            name=str(axis["name"]),
+            unit=str(axis["unit"]),
+            length=int(axis["length"]),
+        )
+        for axis in nd_trace_data.axes
+    )
+    structure = build_trace_structure_summary(
+        dataset_id=dataset_id,
+        design_id=design_id,
+        family=selection.family,
+        trace_mode_group=selection.trace_mode_group,
+        source_kind=cast(str, nd_trace_data.source_kind),
+        stage_kind=cast(str, nd_trace_data.stage_kind),
+        axes=nd_trace_data.axes,
+    )
     summary = TraceMetadataSummary(
         trace_id=trace_id,
         dataset_id=dataset_id,
@@ -1225,32 +1251,38 @@ def _materialize_published_trace(
         representation=summary_representation
         or (metric_spec.representation if metric_spec is not None else "complex"),
         trace_mode_group=selection.trace_mode_group,
-        source_kind=cast(str, trace_data.source_kind),
-        stage_kind=cast(str, trace_data.stage_kind),
+        source_kind=cast(str, nd_trace_data.source_kind),
+        stage_kind=cast(str, nd_trace_data.stage_kind),
+        ndim=structure.ndim,
+        shape=structure.shape,
+        axes_summary=structure.axes_summary,
+        axis_signature=structure.axis_signature,
+        available_sweep_axes=structure.available_sweep_axes,
+        collection_projection=structure.collection_projection,
         provenance_summary=provenance_summary,
     )
     analysis_capabilities = evaluate_trace_analysis_capabilities(
         dataset_family=dataset_family,
         trace=summary,
-        axes=(
-            TraceAxis(
-                name="frequency",
-                unit="GHz",
-                length=len(trace_data.frequencies_ghz),
-            ),
-        ),
+        axes=axes,
     )
     detail = TraceDetail(
         trace_id=trace_id,
         dataset_id=dataset_id,
         design_id=design_id,
-        axes=(
-            TraceAxis(
-                name="frequency",
-                unit="GHz",
-                length=len(trace_data.frequencies_ghz),
-            ),
-        ),
+        family=selection.family,
+        parameter=summary.parameter,
+        representation=summary.representation,
+        trace_mode_group=selection.trace_mode_group,
+        source_kind=cast(str, nd_trace_data.source_kind),
+        stage_kind=cast(str, nd_trace_data.stage_kind),
+        axes=axes,
+        ndim=structure.ndim,
+        shape=structure.shape,
+        axes_summary=structure.axes_summary,
+        axis_signature=structure.axis_signature,
+        available_sweep_axes=structure.available_sweep_axes,
+        collection_projection=structure.collection_projection,
         preview_payload=_build_published_trace_preview_payload(
             task=source_task,
             selection=selection,
@@ -1395,6 +1427,7 @@ def _to_trace_summary(
     *,
     analysis_capabilities: tuple[TraceAnalysisCapability, ...] = (),
 ) -> TraceMetadataSummary:
+    structure = _published_trace_structure_surface(row)
     return TraceMetadataSummary(
         trace_id=row.trace_id,
         dataset_id=row.dataset_id,
@@ -1405,9 +1438,51 @@ def _to_trace_summary(
         trace_mode_group=cast(str, row.trace_mode_group),
         source_kind=cast(str, row.source_kind),
         stage_kind=cast(str, row.stage_kind),
+        ndim=structure.ndim,
+        shape=structure.shape,
+        axes_summary=structure.axes_summary,
+        axis_signature=structure.axis_signature,
+        available_sweep_axes=structure.available_sweep_axes,
+        collection_projection=structure.collection_projection,
         provenance_summary=row.provenance_summary,
         analysis_capabilities=analysis_capabilities,
     )
+
+
+def _published_trace_structure_surface(
+    row: RewritePublishedSimulationTraceRecord,
+):
+    return build_trace_structure_summary(
+        dataset_id=row.dataset_id,
+        design_id=row.design_id,
+        family=row.family,
+        trace_mode_group=row.trace_mode_group,
+        source_kind=row.source_kind,
+        stage_kind=row.stage_kind,
+        axes=tuple(row.axes_json),
+    )
+
+
+def _serialize_published_axes(detail: TraceDetail) -> list[dict[str, object]]:
+    return [
+        {
+            "name": axis.name,
+            "unit": axis.unit,
+            "length": axis.length,
+            **(
+                {
+                    "coordinate_digest": build_axis_coordinate_digest(
+                        axis_name=axis.name,
+                        unit=axis.unit,
+                        length=axis.length,
+                    )
+                }
+                if axis.name == "frequency"
+                else {}
+            ),
+        }
+        for axis in detail.axes
+    ]
 
 
 def _build_simulation_publication_key(

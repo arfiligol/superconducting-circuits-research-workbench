@@ -121,6 +121,23 @@ class DatasetTraceService:
             filtered = [row for row in filtered if row.source_kind == query.source_kind]
         if query.trace_mode_group is not None:
             filtered = [row for row in filtered if row.trace_mode_group == query.trace_mode_group]
+        if query.axis_name is not None:
+            normalized_axis_name = query.axis_name.casefold()
+            filtered = [
+                row
+                for row in filtered
+                if any(
+                    axis_name.casefold() == normalized_axis_name
+                    for axis_name in row.axes_summary.axis_names
+                )
+            ]
+        if query.collection_key is not None:
+            filtered = [
+                row
+                for row in filtered
+                if row.collection_projection is not None
+                and row.collection_projection.collection_key == query.collection_key
+            ]
         return [self._build_trace_browse_row(dataset_id, design_id, row) for row in filtered]
 
     def get_trace_detail(
@@ -370,6 +387,12 @@ class DatasetTraceService:
             trace_mode_group=row.trace_mode_group,
             source_kind=row.source_kind,
             stage_kind=row.stage_kind,
+            ndim=row.ndim,
+            shape=row.shape,
+            axes_summary=row.axes_summary,
+            axis_signature=row.axis_signature,
+            available_sweep_axes=row.available_sweep_axes,
+            collection_projection=row.collection_projection,
             provenance_summary=row.provenance_summary,
             allowed_actions=policy.allowed_actions,
             mutation_policy_summary=policy.summary,
