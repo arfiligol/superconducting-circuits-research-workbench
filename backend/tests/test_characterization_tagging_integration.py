@@ -41,45 +41,51 @@ def test_get_characterization_result_exposes_identify_surface_fields() -> None:
     assert payload["data"]["identify_surface"] == {
         "source_parameters": [
             {
-                "artifact_id": "artifact-fit-table-flux-a-01",
-                "source_parameter": "f01",
-                "label": "f01",
-                "artifact_title": "Fit table",
-                "current_designated_metric": "f01",
+                "artifact_id": "char-fit-flux-a-01:identify-summary",
+                "source_parameter": "lowest_observed_frequency_ghz",
+                "label": "Lowest observed frequency",
+                "artifact_title": "Admittance identify summary",
+                "current_designated_metric": "lowest_observed_frequency_ghz",
             },
             {
-                "artifact_id": "artifact-fit-table-flux-a-01",
-                "source_parameter": "alpha",
-                "label": "alpha",
-                "artifact_title": "Fit table",
-                "current_designated_metric": "alpha",
-            },
-            {
-                "artifact_id": "artifact-fit-table-flux-a-01",
-                "source_parameter": "EJ_fit",
-                "label": "EJ fit",
-                "artifact_title": "Fit table",
+                "artifact_id": "char-fit-flux-a-01:identify-summary",
+                "source_parameter": "highest_observed_frequency_ghz",
+                "label": "Highest observed frequency",
+                "artifact_title": "Admittance identify summary",
                 "current_designated_metric": None,
+            },
+            {
+                "artifact_id": "char-fit-flux-a-01:identify-summary",
+                "source_parameter": "residual_rms_max",
+                "label": "Max residual RMS",
+                "artifact_title": "Admittance identify summary",
+                "current_designated_metric": "residual_rms_max",
             },
         ],
         "designated_metrics": [
-            {"metric_key": "f01", "label": "Qubit Transition"},
-            {"metric_key": "alpha", "label": "Anharmonicity"},
-            {"metric_key": "ej", "label": "Josephson Energy"},
+            {
+                "metric_key": "lowest_observed_frequency_ghz",
+                "label": "Lowest Observed Frequency",
+            },
+            {
+                "metric_key": "highest_observed_frequency_ghz",
+                "label": "Highest Observed Frequency",
+            },
+            {"metric_key": "residual_rms_max", "label": "Max Residual RMS"},
         ],
         "applied_tags": [
             {
-                "artifact_id": "artifact-fit-table-flux-a-01",
-                "source_parameter": "f01",
-                "designated_metric": "f01",
-                "designated_metric_label": "Qubit Transition",
+                "artifact_id": "char-fit-flux-a-01:identify-summary",
+                "source_parameter": "lowest_observed_frequency_ghz",
+                "designated_metric": "lowest_observed_frequency_ghz",
+                "designated_metric_label": "Lowest Observed Frequency",
                 "tagged_at": "2026-03-14T11:05:00Z",
             },
             {
-                "artifact_id": "artifact-fit-table-flux-a-01",
-                "source_parameter": "alpha",
-                "designated_metric": "alpha",
-                "designated_metric_label": "Anharmonicity",
+                "artifact_id": "char-fit-flux-a-01:identify-summary",
+                "source_parameter": "residual_rms_max",
+                "designated_metric": "residual_rms_max",
+                "designated_metric_label": "Max Residual RMS",
                 "tagged_at": "2026-03-14T11:08:00Z",
             },
         ],
@@ -206,9 +212,9 @@ def test_post_characterization_taggings_rejects_conflicts() -> None:
         "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
         "characterization-results/char-fit-flux-a-01/taggings",
         json={
-            "artifact_id": "artifact-fit-table-flux-a-01",
-            "source_parameter": "EJ_fit",
-            "designated_metric": "f01",
+            "artifact_id": "char-fit-flux-a-01:identify-summary",
+            "source_parameter": "highest_observed_frequency_ghz",
+            "designated_metric": "lowest_observed_frequency_ghz",
         },
     )
 

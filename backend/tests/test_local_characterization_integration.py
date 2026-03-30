@@ -1,14 +1,30 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 
 import pytest
 from core.shared.persistence import database as core_database
 from fastapi.testclient import TestClient
+from sc_core.execution import TaskResultHandle
 from sqlalchemy import select
+from src.app.domain.tasks import (
+    CharacterizationSetup,
+    TaskDetail,
+    TaskProgress,
+    TaskResultRefs,
+)
+from src.app.infrastructure.persisted_characterization_runtime import (
+    CharacterizationExecutionRequest,
+    CharacterizationExecutionTrace,
+)
 from src.app.infrastructure.persistence.database import create_metadata_session_factory
 from src.app.infrastructure.persistence.models import RewriteTraceCapabilityRecord
-from src.app.infrastructure.runtime import reset_runtime_state
+from src.app.infrastructure.runtime import (
+    get_catalog_repository,
+    get_persisted_characterization_repository,
+    reset_runtime_state,
+)
 from src.app.main import app
 from src.app.settings import get_settings
 from tests.worker_runtime_harness import (
@@ -73,6 +89,149 @@ def _submit_characterization_task() -> dict[str, object]:
     return response.json()["data"]["task"]
 
 
+def _create_sweepable_definition(name: str) -> str:
+    response = client.post(
+        "/circuit-definitions",
+        json={
+            "name": name,
+            "source_text": """{
+  "name": "SweepableReadoutChain",
+  "parameters": [
+    {"name": "Lj", "default": 1000.0, "unit": "pH"}
+  ],
+  "components": [
+    {"name": "R1", "default": 50.0, "unit": "Ohm"},
+    {"name": "C1", "default": 100.0, "unit": "fF"},
+    {"name": "Lj1", "value_ref": "Lj", "unit": "pH"}
+  ],
+  "topology": [
+    ("P1", "1", "0", 1),
+    ("R1", "1", "0", "R1"),
+    ("C1", "1", "2", "C1"),
+    ("Lj1", "2", "0", "Lj1")
+  ]
+}""",
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["data"]["definition"]["definition_id"]
+
+
+def _submit_local_simulation(
+    *,
+    definition_id: str,
+    parameter_sweeps: list[dict[str, object]],
+) -> dict[str, object]:
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "dataset_id": "local-dataset-001",
+            "definition_id": definition_id,
+            "summary": "Sweep-aware characterization source task.",
+            "simulation_setup": {
+                "frequency_sweep": {
+                    "start_ghz": 1.0,
+                    "stop_ghz": 8.0,
+                    "point_count": 401,
+                    "spacing": "linear",
+                },
+                "parameter_sweeps": parameter_sweeps,
+                "solver": {
+                    "solver_family": "harmonic_balance",
+                    "max_iterations": 20,
+                    "convergence_tolerance": 1e-6,
+                    "harmonic_balance": {
+                        "enabled": True,
+                        "harmonic_count": 5,
+                        "oversample_factor": 2,
+                    },
+                },
+                "sources": [
+                    {
+                        "source_id": "port_1_drive",
+                        "kind": "port_drive",
+                        "target": "port_1",
+                        "amplitude": -30.0,
+                        "frequency_ghz": 5.0,
+                        "phase_deg": 0.0,
+                    }
+                ],
+                "ptc": {
+                    "enabled": False,
+                    "mode": "auto",
+                    "compensate_ports": ["port_1", "port_2"],
+                },
+            },
+        },
+    )
+    assert response.status_code == 201
+    task = response.json()["data"]["task"]
+    detail = task
+    for _ in range(3):
+        drain_lane_queue("simulation")
+        for _ in range(5):
+            detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
+            if (
+                detail["status"] == "completed"
+                and detail["result_handoff"]["availability"] == "ready"
+            ):
+                return detail
+            time.sleep(0.05)
+    return detail
+
+
+def _build_direct_characterization_task(
+    *,
+    dataset_id: str,
+    design_id: str,
+    selected_trace_ids: tuple[str, ...],
+    fit_window: tuple[float, float],
+    residual_tolerance: float,
+) -> TaskDetail:
+    return TaskDetail(
+        task_id=99101,
+        kind="characterization",
+        lane="characterization",
+        execution_mode="run",
+        status="running",
+        submitted_at="2026-03-30T00:00:00Z",
+        owner_user_id="local-user",
+        owner_display_name="Local User",
+        workspace_id="workspace-local",
+        workspace_slug="local",
+        visibility_scope="local",
+        dataset_id=dataset_id,
+        definition_id=None,
+        summary="Direct persisted admittance runtime contract test.",
+        queue_backend="rq_redis",
+        worker_task_name="characterization_run_task",
+        request_ready=True,
+        submitted_from_active_dataset=True,
+        progress=TaskProgress(
+            phase="running",
+            percent_complete=50,
+            summary="Executing persisted admittance extraction.",
+            updated_at="2026-03-30T00:00:00Z",
+        ),
+        result_refs=TaskResultRefs(
+            result_handle=TaskResultHandle(),
+            metadata_records=(),
+            trace_payload=None,
+            result_handles=(),
+        ),
+        characterization_setup=CharacterizationSetup(
+            design_id=design_id,
+            analysis_id="admittance_extraction",
+            selected_trace_ids=selected_trace_ids,
+            analysis_config={
+                "fit_window": list(fit_window),
+                "residual_tolerance": residual_tolerance,
+            },
+        ),
+    )
+
+
 def _metadata_session_factory():
     return create_metadata_session_factory(get_settings().database_path)
 
@@ -102,8 +261,7 @@ def _create_legacy_result_bundle_table() -> None:
 def _result_bundle_columns() -> set[str]:
     with sqlite3.connect(get_settings().database_path) as connection:
         return {
-            str(row[1])
-            for row in connection.execute("PRAGMA table_info(result_bundle_records)")
+            str(row[1]) for row in connection.execute("PRAGMA table_info(result_bundle_records)")
         }
 
 
@@ -395,9 +553,7 @@ def test_local_characterization_registry_exposes_admittance_for_compatible_saved
                 "matched_trace_count": 2,
                 "selected_trace_count": 2,
                 "recommended_trace_modes": ["base"],
-                "summary": (
-                    "2 selected traces are eligible for admittance resonance extraction."
-                ),
+                "summary": ("2 selected traces are eligible for admittance resonance extraction."),
             },
         },
         {
@@ -486,9 +642,7 @@ def test_local_registry_and_submit_use_trace_capability_first_gating_for_transmo
 
     assert trace_response.status_code == 200
     trace_row = next(
-        row
-        for row in trace_response.json()["data"]["rows"]
-        if row["trace_id"] == trace_id
+        row for row in trace_response.json()["data"]["rows"] if row["trace_id"] == trace_id
     )
     admittance_capability = next(
         capability
@@ -545,9 +699,7 @@ def test_local_trace_registry_read_repair_backfills_legacy_floating_qubit_capabi
 
     assert trace_response.status_code == 200
     trace_row = next(
-        row
-        for row in trace_response.json()["data"]["rows"]
-        if row["trace_id"] == trace_id
+        row for row in trace_response.json()["data"]["rows"] if row["trace_id"] == trace_id
     )
     assert trace_row["analysis_capabilities"] != []
     assert any(
@@ -566,9 +718,7 @@ def test_local_trace_registry_read_repair_backfills_legacy_floating_qubit_capabi
                 "matched_trace_count": 1,
                 "selected_trace_count": 1,
                 "recommended_trace_modes": ["base"],
-                "summary": (
-                    "1 selected trace is eligible for admittance resonance extraction."
-                ),
+                "summary": ("1 selected trace is eligible for admittance resonance extraction."),
             },
         }
     ]
@@ -629,9 +779,7 @@ def test_local_characterization_runtime_summary_reports_idle_worker_presence() -
 
     assert response.status_code == 200
     processor = next(
-        item
-        for item in response.json()["data"]["processors"]
-        if item["lane"] == "characterization"
+        item for item in response.json()["data"]["processors"] if item["lane"] == "characterization"
     )
     assert processor["processor_id"] == "sc-worker-characterization:4311"
     assert processor["state"] == "idle"
@@ -690,9 +838,7 @@ def test_local_characterization_submit_accepts_single_eligible_trace() -> None:
     assert response.status_code == 201
     task = response.json()["data"]["task"]
     assert task["status"] == "queued"
-    assert task["characterization_setup"]["selected_trace_ids"] == [
-        "trace_local_flux_measurement"
-    ]
+    assert task["characterization_setup"]["selected_trace_ids"] == ["trace_local_flux_measurement"]
 
 
 def test_local_characterization_submit_rejects_ineligible_selected_trace() -> None:
@@ -792,9 +938,21 @@ def test_local_characterization_submit_completes_with_analysis_run_and_result_ha
 
     detail = client.get(f"/tasks/{task['task_id']}").json()["data"]
     assert detail["status"] == "completed"
-    assert detail["characterization_setup"] == _characterization_payload()[
-        "characterization_setup"
+    assert detail["characterization_setup"]["design_id"] == "design_local_flux_playground"
+    assert detail["characterization_setup"]["analysis_id"] == "admittance_extraction"
+    assert detail["characterization_setup"]["selected_trace_ids"] == [
+        "trace_local_flux_measurement",
+        "trace_local_flux_preview",
     ]
+    assert detail["characterization_setup"]["input_collection_payload"] is not None
+    assert (
+        detail["characterization_setup"]["input_collection_payload"]["shared_axes"][0]["name"]
+        == "frequency"
+    )
+    assert (
+        detail["characterization_setup"]["input_collection_payload"]["shared_axes"][0]["values"]
+        == []
+    )
     assert isinstance(detail["result_refs"]["analysis_run_id"], int)
     assert detail["result_refs"]["analysis_run_id"] > 0
     assert detail["result_refs"]["trace_payload"]["payload_role"] == "analysis_projection"
@@ -862,10 +1020,36 @@ def test_local_characterization_result_surfaces_survive_refresh() -> None:
     task_detail = client.get(f"/tasks/{submitted['task_id']}").json()["data"]
     assert task_detail["result_handoff"]["availability"] == "ready"
     assert detail["payload"]["analysis_run_id"] == task_detail["result_refs"]["analysis_run_id"]
-    assert detail["payload"]["fit_table"][0]["parameter"] == "f01"
-    assert detail["artifact_refs"][0]["payload_locator"] == (
-        f"characterization/{result_row['result_id']}/fit-table.json"
+    assert detail["payload"]["contract_version"] == "admittance_phase1_v1"
+    assert detail["payload"]["input_axis"]["axis_key"] == "selected_scope"
+    assert detail["artifact_refs"][0]["artifact_id"] == (
+        f"{result_row['result_id']}:mode-frequency-grid"
     )
+    assert detail["artifact_refs"][0]["view_kind"] == "preset_query"
+    assert detail["artifact_refs"][0]["query_spec"]["supported_query_fields"] == [
+        "view_mode",
+        "preset_id",
+    ]
+    assert detail["artifact_refs"][0]["payload_locator"] == (
+        f"characterization/{result_row['result_id']}/mode-frequency-grid.json"
+    )
+    artifact_response = client.get(
+        "/datasets/local-dataset-001/designs/design_local_flux_playground/"
+        f"characterization-results/{result_row['result_id']}/artifacts/"
+        f"{result_row['result_id']}:mode-frequency-grid",
+        params={"preset_id": "mode_by_input_table"},
+    )
+    assert artifact_response.status_code == 200
+    artifact_payload = artifact_response.json()["data"]
+    assert artifact_payload["preset_id"] == "mode_by_input_table"
+    assert artifact_payload["payload"]["layout"] == {
+        "rows_axis": "mode_index",
+        "columns_axis": "selected_scope",
+        "cell_metric": "frequency_ghz",
+    }
+    assert artifact_payload["payload"]["columns"] == [
+        {"axis_value": 0.0, "label": "0", "unit": None}
+    ]
 
     reset_runtime_state()
 
@@ -897,9 +1081,9 @@ def test_local_characterization_taggings_survive_refresh() -> None:
         "/datasets/local-dataset-001/designs/design_local_flux_playground/"
         f"characterization-results/{result_row['result_id']}/taggings",
         json={
-            "artifact_id": f"{result_row['result_id']}:fit-table",
-            "source_parameter": "residual_rms",
-            "designated_metric": "residual_rms",
+            "artifact_id": f"{result_row['result_id']}:identify-summary",
+            "source_parameter": "residual_rms_max",
+            "designated_metric": "residual_rms_max",
         },
     )
     assert tagging_response.status_code == 200
@@ -912,10 +1096,10 @@ def test_local_characterization_taggings_survive_refresh() -> None:
     assert detail_response.status_code == 200
     assert detail_response.json()["data"]["identify_surface"]["applied_tags"] == [
         {
-            "artifact_id": f"{result_row['result_id']}:fit-table",
-            "source_parameter": "residual_rms",
-            "designated_metric": "residual_rms",
-            "designated_metric_label": "Residual RMS",
+            "artifact_id": f"{result_row['result_id']}:identify-summary",
+            "source_parameter": "residual_rms_max",
+            "designated_metric": "residual_rms_max",
+            "designated_metric_label": "Max Residual RMS",
             "tagged_at": tagged_metric["tagged_at"],
         }
     ]
@@ -923,10 +1107,10 @@ def test_local_characterization_taggings_survive_refresh() -> None:
     metrics_response = client.get("/datasets/local-dataset-001/metrics-summary")
     assert metrics_response.status_code == 200
     assert {
-        "metric_id": "metric-local-dataset-001-residual-rms",
-        "label": "Residual RMS",
-        "source_parameter": "residual_rms",
-        "designated_metric": "residual_rms",
+        "metric_id": "metric-local-dataset-001-residual-rms-max",
+        "label": "Max Residual RMS",
+        "source_parameter": "residual_rms_max",
+        "designated_metric": "residual_rms_max",
         "tagged_at": tagged_metric["tagged_at"],
     } in metrics_response.json()["data"]["rows"]
 
@@ -941,10 +1125,154 @@ def test_local_characterization_taggings_survive_refresh() -> None:
     assert refreshed_task["result_handoff"]["availability"] == "ready"
     assert refreshed_detail.json()["data"]["identify_surface"]["applied_tags"] == [
         {
-            "artifact_id": f"{result_row['result_id']}:fit-table",
-            "source_parameter": "residual_rms",
-            "designated_metric": "residual_rms",
-            "designated_metric_label": "Residual RMS",
+            "artifact_id": f"{result_row['result_id']}:identify-summary",
+            "source_parameter": "residual_rms_max",
+            "designated_metric": "residual_rms_max",
+            "designated_metric_label": "Max Residual RMS",
             "tagged_at": tagged_metric["tagged_at"],
         }
     ]
+
+
+def test_local_persisted_admittance_runtime_exposes_axis_aware_sweep_contract() -> None:
+    definition_id = _create_sweepable_definition("LocalAdmittanceSweepCharacterization")
+    simulation_task = _submit_local_simulation(
+        definition_id=definition_id,
+        parameter_sweeps=[
+            {
+                "parameter": "Lj",
+                "values": [850.0, 1000.0, 1150.0],
+                "unit": "pH",
+            }
+        ],
+    )
+    assert simulation_task["status"] == "completed"
+
+    publish_response = client.post(
+        f"/tasks/{simulation_task['task_id']}/simulation-results/publish",
+        json={
+            "dataset_id": "local-dataset-001",
+            "design_name": "Local Admittance Sweep Characterization",
+        },
+    )
+    assert publish_response.status_code == 200
+    publish_payload = publish_response.json()["data"]
+    design_id = publish_payload["design"]["design_id"]
+    trace_id = next(
+        trace["trace_id"]
+        for trace in publish_payload["traces"]
+        if trace["family"] == "y_matrix" and trace["trace_mode_group"] == "base"
+    )
+    catalog_repository = get_catalog_repository()
+    design = catalog_repository.get_design("local-dataset-001", design_id)
+    assert design is not None
+    trace_summary = next(
+        trace
+        for trace in catalog_repository.list_trace_metadata("local-dataset-001", design_id)
+        if trace.trace_id == trace_id
+    )
+    trace_detail = catalog_repository.get_trace_detail(
+        "local-dataset-001",
+        design_id,
+        trace_id,
+    )
+    assert trace_summary.available_sweep_axes == ("Lj",)
+    assert trace_detail is not None
+
+    execution_result = get_persisted_characterization_repository().run_admittance_extraction(
+        CharacterizationExecutionRequest(
+            task=_build_direct_characterization_task(
+                dataset_id="local-dataset-001",
+                design_id=design_id,
+                selected_trace_ids=(trace_id,),
+                fit_window=(1.0, 8.0),
+                residual_tolerance=0.05,
+            ),
+            design=design,
+            traces=(
+                CharacterizationExecutionTrace(
+                    summary=trace_summary,
+                    detail=trace_detail,
+                ),
+            ),
+        )
+    )
+    result_id = execution_result.result_summary_payload["characterization_result_id"]
+
+    results_response = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/characterization-results"
+    )
+    assert results_response.status_code == 200
+    result_rows = results_response.json()["data"]["rows"]
+    assert any(row["result_id"] == result_id for row in result_rows)
+
+    detail_response = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/characterization-results/{result_id}"
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["payload"]["contract_version"] == "admittance_phase1_v1"
+    assert detail["payload"]["input_axis"]["axis_key"] == "Lj"
+    assert detail["payload"]["input_axis"]["length"] == 3
+    assert detail["payload"]["metric"]["metric_key"] == "frequency_ghz"
+    assert detail["payload"]["analysis_run_id"] == execution_result.result_refs.analysis_run_id
+    assert detail["artifact_refs"][0]["view_kind"] == "preset_query"
+    assert detail["artifact_refs"][0]["query_spec"]["supported_view_modes"] == [
+        "table",
+        "plot",
+    ]
+
+    artifact_response = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/"
+        f"characterization-results/{result_id}/artifacts/"
+        f"{result_id}:mode-frequency-grid",
+        params={"preset_id": "mode_by_input_table"},
+    )
+    assert artifact_response.status_code == 200
+    artifact_payload = artifact_response.json()["data"]
+    assert artifact_payload["payload"]["layout"] == {
+        "rows_axis": "mode_index",
+        "columns_axis": "Lj",
+        "cell_metric": "frequency_ghz",
+    }
+    assert [column["axis_value"] for column in artifact_payload["payload"]["columns"]] == [
+        850.0,
+        1000.0,
+        1150.0,
+    ]
+    assert len(artifact_payload["payload"]["cells"]) >= 1
+    assert all(len(row) == 3 for row in artifact_payload["payload"]["cells"])
+
+    mode_plot_response = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/"
+        f"characterization-results/{result_id}/artifacts/"
+        f"{result_id}:mode-frequency-grid",
+        params={"view_mode": "plot"},
+    )
+    assert mode_plot_response.status_code == 200
+    assert mode_plot_response.json()["data"]["preset_id"] == "mode_profile_plot"
+    assert mode_plot_response.json()["data"]["payload"]["layout"] == {
+        "x_axis": "mode_index",
+        "y_metric": "frequency_ghz",
+        "series_axis": "Lj",
+    }
+
+    sweep_plot_response = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/"
+        f"characterization-results/{result_id}/artifacts/"
+        f"{result_id}:mode-frequency-grid",
+        params={"preset_id": "sweep_profile_plot"},
+    )
+    assert sweep_plot_response.status_code == 200
+    assert sweep_plot_response.json()["data"]["payload"]["layout"] == {
+        "x_axis": "Lj",
+        "y_metric": "frequency_ghz",
+        "series_axis": "mode_index",
+    }
+
+    reset_runtime_state()
+    refreshed_detail = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/characterization-results/{result_id}"
+    )
+    assert refreshed_detail.status_code == 200
+    assert refreshed_detail.json()["data"]["payload"]["input_axis"]["axis_key"] == "Lj"

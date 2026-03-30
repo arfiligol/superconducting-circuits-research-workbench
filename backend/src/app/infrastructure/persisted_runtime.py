@@ -60,6 +60,16 @@ class PersistedTraceSelectionData:
 
 
 @dataclass(frozen=True)
+class PersistedNdTraceSelectionData:
+    axes: tuple[dict[str, object], ...]
+    values: np.ndarray
+    output_label: str
+    input_label: str
+    source_kind: str
+    stage_kind: str
+
+
+@dataclass(frozen=True)
 class PersistedSimulationTraceGridData:
     frequencies_ghz: tuple[float, ...]
     compare_values: tuple[float, ...] | None
@@ -476,6 +486,98 @@ def extract_selection_trace_data(
     )
 
 
+def extract_selection_trace_nd_data(
+    task: TaskDetail,
+    *,
+    basis_task: TaskDetail | None = None,
+    selection: ResultTraceSelection,
+) -> PersistedNdTraceSelectionData:
+    bundle_payload = _bundle_payload_for_source(
+        basis_task if basis_task is not None else task,
+        selection.source,
+    )
+    if bundle_payload is None:
+        raise ValueError("Selected trace family/source is not available.")
+    loaded_bundle = _load_bundle_trace_records(bundle_payload)
+    real_record = None
+    imag_record = None
+    for record in loaded_bundle.trace_records:
+        if record.get("family") != selection.family:
+            continue
+        trace_meta = _require_mapping(record.get("trace_meta"), field_name="trace_meta")
+        if (
+            int(trace_meta.get("output_port", 0) or 0) != selection.output_port
+            or int(trace_meta.get("input_port", 0) or 0) != selection.input_port
+        ):
+            continue
+        representation = str(record.get("representation", "")).strip()
+        if representation == "real":
+            real_record = record
+        elif representation == "imaginary":
+            imag_record = record
+    if real_record is None or imag_record is None:
+        raise ValueError("Selected trace family/source is not available.")
+
+    trace_store = loaded_bundle.trace_store
+    real_store_ref = _require_mapping(real_record.get("store_ref"), field_name="store_ref")
+    imag_store_ref = _require_mapping(imag_record.get("store_ref"), field_name="store_ref")
+    shape = tuple(int(value) for value in real_store_ref.get("shape", []))
+    selection_slices = tuple(slice(None) for _ in shape)
+    real_values = np.asarray(
+        trace_store.read_trace_slice(real_store_ref, selection=selection_slices),
+        dtype=np.float64,
+    )
+    imag_values = np.asarray(
+        trace_store.read_trace_slice(imag_store_ref, selection=selection_slices),
+        dtype=np.float64,
+    )
+    axes = []
+    for axis_index, axis in enumerate(real_record.get("axes", ())):
+        axis_payload = _require_mapping(axis, field_name=f"axes[{axis_index}]")
+        axis_name = str(axis_payload.get("name", "")).strip()
+        axis_unit = str(axis_payload.get("unit", "")).strip()
+        axis_values = tuple(
+            float(value)
+            for value in _read_axis_values(
+                trace_store,
+                real_store_ref,
+                axis_name=axis_name,
+            )
+        )
+        axes.append(
+            {
+                "name": axis_name,
+                "unit": axis_unit,
+                "length": int(axis_payload.get("length", len(axis_values)) or len(axis_values)),
+                "values": list(axis_values),
+            }
+        )
+    return PersistedNdTraceSelectionData(
+        axes=tuple(axes),
+        values=np.asarray(real_values + (1j * imag_values), dtype=np.complex128),
+        output_label=(
+            loaded_bundle.first_record.get("trace_meta", {}).get("output_label")
+            if isinstance(loaded_bundle.first_record.get("trace_meta"), Mapping)
+            else str(selection.output_port)
+        )
+        or str(selection.output_port),
+        input_label=(
+            loaded_bundle.first_record.get("trace_meta", {}).get("input_label")
+            if isinstance(loaded_bundle.first_record.get("trace_meta"), Mapping)
+            else str(selection.input_port)
+        )
+        or str(selection.input_port),
+        source_kind="circuit_simulation",
+        stage_kind=(
+            "postprocess"
+            if task.kind == "post_processing"
+            or selection.source == "ptc"
+            or selection.family in {"y_matrix", "z_matrix"}
+            else "raw"
+        ),
+    )
+
+
 def extract_simulation_trace_grid_data(
     task: TaskDetail,
     *,
@@ -626,6 +728,37 @@ def write_complex_trace_payload(
         store_key=resolved_store_key,
         payload_role="raw",
         writer_version="local_runtime.trace_publish",
+    )
+    return _trace_payload_ref_from_store_ref(
+        write_result.store_ref,
+        payload_role="dataset_primary",
+    )
+
+
+def write_nd_complex_trace_payload(
+    *,
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+    axes: Sequence[Mapping[str, object]],
+    values: np.ndarray,
+    store_key: str | None = None,
+) -> Any:
+    trace_store = _core_symbols()["LocalZarrTraceStore"](
+        root_path=_core_symbols()["get_trace_store_path"]()
+    )
+    resolved_store_key = (
+        store_key or f"datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr"
+    )
+    write_result = trace_store.write_trace(
+        design_id=_stable_positive_int(dataset_id, design_id),
+        batch_id=_stable_positive_int(trace_id, dataset_id),
+        trace_id=1,
+        values=np.asarray(values, dtype=np.complex128),
+        axes=tuple(dict(axis) for axis in axes),
+        store_key=resolved_store_key,
+        payload_role="raw",
+        writer_version="local_runtime.trace_publish_nd",
     )
     return _trace_payload_ref_from_store_ref(
         write_result.store_ref,

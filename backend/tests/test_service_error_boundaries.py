@@ -148,9 +148,9 @@ def test_dataset_service_raises_conflict_for_characterization_tagging_collision(
             "design_flux_scan_a",
             "char-fit-flux-a-01",
             CharacterizationTaggingRequest(
-                artifact_id="artifact-fit-table-flux-a-01",
-                source_parameter="EJ_fit",
-                designated_metric="f01",
+                artifact_id="char-fit-flux-a-01:identify-summary",
+                source_parameter="highest_observed_frequency_ghz",
+                designated_metric="lowest_observed_frequency_ghz",
             ),
         )
 

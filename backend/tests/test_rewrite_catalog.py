@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
+    CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
     CharacterizationRunHistoryQuery,
     CharacterizationTaggingRequest,
@@ -411,8 +412,8 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     )
 
     assert [metric.metric_id for metric in metrics] == [
-        "metric-fluxonium-f01",
-        "metric-fluxonium-anharmonicity",
+        "metric-fluxonium-lowest-observed-frequency-ghz",
+        "metric-fluxonium-residual-rms-max",
     ]
     assert [design.design_id for design in designs] == ["design_flux_scan_a"]
     assert designs[0].compare_readiness == "ready"
@@ -423,11 +424,42 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     ]
     assert not hasattr(trace_rows[0], "preview_payload")
     assert not hasattr(trace_rows[0], "payload_ref")
+    assert trace_rows[0].ndim == 1
+    assert trace_rows[0].shape == (trace_detail.axes[0].length,)
+    assert trace_rows[0].axes_summary.axis_names == ("frequency",)
+    assert trace_rows[0].axis_signature == trace_rows[1].axis_signature
+    assert trace_rows[0].collection_projection is not None
+    collection_key = trace_rows[0].collection_projection.collection_key
+    layout_collection_key = dataset_service.get_trace_detail(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        "trace_flux_a_layout",
+    ).collection_projection.collection_key
+    phase_collection_key = dataset_service.get_trace_detail(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        "trace_flux_a_phase",
+    ).collection_projection.collection_key
+    assert collection_key == layout_collection_key
+    assert phase_collection_key != collection_key
     assert trace_rows[0].allowed_actions.edit is False
     assert trace_rows[0].allowed_actions.delete is False
     assert "source workflow" in trace_rows[0].mutation_policy_summary
+    filtered_rows = dataset_service.list_trace_metadata(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        TraceBrowseQuery(axis_name="frequency", collection_key=collection_key),
+    )
+    assert [row.trace_id for row in filtered_rows] == [
+        "trace_flux_a_measurement",
+        "trace_flux_a_layout",
+    ]
 
     assert trace_detail.trace_id == "trace_flux_a_measurement"
+    assert trace_detail.ndim == 1
+    assert trace_detail.axes_summary.axis_names == ("frequency",)
+    assert trace_detail.collection_projection is not None
+    assert trace_detail.collection_projection.collection_key == collection_key
     assert trace_detail.preview_payload["kind"] == "series"
     assert len(trace_detail.preview_payload["points"]) == trace_detail.axes[0].length
     assert trace_detail.payload_ref is not None
@@ -662,6 +694,13 @@ def test_dataset_service_exposes_characterization_result_summary_and_detail_surf
         "design_flux_scan_a",
         "char-fit-flux-a-01",
     )
+    artifact_payload = dataset_service.get_characterization_artifact_payload(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        "char-fit-flux-a-01",
+        "char-fit-flux-a-01:mode-frequency-grid",
+        CharacterizationArtifactPayloadQuery(preset_id="mode_by_input_table"),
+    )
 
     assert [row.result_id for row in result_rows] == ["char-fit-flux-a-01"]
     assert result_rows[0].dataset_id == "fluxonium-2025-031"
@@ -675,8 +714,9 @@ def test_dataset_service_exposes_characterization_result_summary_and_detail_surf
         "trace_flux_a_measurement",
         "trace_flux_a_layout",
     )
-    assert result_detail.payload["fit_table"][0]["parameter"] == "f01"
-    assert result_detail.artifact_refs[0].artifact_id == "artifact-fit-table-flux-a-01"
+    assert result_detail.payload["contract_version"] == "admittance_phase1_v1"
+    assert result_detail.artifact_refs[0].artifact_id == "char-fit-flux-a-01:mode-frequency-grid"
+    assert artifact_payload.payload["cells"][0] == [5.612, 5.587, None]
 
 
 def test_dataset_service_exposes_characterization_analysis_registry_and_run_history_surfaces(

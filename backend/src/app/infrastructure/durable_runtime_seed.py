@@ -25,6 +25,7 @@ from src.app.infrastructure.app_state_repository import (
 from src.app.infrastructure.rewrite_app_state_repository import build_seed_tasks
 from src.app.infrastructure.rewrite_catalog_repository import (
     _seed_characterization_analysis_registry,
+    _seed_characterization_artifact_surfaces,
     _seed_characterization_result_details,
     _seed_characterization_results,
     _seed_characterization_run_history,
@@ -180,6 +181,7 @@ def seed_durable_runtime_state() -> None:
         summaries_by_design=_seed_characterization_results(),
         run_history_by_design=_seed_characterization_run_history(),
         details_by_key=_seed_characterization_result_details(),
+        artifact_surfaces_by_key=_seed_characterization_artifact_surfaces(),
     )
 
     for task in build_seed_tasks():
@@ -199,6 +201,7 @@ def _seed_characterization_results_into_runtime(
     summaries_by_design: dict[tuple[str, str], tuple[CharacterizationResultSummary, ...]],
     run_history_by_design: dict[tuple[str, str], tuple[CharacterizationRunHistoryRow, ...]],
     details_by_key: dict[tuple[str, str, str], CharacterizationResultDetail],
+    artifact_surfaces_by_key: dict[tuple[str, str, str], object],
 ) -> None:
     run_history_by_result: dict[
         tuple[str, str, str],
@@ -221,6 +224,7 @@ def _seed_characterization_results_into_runtime(
                 summary=summary,
                 run_history=run_history,
                 detail=detail,
+                artifact_surface=artifact_surfaces_by_key.get(key),
             )
 
 

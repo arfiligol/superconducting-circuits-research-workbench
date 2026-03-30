@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import numpy as np
 from sqlalchemy import func, select
@@ -17,9 +17,22 @@ from src.app.domain.circuit_definitions import CircuitDefinitionRecord
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     CharacterizationAnalysisTraceCompatibility,
+    CharacterizationAppliedTag,
+    CharacterizationArtifactAxisSpec,
+    CharacterizationArtifactMetricSpec,
+    CharacterizationArtifactPayload,
+    CharacterizationArtifactPayloadQuery,
+    CharacterizationArtifactPreset,
+    CharacterizationArtifactQuerySpec,
+    CharacterizationArtifactRef,
+    CharacterizationArtifactViewModeDefault,
+    CharacterizationDesignatedMetricOption,
+    CharacterizationDiagnostic,
+    CharacterizationIdentifySurface,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
     CharacterizationRunHistoryRow,
+    CharacterizationSourceParameterOption,
     CharacterizationTaggingRequest,
     CharacterizationTaggingResult,
     DatasetAllowedActions,
@@ -51,6 +64,10 @@ from src.app.domain.datasets import (
     TraceUpdateResult,
 )
 from src.app.domain.tasks import TaskDetail
+from src.app.domain.trace_structures import (
+    build_axis_coordinate_digest,
+    build_trace_structure_summary,
+)
 from src.app.infrastructure.persisted_characterization_runtime import (
     CharacterizationTaggingResultPayload,
     PersistedCharacterizationRepository,
@@ -119,9 +136,7 @@ class DurableCatalogRepository:
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None:
         with self._session_factory() as session:
             row = session.scalar(
-                select(RewriteDatasetRecord).where(
-                    RewriteDatasetRecord.dataset_id == dataset_id
-                )
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
             )
             return _to_dataset_detail(row) if row is not None else None
 
@@ -135,9 +150,7 @@ class DurableCatalogRepository:
         draft: DatasetCreateDraft,
     ) -> DatasetDetail:
         with self._session_factory() as session:
-            next_counter = (
-                session.scalar(select(func.count(RewriteDatasetRecord.id))) or 0
-            ) + 100
+            next_counter = (session.scalar(select(func.count(RewriteDatasetRecord.id))) or 0) + 100
             dataset_id = _build_dataset_id(
                 workspace_id=workspace_id,
                 name=draft.name,
@@ -170,9 +183,7 @@ class DurableCatalogRepository:
     ) -> DatasetDetail | None:
         with self._session_factory() as session:
             row = session.scalar(
-                select(RewriteDatasetRecord).where(
-                    RewriteDatasetRecord.dataset_id == dataset_id
-                )
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
             )
             if row is None:
                 return None
@@ -190,9 +201,7 @@ class DurableCatalogRepository:
     ) -> DatasetDetail | None:
         with self._session_factory() as session:
             row = session.scalar(
-                select(RewriteDatasetRecord).where(
-                    RewriteDatasetRecord.dataset_id == dataset_id
-                )
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
             )
             if row is None:
                 return None
@@ -239,6 +248,20 @@ class DurableCatalogRepository:
                 trace_id=trace_id,
                 payload_ref=payload_ref,
             )
+            structure = build_trace_structure_summary(
+                dataset_id=dataset_id,
+                design_id=design_id,
+                family=trace.family,
+                parameter=trace.parameter,
+                representation=trace.representation,
+                trace_mode_group=trace.trace_mode_group,
+                source_kind=draft.kind,
+                stage_kind=trace.stage_kind,
+                axes=_serialize_axes_for_storage(
+                    trace.axes,
+                    numeric_payload=numeric_payload,
+                ),
+            )
             summary = TraceMetadataSummary(
                 trace_id=trace_id,
                 dataset_id=dataset_id,
@@ -250,6 +273,12 @@ class DurableCatalogRepository:
                 source_kind=draft.kind,
                 stage_kind=trace.stage_kind,
                 provenance_summary=trace.provenance_summary,
+                ndim=structure.ndim,
+                shape=structure.shape,
+                axes_summary=structure.axes_summary,
+                axis_signature=structure.axis_signature,
+                available_sweep_axes=structure.available_sweep_axes,
+                collection_projection=structure.collection_projection,
             )
             analysis_capabilities = evaluate_trace_analysis_capabilities(
                 dataset_family=dataset.family,
@@ -519,11 +548,25 @@ class DurableCatalogRepository:
         raw_row.parameter = update.parameter or raw_row.parameter
         raw_row.representation = update.representation or raw_row.representation
         raw_row.provenance_summary = update.provenance_summary or raw_row.provenance_summary
-        raw_row.axes_json = [_serialize_axis(axis) for axis in axes]
+        raw_row.axes_json = _serialize_axes_for_storage(
+            axes,
+            numeric_payload=numeric_payload,
+        )
         raw_row.preview_payload_json = preview_payload
         raw_row.numeric_payload_json = numeric_payload
         raw_row.payload_store_key = payload_ref.store_key
         raw_row.updated_at = updated_at
+        structure = build_trace_structure_summary(
+            dataset_id=raw_row.dataset_id,
+            design_id=raw_row.design_id,
+            family=raw_row.family,
+            parameter=raw_row.parameter,
+            representation=raw_row.representation,
+            trace_mode_group=raw_row.trace_mode_group,
+            source_kind=raw_row.source_kind,
+            stage_kind=raw_row.stage_kind,
+            axes=tuple(raw_row.axes_json),
+        )
         updated_summary = TraceMetadataSummary(
             trace_id=raw_row.trace_id,
             dataset_id=raw_row.dataset_id,
@@ -535,6 +578,12 @@ class DurableCatalogRepository:
             source_kind=raw_row.source_kind,
             stage_kind=raw_row.stage_kind,
             provenance_summary=raw_row.provenance_summary,
+            ndim=structure.ndim,
+            shape=structure.shape,
+            axes_summary=structure.axes_summary,
+            axis_signature=structure.axis_signature,
+            available_sweep_axes=structure.available_sweep_axes,
+            collection_projection=structure.collection_projection,
         )
         analysis_capabilities = evaluate_trace_analysis_capabilities(
             dataset_family=dataset.family,
@@ -543,9 +592,7 @@ class DurableCatalogRepository:
         )
         with self._session_factory() as session:
             persisted = session.scalar(
-                select(RewriteDatasetTraceRecord).where(
-                    RewriteDatasetTraceRecord.id == raw_row.id
-                )
+                select(RewriteDatasetTraceRecord).where(RewriteDatasetTraceRecord.id == raw_row.id)
             )
             if persisted is None:
                 return None
@@ -732,6 +779,25 @@ class DurableCatalogRepository:
         ):
             if summary.result_id == result_id:
                 return detail
+        return None
+
+    def get_characterization_artifact_payload(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+        artifact_id: str,
+        query: CharacterizationArtifactPayloadQuery,
+    ) -> CharacterizationArtifactPayload | None:
+        payload = self._characterization_repository.get_artifact_payload(
+            dataset_id,
+            design_id,
+            result_id,
+            artifact_id,
+            query,
+        )
+        if payload is not None:
+            return payload
         return None
 
     def apply_characterization_tagging(
@@ -934,9 +1000,7 @@ class DurableCatalogRepository:
     def _touch_dataset(self, dataset_id: str, updated_at: str) -> DatasetDetail | None:
         with self._session_factory() as session:
             row = session.scalar(
-                select(RewriteDatasetRecord).where(
-                    RewriteDatasetRecord.dataset_id == dataset_id
-                )
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
             )
             if row is None:
                 return None
@@ -1027,20 +1091,31 @@ class DurableCatalogRepository:
             row.design_id,
             row.trace_id,
         )
+        structure = _trace_structure_surface_from_row(row)
         payload_ref = self._storage_metadata_repository.get_trace_payload(row.payload_store_key)
         result_handles = tuple(
             handle
             for handle_id in row.result_handle_ids_json
-            if (
-                handle := self._storage_metadata_repository.get_result_handle(handle_id)
-            )
+            if (handle := self._storage_metadata_repository.get_result_handle(handle_id))
             is not None
         )
         return TraceDetail(
             trace_id=row.trace_id,
             dataset_id=row.dataset_id,
             design_id=row.design_id,
+            family=cast(str, row.family),
+            parameter=row.parameter,
+            representation=row.representation,
+            trace_mode_group=cast(str, row.trace_mode_group),
+            source_kind=cast(str, row.source_kind),
+            stage_kind=cast(str, row.stage_kind),
             axes=tuple(_deserialize_axis(item) for item in row.axes_json),
+            ndim=structure.ndim,
+            shape=structure.shape,
+            axes_summary=structure.axes_summary,
+            axis_signature=structure.axis_signature,
+            available_sweep_axes=structure.available_sweep_axes,
+            collection_projection=structure.collection_projection,
             preview_payload=dict(row.preview_payload_json),
             payload_ref=payload_ref,
             result_handles=result_handles,
@@ -1174,11 +1249,7 @@ class DurableCatalogRepository:
             ):
                 continue
             completion_event = next(
-                (
-                    event
-                    for event in reversed(task.events)
-                    if event.event_type == "task_completed"
-                ),
+                (event for event in reversed(task.events) if event.event_type == "task_completed"),
                 None,
             )
             if completion_event is None:
@@ -1279,7 +1350,10 @@ def _apply_raw_trace_row(
         row.numeric_payload_json = dict(draft.numeric_payload_json)
         row.result_handle_ids_json = list(draft.result_handle_ids_json)
     else:
-        row.axes_json = [_serialize_axis(axis) for axis in draft.axes]
+        row.axes_json = _serialize_axes_for_storage(
+            draft.axes,
+            numeric_payload=draft.numeric_payload,
+        )
         row.preview_payload_json = dict(draft.preview_payload)
         row.numeric_payload_json = dict(draft.numeric_payload)
         row.result_handle_ids_json = list(draft.result_handle_ids)
@@ -1294,6 +1368,7 @@ def _to_trace_summary(
     *,
     analysis_capabilities=(),
 ) -> TraceMetadataSummary:
+    structure = _trace_structure_surface_from_row(row)
     return TraceMetadataSummary(
         trace_id=row.trace_id,
         dataset_id=row.dataset_id,
@@ -1304,6 +1379,12 @@ def _to_trace_summary(
         trace_mode_group=row.trace_mode_group,
         source_kind=row.source_kind,
         stage_kind=row.stage_kind,
+        ndim=structure.ndim,
+        shape=structure.shape,
+        axes_summary=structure.axes_summary,
+        axis_signature=structure.axis_signature,
+        available_sweep_axes=structure.available_sweep_axes,
+        collection_projection=structure.collection_projection,
         provenance_summary=row.provenance_summary,
         analysis_capabilities=analysis_capabilities,
     )
@@ -1323,6 +1404,12 @@ def _build_trace_browse_row(
         trace_mode_group=summary.trace_mode_group,
         source_kind=summary.source_kind,
         stage_kind=summary.stage_kind,
+        ndim=summary.ndim,
+        shape=summary.shape,
+        axes_summary=summary.axes_summary,
+        axis_signature=summary.axis_signature,
+        available_sweep_axes=summary.available_sweep_axes,
+        collection_projection=summary.collection_projection,
         provenance_summary=summary.provenance_summary,
         allowed_actions=policy.allowed_actions,
         mutation_policy_summary=policy.summary,
@@ -1351,12 +1438,79 @@ def _serialize_axis(axis: TraceAxis) -> dict[str, object]:
     return {"name": axis.name, "unit": axis.unit, "length": axis.length}
 
 
+def _serialize_axes_for_storage(
+    axes: tuple[TraceAxis, ...],
+    *,
+    numeric_payload: dict[str, object],
+) -> list[dict[str, object]]:
+    coordinate_digests = _axis_coordinate_digests_from_numeric_payload(
+        axes,
+        numeric_payload=numeric_payload,
+    )
+    return [
+        {
+            **_serialize_axis(axis),
+            **(
+                {"coordinate_digest": coordinate_digests[axis.name]}
+                if axis.name in coordinate_digests
+                else {}
+            ),
+        }
+        for axis in axes
+    ]
+
+
 def _deserialize_axis(payload: dict[str, object]) -> TraceAxis:
     return TraceAxis(
         name=str(payload["name"]),
         unit=str(payload["unit"]),
         length=int(payload["length"]),
     )
+
+
+def _trace_structure_surface_from_row(
+    row: RewriteDatasetTraceRecord,
+):
+    return build_trace_structure_summary(
+        dataset_id=row.dataset_id,
+        design_id=row.design_id,
+        family=row.family,
+        parameter=row.parameter,
+        representation=row.representation,
+        trace_mode_group=row.trace_mode_group,
+        source_kind=row.source_kind,
+        stage_kind=row.stage_kind,
+        axes=tuple(row.axes_json),
+    )
+
+
+def _axis_coordinate_digests_from_numeric_payload(
+    axes: tuple[TraceAxis, ...],
+    *,
+    numeric_payload: dict[str, object],
+) -> dict[str, str]:
+    if len(axes) == 0:
+        return {}
+    axis_key = _numeric_payload_axis_key(numeric_payload)
+    rows = numeric_payload.get("rows")
+    if not isinstance(rows, list):
+        return {}
+    axis_values = [
+        float(row.get(axis_key))
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get(axis_key), int | float)
+    ]
+    if len(axis_values) == 0:
+        return {}
+    primary_axis = axes[0]
+    return {
+        primary_axis.name: build_axis_coordinate_digest(
+            axis_name=primary_axis.name,
+            unit=primary_axis.unit,
+            length=primary_axis.length,
+            values=axis_values,
+        )
+    }
 
 
 def _build_dataset_id(*, workspace_id: str, name: str, counter: int) -> str:
@@ -1378,8 +1532,7 @@ def _slugify(value: str) -> str:
     return "-".join(
         token
         for token in "".join(
-            character.lower() if character.isalnum() else "-"
-            for character in value.strip()
+            character.lower() if character.isalnum() else "-" for character in value.strip()
         ).split("-")
         if token
     )
@@ -1451,10 +1604,7 @@ def _numeric_payload_from_preview_payload(
             if isinstance(item, list | tuple) and len(item) >= 2:
                 rows.append({axis.name: item[0], "value": item[1]})
     if len(rows) == 0:
-        rows = [
-            {axis.name: float(index), "value": 0.0}
-            for index in range(axis.length)
-        ]
+        rows = [{axis.name: float(index), "value": 0.0} for index in range(axis.length)]
     return {
         "kind": "series_table",
         "columns": [
@@ -1638,15 +1788,6 @@ def _parse_characterization_result_detail(
     designated_metrics = identify_surface.get("designated_metrics", [])
     applied_tags = identify_surface.get("applied_tags", [])
     input_trace_ids = payload.get("input_trace_ids", ())
-    from src.app.domain.datasets import (
-        CharacterizationAppliedTag,
-        CharacterizationArtifactRef,
-        CharacterizationDesignatedMetricOption,
-        CharacterizationDiagnostic,
-        CharacterizationIdentifySurface,
-        CharacterizationSourceParameterOption,
-    )
-
     return CharacterizationResultDetail(
         result_id=str(payload["result_id"]),
         dataset_id=str(payload["dataset_id"]),
@@ -1682,6 +1823,111 @@ def _parse_characterization_result_detail(
                     if isinstance(item.get("payload_locator"), str)
                     else None
                 ),
+                axes=tuple(
+                    CharacterizationArtifactAxisSpec(
+                        axis_key=str(axis["axis_key"]),
+                        label=str(axis["label"]),
+                        role=str(axis["role"]),
+                        unit=str(axis["unit"]) if isinstance(axis.get("unit"), str) else None,
+                        length=int(axis["length"]),
+                    )
+                    for axis in item.get("axes", ())
+                    if isinstance(axis, dict)
+                ),
+                metric=(
+                    CharacterizationArtifactMetricSpec(
+                        metric_key=str(item["metric"]["metric_key"]),
+                        label=str(item["metric"]["label"]),
+                        unit=(
+                            str(item["metric"]["unit"])
+                            if isinstance(item["metric"].get("unit"), str)
+                            else None
+                        ),
+                    )
+                    if isinstance(item.get("metric"), dict)
+                    else None
+                ),
+                presets=tuple(
+                    CharacterizationArtifactPreset(
+                        preset_id=str(preset["preset_id"]),
+                        label=str(preset["label"]),
+                        view_kind=str(preset["view_kind"]),
+                        rows_axis=(
+                            str(preset["rows_axis"])
+                            if isinstance(preset.get("rows_axis"), str)
+                            else None
+                        ),
+                        columns_axis=(
+                            str(preset["columns_axis"])
+                            if isinstance(preset.get("columns_axis"), str)
+                            else None
+                        ),
+                        cell_metric=(
+                            str(preset["cell_metric"])
+                            if isinstance(preset.get("cell_metric"), str)
+                            else None
+                        ),
+                        x_axis=(
+                            str(preset["x_axis"]) if isinstance(preset.get("x_axis"), str) else None
+                        ),
+                        y_metric=(
+                            str(preset["y_metric"])
+                            if isinstance(preset.get("y_metric"), str)
+                            else None
+                        ),
+                        series_axis=(
+                            str(preset["series_axis"])
+                            if isinstance(preset.get("series_axis"), str)
+                            else None
+                        ),
+                    )
+                    for preset in item.get("presets", ())
+                    if isinstance(preset, dict)
+                ),
+                default_preset_id=(
+                    str(item["default_preset_id"])
+                    if isinstance(item.get("default_preset_id"), str)
+                    else None
+                ),
+                query_spec=(
+                    CharacterizationArtifactQuerySpec(
+                        query_style=str(item["query_spec"]["query_style"]),
+                        supported_query_fields=tuple(
+                            str(field)
+                            for field in item["query_spec"].get("supported_query_fields", ())
+                            if isinstance(field, str)
+                        ),
+                        supported_view_modes=tuple(
+                            str(mode)
+                            for mode in item["query_spec"].get("supported_view_modes", ())
+                            if isinstance(mode, str)
+                        ),
+                        supported_preset_ids=tuple(
+                            str(preset_id)
+                            for preset_id in item["query_spec"].get("supported_preset_ids", ())
+                            if isinstance(preset_id, str)
+                        ),
+                        default_preset_id=(
+                            str(item["query_spec"]["default_preset_id"])
+                            if isinstance(item["query_spec"].get("default_preset_id"), str)
+                            else None
+                        ),
+                        default_presets_by_view_mode=tuple(
+                            CharacterizationArtifactViewModeDefault(
+                                view_mode=str(default_item["view_mode"]),
+                                preset_id=str(default_item["preset_id"]),
+                            )
+                            for default_item in item["query_spec"].get(
+                                "default_presets_by_view_mode",
+                                (),
+                            )
+                            if isinstance(default_item, dict)
+                        ),
+                    )
+                    if isinstance(item.get("query_spec"), dict)
+                    else None
+                ),
+                identify_source=bool(item.get("identify_source", False)),
             )
             for item in artifact_refs
             if isinstance(item, dict)

@@ -21,6 +21,10 @@ TraceCapabilityStatus = Literal["eligible", "ineligible"]
 RawDataIngestionKind = Literal["measurement", "layout_simulation"]
 SimulationResultPublicationState = Literal["published", "already_published"]
 ResultTracePublicationState = SimulationResultPublicationState
+CharacterizationArtifactViewKind = Literal["table", "plot", "text", "json", "preset_query"]
+CharacterizationArtifactAxisRole = Literal["input", "derived"]
+CharacterizationArtifactQueryStyle = Literal["preset_driven", "static"]
+CharacterizationArtifactQueryField = Literal["view_mode", "preset_id"]
 
 
 @dataclass(frozen=True)
@@ -205,6 +209,51 @@ class DesignBrowseQuery:
 
 
 @dataclass(frozen=True)
+class TraceAxesSummary:
+    rank: int
+    axis_names: tuple[str, ...]
+    axis_units: tuple[str, ...]
+    axis_lengths: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class TraceCollectionProjection:
+    collection_key: str
+    kind: str
+    group_label: str
+
+
+@dataclass(frozen=True)
+class InputCollectionAxis:
+    name: str
+    unit: str
+    length: int
+    values: tuple[float, ...] = ()
+
+
+@dataclass(frozen=True)
+class InputCollectionTraceSummary:
+    trace_id: str
+    family: TraceFamily
+    parameter: str
+    representation: str
+    axis_signature: str
+    collection_key: str | None = None
+
+
+@dataclass(frozen=True)
+class CharacterizationInputCollectionPayload:
+    selected_trace_ids: tuple[str, ...]
+    trace_count: int
+    axis_signature: str | None
+    available_sweep_axes: tuple[str, ...]
+    shared_axes: tuple[InputCollectionAxis, ...]
+    grouping_summary: str
+    collection_projection: TraceCollectionProjection | None = None
+    traces: tuple[InputCollectionTraceSummary, ...] = ()
+
+
+@dataclass(frozen=True)
 class TraceMetadataSummary:
     trace_id: str
     dataset_id: str
@@ -216,6 +265,12 @@ class TraceMetadataSummary:
     source_kind: TraceSourceKind
     stage_kind: TraceStageKind
     provenance_summary: str
+    ndim: int = 0
+    shape: tuple[int, ...] = ()
+    axes_summary: TraceAxesSummary = TraceAxesSummary(0, (), (), ())
+    axis_signature: str = ""
+    available_sweep_axes: tuple[str, ...] = ()
+    collection_projection: TraceCollectionProjection | None = None
     analysis_capabilities: tuple[TraceAnalysisCapability, ...] = ()
 
 
@@ -255,6 +310,12 @@ class TraceBrowseRow:
     trace_mode_group: TraceModeGroup
     source_kind: TraceSourceKind
     stage_kind: TraceStageKind
+    ndim: int
+    shape: tuple[int, ...]
+    axes_summary: TraceAxesSummary
+    axis_signature: str
+    available_sweep_axes: tuple[str, ...]
+    collection_projection: TraceCollectionProjection | None
     provenance_summary: str
     allowed_actions: TraceAllowedActions
     mutation_policy_summary: str
@@ -268,6 +329,8 @@ class TraceBrowseQuery:
     representation: str | None = None
     source_kind: TraceSourceKind | None = None
     trace_mode_group: TraceModeGroup | None = None
+    axis_name: str | None = None
+    collection_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -286,6 +349,18 @@ class TraceDetail:
     preview_payload: dict[str, object]
     payload_ref: TracePayloadRef | None
     result_handles: tuple[ResultHandleRef, ...]
+    family: TraceFamily = "y_matrix"
+    parameter: str = ""
+    representation: str = ""
+    trace_mode_group: TraceModeGroup = "base"
+    source_kind: TraceSourceKind = "measurement"
+    stage_kind: TraceStageKind = "raw"
+    ndim: int = 0
+    shape: tuple[int, ...] = ()
+    axes_summary: TraceAxesSummary = TraceAxesSummary(0, (), (), ())
+    axis_signature: str = ""
+    available_sweep_axes: tuple[str, ...] = ()
+    collection_projection: TraceCollectionProjection | None = None
     analysis_capabilities: tuple[TraceAnalysisCapability, ...] = ()
 
 
@@ -387,6 +462,21 @@ class CharacterizationAnalysisRegistryQuery:
 
 
 @dataclass(frozen=True)
+class CharacterizationAnalysisRegistryResult:
+    rows: tuple[CharacterizationAnalysisRegistryRow, ...]
+    input_collection_payload: CharacterizationInputCollectionPayload | None = None
+
+    def __iter__(self):
+        return iter(self.rows)
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    def __getitem__(self, index: int) -> CharacterizationAnalysisRegistryRow:
+        return self.rows[index]
+
+
+@dataclass(frozen=True)
 class CharacterizationRunHistoryRow:
     run_id: str
     dataset_id: str
@@ -416,13 +506,82 @@ class CharacterizationDiagnostic:
 
 
 @dataclass(frozen=True)
+class CharacterizationArtifactAxisSpec:
+    axis_key: str
+    label: str
+    role: CharacterizationArtifactAxisRole
+    unit: str | None
+    length: int
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactMetricSpec:
+    metric_key: str
+    label: str
+    unit: str | None
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactPreset:
+    preset_id: str
+    label: str
+    view_kind: Literal["table", "plot"]
+    rows_axis: str | None = None
+    columns_axis: str | None = None
+    cell_metric: str | None = None
+    x_axis: str | None = None
+    y_metric: str | None = None
+    series_axis: str | None = None
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactViewModeDefault:
+    view_mode: CharacterizationArtifactViewKind
+    preset_id: str
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactQuerySpec:
+    query_style: CharacterizationArtifactQueryStyle
+    supported_query_fields: tuple[CharacterizationArtifactQueryField, ...]
+    supported_view_modes: tuple[CharacterizationArtifactViewKind, ...]
+    supported_preset_ids: tuple[str, ...] = ()
+    default_preset_id: str | None = None
+    default_presets_by_view_mode: tuple[CharacterizationArtifactViewModeDefault, ...] = ()
+
+
+@dataclass(frozen=True)
 class CharacterizationArtifactRef:
     artifact_id: str
     category: str
-    view_kind: Literal["table", "plot", "text", "json"]
+    view_kind: CharacterizationArtifactViewKind
     title: str
     payload_format: Literal["json", "markdown", "svg", "csv"]
     payload_locator: str | None
+    axes: tuple[CharacterizationArtifactAxisSpec, ...] = ()
+    metric: CharacterizationArtifactMetricSpec | None = None
+    presets: tuple[CharacterizationArtifactPreset, ...] = ()
+    default_preset_id: str | None = None
+    query_spec: CharacterizationArtifactQuerySpec | None = None
+    identify_source: bool = False
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactPayloadQuery:
+    view_mode: CharacterizationArtifactViewKind | None = None
+    preset_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactPayload:
+    artifact_id: str
+    title: str
+    preset_id: str
+    view_kind: CharacterizationArtifactViewKind
+    axes: tuple[CharacterizationArtifactAxisSpec, ...]
+    metric: CharacterizationArtifactMetricSpec | None
+    payload: dict[str, object]
+    diagnostics: tuple[CharacterizationDiagnostic, ...] = ()
 
 
 @dataclass(frozen=True)

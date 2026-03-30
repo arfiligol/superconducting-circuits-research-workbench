@@ -8,7 +8,10 @@ from src.app.domain.characterization_analysis import (
 )
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
+    CharacterizationAnalysisRegistryResult,
     CharacterizationAnalysisRegistryRow,
+    CharacterizationArtifactPayload,
+    CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
@@ -18,12 +21,14 @@ from src.app.domain.datasets import (
     CharacterizationTaggingResult,
     DatasetDetail,
     TaggedCoreMetricSummary,
+    TraceDetail,
     TraceMetadataSummary,
 )
 from src.app.domain.session import SessionState
 from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.services.authorization_service import AuthorizationService
 from src.app.services.service_errors import service_error
+from src.app.services.trace_collection_service import TraceCollectionService
 
 
 class DatasetCharacterizationRepository(Protocol):
@@ -52,6 +57,13 @@ class DatasetCharacterizationRepository(Protocol):
         design_id: str,
     ) -> Sequence[TraceMetadataSummary]: ...
 
+    def get_trace_detail(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> TraceDetail | None: ...
+
     def list_characterization_run_history(
         self,
         dataset_id: str,
@@ -64,6 +76,15 @@ class DatasetCharacterizationRepository(Protocol):
         design_id: str,
         result_id: str,
     ) -> CharacterizationResultDetail | None: ...
+
+    def get_characterization_artifact_payload(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+        artifact_id: str,
+        query: CharacterizationArtifactPayloadQuery,
+    ) -> CharacterizationArtifactPayload | None: ...
 
     def apply_characterization_tagging(
         self,
@@ -84,12 +105,14 @@ class DatasetCharacterizationService:
         repository: DatasetCharacterizationRepository,
         session_repository: DatasetCharacterizationSessionRepository,
         authorization_service: AuthorizationService | None = None,
+        trace_collection_service: TraceCollectionService | None = None,
     ) -> None:
         self._repository = repository
         self._session_repository = session_repository
         self._authorization_service = authorization_service or AuthorizationService(
             CasbinAuthorizationAdapter()
         )
+        self._trace_collection_service = trace_collection_service or TraceCollectionService()
 
     def list_characterization_results(
         self,
@@ -123,13 +146,13 @@ class DatasetCharacterizationService:
         dataset_id: str,
         design_id: str,
         query: CharacterizationAnalysisRegistryQuery,
-    ) -> list[CharacterizationAnalysisRegistryRow]:
+    ) -> CharacterizationAnalysisRegistryResult:
         self._require_visible_dataset(dataset_id)
         trace_rows = tuple(self._repository.list_trace_metadata(dataset_id, design_id))
         if len(trace_rows) == 0 or all(
             len(trace.analysis_capabilities) == 0 for trace in trace_rows
         ):
-            return list(
+            rows = tuple(
                 project_legacy_characterization_registry_rows(
                     legacy_rows=tuple(
                         self._repository.list_characterization_analysis_registry(
@@ -141,15 +164,30 @@ class DatasetCharacterizationService:
                     enforce_runtime_support=True,
                 )
             )
-
+            return CharacterizationAnalysisRegistryResult(
+                rows=rows,
+                input_collection_payload=self._derive_input_collection_payload(
+                    dataset_id=dataset_id,
+                    design_id=design_id,
+                    selected_trace_ids=query.selected_trace_ids,
+                ),
+            )
         included_analysis_ids = derive_characterization_analysis_ids(trace_rows)
-        return list(
+        rows = tuple(
             build_characterization_registry_rows(
                 included_analysis_ids=included_analysis_ids,
                 traces=trace_rows,
                 selected_trace_ids=query.selected_trace_ids,
                 enforce_runtime_support=True,
             )
+        )
+        return CharacterizationAnalysisRegistryResult(
+            rows=rows,
+            input_collection_payload=self._derive_input_collection_payload(
+                dataset_id=dataset_id,
+                design_id=design_id,
+                selected_trace_ids=query.selected_trace_ids,
+            ),
         )
 
     def list_characterization_run_history(
@@ -184,6 +222,34 @@ class DatasetCharacterizationService:
                 ),
             )
         return detail
+
+    def get_characterization_artifact_payload(
+        self,
+        dataset_id: str,
+        design_id: str,
+        result_id: str,
+        artifact_id: str,
+        query: CharacterizationArtifactPayloadQuery,
+    ) -> CharacterizationArtifactPayload:
+        self._require_visible_dataset(dataset_id)
+        payload = self._repository.get_characterization_artifact_payload(
+            dataset_id,
+            design_id,
+            result_id,
+            artifact_id,
+            query,
+        )
+        if payload is None:
+            raise service_error(
+                404,
+                code="artifact_not_found",
+                category="not_found",
+                message=(
+                    "The requested characterization artifact is not available "
+                    "for the selected persisted result."
+                ),
+            )
+        return payload
 
     def apply_characterization_tagging(
         self,
@@ -302,3 +368,22 @@ class DatasetCharacterizationService:
                 message="The selected dataset is not visible in the active workspace.",
             )
         return dataset
+
+    def _derive_input_collection_payload(
+        self,
+        *,
+        dataset_id: str,
+        design_id: str,
+        selected_trace_ids: tuple[str, ...],
+    ):
+        if len(selected_trace_ids) == 0:
+            return None
+        trace_details = []
+        for trace_id in selected_trace_ids:
+            detail = self._repository.get_trace_detail(dataset_id, design_id, trace_id)
+            if detail is None:
+                return None
+            trace_details.append(detail)
+        return self._trace_collection_service.derive_input_collection_payload_from_trace_details(
+            tuple(trace_details)
+        )

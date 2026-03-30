@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
+    CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
     CharacterizationRunHistoryQuery,
     CharacterizationTaggingRequest,
@@ -68,8 +69,7 @@ def create_dataset(
             "dataset": _serialize_dataset_profile(result.dataset),
             "catalog_row": _serialize_catalog_row(result.catalog_row),
             "catalog_rows": [
-                _serialize_catalog_row(row)
-                for row in dataset_service.list_dataset_catalog()
+                _serialize_catalog_row(row) for row in dataset_service.list_dataset_catalog()
             ],
         },
         status_code=201,
@@ -123,8 +123,7 @@ def archive_dataset(
             "dataset": _serialize_dataset_profile(result.dataset),
             "catalog_row": _serialize_catalog_row(result.catalog_row),
             "catalog_rows": [
-                _serialize_catalog_row(row)
-                for row in dataset_service.list_dataset_catalog()
+                _serialize_catalog_row(row) for row in dataset_service.list_dataset_catalog()
             ],
         },
         meta={"generated_at": _generated_at()},
@@ -146,8 +145,7 @@ def delete_dataset(
             "dataset": _serialize_dataset_profile(result.dataset),
             "catalog_row": _serialize_catalog_row(result.catalog_row),
             "catalog_rows": [
-                _serialize_catalog_row(row)
-                for row in dataset_service.list_dataset_catalog()
+                _serialize_catalog_row(row) for row in dataset_service.list_dataset_catalog()
             ],
         },
         meta={"generated_at": _generated_at()},
@@ -259,6 +257,8 @@ def list_trace_metadata(
     representation: Annotated[str | None, Query()] = None,
     source_kind: Annotated[str | None, Query()] = None,
     trace_mode_group: Annotated[str | None, Query()] = None,
+    axis_name: Annotated[str | None, Query()] = None,
+    collection_key: Annotated[str | None, Query()] = None,
 ) -> JSONResponse:
     try:
         resolved_limit = _parse_limit(limit)
@@ -273,6 +273,8 @@ def list_trace_metadata(
                     representation=_normalize_optional_text(representation),
                     source_kind=_normalize_source_kind(source_kind),
                     trace_mode_group=_normalize_trace_mode_group(trace_mode_group),
+                    axis_name=_normalize_optional_text(axis_name),
+                    collection_key=_normalize_optional_text(collection_key),
                 ),
             )
         ]
@@ -291,6 +293,8 @@ def list_trace_metadata(
             "representation": _normalize_optional_text(representation),
             "source_kind": _normalize_source_kind(source_kind),
             "trace_mode_group": _normalize_trace_mode_group(trace_mode_group),
+            "axis_name": _normalize_optional_text(axis_name),
+            "collection_key": _normalize_optional_text(collection_key),
         },
     )
     return _success_response(data={"rows": page_rows}, meta=meta)
@@ -439,20 +443,24 @@ def list_characterization_analysis_registry(
     selected_trace_ids: Annotated[list[str] | None, Query()] = None,
 ) -> JSONResponse:
     try:
-        rows = [
-            asdict(row)
-            for row in dataset_service.list_characterization_analysis_registry(
-                dataset_id,
-                design_id,
-                CharacterizationAnalysisRegistryQuery(
-                    selected_trace_ids=_normalize_trace_ids(selected_trace_ids),
-                ),
-            )
-        ]
+        result = dataset_service.list_characterization_analysis_registry(
+            dataset_id,
+            design_id,
+            CharacterizationAnalysisRegistryQuery(
+                selected_trace_ids=_normalize_trace_ids(selected_trace_ids),
+            ),
+        )
     except ServiceError as exc:
         return _service_error_response(exc)
     return _success_response(
-        data={"rows": rows},
+        data={
+            "rows": [asdict(row) for row in result.rows],
+            "input_collection_payload": (
+                asdict(result.input_collection_payload)
+                if result.input_collection_payload is not None
+                else None
+            ),
+        },
         meta={
             "generated_at": _generated_at(),
             "filter_echo": {
@@ -545,6 +553,34 @@ def get_characterization_result(
     )
 
 
+@router.get(
+    "/{dataset_id}/designs/{design_id}/characterization-results/{result_id}/artifacts/{artifact_id}"
+)
+def get_characterization_artifact_payload(
+    dataset_id: str,
+    design_id: str,
+    result_id: str,
+    artifact_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+    view_mode: Annotated[str | None, Query()] = None,
+    preset_id: Annotated[str | None, Query()] = None,
+) -> JSONResponse:
+    try:
+        payload = dataset_service.get_characterization_artifact_payload(
+            dataset_id,
+            design_id,
+            result_id,
+            artifact_id,
+            CharacterizationArtifactPayloadQuery(
+                view_mode=_normalize_optional_text(view_mode),
+                preset_id=_normalize_optional_text(preset_id),
+            ),
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(data=asdict(payload))
+
+
 @router.post("/{dataset_id}/designs/{design_id}/characterization-results/{result_id}/taggings")
 def apply_characterization_tagging(
     dataset_id: str,
@@ -615,6 +651,25 @@ def _serialize_trace_browse_row(row: object) -> dict[str, object]:
         "trace_mode_group": row.trace_mode_group,
         "source_kind": row.source_kind,
         "stage_kind": row.stage_kind,
+        "ndim": row.ndim,
+        "shape": list(row.shape),
+        "axes_summary": {
+            "rank": row.axes_summary.rank,
+            "axis_names": list(row.axes_summary.axis_names),
+            "axis_units": list(row.axes_summary.axis_units),
+            "axis_lengths": list(row.axes_summary.axis_lengths),
+        },
+        "axis_signature": row.axis_signature,
+        "available_sweep_axes": list(row.available_sweep_axes),
+        "collection_projection": (
+            {
+                "collection_key": row.collection_projection.collection_key,
+                "kind": row.collection_projection.kind,
+                "group_label": row.collection_projection.group_label,
+            }
+            if row.collection_projection is not None
+            else None
+        ),
         "provenance_summary": row.provenance_summary,
         "allowed_actions": asdict(row.allowed_actions),
         "mutation_policy_summary": row.mutation_policy_summary,
@@ -629,7 +684,32 @@ def _serialize_trace_detail(detail: object) -> dict[str, object]:
         "trace_id": detail.trace_id,
         "dataset_id": detail.dataset_id,
         "design_id": detail.design_id,
+        "family": detail.family,
+        "parameter": detail.parameter,
+        "representation": detail.representation,
+        "trace_mode_group": detail.trace_mode_group,
+        "source_kind": detail.source_kind,
+        "stage_kind": detail.stage_kind,
         "axes": [asdict(axis) for axis in detail.axes],
+        "ndim": detail.ndim,
+        "shape": list(detail.shape),
+        "axes_summary": {
+            "rank": detail.axes_summary.rank,
+            "axis_names": list(detail.axes_summary.axis_names),
+            "axis_units": list(detail.axes_summary.axis_units),
+            "axis_lengths": list(detail.axes_summary.axis_lengths),
+        },
+        "axis_signature": detail.axis_signature,
+        "available_sweep_axes": list(detail.available_sweep_axes),
+        "collection_projection": (
+            {
+                "collection_key": detail.collection_projection.collection_key,
+                "kind": detail.collection_projection.kind,
+                "group_label": detail.collection_projection.group_label,
+            }
+            if detail.collection_projection is not None
+            else None
+        ),
         "preview_payload": detail.preview_payload,
         "payload_ref": asdict(detail.payload_ref) if detail.payload_ref is not None else None,
         "result_handles": [asdict(handle) for handle in detail.result_handles],
@@ -764,8 +844,7 @@ def _parse_trace_update_payload(payload: object) -> TraceUpdateDraft:
             code="request_validation_failed",
             category="validation_error",
             message=(
-                "preview_payload is preview-only and cannot be submitted "
-                "to the trace edit path."
+                "preview_payload is preview-only and cannot be submitted to the trace edit path."
             ),
         )
     if "axes" in body:
