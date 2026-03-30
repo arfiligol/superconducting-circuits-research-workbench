@@ -31,6 +31,12 @@ from sc_core.tasking import (
     task_submission_source_for as _task_submission_source_for,
 )
 
+from src.app.domain.datasets import (
+    CharacterizationInputCollectionPayload,
+    InputCollectionAxis,
+    InputCollectionTraceSummary,
+    TraceCollectionProjection,
+)
 from src.app.domain.storage import MetadataRecordRef, ResultHandleRef, TracePayloadRef
 
 TaskKind = Literal["simulation", "post_processing", "characterization"]
@@ -385,19 +391,63 @@ class CharacterizationSetup:
     analysis_id: str
     selected_trace_ids: tuple[str, ...]
     analysis_config: dict[str, object]
+    input_collection_payload: CharacterizationInputCollectionPayload | None = None
 
     def to_mapping(self) -> dict[str, object]:
-        return {
+        payload = {
             "design_id": self.design_id,
             "analysis_id": self.analysis_id,
             "selected_trace_ids": list(self.selected_trace_ids),
             "analysis_config": dict(self.analysis_config),
         }
+        if self.input_collection_payload is not None:
+            payload["input_collection_payload"] = {
+                "selected_trace_ids": list(self.input_collection_payload.selected_trace_ids),
+                "trace_count": self.input_collection_payload.trace_count,
+                "axis_signature": self.input_collection_payload.axis_signature,
+                "available_sweep_axes": list(self.input_collection_payload.available_sweep_axes),
+                "shared_axes": [
+                    {
+                        "name": axis.name,
+                        "unit": axis.unit,
+                        "length": axis.length,
+                        "values": list(axis.values),
+                    }
+                    for axis in self.input_collection_payload.shared_axes
+                ],
+                "grouping_summary": self.input_collection_payload.grouping_summary,
+                "collection_projection": (
+                    {
+                        "collection_key": (
+                            self.input_collection_payload.collection_projection.collection_key
+                        ),
+                        "kind": self.input_collection_payload.collection_projection.kind,
+                        "group_label": (
+                            self.input_collection_payload.collection_projection.group_label
+                        ),
+                    }
+                    if self.input_collection_payload.collection_projection is not None
+                    else None
+                ),
+                "traces": [
+                    {
+                        "trace_id": trace.trace_id,
+                        "family": trace.family,
+                        "parameter": trace.parameter,
+                        "representation": trace.representation,
+                        "axis_signature": trace.axis_signature,
+                        "collection_key": trace.collection_key,
+                    }
+                    for trace in self.input_collection_payload.traces
+                ],
+            }
+        return payload
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> CharacterizationSetup:
         raw_trace_ids = payload.get("selected_trace_ids", ())
         analysis_config = payload.get("analysis_config")
+        raw_input_collection_payload = payload.get("input_collection_payload")
         return cls(
             design_id=str(payload["design_id"]),
             analysis_id=str(payload["analysis_id"]),
@@ -409,7 +459,78 @@ class CharacterizationSetup:
                 if isinstance(analysis_config, Mapping)
                 else {}
             ),
+            input_collection_payload=_coerce_input_collection_payload(
+                raw_input_collection_payload,
+            ),
         )
+
+
+def _coerce_input_collection_payload(
+    payload: object,
+) -> CharacterizationInputCollectionPayload | None:
+    if not isinstance(payload, Mapping):
+        return None
+    raw_shared_axes = payload.get("shared_axes", ())
+    raw_traces = payload.get("traces", ())
+    raw_projection = payload.get("collection_projection")
+    return CharacterizationInputCollectionPayload(
+        selected_trace_ids=tuple(
+            str(trace_id)
+            for trace_id in payload.get("selected_trace_ids", ())
+            if isinstance(trace_id, str)
+        ),
+        trace_count=int(payload.get("trace_count", 0) or 0),
+        axis_signature=(
+            str(payload.get("axis_signature"))
+            if isinstance(payload.get("axis_signature"), str)
+            else None
+        ),
+        available_sweep_axes=tuple(
+            str(axis_name)
+            for axis_name in payload.get("available_sweep_axes", ())
+            if isinstance(axis_name, str)
+        ),
+        shared_axes=tuple(
+            InputCollectionAxis(
+                name=str(axis.get("name", "")),
+                unit=str(axis.get("unit", "")),
+                length=int(axis.get("length", 0) or 0),
+                values=tuple(
+                    float(value)
+                    for value in axis.get("values", ())
+                    if isinstance(value, int | float)
+                ),
+            )
+            for axis in raw_shared_axes
+            if isinstance(axis, Mapping)
+        ),
+        grouping_summary=str(payload.get("grouping_summary", "")),
+        collection_projection=(
+            TraceCollectionProjection(
+                collection_key=str(raw_projection.get("collection_key", "")),
+                kind=str(raw_projection.get("kind", "")),
+                group_label=str(raw_projection.get("group_label", "")),
+            )
+            if isinstance(raw_projection, Mapping)
+            else None
+        ),
+        traces=tuple(
+            InputCollectionTraceSummary(
+                trace_id=str(trace.get("trace_id", "")),
+                family=cast(str, trace.get("family", "")),
+                parameter=str(trace.get("parameter", "")),
+                representation=str(trace.get("representation", "")),
+                axis_signature=str(trace.get("axis_signature", "")),
+                collection_key=(
+                    str(trace.get("collection_key"))
+                    if isinstance(trace.get("collection_key"), str)
+                    else None
+                ),
+            )
+            for trace in raw_traces
+            if isinstance(trace, Mapping)
+        ),
+    )
 
 
 @dataclass(frozen=True)

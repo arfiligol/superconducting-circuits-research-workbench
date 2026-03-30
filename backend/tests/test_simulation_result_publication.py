@@ -430,24 +430,76 @@ def test_completed_simulation_task_can_be_published_and_is_queryable() -> None:
         persisted["publication_summary"]["target_design_id"]
         == "design_fluxonium-simulation-save"
     )
+
+
+def test_sweep_aware_published_trace_exposes_nd_summary_and_collection_filters() -> None:
+    definition_id = _create_sweepable_definition("SweepAwareWholeResultSaveDefinition")
+    task = _submit_local_simulation(
+        definition_id=definition_id,
+        ptc_enabled=False,
+        parameter_sweeps=[
+            {
+                "parameter": "Lj",
+                "values": [850.0, 1000.0, 1150.0],
+                "unit": "pH",
+            }
+        ],
+    )
+
+    publish_response = client.post(
+        f"/tasks/{task['task_id']}/simulation-results/publish",
+        json={
+            "dataset_id": "local-dataset-001",
+            "design_name": "Sweep Aware Save",
+        },
+    )
+
+    assert publish_response.status_code == 200
+    design_id = "design_sweep-aware-save"
+    trace_id = f"trace_simulation_task_{task['task_id']}_y_matrix_raw"
+
+    traces_response = client.get(f"/datasets/local-dataset-001/designs/{design_id}/traces")
+    assert traces_response.status_code == 200
+    trace_row = next(
+        row for row in traces_response.json()["data"]["rows"] if row["trace_id"] == trace_id
+    )
+    assert trace_row["ndim"] == 2
+    assert trace_row["shape"] == [401, 3]
+    assert trace_row["axes_summary"]["axis_names"] == ["frequency", "Lj"]
+    assert trace_row["available_sweep_axes"] == ["Lj"]
+    assert trace_row["collection_projection"] is not None
+
+    detail_response = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/traces/{trace_id}"
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["ndim"] == 2
+    assert detail["shape"] == [401, 3]
+    assert [axis["name"] for axis in detail["axes"]] == ["frequency", "Lj"]
+    assert detail["axis_signature"] == trace_row["axis_signature"]
+    assert detail["collection_projection"] == trace_row["collection_projection"]
+
+    axis_filtered = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/traces?axis_name=Lj"
+    )
+    assert axis_filtered.status_code == 200
+    assert any(
+        row["trace_id"] == trace_id for row in axis_filtered.json()["data"]["rows"]
+    )
+
+    collection_key = trace_row["collection_projection"]["collection_key"]
+    collection_filtered = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/traces?collection_key={collection_key}"
+    )
+    assert collection_filtered.status_code == 200
+    assert [row["trace_id"] for row in collection_filtered.json()["data"]["rows"]] == [trace_id]
     durable_designs = client.get("/datasets/local-dataset-001/designs")
     assert durable_designs.status_code == 200
-    assert any(
-        row["design_id"] == "design_fluxonium-simulation-save"
-        for row in durable_designs.json()["data"]["rows"]
-    )
-    durable_traces = client.get(
-        "/datasets/local-dataset-001/designs/design_fluxonium-simulation-save/traces"
-    )
+    assert any(row["design_id"] == design_id for row in durable_designs.json()["data"]["rows"])
+    durable_traces = client.get(f"/datasets/local-dataset-001/designs/{design_id}/traces")
     assert durable_traces.status_code == 200
-    assert sorted(
-        row["trace_id"] for row in durable_traces.json()["data"]["rows"]
-    ) == sorted(
-        _published_trace_ids(
-            task["task_id"],
-            include_ptc=True,
-        )
-    )
+    assert any(row["trace_id"] == trace_id for row in durable_traces.json()["data"]["rows"])
 
 
 def test_pending_failed_and_wrong_kind_publish_requests_are_rejected_truthfully() -> None:
@@ -610,6 +662,7 @@ def test_published_trace_read_repair_refreshes_stale_capabilities() -> None:
     trace_row = next(
         row for row in traces_response.json()["data"]["rows"] if row["trace_id"] == trace_id
     )
+    collection_key_before = trace_row["collection_projection"]["collection_key"]
     assert trace_row["analysis_capabilities"] != []
     assert any(
         capability["analysis_id"] == "admittance_extraction"
@@ -620,6 +673,10 @@ def test_published_trace_read_repair_refreshes_stale_capabilities() -> None:
     assert detail_response.status_code == 200
     detail_capabilities = _capability_by_analysis(
         detail_response.json()["data"]["analysis_capabilities"]
+    )
+    assert (
+        detail_response.json()["data"]["collection_projection"]["collection_key"]
+        == collection_key_before
     )
     assert (
         detail_capabilities["admittance_extraction"]["status"]

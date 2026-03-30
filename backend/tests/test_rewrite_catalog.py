@@ -423,11 +423,31 @@ def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contrac
     ]
     assert not hasattr(trace_rows[0], "preview_payload")
     assert not hasattr(trace_rows[0], "payload_ref")
+    assert trace_rows[0].ndim == 1
+    assert trace_rows[0].shape == (trace_detail.axes[0].length,)
+    assert trace_rows[0].axes_summary.axis_names == ("frequency",)
+    assert trace_rows[0].axis_signature == trace_rows[1].axis_signature
+    assert trace_rows[0].collection_projection is not None
+    collection_key = trace_rows[0].collection_projection.collection_key
     assert trace_rows[0].allowed_actions.edit is False
     assert trace_rows[0].allowed_actions.delete is False
     assert "source workflow" in trace_rows[0].mutation_policy_summary
+    filtered_rows = dataset_service.list_trace_metadata(
+        "fluxonium-2025-031",
+        "design_flux_scan_a",
+        TraceBrowseQuery(axis_name="frequency", collection_key=collection_key),
+    )
+    assert [row.trace_id for row in filtered_rows] == [
+        "trace_flux_a_measurement",
+        "trace_flux_a_layout",
+        "trace_flux_a_phase",
+    ]
 
     assert trace_detail.trace_id == "trace_flux_a_measurement"
+    assert trace_detail.ndim == 1
+    assert trace_detail.axes_summary.axis_names == ("frequency",)
+    assert trace_detail.collection_projection is not None
+    assert trace_detail.collection_projection.collection_key == collection_key
     assert trace_detail.preview_payload["kind"] == "series"
     assert len(trace_detail.preview_payload["points"]) == trace_detail.axes[0].length
     assert trace_detail.payload_ref is not None

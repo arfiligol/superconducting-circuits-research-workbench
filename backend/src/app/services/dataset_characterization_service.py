@@ -8,6 +8,7 @@ from src.app.domain.characterization_analysis import (
 )
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
+    CharacterizationAnalysisRegistryResult,
     CharacterizationAnalysisRegistryRow,
     CharacterizationResultBrowseQuery,
     CharacterizationResultDetail,
@@ -18,6 +19,7 @@ from src.app.domain.datasets import (
     CharacterizationTaggingResult,
     DatasetDetail,
     TaggedCoreMetricSummary,
+    TraceDetail,
     TraceMetadataSummary,
 )
 from src.app.domain.session import SessionState
@@ -51,6 +53,13 @@ class DatasetCharacterizationRepository(Protocol):
         dataset_id: str,
         design_id: str,
     ) -> Sequence[TraceMetadataSummary]: ...
+
+    def get_trace_detail(
+        self,
+        dataset_id: str,
+        design_id: str,
+        trace_id: str,
+    ) -> TraceDetail | None: ...
 
     def list_characterization_run_history(
         self,
@@ -123,13 +132,13 @@ class DatasetCharacterizationService:
         dataset_id: str,
         design_id: str,
         query: CharacterizationAnalysisRegistryQuery,
-    ) -> list[CharacterizationAnalysisRegistryRow]:
+    ) -> CharacterizationAnalysisRegistryResult:
         self._require_visible_dataset(dataset_id)
         trace_rows = tuple(self._repository.list_trace_metadata(dataset_id, design_id))
         if len(trace_rows) == 0 or all(
             len(trace.analysis_capabilities) == 0 for trace in trace_rows
         ):
-            return list(
+            rows = tuple(
                 project_legacy_characterization_registry_rows(
                     legacy_rows=tuple(
                         self._repository.list_characterization_analysis_registry(
@@ -141,15 +150,30 @@ class DatasetCharacterizationService:
                     enforce_runtime_support=True,
                 )
             )
-
+            return CharacterizationAnalysisRegistryResult(
+                rows=rows,
+                input_collection_payload=self._derive_input_collection_payload(
+                    dataset_id=dataset_id,
+                    design_id=design_id,
+                    selected_trace_ids=query.selected_trace_ids,
+                ),
+            )
         included_analysis_ids = derive_characterization_analysis_ids(trace_rows)
-        return list(
+        rows = tuple(
             build_characterization_registry_rows(
                 included_analysis_ids=included_analysis_ids,
                 traces=trace_rows,
                 selected_trace_ids=query.selected_trace_ids,
                 enforce_runtime_support=True,
             )
+        )
+        return CharacterizationAnalysisRegistryResult(
+            rows=rows,
+            input_collection_payload=self._derive_input_collection_payload(
+                dataset_id=dataset_id,
+                design_id=design_id,
+                selected_trace_ids=query.selected_trace_ids,
+            ),
         )
 
     def list_characterization_run_history(
@@ -302,3 +326,24 @@ class DatasetCharacterizationService:
                 message="The selected dataset is not visible in the active workspace.",
             )
         return dataset
+
+    def _derive_input_collection_payload(
+        self,
+        *,
+        dataset_id: str,
+        design_id: str,
+        selected_trace_ids: tuple[str, ...],
+    ):
+        if len(selected_trace_ids) == 0:
+            return None
+        from src.app.services.trace_collection_service import (
+            derive_input_collection_payload_from_trace_details,
+        )
+
+        trace_details = []
+        for trace_id in selected_trace_ids:
+            detail = self._repository.get_trace_detail(dataset_id, design_id, trace_id)
+            if detail is None:
+                return None
+            trace_details.append(detail)
+        return derive_input_collection_payload_from_trace_details(tuple(trace_details))
