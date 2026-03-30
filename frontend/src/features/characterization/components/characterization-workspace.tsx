@@ -4,13 +4,23 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { LoaderCircle, Play, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { CharacterizationResultExplorer } from "@/features/characterization/components/characterization-result-explorer";
+import { useCharacterizationResultExplorer } from "@/features/characterization/hooks/use-characterization-result-explorer";
 import { useCharacterizationWorkflowData } from "@/features/characterization/hooks/use-characterization-workflow-data";
+import {
+  buildCharacterizationCollectionOptions,
+  buildCharacterizationSweepAxisOptions,
+  filterCharacterizationTraceRows,
+} from "@/features/characterization/lib/trace-selection";
 import {
   characterizationStatusTone,
   resolveCharacterizationSelectionRecovery,
   type CharacterizationResultStatusFilter,
 } from "@/features/characterization/lib/workflow";
-import { AppSelectField } from "@/features/shared/components/app-select";
+import {
+  AppInlineSelect,
+  AppSelectField,
+} from "@/features/shared/components/app-select";
 import {
   SurfaceHeader,
   SurfaceActionButton,
@@ -270,10 +280,8 @@ export function CharacterizationWorkspace() {
     tracesError,
     isTracesLoading,
     selectedTraceIds,
+    setSelectedTraceIds,
     toggleTraceSelection,
-    selectAllTraces,
-    selectBaseTraces,
-    clearTraceSelection,
     resultSearch,
     setResultSearch,
     statusFilter,
@@ -318,8 +326,15 @@ export function CharacterizationWorkspace() {
   const [selectedSourceSelection, setSelectedSourceSelection] = useState("");
   const [selectedDesignatedMetric, setSelectedDesignatedMetric] = useState("");
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
+  const [sweepAxisFilter, setSweepAxisFilter] = useState("");
+  const [collectionFilter, setCollectionFilter] = useState("");
 
   const selectedDesign = designs.find((design) => design.design_id === selectedDesignId) ?? null;
+  const resultExplorer = useCharacterizationResultExplorer({
+    datasetId: activeDatasetState.activeDataset?.datasetId ?? null,
+    designId: selectedDesignId,
+    resultDetail: resultDetail ?? null,
+  });
   const activeDatasetErrorNotice = buildSectionError(
     "Could not load the active dataset.",
     activeDatasetState.activeDatasetError,
@@ -357,6 +372,25 @@ export function CharacterizationWorkspace() {
       })),
     [analysisRegistry],
   );
+  const sweepAxisOptions = useMemo(
+    () => buildCharacterizationSweepAxisOptions(traces),
+    [traces],
+  );
+  const collectionOptions = useMemo(
+    () => buildCharacterizationCollectionOptions(traces),
+    [traces],
+  );
+  const visibleTraces = useMemo(
+    () =>
+      filterCharacterizationTraceRows(traces, {
+        sweepAxis: sweepAxisFilter || null,
+        collection: collectionFilter || null,
+      }),
+    [collectionFilter, sweepAxisFilter, traces],
+  );
+  const visibleSelectedTraceCount = visibleTraces.filter((trace) =>
+    selectedTraceIds.includes(trace.trace_id),
+  ).length;
   const traceSelectionSummary =
     selectedTraceIds.length === 0
       ? "No traces selected"
@@ -439,7 +473,11 @@ export function CharacterizationWorkspace() {
     : null;
 
   useEffect(() => {
-    const firstSourceParameter = resultDetail?.identifySurface.sourceParameters[0];
+    const sourceParameters = resultDetail?.identifySurface.sourceParameters ?? [];
+    const firstSourceParameter =
+      sourceParameters.find(
+        (option) => option.artifactId === resultExplorer.selectedArtifactId,
+      ) ?? sourceParameters[0];
     const firstDesignatedMetric = resultDetail?.identifySurface.designatedMetrics[0];
     setSelectedSourceSelection(
       firstSourceParameter
@@ -450,7 +488,12 @@ export function CharacterizationWorkspace() {
         : "",
     );
     setSelectedDesignatedMetric(firstDesignatedMetric?.metricKey ?? "");
-  }, [resultDetail?.resultId]);
+  }, [resultDetail?.resultId, resultExplorer.selectedArtifactId]);
+
+  useEffect(() => {
+    setSweepAxisFilter("");
+    setCollectionFilter("");
+  }, [selectedDesignId]);
 
   useEffect(() => {
     const nextHref = buildCharacterizationSearchHref(pathname, searchParamsValue, {
@@ -505,6 +548,22 @@ export function CharacterizationWorkspace() {
     } finally {
       setIsRefreshingWorkflow(false);
     }
+  }
+
+  function handleSelectAllVisibleTraces() {
+    setSelectedTraceIds(visibleTraces.map((trace) => trace.trace_id));
+  }
+
+  function handleSelectBaseVisibleTraces() {
+    setSelectedTraceIds(
+      visibleTraces
+        .filter((trace) => trace.trace_mode_group === "base")
+        .map((trace) => trace.trace_id),
+    );
+  }
+
+  function handleClearTraceSelection() {
+    setSelectedTraceIds([]);
   }
 
   return (
@@ -618,30 +677,102 @@ export function CharacterizationWorkspace() {
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Trace Selection
                     </p>
-                    <p className="mt-2 text-sm text-muted-foreground">{traceSelectionSummary}</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {traceSelectionSummary}
+                      {visibleTraces.length !== traces.length
+                        ? ` · ${visibleTraces.length} shown`
+                        : ""}
+                      {visibleSelectedTraceCount > 0 &&
+                      visibleSelectedTraceCount !== selectedTraceIds.length
+                        ? ` · ${visibleSelectedTraceCount} shown selected`
+                        : ""}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <SurfaceActionButton
                       type="button"
-                      onClick={selectAllTraces}
+                      onClick={handleSelectAllVisibleTraces}
                       className="px-3 py-1.5 text-xs"
                     >
                       All
                     </SurfaceActionButton>
                     <SurfaceActionButton
                       type="button"
-                      onClick={selectBaseTraces}
+                      onClick={handleSelectBaseVisibleTraces}
                       className="px-3 py-1.5 text-xs"
                     >
                       Base
                     </SurfaceActionButton>
                     <SurfaceActionButton
                       type="button"
-                      onClick={clearTraceSelection}
+                      onClick={handleClearTraceSelection}
                       className="px-3 py-1.5 text-xs"
                     >
                       Clear
                     </SurfaceActionButton>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1.3fr)]">
+                  {sweepAxisOptions.length > 0 ? (
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                      <p className="mb-3 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Sweep Axis
+                      </p>
+                      <AppInlineSelect
+                        ariaLabel="Characterization sweep axis filter"
+                        value={sweepAxisFilter}
+                        onChange={setSweepAxisFilter}
+                        options={[
+                          { value: "", label: "All sweep axes" },
+                          ...sweepAxisOptions.map((axis) => ({
+                            value: axis,
+                            label: axis,
+                          })),
+                        ]}
+                      />
+                    </div>
+                  ) : null}
+
+                  {collectionOptions.length > 0 ? (
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                      <p className="mb-3 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Collection Hint
+                      </p>
+                      <AppInlineSelect
+                        ariaLabel="Characterization trace collection filter"
+                        value={collectionFilter}
+                        onChange={setCollectionFilter}
+                        options={[
+                          { value: "", label: "All collections" },
+                          ...collectionOptions.map((option) => ({
+                            value: option.value,
+                            label: option.label,
+                          })),
+                        ]}
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Collection Projection
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Backend grouping hints keep sweep-aware traces together without claiming value-level or provenance-derived meaning.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {sweepAxisOptions.map((axis) => (
+                        <SurfaceTag key={axis} tone="default">
+                          {axis}
+                        </SurfaceTag>
+                      ))}
+                      {collectionOptions.slice(0, 4).map((option) => (
+                        <SurfaceTag key={option.value} tone="default">
+                          {option.label}
+                        </SurfaceTag>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -655,10 +786,11 @@ export function CharacterizationWorkspace() {
                         <th className="w-28 px-3 py-3">View</th>
                         <th className="w-24 px-3 py-3">Source</th>
                         <th className="w-24 px-3 py-3">Mode</th>
+                        <th className="w-52 px-3 py-3">Sweep / Collection</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border bg-background">
-                      {traces.map((trace) => {
+                      {visibleTraces.map((trace) => {
                         const isSelected = selectedTraceIds.includes(trace.trace_id);
                         return (
                           <tr
@@ -700,6 +832,30 @@ export function CharacterizationWorkspace() {
                             <td className="px-3 py-3 align-top text-muted-foreground">
                               {formatModeLabel(trace.trace_mode_group)}
                             </td>
+                            <td className="px-3 py-3 align-top">
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap gap-2">
+                                  {trace.availableSweepAxes.length > 0 ? (
+                                    trace.availableSweepAxes.map((axis) => (
+                                      <SurfaceTag key={`${trace.trace_id}-${axis}`} tone="default">
+                                        {axis}
+                                      </SurfaceTag>
+                                    ))
+                                  ) : (
+                                    <SurfaceTag tone="default">No sweep axis</SurfaceTag>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {trace.axesSummary}
+                                </p>
+                                {trace.collectionProjection ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    {trace.collectionProjection.label} ·{" "}
+                                    {trace.collectionProjection.summary}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </td>
                           </tr>
                         );
                       })}
@@ -707,9 +863,9 @@ export function CharacterizationWorkspace() {
                   </table>
                 </div>
 
-                {!isTracesLoading && traces.length === 0 ? (
+                {!isTracesLoading && visibleTraces.length === 0 ? (
                   <p className="mt-4 rounded-[0.95rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                    No visible traces are indexed for this design yet.
+                    No traces match the current design scope and sweep-aware filters yet.
                   </p>
                 ) : null}
                 {tracesErrorNotice ? (
@@ -998,18 +1154,16 @@ export function CharacterizationWorkspace() {
                             </p>
                           </div>
                         </div>
-                        <div className="mt-4">
-                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Input Trace Scope
-                          </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {resultDetail.inputTraceIds.map((traceId) => (
-                              <SurfaceTag key={traceId} tone="default">
-                                {traceId}
-                              </SurfaceTag>
-                            ))}
+                        {resultDetail.inputCollectionPayload ? (
+                          <div className="mt-4">
+                            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Collection Scope
+                            </p>
+                            <p className="mt-2 text-sm text-foreground">
+                              {resultDetail.inputCollectionPayload.groupingSummary}
+                            </p>
                           </div>
-                        </div>
+                        ) : null}
                       </div>
 
                       {resultDetail.diagnostics.length > 0 ? (
@@ -1054,45 +1208,19 @@ export function CharacterizationWorkspace() {
                         </div>
                       ) : null}
 
-                      {resultDetail.artifactRefs.length > 0 ? (
-                        <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Result Files
-                            </p>
-                            <SurfaceTag tone="default">
-                              {resultDetail.artifactRefs.length} files
-                            </SurfaceTag>
-                          </div>
-                          <div className="mt-3 space-y-3">
-                            {resultDetail.artifactRefs.map((artifact) => (
-                              <div
-                                key={artifact.artifactId}
-                                className="rounded-xl border border-border bg-card px-3 py-3"
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <SurfaceTag tone="default">{artifact.category}</SurfaceTag>
-                                  <SurfaceTag tone="default">{artifact.viewKind}</SurfaceTag>
-                                  <SurfaceTag tone="default">{artifact.payloadFormat}</SurfaceTag>
-                                </div>
-                                <p className="mt-2 text-sm font-medium text-foreground">
-                                  {artifact.title}
-                                </p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {artifact.payloadLocator ?? "No file path available yet"}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
+                      <CharacterizationResultExplorer
+                        resultDetail={resultDetail}
+                        explorer={resultExplorer}
+                      />
 
-                      <div>
-                        <p className="mb-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Result Snapshot
-                        </p>
-                        <ResultPayloadPreview payload={resultDetail.payload} />
-                      </div>
+                      <details className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          Debug Payload
+                        </summary>
+                        <div className="mt-4">
+                          <ResultPayloadPreview payload={resultDetail.payload} />
+                        </div>
+                      </details>
 
                       <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
                         <div className="flex items-center justify-between gap-3">

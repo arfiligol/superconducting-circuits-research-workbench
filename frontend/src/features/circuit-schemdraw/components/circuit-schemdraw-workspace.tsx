@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { json } from "@codemirror/lang-json";
 import { python } from "@codemirror/lang-python";
 import {
@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
+  Download,
   FileCode2,
   LoaderCircle,
   RefreshCcw,
@@ -17,6 +18,8 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CodeMirror from "@uiw/react-codemirror";
 
+import { SchemdrawDownloadDialog } from "@/features/circuit-schemdraw/components/schemdraw-download-dialog";
+import { SchemdrawGuidanceCard } from "@/features/circuit-schemdraw/components/schemdraw-guidance-card";
 import { SchemdrawSvgViewer } from "@/features/circuit-schemdraw/components/schemdraw-svg-viewer";
 import { useCircuitSchemdrawData } from "@/features/circuit-schemdraw/hooks/use-circuit-schemdraw-data";
 import { parseSchemdrawDefinitionIdParam } from "@/features/circuit-schemdraw/lib/definition-id";
@@ -25,10 +28,19 @@ import {
   createSchemdrawDiagnosticsExtension,
   summarizeSchemdrawEditorNotice,
 } from "@/features/circuit-schemdraw/lib/editor-diagnostics";
-import type { SchemdrawFailureDetail } from "@/features/circuit-schemdraw/lib/render";
+import {
+  buildSchemdrawPreviewFilename,
+  downloadSchemdrawPng,
+  downloadSchemdrawSvg,
+} from "@/features/circuit-schemdraw/lib/export";
+import {
+  resolveSchemdrawDownloadSnapshot,
+  type SchemdrawFailureDetail,
+} from "@/features/circuit-schemdraw/lib/render";
 import { resolveSchemdrawSelectionRecovery } from "@/features/circuit-schemdraw/lib/workflow";
 import { AppInlineSelect } from "@/features/shared/components/app-select";
 import {
+  SurfaceActionButton,
   SurfaceTag,
   cx,
   resolveSurfaceInsetToneClass,
@@ -278,6 +290,8 @@ export function CircuitSchemdrawWorkspace() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isNavigating, startTransition] = useTransition();
+  const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
+  const [pendingDownloadFormat, setPendingDownloadFormat] = useState<"svg" | "png" | null>(null);
 
   const requestedDefinitionId = searchParams.get("definitionId");
   const rawDefinitionId = parseSchemdrawDefinitionIdParam(requestedDefinitionId);
@@ -305,6 +319,10 @@ export function CircuitSchemdrawWorkspace() {
     definitions,
   );
   const previewTone = renderTone(renderSurface.phase);
+  const downloadPreview = useMemo(
+    () => resolveSchemdrawDownloadSnapshot(renderSurface),
+    [renderSurface],
+  );
   const { sourceDiagnostics, relationDiagnostics } = useMemo(
     () => buildSchemdrawEditorDiagnostics(renderSurface.diagnostics),
     [renderSurface.diagnostics],
@@ -351,6 +369,44 @@ export function CircuitSchemdrawWorkspace() {
       }),
     [developerModeEnabled, relationDiagnostics, renderSurface.failureDetail],
   );
+
+  useEffect(() => {
+    if (!downloadPreview && isDownloadDialogOpen) {
+      setIsDownloadDialogOpen(false);
+      setPendingDownloadFormat(null);
+    }
+  }, [downloadPreview, isDownloadDialogOpen]);
+
+  async function handleDownload(format: "svg" | "png") {
+    if (!downloadPreview) {
+      return;
+    }
+
+    const filename = buildSchemdrawPreviewFilename({
+      definitionName: selectedDefinitionSummary?.name ?? null,
+      requestId: downloadPreview.requestId,
+      format,
+    });
+
+    setPendingDownloadFormat(format);
+    try {
+      if (format === "svg") {
+        downloadSchemdrawSvg({
+          svgText: downloadPreview.svg,
+          filename,
+        });
+      } else {
+        await downloadSchemdrawPng({
+          svgText: downloadPreview.svg,
+          previewMetadata: downloadPreview.previewMetadata,
+          filename,
+        });
+      }
+      setIsDownloadDialogOpen(false);
+    } finally {
+      setPendingDownloadFormat(null);
+    }
+  }
 
   function replaceDefinitionId(definitionId: CircuitDefinitionId | null) {
     startTransition(() => {
@@ -560,6 +616,8 @@ export function CircuitSchemdrawWorkspace() {
         </details>
       </section>
 
+      <SchemdrawGuidanceCard />
+
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
           <div className="flex flex-col gap-4 border-b border-border/80 pb-4 md:flex-row md:items-start md:justify-between">
@@ -621,6 +679,22 @@ export function CircuitSchemdrawWorkspace() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <SurfaceActionButton
+                shape="soft"
+                icon={<Download className="h-4 w-4" />}
+                disabled={!downloadPreview || pendingDownloadFormat !== null}
+                title={
+                  downloadPreview
+                    ? "Download the latest adopted preview as SVG or PNG"
+                    : "Download becomes available after a rendered preview is adopted"
+                }
+                aria-label="Download latest preview"
+                onClick={() => {
+                  setIsDownloadDialogOpen(true);
+                }}
+              >
+                Download
+              </SurfaceActionButton>
               <SurfaceTag tone={previewTone}>{renderSurface.statusLabel}</SurfaceTag>
               {renderSurface.isStale ? (
                 <SurfaceTag tone="warning">Stale preview</SurfaceTag>
@@ -812,6 +886,18 @@ export function CircuitSchemdrawWorkspace() {
           />
         </div>
       </section>
+
+      <SchemdrawDownloadDialog
+        open={isDownloadDialogOpen && downloadPreview !== null}
+        isPendingFormat={pendingDownloadFormat}
+        onClose={() => {
+          if (pendingDownloadFormat) {
+            return;
+          }
+          setIsDownloadDialogOpen(false);
+        }}
+        onDownload={handleDownload}
+      />
     </div>
   );
 }
