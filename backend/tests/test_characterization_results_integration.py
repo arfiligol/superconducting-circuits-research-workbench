@@ -163,7 +163,7 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
         {
             "artifact_id": "char-fit-flux-a-01:mode-frequency-grid",
             "category": "result_tensor",
-            "view_kind": "json",
+            "view_kind": "preset_query",
             "title": "Mode frequency grid",
             "payload_format": "json",
             "payload_locator": "characterization/char-fit-flux-a-01/mode-frequency-grid.json",
@@ -224,6 +224,21 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
                 },
             ],
             "default_preset_id": "mode_by_input_table",
+            "query_spec": {
+                "query_style": "preset_driven",
+                "supported_query_fields": ["view_mode", "preset_id"],
+                "supported_view_modes": ["table", "plot"],
+                "supported_preset_ids": [
+                    "mode_by_input_table",
+                    "mode_profile_plot",
+                    "sweep_profile_plot",
+                ],
+                "default_preset_id": "mode_by_input_table",
+                "default_presets_by_view_mode": [
+                    {"view_mode": "table", "preset_id": "mode_by_input_table"},
+                    {"view_mode": "plot", "preset_id": "mode_profile_plot"},
+                ],
+            },
             "identify_source": False,
         },
         {
@@ -249,6 +264,16 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
                 }
             ],
             "default_preset_id": "summary_table",
+            "query_spec": {
+                "query_style": "preset_driven",
+                "supported_query_fields": ["view_mode", "preset_id"],
+                "supported_view_modes": ["table"],
+                "supported_preset_ids": ["summary_table"],
+                "default_preset_id": "summary_table",
+                "default_presets_by_view_mode": [
+                    {"view_mode": "table", "preset_id": "summary_table"}
+                ],
+            },
             "identify_source": True,
         },
         {
@@ -262,6 +287,14 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
             "metric": None,
             "presets": [],
             "default_preset_id": None,
+            "query_spec": {
+                "query_style": "static",
+                "supported_query_fields": [],
+                "supported_view_modes": ["json"],
+                "supported_preset_ids": [],
+                "default_preset_id": None,
+                "default_presets_by_view_mode": [],
+            },
             "identify_source": False,
         },
     ]
@@ -297,21 +330,21 @@ def test_get_characterization_artifact_payload_returns_phase1_admittance_presets
         "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
         "characterization-results/char-fit-flux-a-01/artifacts/"
         "char-fit-flux-a-01:mode-frequency-grid",
-        params={"preset_id": "sweep_profile_plot"},
+        params={"view_mode": "plot"},
     )
 
     assert plot_response.status_code == 200
     plot_payload = plot_response.json()
-    assert plot_payload["data"]["preset_id"] == "sweep_profile_plot"
+    assert plot_payload["data"]["preset_id"] == "mode_profile_plot"
     assert plot_payload["data"]["view_kind"] == "plot"
     assert plot_payload["data"]["payload"]["layout"] == {
-        "x_axis": "flux_bias",
+        "x_axis": "mode_index",
         "y_metric": "frequency_ghz",
-        "series_axis": "mode_index",
+        "series_axis": "flux_bias",
     }
-    assert plot_payload["data"]["payload"]["series"][0]["x_values"] == [7.4, 7.6, 7.8]
-    assert plot_payload["data"]["payload"]["series"][0]["y_values"] == [5.612, 5.587, None]
-    assert plot_payload["data"]["payload"]["series"][0]["mask"] == [False, False, True]
+    assert plot_payload["data"]["payload"]["series"][0]["x_values"] == [0, 1]
+    assert plot_payload["data"]["payload"]["series"][0]["y_values"] == [5.612, 5.846]
+    assert plot_payload["data"]["payload"]["series"][0]["mask"] == [False, False]
 
 
 def test_characterization_result_routes_reject_invisible_dataset() -> None:

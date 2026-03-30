@@ -7,7 +7,11 @@ from src.app.domain.admittance_result_contract import (
     build_admittance_identify_surface,
     query_admittance_artifact_payload,
 )
-from src.app.domain.datasets import CharacterizationAppliedTag, CharacterizationDiagnostic
+from src.app.domain.datasets import (
+    CharacterizationAppliedTag,
+    CharacterizationArtifactPayloadQuery,
+    CharacterizationDiagnostic,
+)
 
 
 def _sample_surface() -> AdmittanceResultSurface:
@@ -42,7 +46,10 @@ def test_admittance_grid_artifact_supports_multiple_mode_rows_and_preserves_mask
     table_payload = query_admittance_artifact_payload(
         surface=surface,
         artifact_id=artifact_id,
-        preset_id="mode_by_input_table",
+        query=CharacterizationArtifactPayloadQuery(
+            view_mode="table",
+            preset_id="mode_by_input_table",
+        ),
     )
 
     assert table_payload is not None
@@ -67,12 +74,34 @@ def test_admittance_grid_artifact_supports_multiple_mode_rows_and_preserves_mask
     plot_payload = query_admittance_artifact_payload(
         surface=surface,
         artifact_id=artifact_id,
-        preset_id="mode_profile_plot",
+        query=CharacterizationArtifactPayloadQuery(view_mode="plot"),
     )
     assert plot_payload is not None
+    assert plot_payload.preset_id == "mode_profile_plot"
     assert plot_payload.view_kind == "plot"
     assert plot_payload.payload["series"][2]["mask"] == [True, True, True]
     assert plot_payload.payload["series"][2]["y_values"] == [None, None, None]
+
+
+def test_admittance_grid_artifact_manifest_exposes_explicit_query_spec() -> None:
+    artifact_refs = build_admittance_artifact_refs(result_id="char-demo")
+    grid_artifact = next(
+        ref for ref in artifact_refs if ref.artifact_id == "char-demo:mode-frequency-grid"
+    )
+
+    assert grid_artifact.view_kind == "preset_query"
+    assert grid_artifact.query_spec is not None
+    assert grid_artifact.query_spec.query_style == "preset_driven"
+    assert grid_artifact.query_spec.supported_query_fields == ("view_mode", "preset_id")
+    assert grid_artifact.query_spec.supported_view_modes == ("table", "plot")
+    assert grid_artifact.query_spec.default_preset_id == "mode_by_input_table"
+    assert [
+        (item.view_mode, item.preset_id)
+        for item in grid_artifact.query_spec.default_presets_by_view_mode
+    ] == [
+        ("table", "mode_by_input_table"),
+        ("plot", "mode_profile_plot"),
+    ]
 
 
 def test_admittance_identify_surface_uses_explicit_summary_artifact() -> None:

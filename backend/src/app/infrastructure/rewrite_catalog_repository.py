@@ -34,7 +34,9 @@ from src.app.domain.datasets import (
     CharacterizationArtifactPayload,
     CharacterizationArtifactPayloadQuery,
     CharacterizationArtifactPreset,
+    CharacterizationArtifactQuerySpec,
     CharacterizationArtifactRef,
+    CharacterizationArtifactViewModeDefault,
     CharacterizationDesignatedMetricOption,
     CharacterizationDiagnostic,
     CharacterizationIdentifySurface,
@@ -905,7 +907,7 @@ class InMemoryRewriteCatalogRepository:
             return query_admittance_artifact_payload(
                 surface=surface,
                 artifact_id=artifact_id,
-                preset_id=query.preset_id,
+                query=query,
             )
         if self._durable_characterization_repository is not None:
             return self._durable_characterization_repository.get_artifact_payload(
@@ -1785,6 +1787,44 @@ def _parse_characterization_result_detail(
                 default_preset_id=(
                     str(item["default_preset_id"])
                     if isinstance(item.get("default_preset_id"), str)
+                    else None
+                ),
+                query_spec=(
+                    CharacterizationArtifactQuerySpec(
+                        query_style=str(item["query_spec"]["query_style"]),
+                        supported_query_fields=tuple(
+                            str(field)
+                            for field in item["query_spec"].get("supported_query_fields", ())
+                            if isinstance(field, str)
+                        ),
+                        supported_view_modes=tuple(
+                            str(mode)
+                            for mode in item["query_spec"].get("supported_view_modes", ())
+                            if isinstance(mode, str)
+                        ),
+                        supported_preset_ids=tuple(
+                            str(preset_id)
+                            for preset_id in item["query_spec"].get("supported_preset_ids", ())
+                            if isinstance(preset_id, str)
+                        ),
+                        default_preset_id=(
+                            str(item["query_spec"]["default_preset_id"])
+                            if isinstance(item["query_spec"].get("default_preset_id"), str)
+                            else None
+                        ),
+                        default_presets_by_view_mode=tuple(
+                            CharacterizationArtifactViewModeDefault(
+                                view_mode=str(default_item["view_mode"]),
+                                preset_id=str(default_item["preset_id"]),
+                            )
+                            for default_item in item["query_spec"].get(
+                                "default_presets_by_view_mode",
+                                (),
+                            )
+                            if isinstance(default_item, dict)
+                        ),
+                    )
+                    if isinstance(item.get("query_spec"), dict)
                     else None
                 ),
                 identify_source=bool(item.get("identify_source", False)),

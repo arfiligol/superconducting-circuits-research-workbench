@@ -3472,6 +3472,22 @@
             }
           },
           {
+            "name": "view_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "View Mode"
+            }
+          },
+          {
             "name": "preset_id",
             "in": "query",
             "required": false,

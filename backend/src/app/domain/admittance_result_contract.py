@@ -8,8 +8,11 @@ from src.app.domain.datasets import (
     CharacterizationArtifactAxisSpec,
     CharacterizationArtifactMetricSpec,
     CharacterizationArtifactPayload,
+    CharacterizationArtifactPayloadQuery,
     CharacterizationArtifactPreset,
+    CharacterizationArtifactQuerySpec,
     CharacterizationArtifactRef,
+    CharacterizationArtifactViewModeDefault,
     CharacterizationDesignatedMetricOption,
     CharacterizationDiagnostic,
     CharacterizationIdentifySurface,
@@ -140,7 +143,7 @@ def build_admittance_artifact_refs(
         CharacterizationArtifactRef(
             artifact_id=admittance_grid_artifact_id(result_id),
             category="result_tensor",
-            view_kind="json",
+            view_kind="preset_query",
             title="Mode frequency grid",
             payload_format="json",
             payload_locator=f"characterization/{result_id}/mode-frequency-grid.json",
@@ -173,6 +176,27 @@ def build_admittance_artifact_refs(
                 ),
             ),
             default_preset_id=ADMITTANCE_TABLE_PRESET_ID,
+            query_spec=CharacterizationArtifactQuerySpec(
+                query_style="preset_driven",
+                supported_query_fields=("view_mode", "preset_id"),
+                supported_view_modes=("table", "plot"),
+                supported_preset_ids=(
+                    ADMITTANCE_TABLE_PRESET_ID,
+                    ADMITTANCE_MODE_PROFILE_PRESET_ID,
+                    ADMITTANCE_SWEEP_PROFILE_PRESET_ID,
+                ),
+                default_preset_id=ADMITTANCE_TABLE_PRESET_ID,
+                default_presets_by_view_mode=(
+                    CharacterizationArtifactViewModeDefault(
+                        view_mode="table",
+                        preset_id=ADMITTANCE_TABLE_PRESET_ID,
+                    ),
+                    CharacterizationArtifactViewModeDefault(
+                        view_mode="plot",
+                        preset_id=ADMITTANCE_MODE_PROFILE_PRESET_ID,
+                    ),
+                ),
+            ),
         ),
         CharacterizationArtifactRef(
             artifact_id=admittance_identify_artifact_id(result_id),
@@ -189,6 +213,19 @@ def build_admittance_artifact_refs(
                 ),
             ),
             default_preset_id=ADMITTANCE_IDENTIFY_PRESET_ID,
+            query_spec=CharacterizationArtifactQuerySpec(
+                query_style="preset_driven",
+                supported_query_fields=("view_mode", "preset_id"),
+                supported_view_modes=("table",),
+                supported_preset_ids=(ADMITTANCE_IDENTIFY_PRESET_ID,),
+                default_preset_id=ADMITTANCE_IDENTIFY_PRESET_ID,
+                default_presets_by_view_mode=(
+                    CharacterizationArtifactViewModeDefault(
+                        view_mode="table",
+                        preset_id=ADMITTANCE_IDENTIFY_PRESET_ID,
+                    ),
+                ),
+            ),
             identify_source=True,
         ),
         CharacterizationArtifactRef(
@@ -198,6 +235,11 @@ def build_admittance_artifact_refs(
             title="Admittance extraction report",
             payload_format="json",
             payload_locator=f"characterization/{result_id}/report.json",
+            query_spec=CharacterizationArtifactQuerySpec(
+                query_style="static",
+                supported_query_fields=(),
+                supported_view_modes=("json",),
+            ),
         ),
     )
 
@@ -250,6 +292,7 @@ def annotate_admittance_artifact_refs(
                         for preset in ref.presets
                     ),
                     default_preset_id=ref.default_preset_id,
+                    query_spec=ref.query_spec,
                     identify_source=ref.identify_source,
                 )
             )
@@ -404,17 +447,17 @@ def query_admittance_artifact_payload(
     *,
     surface: AdmittanceResultSurface,
     artifact_id: str,
-    preset_id: str | None,
+    query: CharacterizationArtifactPayloadQuery,
 ) -> CharacterizationArtifactPayload | None:
     if artifact_id.endswith(ADMITTANCE_GRID_ARTIFACT_SUFFIX):
-        resolved_preset_id = preset_id or ADMITTANCE_TABLE_PRESET_ID
+        resolved_preset_id = _resolve_grid_preset_id(query)
         return _query_grid_artifact_payload(
             artifact_id=artifact_id,
             preset_id=resolved_preset_id,
             surface=surface,
         )
     if artifact_id.endswith(ADMITTANCE_IDENTIFY_ARTIFACT_SUFFIX):
-        resolved_preset_id = preset_id or ADMITTANCE_IDENTIFY_PRESET_ID
+        resolved_preset_id = _resolve_identify_preset_id(query)
         return CharacterizationArtifactPayload(
             artifact_id=artifact_id,
             title="Admittance identify summary",
@@ -435,10 +478,12 @@ def query_admittance_artifact_payload(
             },
         )
     if artifact_id.endswith(ADMITTANCE_REPORT_ARTIFACT_SUFFIX):
+        if query.view_mode not in (None, "json"):
+            return None
         return CharacterizationArtifactPayload(
             artifact_id=artifact_id,
             title="Admittance extraction report",
-            preset_id=preset_id or "default",
+            preset_id=query.preset_id or "default",
             view_kind="json",
             axes=(),
             metric=None,
@@ -579,6 +624,42 @@ def _query_grid_artifact_payload(
             },
             diagnostics=surface.diagnostics,
         )
+    return None
+
+
+def _resolve_grid_preset_id(query: CharacterizationArtifactPayloadQuery) -> str | None:
+    if query.preset_id is not None:
+        if query.view_mode is None:
+            return query.preset_id
+        preset_view_kind = _grid_preset_view_kind(query.preset_id)
+        if preset_view_kind == query.view_mode:
+            return query.preset_id
+        return None
+    if query.view_mode == "plot":
+        return ADMITTANCE_MODE_PROFILE_PRESET_ID
+    if query.view_mode in (None, "table"):
+        return ADMITTANCE_TABLE_PRESET_ID
+    return None
+
+
+def _resolve_identify_preset_id(query: CharacterizationArtifactPayloadQuery) -> str | None:
+    if query.view_mode not in (None, "table"):
+        return None
+    if query.preset_id is None:
+        return ADMITTANCE_IDENTIFY_PRESET_ID
+    if query.preset_id == ADMITTANCE_IDENTIFY_PRESET_ID:
+        return query.preset_id
+    return None
+
+
+def _grid_preset_view_kind(preset_id: str) -> str | None:
+    if preset_id == ADMITTANCE_TABLE_PRESET_ID:
+        return "table"
+    if preset_id in {
+        ADMITTANCE_MODE_PROFILE_PRESET_ID,
+        ADMITTANCE_SWEEP_PROFILE_PRESET_ID,
+    }:
+        return "plot"
     return None
 
 

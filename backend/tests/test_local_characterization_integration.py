@@ -1025,6 +1025,11 @@ def test_local_characterization_result_surfaces_survive_refresh() -> None:
     assert detail["artifact_refs"][0]["artifact_id"] == (
         f"{result_row['result_id']}:mode-frequency-grid"
     )
+    assert detail["artifact_refs"][0]["view_kind"] == "preset_query"
+    assert detail["artifact_refs"][0]["query_spec"]["supported_query_fields"] == [
+        "view_mode",
+        "preset_id",
+    ]
     assert detail["artifact_refs"][0]["payload_locator"] == (
         f"characterization/{result_row['result_id']}/mode-frequency-grid.json"
     )
@@ -1211,6 +1216,11 @@ def test_local_persisted_admittance_runtime_exposes_axis_aware_sweep_contract() 
     assert detail["payload"]["input_axis"]["length"] == 3
     assert detail["payload"]["metric"]["metric_key"] == "frequency_ghz"
     assert detail["payload"]["analysis_run_id"] == execution_result.result_refs.analysis_run_id
+    assert detail["artifact_refs"][0]["view_kind"] == "preset_query"
+    assert detail["artifact_refs"][0]["query_spec"]["supported_view_modes"] == [
+        "table",
+        "plot",
+    ]
 
     artifact_response = client.get(
         f"/datasets/local-dataset-001/designs/{design_id}/"
@@ -1237,9 +1247,10 @@ def test_local_persisted_admittance_runtime_exposes_axis_aware_sweep_contract() 
         f"/datasets/local-dataset-001/designs/{design_id}/"
         f"characterization-results/{result_id}/artifacts/"
         f"{result_id}:mode-frequency-grid",
-        params={"preset_id": "mode_profile_plot"},
+        params={"view_mode": "plot"},
     )
     assert mode_plot_response.status_code == 200
+    assert mode_plot_response.json()["data"]["preset_id"] == "mode_profile_plot"
     assert mode_plot_response.json()["data"]["payload"]["layout"] == {
         "x_axis": "mode_index",
         "y_metric": "frequency_ghz",

@@ -562,6 +562,7 @@ def get_characterization_artifact_payload(
     result_id: str,
     artifact_id: str,
     dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+    view_mode: Annotated[str | None, Query()] = None,
     preset_id: Annotated[str | None, Query()] = None,
 ) -> JSONResponse:
     try:
@@ -571,6 +572,7 @@ def get_characterization_artifact_payload(
             result_id,
             artifact_id,
             CharacterizationArtifactPayloadQuery(
+                view_mode=_normalize_optional_text(view_mode),
                 preset_id=_normalize_optional_text(preset_id),
             ),
         )

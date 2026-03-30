@@ -17,14 +17,22 @@ from src.app.domain.circuit_definitions import CircuitDefinitionRecord
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     CharacterizationAnalysisTraceCompatibility,
+    CharacterizationAppliedTag,
     CharacterizationArtifactAxisSpec,
     CharacterizationArtifactMetricSpec,
     CharacterizationArtifactPayload,
     CharacterizationArtifactPayloadQuery,
     CharacterizationArtifactPreset,
+    CharacterizationArtifactQuerySpec,
+    CharacterizationArtifactRef,
+    CharacterizationArtifactViewModeDefault,
+    CharacterizationDesignatedMetricOption,
+    CharacterizationDiagnostic,
+    CharacterizationIdentifySurface,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
     CharacterizationRunHistoryRow,
+    CharacterizationSourceParameterOption,
     CharacterizationTaggingRequest,
     CharacterizationTaggingResult,
     DatasetAllowedActions,
@@ -1780,15 +1788,6 @@ def _parse_characterization_result_detail(
     designated_metrics = identify_surface.get("designated_metrics", [])
     applied_tags = identify_surface.get("applied_tags", [])
     input_trace_ids = payload.get("input_trace_ids", ())
-    from src.app.domain.datasets import (
-        CharacterizationAppliedTag,
-        CharacterizationArtifactRef,
-        CharacterizationDesignatedMetricOption,
-        CharacterizationDiagnostic,
-        CharacterizationIdentifySurface,
-        CharacterizationSourceParameterOption,
-    )
-
     return CharacterizationResultDetail(
         result_id=str(payload["result_id"]),
         dataset_id=str(payload["dataset_id"]),
@@ -1888,6 +1887,44 @@ def _parse_characterization_result_detail(
                 default_preset_id=(
                     str(item["default_preset_id"])
                     if isinstance(item.get("default_preset_id"), str)
+                    else None
+                ),
+                query_spec=(
+                    CharacterizationArtifactQuerySpec(
+                        query_style=str(item["query_spec"]["query_style"]),
+                        supported_query_fields=tuple(
+                            str(field)
+                            for field in item["query_spec"].get("supported_query_fields", ())
+                            if isinstance(field, str)
+                        ),
+                        supported_view_modes=tuple(
+                            str(mode)
+                            for mode in item["query_spec"].get("supported_view_modes", ())
+                            if isinstance(mode, str)
+                        ),
+                        supported_preset_ids=tuple(
+                            str(preset_id)
+                            for preset_id in item["query_spec"].get("supported_preset_ids", ())
+                            if isinstance(preset_id, str)
+                        ),
+                        default_preset_id=(
+                            str(item["query_spec"]["default_preset_id"])
+                            if isinstance(item["query_spec"].get("default_preset_id"), str)
+                            else None
+                        ),
+                        default_presets_by_view_mode=tuple(
+                            CharacterizationArtifactViewModeDefault(
+                                view_mode=str(default_item["view_mode"]),
+                                preset_id=str(default_item["preset_id"]),
+                            )
+                            for default_item in item["query_spec"].get(
+                                "default_presets_by_view_mode",
+                                (),
+                            )
+                            if isinstance(default_item, dict)
+                        ),
+                    )
+                    if isinstance(item.get("query_spec"), dict)
                     else None
                 ),
                 identify_source=bool(item.get("identify_source", False)),

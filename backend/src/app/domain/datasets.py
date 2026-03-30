@@ -21,8 +21,10 @@ TraceCapabilityStatus = Literal["eligible", "ineligible"]
 RawDataIngestionKind = Literal["measurement", "layout_simulation"]
 SimulationResultPublicationState = Literal["published", "already_published"]
 ResultTracePublicationState = SimulationResultPublicationState
-CharacterizationArtifactViewKind = Literal["table", "plot", "text", "json"]
+CharacterizationArtifactViewKind = Literal["table", "plot", "text", "json", "preset_query"]
 CharacterizationArtifactAxisRole = Literal["input", "derived"]
+CharacterizationArtifactQueryStyle = Literal["preset_driven", "static"]
+CharacterizationArtifactQueryField = Literal["view_mode", "preset_id"]
 
 
 @dataclass(frozen=True)
@@ -533,6 +535,22 @@ class CharacterizationArtifactPreset:
 
 
 @dataclass(frozen=True)
+class CharacterizationArtifactViewModeDefault:
+    view_mode: CharacterizationArtifactViewKind
+    preset_id: str
+
+
+@dataclass(frozen=True)
+class CharacterizationArtifactQuerySpec:
+    query_style: CharacterizationArtifactQueryStyle
+    supported_query_fields: tuple[CharacterizationArtifactQueryField, ...]
+    supported_view_modes: tuple[CharacterizationArtifactViewKind, ...]
+    supported_preset_ids: tuple[str, ...] = ()
+    default_preset_id: str | None = None
+    default_presets_by_view_mode: tuple[CharacterizationArtifactViewModeDefault, ...] = ()
+
+
+@dataclass(frozen=True)
 class CharacterizationArtifactRef:
     artifact_id: str
     category: str
@@ -544,11 +562,13 @@ class CharacterizationArtifactRef:
     metric: CharacterizationArtifactMetricSpec | None = None
     presets: tuple[CharacterizationArtifactPreset, ...] = ()
     default_preset_id: str | None = None
+    query_spec: CharacterizationArtifactQuerySpec | None = None
     identify_source: bool = False
 
 
 @dataclass(frozen=True)
 class CharacterizationArtifactPayloadQuery:
+    view_mode: CharacterizationArtifactViewKind | None = None
     preset_id: str | None = None
 
 
