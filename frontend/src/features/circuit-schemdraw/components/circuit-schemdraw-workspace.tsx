@@ -616,8 +616,6 @@ export function CircuitSchemdrawWorkspace() {
         </details>
       </section>
 
-      <SchemdrawGuidanceCard />
-
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
           <div className="flex flex-col gap-4 border-b border-border/80 pb-4 md:flex-row md:items-start md:justify-between">
@@ -773,6 +771,8 @@ export function CircuitSchemdrawWorkspace() {
           </div>
         </section>
       </section>
+
+      <SchemdrawGuidanceCard />
 
       <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
         <div className="border-b border-border/80 pb-4">

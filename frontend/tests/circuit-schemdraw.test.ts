@@ -928,10 +928,11 @@ describe("circuit schemdraw workspace source contracts", () => {
     const snapshotIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Snapshot");
 
     expect(linkedIndex).toBeGreaterThan(-1);
-    expect(guidanceIndex).toBeGreaterThan(linkedIndex);
     expect(editorIndex).toBeGreaterThan(linkedIndex);
     expect(previewIndex).toBeGreaterThan(editorIndex);
+    expect(guidanceIndex).toBeGreaterThan(previewIndex);
     expect(diagnosticsIndex).toBeGreaterThan(previewIndex);
+    expect(diagnosticsIndex).toBeGreaterThan(guidanceIndex);
     expect(snapshotIndex).toBeGreaterThan(diagnosticsIndex);
   });
 
