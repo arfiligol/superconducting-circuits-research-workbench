@@ -8,7 +8,6 @@ import { EditorView } from "@codemirror/view";
 import {
   ChevronDown,
   ChevronRight,
-  FileCode2,
   LoaderCircle,
   Play,
   Plus,
@@ -17,17 +16,31 @@ import {
   Settings2,
   Trash2,
   WandSparkles,
-  X,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import CodeMirror from "@uiw/react-codemirror";
 import { useFieldArray, useForm } from "react-hook-form";
 
+import { PostProcessingResultStage } from "@/features/simulation/components/post-processing-result-stage";
+import { PostProcessingSetupStage } from "@/features/simulation/components/post-processing-setup-stage";
+import { SimulationResultStage } from "@/features/simulation/components/simulation-result-stage";
+import {
+  CompactField,
+  DraftOnlyBadge,
+  OverlayDialog,
+  ReadOnlyCodeSurface,
+  SetupInputField,
+  SetupSection,
+  SetupSlideToggle,
+  SetupTextInput,
+  StageNotice,
+  StageTaskActions,
+  SummaryCard,
+  WorkflowStageSection,
+} from "@/features/simulation/components/simulation-workbench-stage-kit";
 import { useSavedSimulationSetups } from "@/features/simulation/hooks/use-saved-simulation-setups";
 import { useSimulationSubmission } from "@/features/simulation/hooks/use-simulation-submission";
 import { useSimulationTaskAttachment } from "@/features/simulation/hooks/use-simulation-task-attachment";
 import { useSimulationWorkflowData } from "@/features/simulation/hooks/use-simulation-workflow-data";
-import { SimulationResultExplorer } from "@/features/simulation/components/simulation-result-explorer";
 import { parseSimulationDefinitionIdParam } from "@/features/simulation/lib/definition-id";
 import { resolveOfficialSimulationExamplePreset } from "@/features/simulation/lib/official-example";
 import {
@@ -57,6 +70,11 @@ import {
   type SimulationRequestValues,
 } from "@/features/simulation/lib/request-form";
 import {
+  resolveResultStageState,
+  resolveSetupStageState,
+  taskStatusTone,
+} from "@/features/simulation/lib/stage-state";
+import {
   formatSimulationTaskStatusLabel,
   hasSimulationTaskResult,
   resolveAuthoritativeSimulationTaskSummary,
@@ -76,25 +94,14 @@ import {
   SurfacePanel,
   SurfaceTag,
   cx,
-  resolveSurfaceInsetToneClass,
 } from "@/features/shared/components/surface-kit";
 import { ApiError } from "@/lib/api/client";
 import { useAppToasts } from "@/lib/app-state";
 import type {
   PostProcessingSetup,
   TaskDetail,
-  TaskExecutionStatus,
   TaskSummary,
 } from "@/lib/api/tasks";
-import { vsCodeDarkEditorTheme } from "@/lib/codemirror-theme";
-
-type StageTone = "default" | "primary" | "success" | "warning" | "error";
-
-type WorkflowStageState = Readonly<{
-  label: string;
-  tone: StageTone;
-  message: string;
-}>;
 
 const FREQUENCY_WHEEL_STEP_GHZ = 0.001;
 const SOURCE_CURRENT_WHEEL_STEP_AMP = 0.000001;
@@ -125,29 +132,6 @@ function describeApiError(error: Error | undefined) {
   }
 
   return error.message;
-}
-
-function taskStatusTone(status: TaskExecutionStatus): StageTone {
-  if (status === "completed") {
-    return "success";
-  }
-
-  if (
-    status === "queued" ||
-    status === "dispatching" ||
-    status === "running" ||
-    status === "cancellation_requested" ||
-    status === "cancelling" ||
-    status === "termination_requested"
-  ) {
-    return "primary";
-  }
-
-  if (status === "failed" || status === "cancelled" || status === "terminated") {
-    return "warning";
-  }
-
-  return "default";
 }
 
 function formatCodeValue(value: string | null | undefined, fallback: string) {
@@ -257,470 +241,6 @@ function hydratePostProcessingSteps(
   });
 
   return hydratedSteps;
-}
-
-function resolveSetupStageState(input: Readonly<{
-  stageLabel: string;
-  blockedReason: string | null;
-  latestTask: TaskSummary | undefined;
-}>): WorkflowStageState {
-  if (input.blockedReason) {
-    return {
-      label: "Blocked",
-      tone: "warning",
-      message: input.blockedReason,
-    };
-  }
-
-  if (!input.latestTask) {
-    return {
-      label: "Not started",
-      tone: "default",
-      message: `${input.stageLabel} has not been submitted yet.`,
-    };
-  }
-
-  if (input.latestTask.status === "completed") {
-    return {
-      label: "Completed",
-      tone: "success",
-      message: `Latest ${input.stageLabel.toLowerCase()} run completed successfully. You can review the result or launch another run.`,
-    };
-  }
-
-  const statusLabel = formatSimulationTaskStatusLabel(input.latestTask.status);
-  return {
-    label: statusLabel,
-    tone: taskStatusTone(input.latestTask.status),
-    message: `Latest ${input.stageLabel.toLowerCase()} task #${input.latestTask.taskId} is ${statusLabel.toLowerCase()}.`,
-  };
-}
-
-function resolveResultStageState(input: Readonly<{
-  stageLabel: string;
-  blockedReason?: string | null;
-  latestTask: TaskSummary | undefined;
-  detail: TaskDetail | undefined;
-  hasResult: boolean;
-}>): WorkflowStageState {
-  if (input.blockedReason) {
-    return {
-      label: "Blocked",
-      tone: "warning",
-      message: input.blockedReason,
-    };
-  }
-
-  if (!input.latestTask) {
-    return {
-      label: "Not started",
-      tone: "default",
-      message: `${input.stageLabel} is still waiting for its first run.`,
-    };
-  }
-
-  if (input.latestTask.status === "completed") {
-    if (input.hasResult) {
-      return {
-        label: "Completed",
-        tone: "success",
-        message: `Latest ${input.stageLabel.toLowerCase()} output is ready to inspect.`,
-      };
-    }
-
-    return {
-      label: "Completed",
-      tone: "warning",
-      message: `Latest ${input.stageLabel.toLowerCase()} task completed, but persisted outputs are not available yet.`,
-    };
-  }
-
-  const statusLabel = formatSimulationTaskStatusLabel(input.latestTask.status);
-  const progressSummary =
-    input.detail?.progress.summary ?? input.detail?.dispatch?.status ?? input.latestTask.summary;
-
-  return {
-    label: statusLabel,
-    tone: taskStatusTone(input.latestTask.status),
-    message: `Latest ${input.stageLabel.toLowerCase()} task #${input.latestTask.taskId} is ${statusLabel.toLowerCase()}. ${progressSummary}`,
-  };
-}
-
-function SummaryCard({
-  label,
-  value,
-  detail,
-}: Readonly<{
-  label: string;
-  value: string;
-  detail?: string;
-}>) {
-  return (
-    <div className="rounded-[0.9rem] border border-border bg-surface px-4 py-3">
-      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-sm font-semibold text-foreground">{value}</p>
-      {detail ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p> : null}
-    </div>
-  );
-}
-
-function StageNotice({
-  tone,
-  title,
-  message,
-  actions,
-}: Readonly<{
-  tone: StageTone;
-  title: string;
-  message: string;
-  actions?: React.ReactNode;
-}>) {
-  const toneClass =
-    tone === "error"
-      ? resolveSurfaceInsetToneClass("error")
-      : tone === "warning"
-        ? resolveSurfaceInsetToneClass("warning")
-        : tone === "success"
-          ? resolveSurfaceInsetToneClass("success")
-          : tone === "primary"
-            ? resolveSurfaceInsetToneClass("primary")
-            : "border-border bg-surface text-foreground";
-
-  return (
-    <div className={cx("rounded-[0.95rem] border px-4 py-4 text-sm", toneClass)}>
-      <p className="font-medium text-foreground">{title}</p>
-      <p className="mt-2 leading-6">{message}</p>
-      {actions ? <div className="mt-4 flex flex-wrap gap-2">{actions}</div> : null}
-    </div>
-  );
-}
-
-function ReadOnlyCodeSurface({
-  label,
-  detail,
-  value,
-  height,
-}: Readonly<{
-  label: string;
-  detail?: string;
-  value: string;
-  height: string;
-}>) {
-  const extensions = useMemo(
-    () => [json(), EditorState.readOnly.of(true), EditorView.editable.of(false), vsCodeDarkEditorTheme],
-    [],
-  );
-
-  return (
-    <div className="overflow-hidden rounded-[0.95rem] border border-border bg-background shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
-      <div className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            {label}
-          </p>
-          {detail ? <p className="mt-1 text-xs text-muted-foreground">{detail}</p> : null}
-        </div>
-        <FileCode2 className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <CodeMirror
-        value={value}
-        height={height}
-        theme="dark"
-        editable={false}
-        extensions={extensions}
-        className="text-sm leading-6"
-      />
-    </div>
-  );
-}
-
-function WorkflowStageSection({
-  step,
-  title,
-  description,
-  status,
-  actions,
-  children,
-}: Readonly<{
-  step: number;
-  title: string;
-  description: string;
-  status: WorkflowStageState;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-}>) {
-  return (
-    <section className="rounded-[1.15rem] border border-border bg-card px-5 py-5 shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
-      <div className="grid gap-5 lg:grid-cols-[56px_minmax(0,1fr)]">
-        <div className="flex lg:justify-center">
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-semibold text-primary">
-            {step}
-          </span>
-        </div>
-        <div className="min-w-0">
-          <div className="flex flex-col gap-3 border-b border-border/80 pb-4 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold text-foreground">{title}</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                {description}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <SurfaceTag tone={status.tone}>{status.label}</SurfaceTag>
-              {actions}
-            </div>
-          </div>
-          <div className="mt-4 space-y-4">{children}</div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function SetupSection({
-  title,
-  description,
-  status,
-  actions,
-  children,
-}: Readonly<{
-  title: string;
-  description: string;
-  status?: React.ReactNode;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-}>) {
-  return (
-    <section className="rounded-[1rem] border border-border bg-surface px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
-      <div className="flex flex-col gap-3 border-b border-border/80 pb-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            {status}
-          </div>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-        </div>
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
-      </div>
-      <div className="mt-4 space-y-4">{children}</div>
-    </section>
-  );
-}
-
-function SetupInputField({
-  label,
-  detail,
-  children,
-  error,
-}: Readonly<{
-  label: string;
-  detail?: string;
-  children: React.ReactNode;
-  error?: string;
-}>) {
-  return (
-    <label className="block rounded-[0.95rem] border border-border bg-background px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.04)]">
-      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </span>
-      {detail ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{detail}</span> : null}
-      <div className="mt-3">{children}</div>
-      {error ? <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{error}</p> : null}
-    </label>
-  );
-}
-
-function CompactField({
-  label,
-  detail,
-  headerAside,
-  children,
-  error,
-  className,
-}: Readonly<{
-  label: string;
-  detail?: string;
-  headerAside?: React.ReactNode;
-  children: React.ReactNode;
-  error?: string;
-  className?: string;
-}>) {
-  return (
-    <label className={cx("block min-w-0", className)}>
-      <span className="flex items-start justify-between gap-3">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-          {label}
-        </span>
-        {headerAside ? (
-          <span className="text-[11px] text-muted-foreground">{headerAside}</span>
-        ) : null}
-      </span>
-      {detail ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{detail}</span> : null}
-      <div className="mt-2">{children}</div>
-      {error ? <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">{error}</p> : null}
-    </label>
-  );
-}
-
-function SetupTextInput(props: Readonly<React.InputHTMLAttributes<HTMLInputElement>>) {
-  return (
-    <input
-      {...props}
-      className={cx(
-        "w-full rounded-[0.8rem] border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15",
-        props.className,
-      )}
-    />
-  );
-}
-
-function DraftOnlyBadge() {
-  return <SurfaceTag>Local draft only</SurfaceTag>;
-}
-
-function SetupSlideToggle({
-  checked,
-  onCheckedChange,
-  label,
-  description,
-  className,
-  disabled = false,
-}: Readonly<{
-  checked: boolean;
-  onCheckedChange: (nextChecked: boolean) => void;
-  label: string;
-  description?: string;
-  className?: string;
-  disabled?: boolean;
-}>) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => {
-        if (!disabled) {
-          onCheckedChange(!checked);
-        }
-      }}
-      className={cx(
-        "flex w-full cursor-pointer items-center justify-between gap-4 rounded-[0.95rem] border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-60",
-        checked
-          ? "border-primary/35 bg-primary/10"
-          : "border-border bg-background hover:border-primary/25 hover:bg-primary/5",
-        className,
-      )}
-    >
-      <span className={cx("min-w-0", !disabled && "cursor-pointer")}>
-        <span className={cx("block text-sm font-medium text-foreground", !disabled && "cursor-pointer")}>{label}</span>
-        {description ? (
-          <span
-            className={cx(
-              "mt-1 block text-xs leading-5 text-muted-foreground",
-              !disabled && "cursor-pointer",
-            )}
-          >
-            {description}
-          </span>
-        ) : null}
-      </span>
-      <span
-        className={cx(
-          "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition",
-          checked
-            ? "border-primary/30 bg-primary"
-            : "border-border bg-muted/70",
-          !disabled && "cursor-pointer",
-        )}
-      >
-        <span
-          className={cx(
-            "inline-flex h-5 w-5 rounded-full bg-white shadow-[0_4px_12px_rgba(15,23,42,0.22)] transition-transform",
-            checked ? "translate-x-6" : "translate-x-1",
-            !disabled && "cursor-pointer",
-          )}
-        />
-      </span>
-    </button>
-  );
-}
-
-function OverlayDialog({
-  open,
-  title,
-  description,
-  children,
-  onClose,
-}: Readonly<{
-  open: boolean;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-  onClose: () => void;
-}>) {
-  if (!open) {
-    return null;
-  }
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 backdrop-blur-sm"
-    >
-      <div className="w-full max-w-3xl rounded-[1.1rem] border border-border bg-card shadow-[0_28px_90px_rgba(0,0,0,0.38)]">
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:border-primary/35 hover:bg-primary/10 hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="max-h-[70vh] overflow-y-auto px-5 py-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function StageTaskActions({
-  task,
-  resolvedTaskId,
-  onViewTask,
-}: Readonly<{
-  task: TaskSummary | undefined;
-  resolvedTaskId: number | null;
-  onViewTask: (taskId: number) => void;
-}>) {
-  if (!task) {
-    return null;
-  }
-
-  const isAttached = resolvedTaskId === task.taskId;
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {isAttached ? (
-        <SurfaceTag tone="primary">Attached to Page</SurfaceTag>
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            onViewTask(task.taskId);
-          }}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
-        >
-          Attach Run
-        </button>
-      )}
-    </div>
-  );
 }
 
 function formatSavedSetupTimestamp(isoTimestamp: string) {
@@ -2343,460 +1863,61 @@ export function SimulationWorkbenchShell() {
           ) : null}
         </WorkflowStageSection>
 
-        <WorkflowStageSection
-          step={3}
-          title="Simulation Result"
-          description="Browse the latest simulation result, inspect the current trace, and save it when you want to carry it forward."
-          status={simulationResultState}
-        >
-          {(simulationStageErrorMessage ||
-            (simulationResultState.label !== "Completed" &&
-              simulationResultState.label !== "Not started")) ? (
-            <StageNotice
-              tone={simulationResultState.tone}
-              title={`Simulation Result · ${simulationResultState.label}`}
-              message={
-                simulationStageErrorMessage
-                  ? `${simulationResultState.message} ${simulationStageErrorMessage}`
-                  : simulationResultState.message
-              }
-            />
-          ) : null}
+        <SimulationResultStage
+          state={simulationResultState}
+          errorMessage={simulationStageErrorMessage}
+          displayedSimulationStageAuthority={displayedSimulationStageAuthority}
+          displayedSimulationTaskDetail={displayedSimulationTaskDetail}
+          attachedSimulationStageTask={attachedSimulationStageTask}
+          simulationResultReady={simulationResultReady}
+          activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
+          resolvedTaskId={resolvedTaskId}
+          attachTask={attachTask}
+        />
 
-          {displayedSimulationStageAuthority ? (
-            <>
-              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      {attachedSimulationStageTask ? "Attached Run" : "Latest Run"}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      {displayedSimulationTaskDetail?.progress.summary ??
-                        displayedSimulationStageAuthority.summary}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      {simulationResultReady
-                        ? "This persisted result stays attached to the current page context and is ready for Post Processing."
-                        : "The explorer and save target appear as soon as the backend publishes the persisted result handoff."}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <SurfaceTag tone="default">
-                      Task #{displayedSimulationStageAuthority.taskId}
-                    </SurfaceTag>
-                    <SurfaceTag tone={taskStatusTone(displayedSimulationStageAuthority.status)}>
-                      {formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)}
-                    </SurfaceTag>
-                    <SurfaceTag tone={simulationResultReady ? "success" : "default"}>
-                      {simulationResultReady ? "Explorer ready" : "Preparing result"}
-                    </SurfaceTag>
-                    <StageTaskActions
-                      task={displayedSimulationStageAuthority}
-                      resolvedTaskId={resolvedTaskId}
-                      onViewTask={attachTask}
-                    />
-                  </div>
-                </div>
-              </div>
+        <PostProcessingSetupStage
+          state={postProcessingSetupState}
+          blockedReason={postProcessingSetupBlockedReason}
+          displayedSimulationStageAuthority={displayedSimulationStageAuthority}
+          latestPostProcessingStageAuthority={latestPostProcessingStageAuthority}
+          latestPostProcessingTaskDetail={latestPostProcessingTaskDetail}
+          postProcessingResultReady={postProcessingResultReady}
+          postProcessingSteps={postProcessingSteps}
+          postProcessingPipelineContext={postProcessingPipelineContext}
+          postProcessingStepContexts={postProcessingStepContexts}
+          initialPostProcessingStepContext={initialPostProcessingStepContext}
+          newPostProcessingStepType={newPostProcessingStepType}
+          setNewPostProcessingStepType={setNewPostProcessingStepType}
+          postProcessingStepTypeOptions={postProcessingStepTypeOptions}
+          appendPostProcessingStep={appendPostProcessingStep}
+          removePostProcessingStep={removePostProcessingStep}
+          updateCoordinateTransformStep={updateCoordinateTransformStep}
+          toggleKronReductionKeepLabel={toggleKronReductionKeepLabel}
+          updatePostProcessingStepType={updatePostProcessingStepType}
+          postProcessingBuildError={postProcessingBuildError}
+          taskMutationState={taskMutationStatus.state}
+          form={form}
+          onSubmit={() => {
+            void handleSubmit("post_processing");
+          }}
+          attachTask={attachTask}
+          resolvedTaskId={resolvedTaskId}
+        />
 
-              {displayedSimulationTaskDetail &&
-              (displayedSimulationTaskDetail.status === "queued" ||
-                displayedSimulationTaskDetail.status === "running") ? (
-                <div className="mt-4">
-                  <StageNotice
-                    tone="primary"
-                    title="Live result refresh"
-                    message="This stage refreshes every 2 seconds while the run is active, then attaches the saved result as soon as it is ready."
-                  />
-                </div>
-              ) : null}
-
-              {displayedSimulationTaskDetail && simulationResultReady ? (
-                <div className="mt-4">
-                  <SimulationResultExplorer
-                    task={displayedSimulationTaskDetail}
-                    activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
-                  />
-                </div>
-              ) : null}
-
-              {displayedSimulationTaskDetail && !simulationResultReady ? (
-                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                  Persisted refs and task result handles stay available after the result handoff is ready.
-                </div>
-              ) : null}
-            </>
-          ) : null}
-        </WorkflowStageSection>
-
-        <WorkflowStageSection
-          step={4}
-          title="Post Processing Setup"
-          description="Author the processing steps, keep their order intentional, and launch the next run."
-          status={postProcessingSetupState}
-          actions={
-            displayedSimulationStageAuthority ? (
-              <SurfaceTag tone="default">
-                Simulation #{displayedSimulationStageAuthority.taskId}
-              </SurfaceTag>
-            ) : null
-          }
-        >
-          {postProcessingSetupBlockedReason ? (
-            <StageNotice
-              tone={postProcessingSetupState.tone}
-              title={`Post Processing Setup · ${postProcessingSetupState.label}`}
-              message={postProcessingSetupState.message}
-            />
-          ) : null}
-
-          <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Steps
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Choose a step type, then add it in the order it should run.
-                </p>
-              </div>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                <AppInlineSelect
-                  ariaLabel="Post-processing step type to add"
-                  value={newPostProcessingStepType}
-                  onChange={(nextValue) => {
-                    setNewPostProcessingStepType(nextValue as PostProcessingStepType);
-                  }}
-                  options={postProcessingStepTypeOptions}
-                  className="sm:min-w-[280px]"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    appendPostProcessingStep(newPostProcessingStepType);
-                  }}
-                  disabled={
-                    !isPostProcessingStepTypeAvailable(
-                      newPostProcessingStepType,
-                      postProcessingPipelineContext,
-                    )
-                  }
-                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Step
-                </button>
-              </div>
-            </div>
-
-            {postProcessingSteps.length === 0 ? (
-              <div className="mt-4 rounded-[0.95rem] border border-dashed border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-                No steps yet. Add the transformations you want to apply after the simulation result.
-              </div>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {postProcessingSteps.map((step, index) => {
-                  const stepContext =
-                    postProcessingStepContexts.get(step.id) ?? initialPostProcessingStepContext;
-                  const stepTypeOptions: readonly AppSelectOption[] = [
-                    {
-                      value: "coordinate_transform",
-                      label: "Coordinate Transformation",
-                      disabled: !isPostProcessingStepTypeAvailable(
-                        "coordinate_transform",
-                        stepContext,
-                      ),
-                    },
-                    {
-                      value: "kron_reduction",
-                      label: "Kron Reduction",
-                      disabled: !isPostProcessingStepTypeAvailable("kron_reduction", stepContext),
-                    },
-                  ];
-
-                  return (
-                    <div
-                      key={step.id}
-                      className="rounded-[0.95rem] border border-border bg-surface px-4 py-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-semibold text-foreground">Step {index + 1}</p>
-                            <SurfaceTag tone="default">Step {index + 1}</SurfaceTag>
-                          </div>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            {step.type === "coordinate_transform"
-                              ? "Build a common/differential transform from two ports."
-                              : "Reduce the basis to the ports you want to keep."}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            removePostProcessingStep(step.id);
-                          }}
-                          className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-rose-300 hover:bg-rose-50 dark:hover:border-rose-400/40 dark:hover:bg-rose-500/10"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Remove
-                        </button>
-                      </div>
-
-                      <div className="mt-4">
-                        <CompactField label="Step Type">
-                          <AppInlineSelect
-                            ariaLabel={`Post-processing step ${index + 1} type`}
-                            value={step.type}
-                            onChange={(nextValue) => {
-                              updatePostProcessingStepType(
-                                step.id,
-                                nextValue as PostProcessingStepType,
-                              );
-                            }}
-                            options={stepTypeOptions}
-                          />
-                        </CompactField>
-                      </div>
-
-                      {step.type === "coordinate_transform" ? (
-                        <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          <CompactField label="Port A">
-                            <AppInlineSelect
-                              ariaLabel={`Coordinate transform step ${index + 1} port A`}
-                              value={step.portA}
-                              onChange={(nextValue) => {
-                                updateCoordinateTransformStep(step.id, "portA", nextValue);
-                              }}
-                              options={stepContext.coordinatePortOptions}
-                            />
-                          </CompactField>
-                          <CompactField label="Port B">
-                            <AppInlineSelect
-                              ariaLabel={`Coordinate transform step ${index + 1} port B`}
-                              value={step.portB}
-                              onChange={(nextValue) => {
-                                updateCoordinateTransformStep(step.id, "portB", nextValue);
-                              }}
-                              options={stepContext.coordinatePortOptions}
-                            />
-                          </CompactField>
-                        </div>
-                      ) : (
-                        <div className="mt-4 space-y-3">
-                          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                            Keep Ports
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {stepContext.basisOptions.map((option) => {
-                              const isSelected = step.keepLabels.includes(option.value);
-                              return (
-                                <button
-                                  key={`${step.id}:${option.value}`}
-                                  type="button"
-                                  onClick={() => {
-                                    toggleKronReductionKeepLabel(step.id, option.value);
-                                  }}
-                                  className={cx(
-                                    "inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition",
-                                    isSelected
-                                      ? "border-primary/35 bg-primary text-primary-foreground"
-                                      : "border-border bg-background text-foreground hover:border-primary/35 hover:bg-primary/10",
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-            <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-              Note
-            </span>
-            <textarea
-              {...form.register("postProcessingNote")}
-              rows={4}
-              placeholder="Optional context for this post-processing run."
-              className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
-            />
-          </label>
-
-          {form.formState.errors.postProcessingNote ? (
-            <p className="text-sm text-rose-700 dark:text-rose-300">
-              {form.formState.errors.postProcessingNote.message}
-            </p>
-          ) : null}
-          {postProcessingBuildError ? (
-            <p className="text-sm text-rose-700 dark:text-rose-300">
-              {postProcessingBuildError}
-            </p>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={() => {
-              void handleSubmit("post_processing");
-            }}
-            disabled={
-              taskMutationStatus.state === "submitting" || postProcessingSetupBlockedReason !== null
-            }
-            className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {taskMutationStatus.state === "submitting" ? (
-              <LoaderCircle className="h-4 w-4 animate-spin" />
-            ) : (
-              <WandSparkles className="h-4 w-4" />
-            )}
-            Run Post Processing
-          </button>
-
-          {latestPostProcessingStageAuthority ? (
-            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Latest Post Processing Run
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {latestPostProcessingTaskDetail?.progress.summary ??
-                      latestPostProcessingStageAuthority.summary}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {postProcessingResultReady
-                      ? "The processed result is attached and ready to review below."
-                      : "The processed result appears below as soon as the downstream run finishes."}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <SurfaceTag tone="default">
-                    Task #{latestPostProcessingStageAuthority.taskId}
-                  </SurfaceTag>
-                  <SurfaceTag tone={taskStatusTone(latestPostProcessingStageAuthority.status)}>
-                    {formatSimulationTaskStatusLabel(latestPostProcessingStageAuthority.status)}
-                  </SurfaceTag>
-                  <SurfaceTag tone={postProcessingResultReady ? "success" : "default"}>
-                    {postProcessingResultReady ? "Result ready" : "Processing"}
-                  </SurfaceTag>
-                  <StageTaskActions
-                    task={latestPostProcessingStageAuthority}
-                    resolvedTaskId={resolvedTaskId}
-                    onViewTask={attachTask}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </WorkflowStageSection>
-
-        <WorkflowStageSection
-          step={5}
-          title="Post Processing Result"
-          description="Browse the processed result, switch between available result sources, and save the current trace from here too."
-          status={postProcessingResultState}
-          actions={
-            latestPostProcessingStageAuthority ? (
-              <SurfaceTag tone="default">
-                Task #{latestPostProcessingStageAuthority.taskId}
-              </SurfaceTag>
-            ) : explicitUpstreamSimulationTaskId !== null ? (
-              <SurfaceTag tone="default">
-                Simulation #{explicitUpstreamSimulationTaskId}
-              </SurfaceTag>
-            ) : displayedSimulationStageAuthority ? (
-              <SurfaceTag tone="default">
-                Simulation #{displayedSimulationStageAuthority.taskId}
-              </SurfaceTag>
-            ) : null
-          }
-        >
-          {(postProcessingStageErrorMessage ||
-            (postProcessingResultState.label !== "Completed" &&
-              postProcessingResultState.label !== "Not started")) ? (
-            <StageNotice
-              tone={postProcessingResultState.tone}
-              title={`Post Processing Result · ${postProcessingResultState.label}`}
-              message={
-                postProcessingStageErrorMessage
-                  ? `${postProcessingResultState.message} ${postProcessingStageErrorMessage}`
-                  : postProcessingResultState.message
-              }
-            />
-          ) : null}
-
-          {latestPostProcessingTaskDetail && postProcessingResultReady ? (
-            <SimulationResultExplorer
-              task={latestPostProcessingTaskDetail}
-              activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
-            />
-          ) : null}
-
-          {latestPostProcessingStageAuthority ? (
-            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Latest Result
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {latestPostProcessingTaskDetail?.progress.summary ??
-                      latestPostProcessingStageAuthority.summary}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {explicitUpstreamSimulationTaskId !== null
-                      ? `This processed result stays tied to simulation task #${explicitUpstreamSimulationTaskId}.`
-                      : displayedSimulationStageAuthority
-                        ? `This processed result stays tied to simulation task #${displayedSimulationStageAuthority.taskId}.`
-                        : "Upstream simulation context is not currently available in the page."}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <SurfaceTag tone="default">
-                    Task #{latestPostProcessingStageAuthority.taskId}
-                  </SurfaceTag>
-                  <SurfaceTag tone={taskStatusTone(latestPostProcessingStageAuthority.status)}>
-                    {formatSimulationTaskStatusLabel(latestPostProcessingStageAuthority.status)}
-                  </SurfaceTag>
-                  <SurfaceTag tone={postProcessingResultReady ? "success" : "default"}>
-                    {postProcessingResultReady ? "Ready" : "Pending"}
-                  </SurfaceTag>
-                  <StageTaskActions
-                    task={latestPostProcessingStageAuthority}
-                    resolvedTaskId={resolvedTaskId}
-                    onViewTask={attachTask}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <SurfaceTag tone="default">
-                  {postProcessingStepCount} step{postProcessingStepCount === 1 ? "" : "s"}
-                </SurfaceTag>
-                {postProcessingResultSummary.analysisRunId !== null ? (
-                  <SurfaceTag tone="success">
-                    Analysis Run {postProcessingResultSummary.analysisRunId}
-                  </SurfaceTag>
-                ) : null}
-              </div>
-
-              <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                {postProcessingResultSummary.resultHandleCount} result handle
-                {postProcessingResultSummary.resultHandleCount === 1 ? "" : "s"} ·{" "}
-                {postProcessingResultSummary.materializedHandleCount} materialized ·{" "}
-                {postProcessingResultSummary.hasTracePayload ? "trace payload attached" : "trace payload pending"}
-              </p>
-            </div>
-          ) : null}
-        </WorkflowStageSection>
+        <PostProcessingResultStage
+          state={postProcessingResultState}
+          errorMessage={postProcessingStageErrorMessage}
+          latestPostProcessingStageAuthority={latestPostProcessingStageAuthority}
+          latestPostProcessingTaskDetail={latestPostProcessingTaskDetail}
+          postProcessingResultReady={postProcessingResultReady}
+          activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
+          explicitUpstreamSimulationTaskId={explicitUpstreamSimulationTaskId}
+          displayedSimulationStageAuthority={displayedSimulationStageAuthority}
+          postProcessingStepCount={postProcessingStepCount}
+          postProcessingResultSummary={postProcessingResultSummary}
+          resolvedTaskId={resolvedTaskId}
+          attachTask={attachTask}
+        />
       </div>
 
       <OverlayDialog

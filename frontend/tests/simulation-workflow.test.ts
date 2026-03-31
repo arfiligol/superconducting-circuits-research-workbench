@@ -68,9 +68,63 @@ const simulationWorkbenchSource = readFileSync(
   ),
   "utf8",
 );
+const simulationResultStageSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-result-stage.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const postProcessingSetupStageSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/post-processing-setup-stage.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const postProcessingResultStageSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/post-processing-result-stage.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationWorkbenchStageKitSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-workbench-stage-kit.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 const simulationWorkflowHookSource = readFileSync(
   fileURLToPath(
     new URL("../src/features/simulation/hooks/use-simulation-workflow-data.ts", import.meta.url),
+  ),
+  "utf8",
+);
+const simulationWorkflowContextHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/hooks/use-simulation-workflow-context.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationStageTaskDataHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/hooks/use-simulation-stage-task-data.ts",
+      import.meta.url,
+    ),
   ),
   "utf8",
 );
@@ -166,6 +220,12 @@ const currentTraceSaveControlSource = readFileSync(
 );
 const tasksApiSource = readFileSync(
   fileURLToPath(new URL("../src/lib/api/tasks.ts", import.meta.url)),
+  "utf8",
+);
+const simulationStageStateSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/simulation/lib/stage-state.ts", import.meta.url),
+  ),
   "utf8",
 );
 const PRIMARY_SCHEMA_ID = "7f3a2c91-1d7f-4a55-9cfd-0f0b7d5c1001";
@@ -1256,9 +1316,9 @@ describe("simulation workflow source contract", () => {
   it("keeps the page organized around the five-stage workflow instead of task dashboards", () => {
     expect(simulationWorkbenchSource).toContain("Definition / Netlist Context");
     expect(simulationWorkbenchSource).toContain("Simulation Setup");
-    expect(simulationWorkbenchSource).toContain("Simulation Result");
-    expect(simulationWorkbenchSource).toContain("Post Processing Setup");
-    expect(simulationWorkbenchSource).toContain("Post Processing Result");
+    expect(simulationResultStageSource).toContain("Simulation Result");
+    expect(postProcessingSetupStageSource).toContain("Post Processing Setup");
+    expect(postProcessingResultStageSource).toContain("Post Processing Result");
     expect(simulationWorkbenchSource).toContain("Signal Frequency Sweep Range");
     expect(simulationWorkbenchSource).toContain("Parameter Sweep Setup");
     expect(simulationWorkbenchSource).toContain("HB Solving");
@@ -1278,13 +1338,16 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("Source Mode");
     expect(simulationWorkbenchSource).toContain("Pump Source");
     expect(simulationWorkbenchSource).toContain("Run Simulation");
-    expect(simulationWorkbenchSource).toContain("Run Post Processing");
-    expect(simulationWorkbenchSource).toContain("Add Step");
-    expect(simulationWorkbenchSource).toContain("Step Type");
-    expect(simulationWorkbenchSource).toContain("updatePostProcessingStepType");
+    expect(postProcessingSetupStageSource).toContain("Run Post Processing");
+    expect(postProcessingSetupStageSource).toContain("Add Step");
+    expect(postProcessingSetupStageSource).toContain("Step Type");
+    expect(postProcessingSetupStageSource).toContain("updatePostProcessingStepType");
     expect(simulationWorkbenchSource).toContain("useSimulationSubmission");
     expect(simulationWorkbenchSource).toContain("useSimulationTaskAttachment");
     expect(simulationWorkbenchSource).toContain("useSavedSimulationSetups");
+    expect(simulationWorkbenchSource).toContain("SimulationResultStage");
+    expect(simulationWorkbenchSource).toContain("PostProcessingSetupStage");
+    expect(simulationWorkbenchSource).toContain("PostProcessingResultStage");
     expect(simulationWorkbenchSource).toContain("Load Official Example");
     expect(savedSimulationSetupsHookSource).toContain("Task-backed · #");
     expect(savedSimulationSetupsHookSource).toContain("Edited from task #");
@@ -1294,7 +1357,7 @@ describe("simulation workflow source contract", () => {
     );
     expect(simulationWorkbenchSource).toContain("Manage");
     expect(simulationWorkbenchSource).toContain("Save");
-    expect(simulationWorkbenchSource).toContain('role="switch"');
+    expect(simulationWorkbenchStageKitSource).toContain('role="switch"');
     expect(simulationWorkbenchSource).toContain("AppNumberInput");
     expect(simulationWorkbenchSource).toContain("<AppNumberInput");
     expect(simulationWorkbenchSource).not.toContain("function SetupNumberInput");
@@ -1333,17 +1396,17 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).toContain("deriveSimulationSweepTargetOptions");
     expect(simulationWorkbenchSource).toContain("deriveSimulationPtcPortOptions");
     expect(simulationWorkbenchSource).toContain("No sweep targets are currently available");
-    expect(simulationWorkbenchSource).toContain("SimulationResultExplorer");
-    expect(simulationWorkbenchSource).toContain("task={latestPostProcessingTaskDetail}");
-    expect(simulationWorkbenchSource).toContain("Live result refresh");
-    expect(simulationWorkbenchSource).toContain("Attach Run");
-    expect(simulationWorkbenchSource).toContain("Attached to Page");
+    expect(simulationResultStageSource).toContain("SimulationResultExplorer");
+    expect(postProcessingResultStageSource).toContain("task={latestPostProcessingTaskDetail}");
+    expect(simulationResultStageSource).toContain("Live result refresh");
+    expect(simulationWorkbenchStageKitSource).toContain("Attach Run");
+    expect(simulationWorkbenchStageKitSource).toContain("Attached to Page");
     expect(simulationWorkbenchSource).toContain("useAppToasts");
     expect(simulationWorkbenchSource).toContain('"Run submission failed"');
     expect(simulationWorkbenchSource).toContain("pushToast({");
     expect(simulationWorkbenchSource).not.toContain("Simulation Setup · ${simulationSetupState.label}");
-    expect(simulationWorkbenchSource).toContain("Author the processing steps, keep their order intentional");
-    expect(simulationWorkbenchSource).toContain("switch between available result sources");
+    expect(postProcessingSetupStageSource).toContain("Author the processing steps, keep their order intentional");
+    expect(postProcessingResultStageSource).toContain("switch between available result sources");
     expect(simulationWorkbenchSource).not.toContain("Choose Raw or PTC");
     expect(simulationWorkbenchSource).not.toContain("postSourceSelection");
     expect(simulationWorkbenchSource).not.toContain("PTC source");
@@ -1419,9 +1482,12 @@ describe("simulation workflow source contract", () => {
   });
 
   it("binds stage authority to the current definition and dataset context", () => {
-    expect(simulationWorkflowHookSource).toContain("resolveLatestSimulationTaskInContext(");
-    expect(simulationWorkflowHookSource).toContain("resolveLatestSimulationStageTaskInContext(");
-    expect(simulationWorkflowHookSource).toContain("const pageContext = {");
+    expect(simulationWorkflowHookSource).toContain("useSimulationWorkflowContext(");
+    expect(simulationWorkflowHookSource).toContain("useSimulationStageTaskData({");
+    expect(simulationWorkflowContextHookSource).toContain("resolveSimulationDefinitionId(");
+    expect(simulationStageTaskDataHookSource).toContain("resolveLatestSimulationTaskInContext(");
+    expect(simulationStageTaskDataHookSource).toContain("resolveLatestSimulationStageTaskInContext(");
+    expect(simulationStageTaskDataHookSource).toContain("const pageContext: SimulationPageContext = {");
     expect(simulationWorkbenchSource).toContain("resolveAuthoritativeSimulationTaskSummary");
     expect(simulationWorkbenchSource).toContain(
       "const displayedSimulationStageTask =",
@@ -1450,17 +1516,19 @@ describe("simulation workflow source contract", () => {
     expect(simulationSubmissionHookSource).toContain(
       "post_processing_setup: postProcessingSetup ?? null",
     );
-    expect(simulationWorkflowHookSource).toContain("attachedContextTask");
-    expect(simulationWorkflowHookSource).toContain("attachedSimulationTaskDetail");
-    expect(simulationWorkflowHookSource).toContain("upstreamSimulationStageTask");
+    expect(simulationStageTaskDataHookSource).toContain("attachedContextTask");
+    expect(simulationStageTaskDataHookSource).toContain("attachedSimulationTaskDetail");
+    expect(simulationStageTaskDataHookSource).toContain("upstreamSimulationStageTask");
     expect(simulationSubmissionHookSource).toContain("const verifySelectedDefinition");
     expect(simulationSubmissionHookSource).toContain("await listCircuitDefinitions()");
     expect(simulationSubmissionHookSource).toContain(
       "await getCircuitDefinition(nextDefinitionId)",
     );
     expect(simulationWorkflowHookSource).not.toContain("keepPreviousData: true");
-    expect(simulationWorkflowHookSource).toContain("shouldRefreshTaskDetail");
-    expect(simulationWorkflowHookSource).toContain('task.status === "completed" && !hasSimulationTaskResult(task)');
+    expect(simulationStageTaskDataHookSource).toContain("shouldRefreshSimulationTaskDetail");
+    expect(simulationStageStateSource).toContain(
+      'task.status === "completed" && !hasSimulationTaskResult(task)',
+    );
     expect(simulationResultExplorerHookSource).toContain(
       "simulationResultExplorerBootstrapKey",
     );
