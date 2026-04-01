@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.domain.tasks import PostProcessingOperation, TaskLifecycleUpdate
 from src.app.infrastructure import persisted_runtime
+from src.app.infrastructure.persisted_runtime import PersistedSimulationTraceGridData
 from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
 from src.app.infrastructure.runtime import (
     get_rewrite_app_state_repository,
@@ -15,6 +16,13 @@ from src.app.infrastructure.runtime import (
 )
 from src.app.main import app
 from src.app.services import simulation_result_explorer_view_service
+from src.app.services.simulation_result_explorer_models import (
+    ExplorerContext,
+    ResolvedSelection,
+)
+from src.app.services.simulation_result_explorer_view_service import (
+    SimulationResultExplorerViewService,
+)
 from tests.worker_runtime_harness import drain_lane_queue
 
 client = TestClient(app)
@@ -136,8 +144,13 @@ def _submit_local_post_processing(
     trace_family: str = "z_matrix",
     representation: str = "real",
     operations: list[dict[str, object]] | None = None,
+    parameter_sweeps: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
-    upstream_task = _submit_local_simulation(definition_id=definition_id, ptc_enabled=True)
+    upstream_task = _submit_local_simulation(
+        definition_id=definition_id,
+        ptc_enabled=True,
+        parameter_sweeps=parameter_sweeps,
+    )
     response = client.post(
         "/tasks",
         json={
@@ -828,6 +841,100 @@ def test_simulation_view_avoids_bundle_materialization_for_compare_axis_requests
     payload = response.json()["data"]
     assert payload["selection"]["compare_axis_index"] == 0
     assert len(payload["plot"]["series"]) == 3
+
+
+def test_post_processing_compare_axis_payload_stays_correct_and_avoids_repeated_bundle_loads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    basis_task = _submit_local_simulation(
+        ptc_enabled=True,
+        parameter_sweeps=[
+            {
+                "parameter": "Lj",
+                "values": [850.0, 1000.0, 1150.0],
+                "unit": "pH",
+            },
+            {
+                "parameter": "Cj",
+                "values": [900.0, 1000.0],
+                "unit": "fF",
+            },
+        ],
+    )
+    explorer_task = _submit_local_post_processing(trace_family="z_matrix", representation="real")
+
+    with _bind_client_app_context(client):
+        task_service = get_task_service()
+        context = ExplorerContext(
+            explorer_task=task_service.get_task(explorer_task["task_id"]),
+            basis_task=task_service.get_task(basis_task["task_id"]),
+            port_options={1: "Port 1"},
+            default_selection={
+                "family": "z_matrix",
+                "source": "raw",
+                "metric": "real",
+                "sweep_index": 5,
+                "compare_axis_index": 1,
+                "z0_ohm": 50.0,
+                "output_port": 1,
+                "input_port": 1,
+            },
+        )
+
+    def fail_bundle_materialization(*args, **kwargs):
+        raise AssertionError("post-processing compare-axis view should not materialize bundles")
+
+    def build_grid(*args, **kwargs):
+        return PersistedSimulationTraceGridData(
+            frequencies_ghz=(1.0, 2.0, 3.0),
+            compare_values=(900.0, 1000.0),
+            values=np.asarray(
+                [
+                    [1.0 + 0.0j, 1.5 + 0.0j],
+                    [2.0 + 0.0j, 2.5 + 0.0j],
+                    [3.0 + 0.0j, 3.5 + 0.0j],
+                ],
+                dtype=np.complex128,
+            ),
+        )
+
+    monkeypatch.setattr(
+        simulation_result_explorer_view_service,
+        "load_task_family_bundle",
+        fail_bundle_materialization,
+    )
+    monkeypatch.setattr(
+        simulation_result_explorer_view_service,
+        "extract_result_trace_grid_data",
+        build_grid,
+    )
+
+    payload = SimulationResultExplorerViewService().build_view_payload(
+        context=context,
+        selection=ResolvedSelection(
+            family="z_matrix",
+            source="raw",
+            metric="real",
+            sweep_index=5,
+            compare_axis_index=1,
+            z0_ohm=50.0,
+            output_port=1,
+            input_port=1,
+        ),
+    )
+
+    assert payload["selection"]["sweep_index"] == 5
+    assert payload["selection"]["compare_axis_index"] == 1
+    assert payload["plot"]["metadata"]["sweep_index"] == 5
+    assert payload["plot"]["metadata"]["compare_axis_index"] == 1
+    assert [series["label"] for series in payload["plot"]["series"]] == [
+        "Cj = 900 fF",
+        "Cj = 1000 fF",
+    ]
+    assert [series["values"] for series in payload["plot"]["series"]] == [
+        [1.0, 2.0, 3.0],
+        [1.5, 2.5, 3.5],
+    ]
 
 
 def test_retry_task_recovers_missing_persisted_setup_for_explorer() -> None:

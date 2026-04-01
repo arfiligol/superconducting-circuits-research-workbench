@@ -8,6 +8,7 @@ import numpy as np
 
 from src.app.infrastructure.persisted_runtime import (
     available_sources_for_task_family,
+    extract_result_trace_grid_data,
     extract_simulation_trace_grid_data,
     load_task_family_bundle,
 )
@@ -19,7 +20,7 @@ from src.app.services.simulation_result_explorer_models import (
     ExplorerContext,
     ResolvedSelection,
 )
-from src.app.services.simulation_result_explorer_query_service import (
+from src.app.services.simulation_result_explorer_selection import (
     decode_sweep_index,
     default_selection_trace_key,
     encode_sweep_index,
@@ -103,7 +104,13 @@ class SimulationResultExplorerViewService:
         context: ExplorerContext,
         selection: ResolvedSelection,
     ) -> dict[str, object]:
-        if context.explorer_task.kind == "simulation":
+        if (
+            context.explorer_task.kind == "simulation"
+            or (
+                context.explorer_task.kind == "post_processing"
+                and selection.compare_axis_index is not None
+            )
+        ):
             return self._build_selected_view_payload_fast(
                 context=context,
                 selection=selection,
@@ -146,14 +153,28 @@ class SimulationResultExplorerViewService:
     ) -> dict[str, object]:
         plot_context = _build_plot_context(context=context, selection=selection)
         metric_config = plot_context.metric_config
-        trace_grid = extract_simulation_trace_grid_data(
-            context.explorer_task,
-            family=selection.family,
-            source=selection.source,
-            output_port=selection.output_port,
-            input_port=selection.input_port,
-            sweep_index=selection.sweep_index,
-            compare_axis_index=selection.compare_axis_index,
+        trace_grid = (
+            extract_simulation_trace_grid_data(
+                context.explorer_task,
+                family=selection.family,
+                source=selection.source,
+                output_port=selection.output_port,
+                input_port=selection.input_port,
+                sweep_index=selection.sweep_index,
+                compare_axis_index=selection.compare_axis_index,
+            )
+            if context.explorer_task.kind == "simulation"
+            else extract_result_trace_grid_data(
+                context.explorer_task,
+                basis_task=context.basis_task,
+                family=selection.family,
+                source=selection.source,
+                output_port=selection.output_port,
+                input_port=selection.input_port,
+                sweep_index=selection.sweep_index,
+                compare_axis_index=selection.compare_axis_index,
+                z0_ohm=selection.z0_ohm,
+            )
         )
         plot_series = self._build_plot_series_from_trace_grid(
             context=context,
