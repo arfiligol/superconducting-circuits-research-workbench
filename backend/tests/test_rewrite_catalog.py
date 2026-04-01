@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 from fastapi.testclient import TestClient
 from src.app.domain.datasets import (
@@ -8,8 +10,11 @@ from src.app.domain.datasets import (
     CharacterizationTaggingRequest,
     DatasetProfileUpdate,
     DesignBrowseQuery,
+    DesignCreateDraft,
+    SimulationResultPublicationDraft,
     TraceBrowseQuery,
 )
+from src.app.infrastructure.persisted_runtime import SIMULATION_PTC_BUNDLE_KEY
 from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
 from src.app.infrastructure.rewrite_catalog_repository import (
     COUPLER_DETUNING_DEMO_DEFINITION_ID,
@@ -17,7 +22,7 @@ from src.app.infrastructure.rewrite_catalog_repository import (
     FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
     InMemoryRewriteCatalogRepository,
 )
-from src.app.infrastructure.runtime import reset_runtime_state
+from src.app.infrastructure.runtime import get_task_service, reset_runtime_state
 from src.app.main import app
 from src.app.services.dataset_catalog_service import DatasetCatalogService
 from src.app.services.dataset_characterization_service import (
@@ -142,6 +147,25 @@ def _capabilities_by_analysis(
         capability["analysis_id"]: capability
         for capability in capabilities
     }
+
+
+def _strip_completed_bundle_metadata(task, bundle_key: str):
+    return replace(
+        task,
+        events=tuple(
+            replace(
+                event,
+                metadata={
+                    key: value
+                    for key, value in event.metadata.items()
+                    if key != bundle_key
+                },
+            )
+            if event.event_type == "task_completed" and bundle_key in event.metadata
+            else event
+            for event in task.events
+        ),
+    )
 
 
 def test_dataset_service_lists_visible_catalog_rows_for_active_workspace(
@@ -479,6 +503,117 @@ def test_local_seed_single_trace_preview_uses_full_series_for_one_dimensional_pr
     assert trace_detail is not None
     assert trace_detail.preview_payload["kind"] == "series"
     assert len(trace_detail.preview_payload["points"]) == trace_detail.axes[0].length
+
+
+def test_rewrite_fallback_publication_uses_materialized_bundle_truth(
+    catalog_repository: InMemoryRewriteCatalogRepository,
+) -> None:
+    created_design = catalog_repository.create_design(
+        "local-dataset-001",
+        DesignCreateDraft(name="Fallback Publication Truth"),
+    )
+    design = created_design.design
+    switched = client.patch(
+        "/session/runtime-mode",
+        json={"runtime_mode": "local"},
+    )
+    assert switched.status_code == 200
+
+    response = client.post(
+        "/tasks",
+        json={
+            "kind": "simulation",
+            "dataset_id": "local-dataset-001",
+            "definition_id": FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
+            "summary": "Fallback publication truth source.",
+            "simulation_setup": {
+                "frequency_sweep": {
+                    "start_ghz": 1.0,
+                    "stop_ghz": 8.0,
+                    "point_count": 401,
+                    "spacing": "linear",
+                },
+                "parameter_sweeps": [],
+                "solver": {
+                    "solver_family": "harmonic_balance",
+                    "max_iterations": 20,
+                    "convergence_tolerance": 1e-6,
+                    "harmonic_balance": {
+                        "enabled": True,
+                        "harmonic_count": 5,
+                        "oversample_factor": 2,
+                    },
+                },
+                "sources": [
+                    {
+                        "source_id": "port_1_drive",
+                        "kind": "port_drive",
+                        "target": "port_1",
+                        "amplitude": -30.0,
+                        "frequency_ghz": 5.0,
+                        "phase_deg": 0.0,
+                    }
+                ],
+                "ptc": {
+                    "enabled": True,
+                    "mode": "auto",
+                    "compensate_ports": ["port_1", "port_2"],
+                },
+            },
+        },
+    )
+    assert response.status_code == 201
+    task_id = response.json()["data"]["task"]["task_id"]
+
+    from tests.worker_runtime_harness import drain_lane_queue
+
+    detail = None
+    for _ in range(3):
+        drain_lane_queue("simulation")
+        detail = client.get(f"/tasks/{task_id}").json()["data"]
+        if (
+            detail["status"] == "completed"
+            and detail["result_handoff"]["availability"] == "ready"
+        ):
+            break
+    assert detail is not None
+    assert detail["status"] == "completed"
+    assert detail["result_handoff"]["availability"] == "ready"
+    task = _strip_completed_bundle_metadata(
+        get_task_service().get_task(task_id),
+        SIMULATION_PTC_BUNDLE_KEY,
+    )
+
+    published = catalog_repository.publish_simulation_result(
+        task=task,
+        dataset_id="local-dataset-001",
+        draft=SimulationResultPublicationDraft(
+            design_id=design.design_id,
+            design_name=design.name,
+        ),
+    )
+
+    assert published is not None
+    assert [trace.trace_id for trace in published.traces] == [
+        f"trace_simulation_task_{task_id}_s_matrix_raw",
+        f"trace_simulation_task_{task_id}_y_matrix_raw",
+        f"trace_simulation_task_{task_id}_z_matrix_raw",
+    ]
+    assert all(not trace.trace_id.endswith("_ptc") for trace in published.traces)
+
+    trace_detail = catalog_repository.get_trace_detail(
+        "local-dataset-001",
+        design.design_id,
+        f"trace_simulation_task_{task_id}_y_matrix_raw",
+    )
+    assert trace_detail is not None
+    assert trace_detail.preview_payload["kind"] == "series"
+    assert len(trace_detail.preview_payload["points"]) == trace_detail.axes[0].length
+    assert trace_detail.preview_payload["points"][:3] != [
+        [1.0, 0.11],
+        [2.0, 0.18],
+        [3.0, 0.15],
+    ]
 
 
 def test_ingested_trace_can_be_updated_without_changing_identity() -> None:

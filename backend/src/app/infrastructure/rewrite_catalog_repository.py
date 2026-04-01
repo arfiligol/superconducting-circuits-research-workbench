@@ -87,8 +87,7 @@ from src.app.infrastructure.simulation_result_publication_materializer import (
     build_result_trace_publication_detail,
     build_result_trace_publication_summary,
     build_simulation_publication_key,
-    build_simulation_publication_trace_details,
-    build_simulation_publication_trace_summary,
+    build_simulation_publication_traces,
 )
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
@@ -374,22 +373,19 @@ class InMemoryRewriteCatalogRepository:
         )
         trace_rows = list(self._trace_summaries.get((dataset_id, design_id), ()))
         published_trace_rows: list[TraceMetadataSummary] = []
-        published_trace_details = build_simulation_publication_trace_details(
+        published_traces = build_simulation_publication_traces(
             task=task,
+            dataset_family=dataset.family,
             dataset_id=dataset_id,
             design_id=design_id,
         )
         already_published = all(
-            any(existing.trace_id == detail.trace_id for existing in trace_rows)
-            for _, _, detail in published_trace_details
+            any(existing.trace_id == trace.detail.trace_id for existing in trace_rows)
+            for trace in published_traces
         )
-        for family, source, detail in published_trace_details:
-            summary = build_simulation_publication_trace_summary(
-                detail=detail,
-                task=task,
-                family=family,
-                source=source,
-            )
+        for trace in published_traces:
+            summary = trace.summary
+            detail = trace.detail
             self._trace_details[(dataset_id, design_id, detail.trace_id)] = detail
             trace_rows = [row for row in trace_rows if row.trace_id != detail.trace_id]
             trace_rows.append(summary)
