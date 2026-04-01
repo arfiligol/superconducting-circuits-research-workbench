@@ -95,6 +95,89 @@ const simulationSetupStageSource = readFileSync(
   ),
   "utf8",
 );
+const simulationSavedSetupDialogsSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-saved-setup-dialogs.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationFrequencySweepSectionSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-frequency-sweep-section.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationParameterSweepSectionSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-parameter-sweep-section.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationHbSolvingSectionSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-hb-solving-section.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationSourcesSectionSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-sources-section.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationPtcSectionSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-ptc-section.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationAdvancedHbsolveSectionSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-advanced-hbsolve-section.tsx",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationSetupStageConfigSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/simulation/components/simulation-setup-stage-config.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const simulationSetupSurfaceSource = [
+  simulationSetupStageSource,
+  simulationSavedSetupDialogsSource,
+  simulationFrequencySweepSectionSource,
+  simulationParameterSweepSectionSource,
+  simulationHbSolvingSectionSource,
+  simulationSourcesSectionSource,
+  simulationPtcSectionSource,
+  simulationAdvancedHbsolveSectionSource,
+  simulationSetupStageConfigSource,
+].join("\n");
 const postProcessingSetupStageSource = readFileSync(
   fileURLToPath(
     new URL(
@@ -1355,24 +1438,31 @@ describe("simulation workflow source contract", () => {
     expect(simulationResultStageSource).toContain("Simulation Result");
     expect(postProcessingSetupStageSource).toContain("Post Processing Setup");
     expect(postProcessingResultStageSource).toContain("Post Processing Result");
-    expect(simulationSetupStageSource).toContain("Signal Frequency Sweep Range");
-    expect(simulationSetupStageSource).toContain("Parameter Sweep Setup");
-    expect(simulationSetupStageSource).toContain("HB Solving");
-    expect(simulationSetupStageSource).toContain("Sources");
-    expect(simulationSetupStageSource).toContain("PTC");
-    expect(simulationSetupStageSource).toContain("Advanced hbsolve Options");
-    expect(simulationSetupStageSource).toContain("const FREQUENCY_WHEEL_STEP_GHZ = 0.001");
-    expect(simulationSetupStageSource).toContain("step={String(FREQUENCY_WHEEL_STEP_GHZ)}");
-    expect(simulationSetupStageSource).toContain("Schema unit ·");
-    expect(simulationSetupStageSource).toContain("Add Axis");
-    expect(simulationSetupStageSource).toContain("Add Source");
-    expect(simulationSetupStageSource).toContain("Persisted on task");
-    expect(simulationSetupStageSource).toContain(
+    expect(simulationSetupStageSource).toContain("SimulationFrequencySweepSection");
+    expect(simulationSetupStageSource).toContain("SimulationParameterSweepSection");
+    expect(simulationSetupStageSource).toContain("SimulationHbSolvingSection");
+    expect(simulationSetupStageSource).toContain("SimulationSourcesSection");
+    expect(simulationSetupStageSource).toContain("SimulationPtcSection");
+    expect(simulationSetupStageSource).toContain("SimulationAdvancedHbsolveSection");
+    expect(simulationSetupStageSource).toContain("SimulationSavedSetupDialogs");
+    expect(simulationSetupSurfaceSource).toContain("Signal Frequency Sweep Range");
+    expect(simulationSetupSurfaceSource).toContain("Parameter Sweep Setup");
+    expect(simulationSetupSurfaceSource).toContain("HB Solving");
+    expect(simulationSetupSurfaceSource).toContain("Sources");
+    expect(simulationSetupSurfaceSource).toContain("PTC");
+    expect(simulationSetupSurfaceSource).toContain("Advanced hbsolve Options");
+    expect(simulationSetupStageConfigSource).toContain("FREQUENCY_WHEEL_STEP_GHZ = 0.001");
+    expect(simulationSetupSurfaceSource).toContain("step={String(FREQUENCY_WHEEL_STEP_GHZ)}");
+    expect(simulationSetupSurfaceSource).toContain("Schema unit ·");
+    expect(simulationSetupSurfaceSource).toContain("Add Axis");
+    expect(simulationSetupSurfaceSource).toContain("Add Source");
+    expect(simulationSetupSurfaceSource).toContain("Persisted on task");
+    expect(simulationSetupSurfaceSource).toContain(
       "PTC is submitted with the simulation setup and restored from persisted task detail.",
     );
-    expect(simulationSetupStageSource).toContain("Source Current Ip (A)");
-    expect(simulationSetupStageSource).toContain("Source Mode");
-    expect(simulationSetupStageSource).toContain("Pump Source");
+    expect(simulationSetupSurfaceSource).toContain("Source Current Ip (A)");
+    expect(simulationSetupSurfaceSource).toContain("Source Mode");
+    expect(simulationSetupSurfaceSource).toContain("Pump Source");
     expect(simulationSetupStageSource).toContain("Run Simulation");
     expect(postProcessingSetupStageSource).toContain("Run Post Processing");
     expect(postProcessingSetupStageSource).toContain("Add Step");
@@ -1396,8 +1486,8 @@ describe("simulation workflow source contract", () => {
     expect(simulationSetupStageSource).toContain("Manage");
     expect(simulationSetupStageSource).toContain("Save");
     expect(simulationWorkbenchStageKitSource).toContain('role="switch"');
-    expect(simulationSetupStageSource).toContain("AppNumberInput");
-    expect(simulationSetupStageSource).toContain("<AppNumberInput");
+    expect(simulationSetupSurfaceSource).toContain("AppNumberInput");
+    expect(simulationSetupSurfaceSource).toContain("<AppNumberInput");
     expect(simulationSetupStageSource).not.toContain("function SetupNumberInput");
     expect(simulationSetupStageSource).not.toContain('type="checkbox"');
     expect(simulationSubmissionDraftBuilderHookSource).toContain("buildSimulationSetupDraft");
@@ -1433,7 +1523,7 @@ describe("simulation workflow source contract", () => {
     expect(simulationWorkbenchSource).not.toContain("not submitted with the task");
     expect(simulationWorkbenchSource).toContain("deriveSimulationSweepTargetOptions");
     expect(simulationWorkbenchSource).toContain("deriveSimulationPtcPortOptions");
-    expect(simulationSetupStageSource).toContain("No sweep targets are currently available");
+    expect(simulationSetupSurfaceSource).toContain("No sweep targets are currently available");
     expect(simulationResultStageSource).toContain("SimulationResultExplorer");
     expect(postProcessingResultStageSource).toContain("task={latestPostProcessingTaskDetail}");
     expect(simulationResultStageSource).toContain("Live result refresh");
@@ -1644,11 +1734,11 @@ describe("simulation workflow source contract", () => {
     expect(savedSimulationSetupsHookSource).toContain(
       'action === "overwrite" ? saveDialogOverwriteTargetId : null',
     );
-    expect(simulationSetupStageSource).toContain('submitSaveDialog("create");');
-    expect(simulationSetupStageSource).toContain('submitSaveDialog("overwrite");');
-    expect(simulationSetupStageSource).toContain("Save Current as New");
-    expect(simulationSetupStageSource).toContain("Overwrite Current");
-    expect(simulationSetupStageSource).toContain("Save as New");
+    expect(simulationSavedSetupDialogsSource).toContain('submitSaveDialog("create");');
+    expect(simulationSavedSetupDialogsSource).toContain('submitSaveDialog("overwrite");');
+    expect(simulationSavedSetupDialogsSource).toContain("Save Current as New");
+    expect(simulationSavedSetupDialogsSource).toContain("Overwrite Current");
+    expect(simulationSavedSetupDialogsSource).toContain("Save as New");
     expect(simulationWorkbenchSource).not.toContain(
       "persistSavedSetup(saveSetupNameDraft, activeSavedSetup?.id ?? null);",
     );

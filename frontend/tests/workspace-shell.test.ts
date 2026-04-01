@@ -103,6 +103,30 @@ const simulationSource =
       new URL("../src/features/simulation/components/simulation-setup-stage.tsx", import.meta.url),
     ),
     "utf8",
+  ) +
+  readFileSync(
+    fileURLToPath(
+      new URL(
+        "../src/features/simulation/components/simulation-frequency-sweep-section.tsx",
+        import.meta.url,
+      ),
+    ),
+    "utf8",
+  ) +
+  readFileSync(
+    fileURLToPath(
+      new URL(
+        "../src/features/simulation/components/simulation-parameter-sweep-section.tsx",
+        import.meta.url,
+      ),
+    ),
+    "utf8",
+  ) +
+  readFileSync(
+    fileURLToPath(
+      new URL("../src/features/simulation/components/simulation-sources-section.tsx", import.meta.url),
+    ),
+    "utf8",
   );
 const researchPanelsSource = readFileSync(
   fileURLToPath(
