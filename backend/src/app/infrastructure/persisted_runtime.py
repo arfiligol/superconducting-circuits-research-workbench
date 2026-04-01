@@ -655,6 +655,93 @@ def extract_simulation_trace_grid_data(
     )
 
 
+def extract_result_trace_grid_data(
+    task: TaskDetail,
+    *,
+    basis_task: TaskDetail | None = None,
+    family: str,
+    source: str,
+    output_port: int,
+    input_port: int,
+    sweep_index: int | None,
+    compare_axis_index: int | None,
+    z0_ohm: float,
+) -> PersistedSimulationTraceGridData:
+    if task.kind == "simulation":
+        return extract_simulation_trace_grid_data(
+            task,
+            family=family,
+            source=source,
+            output_port=output_port,
+            input_port=input_port,
+            sweep_index=sweep_index,
+            compare_axis_index=compare_axis_index,
+        )
+
+    if task.kind != "post_processing" or basis_task is None or basis_task.simulation_setup is None:
+        raise ValueError(
+            "Result trace grid extraction requires a persisted simulation or post-processing task."
+        )
+
+    bundle_payload = _bundle_payload_for_source(task, source)
+    if bundle_payload is None:
+        raise ValueError("Selected trace family/source is not available.")
+
+    loaded_bundle = _load_bundle_trace_records(bundle_payload)
+    labels = _post_processing_labels(loaded_bundle.trace_records, loaded_bundle.first_record)
+    if len(labels) == 0:
+        raise ValueError("Persisted post-processing bundle is missing matrix labels.")
+    frequencies = loaded_bundle.frequencies_ghz
+    coordinates = list(_decode_axis_indices(basis_task.simulation_setup, sweep_index))
+    compare_values: tuple[float, ...] | None = None
+    if compare_axis_index is not None:
+        if compare_axis_index < 0 or compare_axis_index >= len(
+            basis_task.simulation_setup.parameter_sweeps
+        ):
+            raise ValueError("compare_axis_index is outside the available parameter sweep range.")
+        compare_axis = basis_task.simulation_setup.parameter_sweeps[compare_axis_index]
+        compare_values = tuple(float(value) for value in compare_axis.values)
+        selectors: list[object] = [int(coordinate) for coordinate in coordinates]
+        selectors[compare_axis_index] = slice(None)
+    else:
+        selectors = [int(coordinate) for coordinate in coordinates]
+
+    selection: tuple[object, ...] = (
+        (slice(None), *selectors) if len(selectors) > 0 else (slice(None),)
+    )
+    y_grid = _materialize_post_processing_y_matrix_grid(
+        trace_store=loaded_bundle.trace_store,
+        trace_records=loaded_bundle.trace_records,
+        labels=labels,
+        selection=selection,
+        frequency_count=len(frequencies),
+    )
+    if family == "y_matrix":
+        values = y_grid[:, :, output_port - 1, input_port - 1]
+    elif family == "z_matrix":
+        values = np.empty((y_grid.shape[0], y_grid.shape[1]), dtype=np.complex128)
+        for frequency_index in range(y_grid.shape[0]):
+            for compare_index in range(y_grid.shape[1]):
+                matrix = _matrix_inverse(y_grid[frequency_index, compare_index])
+                values[frequency_index, compare_index] = matrix[output_port - 1, input_port - 1]
+    elif family == "s_matrix":
+        values = np.empty((y_grid.shape[0], y_grid.shape[1]), dtype=np.complex128)
+        for frequency_index in range(y_grid.shape[0]):
+            for compare_index in range(y_grid.shape[1]):
+                matrix = _matrix_s_from_y(
+                    y_grid[frequency_index, compare_index],
+                    z0_ohm=z0_ohm,
+                )
+                values[frequency_index, compare_index] = matrix[output_port - 1, input_port - 1]
+    else:
+        raise ValueError("Selected trace family/source is not available.")
+    return PersistedSimulationTraceGridData(
+        frequencies_ghz=frequencies,
+        compare_values=compare_values,
+        values=np.asarray(values, dtype=np.complex128),
+    )
+
+
 def build_trace_preview_payload(
     *,
     selection: ResultTraceSelection,
@@ -1396,27 +1483,9 @@ def _build_post_processing_bundle_view(
 ) -> PersistedExplorerBundle:
     loaded_bundle = _load_bundle_trace_records(bundle_payload)
     trace_records = loaded_bundle.trace_records
-    first_meta = _require_mapping(
-        loaded_bundle.first_record.get("trace_meta"),
-        field_name="trace_meta",
-    )
-    raw_labels = first_meta.get("labels", ())
-    labels = tuple(str(label) for label in raw_labels) if isinstance(raw_labels, list) else ()
+    labels = _post_processing_labels(trace_records, loaded_bundle.first_record)
     if len(labels) == 0:
-        labels = tuple(
-            sorted(
-                {
-                    str(
-                        _require_mapping(
-                            record.get("trace_meta"),
-                            field_name="trace_meta",
-                        ).get("row_label", "")
-                    )
-                    for record in trace_records
-                    if isinstance(record, Mapping)
-                }
-            )
-        )
+        raise ValueError("Persisted post-processing bundle is missing matrix labels.")
     y_matrices = _materialize_post_processing_y_matrices(
         trace_records=trace_records,
         labels=labels,
@@ -1527,6 +1596,49 @@ def _materialize_post_processing_y_matrices(
     return matrices
 
 
+def _materialize_post_processing_y_matrix_grid(
+    *,
+    trace_store: Any,
+    trace_records: Sequence[Mapping[str, object]],
+    labels: tuple[str, ...],
+    selection: tuple[object, ...],
+    frequency_count: int,
+) -> np.ndarray:
+    label_positions = {label: index for index, label in enumerate(labels)}
+    grouped: dict[tuple[str, str], dict[str, np.ndarray]] = {}
+    for record in trace_records:
+        trace_meta = _require_mapping(record.get("trace_meta"), field_name="trace_meta")
+        key = (
+            str(trace_meta.get("row_label", "")),
+            str(trace_meta.get("col_label", "")),
+        )
+        grouped.setdefault(key, {})[str(record.get("representation"))] = _read_trace_grid_values(
+            trace_store,
+            _require_mapping(record.get("store_ref"), field_name="store_ref"),
+            selection=selection,
+            frequency_count=frequency_count,
+        )
+    sample = next(iter(grouped.values()))
+    sample_values = sample.get("real")
+    if sample_values is None:
+        sample_values = sample.get("imaginary")
+    if sample_values is None:
+        raise ValueError("Persisted post-processing traces are missing real/imaginary pairs.")
+    matrix_grid = np.zeros(
+        (frequency_count, sample_values.shape[1], len(labels), len(labels)),
+        dtype=np.complex128,
+    )
+    for (row_label, col_label), representations in grouped.items():
+        row_index = label_positions[row_label]
+        col_index = label_positions[col_label]
+        real_values = representations.get("real")
+        imag_values = representations.get("imaginary")
+        if real_values is None or imag_values is None:
+            raise ValueError("Persisted post-processing traces are missing real/imaginary pairs.")
+        matrix_grid[:, :, row_index, col_index] = real_values + (1j * imag_values)
+    return matrix_grid
+
+
 def _merge_bundle_views(
     left: PersistedExplorerBundle,
     right: PersistedExplorerBundle,
@@ -1543,6 +1655,34 @@ def _merge_bundle_views(
         frequencies_ghz=left.frequencies_ghz or right.frequencies_ghz,
         labels=left.labels or right.labels,
         family_bundle=merged,
+    )
+
+
+def _post_processing_labels(
+    trace_records: Sequence[Mapping[str, object]],
+    first_record: Mapping[str, object],
+) -> tuple[str, ...]:
+    first_meta = _require_mapping(
+        first_record.get("trace_meta"),
+        field_name="trace_meta",
+    )
+    raw_labels = first_meta.get("labels", ())
+    labels = tuple(str(label) for label in raw_labels) if isinstance(raw_labels, list) else ()
+    if len(labels) > 0:
+        return labels
+    return tuple(
+        sorted(
+            {
+                str(
+                    _require_mapping(
+                        record.get("trace_meta"),
+                        field_name="trace_meta",
+                    ).get("row_label", "")
+                )
+                for record in trace_records
+                if isinstance(record, Mapping)
+            }
+        )
     )
 
 

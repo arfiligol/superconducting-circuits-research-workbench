@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from src.app.domain.tasks import SimulationSetup, TaskDetail
 from src.app.infrastructure.persisted_runtime import (
     available_sources_for_task_family,
@@ -14,6 +12,12 @@ from src.app.services.simulation_result_explorer_models import (
     ExplorerContext,
     ExplorerSelectionRequest,
     ResolvedSelection,
+)
+from src.app.services.simulation_result_explorer_selection import (
+    default_compare_axis_index,
+    default_sweep_index,
+    resolve_compare_axis_index,
+    validate_sweep_index,
 )
 from src.app.services.task_service import TaskService
 
@@ -86,7 +90,7 @@ class SimulationResultExplorerQueryService:
         )
         basis_setup = context.basis_task.simulation_setup
         _validate_sweep_index(basis_setup, resolved_sweep_index)
-        resolved_compare_axis_index = _resolve_compare_axis_index(
+        resolved_compare_axis_index = resolve_compare_axis_index(
             basis_setup,
             selection_request.compare_axis_index
             if selection_request.compare_axis_index is not None
@@ -199,40 +203,6 @@ class SimulationResultExplorerQueryService:
                 message="Post-processing explorer requires a persisted upstream simulation result.",
             )
         return upstream_task
-
-
-def default_selection_trace_key(default_selection: Mapping[str, object]) -> str:
-    return _resolved_selection_from_mapping(default_selection).trace_key
-
-
-def serialize_parameter_sweep_bootstrap(
-    setup: SimulationSetup,
-    *,
-    sweep_index: int | None,
-    compare_axis_index: int | None,
-) -> dict[str, object]:
-    coordinates = decode_sweep_index(setup, sweep_index)
-    axes: list[dict[str, object]] = []
-    for axis_index, sweep in enumerate(setup.parameter_sweeps):
-        axes.append(
-            {
-                "parameter": sweep.parameter,
-                "label": sweep.parameter,
-                "unit": sweep.unit,
-                "values": [float(value) for value in sweep.values],
-                "selected_value_index": (
-                    coordinates[axis_index] if axis_index < len(coordinates) else 0
-                ),
-            }
-        )
-    return {
-        "axes": axes,
-        "point_count": _sweep_point_count(setup),
-        "active": len(axes) > 0,
-        "compare_axis_index": compare_axis_index,
-    }
-
-
 def _default_selection(
     task: TaskDetail,
     *,
@@ -241,9 +211,11 @@ def _default_selection(
 ) -> dict[str, object]:
     default_port = min(port_options) if len(port_options) > 0 else 1
     basis_setup = basis_task.simulation_setup
-    default_sweep_index = _default_sweep_index(basis_setup) if basis_setup is not None else None
-    default_compare_axis_index = (
-        _default_compare_axis_index(basis_setup) if basis_setup is not None else None
+    default_sweep_index_value = (
+        default_sweep_index(basis_setup) if basis_setup is not None else None
+    )
+    default_compare_axis_index_value = (
+        default_compare_axis_index(basis_setup) if basis_setup is not None else None
     )
     if task.kind == "post_processing" and task.post_processing_setup is not None:
         selection = (
@@ -265,8 +237,8 @@ def _default_selection(
                     family,
                     selection.representation,
                 ),
-                "sweep_index": default_sweep_index,
-                "compare_axis_index": default_compare_axis_index,
+                "sweep_index": default_sweep_index_value,
+                "compare_axis_index": default_compare_axis_index_value,
                 "z0_ohm": 50.0,
                 "output_port": default_port,
                 "input_port": default_port,
@@ -276,8 +248,8 @@ def _default_selection(
         "family": "s_matrix",
         "source": "raw",
         "metric": "magnitude_db",
-        "sweep_index": default_sweep_index,
-        "compare_axis_index": default_compare_axis_index,
+        "sweep_index": default_sweep_index_value,
+        "compare_axis_index": default_compare_axis_index_value,
         "z0_ohm": 50.0,
         "output_port": default_port,
         "input_port": default_port,
@@ -314,130 +286,5 @@ def _available_sources_for_task(task: TaskDetail, family: str) -> tuple[str, ...
     return available_sources_for_task_family(task, family)
 
 
-def _default_sweep_index(setup: SimulationSetup) -> int | None:
-    return 0 if len(setup.parameter_sweeps) > 0 else None
-
-
-def _default_compare_axis_index(setup: SimulationSetup) -> int | None:
-    return 0 if len(setup.parameter_sweeps) > 0 else None
-
-
-def _sweep_point_count(setup: SimulationSetup) -> int:
-    if len(setup.parameter_sweeps) == 0:
-        return 1
-    total = 1
-    for sweep in setup.parameter_sweeps:
-        total *= max(len(sweep.values), 1)
-    return total
-
-
 def _validate_sweep_index(setup: SimulationSetup, sweep_index: int | None) -> None:
-    if len(setup.parameter_sweeps) == 0:
-        if sweep_index not in {None, 0}:
-            raise service_error(
-                400,
-                code="request_validation_failed",
-                category="validation_error",
-                message="sweep_index is not available for this persisted result.",
-            )
-        return
-
-    if sweep_index is None or sweep_index < 0 or sweep_index >= _sweep_point_count(setup):
-        raise service_error(
-            400,
-            code="request_validation_failed",
-            category="validation_error",
-            message="sweep_index is outside the available parameter sweep range.",
-        )
-
-
-def _resolve_compare_axis_index(
-    setup: SimulationSetup,
-    compare_axis_index: int | None,
-) -> int | None:
-    if len(setup.parameter_sweeps) == 0:
-        if compare_axis_index is not None:
-            raise service_error(
-                400,
-                code="request_validation_failed",
-                category="validation_error",
-                message="compare_axis_index is not available for this persisted result.",
-            )
-        return None
-
-    resolved_index = compare_axis_index if compare_axis_index is not None else 0
-    if resolved_index < 0 or resolved_index >= len(setup.parameter_sweeps):
-        raise service_error(
-            400,
-            code="request_validation_failed",
-            category="validation_error",
-            message="compare_axis_index is outside the available parameter sweep range.",
-        )
-    return resolved_index
-
-
-def decode_sweep_index(setup: SimulationSetup, sweep_index: int | None) -> tuple[int, ...]:
-    if len(setup.parameter_sweeps) == 0:
-        return ()
-
-    resolved_index = sweep_index if sweep_index is not None else 0
-    remaining = resolved_index
-    coordinates = [0] * len(setup.parameter_sweeps)
-    for axis_index in range(len(setup.parameter_sweeps) - 1, -1, -1):
-        axis_size = max(len(setup.parameter_sweeps[axis_index].values), 1)
-        coordinates[axis_index] = remaining % axis_size
-        remaining //= axis_size
-    return tuple(coordinates)
-
-
-def encode_sweep_index(
-    setup: SimulationSetup,
-    coordinates: tuple[int, ...],
-) -> int | None:
-    if len(setup.parameter_sweeps) == 0:
-        return None
-
-    encoded = 0
-    for axis_index, sweep in enumerate(setup.parameter_sweeps):
-        axis_size = max(len(sweep.values), 1)
-        coordinate = coordinates[axis_index] if axis_index < len(coordinates) else 0
-        coordinate = min(max(coordinate, 0), axis_size - 1)
-        encoded = (encoded * axis_size) + coordinate
-    return encoded
-
-
-def replace_sweep_index(
-    selection: ResolvedSelection,
-    sweep_index: int | None,
-) -> ResolvedSelection:
-    return ResolvedSelection(
-        family=selection.family,
-        source=selection.source,
-        metric=selection.metric,
-        sweep_index=sweep_index,
-        compare_axis_index=selection.compare_axis_index,
-        z0_ohm=selection.z0_ohm,
-        output_port=selection.output_port,
-        input_port=selection.input_port,
-    )
-
-
-def _resolved_selection_from_mapping(selection: Mapping[str, object]) -> ResolvedSelection:
-    return ResolvedSelection(
-        family=str(selection["family"]),
-        source=str(selection["source"]),
-        metric=str(selection["metric"]),
-        sweep_index=(
-            int(selection["sweep_index"])
-            if selection.get("sweep_index") is not None
-            else None
-        ),
-        compare_axis_index=(
-            int(selection["compare_axis_index"])
-            if selection.get("compare_axis_index") is not None
-            else None
-        ),
-        z0_ohm=float(selection["z0_ohm"]),
-        output_port=int(selection["output_port"]),
-        input_port=int(selection["input_port"]),
-    )
+    validate_sweep_index(setup, sweep_index)
