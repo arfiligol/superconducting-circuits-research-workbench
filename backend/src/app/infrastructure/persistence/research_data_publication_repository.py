@@ -38,7 +38,6 @@ from src.app.domain.trace_structures import (
     build_trace_structure_summary,
 )
 from src.app.infrastructure.persisted_runtime import (
-    available_sources_for_task_family,
     build_trace_preview_payload,
     delete_trace_payload_store,
     extract_selection_trace_data,
@@ -59,6 +58,9 @@ from src.app.infrastructure.persistence.trace_capability_store import (
     load_trace_capability_map,
     replace_trace_capabilities,
     trace_capabilities_equal,
+)
+from src.app.infrastructure.simulation_result_publication_materializer import (
+    build_simulation_publication_traces,
 )
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
@@ -164,18 +166,14 @@ class SqliteResearchDataPublicationRepository:
             raise ValueError("simulation result already published elsewhere")
 
         published_at = _timestamp_now()
-        trace_details = tuple(
-            _build_persisted_simulation_publication_trace(
-                task=task,
-                dataset_family=dataset.family,
-                dataset_id=dataset.dataset_id,
-                design_id=design_id,
-                family=family,
-                source=source,
-            )
-            for family, source in _legacy_bundle_publication_targets(task)
+        trace_details = build_simulation_publication_traces(
+            task=task,
+            dataset_family=dataset.family,
+            dataset_id=dataset.dataset_id,
+            design_id=design_id,
         )
-        for _summary, detail in trace_details:
+        for trace in trace_details:
+            detail = trace.detail
             payload_ref = detail.payload_ref
             if payload_ref is None:
                 raise ValueError("published simulation result is missing a trace payload")
@@ -213,7 +211,9 @@ class SqliteResearchDataPublicationRepository:
             )
             session.add(row)
             session.flush()
-            for summary, detail in trace_details:
+            for trace in trace_details:
+                summary = trace.summary
+                detail = trace.detail
                 session.add(
                     RewritePublishedSimulationTraceRecord(
                         publication_id=row.id,
@@ -1073,52 +1073,6 @@ def _build_published_trace_preview_payload(
             )
         ]
     return preview
-
-
-def _legacy_bundle_publication_targets(task: TaskDetail) -> tuple[tuple[str, str], ...]:
-    targets: list[tuple[str, str]] = [
-        ("s_matrix", "raw"),
-        ("y_matrix", "raw"),
-        ("z_matrix", "raw"),
-    ]
-    if "ptc" in available_sources_for_task_family(task, "y_matrix"):
-        targets.extend((("y_matrix", "ptc"), ("z_matrix", "ptc")))
-    return tuple(targets)
-
-
-def _build_persisted_simulation_publication_trace(
-    *,
-    task: TaskDetail,
-    dataset_family: str,
-    dataset_id: str,
-    design_id: str,
-    family: str,
-    source: str,
-) -> tuple[TraceMetadataSummary, TraceDetail]:
-    selection = ResultTraceSelection(
-        family=family,
-        source=source,
-        output_port=1,
-        input_port=1,
-        z0_ohm=50.0 if family in {"y_matrix", "z_matrix"} else None,
-    )
-    materialized = _materialize_published_trace(
-        source_task=task,
-        basis_task=task,
-        dataset_family=dataset_family,
-        dataset_id=dataset_id,
-        design_id=design_id,
-        selection=selection,
-        metric=None,
-        trace_id=f"trace_simulation_task_{task.task_id}_{family}_{source}",
-        saved_parameter=build_trace_parameter(selection),
-        summary_parameter=source,
-        summary_representation="complex_matrix",
-        result_handle_key=f"{family}:{source}",
-        result_handle_label=f"Published {family.upper()} {source.upper()} result",
-        provenance_summary=f"Published from simulation task {task.task_id}",
-    )
-    return materialized.summary, materialized.detail
 
 
 def _build_trace_history_steps(

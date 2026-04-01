@@ -432,6 +432,38 @@ def test_completed_simulation_task_can_be_published_and_is_queryable() -> None:
     )
 
 
+def test_published_whole_result_trace_detail_uses_materialized_preview_payload() -> None:
+    task = _submit_local_simulation(ptc_enabled=False)
+
+    publish_response = client.post(
+        f"/tasks/{task['task_id']}/simulation-results/publish",
+        json={
+            "dataset_id": "local-dataset-001",
+            "design_name": "Truthful Preview Save",
+        },
+    )
+    assert publish_response.status_code == 200
+    design_id = publish_response.json()["data"]["design"]["design_id"]
+
+    trace_detail = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}"
+        f"/traces/trace_simulation_task_{task['task_id']}_y_matrix_raw"
+    )
+    assert trace_detail.status_code == 200
+    payload = trace_detail.json()["data"]
+    preview = payload["preview_payload"]
+
+    assert preview["kind"] == "series"
+    assert len(preview["points"]) == payload["axes"][0]["length"]
+    assert len(preview["x_axis"]["values"]) == payload["axes"][0]["length"]
+    assert len(preview["series"][0]["values"]) == payload["axes"][0]["length"]
+    assert preview["points"][:3] != [
+        [1.0, 0.11],
+        [2.0, 0.18],
+        [3.0, 0.15],
+    ]
+
+
 def test_sweep_aware_published_trace_exposes_nd_summary_and_collection_filters() -> None:
     definition_id = _create_sweepable_definition("SweepAwareWholeResultSaveDefinition")
     task = _submit_local_simulation(

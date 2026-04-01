@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass, replace
+from typing import cast
 
+from src.app.domain.characterization_analysis import (
+    evaluate_trace_analysis_capabilities,
+)
 from src.app.domain.datasets import TraceAxis, TraceDetail, TraceMetadataSummary
 from src.app.domain.result_traces import (
     ResultTraceSelection,
@@ -12,12 +17,28 @@ from src.app.domain.result_traces import (
     resolve_saved_trace_parameter,
 )
 from src.app.domain.tasks import TaskDetail
+from src.app.domain.trace_structures import build_trace_structure_summary
+from src.app.infrastructure.persisted_runtime import (
+    available_sources_for_task_family,
+    build_trace_preview_payload,
+    extract_selection_trace_data,
+    extract_selection_trace_nd_data,
+    write_nd_complex_trace_payload,
+)
 from src.app.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
     build_result_handle_ref,
     build_result_provenance_ref,
     build_trace_payload_ref,
 )
+
+
+@dataclass(frozen=True)
+class MaterializedSimulationPublicationTrace:
+    family: str
+    source: str
+    summary: TraceMetadataSummary
+    detail: TraceDetail
 
 
 def build_simulation_publication_key(
@@ -29,134 +50,26 @@ def build_simulation_publication_key(
     return f"simulation-publication:{task_id}:{dataset_id}:{design_id}"
 
 
-def build_simulation_publication_trace_details(
+def build_simulation_publication_traces(
     *,
     task: TaskDetail,
+    dataset_family: str,
     dataset_id: str,
     design_id: str,
-) -> tuple[tuple[str, str, TraceDetail], ...]:
-    point_count = (
-        task.simulation_setup.frequency_sweep.point_count
-        if task.simulation_setup is not None
-        else 1
-    )
-    published_families: list[tuple[str, str, str]] = [
-        ("s_matrix", "raw", "raw"),
-        ("y_matrix", "raw", "postprocess"),
-        ("z_matrix", "raw", "postprocess"),
-    ]
-    if (
-        task.simulation_setup is not None
-        and task.simulation_setup.ptc is not None
-        and task.simulation_setup.ptc.enabled
-    ):
-        published_families.extend(
-            [
-                ("y_matrix", "ptc", "postprocess"),
-                ("z_matrix", "ptc", "postprocess"),
-            ]
-        )
-    trace_batch_record = build_metadata_record_ref(
-        "trace_batch",
-        f"trace_batch:published:{task.task_id}:{dataset_id}:{design_id}",
-        version=1,
-    )
-    details: list[tuple[str, str, TraceDetail]] = []
-    for family, source, _stage_kind in published_families:
-        trace_id = f"trace_simulation_task_{task.task_id}_{family}_{source}"
-        result_handle_record = build_metadata_record_ref(
-            "result_handle",
-            f"result_handle:published:{task.task_id}:{family}:{source}",
-            version=2,
-        )
-        details.append(
-            (
-                family,
-                source,
-                TraceDetail(
-                    trace_id=trace_id,
-                    dataset_id=dataset_id,
-                    design_id=design_id,
-                    axes=(TraceAxis(name="frequency", unit="GHz", length=point_count),),
-                    preview_payload={
-                        "kind": "sampled_series",
-                        "source": source,
-                        "family": family,
-                        "points": [
-                            [1.0, 0.11],
-                            [2.0, 0.18],
-                            [3.0, 0.15],
-                        ],
-                    },
-                    payload_ref=build_trace_payload_ref(
-                        payload_role="dataset_primary",
-                        store_key=(
-                            f"datasets/{dataset_id}/designs/{design_id}/simulation-results/"
-                            f"task_{task.task_id}/{trace_id}.zarr"
-                        ),
-                        store_uri=(
-                            f"trace_store/datasets/{dataset_id}/designs/{design_id}/"
-                            f"simulation-results/task_{task.task_id}/{trace_id}.zarr"
-                        ),
-                        group_path=(
-                            f"/datasets/{dataset_id}/designs/{design_id}/simulation_results"
-                        ),
-                        array_path=trace_id,
-                        dtype="complex64",
-                        shape=(point_count, 2),
-                        chunk_shape=(min(point_count, 64), 2),
-                    ),
-                    result_handles=(
-                        build_result_handle_ref(
-                            handle_id=f"published-result:{task.task_id}:{family}:{source}",
-                            kind="simulation_trace",
-                            status="materialized",
-                            label=f"Published {family.upper()} {source.upper()} result",
-                            metadata_record=result_handle_record,
-                            payload_backend="local_zarr",
-                            payload_format="zarr",
-                            payload_role="trace_payload",
-                            payload_locator=(
-                                f"trace_store/datasets/{dataset_id}/designs/{design_id}/"
-                                f"simulation-results/task_{task.task_id}/{trace_id}.zarr"
-                            ),
-                            provenance_task_id=task.task_id,
-                            provenance=build_result_provenance_ref(
-                                source_dataset_id=task.dataset_id,
-                                source_task_id=task.task_id,
-                                trace_batch_record=trace_batch_record,
-                            ),
-                        ),
-                    ),
-                ),
+) -> tuple[MaterializedSimulationPublicationTrace, ...]:
+    traces: list[MaterializedSimulationPublicationTrace] = []
+    for family, source in _simulation_publication_targets(task):
+        traces.append(
+            _materialize_simulation_publication_trace(
+                task=task,
+                dataset_family=dataset_family,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                family=family,
+                source=source,
             )
         )
-    return tuple(details)
-
-
-def build_simulation_publication_trace_summary(
-    *,
-    detail: TraceDetail,
-    task: TaskDetail,
-    family: str,
-    source: str,
-) -> TraceMetadataSummary:
-    return TraceMetadataSummary(
-        trace_id=detail.trace_id,
-        dataset_id=detail.dataset_id,
-        design_id=detail.design_id,
-        family=family,
-        parameter=source,
-        representation="complex_matrix",
-        trace_mode_group="base",
-        source_kind="circuit_simulation",
-        stage_kind=(
-            "postprocess"
-            if source == "ptc" or family in {"y_matrix", "z_matrix"}
-            else "raw"
-        ),
-        provenance_summary=f"Published from simulation task {task.task_id}",
-    )
+    return tuple(traces)
 
 
 def build_result_trace_publication_detail(
@@ -333,6 +246,178 @@ def _provenance_summary_for_trace(
             f"({selection.source.upper()} {build_trace_parameter(selection)})"
         )
     return f"Published from simulation task {task.task_id}"
+
+
+def _simulation_publication_targets(task: TaskDetail) -> tuple[tuple[str, str], ...]:
+    targets: list[tuple[str, str]] = []
+    if "raw" in available_sources_for_task_family(task, "s_matrix"):
+        targets.append(("s_matrix", "raw"))
+    if "raw" in available_sources_for_task_family(task, "y_matrix"):
+        targets.append(("y_matrix", "raw"))
+    if "raw" in available_sources_for_task_family(task, "z_matrix"):
+        targets.append(("z_matrix", "raw"))
+    if "ptc" in available_sources_for_task_family(task, "y_matrix"):
+        targets.append(("y_matrix", "ptc"))
+    if "ptc" in available_sources_for_task_family(task, "z_matrix"):
+        targets.append(("z_matrix", "ptc"))
+    return tuple(targets)
+
+
+def _materialize_simulation_publication_trace(
+    *,
+    task: TaskDetail,
+    dataset_family: str,
+    dataset_id: str,
+    design_id: str,
+    family: str,
+    source: str,
+) -> MaterializedSimulationPublicationTrace:
+    selection = ResultTraceSelection(
+        family=family,
+        source=source,
+        output_port=1,
+        input_port=1,
+        z0_ohm=50.0 if family in {"y_matrix", "z_matrix"} else None,
+    )
+    trace_data = extract_selection_trace_data(
+        task,
+        basis_task=task,
+        selection=selection,
+    )
+    nd_trace_data = extract_selection_trace_nd_data(
+        task,
+        basis_task=task,
+        selection=selection,
+    )
+    trace_id = f"trace_simulation_task_{task.task_id}_{family}_{source}"
+    payload_ref = write_nd_complex_trace_payload(
+        dataset_id=dataset_id,
+        design_id=design_id,
+        trace_id=trace_id,
+        axes=nd_trace_data.axes,
+        values=nd_trace_data.values,
+    )
+    trace_batch_record = build_metadata_record_ref(
+        "trace_batch",
+        f"trace_batch:published:{task.task_id}:{dataset_id}:{design_id}",
+        version=1,
+    )
+    result_handle_record = build_metadata_record_ref(
+        "result_handle",
+        f"result_handle:published:{task.task_id}:{family}:{source}",
+        version=2,
+    )
+    result_handle = build_result_handle_ref(
+        handle_id=f"published-result:{task.task_id}:{family}:{source}",
+        kind="simulation_trace",
+        status="materialized",
+        label=f"Published {family.upper()} {source.upper()} result",
+        metadata_record=result_handle_record,
+        payload_backend="local_zarr",
+        payload_format="zarr",
+        payload_role="trace_payload",
+        payload_locator=payload_ref.store_uri or payload_ref.store_key,
+        provenance_task_id=task.task_id,
+        provenance=build_result_provenance_ref(
+            source_dataset_id=task.dataset_id,
+            source_task_id=task.task_id,
+            trace_batch_record=trace_batch_record,
+        ),
+    )
+    axes = tuple(
+        TraceAxis(
+            name=str(axis["name"]),
+            unit=str(axis["unit"]),
+            length=int(axis["length"]),
+        )
+        for axis in nd_trace_data.axes
+    )
+    structure = build_trace_structure_summary(
+        dataset_id=dataset_id,
+        design_id=design_id,
+        family=selection.family,
+        parameter=source,
+        representation="complex_matrix",
+        trace_mode_group=selection.trace_mode_group,
+        source_kind=cast(str, nd_trace_data.source_kind),
+        stage_kind=cast(str, nd_trace_data.stage_kind),
+        axes=nd_trace_data.axes,
+    )
+    summary = TraceMetadataSummary(
+        trace_id=trace_id,
+        dataset_id=dataset_id,
+        design_id=design_id,
+        family=selection.family,
+        parameter=source,
+        representation="complex_matrix",
+        trace_mode_group=selection.trace_mode_group,
+        source_kind=cast(str, nd_trace_data.source_kind),
+        stage_kind=cast(str, nd_trace_data.stage_kind),
+        ndim=structure.ndim,
+        shape=structure.shape,
+        axes_summary=structure.axes_summary,
+        axis_signature=structure.axis_signature,
+        available_sweep_axes=structure.available_sweep_axes,
+        collection_projection=structure.collection_projection,
+        provenance_summary=f"Published from simulation task {task.task_id}",
+    )
+    analysis_capabilities = evaluate_trace_analysis_capabilities(
+        dataset_family=dataset_family,
+        trace=summary,
+        axes=axes,
+    )
+    preview = build_trace_preview_payload(
+        selection=selection,
+        trace_data=trace_data,
+    )
+    preview["kind"] = "series"
+    preview["family"] = selection.family
+    preview["source"] = selection.source
+    preview["parameter"] = source
+    preview["default_parameter"] = build_trace_parameter(selection)
+    preview["output_port"] = selection.output_port
+    preview["input_port"] = selection.input_port
+    preview["trace_mode_group"] = selection.trace_mode_group
+    preview["output_mode"] = selection.output_mode
+    preview["input_mode"] = selection.input_mode
+    preview["history_steps"] = _build_trace_history_steps(task=task, selection=selection)
+    preview["history_summary"] = " -> ".join(preview["history_steps"])
+    preview["points"] = [
+        [float(frequency), float(value.real), float(value.imag)]
+        for frequency, value in zip(
+            trace_data.frequencies_ghz,
+            trace_data.values,
+            strict=True,
+        )
+    ]
+    detail = TraceDetail(
+        trace_id=trace_id,
+        dataset_id=dataset_id,
+        design_id=design_id,
+        family=selection.family,
+        parameter=summary.parameter,
+        representation=summary.representation,
+        trace_mode_group=selection.trace_mode_group,
+        source_kind=cast(str, nd_trace_data.source_kind),
+        stage_kind=cast(str, nd_trace_data.stage_kind),
+        axes=axes,
+        ndim=structure.ndim,
+        shape=structure.shape,
+        axes_summary=structure.axes_summary,
+        axis_signature=structure.axis_signature,
+        available_sweep_axes=structure.available_sweep_axes,
+        collection_projection=structure.collection_projection,
+        preview_payload=preview,
+        payload_ref=payload_ref,
+        result_handles=(result_handle,),
+        analysis_capabilities=analysis_capabilities,
+    )
+    return MaterializedSimulationPublicationTrace(
+        family=family,
+        source=source,
+        summary=replace(summary, analysis_capabilities=analysis_capabilities),
+        detail=detail,
+    )
 
 
 def _build_trace_history_steps(
