@@ -91,12 +91,19 @@ const schemdrawSource = readFileSync(
   ),
   "utf8",
 );
-const simulationSource = readFileSync(
-  fileURLToPath(
-    new URL("../src/features/simulation/components/simulation-workbench-shell.tsx", import.meta.url),
-  ),
-  "utf8",
-);
+const simulationSource =
+  readFileSync(
+    fileURLToPath(
+      new URL("../src/features/simulation/components/simulation-workbench-shell.tsx", import.meta.url),
+    ),
+    "utf8",
+  ) +
+  readFileSync(
+    fileURLToPath(
+      new URL("../src/features/simulation/components/simulation-setup-stage.tsx", import.meta.url),
+    ),
+    "utf8",
+  );
 const researchPanelsSource = readFileSync(
   fileURLToPath(
     new URL("../src/features/shared/components/research-workflow-panels.tsx", import.meta.url),
