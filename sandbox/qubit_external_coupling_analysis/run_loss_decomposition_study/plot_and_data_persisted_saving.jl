@@ -122,31 +122,60 @@ function build_candidate_compare_plot(inputs, persisted_outputs)
     )
 end
 
-function build_selected_case_plot(summary_df)
-    row_for(case_name) = only(filter(row -> row.case == case_name, eachrow(summary_df)))
-    xy_baseline = row_for("xy_only_baseline")
-    ro_only = row_for("readout_only_selected")
-    full_shift = row_for("xy_plus_readout_shifted")
-    xy_matched = row_for("xy_only_matched")
-    ideal_additive = row_for("ideal_additive_reference")
+function build_selected_case_plot(ceff_trace_df::DataFrame)
+    label_by_case = Dict(
+        "xy_only_baseline" => "XY baseline",
+        "readout_only_selected" => "RO only",
+        "xy_plus_readout_shifted" => "XY + Readout",
+        "xy_only_matched" => "XY matched",
+    )
+    case_order = [
+        "xy_only_baseline",
+        "readout_only_selected",
+        "xy_plus_readout_shifted",
+        "xy_only_matched",
+    ]
+    summary_rows = NamedTuple[]
 
-    return build_plot(
+    for case_name in case_order
+        case_df = ceff_trace_df[ceff_trace_df.case .== case_name, :]
+        isempty(case_df) && continue
+        first_row = case_df[1, :]
+        push!(
+            summary_rows,
+            (
+                case=case_name,
+                label=get(label_by_case, case_name, case_name),
+                fq_ghz=first_row.extracted_fq_ghz,
+                t1_fit_us=first_row.t1_fit_at_extracted_f_us,
+                c_eff_fit_ff=first_row.c_eff_fit_at_extracted_f_ff,
+                re_y_dm_s=first_row.extracted_re_y_dm_s,
+            ),
+        )
+    end
+
+    summary_df = DataFrame(summary_rows)
+    fig = build_plot(
         [
             scatter(
                 mode="markers+text",
-                x=[xy_baseline.fq_ghz, ro_only.fq_ghz, full_shift.fq_ghz, xy_matched.fq_ghz, ideal_additive.fq_ghz],
-                y=[xy_baseline.re_y_dm_s, ro_only.re_y_dm_s, full_shift.re_y_dm_s, xy_matched.re_y_dm_s, ideal_additive.re_y_dm_s],
-                text=["XY baseline", "RO only", "XY + Readout", "XY matched", "Ideal additive"],
+                x=summary_df.fq_ghz,
+                y=summary_df.t1_fit_us,
+                text=summary_df.label,
                 textposition="top center",
                 marker=attr(size=12),
-                name="Re(Ydm) at extracted resonance",
+                customdata=hcat(summary_df.c_eff_fit_ff, summary_df.re_y_dm_s),
+                hovertemplate="Case: %{text}<br>fq: %{x:.6f} GHz<br>T1: %{y:.4f} us<br>Ceff: %{customdata[0]:.4f} fF<br>Re(Ydm): %{customdata[1]:.6e} S<extra></extra>",
+                name="T1 at extracted resonance",
             ),
         ],
-        "Selected Cases: Re(Ydm,in) At Extracted Resonance",
+        "Selected Physical Cases: T1 At Extracted Resonance",
         "Extracted Qubit Resonance Frequency (GHz)",
-        "Re(Ydm,in) (S)";
+        "T1 (us)";
         legend_title="Case",
     )
+    PlotlyJS.relayout!(fig, yaxis=attr(title="T1 (us)", type="log"))
+    return fig
 end
 
 function build_selected_case_ceff_plot(ceff_trace_df::DataFrame)
@@ -493,7 +522,7 @@ function display_persisted_plots_and_summary(inputs, persisted_outputs)
     )
 
     candidate_compare_plot = build_candidate_compare_plot(inputs, persisted_outputs)
-    selected_case_plot = build_selected_case_plot(persisted_outputs.summary_df)
+    selected_case_plot = build_selected_case_plot(persisted_outputs.selected_case_ceff_trace_df)
     selected_case_ceff_plot = build_selected_case_ceff_plot(persisted_outputs.selected_case_ceff_trace_df)
     selected_case_t1_plot = build_selected_case_t1_plot(persisted_outputs.selected_case_ceff_trace_df)
 
