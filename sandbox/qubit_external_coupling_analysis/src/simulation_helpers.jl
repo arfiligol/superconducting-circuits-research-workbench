@@ -47,6 +47,42 @@ function simulate_case(cfg::StudyConfig; label::AbstractString)
     )
 end
 
+function simulate_case_with_ceff_trace(
+    cfg::StudyConfig;
+    label::AbstractString,
+    fit_half_window_points::Integer=4,
+)
+    response = solve_linear_response(cfg; returnZ=true)
+    freqs_ghz = response.solution.linearized.w ./ (2π .* GHz)
+    y_cube_raw = z_to_y_cube(response.solution)
+    dm_loss_result = differential_mode_input_admittance(y_cube_raw, cfg; ptc_mode=:qubit_only)
+    dm_ceff_result = differential_mode_input_admittance(y_cube_raw, cfg; ptc_mode=:all_ports)
+    resonance = extract_resonance_from_yin(freqs_ghz, dm_loss_result.Yin_dm)
+    ceff_trace = fit_effective_capacitance_trace(
+        freqs_ghz,
+        dm_ceff_result.Yin_dm;
+        half_window_points=fit_half_window_points,
+    )
+    resonance_idx = argmin(abs.(freqs_ghz .- resonance.frequency_ghz))
+
+    return (
+        label=String(label),
+        config=cfg,
+        freqs_ghz=freqs_ghz,
+        Yin_dm_loss=dm_loss_result.Yin_dm,
+        Yin_dm_ceff=dm_ceff_result.Yin_dm,
+        resonance=resonance,
+        G_resonance_s=resonance.re_y,
+        fq_ghz=resonance.frequency_ghz,
+        crossed=resonance.crossed,
+        ceff_trace=ceff_trace,
+        ceff_fit_at_resonance_f=ceff_trace.c_eff_fit_f[resonance_idx],
+        ceff_direct_at_resonance_f=ceff_trace.c_eff_direct_f[resonance_idx],
+        ceff_sample_frequency_ghz=freqs_ghz[resonance_idx],
+        symbolic_component_count=length(response.netlists.symbolic_netlist),
+    )
+end
+
 function simulate_readout_sparameters(
     cfg::StudyConfig;
     sweep_start_ghz,

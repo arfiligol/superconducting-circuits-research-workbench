@@ -92,7 +92,7 @@ function build_user_editable_inputs()
 
         # Readout-branch geometry.
         left_readout_length_m=3462.732 * um,
-        purcell_filter_length_m=13500 * um,
+        purcell_filter_length_m=8500 * um,
         right_readout_length_m=3462.732 * um,
         qwr_length_m=4731.6735 * um,
         pf_coupling_cap_in_f=41.06185 * fF,
@@ -170,6 +170,11 @@ function build_user_editable_inputs()
         # Vector fitting setup.
         vf_expected_resonators=2,
         vf_background_poles=2,
+
+        # Effective-capacitance fitting setup.
+        ceff_fit_config=(
+            half_window_points=4,
+        ),
 
         # Plot controls for persisted multi-parameter sweep results.
         #

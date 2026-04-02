@@ -40,6 +40,7 @@ export run_parameter_sweep
 export build_plot
 export solve_linear_response
 export simulate_case
+export simulate_case_with_ceff_trace
 export simulate_readout_sparameters
 export scan_lq_values
 export scan_lq_values_with_yin_traces

@@ -131,10 +131,54 @@ function build_study_output_paths()
         window_length_csv_path=joinpath(raw_dir, "selected_coupled_window_length_sweep_summary.csv"),
         ro_window_length_csv_path=joinpath(raw_dir, "selected_ro_only_coupled_window_length_sweep_summary.csv"),
         window_length_ydm_trace_csv_path=joinpath(raw_dir, "selected_coupled_window_length_yin_traces.csv"),
+        selected_case_ceff_trace_csv_path=joinpath(raw_dir, "selected_case_ceff_frequency_traces.csv"),
         readout_s21_raw_csv_path=joinpath(raw_dir, "selected_readout_s21_raw.csv"),
         readout_s21_model_csv_path=joinpath(raw_dir, "selected_readout_s21_vf_model.csv"),
         readout_s21_resonance_csv_path=joinpath(raw_dir, "selected_readout_s21_vf_resonances.csv"),
     )
+end
+
+function build_case_ceff_trace_rows(case_result)
+    return [
+        (
+            case=case_result.label,
+            g_ptc_mode="qubit_only",
+            ceff_ptc_mode="all_ports",
+            frequency_ghz=freq_ghz,
+            omega_rad_per_s=case_result.ceff_trace.omega_rad_per_s[idx],
+            re_y_dm_s=real(yin_loss_value),
+            im_y_dm_s=imag(yin_loss_value),
+            re_y_dm_ceff_s=real(yin_ceff_value),
+            im_y_dm_ceff_s=imag(yin_ceff_value),
+            c_eff_fit_f=case_result.ceff_trace.c_eff_fit_f[idx],
+            c_eff_fit_ff=case_result.ceff_trace.c_eff_fit_f[idx] / fF,
+            c_eff_direct_f=case_result.ceff_trace.c_eff_direct_f[idx],
+            c_eff_direct_ff=case_result.ceff_trace.c_eff_direct_f[idx] / fF,
+            t1_fit_s=(real(yin_loss_value) > 0 && case_result.ceff_trace.c_eff_fit_f[idx] > 0) ? case_result.ceff_trace.c_eff_fit_f[idx] / real(yin_loss_value) : NaN,
+            t1_fit_us=(real(yin_loss_value) > 0 && case_result.ceff_trace.c_eff_fit_f[idx] > 0) ? (case_result.ceff_trace.c_eff_fit_f[idx] / real(yin_loss_value)) * 1e6 : NaN,
+            t1_direct_s=(real(yin_loss_value) > 0 && case_result.ceff_trace.c_eff_direct_f[idx] > 0) ? case_result.ceff_trace.c_eff_direct_f[idx] / real(yin_loss_value) : NaN,
+            t1_direct_us=(real(yin_loss_value) > 0 && case_result.ceff_trace.c_eff_direct_f[idx] > 0) ? (case_result.ceff_trace.c_eff_direct_f[idx] / real(yin_loss_value)) * 1e6 : NaN,
+            fit_rmse_s=case_result.ceff_trace.fit_rmse_s[idx],
+            fit_point_count=case_result.ceff_trace.fit_point_count[idx],
+            fit_window_start_idx=case_result.ceff_trace.fit_window_start_idx[idx],
+            fit_window_stop_idx=case_result.ceff_trace.fit_window_stop_idx[idx],
+            fit_half_window_points=case_result.ceff_trace.fit_half_window_points,
+            crossed=case_result.crossed,
+            extracted_fq_ghz=case_result.fq_ghz,
+            extracted_re_y_dm_s=case_result.G_resonance_s,
+            ceff_sample_frequency_ghz=case_result.ceff_sample_frequency_ghz,
+            c_eff_fit_at_extracted_f_f=case_result.ceff_fit_at_resonance_f,
+            c_eff_fit_at_extracted_f_ff=case_result.ceff_fit_at_resonance_f / fF,
+            c_eff_direct_at_extracted_f_f=case_result.ceff_direct_at_resonance_f,
+            c_eff_direct_at_extracted_f_ff=case_result.ceff_direct_at_resonance_f / fF,
+            t1_fit_at_extracted_f_s=(case_result.G_resonance_s > 0 && case_result.ceff_fit_at_resonance_f > 0) ? case_result.ceff_fit_at_resonance_f / case_result.G_resonance_s : NaN,
+            t1_fit_at_extracted_f_us=(case_result.G_resonance_s > 0 && case_result.ceff_fit_at_resonance_f > 0) ? (case_result.ceff_fit_at_resonance_f / case_result.G_resonance_s) * 1e6 : NaN,
+            t1_direct_at_extracted_f_s=(case_result.G_resonance_s > 0 && case_result.ceff_direct_at_resonance_f > 0) ? case_result.ceff_direct_at_resonance_f / case_result.G_resonance_s : NaN,
+            t1_direct_at_extracted_f_us=(case_result.G_resonance_s > 0 && case_result.ceff_direct_at_resonance_f > 0) ? (case_result.ceff_direct_at_resonance_f / case_result.G_resonance_s) * 1e6 : NaN,
+        ) for (idx, (freq_ghz, yin_loss_value, yin_ceff_value)) in enumerate(
+            zip(case_result.freqs_ghz, case_result.Yin_dm_loss, case_result.Yin_dm_ceff),
+        )
+    ]
 end
 
 function run_loss_decomposition_simulation(inputs, circuit_context)
@@ -145,7 +189,8 @@ function run_loss_decomposition_simulation(inputs, circuit_context)
     println("============================================================")
     println("Floating-Qubit Loss Decomposition Study")
     println("============================================================")
-    println("PTC -> CT -> Kron reduction is always applied on the qubit ports only.")
+    println("Loss metrics use qubit-port-only PTC before CT -> Kron reduction.")
+    println("Ceff diagnostics use all-port PTC before the same CT -> Kron reduction.")
     println("PF and QWR resonant lengths are fixed; only coupled-window length and C_rq1/C_rq2 are swept on the readout side.")
     @printf(
         "Execution config: workers = %d (available Julia threads = %d), candidate batch save = %d points\n",
@@ -303,6 +348,30 @@ function run_loss_decomposition_simulation(inputs, circuit_context)
         g_xy_matched,
     )
     println()
+
+    selected_case_ceff_results = [
+        simulate_case_with_ceff_trace(
+            xy_baseline.result.config;
+            label="xy_only_baseline",
+            fit_half_window_points=inputs.ceff_fit_config.half_window_points,
+        ),
+        simulate_case_with_ceff_trace(
+            readout_selected.config;
+            label="readout_only_selected",
+            fit_half_window_points=inputs.ceff_fit_config.half_window_points,
+        ),
+        simulate_case_with_ceff_trace(
+            full_shift.config;
+            label="xy_plus_readout_shifted",
+            fit_half_window_points=inputs.ceff_fit_config.half_window_points,
+        ),
+        simulate_case_with_ceff_trace(
+            xy_matched.result.config;
+            label="xy_only_matched",
+            fit_half_window_points=inputs.ceff_fit_config.half_window_points,
+        ),
+    ]
+    selected_case_ceff_trace_df = DataFrame(vcat(build_case_ceff_trace_rows.(selected_case_ceff_results)...))
 
     summary_df = DataFrame([
         make_case_summary_row(
@@ -549,6 +618,7 @@ function run_loss_decomposition_simulation(inputs, circuit_context)
     CSV.write(output_paths.window_length_csv_path, window_length_df)
     CSV.write(output_paths.ro_window_length_csv_path, ro_window_length_df)
     CSV.write(output_paths.window_length_ydm_trace_csv_path, DataFrame(window_length_trace_rows))
+    CSV.write(output_paths.selected_case_ceff_trace_csv_path, selected_case_ceff_trace_df)
 
     return (
         xy_baseline=xy_baseline,
@@ -570,6 +640,7 @@ function run_loss_decomposition_simulation(inputs, circuit_context)
         lq_ydm_trace_df=lq_ydm_trace_df,
         window_length_df=window_length_df,
         window_length_ydm_trace_df=DataFrame(window_length_trace_rows),
+        selected_case_ceff_trace_df=selected_case_ceff_trace_df,
         selected_readout_response=selected_readout_response,
         output_paths=output_paths,
     )

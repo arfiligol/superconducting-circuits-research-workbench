@@ -14,6 +14,7 @@ function load_persisted_outputs()
         paths.window_length_csv_path,
         paths.ro_window_length_csv_path,
         paths.window_length_ydm_trace_csv_path,
+        paths.selected_case_ceff_trace_csv_path,
         paths.readout_s21_raw_csv_path,
         paths.readout_s21_model_csv_path,
         paths.readout_s21_resonance_csv_path,
@@ -32,6 +33,7 @@ function load_persisted_outputs()
         window_length_df=CSV.read(paths.window_length_csv_path, DataFrame),
         ro_window_length_df=CSV.read(paths.ro_window_length_csv_path, DataFrame),
         window_length_ydm_trace_df=CSV.read(paths.window_length_ydm_trace_csv_path, DataFrame),
+        selected_case_ceff_trace_df=CSV.read(paths.selected_case_ceff_trace_csv_path, DataFrame),
         readout_s21_raw_df=CSV.read(paths.readout_s21_raw_csv_path, DataFrame),
         readout_s21_model_df=CSV.read(paths.readout_s21_model_csv_path, DataFrame),
         readout_s21_resonance_df=CSV.read(paths.readout_s21_resonance_csv_path, DataFrame),
@@ -49,6 +51,8 @@ function build_figure_paths(output_paths)
         ro_window_length_png_path=joinpath(output_paths.figures_dir, "ro_only_coupled_window_length_sweep.png"),
         window_length_png_path=joinpath(output_paths.figures_dir, "selected_coupled_window_length_sweep.png"),
         window_length_yin_heatmap_png_path=joinpath(output_paths.figures_dir, "xy_plus_readout_yin_window_heatmap.png"),
+        selected_case_ceff_png_path=joinpath(output_paths.figures_dir, "selected_case_ceff_vs_frequency.png"),
+        selected_case_t1_png_path=joinpath(output_paths.figures_dir, "selected_case_t1_vs_frequency.png"),
         selected_case_png_path=joinpath(output_paths.figures_dir, "selected_case_scatter.png"),
     )
 end
@@ -143,6 +147,76 @@ function build_selected_case_plot(summary_df)
         "Re(Ydm,in) (S)";
         legend_title="Case",
     )
+end
+
+function build_selected_case_ceff_plot(ceff_trace_df::DataFrame)
+    case_order = unique(ceff_trace_df.case)
+    traces = GenericTrace[]
+
+    for case_name in case_order
+        case_df = ceff_trace_df[ceff_trace_df.case .== case_name, :]
+        sort!(case_df, :frequency_ghz)
+        push!(
+            traces,
+            scatter(
+                mode="lines",
+                x=case_df.frequency_ghz,
+                y=case_df.c_eff_fit_ff,
+                customdata=hcat(
+                    case_df.c_eff_direct_ff,
+                    case_df.fit_rmse_s,
+                    case_df.extracted_fq_ghz,
+                ),
+                hovertemplate="Case: $(case_name)<br>Frequency: %{x:.4f} GHz<br>Ceff fit: %{y:.4f} fF<br>Ceff direct Im(Y)/ω: %{customdata[0]:.4f} fF<br>fit RMSE: %{customdata[1]:.3e} S<br>extracted fq: %{customdata[2]:.6f} GHz<extra></extra>",
+                name=case_name,
+            ),
+        )
+    end
+
+    return build_plot(
+        traces,
+        "Selected Cases: Ceff,q(ω) From All-Port PTC",
+        "Frequency (GHz)",
+        "Ceff,q (fF)";
+        legend_title="Case",
+    )
+end
+
+function build_selected_case_t1_plot(ceff_trace_df::DataFrame)
+    case_order = unique(ceff_trace_df.case)
+    traces = GenericTrace[]
+
+    for case_name in case_order
+        case_df = ceff_trace_df[ceff_trace_df.case .== case_name, :]
+        case_df = case_df[isfinite.(case_df.t1_fit_us) .& (case_df.t1_fit_us .> 0), :]
+        isempty(case_df) && continue
+        sort!(case_df, :frequency_ghz)
+        push!(
+            traces,
+            scatter(
+                mode="lines",
+                x=case_df.frequency_ghz,
+                y=case_df.t1_fit_us,
+                customdata=hcat(
+                    case_df.c_eff_fit_ff,
+                    case_df.re_y_dm_s,
+                    case_df.extracted_fq_ghz,
+                ),
+                hovertemplate="Case: $(case_name)<br>Frequency: %{x:.4f} GHz<br>T1 fit: %{y:.4f} us<br>Ceff fit (all-port): %{customdata[0]:.4f} fF<br>Re(Ydm) loss metric: %{customdata[1]:.3e} S<br>extracted fq: %{customdata[2]:.6f} GHz<extra></extra>",
+                name=case_name,
+            ),
+        )
+    end
+
+    fig = build_plot(
+        traces,
+        "Selected Cases: T1(ω) Using All-Port Ceff And Qubit-Port Loss",
+        "Frequency (GHz)",
+        "T1 (us)";
+        legend_title="Case",
+    )
+    PlotlyJS.relayout!(fig, yaxis=attr(title="T1 (us)", type="log"))
+    return fig
 end
 
 function build_yin_heatmap_plot(trace_df::DataFrame; sweep_column::Symbol, sweep_axis_title::AbstractString, title::AbstractString)
@@ -420,6 +494,8 @@ function display_persisted_plots_and_summary(inputs, persisted_outputs)
 
     candidate_compare_plot = build_candidate_compare_plot(inputs, persisted_outputs)
     selected_case_plot = build_selected_case_plot(persisted_outputs.summary_df)
+    selected_case_ceff_plot = build_selected_case_ceff_plot(persisted_outputs.selected_case_ceff_trace_df)
+    selected_case_t1_plot = build_selected_case_t1_plot(persisted_outputs.selected_case_ceff_trace_df)
 
     figure_paths = build_figure_paths(persisted_outputs.paths)
     try_save_png(readout_s21_vf_plot, figure_paths.readout_s21_png_path, inputs)
@@ -430,6 +506,8 @@ function display_persisted_plots_and_summary(inputs, persisted_outputs)
     try_save_png(ro_window_length_plot, figure_paths.ro_window_length_png_path, inputs)
     try_save_png(window_length_plot, figure_paths.window_length_png_path, inputs)
     try_save_png(window_yin_heatmap_plot, figure_paths.window_length_yin_heatmap_png_path, inputs)
+    try_save_png(selected_case_ceff_plot, figure_paths.selected_case_ceff_png_path, inputs)
+    try_save_png(selected_case_t1_plot, figure_paths.selected_case_t1_png_path, inputs)
     try_save_png(selected_case_plot, figure_paths.selected_case_png_path, inputs)
 
     display(readout_s21_vf_plot)
@@ -440,6 +518,8 @@ function display_persisted_plots_and_summary(inputs, persisted_outputs)
     display(ro_window_length_plot)
     display(window_length_plot)
     display(window_yin_heatmap_plot)
+    display(selected_case_ceff_plot)
+    display(selected_case_t1_plot)
     display(selected_case_plot)
 
     println("Vector-fitting resonance summary:")
@@ -466,6 +546,46 @@ function display_persisted_plots_and_summary(inputs, persisted_outputs)
             row.c_rq1_ff,
             row.c_rq2_ff,
             row.note,
+        )
+    end
+
+    println()
+    println("Selected-case Ceff summary (all-port PTC, local slope fit):")
+    ceff_case_summary_df = combine(
+        groupby(persisted_outputs.selected_case_ceff_trace_df, :case),
+        :extracted_fq_ghz => first => :extracted_fq_ghz,
+        :ceff_sample_frequency_ghz => first => :ceff_sample_frequency_ghz,
+        :c_eff_fit_at_extracted_f_ff => first => :c_eff_fit_at_extracted_f_ff,
+        :c_eff_direct_at_extracted_f_ff => first => :c_eff_direct_at_extracted_f_ff,
+    )
+    for row in eachrow(ceff_case_summary_df)
+        @printf(
+            "  %-26s fq = %7.4f GHz | sampled at %.4f GHz | Ceff_fit = % .4f fF | Ceff_direct = % .4f fF\n",
+            row.case,
+            row.extracted_fq_ghz,
+            row.ceff_sample_frequency_ghz,
+            row.c_eff_fit_at_extracted_f_ff,
+            row.c_eff_direct_at_extracted_f_ff,
+        )
+    end
+
+    println()
+    println("Selected-case T1 summary (T1 = Ceff_fit[all-port] / Re(Ydm)[qubit-port-only]):")
+    t1_case_summary_df = combine(
+        groupby(persisted_outputs.selected_case_ceff_trace_df, :case),
+        :extracted_fq_ghz => first => :extracted_fq_ghz,
+        :ceff_sample_frequency_ghz => first => :ceff_sample_frequency_ghz,
+        :t1_fit_at_extracted_f_us => first => :t1_fit_at_extracted_f_us,
+        :extracted_re_y_dm_s => first => :extracted_re_y_dm_s,
+    )
+    for row in eachrow(t1_case_summary_df)
+        @printf(
+            "  %-26s fq = %7.4f GHz | sampled at %.4f GHz | T1_fit = % .4f us | Re(Ydm) sample = % .6e S\n",
+            row.case,
+            row.extracted_fq_ghz,
+            row.ceff_sample_frequency_ghz,
+            row.t1_fit_at_extracted_f_us,
+            row.extracted_re_y_dm_s,
         )
     end
 
