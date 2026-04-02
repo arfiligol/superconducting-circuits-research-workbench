@@ -8,6 +8,7 @@ import {
   characterizationArtifactPayloadKey,
   characterizationResultDetailKey,
   characterizationResultsListKey,
+  formatCharacterizationTraceAxesSummary,
   characterizationRunHistoryKey,
   characterizationTaggingsKey,
 } from "../src/features/characterization/lib/api";
@@ -439,6 +440,21 @@ describe("characterization explorer helpers", () => {
         collection: "collection_b",
       }).map((trace) => trace.trace_id),
     ).toEqual(["trace_b"]);
+  });
+
+  it("formats structured trace axes summaries from the dataset trace browse contract", () => {
+    expect(
+      formatCharacterizationTraceAxesSummary({
+        rank: 2,
+        axis_names: ["frequency", "L_jun"],
+        axis_units: ["GHz", "nH"],
+        axis_lengths: [401, 5],
+      }),
+    ).toBe("frequency (GHz) × L_jun (nH) · 401 × 5");
+    expect(formatCharacterizationTraceAxesSummary("Shared axis L_jun")).toBe(
+      "Shared axis L_jun",
+    );
+    expect(formatCharacterizationTraceAxesSummary(null)).toBe("Axis summary unavailable");
   });
 });
 

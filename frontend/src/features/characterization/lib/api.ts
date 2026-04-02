@@ -253,7 +253,15 @@ type CharacterizationTraceSelectionRowResponse = Readonly<{
     delete: boolean;
   }>;
   mutation_policy_summary: string;
-  axes_summary?: string | null;
+  axes_summary?:
+    | string
+    | Readonly<{
+        rank?: number | null;
+        axis_names?: readonly string[] | null;
+        axis_units?: readonly (string | null)[] | null;
+        axis_lengths?: readonly number[] | null;
+      }>
+    | null;
   axis_signature?: string | null;
   available_sweep_axes?: readonly string[] | null;
   collection_projection?:
@@ -262,6 +270,11 @@ type CharacterizationTraceSelectionRowResponse = Readonly<{
         label: string;
         summary: string;
         trace_count?: number | null;
+      }>
+    | Readonly<{
+        collection_key?: string | null;
+        kind?: string | null;
+        group_label?: string | null;
       }>
     | null;
 }>;
@@ -662,12 +675,63 @@ function mapCharacterizationTraceCollectionProjection(
     return null;
   }
 
+  if ("label" in payload && "summary" in payload) {
+    return {
+      collectionId: payload.collection_id ?? null,
+      label: payload.label,
+      summary: payload.summary,
+      traceCount: payload.trace_count ?? 0,
+    };
+  }
+
   return {
-    collectionId: payload.collection_id ?? null,
-    label: payload.label,
-    summary: payload.summary,
-    traceCount: payload.trace_count ?? 0,
+    collectionId: payload.collection_key ?? null,
+    label: payload.group_label?.trim() || payload.collection_key || "Collection",
+    summary:
+      payload.kind === "trace_structure_group"
+        ? "Shared trace structure"
+        : payload.kind?.replaceAll("_", " ") || "Sweep-aware grouping",
+    traceCount: 0,
   };
+}
+
+export function formatCharacterizationTraceAxesSummary(
+  payload: CharacterizationTraceSelectionRowResponse["axes_summary"],
+) {
+  if (typeof payload === "string") {
+    return payload.trim().length > 0 ? payload : "Axis summary unavailable";
+  }
+
+  if (!payload) {
+    return "Axis summary unavailable";
+  }
+
+  const axisNames = (payload.axis_names ?? []).filter(
+    (axisName): axisName is string =>
+      typeof axisName === "string" && axisName.trim().length > 0,
+  );
+  const axisUnits = payload.axis_units ?? [];
+  const axisLengths = (payload.axis_lengths ?? []).filter(
+    (axisLength): axisLength is number => Number.isFinite(axisLength),
+  );
+
+  if (axisNames.length === 0) {
+    return typeof payload.rank === "number" && payload.rank > 0
+      ? `${payload.rank}D trace`
+      : "Axis summary unavailable";
+  }
+
+  const axisLabel = axisNames
+    .map((axisName, index) => {
+      const unit = axisUnits[index];
+      return typeof unit === "string" && unit.trim().length > 0
+        ? `${axisName} (${unit})`
+        : axisName;
+    })
+    .join(" × ");
+  const shapeLabel =
+    axisLengths.length === axisNames.length ? ` · ${axisLengths.join(" × ")}` : "";
+  return `${axisLabel}${shapeLabel}`;
 }
 
 function mapCharacterizationTraceSelectionRow(
@@ -686,7 +750,7 @@ function mapCharacterizationTraceSelectionRow(
     provenance_summary: payload.provenance_summary,
     allowed_actions: payload.allowed_actions,
     mutation_policy_summary: payload.mutation_policy_summary,
-    axesSummary: payload.axes_summary ?? "Axis summary unavailable",
+    axesSummary: formatCharacterizationTraceAxesSummary(payload.axes_summary),
     axisSignature: payload.axis_signature ?? "",
     availableSweepAxes: [...(payload.available_sweep_axes ?? [])],
     collectionProjection: mapCharacterizationTraceCollectionProjection(
