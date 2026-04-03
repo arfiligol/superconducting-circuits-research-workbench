@@ -13,7 +13,9 @@ from src.app.domain.tasks import (
     TaskLifecycleUpdate,
     TaskResultRefs,
 )
-from src.app.infrastructure.rewrite_app_state_repository import build_pending_result_refs
+from src.app.infrastructure.task_result_reference_factory import (
+    build_pending_result_refs,
+)
 
 
 class StorageMetadataRepository(Protocol):

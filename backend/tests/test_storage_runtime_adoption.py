@@ -21,12 +21,12 @@ from src.app.infrastructure.persistence import (
     create_metadata_session_factory,
 )
 from src.app.infrastructure.runtime import (
+    get_app_state_repository,
     get_catalog_repository,
-    get_rewrite_app_state_repository,
-    get_rewrite_task_repository,
     get_storage_metadata_repository,
     get_task_audit_repository,
     get_task_execution_runtime,
+    get_task_repository,
     get_task_service,
     get_task_snapshot_repository,
     get_worker_runtime_settings,
@@ -43,7 +43,7 @@ from src.app.settings import get_settings
 
 
 def _enter_online_owner_session() -> None:
-    repository = get_rewrite_app_state_repository()
+    repository = get_app_state_repository()
     repository.switch_runtime_mode(
         runtime_mode="online",
         server_target_origin="http://127.0.0.1:8000",
@@ -208,9 +208,9 @@ def test_rebuild_durable_runtime_state_resets_persisted_catalog_before_reseeding
 
 
 def test_task_service_uses_persisted_task_repository_not_app_state_seeds() -> None:
-    app_state_repository = get_rewrite_app_state_repository()
+    app_state_repository = get_app_state_repository()
     persisted_task = get_task_service().get_task(303)
-    persisted_history = get_rewrite_task_repository().get_task_history_view(303)
+    persisted_history = get_task_repository().get_task_history_view(303)
 
     assert app_state_repository.list_tasks() == []
     assert app_state_repository.get_task(303) is None
@@ -376,7 +376,7 @@ def test_task_service_lifecycle_update_persists_running_state_across_reset() -> 
     assert history.task.dispatch is not None
     assert history.latest_event.metadata["dispatch_key"] == history.task.dispatch.dispatch_key
 
-    repository_history = get_rewrite_task_repository().get_task_history_view(
+    repository_history = get_task_repository().get_task_history_view(
         submitted_task.task_id
     )
     assert repository_history is not None
@@ -788,7 +788,7 @@ def test_runtime_reset_keeps_submitted_task_row_and_storage_refs() -> None:
     assert reloaded_task.dispatch.status == "accepted"
     assert reloaded_task.dataset_id == "fluxonium-2025-031"
     assert reloaded_task.result_refs.result_handles == submitted_task.result_refs.result_handles
-    assert get_rewrite_task_repository().get_task(submitted_task.task_id) is not None
+    assert get_task_repository().get_task(submitted_task.task_id) is not None
 
 
 def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_cancelled_state(

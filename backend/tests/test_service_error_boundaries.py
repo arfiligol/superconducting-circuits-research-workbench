@@ -2,9 +2,11 @@ import pytest
 from fastapi import HTTPException
 from src.app.domain.datasets import CharacterizationTaggingRequest
 from src.app.domain.tasks import TaskSubmissionDraft
+from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
 from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
 from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
 from src.app.infrastructure.session_jwt_transport import SessionJwtTransport
+from src.app.services.authorization_service import AuthorizationService
 from src.app.services.circuit_definition_service import CircuitDefinitionService
 from src.app.services.dataset_catalog_service import DatasetCatalogService
 from src.app.services.dataset_characterization_service import (
@@ -16,6 +18,8 @@ from src.app.services.result_trace_publication_service import (
     ResultTracePublicationService,
 )
 from src.app.services.service_errors import ServiceError
+from src.app.services.session_mutation_service import SessionMutationService
+from src.app.services.session_projection_service import SessionProjectionService
 from src.app.services.session_service import SessionService
 from src.app.services.simulation_result_publication_service import (
     SimulationResultPublicationService,
@@ -37,6 +41,35 @@ def _enter_online_owner_session(repository: InMemoryRewriteAppStateRepository) -
         password="rewrite-local-password",
     )
     assert session is not None
+
+
+def _build_session_service(
+    repository: InMemoryRewriteAppStateRepository,
+    dataset_repository: InMemoryRewriteCatalogRepository,
+    *,
+    token_transport: SessionJwtTransport | None = None,
+) -> SessionService:
+    resolved_transport = token_transport or SessionJwtTransport(secret="test-session-secret-2026")
+    authorization_service = AuthorizationService(CasbinAuthorizationAdapter())
+    projection_service = SessionProjectionService(
+        repository=repository,
+        dataset_repository=dataset_repository,
+        token_transport=resolved_transport,
+        authorization_service=authorization_service,
+    )
+    return SessionService(
+        repository=repository,
+        dataset_repository=dataset_repository,
+        token_transport=resolved_transport,
+        projection_service=projection_service,
+        mutation_service=SessionMutationService(
+            repository=repository,
+            dataset_repository=dataset_repository,
+            token_transport=resolved_transport,
+            authorization_service=authorization_service,
+            projection_service=projection_service,
+        ),
+    )
 
 
 def _build_dataset_service(
@@ -167,9 +200,9 @@ def test_session_service_raises_framework_agnostic_error_for_missing_active_data
         server_target_origin="http://127.0.0.1:8000",
     )
     token_transport = SessionJwtTransport(secret="test-session-secret-2026")
-    service = SessionService(
-        repository=repository,
-        dataset_repository=InMemoryRewriteCatalogRepository(),
+    service = _build_session_service(
+        repository,
+        InMemoryRewriteCatalogRepository(),
         token_transport=token_transport,
     )
     login_result = service.login(

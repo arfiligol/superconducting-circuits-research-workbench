@@ -16,9 +16,9 @@ from src.app.infrastructure.persistence.database import create_metadata_session_
 from src.app.infrastructure.persistence.models import RewriteAuthenticatedSessionRecord
 from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
 from src.app.infrastructure.runtime import (
+    get_app_state_repository,
+    get_catalog_repository,
     get_execution_recovery_service,
-    get_rewrite_app_state_repository,
-    get_rewrite_catalog_repository,
     get_task_audit_repository,
     get_task_execution_runtime,
     get_task_service,
@@ -185,7 +185,7 @@ def _retry_task_and_optionally_drain(
 def _bind_client_app_context(test_client: TestClient):
     app_context_id = test_client.cookies.get("sc_app_context")
     assert app_context_id is not None
-    repository = get_rewrite_app_state_repository()
+    repository = get_app_state_repository()
     binding = repository.bind_request_app_context_id(app_context_id)
     try:
         yield
@@ -463,7 +463,7 @@ def test_active_workspace_switch_survives_backend_restart() -> None:
 
 
 def test_authenticated_session_creation_uses_durable_workspace_default_dataset() -> None:
-    repository = get_rewrite_app_state_repository()
+    repository = get_app_state_repository()
     repository.upsert_workspace_default_dataset(
         workspace_id="ws-device-lab",
         default_dataset_id="durable-default-dataset",
@@ -507,7 +507,7 @@ def test_active_dataset_binding_survives_backend_restart() -> None:
 
 
 def test_get_session_clears_stale_local_active_dataset_instead_of_failing_context_rebind() -> None:
-    repository = get_rewrite_app_state_repository()
+    repository = get_app_state_repository()
     bootstrap = client.get("/session")
     assert bootstrap.status_code == 200
     with _bind_client_app_context(client):
@@ -540,9 +540,40 @@ def test_runtime_mode_switch_remains_coherent_after_backend_restart() -> None:
     assert payload["workspace"]["id"] == "local-space"
 
 
+def test_get_session_clears_stale_local_active_dataset_context() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Temporary Local Session Dataset",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+
+    selected = client.patch("/session/active-dataset", json={"dataset_id": dataset_id})
+    assert selected.status_code == 200
+    assert selected.json()["data"]["active_dataset"]["id"] == dataset_id
+
+    catalog_repository = get_catalog_repository()
+    catalog_repository.set_dataset_lifecycle_state(dataset_id, "archived")
+
+    response = client.get("/session")
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["runtime_mode"] == "local"
+    assert payload["auth"]["state"] == "local_bypass"
+    assert payload["active_dataset"] is None
+    with _bind_client_app_context(client):
+        assert get_app_state_repository().get_session_state().active_dataset_id is None
+
+
 def test_get_session_requires_context_rebind_when_active_dataset_is_archived() -> None:
     _login()
-    catalog_repository = get_rewrite_catalog_repository()
+    catalog_repository = get_catalog_repository()
     catalog_repository.set_dataset_lifecycle_state("fluxonium-2025-031", "archived")
 
     response = client.get("/session")
@@ -555,7 +586,7 @@ def test_get_session_requires_context_rebind_when_active_dataset_is_archived() -
 
 def test_switch_workspace_can_clear_active_dataset_when_target_has_no_visible_dataset() -> None:
     _login()
-    catalog_repository = get_rewrite_catalog_repository()
+    catalog_repository = get_catalog_repository()
     catalog_repository.set_dataset_lifecycle_state("transmon-coupler-014", "archived")
 
     response = client.patch("/session/active-workspace", json={"workspace_id": "ws-modeling"})
@@ -579,7 +610,7 @@ def test_switch_workspace_rejects_missing_membership() -> None:
 
 def test_session_rebind_after_member_removal_does_not_keep_old_workspace_dataset() -> None:
     _login()
-    repository = get_rewrite_app_state_repository()
+    repository = get_app_state_repository()
 
     assert repository.remove_workspace_member("ws-device-lab", "researcher-01") is True
 

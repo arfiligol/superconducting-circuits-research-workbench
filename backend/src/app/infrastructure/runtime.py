@@ -65,6 +65,8 @@ from src.app.services.result_trace_publication_service import (
     ResultTracePublicationService,
 )
 from src.app.services.schemdraw_render_service import SchemdrawRenderService
+from src.app.services.session_mutation_service import SessionMutationService
+from src.app.services.session_projection_service import SessionProjectionService
 from src.app.services.session_service import SessionService
 from src.app.services.simulation_result_explorer_query_service import (
     SimulationResultExplorerQueryService,
@@ -85,6 +87,8 @@ from src.app.services.task_service import TaskService
 from src.app.services.task_submission_service import TaskSubmissionService
 from src.app.services.trace_collection_service import TraceCollectionService
 from src.app.services.workspace_collaboration_service import WorkspaceCollaborationService
+from src.app.services.workspace_invitation_service import WorkspaceInvitationService
+from src.app.services.workspace_membership_service import WorkspaceMembershipService
 from src.app.settings import get_settings
 
 
@@ -283,24 +287,57 @@ def get_schemdraw_render_service() -> SchemdrawRenderService:
 
 @lru_cache(maxsize=1)
 def get_session_service() -> SessionService:
+    repository = get_app_state_repository()
+    dataset_repository = get_catalog_repository()
+    token_transport = get_session_token_transport()
+    authorization_service = get_authorization_service()
+    audit_repository = get_task_audit_repository()
+    task_repository = get_task_repository()
+    projection_service = SessionProjectionService(
+        repository=repository,
+        dataset_repository=dataset_repository,
+        token_transport=token_transport,
+        authorization_service=authorization_service,
+        task_repository=task_repository,
+    )
     return SessionService(
-        repository=get_app_state_repository(),
-        dataset_repository=get_catalog_repository(),
-        token_transport=get_session_token_transport(),
-        authorization_service=get_authorization_service(),
-        audit_repository=get_task_audit_repository(),
-        task_repository=get_task_repository(),
+        repository=repository,
+        dataset_repository=dataset_repository,
+        token_transport=token_transport,
+        projection_service=projection_service,
+        mutation_service=SessionMutationService(
+            repository=repository,
+            dataset_repository=dataset_repository,
+            token_transport=token_transport,
+            authorization_service=authorization_service,
+            projection_service=projection_service,
+            audit_repository=audit_repository,
+        ),
+        audit_repository=audit_repository,
+        task_repository=task_repository,
     )
 
 
 @lru_cache(maxsize=1)
 def get_workspace_collaboration_service() -> WorkspaceCollaborationService:
+    repository = get_app_state_repository()
+    session_service = get_session_service()
+    authorization_service = get_authorization_service()
+    audit_repository = get_task_audit_repository()
     return WorkspaceCollaborationService(
-        repository=get_app_state_repository(),
-        session_service=get_session_service(),
-        authorization_service=get_authorization_service(),
-        delivery_service=WorkspaceInvitationDeliveryService(get_settings()),
-        audit_repository=get_task_audit_repository(),
+        invitation_service=WorkspaceInvitationService(
+            repository=repository,
+            session_service=session_service,
+            authorization_service=authorization_service,
+            delivery_service=WorkspaceInvitationDeliveryService(get_settings()),
+            audit_repository=audit_repository,
+        ),
+        membership_service=WorkspaceMembershipService(
+            repository=repository,
+            session_service=session_service,
+            authorization_service=authorization_service,
+            audit_repository=audit_repository,
+        ),
     )
 
 
@@ -463,8 +500,3 @@ def reset_runtime_state() -> None:
     get_audit_log_service.cache_clear()
     _get_task_runtime_bundle.cache_clear()
     get_simulation_result_explorer_service.cache_clear()
-
-
-get_rewrite_catalog_repository = get_catalog_repository
-get_rewrite_app_state_repository = get_app_state_repository
-get_rewrite_task_repository = get_task_repository
