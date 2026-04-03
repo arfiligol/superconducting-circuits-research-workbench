@@ -431,7 +431,6 @@ def test_completed_simulation_task_can_be_published_and_is_queryable() -> None:
         == "design_fluxonium-simulation-save"
     )
 
-
 def test_published_whole_result_trace_detail_uses_materialized_preview_payload() -> None:
     task = _submit_local_simulation(ptc_enabled=False)
 
@@ -462,8 +461,6 @@ def test_published_whole_result_trace_detail_uses_materialized_preview_payload()
         [2.0, 0.18],
         [3.0, 0.15],
     ]
-
-
 def test_sweep_aware_published_trace_exposes_nd_summary_and_collection_filters() -> None:
     definition_id = _create_sweepable_definition("SweepAwareWholeResultSaveDefinition")
     task = _submit_local_simulation(

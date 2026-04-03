@@ -1391,7 +1391,9 @@ def _enrich_in_memory_trace_detail(
         design_id=detail.design_id,
         family=summary.family if summary is not None else detail.family,
         parameter=summary.parameter if summary is not None else detail.parameter,
-        representation=(summary.representation if summary is not None else detail.representation),
+        representation=(
+            summary.representation if summary is not None else detail.representation
+        ),
         trace_mode_group=(
             summary.trace_mode_group if summary is not None else detail.trace_mode_group
         ),
@@ -1403,7 +1405,9 @@ def _enrich_in_memory_trace_detail(
         detail,
         family=summary.family if summary is not None else detail.family,
         parameter=summary.parameter if summary is not None else detail.parameter,
-        representation=(summary.representation if summary is not None else detail.representation),
+        representation=(
+            summary.representation if summary is not None else detail.representation
+        ),
         trace_mode_group=(
             summary.trace_mode_group if summary is not None else detail.trace_mode_group
         ),
