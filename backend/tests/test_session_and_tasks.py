@@ -507,7 +507,7 @@ def test_active_dataset_binding_survives_backend_restart() -> None:
 
 
 def test_get_session_clears_stale_local_active_dataset_instead_of_failing_context_rebind() -> None:
-    repository = get_rewrite_app_state_repository()
+    repository = get_app_state_repository()
     bootstrap = client.get("/session")
     assert bootstrap.status_code == 200
     with _bind_client_app_context(client):
