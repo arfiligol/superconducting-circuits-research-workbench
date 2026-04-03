@@ -720,6 +720,7 @@ def test_local_trace_registry_read_repair_backfills_legacy_floating_qubit_capabi
                 "selected_trace_count": 1,
                 "recommended_trace_modes": ["base"],
                 "summary": ("1 selected trace is eligible for admittance resonance extraction."),
+                "summary": "1 selected trace is eligible for admittance resonance extraction.",
             },
         }
     ]

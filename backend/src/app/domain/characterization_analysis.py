@@ -933,8 +933,6 @@ def _eligible_capability_summary(
     if len(advisory_reasons) == 0:
         return summary
     return f"{summary} {advisory_reasons[0].message}"
-
-
 def _first_incompatible_reason(
     analysis_id: str,
     traces: tuple[TraceMetadataSummary, ...],

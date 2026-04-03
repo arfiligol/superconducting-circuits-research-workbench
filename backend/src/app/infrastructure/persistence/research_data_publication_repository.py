@@ -799,7 +799,7 @@ class SqliteResearchDataPublicationRepository:
                         unit=str(axis["unit"]),
                         length=int(axis["length"]),
                     )
-                        for axis in row.axes_json
+                    for axis in row.axes_json
                 ),
             )
             if trace_capabilities_equal(

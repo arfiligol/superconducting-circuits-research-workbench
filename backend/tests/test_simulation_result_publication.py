@@ -658,7 +658,6 @@ def test_published_trace_records_keep_source_task_provenance_and_are_browse_visi
         "datasets/local-dataset-001/designs/design_published-explorer-design/"
     )
 
-
 def test_published_trace_read_repair_refreshes_stale_capabilities() -> None:
     task = _submit_local_simulation(ptc_enabled=False)
     publish = client.post(
@@ -707,6 +706,52 @@ def test_published_trace_read_repair_refreshes_stale_capabilities() -> None:
         detail_response.json()["data"]["collection_projection"]["collection_key"]
         == collection_key_before
     )
+    assert (
+        detail_capabilities["admittance_extraction"]["status"]
+        == row_capabilities["admittance_extraction"]["status"]
+    )
+    assert _load_trace_capability_analysis_ids("local-dataset-001", design_id, trace_id) == (
+        "admittance_extraction",
+        "junction_parameter_identification",
+        "screening_summary",
+        "sideband_comparison",
+    )
+
+
+def test_published_trace_read_repair_backfills_missing_capabilities() -> None:
+    task = _submit_local_simulation(ptc_enabled=False)
+    publish = client.post(
+        f"/tasks/{task['task_id']}/simulation-results/publish",
+        json={
+            "dataset_id": "local-dataset-001",
+            "design_name": "Published Capability Backfill",
+        },
+    )
+    assert publish.status_code == 200
+    design_id = "design_published-capability-backfill"
+    trace_id = _published_trace_ids(task["task_id"], include_ptc=False)[1]
+    _clear_trace_capabilities("local-dataset-001", design_id, (trace_id,))
+
+    traces_response = client.get(f"/datasets/local-dataset-001/designs/{design_id}/traces")
+    detail_response = client.get(
+        f"/datasets/local-dataset-001/designs/{design_id}/traces/{trace_id}"
+    )
+
+    assert traces_response.status_code == 200
+    trace_row = next(
+        row for row in traces_response.json()["data"]["rows"] if row["trace_id"] == trace_id
+    )
+    assert trace_row["analysis_capabilities"] != []
+    assert any(
+        capability["analysis_id"] == "admittance_extraction"
+        for capability in trace_row["analysis_capabilities"]
+    )
+
+    assert detail_response.status_code == 200
+    detail_capabilities = _capability_by_analysis(
+        detail_response.json()["data"]["analysis_capabilities"]
+    )
+    row_capabilities = _capability_by_analysis(trace_row["analysis_capabilities"])
     assert (
         detail_capabilities["admittance_extraction"]["status"]
         == row_capabilities["admittance_extraction"]["status"]
