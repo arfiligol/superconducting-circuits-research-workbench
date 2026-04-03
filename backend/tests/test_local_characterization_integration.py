@@ -261,7 +261,8 @@ def _create_legacy_result_bundle_table() -> None:
 def _result_bundle_columns() -> set[str]:
     with sqlite3.connect(get_settings().database_path) as connection:
         return {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(result_bundle_records)")
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(result_bundle_records)")
         }
 
 
