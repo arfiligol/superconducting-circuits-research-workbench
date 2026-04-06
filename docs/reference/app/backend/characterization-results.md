@@ -10,9 +10,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Characterization analysis registry、input collection、run history、axis-aware artifact manifest、artifact payload 與 identify/tagging 的 backend reference surface。
-version: v0.10.0
-last_updated: 2026-03-30
+scope: Characterization analysis registry、Data Collection Review、analysis pipeline gating、run history、axis-aware artifact manifest、artifact payload 與 identify/tagging 的 backend reference surface。
+version: v0.11.0
+last_updated: 2026-04-06
 updated_by: codex
 ---
 
@@ -33,7 +33,8 @@ updated_by: codex
 
 | Surface | 說明 |
 | :--- | :--- |
-| **Analysis Registry Summary** | 分析項註冊摘要 |
+| **Analysis Registry Summary** | 分析項註冊摘要與 prerequisite / downstream hints |
+| **Data Collection Review** | 由 selected traces 與 persisted trace structure 派生的 pre-run scientific collection review |
 | **Characterization Input Collection** | 由 selected traces 與 persisted trace structure 派生的 scientific input collection |
 | **Run History List** | 執行歷史列表 |
 | **Result Artifact Manifest** | analysis-aware、axis-aware 結果產出清單 |
@@ -57,6 +58,11 @@ updated_by: codex
     | `trace_compatibility` | Trace 相容性摘要 |
     | `input_axis_requirements` | 對 source trace axes / sweep axes 的需求摘要 |
     | `result_view_capabilities` | 此 analysis 預期提供的 table / plot presets 摘要 |
+    | `prerequisite_state` | `ready`, `blocked`, `requires_upstream_result` |
+    | `prerequisite_summary` | 為何 blocked / requires upstream result 的簡短原因 |
+    | `required_upstream_analysis_ids[]` | 若此 analysis 依賴上游結果，指出哪些 analysis types 可滿足 prerequisite |
+    | `available_upstream_runs[]` | optional；目前 design scope 內已存在、可滿足 prerequisite 的 persisted runs |
+    | `next_analysis_ids[]` | 若此 analysis 完成，哪些 downstream analyses 可被解鎖 |
 
     query input baseline：
 
@@ -65,6 +71,36 @@ updated_by: codex
     | `dataset_id` | active dataset scope |
     | `design_id` | 目前 design scope |
     | `selected_trace_ids[]` | compatibility 計算可參考的明確 selection；仍屬於 UI interaction input |
+
+=== "Data Collection Review"
+
+    Data Collection Review 是 submit 前的第一-class review surface。
+
+    minimum review contract：
+
+    | Field | Meaning |
+    |---|---|
+    | `selection_summary` | 使用者目前選了哪些 traces / collections 的摘要 |
+    | `source_trace_ids[]` | user-selected source traces |
+    | `shared_axes[]` | collection 共同可解讀的 canonical axes；包含 axis names、units 與可恢復的 coordinate values / refs |
+    | `available_sweep_axes[]` | analysis / explorer 可用的 structured sweep axes |
+    | `collection_members[]` | backend 派生的 scientific members；保留 source / trace membership 與 compatible grouping identity |
+    | `source_coverage` | measurement / layout simulation / circuit simulation 等來源覆蓋摘要 |
+    | `grouping_summary` | shared axes、batch lineage、scientific grouping 與 collection label 摘要 |
+    | `readiness_state` | `ready`, `inspect_only`, `blocked` |
+    | `runnable_analyses[]` | 目前 collection 下可直接執行的 analyses |
+    | `blocked_analyses[]` | 目前被擋住的 analyses 與 blocking reason |
+
+    collection member minimum fields：
+
+    | Field | Meaning |
+    |---|---|
+    | `member_key` | derived member identity |
+    | `trace_ids[]` | belonging trace ids |
+    | `source_kind` | `measurement`, `layout_simulation`, `circuit_simulation` |
+    | `family` / `representation` | member scientific typing |
+    | `axis_signature` | shared axis structure summary |
+    | `member_label` | UI-safe compare label |
 
 === "Characterization Input Collection"
 
@@ -78,6 +114,8 @@ updated_by: codex
     | `source_batch_ids[]` | optional upstream batch lineage |
     | `shared_axes[]` | selected traces 共同可解讀的 canonical axes；包含 axis names、units 與可恢復的 coordinate values / refs |
     | `available_sweep_axes[]` | 可供 analysis / explorer 使用的 input sweep axes |
+    | `collection_members[]` | compare / grouping 所需的 member summaries |
+    | `source_coverage` | selected traces 的來源覆蓋摘要 |
     | `grouping_summary` | 由 batch lineage / axis compatibility 派生的 scientific grouping 摘要 |
     | `readiness_state` | `ready`, `inspect_only`, `blocked` 等 collection readiness |
 
@@ -89,6 +127,7 @@ updated_by: codex
     | ND sweep preservation | 若 source trace 本身為 parameter-swept ND trace，collection 必須直接保留 sweep axes，不得先降成 ad hoc point-trace bag |
     | Structured filtering | collection readiness 與 analysis availability 可依 family、representation、source、stage 與 available sweep axes 判定 |
     | No provenance parsing | backend 不得以解析 free-form provenance summary 來猜 sweep axis meaning |
+    | Derived authority | collection review / input collection 都是 derived read model，不是 editable owner resource |
 
 === "Run History"
 
@@ -146,6 +185,24 @@ updated_by: codex
     | `trace_mode_filter` | optional |
     | `category` | optional |
 
+## Analysis Pipeline And Dependency Contract
+
+| Concern | Contract |
+|---|---|
+| Pipeline-first model | Characterization 應被視為 analysis pipeline，而不是單次 one-off run surface |
+| Separate run identity | extraction、fitting、comparison 等每個 analysis 都保有自己的 `run_id` |
+| Upstream result dependency | 某 analysis 若依賴上游 analysis 結果，contract 必須顯式指出 `required_upstream_analysis_ids[]` 與可接受的 upstream result surface |
+| Submit lineage | downstream analysis submit path 應能攜帶 `input_result_refs[]` 或等價 upstream lineage，而不是只保留 raw `selected_trace_ids[]` |
+| Blocking truth | backend 必須能回答是 `blocked`，還是 `requires_upstream_result`；frontend 不得自行猜測 |
+| Next-step truth | backend 應能指出某 successful run 之後可解鎖哪些 downstream analyses |
+
+### Availability vs Run Status
+
+| State family | Values | Meaning |
+|---|---|---|
+| analysis availability | `ready`, `blocked`, `requires_upstream_result` | submit 前是否可執行，以及需要補哪個 prerequisite |
+| run execution | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` | 單一 analysis run 的 task / persisted execution state |
+
 ### Analysis-specific Result Axis Contract
 
 Characterization results 必須同時區分 source input axes 與 analysis-derived result axes。
@@ -154,13 +211,16 @@ Characterization results 必須同時區分 source input axes 與 analysis-deriv
 |---|---|
 | `input_axis` | 直接來自 source trace canonical structure 的 axis，例如 `L_jun` |
 | `derived_axis` | 由 analysis 產生的 axis，例如 `mode_index` |
+| `member_dimension` | compare-preserving result 用來保留 collection member / source identity 的明確維度 |
 | `metric` | table cell / plot y-value 等被觀測量，例如 `frequency_ghz` |
 
 !!! warning "Derived axes must be labeled as derived"
     `mode_index`、fit iteration、residual bucket 等 analysis-produced axes，必須標示為 derived。
     它們不得被寫成 source trace 原生 axis。
 
-### First-phase Admittance Resonance Extraction
+## Analysis Stage Contracts
+
+### `admittance_extraction`
 
 本分析的第一階段 canonical result semantics 應定義為：
 
@@ -173,7 +233,38 @@ Characterization results 必須同時區分 source input axes 與 analysis-deriv
 | Plot preset A | x=`mode_index`，y=`frequency_ghz`，series=`L_jun` |
 | Plot preset B | x=`L_jun`，y=`frequency_ghz`，series=`mode_index` |
 | First-phase mode meaning | `mode_index` 只表示單一 sweep point 內的 ordinal extracted mode |
+| Fitting boundary | 本分析只輸出 resonance surface / diagnostics，不負責 model fitting |
 | Explicit non-goal | 本 contract 不宣稱已具備跨 sweep 的 physical mode continuity；若需此能力，必須另定 `mode_track_id` 等更強 contract |
+
+### `junction_parameter_identification`
+
+本分析應作為 `admittance_extraction` 的下游 model-based fitting analysis。
+
+| Concern | Contract |
+|---|---|
+| Input contract | 消費 upstream extraction result surface，而不是直接消費 raw `Im(Y)` traces |
+| Owned controls | fit bounds、model config、branch / member selection、prior / initialization config |
+| Result preview | fit parameter table、measured vs fitted overlay、residual / diagnostics |
+| Member scope | 若對多個 source members 分別 fitting，結果必須保留 member/source identity |
+| Non-goal | 不重新定義 resonance extraction 本身，也不把 raw trace selection 重新變成唯一 scientific input |
+
+## Cross-source Compare Contract
+
+| Concern | Contract |
+|---|---|
+| Compare eligibility | `measurement`、`layout_simulation`、`circuit_simulation` 只要共享相容的 canonical scientific structure，就可成為 compare candidates |
+| Structural compatibility | 至少需滿足 family、representation、required axes 與 `axis_signature` / shared-axis compatibility |
+| Identity preservation | compare-preserving result 必須保留 member/source identity，不得把多個 compatible members 平均成單一 surface |
+| Result preview | table / plot preset 應能表達 raw extracted resonance points per source/member，並支援 downstream fit lines per source/member |
+| Implementation honesty | phase-1 runtime 若仍做 aggregation，docs 必須將它標示為 phase-1 truth，而不是 compare-preserving surface |
+
+!!! warning "Current phase-1 truth"
+    目前 `admittance_extraction` runtime 會對多筆對齊 selected traces 先做平均，再進入 extraction。
+    因此現在的 phase-1 result surface 不是真正的 cross-source compare overlay result。
+
+!!! tip "Compare-preserving contract path"
+    若要支援多來源 overlay，artifact manifest 與 payload 必須升級成 compare-preserving contract：
+    讓 `member_dimension` 或等價 compare dimension 能穩定表達 collection member / source identity。
 
 ### Invalid Cell And Mask Semantics
 
@@ -201,6 +292,7 @@ Characterization results 必須同時區分 source input axes 與 analysis-deriv
 | Dominant access pattern | 目前優先支援 `固定 sweep point -> 讀完整 frequency slice`，或 `固定 result axes -> 讀單一 plot / table projection` |
 | Storage / chunking | artifact payload retrieval 與 underlying chunking 應對齊主要 scientific access pattern，而不是 generic default |
 | Whole dense tensor transport | large-result whole dense tensor transport 不是預設 contract；只有某 artifact/view 明確宣告允許時才可整包回傳 |
+| Compare payload discipline | compare-preserving artifact 應優先回傳 member-aware projection，而不是對 members 先做 aggregation 再失去 identity |
 
 === "Identify / Tagging"
 
