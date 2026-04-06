@@ -33,6 +33,7 @@ from sc_core.tasking import (
 
 from src.app.domain.datasets import (
     CharacterizationInputCollectionPayload,
+    CharacterizationInputResultRef,
     InputCollectionAxis,
     InputCollectionTraceSummary,
     TraceCollectionProjection,
@@ -391,6 +392,7 @@ class CharacterizationSetup:
     analysis_id: str
     selected_trace_ids: tuple[str, ...]
     analysis_config: dict[str, object]
+    input_result_refs: tuple[CharacterizationInputResultRef, ...] = ()
     input_collection_payload: CharacterizationInputCollectionPayload | None = None
 
     def to_mapping(self) -> dict[str, object]:
@@ -399,6 +401,17 @@ class CharacterizationSetup:
             "analysis_id": self.analysis_id,
             "selected_trace_ids": list(self.selected_trace_ids),
             "analysis_config": dict(self.analysis_config),
+            "input_result_refs": [
+                {
+                    "analysis_id": ref.analysis_id,
+                    "result_id": ref.result_id,
+                    "run_id": ref.run_id,
+                    "artifact_id": ref.artifact_id,
+                    "contract_version": ref.contract_version,
+                    "title": ref.title,
+                }
+                for ref in self.input_result_refs
+            ],
         }
         if self.input_collection_payload is not None:
             payload["input_collection_payload"] = {
@@ -447,6 +460,7 @@ class CharacterizationSetup:
     def from_mapping(cls, payload: Mapping[str, object]) -> CharacterizationSetup:
         raw_trace_ids = payload.get("selected_trace_ids", ())
         analysis_config = payload.get("analysis_config")
+        raw_input_result_refs = payload.get("input_result_refs", ())
         raw_input_collection_payload = payload.get("input_collection_payload")
         return cls(
             design_id=str(payload["design_id"]),
@@ -458,6 +472,26 @@ class CharacterizationSetup:
                 dict(cast(Mapping[str, object], analysis_config))
                 if isinstance(analysis_config, Mapping)
                 else {}
+            ),
+            input_result_refs=tuple(
+                CharacterizationInputResultRef(
+                    analysis_id=str(item.get("analysis_id", "")),
+                    result_id=str(item.get("result_id", "")),
+                    run_id=str(item.get("run_id")) if isinstance(item.get("run_id"), str) else None,
+                    artifact_id=(
+                        str(item.get("artifact_id"))
+                        if isinstance(item.get("artifact_id"), str)
+                        else None
+                    ),
+                    contract_version=(
+                        str(item.get("contract_version"))
+                        if isinstance(item.get("contract_version"), str)
+                        else None
+                    ),
+                    title=str(item.get("title")) if isinstance(item.get("title"), str) else None,
+                )
+                for item in raw_input_result_refs
+                if isinstance(item, Mapping)
             ),
             input_collection_payload=_coerce_input_collection_payload(
                 raw_input_collection_payload,

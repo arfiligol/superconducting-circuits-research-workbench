@@ -111,8 +111,10 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
         "trace_flux_a_measurement",
         "trace_flux_a_layout",
     ]
+    assert payload["data"]["input_result_refs"] == []
+    assert payload["data"]["downstream_unlock_analysis_ids"] == ["admittance_member_fit"]
     assert payload["data"]["payload"] == {
-        "contract_version": "admittance_phase1_v1",
+        "contract_version": "admittance_member_phase1_v1",
         "analysis_run_id": 101,
         "analysis_config": {
             "fit_window": [5.4, 6.0],
@@ -129,14 +131,20 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
             "label": "Mode index",
             "length": 2,
         },
+        "member_axis": {
+            "axis_key": "member_key",
+            "label": "Collection member",
+            "length": 2,
+        },
         "metric": {
             "metric_key": "frequency_ghz",
             "label": "Frequency",
             "unit": "GHz",
         },
         "fit_window_ghz": [5.4, 6.0],
-        "masked_input_indices": [2],
-        "masked_input_count": 1,
+        "member_count": 2,
+        "masked_input_indices_by_member": [[2], [2]],
+        "masked_member_count": 2,
         "mode_capacity": 2,
     }
     assert payload["data"]["diagnostics"] == [
@@ -159,145 +167,52 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
             "blocking": False,
         }
     ]
-    assert payload["data"]["artifact_refs"] == [
+    artifact_refs = payload["data"]["artifact_refs"]
+    assert [artifact["artifact_id"] for artifact in artifact_refs] == [
+        "char-fit-flux-a-01:mode-frequency-grid",
+        "char-fit-flux-a-01:identify-summary",
+        "char-fit-flux-a-01:report",
+    ]
+    grid_artifact = artifact_refs[0]
+    assert grid_artifact["view_kind"] == "preset_query"
+    assert grid_artifact["axes"] == [
         {
-            "artifact_id": "char-fit-flux-a-01:mode-frequency-grid",
-            "category": "result_tensor",
-            "view_kind": "preset_query",
-            "title": "Mode frequency grid",
-            "payload_format": "json",
-            "payload_locator": "characterization/char-fit-flux-a-01/mode-frequency-grid.json",
-            "axes": [
-                {
-                    "axis_key": "flux_bias",
-                    "label": "Flux bias",
-                    "role": "input",
-                    "unit": "mA",
-                    "length": 3,
-                },
-                {
-                    "axis_key": "mode_index",
-                    "label": "Mode index",
-                    "role": "derived",
-                    "unit": None,
-                    "length": 2,
-                },
-            ],
-            "metric": {
-                "metric_key": "frequency_ghz",
-                "label": "Frequency",
-                "unit": "GHz",
-            },
-            "presets": [
-                {
-                    "preset_id": "mode_by_input_table",
-                    "label": "Mode by input table",
-                    "view_kind": "table",
-                    "rows_axis": "mode_index",
-                    "columns_axis": "flux_bias",
-                    "cell_metric": "frequency_ghz",
-                    "x_axis": None,
-                    "y_metric": None,
-                    "series_axis": None,
-                },
-                {
-                    "preset_id": "mode_profile_plot",
-                    "label": "Mode profile plot",
-                    "view_kind": "plot",
-                    "rows_axis": None,
-                    "columns_axis": None,
-                    "cell_metric": None,
-                    "x_axis": "mode_index",
-                    "y_metric": "frequency_ghz",
-                    "series_axis": "flux_bias",
-                },
-                {
-                    "preset_id": "sweep_profile_plot",
-                    "label": "Sweep profile plot",
-                    "view_kind": "plot",
-                    "rows_axis": None,
-                    "columns_axis": None,
-                    "cell_metric": None,
-                    "x_axis": "flux_bias",
-                    "y_metric": "frequency_ghz",
-                    "series_axis": "mode_index",
-                },
-            ],
-            "default_preset_id": "mode_by_input_table",
-            "query_spec": {
-                "query_style": "preset_driven",
-                "supported_query_fields": ["view_mode", "preset_id"],
-                "supported_view_modes": ["table", "plot"],
-                "supported_preset_ids": [
-                    "mode_by_input_table",
-                    "mode_profile_plot",
-                    "sweep_profile_plot",
-                ],
-                "default_preset_id": "mode_by_input_table",
-                "default_presets_by_view_mode": [
-                    {"view_mode": "table", "preset_id": "mode_by_input_table"},
-                    {"view_mode": "plot", "preset_id": "mode_profile_plot"},
-                ],
-            },
-            "identify_source": False,
+            "axis_key": "flux_bias",
+            "label": "Flux bias",
+            "role": "input",
+            "unit": "mA",
+            "length": 3,
         },
         {
-            "artifact_id": "char-fit-flux-a-01:identify-summary",
-            "category": "summary_table",
-            "view_kind": "table",
-            "title": "Admittance identify summary",
-            "payload_format": "json",
-            "payload_locator": "characterization/char-fit-flux-a-01/identify-summary.json",
-            "axes": [],
-            "metric": None,
-            "presets": [
-                {
-                    "preset_id": "summary_table",
-                    "label": "Identify summary table",
-                    "view_kind": "table",
-                    "rows_axis": None,
-                    "columns_axis": None,
-                    "cell_metric": None,
-                    "x_axis": None,
-                    "y_metric": None,
-                    "series_axis": None,
-                }
-            ],
-            "default_preset_id": "summary_table",
-            "query_spec": {
-                "query_style": "preset_driven",
-                "supported_query_fields": ["view_mode", "preset_id"],
-                "supported_view_modes": ["table"],
-                "supported_preset_ids": ["summary_table"],
-                "default_preset_id": "summary_table",
-                "default_presets_by_view_mode": [
-                    {"view_mode": "table", "preset_id": "summary_table"}
-                ],
-            },
-            "identify_source": True,
+            "axis_key": "member_key",
+            "label": "Collection member",
+            "role": "member",
+            "unit": None,
+            "length": 2,
         },
         {
-            "artifact_id": "char-fit-flux-a-01:report",
-            "category": "report",
-            "view_kind": "json",
-            "title": "Admittance extraction report",
-            "payload_format": "json",
-            "payload_locator": "characterization/char-fit-flux-a-01/report.json",
-            "axes": [],
-            "metric": None,
-            "presets": [],
-            "default_preset_id": None,
-            "query_spec": {
-                "query_style": "static",
-                "supported_query_fields": [],
-                "supported_view_modes": ["json"],
-                "supported_preset_ids": [],
-                "default_preset_id": None,
-                "default_presets_by_view_mode": [],
-            },
-            "identify_source": False,
+            "axis_key": "mode_index",
+            "label": "Mode index",
+            "role": "derived",
+            "unit": None,
+            "length": 2,
         },
     ]
+    assert grid_artifact["query_spec"]["supported_query_fields"] == [
+        "view_mode",
+        "preset_id",
+    ]
+    assert [preset["compare_axis"] for preset in grid_artifact["presets"]] == [
+        "member_key",
+        "member_key",
+        "member_key",
+    ]
+    identify_artifact = artifact_refs[1]
+    assert identify_artifact["identify_source"] is True
+    assert identify_artifact["presets"][0]["preset_id"] == "summary_table"
+    report_artifact = artifact_refs[2]
+    assert report_artifact["view_kind"] == "json"
+    assert report_artifact["query_spec"]["query_style"] == "static"
 
 
 def test_get_characterization_artifact_payload_returns_phase1_admittance_presets() -> None:
@@ -316,15 +231,22 @@ def test_get_characterization_artifact_payload_returns_phase1_admittance_presets
         "rows_axis": "mode_index",
         "columns_axis": "flux_bias",
         "cell_metric": "frequency_ghz",
+        "compare_axis": "member_key",
     }
-    assert table_payload["data"]["payload"]["cells"] == [
+    assert table_payload["data"]["payload"]["compare_groups"][0]["compare_key"] == (
+        "measurement:trace_flux_a_measurement"
+    )
+    assert table_payload["data"]["payload"]["compare_groups"][0]["cells"] == [
         [5.612, 5.587, None],
         [5.846, 5.821, None],
     ]
-    assert table_payload["data"]["payload"]["mask"] == [
+    assert table_payload["data"]["payload"]["compare_groups"][0]["mask"] == [
         [False, False, True],
         [False, False, True],
     ]
+    assert table_payload["data"]["payload"]["compare_groups"][1]["compare_key"] == (
+        "layout_simulation:trace_flux_a_layout"
+    )
 
     plot_response = client.get(
         "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
@@ -341,10 +263,16 @@ def test_get_characterization_artifact_payload_returns_phase1_admittance_presets
         "x_axis": "mode_index",
         "y_metric": "frequency_ghz",
         "series_axis": "flux_bias",
+        "compare_axis": "member_key",
     }
-    assert plot_payload["data"]["payload"]["series"][0]["x_values"] == [0, 1]
-    assert plot_payload["data"]["payload"]["series"][0]["y_values"] == [5.612, 5.846]
-    assert plot_payload["data"]["payload"]["series"][0]["mask"] == [False, False]
+    measurement_series = [
+        series
+        for series in plot_payload["data"]["payload"]["series"]
+        if series["compare_key"] == "measurement:trace_flux_a_measurement"
+    ]
+    assert measurement_series[0]["x_values"] == [0, 1]
+    assert measurement_series[0]["y_values"] == [5.612, 5.846]
+    assert measurement_series[0]["mask"] == [False, False]
 
 
 def test_characterization_result_routes_reject_invisible_dataset() -> None:

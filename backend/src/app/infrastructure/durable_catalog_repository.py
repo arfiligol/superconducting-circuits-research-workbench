@@ -29,6 +29,7 @@ from src.app.domain.datasets import (
     CharacterizationDesignatedMetricOption,
     CharacterizationDiagnostic,
     CharacterizationIdentifySurface,
+    CharacterizationInputResultRef,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
     CharacterizationRunHistoryRow,
@@ -1760,6 +1761,7 @@ def _parse_characterization_run_history_row(
     if not isinstance(payload, dict):
         return None
     result_id = payload.get("result_id")
+    input_result_refs = payload.get("input_result_refs", ())
     return CharacterizationRunHistoryRow(
         run_id=str(payload["run_id"]),
         dataset_id=str(payload["dataset_id"]),
@@ -1773,6 +1775,26 @@ def _parse_characterization_run_history_row(
         provenance_summary=str(payload["provenance_summary"]),
         updated_at=str(payload["updated_at"]),
         result_id=str(result_id) if isinstance(result_id, str) else None,
+        input_result_refs=tuple(
+            CharacterizationInputResultRef(
+                analysis_id=str(item.get("analysis_id", "")),
+                result_id=str(item.get("result_id", "")),
+                run_id=str(item.get("run_id")) if isinstance(item.get("run_id"), str) else None,
+                artifact_id=(
+                    str(item.get("artifact_id"))
+                    if isinstance(item.get("artifact_id"), str)
+                    else None
+                ),
+                contract_version=(
+                    str(item.get("contract_version"))
+                    if isinstance(item.get("contract_version"), str)
+                    else None
+                ),
+                title=str(item.get("title")) if isinstance(item.get("title"), str) else None,
+            )
+            for item in input_result_refs
+            if isinstance(item, dict)
+        ),
     )
 
 
@@ -1788,6 +1810,8 @@ def _parse_characterization_result_detail(
     designated_metrics = identify_surface.get("designated_metrics", [])
     applied_tags = identify_surface.get("applied_tags", [])
     input_trace_ids = payload.get("input_trace_ids", ())
+    input_result_refs = payload.get("input_result_refs", ())
+    downstream_unlock_analysis_ids = payload.get("downstream_unlock_analysis_ids", ())
     return CharacterizationResultDetail(
         result_id=str(payload["result_id"]),
         dataset_id=str(payload["dataset_id"]),
@@ -1800,6 +1824,26 @@ def _parse_characterization_result_detail(
         trace_count=int(payload["trace_count"]),
         updated_at=str(payload["updated_at"]),
         input_trace_ids=tuple(str(item) for item in input_trace_ids if isinstance(item, str)),
+        input_result_refs=tuple(
+            CharacterizationInputResultRef(
+                analysis_id=str(item.get("analysis_id", "")),
+                result_id=str(item.get("result_id", "")),
+                run_id=str(item.get("run_id")) if isinstance(item.get("run_id"), str) else None,
+                artifact_id=(
+                    str(item.get("artifact_id"))
+                    if isinstance(item.get("artifact_id"), str)
+                    else None
+                ),
+                contract_version=(
+                    str(item.get("contract_version"))
+                    if isinstance(item.get("contract_version"), str)
+                    else None
+                ),
+                title=str(item.get("title")) if isinstance(item.get("title"), str) else None,
+            )
+            for item in input_result_refs
+            if isinstance(item, dict)
+        ),
         payload=dict(payload.get("payload", {})),
         diagnostics=tuple(
             CharacterizationDiagnostic(
@@ -1878,6 +1922,11 @@ def _parse_characterization_result_detail(
                         series_axis=(
                             str(preset["series_axis"])
                             if isinstance(preset.get("series_axis"), str)
+                            else None
+                        ),
+                        compare_axis=(
+                            str(preset["compare_axis"])
+                            if isinstance(preset.get("compare_axis"), str)
                             else None
                         ),
                     )
@@ -1967,6 +2016,11 @@ def _parse_characterization_result_detail(
                 for item in applied_tags
                 if isinstance(item, dict)
             ),
+        ),
+        downstream_unlock_analysis_ids=tuple(
+            str(analysis_id)
+            for analysis_id in downstream_unlock_analysis_ids
+            if isinstance(analysis_id, str)
         ),
     )
 

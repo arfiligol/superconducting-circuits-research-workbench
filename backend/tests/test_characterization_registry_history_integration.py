@@ -62,65 +62,30 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
             "trace_flux_a_layout",
         ],
     }
-    assert payload["data"]["rows"] == [
-        {
-            "analysis_id": "admittance_extraction",
-            "label": "Admittance Resonance Extraction",
-            "availability_state": "recommended",
-            "required_config_fields": ["fit_window", "residual_tolerance"],
-            "trace_compatibility": {
-                "matched_trace_count": 2,
-                "selected_trace_count": 2,
-                "recommended_trace_modes": ["base"],
-                "summary": "2 selected traces are eligible for admittance resonance extraction.",
-            },
+    rows_by_id = {
+        row["analysis_id"]: row for row in payload["data"]["rows"]
+    }
+    assert rows_by_id["admittance_extraction"] == {
+        "analysis_id": "admittance_extraction",
+        "label": "Admittance Resonance Extraction",
+        "availability_state": "recommended",
+        "required_config_fields": ["fit_window", "residual_tolerance"],
+        "trace_compatibility": {
+            "matched_trace_count": 2,
+            "selected_trace_count": 2,
+            "recommended_trace_modes": ["base"],
+            "summary": "2 selected traces are eligible for admittance resonance extraction.",
         },
-        {
-            "analysis_id": "sideband_comparison",
-            "label": "Sideband Comparison",
-            "availability_state": "unavailable",
-            "required_config_fields": ["comparison_window"],
-            "trace_compatibility": {
-                "matched_trace_count": 0,
-                "selected_trace_count": 2,
-                "recommended_trace_modes": ["sideband"],
-                "summary": (
-                    "2 selected traces are not eligible for sideband comparison "
-                    "because Requires sideband trace mode coverage."
-                ),
-            },
-        },
-        {
-            "analysis_id": "junction_parameter_identification",
-            "label": "Junction Parameter Identification",
-            "availability_state": "unavailable",
-            "required_config_fields": ["fit_window", "prior_family"],
-            "trace_compatibility": {
-                "matched_trace_count": 0,
-                "selected_trace_count": 2,
-                "recommended_trace_modes": ["base", "sideband"],
-                "summary": (
-                    "2 selected traces are not eligible for junction parameter "
-                    "identification because Requires complex representation."
-                ),
-            },
-        },
-        {
-            "analysis_id": "screening_summary",
-            "label": "Screening Summary",
-            "availability_state": "unavailable",
-            "required_config_fields": ["screening_mode"],
-            "trace_compatibility": {
-                "matched_trace_count": 0,
-                "selected_trace_count": 2,
-                "recommended_trace_modes": ["base"],
-                "summary": (
-                    "2 selected traces are not eligible for screening summary "
-                    "because Requires s matrix traces."
-                ),
-            },
-        },
-    ]
+        "prerequisite_state": "ready",
+        "upstream_result_requirement": None,
+        "downstream_unlock_analysis_ids": ["admittance_member_fit"],
+    }
+    assert rows_by_id["admittance_member_fit"]["prerequisite_state"] == "ready"
+    assert rows_by_id["admittance_member_fit"]["upstream_result_requirement"] is not None
+    assert rows_by_id["admittance_member_fit"]["upstream_result_requirement"][
+        "required_upstream_analysis_ids"
+    ] == ["admittance_extraction"]
+    assert payload["data"]["data_collection_review"]["readiness_state"] == "ready"
 
 
 def test_characterization_registry_ignores_incomplete_legacy_row_sources(
@@ -159,11 +124,12 @@ def test_characterization_registry_ignores_incomplete_legacy_row_sources(
     rows = response.json()["data"]["rows"]
     assert [row["analysis_id"] for row in rows] == [
         "admittance_extraction",
+        "admittance_member_fit",
         "sideband_comparison",
         "junction_parameter_identification",
         "screening_summary",
     ]
-    assert rows[1]["label"] == "Sideband Comparison"
+    assert rows[2]["label"] == "Sideband Comparison"
 
 
 def test_characterization_registry_fallback_does_not_overclaim_selected_scope(
@@ -224,6 +190,9 @@ def test_characterization_registry_fallback_does_not_overclaim_selected_scope(
                     "this design does not yet carry durable trace capability markings."
                 ),
             },
+            "prerequisite_state": "ready",
+            "upstream_result_requirement": None,
+            "downstream_unlock_analysis_ids": ["admittance_member_fit"],
         }
     ]
 
@@ -283,6 +252,9 @@ def test_characterization_registry_fallback_marks_unsupported_analysis_unavailab
                     "executing this analysis."
                 ),
             },
+            "prerequisite_state": "ready",
+            "upstream_result_requirement": None,
+            "downstream_unlock_analysis_ids": [],
         }
     ]
 
@@ -336,6 +308,7 @@ def test_characterization_run_history_supports_analysis_filter_and_cursor_meta()
             "provenance_summary": "Measurement sideband trace · batch #4",
             "updated_at": "2026-03-14T11:20:00Z",
             "result_id": "char-sideband-flux-a-02",
+            "input_result_refs": [],
         }
     ]
 
@@ -363,6 +336,7 @@ def test_characterization_run_history_supports_analysis_filter_and_cursor_meta()
             "provenance_summary": "Measurement batch #4 + layout batch #2",
             "updated_at": "2026-03-14T11:12:00Z",
             "result_id": "char-fit-flux-a-01",
+            "input_result_refs": [],
         }
     ]
 

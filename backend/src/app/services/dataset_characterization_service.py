@@ -12,6 +12,7 @@ from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     CharacterizationArtifactPayload,
     CharacterizationArtifactPayloadQuery,
+    CharacterizationInputResultRef,
     CharacterizationResultBrowseQuery,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
@@ -149,6 +150,15 @@ class DatasetCharacterizationService:
     ) -> CharacterizationAnalysisRegistryResult:
         self._require_visible_dataset(dataset_id)
         trace_rows = tuple(self._repository.list_trace_metadata(dataset_id, design_id))
+        upstream_results = self._available_upstream_results(
+            dataset_id=dataset_id,
+            design_id=design_id,
+        )
+        input_collection_payload = self._derive_input_collection_payload(
+            dataset_id=dataset_id,
+            design_id=design_id,
+            selected_trace_ids=query.selected_trace_ids,
+        )
         if len(trace_rows) == 0 or all(
             len(trace.analysis_capabilities) == 0 for trace in trace_rows
         ):
@@ -161,15 +171,18 @@ class DatasetCharacterizationService:
                         )
                     ),
                     selected_trace_ids=query.selected_trace_ids,
+                    upstream_results_by_analysis_id=upstream_results,
                     enforce_runtime_support=True,
                 )
             )
             return CharacterizationAnalysisRegistryResult(
                 rows=rows,
-                input_collection_payload=self._derive_input_collection_payload(
+                input_collection_payload=input_collection_payload,
+                data_collection_review=self._derive_collection_review(
                     dataset_id=dataset_id,
                     design_id=design_id,
                     selected_trace_ids=query.selected_trace_ids,
+                    rows=rows,
                 ),
             )
         included_analysis_ids = derive_characterization_analysis_ids(trace_rows)
@@ -178,15 +191,18 @@ class DatasetCharacterizationService:
                 included_analysis_ids=included_analysis_ids,
                 traces=trace_rows,
                 selected_trace_ids=query.selected_trace_ids,
+                upstream_results_by_analysis_id=upstream_results,
                 enforce_runtime_support=True,
             )
         )
         return CharacterizationAnalysisRegistryResult(
             rows=rows,
-            input_collection_payload=self._derive_input_collection_payload(
+            input_collection_payload=input_collection_payload,
+            data_collection_review=self._derive_collection_review(
                 dataset_id=dataset_id,
                 design_id=design_id,
                 selected_trace_ids=query.selected_trace_ids,
+                rows=rows,
             ),
         )
 
@@ -387,3 +403,56 @@ class DatasetCharacterizationService:
         return self._trace_collection_service.derive_input_collection_payload_from_trace_details(
             tuple(trace_details)
         )
+
+    def _derive_collection_review(
+        self,
+        *,
+        dataset_id: str,
+        design_id: str,
+        selected_trace_ids: tuple[str, ...],
+        rows: tuple[CharacterizationAnalysisRegistryRow, ...],
+    ):
+        if len(selected_trace_ids) == 0:
+            return None
+        trace_details: list[TraceDetail] = []
+        for trace_id in selected_trace_ids:
+            detail = self._repository.get_trace_detail(dataset_id, design_id, trace_id)
+            if detail is None:
+                return None
+            trace_details.append(detail)
+        return self._trace_collection_service.derive_data_collection_review_from_trace_details(
+            tuple(trace_details),
+            rows,
+        )
+
+    def _available_upstream_results(
+        self,
+        *,
+        dataset_id: str,
+        design_id: str,
+    ) -> dict[str, tuple[CharacterizationInputResultRef, ...]]:
+        summaries = tuple(self._repository.list_characterization_results(dataset_id, design_id))
+        run_history = tuple(
+            self._repository.list_characterization_run_history(dataset_id, design_id)
+        )
+        run_ids_by_result_id = {
+            row.result_id: row.run_id
+            for row in run_history
+            if row.result_id is not None
+        }
+        refs_by_analysis_id: dict[str, list[CharacterizationInputResultRef]] = {}
+        for summary in summaries:
+            if summary.status != "completed":
+                continue
+            refs_by_analysis_id.setdefault(summary.analysis_id, []).append(
+                CharacterizationInputResultRef(
+                    analysis_id=summary.analysis_id,
+                    result_id=summary.result_id,
+                    run_id=run_ids_by_result_id.get(summary.result_id),
+                    title=summary.title,
+                )
+            )
+        return {
+            analysis_id: tuple(refs)
+            for analysis_id, refs in refs_by_analysis_id.items()
+        }

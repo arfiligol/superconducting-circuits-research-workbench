@@ -7,6 +7,9 @@ from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     CharacterizationAnalysisTraceCompatibility,
     CharacterizationAvailabilityState,
+    CharacterizationInputResultRef,
+    CharacterizationPrerequisiteState,
+    CharacterizationUpstreamResultRequirement,
     TraceAnalysisCapability,
     TraceAxis,
     TraceCapabilityReason,
@@ -54,6 +57,8 @@ class CharacterizationAnalysisSpec:
     input_roles: tuple[CharacterizationAnalysisInputRoleSpec, ...]
     unavailable_summary: str
     dataset_family_gate_mode: Literal["hard", "advisory"] = "hard"
+    required_upstream_analysis_ids: tuple[str, ...] = ()
+    downstream_analysis_ids: tuple[str, ...] = ()
 
     @property
     def required_config_fields(self) -> tuple[str, ...]:
@@ -118,6 +123,28 @@ _ANALYSIS_SPECS: tuple[CharacterizationAnalysisSpec, ...] = (
             "No base-mode admittance trace currently satisfies the resonance extraction "
             "input requirements."
         ),
+        downstream_analysis_ids=("admittance_member_fit",),
+    ),
+    CharacterizationAnalysisSpec(
+        analysis_id="admittance_member_fit",
+        label="Admittance Member Fit",
+        dataset_families=("fluxonium", "floatingqubit"),
+        config_fields=(
+            _CONFIG_RANGE(
+                field_key="branch_selector",
+                label="Branch selector",
+                schema_type="non_empty_text",
+            ),
+        ),
+        recommended_trace_modes=("base",),
+        ready_state="available",
+        local_runtime_supported=False,
+        input_roles=(),
+        unavailable_summary=(
+            "A compatible admittance extraction result is required before member fit can run."
+        ),
+        dataset_family_gate_mode="advisory",
+        required_upstream_analysis_ids=("admittance_extraction",),
     ),
     CharacterizationAnalysisSpec(
         analysis_id="sideband_comparison",
@@ -358,7 +385,8 @@ def derive_characterization_analysis_ids(
         for trace in traces
         for capability in trace.analysis_capabilities
     }
-    return tuple(spec.analysis_id for spec in _ANALYSIS_SPECS if spec.analysis_id in present)
+    expanded = _expand_analysis_ids_with_pipeline_relations(present)
+    return tuple(spec.analysis_id for spec in _ANALYSIS_SPECS if spec.analysis_id in expanded)
 
 
 def build_characterization_registry_rows(
@@ -366,8 +394,12 @@ def build_characterization_registry_rows(
     included_analysis_ids: tuple[str, ...],
     traces: tuple[TraceMetadataSummary, ...],
     selected_trace_ids: tuple[str, ...],
+    upstream_results_by_analysis_id: (
+        dict[str, tuple[CharacterizationInputResultRef, ...]] | None
+    ) = None,
     enforce_runtime_support: bool = False,
 ) -> tuple[CharacterizationAnalysisRegistryRow, ...]:
+    upstream_results = upstream_results_by_analysis_id or {}
     rows: list[CharacterizationAnalysisRegistryRow] = []
     for analysis_id in included_analysis_ids:
         spec = get_characterization_analysis_spec(analysis_id)
@@ -380,6 +412,10 @@ def build_characterization_registry_rows(
         )
         if enforce_runtime_support:
             evaluation = _enforce_runtime_support(spec=spec, evaluation=evaluation)
+        prerequisite_state, upstream_requirement = resolve_characterization_prerequisite_state(
+            spec=spec,
+            upstream_results_by_analysis_id=upstream_results,
+        )
         rows.append(
             CharacterizationAnalysisRegistryRow(
                 analysis_id=spec.analysis_id,
@@ -392,6 +428,9 @@ def build_characterization_registry_rows(
                     recommended_trace_modes=spec.recommended_trace_modes,
                     summary=evaluation.summary,
                 ),
+                prerequisite_state=prerequisite_state,
+                upstream_result_requirement=upstream_requirement,
+                downstream_unlock_analysis_ids=spec.downstream_analysis_ids,
             )
         )
     return tuple(rows)
@@ -401,10 +440,14 @@ def project_legacy_characterization_registry_rows(
     *,
     legacy_rows: tuple[CharacterizationAnalysisRegistryRow, ...],
     selected_trace_ids: tuple[str, ...],
+    upstream_results_by_analysis_id: (
+        dict[str, tuple[CharacterizationInputResultRef, ...]] | None
+    ) = None,
     enforce_runtime_support: bool = False,
 ) -> tuple[CharacterizationAnalysisRegistryRow, ...]:
     selected_trace_count = len(selected_trace_ids)
     selected_scope_requested = selected_trace_count > 0
+    upstream_results = upstream_results_by_analysis_id or {}
     projected_rows: list[CharacterizationAnalysisRegistryRow] = []
 
     for row in legacy_rows:
@@ -412,6 +455,14 @@ def project_legacy_characterization_registry_rows(
         availability_state = row.availability_state
         matched_trace_count = row.trace_compatibility.matched_trace_count
         summary = row.trace_compatibility.summary
+        prerequisite_state, upstream_requirement = (
+            resolve_characterization_prerequisite_state(
+                spec=spec,
+                upstream_results_by_analysis_id=upstream_results,
+            )
+            if spec is not None
+            else ("ready", None)
+        )
 
         if selected_scope_requested:
             availability_state = "unavailable"
@@ -449,10 +500,53 @@ def project_legacy_characterization_registry_rows(
                     ),
                     summary=summary,
                 ),
+                prerequisite_state=prerequisite_state,
+                upstream_result_requirement=upstream_requirement,
+                downstream_unlock_analysis_ids=(
+                    spec.downstream_analysis_ids if spec is not None else ()
+                ),
             )
         )
 
     return tuple(projected_rows)
+
+
+def resolve_characterization_prerequisite_state(
+    *,
+    spec: CharacterizationAnalysisSpec | None,
+    upstream_results_by_analysis_id: dict[str, tuple[CharacterizationInputResultRef, ...]],
+) -> tuple[
+    CharacterizationPrerequisiteState,
+    CharacterizationUpstreamResultRequirement | None,
+]:
+    if spec is None or len(spec.required_upstream_analysis_ids) == 0:
+        return "ready", None
+    satisfied_results: list[CharacterizationInputResultRef] = []
+    missing_analysis_ids: list[str] = []
+    for analysis_id in spec.required_upstream_analysis_ids:
+        candidates = upstream_results_by_analysis_id.get(analysis_id, ())
+        if len(candidates) == 0:
+            missing_analysis_ids.append(analysis_id)
+            continue
+        satisfied_results.extend(candidates)
+    requirement = CharacterizationUpstreamResultRequirement(
+        required_upstream_analysis_ids=spec.required_upstream_analysis_ids,
+        satisfied_result_refs=tuple(satisfied_results),
+        summary=(
+            "Requires a completed "
+            f"{_format_analysis_label_list(spec.required_upstream_analysis_ids)} result "
+            "before this pipeline step can run."
+            if len(missing_analysis_ids) > 0
+            else (
+                "Ready from upstream "
+                f"{_format_analysis_label_list(spec.required_upstream_analysis_ids)} "
+                "results."
+            )
+        ),
+    )
+    if len(missing_analysis_ids) > 0:
+        return "requires_upstream_result", requirement
+    return "ready", requirement
 
 
 def evaluate_characterization_analysis_scope(
@@ -471,6 +565,43 @@ def evaluate_characterization_analysis_scope(
     missing_selected_trace_ids = tuple(
         trace_id for trace_id in selected_trace_ids if trace_id not in traces_by_id
     )
+
+    if len(spec.input_roles) == 0:
+        selected_trace_count = len(selected_trace_ids)
+        matched_trace_count = len(scope_traces)
+        if len(missing_selected_trace_ids) > 0:
+            summary = _selected_scope_summary(
+                spec,
+                missing_count=len(missing_selected_trace_ids),
+                incompatible_count=0,
+                traces=scope_traces,
+            )
+            return CharacterizationAnalysisScopeEvaluation(
+                spec=spec,
+                availability_state="unavailable",
+                matched_trace_count=matched_trace_count,
+                selected_trace_count=selected_trace_count,
+                summary=summary,
+                selected_scope_ready=False,
+                missing_selected_trace_ids=missing_selected_trace_ids,
+                incompatible_selected_trace_ids=(),
+            )
+        trace_noun = "trace" if matched_trace_count == 1 else "traces"
+        return CharacterizationAnalysisScopeEvaluation(
+            spec=spec,
+            availability_state=spec.ready_state,
+            matched_trace_count=matched_trace_count,
+            selected_trace_count=selected_trace_count,
+            summary=(
+                f"{matched_trace_count} selected {trace_noun} preserve collection scope "
+                f"for {spec.label.lower()}."
+                if selected_trace_count > 0
+                else f"Design trace scope is compatible with {spec.label.lower()}."
+            ),
+            selected_scope_ready=True,
+            missing_selected_trace_ids=missing_selected_trace_ids,
+            incompatible_selected_trace_ids=(),
+        )
 
     matched_trace_ids: set[str] = set()
     role_counts: dict[str, int] = {role.input_role: 0 for role in spec.input_roles}
@@ -924,6 +1055,24 @@ def _should_evaluate_spec_for_trace(
     return any(trace.family in role.accepted_families for role in spec.input_roles)
 
 
+def _expand_analysis_ids_with_pipeline_relations(
+    analysis_ids: set[str],
+) -> set[str]:
+    expanded = set(analysis_ids)
+    changed = True
+    while changed:
+        changed = False
+        for spec in _ANALYSIS_SPECS:
+            if spec.analysis_id in expanded:
+                continue
+            if len(spec.required_upstream_analysis_ids) == 0:
+                continue
+            if all(analysis_id in expanded for analysis_id in spec.required_upstream_analysis_ids):
+                expanded.add(spec.analysis_id)
+                changed = True
+    return expanded
+
+
 def _eligible_capability_summary(
     *,
     role: CharacterizationAnalysisInputRoleSpec,
@@ -955,6 +1104,20 @@ def _format_token_list(values: tuple[str, ...]) -> str:
     return ", ".join(value.replace("_", " ") for value in values[:-1]) + (
         f", or {values[-1].replace('_', ' ')}"
     )
+
+
+def _format_analysis_label_list(analysis_ids: tuple[str, ...]) -> str:
+    labels = tuple(
+        (
+            spec.label.lower()
+            if (spec := get_characterization_analysis_spec(analysis_id)) is not None
+            else analysis_id
+        )
+        for analysis_id in analysis_ids
+    )
+    if len(labels) == 1:
+        return labels[0]
+    return ", ".join(labels[:-1]) + f", or {labels[-1]}"
 
 
 def _capability_reason(

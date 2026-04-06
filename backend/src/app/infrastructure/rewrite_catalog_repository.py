@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from src.app.domain.admittance_result_contract import (
+    AdmittanceResultMember,
     AdmittanceResultSurface,
     annotate_admittance_artifact_refs,
     build_admittance_artifact_refs,
@@ -40,6 +41,7 @@ from src.app.domain.datasets import (
     CharacterizationDesignatedMetricOption,
     CharacterizationDiagnostic,
     CharacterizationIdentifySurface,
+    CharacterizationInputResultRef,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
     CharacterizationRunHistoryRow,
@@ -1657,6 +1659,7 @@ def _parse_characterization_run_history_row(
     if body is None:
         return None
     result_id = body.get("result_id")
+    input_result_refs = body.get("input_result_refs", ())
     return CharacterizationRunHistoryRow(
         run_id=str(body["run_id"]),
         dataset_id=str(body["dataset_id"]),
@@ -1670,6 +1673,26 @@ def _parse_characterization_run_history_row(
         provenance_summary=str(body["provenance_summary"]),
         updated_at=str(body["updated_at"]),
         result_id=str(result_id) if isinstance(result_id, str) else None,
+        input_result_refs=tuple(
+            CharacterizationInputResultRef(
+                analysis_id=str(item.get("analysis_id", "")),
+                result_id=str(item.get("result_id", "")),
+                run_id=str(item.get("run_id")) if isinstance(item.get("run_id"), str) else None,
+                artifact_id=(
+                    str(item.get("artifact_id"))
+                    if isinstance(item.get("artifact_id"), str)
+                    else None
+                ),
+                contract_version=(
+                    str(item.get("contract_version"))
+                    if isinstance(item.get("contract_version"), str)
+                    else None
+                ),
+                title=str(item.get("title")) if isinstance(item.get("title"), str) else None,
+            )
+            for item in input_result_refs
+            if isinstance(item, dict)
+        ),
     )
 
 
@@ -1686,6 +1709,8 @@ def _parse_characterization_result_detail(
     designated_metrics = identify_surface.get("designated_metrics", [])
     applied_tags = identify_surface.get("applied_tags", [])
     input_trace_ids = body.get("input_trace_ids", ())
+    input_result_refs = body.get("input_result_refs", ())
+    downstream_unlock_analysis_ids = body.get("downstream_unlock_analysis_ids", ())
     return CharacterizationResultDetail(
         result_id=str(body["result_id"]),
         dataset_id=str(body["dataset_id"]),
@@ -1699,6 +1724,26 @@ def _parse_characterization_result_detail(
         updated_at=str(body["updated_at"]),
         input_trace_ids=tuple(
             str(trace_id) for trace_id in input_trace_ids if isinstance(trace_id, str)
+        ),
+        input_result_refs=tuple(
+            CharacterizationInputResultRef(
+                analysis_id=str(item.get("analysis_id", "")),
+                result_id=str(item.get("result_id", "")),
+                run_id=str(item.get("run_id")) if isinstance(item.get("run_id"), str) else None,
+                artifact_id=(
+                    str(item.get("artifact_id"))
+                    if isinstance(item.get("artifact_id"), str)
+                    else None
+                ),
+                contract_version=(
+                    str(item.get("contract_version"))
+                    if isinstance(item.get("contract_version"), str)
+                    else None
+                ),
+                title=str(item.get("title")) if isinstance(item.get("title"), str) else None,
+            )
+            for item in input_result_refs
+            if isinstance(item, dict)
         ),
         payload=dict(body.get("payload", {})),
         diagnostics=tuple(
@@ -1778,6 +1823,11 @@ def _parse_characterization_result_detail(
                         series_axis=(
                             str(preset["series_axis"])
                             if isinstance(preset.get("series_axis"), str)
+                            else None
+                        ),
+                        compare_axis=(
+                            str(preset["compare_axis"])
+                            if isinstance(preset.get("compare_axis"), str)
                             else None
                         ),
                     )
@@ -1867,6 +1917,11 @@ def _parse_characterization_result_detail(
                 for item in applied_tags
                 if isinstance(item, dict)
             ),
+        ),
+        downstream_unlock_analysis_ids=tuple(
+            str(analysis_id)
+            for analysis_id in downstream_unlock_analysis_ids
+            if isinstance(analysis_id, str)
         ),
     )
 
@@ -3104,6 +3159,7 @@ def _seed_characterization_result_details() -> dict[
                     ),
                 ),
             ),
+            downstream_unlock_analysis_ids=("admittance_member_fit",),
         ),
         (
             "fluxonium-2025-031",
@@ -3389,14 +3445,46 @@ def _seed_admittance_flux_scan_a_surface() -> AdmittanceResultSurface:
         input_axis_label="Flux bias",
         input_axis_unit="mA",
         input_axis_values=(7.4, 7.6, 7.8),
-        frequency_grid_by_input=(
-            (5.612, 5.846),
-            (5.587, 5.821),
-            (None, None),
+        members=(
+            AdmittanceResultMember(
+                member_key="measurement:trace_flux_a_measurement",
+                label="measurement · admittance (complex)",
+                trace_id="trace_flux_a_measurement",
+                source_kind="measurement",
+                trace_mode_group="base",
+                parameter="admittance",
+                representation="complex",
+                provenance_summary="Measurement batch #4",
+            ),
+            AdmittanceResultMember(
+                member_key="layout_simulation:trace_flux_a_layout",
+                label="layout simulation · admittance (complex)",
+                trace_id="trace_flux_a_layout",
+                source_kind="layout_simulation",
+                trace_mode_group="base",
+                parameter="admittance",
+                representation="complex",
+                provenance_summary="Layout batch #2",
+            ),
         ),
-        residual_rms_by_input=(0.0118, 0.0131, None),
+        frequency_grid_by_member=(
+            (
+                (5.612, 5.846),
+                (5.587, 5.821),
+                (None, None),
+            ),
+            (
+                (5.604, 5.839),
+                (5.58, 5.814),
+                (None, None),
+            ),
+        ),
+        residual_rms_by_member=(
+            (0.0118, 0.0131, None),
+            (0.0109, 0.0124, None),
+        ),
         fit_window_ghz=(5.4, 6.0),
-        masked_input_indices=(2,),
+        masked_input_indices_by_member=((2,), (2,)),
         diagnostics=(
             CharacterizationDiagnostic(
                 severity="info",
