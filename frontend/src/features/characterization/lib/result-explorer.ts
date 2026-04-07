@@ -1,57 +1,183 @@
 import type {
-  CharacterizationArtifactManifestEntry,
-  CharacterizationArtifactPresetView,
-  CharacterizationArtifactViewMode,
+  CharacterizationArtifactCompareGroup,
+  CharacterizationArtifactMemberRef,
+  CharacterizationArtifactPayload,
+  CharacterizationArtifactPayloadLayout,
+  CharacterizationArtifactPayloadViewKind,
+  CharacterizationArtifactPlotSeries,
+  CharacterizationArtifactPreset,
+  CharacterizationArtifactRef,
 } from "@/features/characterization/lib/contracts";
 
+function readString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function readNullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readSeriesMask(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as readonly boolean[];
+  }
+
+  return value.map((item) => item === true);
+}
+
+function readNullableNumberArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as readonly (number | null)[];
+  }
+
+  return value.map((item) => readNullableNumber(item));
+}
+
+function readStringOrNumberArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as readonly (string | number)[];
+  }
+
+  return value.filter(
+    (item): item is string | number =>
+      typeof item === "string" || (typeof item === "number" && Number.isFinite(item)),
+  );
+}
+
+function readMember(value: unknown): CharacterizationArtifactMemberRef | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const payload = value as Record<string, unknown>;
+  const memberKey = readString(payload.member_key);
+  const label = readString(payload.label);
+  const traceId = readString(payload.trace_id);
+  const sourceKind = readString(payload.source_kind);
+  const traceModeGroup = readString(payload.trace_mode_group);
+  const parameter = readString(payload.parameter);
+  const representation = readString(payload.representation);
+  const provenanceSummary = readString(payload.provenance_summary);
+
+  if (
+    !memberKey ||
+    !label ||
+    !traceId ||
+    !sourceKind ||
+    !traceModeGroup ||
+    !parameter ||
+    !representation ||
+    !provenanceSummary
+  ) {
+    return null;
+  }
+
+  return {
+    memberKey,
+    label,
+    traceId,
+    sourceKind,
+    traceModeGroup,
+    parameter,
+    representation,
+    provenanceSummary,
+  };
+}
+
+function readCells(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as readonly (readonly (number | null)[])[];
+  }
+
+  return value.map((row) => readNullableNumberArray(row));
+}
+
+function readMaskMatrix(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as readonly (readonly boolean[])[];
+  }
+
+  return value.map((row) => readSeriesMask(row));
+}
+
+function readPlotSeries(value: unknown): CharacterizationArtifactPlotSeries[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const payload = item as Record<string, unknown>;
+      const seriesKey = readString(payload.series_key);
+      const seriesLabel = readString(payload.series_label);
+      if (!seriesKey || !seriesLabel) {
+        return null;
+      }
+
+      return {
+        seriesKey,
+        seriesLabel,
+        seriesValue:
+          typeof payload.series_value === "string" ||
+          (typeof payload.series_value === "number" &&
+            Number.isFinite(payload.series_value))
+            ? payload.series_value
+            : null,
+        xValues: readStringOrNumberArray(payload.x_values),
+        yValues: readNullableNumberArray(payload.y_values),
+        mask: readSeriesMask(payload.mask),
+        compareKey: readString(payload.compare_key),
+        compareLabel: readString(payload.compare_label),
+        member: readMember(payload.member),
+      } satisfies CharacterizationArtifactPlotSeries;
+    })
+    .filter((series): series is CharacterizationArtifactPlotSeries => series !== null);
+}
+
 export function resolveCharacterizationArtifactSelection(
-  manifest: readonly CharacterizationArtifactManifestEntry[],
+  artifacts: readonly CharacterizationArtifactRef[],
   selectedArtifactId: string | null,
 ) {
-  if (manifest.length === 0) {
+  if (artifacts.length === 0) {
     return null;
   }
 
   if (selectedArtifactId) {
-    const selectedArtifact = manifest.find(
-      (artifact) => artifact.artifactId === selectedArtifactId,
-    );
+    const selectedArtifact = artifacts.find((artifact) => artifact.artifactId === selectedArtifactId);
     if (selectedArtifact) {
       return selectedArtifact;
     }
   }
 
-  return manifest[0] ?? null;
+  return artifacts[0] ?? null;
 }
 
 export function resolveCharacterizationArtifactViewMode(
-  artifact: CharacterizationArtifactManifestEntry | null,
-  selectedViewMode: CharacterizationArtifactViewMode | null,
-): CharacterizationArtifactViewMode | null {
+  artifact: CharacterizationArtifactRef | null,
+  selectedViewMode: CharacterizationArtifactPayloadViewKind | null,
+): CharacterizationArtifactPayloadViewKind | null {
   if (!artifact) {
     return null;
   }
 
-  const supportedViewModes =
-    artifact.querySpec.supportedViewModes.length > 0
-      ? artifact.querySpec.supportedViewModes
-      : artifact.supportedViewModes;
-
+  const supportedViewModes = artifact.querySpec?.supportedViewModes ?? [];
   if (selectedViewMode && supportedViewModes.includes(selectedViewMode)) {
     return selectedViewMode;
   }
 
-  const defaultViewModes = artifact.querySpec.defaultPresetsByViewMode
-    .map((item) => item.viewMode)
-    .filter((viewMode, index, values) => values.indexOf(viewMode) === index);
-  const firstDefaultViewMode = defaultViewModes.find((viewMode) =>
-    supportedViewModes.includes(viewMode),
-  );
-  if (firstDefaultViewMode) {
-    return firstDefaultViewMode;
+  const defaultViewMode = artifact.querySpec?.defaultPresetsByViewMode[0]?.viewMode ?? null;
+  if (defaultViewMode && supportedViewModes.includes(defaultViewMode)) {
+    return defaultViewMode;
   }
 
-  if (artifact.viewKind !== "preset_query" && supportedViewModes.includes(artifact.viewKind)) {
+  if (
+    artifact.viewKind !== "preset_query" &&
+    supportedViewModes.includes(artifact.viewKind)
+  ) {
     return artifact.viewKind;
   }
 
@@ -63,20 +189,19 @@ export function resolveCharacterizationArtifactViewMode(
 }
 
 export function resolveCharacterizationArtifactPresetViews(
-  artifact: CharacterizationArtifactManifestEntry | null,
-  viewMode: CharacterizationArtifactViewMode | null,
+  artifact: CharacterizationArtifactRef | null,
+  viewMode: CharacterizationArtifactPayloadViewKind | null,
 ) {
   if (!artifact || !viewMode) {
-    return [] as readonly CharacterizationArtifactPresetView[];
+    return [] as readonly CharacterizationArtifactPreset[];
   }
 
-  const supportedPresetIds =
-    artifact.querySpec.supportedPresetIds.length > 0
-      ? new Set(artifact.querySpec.supportedPresetIds)
-      : null;
+  const supportedPresetIds = artifact.querySpec?.supportedPresetIds.length
+    ? new Set(artifact.querySpec.supportedPresetIds)
+    : null;
 
-  return artifact.presetViews.filter((preset) => {
-    if (preset.viewMode !== viewMode) {
+  return artifact.presets.filter((preset) => {
+    if (preset.viewKind !== viewMode) {
       return false;
     }
 
@@ -89,8 +214,8 @@ export function resolveCharacterizationArtifactPresetViews(
 }
 
 export function resolveCharacterizationArtifactPresetId(
-  artifact: CharacterizationArtifactManifestEntry | null,
-  viewMode: CharacterizationArtifactViewMode | null,
+  artifact: CharacterizationArtifactRef | null,
+  viewMode: CharacterizationArtifactPayloadViewKind | null,
   selectedPresetId: string | null,
 ) {
   const presetViews = resolveCharacterizationArtifactPresetViews(artifact, viewMode);
@@ -102,47 +227,205 @@ export function resolveCharacterizationArtifactPresetId(
     return selectedPresetId;
   }
 
-  if (
-    artifact?.querySpec.defaultPresetId &&
-    presetViews.some((preset) => preset.presetId === artifact.querySpec.defaultPresetId)
-  ) {
-    return artifact.querySpec.defaultPresetId;
+  const queryDefault = artifact?.querySpec?.defaultPresetId ?? artifact?.defaultPresetId ?? null;
+  if (queryDefault && presetViews.some((preset) => preset.presetId === queryDefault)) {
+    return queryDefault;
   }
 
-  const defaultPresetForViewMode = artifact?.querySpec.defaultPresetsByViewMode.find(
-    (defaultPreset) => defaultPreset.viewMode === viewMode,
+  const defaultForViewMode = artifact?.querySpec?.defaultPresetsByViewMode.find(
+    (preset) => preset.viewMode === viewMode,
   );
   if (
-    defaultPresetForViewMode &&
-    presetViews.some((preset) => preset.presetId === defaultPresetForViewMode.presetId)
+    defaultForViewMode &&
+    presetViews.some((preset) => preset.presetId === defaultForViewMode.presetId)
   ) {
-    return defaultPresetForViewMode.presetId;
+    return defaultForViewMode.presetId;
   }
 
-  return (
-    presetViews.find((preset) => preset.isDefault)?.presetId ??
-    presetViews[0]?.presetId ??
-    null
-  );
+  return presetViews[0]?.presetId ?? null;
 }
 
 export function buildCharacterizationArtifactPayloadRequest(input: Readonly<{
-  artifact: CharacterizationArtifactManifestEntry | null;
-  viewMode: CharacterizationArtifactViewMode | null;
+  artifact: CharacterizationArtifactRef | null;
+  viewMode: CharacterizationArtifactPayloadViewKind | null;
   presetId: string | null;
 }>) {
-  if (!input.artifact || !input.viewMode) {
+  if (!input.artifact) {
     return null;
   }
 
+  if (input.artifact.viewKind === "preset_query") {
+    if (!input.viewMode) {
+      return null;
+    }
+
+    return {
+      viewMode: input.viewMode,
+      presetId:
+        input.presetId &&
+        resolveCharacterizationArtifactPresetViews(input.artifact, input.viewMode).some(
+          (preset) => preset.presetId === input.presetId,
+        )
+          ? input.presetId
+          : null,
+    };
+  }
+
   return {
-    viewMode: input.viewMode,
-    presetId:
-      input.presetId &&
-      resolveCharacterizationArtifactPresetViews(input.artifact, input.viewMode).some(
-        (preset) => preset.presetId === input.presetId,
-      )
-        ? input.presetId
-        : null,
+    viewMode:
+      input.viewMode && input.viewMode !== input.artifact.viewKind ? input.viewMode : null,
+    presetId: null,
+  };
+}
+
+export function resolveCharacterizationArtifactLayout(
+  payload: CharacterizationArtifactPayload | null,
+): CharacterizationArtifactPayloadLayout | null {
+  const layout = payload?.payload.layout;
+  if (!layout || typeof layout !== "object") {
+    return null;
+  }
+
+  const value = layout as Record<string, unknown>;
+  return {
+    rowsAxis: readString(value.rows_axis),
+    columnsAxis: readString(value.columns_axis),
+    cellMetric: readString(value.cell_metric),
+    xAxis: readString(value.x_axis),
+    yMetric: readString(value.y_metric),
+    seriesAxis: readString(value.series_axis),
+    compareAxis: readString(value.compare_axis),
+  };
+}
+
+export function resolveCharacterizationArtifactCompareGroups(
+  payload: CharacterizationArtifactPayload | null,
+): readonly CharacterizationArtifactCompareGroup[] {
+  const compareGroups = payload?.payload.compare_groups;
+  if (!Array.isArray(compareGroups)) {
+    return [];
+  }
+
+  const resolvedGroups: CharacterizationArtifactCompareGroup[] = [];
+
+  for (const item of compareGroups) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const group = item as Record<string, unknown>;
+    const compareKey = readString(group.compare_key);
+    const compareLabel = readString(group.compare_label);
+    if (!compareKey || !compareLabel) {
+      continue;
+    }
+
+    resolvedGroups.push({
+      compareKey,
+      compareLabel,
+      member: readMember(group.member),
+      cells: readCells(group.cells),
+      mask: readMaskMatrix(group.mask),
+      series: readPlotSeries(group.series),
+    });
+  }
+
+  return resolvedGroups;
+}
+
+export function resolveCharacterizationArtifactPlotSeries(
+  payload: CharacterizationArtifactPayload | null,
+) {
+  return readPlotSeries(payload?.payload.series);
+}
+
+export function resolveCharacterizationArtifactTableRows(
+  payload: CharacterizationArtifactPayload | null,
+) {
+  const rows = payload?.payload.rows;
+  if (!Array.isArray(rows)) {
+    return [] as readonly { axisValue: string | number; label: string; unit: string | null }[];
+  }
+
+  return rows
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const row = item as Record<string, unknown>;
+      const label = readString(row.label);
+      const axisValue = row.axis_value;
+      if (
+        !label ||
+        !(
+          typeof axisValue === "string" ||
+          (typeof axisValue === "number" && Number.isFinite(axisValue))
+        )
+      ) {
+        return null;
+      }
+
+      return {
+        axisValue,
+        label,
+        unit: readString(row.unit),
+      };
+    })
+    .filter(
+      (
+        row,
+      ): row is { axisValue: string | number; label: string; unit: string | null } =>
+        row !== null,
+    );
+}
+
+export function resolveCharacterizationArtifactTableColumns(
+  payload: CharacterizationArtifactPayload | null,
+) {
+  const columns = payload?.payload.columns;
+  if (!Array.isArray(columns)) {
+    return [] as readonly { axisValue: string | number; label: string; unit: string | null }[];
+  }
+
+  return columns
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const column = item as Record<string, unknown>;
+      const label = readString(column.label);
+      const axisValue = column.axis_value;
+      if (
+        !label ||
+        !(
+          typeof axisValue === "string" ||
+          (typeof axisValue === "number" && Number.isFinite(axisValue))
+        )
+      ) {
+        return null;
+      }
+
+      return {
+        axisValue,
+        label,
+        unit: readString(column.unit),
+      };
+    })
+    .filter(
+      (
+        column,
+      ): column is { axisValue: string | number; label: string; unit: string | null } =>
+        column !== null,
+    );
+}
+
+export function resolveCharacterizationSingleMemberTableProjection(
+  payload: CharacterizationArtifactPayload | null,
+) {
+  return {
+    cells: readCells(payload?.payload.cells),
+    mask: readMaskMatrix(payload?.payload.mask),
   };
 }

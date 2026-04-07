@@ -14,8 +14,12 @@ import {
 } from "../src/features/characterization/lib/api";
 import {
   buildCharacterizationArtifactPayloadRequest,
+  resolveCharacterizationArtifactCompareGroups,
   resolveCharacterizationArtifactPresetId,
+  resolveCharacterizationArtifactPlotSeries,
   resolveCharacterizationArtifactSelection,
+  resolveCharacterizationArtifactTableColumns,
+  resolveCharacterizationArtifactTableRows,
   resolveCharacterizationArtifactViewMode,
 } from "../src/features/characterization/lib/result-explorer";
 import {
@@ -112,7 +116,7 @@ describe("characterization api keys", () => {
         },
       ),
     ).toBe(
-      "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/characterization-results/char-fit-flux-a-01/artifacts/artifact_resonance_frequency_matrix/payload?view_mode=plot&preset_id=plot_mode_vs_frequency_by_ljun",
+      "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/characterization-results/char-fit-flux-a-01/artifacts/artifact_resonance_frequency_matrix?view_mode=plot&preset_id=plot_mode_vs_frequency_by_ljun",
     );
   });
 
@@ -258,74 +262,59 @@ describe("characterization browse helpers", () => {
 });
 
 describe("characterization explorer helpers", () => {
-  const artifactManifest = [
+  const artifactRefs = [
     {
       artifactId: "artifact_resonance_frequency_matrix",
       category: "matrix",
       viewKind: "preset_query",
       title: "Resonance Matrix",
-      summary: "Mode-index by input-axis frequency grid.",
       payloadFormat: "json",
       payloadLocator: null,
-      supportedViewModes: ["table", "plot"],
-      supportedPresetIds: [
-        "table_mode_by_input_axis",
-        "plot_mode_profile",
-        "plot_sweep_profile",
+      axes: [
+        { axisKey: "input_axis", label: "Input Axis", role: "input", unit: "nH", length: 3 },
+        { axisKey: "member_key", label: "Collection Member", role: "member", unit: null, length: 2 },
+        { axisKey: "mode_index", label: "Mode Index", role: "derived", unit: null, length: 2 },
       ],
-      defaultPresetId: "table_mode_by_input_axis",
-      axisSummary: {
-        inputAxes: [{ key: "input_axis", label: "Input Axis", unit: "nH", family: "input_axis" }],
-        derivedAxes: [{ key: "mode_index", label: "Mode Index", unit: null, family: "derived_axis" }],
-        metrics: [{ key: "frequency_ghz", label: "Frequency", unit: "GHz", family: "metric" }],
-      },
-      presetViews: [
+      metric: { metricKey: "frequency_ghz", label: "Frequency", unit: "GHz" },
+      presets: [
         {
           presetId: "table_mode_by_input_axis",
           label: "Matrix",
-          description: "Rows mode index, columns input axis.",
-          viewMode: "table",
-          isDefault: true,
-          axisContract: {
-            rowAxis: "mode_index",
-            columnAxis: "input_axis",
-            xAxis: null,
-            yAxis: null,
-            seriesAxis: null,
-            metric: "frequency_ghz",
-          },
+          viewKind: "table",
+          rowsAxis: "mode_index",
+          columnsAxis: "input_axis",
+          cellMetric: "frequency_ghz",
+          xAxis: null,
+          yMetric: null,
+          seriesAxis: null,
+          compareAxis: "member_key",
         },
         {
           presetId: "plot_mode_profile",
           label: "Mode Profile",
-          description: "x mode index, series input axis.",
-          viewMode: "plot",
-          isDefault: false,
-          axisContract: {
-            rowAxis: null,
-            columnAxis: null,
-            xAxis: "mode_index",
-            yAxis: "frequency_ghz",
-            seriesAxis: "input_axis",
-            metric: "frequency_ghz",
-          },
+          viewKind: "plot",
+          rowsAxis: null,
+          columnsAxis: null,
+          cellMetric: null,
+          xAxis: "mode_index",
+          yMetric: "frequency_ghz",
+          seriesAxis: "input_axis",
+          compareAxis: "member_key",
         },
         {
           presetId: "plot_sweep_profile",
           label: "Sweep Profile",
-          description: "x input axis, series mode index.",
-          viewMode: "plot",
-          isDefault: false,
-          axisContract: {
-            rowAxis: null,
-            columnAxis: null,
-            xAxis: "input_axis",
-            yAxis: "frequency_ghz",
-            seriesAxis: "mode_index",
-            metric: "frequency_ghz",
-          },
+          viewKind: "plot",
+          rowsAxis: null,
+          columnsAxis: null,
+          cellMetric: null,
+          xAxis: "input_axis",
+          yMetric: "frequency_ghz",
+          seriesAxis: "mode_index",
+          compareAxis: "member_key",
         },
       ],
+      defaultPresetId: "table_mode_by_input_axis",
       querySpec: {
         queryStyle: "preset_driven",
         supportedQueryFields: ["view_mode", "preset_id"],
@@ -347,8 +336,103 @@ describe("characterization explorer helpers", () => {
           },
         ],
       },
+      identifySource: false,
     },
   ] as const;
+
+  const compareAwarePayload = {
+    artifactId: "artifact_resonance_frequency_matrix",
+    title: "Mode frequency grid",
+    presetId: "mode_by_input_table",
+    viewKind: "table",
+    axes: artifactRefs[0].axes,
+    metric: artifactRefs[0].metric,
+    diagnostics: [],
+    payload: {
+      layout: {
+        rows_axis: "mode_index",
+        columns_axis: "input_axis",
+        cell_metric: "frequency_ghz",
+        compare_axis: "member_key",
+      },
+      rows: [
+        { axis_value: 0, label: "Mode 0", unit: null },
+        { axis_value: 1, label: "Mode 1", unit: null },
+      ],
+      columns: [
+        { axis_value: 850, label: "850 nH", unit: "nH" },
+        { axis_value: 1000, label: "1000 nH", unit: "nH" },
+      ],
+      compare_groups: [
+        {
+          compare_key: "measurement:trace_a",
+          compare_label: "Measured member",
+          member: {
+            member_key: "measurement:trace_a",
+            label: "Measured member",
+            trace_id: "trace_a",
+            source_kind: "measurement",
+            trace_mode_group: "base",
+            parameter: "Y11",
+            representation: "real",
+            provenance_summary: "Measurement batch #1",
+          },
+          cells: [
+            [5.61, 5.58],
+            [5.84, null],
+          ],
+          mask: [
+            [false, false],
+            [false, true],
+          ],
+        },
+        {
+          compare_key: "layout_simulation:trace_b",
+          compare_label: "Layout member",
+          member: {
+            member_key: "layout_simulation:trace_b",
+            label: "Layout member",
+            trace_id: "trace_b",
+            source_kind: "layout_simulation",
+            trace_mode_group: "base",
+            parameter: "Y11",
+            representation: "real",
+            provenance_summary: "Layout batch #2",
+          },
+          cells: [
+            [5.63, 5.6],
+            [5.86, null],
+          ],
+          mask: [
+            [false, false],
+            [false, true],
+          ],
+        },
+      ],
+      series: [
+        {
+          series_key: "input_axis:0",
+          series_label: "850 nH",
+          series_value: 850,
+          x_values: [0, 1],
+          y_values: [5.61, 5.84],
+          mask: [false, false],
+          compare_key: "measurement:trace_a",
+          compare_label: "Measured member",
+          member: {
+            member_key: "measurement:trace_a",
+            label: "Measured member",
+            trace_id: "trace_a",
+            source_kind: "measurement",
+            trace_mode_group: "base",
+            parameter: "Y11",
+            representation: "real",
+            provenance_summary: "Measurement batch #1",
+          },
+        },
+      ],
+    },
+  } as const;
 
   const traceRows = [
     {
@@ -400,7 +484,7 @@ describe("characterization explorer helpers", () => {
   ] as const;
 
   it("keeps artifact selection and preset resolution manifest-driven", () => {
-    const artifact = resolveCharacterizationArtifactSelection(artifactManifest, null);
+    const artifact = resolveCharacterizationArtifactSelection(artifactRefs, null);
     expect(artifact?.artifactId).toBe("artifact_resonance_frequency_matrix");
     expect(artifact?.viewKind).toBe("preset_query");
     expect(resolveCharacterizationArtifactViewMode(artifact ?? null, null)).toBe("table");
@@ -420,6 +504,24 @@ describe("characterization explorer helpers", () => {
       viewMode: "plot",
       presetId: "plot_sweep_profile",
     });
+  });
+
+  it("parses compare-aware member payloads without collapsing identity", () => {
+    expect(resolveCharacterizationArtifactTableRows(compareAwarePayload)).toEqual([
+      { axisValue: 0, label: "Mode 0", unit: null },
+      { axisValue: 1, label: "Mode 1", unit: null },
+    ]);
+    expect(resolveCharacterizationArtifactTableColumns(compareAwarePayload)).toEqual([
+      { axisValue: 850, label: "850 nH", unit: "nH" },
+      { axisValue: 1000, label: "1000 nH", unit: "nH" },
+    ]);
+    expect(resolveCharacterizationArtifactCompareGroups(compareAwarePayload)).toHaveLength(2);
+    expect(resolveCharacterizationArtifactCompareGroups(compareAwarePayload)[0]?.member?.traceId).toBe(
+      "trace_a",
+    );
+    expect(resolveCharacterizationArtifactPlotSeries(compareAwarePayload)[0]?.compareKey).toBe(
+      "measurement:trace_a",
+    );
   });
 
   it("builds sweep-aware and collection-aware filters without parsing provenance strings", () => {
@@ -563,20 +665,28 @@ describe("characterization task helpers", () => {
 
 describe("characterization source contracts", () => {
   it("keeps characterization run-first without duplicating task-management walls", () => {
-    expect(characterizationWorkspaceSource).toContain('title="Select Data Scope"');
-    expect(characterizationWorkspaceSource).toContain('title="Choose Analysis & Setup"');
-    expect(characterizationWorkspaceSource).toContain('title="Inspect Result"');
+    expect(characterizationWorkspaceSource).toContain('title="Design / Source Scope"');
+    expect(characterizationWorkspaceSource).toContain('title="Data Collection Review"');
+    expect(characterizationWorkspaceSource).toContain('title="Analysis Pipeline"');
+    expect(characterizationWorkspaceSource).toContain('title="Active Analysis Run"');
+    expect(characterizationWorkspaceSource).toContain('title="Result Preview"');
+    expect(characterizationWorkspaceSource).toContain('title="Downstream Analysis / Next Step"');
     expect(characterizationWorkspaceSource).toContain('<div className="space-y-6">');
     expect(characterizationWorkspaceSource).toContain("Trace Selection");
     expect(characterizationWorkspaceSource).toContain("Sweep Axis");
     expect(characterizationWorkspaceSource).toContain("Collection Hint");
+    expect(characterizationWorkspaceSource).toContain("Review Summary");
+    expect(characterizationWorkspaceSource).toContain("Collection Members");
+    expect(characterizationWorkspaceSource).toContain("Runnable Analyses");
+    expect(characterizationWorkspaceSource).toContain("Blocked Analyses");
     expect(characterizationWorkspaceSource).toContain("Results");
     expect(characterizationWorkspaceSource).toContain("Result Detail");
     expect(characterizationWorkspaceSource).toContain("CharacterizationResultExplorer");
     expect(characterizationWorkspaceSource).toContain("Debug Payload");
     expect(characterizationWorkspaceSource).toContain("Identify & Tag");
-    expect(characterizationWorkspaceSource).toContain("Validation Explanation");
-    expect(characterizationWorkspaceSource).toContain("None available");
+    expect(characterizationWorkspaceSource).toContain("Pipeline Guidance");
+    expect(characterizationWorkspaceSource).toContain("Run History");
+    expect(characterizationWorkspaceSource).toContain("No downstream step unlocked yet");
     expect(characterizationWorkspaceSource).toContain("SurfaceActionButton");
     expect(characterizationWorkspaceSource).not.toContain("This registry does not submit or attach analyses.");
     expect(characterizationWorkspaceSource).not.toContain("Characterization Task Queue");
@@ -589,7 +699,6 @@ describe("characterization source contracts", () => {
     expect(characterizationWorkspaceSource).not.toContain("latest persisted result in view");
     expect(characterizationWorkspaceSource).not.toContain("Persisted characterization outputs for the current design.");
     expect(characterizationWorkspaceSource).not.toContain("Materialized payload references.");
-    expect(characterizationWorkspaceSource).not.toContain("artifactRefs");
     expect(characterizationWorkspaceSource).not.toContain("SummaryTile");
     expect(characterizationWorkspaceSource).not.toContain('title="Run Analysis"');
     expect(characterizationWorkspaceSource).not.toContain('title="Latest Analysis"');
@@ -598,8 +707,9 @@ describe("characterization source contracts", () => {
       'xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.9fr)]',
     );
     expect(characterizationExplorerSource).toContain("Result Explorer");
-    expect(characterizationExplorerSource).toContain("supportedViewModes");
+    expect(characterizationExplorerSource).toContain("compareGroups");
     expect(characterizationExplorerSource).toContain("availablePresetViews");
+    expect(characterizationExplorerSource).toContain("MemberBadge");
   });
 
   it("binds trace browse, characterization submit, and result continuity to shared app authority", () => {
@@ -619,6 +729,8 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain(
       "listCharacterizationAnalysisRegistry(activeDatasetId, resolvedDesignId",
     );
+    expect(characterizationHookSource).toContain("analysisRegistryQuery.data?.inputCollectionPayload");
+    expect(characterizationHookSource).toContain("analysisRegistryQuery.data?.dataCollectionReview");
     expect(characterizationHookSource).toContain(
       "listCharacterizationRunHistory(activeDatasetId, resolvedDesignId",
     );
@@ -649,6 +761,7 @@ describe("characterization source contracts", () => {
     expect(characterizationExplorerHookSource).toContain("getCharacterizationArtifactPayload(");
     expect(characterizationExplorerHookSource).toContain("keepPreviousData: true");
     expect(characterizationExplorerHookSource).toContain("resolveCharacterizationArtifactPresetId");
+    expect(characterizationExplorerHookSource).toContain("const artifactRefs = resultDetail?.artifactRefs ?? [];");
     expect(characterizationExplorerHookSource).toContain(
       '"characterization-artifact-payload"',
     );

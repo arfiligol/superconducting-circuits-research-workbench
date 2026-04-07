@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { getCharacterizationArtifactPayload } from "@/features/characterization/lib/api";
 import type {
   CharacterizationArtifactPayload,
-  CharacterizationArtifactViewMode,
+  CharacterizationArtifactPayloadViewKind,
   CharacterizationResultDetail,
 } from "@/features/characterization/lib/contracts";
 import {
@@ -30,13 +30,13 @@ export function useCharacterizationResultExplorer({
 }: UseCharacterizationResultExplorerInput) {
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [selectedViewMode, setSelectedViewMode] =
-    useState<CharacterizationArtifactViewMode | null>(null);
+    useState<CharacterizationArtifactPayloadViewKind | null>(null);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
-  const artifactManifest = resultDetail?.artifactManifest ?? [];
+  const artifactRefs = resultDetail?.artifactRefs ?? [];
   const selectedArtifact = useMemo(
-    () => resolveCharacterizationArtifactSelection(artifactManifest, selectedArtifactId),
-    [artifactManifest, selectedArtifactId],
+    () => resolveCharacterizationArtifactSelection(artifactRefs, selectedArtifactId),
+    [artifactRefs, selectedArtifactId],
   );
   const resolvedViewMode = useMemo(
     () => resolveCharacterizationArtifactViewMode(selectedArtifact, selectedViewMode),

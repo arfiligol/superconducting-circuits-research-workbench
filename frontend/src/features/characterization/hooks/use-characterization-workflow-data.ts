@@ -13,6 +13,7 @@ import {
   listCharacterizationTraceSelectionRows,
 } from "@/features/characterization/lib/api";
 import type {
+  CharacterizationAnalysisRegistry,
   CharacterizationAnalysisRegistryRow,
   CharacterizationTaggingInput,
   CharacterizationTraceSelectionRow,
@@ -61,6 +62,12 @@ type UseCharacterizationWorkflowDataOptions = Readonly<{
   requestedDesignId: string | null;
   requestedResultId: string | null;
 }>;
+
+const EMPTY_CHARACTERIZATION_REGISTRY: CharacterizationAnalysisRegistry = {
+  rows: [],
+  inputCollectionPayload: null,
+  dataCollectionReview: null,
+};
 
 function defaultCharacterizationConfigValue(field: string) {
   switch (field) {
@@ -291,7 +298,7 @@ export function useCharacterizationWorkflowData({
   );
 
   const selectedAnalysis =
-    analysisRegistryQuery.data?.find((analysis) => analysis.analysisId === selectedAnalysisId) ??
+    analysisRegistryQuery.data?.rows.find((analysis) => analysis.analysisId === selectedAnalysisId) ??
     null;
 
   const runHistoryQuery = useSWR(
@@ -362,7 +369,7 @@ export function useCharacterizationWorkflowData({
 
   useEffect(() => {
     setSelectedAnalysisId((current) => {
-      const rows = analysisRegistryQuery.data ?? [];
+      const rows = analysisRegistryQuery.data?.rows ?? [];
       if (rows.length === 0) {
         return null;
       }
@@ -372,12 +379,24 @@ export function useCharacterizationWorkflowData({
       }
 
       return (
-        rows.find((analysis) => analysis.availabilityState === "recommended")?.analysisId ??
+        rows.find(
+          (analysis) =>
+            analysis.prerequisiteState === "ready" &&
+            analysis.availabilityState === "recommended",
+        )?.analysisId ??
+        rows.find(
+          (analysis) =>
+            analysis.prerequisiteState === "ready" &&
+            analysis.availabilityState !== "unavailable",
+        )?.analysisId ??
+        rows.find(
+          (analysis) => analysis.prerequisiteState === "requires_upstream_result",
+        )?.analysisId ??
         rows.find((analysis) => analysis.availabilityState !== "unavailable")?.analysisId ??
         null
       );
     });
-  }, [analysisRegistryQuery.data]);
+  }, [analysisRegistryQuery.data?.rows]);
 
   useEffect(() => {
     const traces = tracesQuery.data?.rows ?? [];
@@ -562,6 +581,24 @@ export function useCharacterizationWorkflowData({
 
     if (selectedAnalysis.availabilityState === "unavailable") {
       const error = new Error("This analysis is not runnable for the current trace selection.");
+      setTaskMutationState({ state: "error", message: error.message });
+      throw error;
+    }
+
+    if (selectedAnalysis.prerequisiteState === "requires_upstream_result") {
+      const error = new Error(
+        selectedAnalysis.upstreamResultRequirement?.summary ||
+          "This analysis needs an upstream persisted result before it can run.",
+      );
+      setTaskMutationState({ state: "error", message: error.message });
+      throw error;
+    }
+
+    if (selectedAnalysis.prerequisiteState === "blocked") {
+      const error = new Error(
+        selectedAnalysis.traceCompatibility.summary ||
+          "This analysis is blocked for the current data collection.",
+      );
       setTaskMutationState({ state: "error", message: error.message });
       throw error;
     }
@@ -753,7 +790,10 @@ export function useCharacterizationWorkflowData({
     requestedDesignId,
     selectedDesignId: resolvedDesignId,
     setSelectedDesignId,
-    analysisRegistry: analysisRegistryQuery.data ?? [],
+    analysisRegistry: analysisRegistryQuery.data?.rows ?? [],
+    analysisRegistryPayload: analysisRegistryQuery.data ?? EMPTY_CHARACTERIZATION_REGISTRY,
+    inputCollectionPayload: analysisRegistryQuery.data?.inputCollectionPayload ?? null,
+    dataCollectionReview: analysisRegistryQuery.data?.dataCollectionReview ?? null,
     analysisRegistryError: analysisRegistryQuery.error as Error | undefined,
     isAnalysisRegistryLoading: analysisRegistryQuery.isLoading,
     selectedAnalysis,

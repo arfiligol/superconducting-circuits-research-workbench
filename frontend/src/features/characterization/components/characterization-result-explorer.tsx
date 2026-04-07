@@ -7,9 +7,21 @@ import { useTheme } from "next-themes";
 
 import type { UseCharacterizationResultExplorerResult } from "@/features/characterization/hooks/use-characterization-result-explorer";
 import type {
+  CharacterizationArtifactMemberRef,
   CharacterizationArtifactPayload,
+  CharacterizationArtifactPlotSeries,
+  CharacterizationArtifactRef,
+  CharacterizationArtifactPayloadViewKind,
   CharacterizationResultDetail,
 } from "@/features/characterization/lib/contracts";
+import {
+  resolveCharacterizationArtifactCompareGroups,
+  resolveCharacterizationArtifactLayout,
+  resolveCharacterizationArtifactPlotSeries,
+  resolveCharacterizationArtifactTableColumns,
+  resolveCharacterizationArtifactTableRows,
+  resolveCharacterizationSingleMemberTableProjection,
+} from "@/features/characterization/lib/result-explorer";
 import { AppInlineSelect } from "@/features/shared/components/app-select";
 import {
   AppSegmentedControl,
@@ -36,10 +48,237 @@ const Plot = dynamic<PlotComponentProps>(
   },
 );
 
-function CharacterizationPlot({
+function formatPayloadKindLabel(value: CharacterizationArtifactPayloadViewKind) {
+  switch (value) {
+    case "table":
+      return "Table";
+    case "plot":
+      return "Plot";
+    case "json":
+      return "JSON";
+    case "text":
+      return "Text";
+    default:
+      return value;
+  }
+}
+
+function formatSourceKind(value: string) {
+  switch (value) {
+    case "measurement":
+      return "Measurement";
+    case "layout_simulation":
+      return "Layout";
+    case "circuit_simulation":
+      return "Circuit";
+    default:
+      return value.replaceAll("_", " ");
+  }
+}
+
+function resolveAxisLabel(
+  artifact: CharacterizationArtifactRef | null,
+  axisKey: string | null,
+  fallback: string,
+) {
+  if (!axisKey) {
+    return fallback;
+  }
+
+  return artifact?.axes.find((axis) => axis.axisKey === axisKey)?.label ?? axisKey;
+}
+
+function resolveMetricLabel(artifact: CharacterizationArtifactRef | null, fallback: string) {
+  return artifact?.metric?.label ?? fallback;
+}
+
+function memberSummary(member: CharacterizationArtifactMemberRef | null) {
+  if (!member) {
+    return null;
+  }
+
+  return `${formatSourceKind(member.sourceKind)} · ${member.parameter} · ${member.traceId}`;
+}
+
+function MemberBadge({
+  member,
+  compareLabel,
+}: Readonly<{
+  member: CharacterizationArtifactMemberRef | null;
+  compareLabel: string;
+}>) {
+  return (
+    <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <SurfaceTag tone="default">{compareLabel}</SurfaceTag>
+        {member ? <SurfaceTag tone="default">{formatSourceKind(member.sourceKind)}</SurfaceTag> : null}
+      </div>
+      {member ? (
+        <>
+          <p className="mt-2 text-sm font-medium text-foreground">{member.label}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{memberSummary(member)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{member.provenanceSummary}</p>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function CompareAwareTable({
   payload,
+  selectedArtifact,
 }: Readonly<{
   payload: CharacterizationArtifactPayload;
+  selectedArtifact: CharacterizationArtifactRef | null;
+}>) {
+  const layout = resolveCharacterizationArtifactLayout(payload);
+  const rowLabels = resolveCharacterizationArtifactTableRows(payload);
+  const columnLabels = resolveCharacterizationArtifactTableColumns(payload);
+  const compareGroups = resolveCharacterizationArtifactCompareGroups(payload);
+  const singleMemberProjection = resolveCharacterizationSingleMemberTableProjection(payload);
+  const effectiveGroups =
+    compareGroups.length > 0
+      ? compareGroups
+      : singleMemberProjection.cells.length > 0
+        ? [
+            {
+              compareKey: "selected-scope",
+              compareLabel: "Selected scope",
+              member: null,
+              cells: singleMemberProjection.cells,
+              mask: singleMemberProjection.mask,
+              series: [],
+            },
+          ]
+        : [];
+  const rowAxisLabel = resolveAxisLabel(selectedArtifact, layout?.rowsAxis ?? null, "Rows");
+  const columnAxisLabel = resolveAxisLabel(
+    selectedArtifact,
+    layout?.columnsAxis ?? null,
+    "Columns",
+  );
+  const metricLabel = resolveMetricLabel(
+    selectedArtifact,
+    layout?.cellMetric ?? "Metric",
+  );
+
+  if (effectiveGroups.length === 0 || rowLabels.length === 0 || columnLabels.length === 0) {
+    return (
+      <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
+        The selected preset did not expose a table payload yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 text-[11px]">
+        <SurfaceTag tone="default">{rowAxisLabel}</SurfaceTag>
+        <SurfaceTag tone="default">{columnAxisLabel}</SurfaceTag>
+        <SurfaceTag tone="default">{metricLabel}</SurfaceTag>
+        {layout?.compareAxis ? (
+          <SurfaceTag tone="default">
+            Compare {resolveAxisLabel(selectedArtifact, layout.compareAxis, layout.compareAxis)}
+          </SurfaceTag>
+        ) : null}
+      </div>
+
+      {effectiveGroups.length > 1 ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {effectiveGroups.map((group) => (
+            <div key={group.compareKey} className="space-y-3">
+              <MemberBadge member={group.member} compareLabel={group.compareLabel} />
+              <div className="overflow-x-auto rounded-[0.95rem] border border-border bg-background">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-card">
+                    <tr className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                      <th className="px-4 py-3">{rowAxisLabel}</th>
+                      {columnLabels.map((column) => (
+                        <th key={`${group.compareKey}-${column.label}`} className="px-4 py-3">
+                          {column.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {rowLabels.map((row, rowIndex) => (
+                      <tr key={`${group.compareKey}-${row.label}`}>
+                        <td className="px-4 py-3 font-medium text-foreground">{row.label}</td>
+                        {columnLabels.map((column, columnIndex) => {
+                          const value = group.cells[rowIndex]?.[columnIndex] ?? null;
+                          const masked = group.mask[rowIndex]?.[columnIndex] ?? value == null;
+                          return (
+                            <td
+                              key={`${group.compareKey}-${row.label}-${column.label}`}
+                              className="px-4 py-3"
+                            >
+                              {masked ? (
+                                <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-950 dark:text-amber-100">
+                                  Masked
+                                </span>
+                              ) : (
+                                <span className="font-medium text-foreground">{String(value)}</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-[0.95rem] border border-border bg-background">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-card">
+              <tr className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                <th className="px-4 py-3">{rowAxisLabel}</th>
+                {columnLabels.map((column) => (
+                  <th key={column.label} className="px-4 py-3">
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rowLabels.map((row, rowIndex) => (
+                <tr key={row.label}>
+                  <td className="px-4 py-3 font-medium text-foreground">{row.label}</td>
+                  {columnLabels.map((column, columnIndex) => {
+                    const value = effectiveGroups[0]?.cells[rowIndex]?.[columnIndex] ?? null;
+                    const masked =
+                      effectiveGroups[0]?.mask[rowIndex]?.[columnIndex] ?? value == null;
+                    return (
+                      <td key={`${row.label}-${column.label}`} className="px-4 py-3">
+                        {masked ? (
+                          <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-950 dark:text-amber-100">
+                            Masked
+                          </span>
+                        ) : (
+                          <span className="font-medium text-foreground">{String(value)}</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompareAwarePlot({
+  payload,
+  selectedArtifact,
+}: Readonly<{
+  payload: CharacterizationArtifactPayload;
+  selectedArtifact: CharacterizationArtifactRef | null;
 }>) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme !== "light";
@@ -47,9 +286,18 @@ function CharacterizationPlot({
   const gridColor = isDark ? "rgba(148, 163, 184, 0.22)" : "rgba(148, 163, 184, 0.18)";
   const lineColor = isDark ? "rgba(148, 163, 184, 0.42)" : "rgba(148, 163, 184, 0.3)";
   const palette = ["#2563eb", "#0f766e", "#b45309", "#7c3aed", "#be185d", "#0891b2"];
-  const plot = payload.plot;
+  const layout = resolveCharacterizationArtifactLayout(payload);
+  const compareGroups = resolveCharacterizationArtifactCompareGroups(payload);
+  const series = resolveCharacterizationArtifactPlotSeries(payload);
+  const xAxisLabel = resolveAxisLabel(selectedArtifact, layout?.xAxis ?? null, "X");
+  const yAxisLabel = resolveMetricLabel(selectedArtifact, layout?.yMetric ?? "Y");
+  const compareAxisLabel = resolveAxisLabel(
+    selectedArtifact,
+    layout?.compareAxis ?? null,
+    "Member",
+  );
 
-  const layout = useMemo(
+  const plotLayout = useMemo(
     () => ({
       title: undefined,
       paper_bgcolor: "rgba(0,0,0,0)",
@@ -57,7 +305,7 @@ function CharacterizationPlot({
       margin: { t: 18, r: 260, b: 54, l: 62 },
       xaxis: {
         title: {
-          text: plot?.xAxis.label ?? "X",
+          text: xAxisLabel,
           standoff: 16,
           font: { color: axisColor },
         },
@@ -72,7 +320,7 @@ function CharacterizationPlot({
       },
       yaxis: {
         title: {
-          text: plot?.yAxis.label ?? "Y",
+          text: yAxisLabel,
           standoff: 14,
           font: { color: axisColor },
         },
@@ -97,136 +345,107 @@ function CharacterizationPlot({
         color: axisColor,
       },
     }),
-    [axisColor, gridColor, lineColor, plot?.xAxis.label, plot?.yAxis.label],
+    [axisColor, gridColor, lineColor, xAxisLabel, yAxisLabel],
   );
 
-  if (!plot) {
-    return null;
+  if (series.length === 0) {
+    return (
+      <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
+        The selected preset did not expose a plot payload yet.
+      </div>
+    );
   }
 
   return (
-    <div className="overflow-hidden rounded-[0.95rem] border border-border/80 bg-background">
-      <Plot
-        data={plot.series.map((series, index) => ({
-          type: "scatter",
-          mode: "lines+markers",
-          name: series.label,
-          x: plot.xAxis.values,
-          y: series.values,
-          connectgaps: false,
-          line: {
-            color: palette[index % palette.length],
-            width: 2.5,
-          },
-          marker: {
-            color: palette[index % palette.length],
-            size: 4,
-          },
-          hovertemplate: `${plot.xAxis.label}: %{x}<br>${plot.yAxis.label}: %{y}<extra>${series.label}</extra>`,
-        }))}
-        layout={layout}
-        config={{
-          displaylogo: false,
-          responsive: true,
-          modeBarButtonsToRemove: [
-            "select2d",
-            "lasso2d",
-            "autoScale2d",
-            "toggleSpikelines",
-          ],
-        }}
-        className="h-[380px] w-full"
-        style={{ width: "100%", height: "380px" }}
-        useResizeHandler
-      />
-    </div>
-  );
-}
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 text-[11px]">
+        <SurfaceTag tone="default">{xAxisLabel}</SurfaceTag>
+        <SurfaceTag tone="default">{yAxisLabel}</SurfaceTag>
+        {layout?.seriesAxis ? (
+          <SurfaceTag tone="default">
+            Series {resolveAxisLabel(selectedArtifact, layout.seriesAxis, layout.seriesAxis)}
+          </SurfaceTag>
+        ) : null}
+        {layout?.compareAxis ? <SurfaceTag tone="default">Compare {compareAxisLabel}</SurfaceTag> : null}
+      </div>
 
-function CharacterizationTable({
-  payload,
-}: Readonly<{
-  payload: CharacterizationArtifactPayload;
-}>) {
-  if (!payload.table) {
-    return null;
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-[0.95rem] border border-border/80 bg-background">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-card">
-          <tr className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-            {payload.table.columns.map((column) => (
-              <th key={column.key} className="px-4 py-3">
-                <div className="space-y-1">
-                  <span>{column.label}</span>
-                  <span className="block text-[10px] font-medium normal-case tracking-normal text-muted-foreground">
-                    {column.role.replaceAll("_", " ")}
-                  </span>
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border bg-surface">
-          {payload.table.rows.map((row, rowIndex) => (
-            <tr key={`row-${rowIndex}`}>
-              {payload.table?.columns.map((column) => {
-                const value = row[column.key];
-                return (
-                  <td key={`${rowIndex}-${column.key}`} className="px-4 py-3 align-top">
-                    {value == null ? (
-                      <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-950 dark:text-amber-100">
-                        Masked
-                      </span>
-                    ) : (
-                      <span className="font-medium text-foreground">{String(value)}</span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
+      {compareGroups.length > 1 ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {compareGroups.map((group) => (
+            <MemberBadge
+              key={group.compareKey}
+              member={group.member}
+              compareLabel={group.compareLabel}
+            />
           ))}
-        </tbody>
-      </table>
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-[0.95rem] border border-border/80 bg-background">
+        <Plot
+          data={series.map((item: CharacterizationArtifactPlotSeries, index) => ({
+            type: "scatter",
+            mode: "lines+markers",
+            name:
+              compareGroups.length > 1 && item.compareLabel
+                ? `${item.compareLabel} · ${item.seriesLabel}`
+                : item.seriesLabel,
+            x: item.xValues,
+            y: item.yValues,
+            connectgaps: false,
+            line: {
+              color: palette[index % palette.length],
+              width: 2.5,
+            },
+            marker: {
+              color: palette[index % palette.length],
+              size: 4,
+            },
+            hovertemplate: `${xAxisLabel}: %{x}<br>${yAxisLabel}: %{y}<extra>${
+              compareGroups.length > 1 && item.compareLabel
+                ? `${item.compareLabel} · ${item.seriesLabel}`
+                : item.seriesLabel
+            }</extra>`,
+          }))}
+          layout={plotLayout}
+          config={{
+            displaylogo: false,
+            responsive: true,
+            modeBarButtonsToRemove: [
+              "select2d",
+              "lasso2d",
+              "autoScale2d",
+              "toggleSpikelines",
+            ],
+          }}
+          className="h-[380px] w-full"
+          style={{ width: "100%", height: "380px" }}
+          useResizeHandler
+        />
+      </div>
     </div>
   );
 }
 
 function CharacterizationStructuredPayload({
   payload,
+  selectedArtifact,
 }: Readonly<{
   payload: CharacterizationArtifactPayload;
+  selectedArtifact: CharacterizationArtifactRef | null;
 }>) {
-  if (payload.viewMode === "table" && payload.table) {
-    return <CharacterizationTable payload={payload} />;
+  if (payload.viewKind === "table") {
+    return <CompareAwareTable payload={payload} selectedArtifact={selectedArtifact} />;
   }
 
-  if (payload.viewMode === "plot" && payload.plot) {
-    return <CharacterizationPlot payload={payload} />;
-  }
-
-  if (payload.textPayload) {
-    return (
-      <pre className="overflow-x-auto rounded-[0.95rem] border border-border bg-background px-4 py-4 text-xs leading-6 text-muted-foreground">
-        {payload.textPayload}
-      </pre>
-    );
-  }
-
-  if (payload.jsonPayload) {
-    return (
-      <pre className="overflow-x-auto rounded-[0.95rem] border border-border bg-background px-4 py-4 text-xs leading-6 text-muted-foreground">
-        {JSON.stringify(payload.jsonPayload, null, 2)}
-      </pre>
-    );
+  if (payload.viewKind === "plot") {
+    return <CompareAwarePlot payload={payload} selectedArtifact={selectedArtifact} />;
   }
 
   return (
-    <div className="rounded-[0.95rem] border border-dashed border-border bg-background px-4 py-5 text-sm text-muted-foreground">
-      This artifact does not expose a renderable payload for the current preset.
-    </div>
+    <pre className="overflow-x-auto rounded-[0.95rem] border border-border bg-background px-4 py-4 text-xs leading-6 text-muted-foreground">
+      {JSON.stringify(payload.payload, null, 2)}
+    </pre>
   );
 }
 
@@ -238,69 +457,18 @@ export function CharacterizationResultExplorer({
   explorer: UseCharacterizationResultExplorerResult;
 }>) {
   const selectedArtifact = explorer.selectedArtifact;
-  const viewModeOptions = (
-    selectedArtifact?.querySpec.supportedViewModes ??
-    []
-  ).map(
+  const supportedViewModes = selectedArtifact?.querySpec?.supportedViewModes ?? [];
+  const viewModeOptions = supportedViewModes.map(
     (viewMode) =>
       ({
         value: viewMode,
-        label:
-          viewMode === "table"
-            ? "Table"
-            : viewMode === "plot"
-              ? "Plot"
-              : viewMode === "json"
-                ? "JSON"
-                : "Text",
+        label: formatPayloadKindLabel(viewMode),
       }) satisfies AppSegmentedOption,
   );
+  const payloadLayout = resolveCharacterizationArtifactLayout(explorer.payload);
 
   return (
     <div className="space-y-4">
-      {resultDetail.inputCollectionPayload ? (
-        <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                Input Collection
-              </p>
-              <p className="mt-2 text-sm text-foreground">
-                {resultDetail.inputCollectionPayload.groupingSummary}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-[11px]">
-              <SurfaceTag tone="default">
-                {resultDetail.inputCollectionPayload.collectionCount} collections
-              </SurfaceTag>
-              <SurfaceTag
-                tone={
-                  resultDetail.inputCollectionPayload.readinessState === "ready"
-                    ? "success"
-                    : resultDetail.inputCollectionPayload.readinessState === "blocked"
-                      ? "warning"
-                      : "default"
-                }
-              >
-                {resultDetail.inputCollectionPayload.readinessState.replaceAll("_", " ")}
-              </SurfaceTag>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {resultDetail.inputCollectionPayload.availableSweepAxes.map((axis) => (
-              <SurfaceTag key={axis} tone="default">
-                {axis}
-              </SurfaceTag>
-            ))}
-            {resultDetail.inputCollectionPayload.sharedAxes.map((axis) => (
-              <SurfaceTag key={`${axis.family}-${axis.key}`} tone="default">
-                {axis.label}
-              </SurfaceTag>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -308,7 +476,7 @@ export function CharacterizationResultExplorer({
               Result Explorer
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Inspect persisted artifacts through backend-defined presets and axis semantics.
+              Inspect persisted artifacts through backend-defined presets, compare groups, and axis semantics.
             </p>
           </div>
           {selectedArtifact ? (
@@ -321,7 +489,7 @@ export function CharacterizationResultExplorer({
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {resultDetail.artifactManifest.map((artifact) => (
+          {resultDetail.artifactRefs.map((artifact) => (
             <button
               key={artifact.artifactId}
               type="button"
@@ -344,23 +512,20 @@ export function CharacterizationResultExplorer({
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
               <p className="text-sm font-semibold text-foreground">{selectedArtifact.title}</p>
-              <p className="mt-2 text-sm text-muted-foreground">{selectedArtifact.summary}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {selectedArtifact.viewKind === "preset_query"
+                  ? "Preset-driven artifact. Table and plot semantics come from backend query presets."
+                  : "Static artifact. The payload view is fixed by the backend manifest."}
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {selectedArtifact.axisSummary.inputAxes.map((axis) => (
-                  <SurfaceTag key={`input-${axis.key}`} tone="default">
+                {selectedArtifact.axes.map((axis) => (
+                  <SurfaceTag key={axis.axisKey} tone="default">
                     {axis.label}
                   </SurfaceTag>
                 ))}
-                {selectedArtifact.axisSummary.derivedAxes.map((axis) => (
-                  <SurfaceTag key={`derived-${axis.key}`} tone="default">
-                    {axis.label}
-                  </SurfaceTag>
-                ))}
-                {selectedArtifact.axisSummary.metrics.map((axis) => (
-                  <SurfaceTag key={`metric-${axis.key}`} tone="default">
-                    {axis.label}
-                  </SurfaceTag>
-                ))}
+                {selectedArtifact.metric ? (
+                  <SurfaceTag tone="default">{selectedArtifact.metric.label}</SurfaceTag>
+                ) : null}
               </div>
             </div>
 
@@ -387,7 +552,12 @@ export function CharacterizationResultExplorer({
                   options={explorer.availablePresetViews.map((preset) => ({
                     value: preset.presetId,
                     label: preset.label,
-                    description: preset.description,
+                    description:
+                      preset.compareAxis
+                        ? `Compare ${preset.compareAxis}`
+                        : preset.viewKind === "table"
+                          ? "Backend-defined table preset"
+                          : "Backend-defined plot preset",
                   }))}
                   className="rounded-[0.95rem] border border-border bg-background px-4 py-4"
                 />
@@ -413,55 +583,86 @@ export function CharacterizationResultExplorer({
           <div className="mt-4 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <SurfaceTag tone="default">
-                  {explorer.payload.axisContract.rowAxis
-                    ? `Rows ${explorer.payload.axisContract.rowAxis}`
-                    : explorer.payload.axisContract.xAxis
-                      ? `X ${explorer.payload.axisContract.xAxis}`
-                      : "Preset view"}
-                </SurfaceTag>
-                {explorer.payload.axisContract.columnAxis ? (
+                {payloadLayout?.rowsAxis ? (
                   <SurfaceTag tone="default">
-                    Columns {explorer.payload.axisContract.columnAxis}
+                    Rows {resolveAxisLabel(selectedArtifact, payloadLayout.rowsAxis, payloadLayout.rowsAxis)}
+                  </SurfaceTag>
+                ) : payloadLayout?.xAxis ? (
+                  <SurfaceTag tone="default">
+                    X {resolveAxisLabel(selectedArtifact, payloadLayout.xAxis, payloadLayout.xAxis)}
                   </SurfaceTag>
                 ) : null}
-                {explorer.payload.axisContract.seriesAxis ? (
+                {payloadLayout?.columnsAxis ? (
                   <SurfaceTag tone="default">
-                    Series {explorer.payload.axisContract.seriesAxis}
+                    Columns{" "}
+                    {resolveAxisLabel(
+                      selectedArtifact,
+                      payloadLayout.columnsAxis,
+                      payloadLayout.columnsAxis,
+                    )}
                   </SurfaceTag>
                 ) : null}
-                {explorer.payload.axisContract.metric ? (
+                {payloadLayout?.seriesAxis ? (
                   <SurfaceTag tone="default">
-                    Metric {explorer.payload.axisContract.metric}
+                    Series{" "}
+                    {resolveAxisLabel(
+                      selectedArtifact,
+                      payloadLayout.seriesAxis,
+                      payloadLayout.seriesAxis,
+                    )}
+                  </SurfaceTag>
+                ) : null}
+                {payloadLayout?.compareAxis ? (
+                  <SurfaceTag tone="default">
+                    Compare{" "}
+                    {resolveAxisLabel(
+                      selectedArtifact,
+                      payloadLayout.compareAxis,
+                      payloadLayout.compareAxis,
+                    )}
                   </SurfaceTag>
                 ) : null}
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {explorer.payload.viewMode === "plot" ? (
+                {explorer.payload.viewKind === "plot" ? (
                   <LineChart className="h-4 w-4" />
-                ) : explorer.payload.viewMode === "table" ? (
+                ) : explorer.payload.viewKind === "table" ? (
                   <Rows3 className="h-4 w-4" />
                 ) : (
                   <FileJson className="h-4 w-4" />
                 )}
-                {explorer.payload.viewMode}
+                {formatPayloadKindLabel(explorer.payload.viewKind)}
               </div>
             </div>
 
-            {explorer.payload.warnings.length > 0 ? (
-              <div className="rounded-[0.95rem] border border-amber-500/35 bg-amber-500/10 px-4 py-4">
-                <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-                  Payload Warnings
+            {explorer.payload.diagnostics.length > 0 ? (
+              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Payload Diagnostics
                 </p>
-                <ul className="mt-2 space-y-2 text-sm text-amber-950/90 dark:text-amber-100/90">
-                  {explorer.payload.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
+                <div className="mt-3 space-y-2">
+                  {explorer.payload.diagnostics.map((diagnostic) => (
+                    <div
+                      key={`${diagnostic.code}-${diagnostic.message}`}
+                      className={cx(
+                        "rounded-xl border px-3 py-3 text-sm",
+                        diagnostic.blocking
+                          ? "border-amber-500/25 bg-amber-500/10"
+                          : "border-border bg-surface",
+                      )}
+                    >
+                      <p className="font-medium text-foreground">{diagnostic.message}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{diagnostic.code}</p>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             ) : null}
 
-            <CharacterizationStructuredPayload payload={explorer.payload} />
+            <CharacterizationStructuredPayload
+              payload={explorer.payload}
+              selectedArtifact={selectedArtifact}
+            />
           </div>
         ) : null}
       </div>
