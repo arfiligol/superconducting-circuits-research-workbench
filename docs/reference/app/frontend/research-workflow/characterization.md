@@ -13,23 +13,23 @@ route: /characterization
 status: draft
 owner: docs-team
 audience: team
-scope: "/characterization 的 design scope、sweep-aware trace selection、derived input collection、latest run summary、run history、axis-aware result view 與 identify mode 契約"
-version: v0.17.0
-last_updated: 2026-03-28
+scope: "/characterization 的 design scope、Data Collection Review、analysis pipeline、active analysis run、axis-aware result preview、downstream analysis gating 與 identify mode 契約"
+version: v0.18.0
+last_updated: 2026-04-06
 updated_by: codex
 ---
 
 # Characterization
 
-本頁定義 design-scoped characterization workflow 的 analysis selection、sweep-aware trace selection、derived input collection、latest run summary、run history、result view 與 identify mode 契約。
+本頁定義 design-scoped characterization workbench 的 Data Collection Review、analysis pipeline、analysis run、result preview 與 identify mode 契約。
 
 !!! info "Page Frame"
-    本頁負責 design scope、compatible traces / collections、analysis run、persisted result inspection 與 identify / tagging。
+    本頁負責 design scope、Data Collection Review、analysis pipeline、analysis run、persisted result inspection 與 identify / tagging。
     raw data ingest、schema editing 與 simulation execution 不屬於本頁責任。
 
-!!! info "Analysis Path"
-    本頁遵循嚴格線性邏輯：
-    `選擇 Design` → `篩選相容 Traces / Collections` → `執行分析` → `檢閱 latest run state` → `檢閱持久化結果`。
+!!! info "Workflow Path"
+    本頁採 pipeline-first workflow：
+    `選擇 Design / Source Scope` → `檢閱 Data Collection Review` → `選擇 Analysis` → `執行單一 analysis run` → `檢閱 Result Preview` → `進入下一個可用 analysis`。
 
 !!! tip "Shared Surfaces"
     本頁使用 shared [Header](../shared-shell/header.md)、[Sidebar](../shared-shell/sidebar.md) 與 [Task Management](../shared-workflow/task-management.md)。
@@ -55,29 +55,27 @@ updated_by: codex
     本頁的 Design Selector 選的是 active dataset 內的 dataset-local `design_id`。
     它不是第二個 global dataset context。
 
-## 核心職責
+## User Mental Model
 
-=== "配置與執行"
-    * **範圍定義**: 選擇一個 Design 並檢視其 Source Coverage。
-    * **分析選擇**: 選擇 Analysis 類型並確認與當前 Traces 的相容性。
-    * **任務提交**: 選取多筆 Traces；backend 依 persisted trace structure 派生 input collection 後啟動 Characterization Run。
-    * **執行狀態**: 以 compact latest-run summary 回答目前分析是否 queued / running / completed / failed。
-
-=== "結果與標記"
-    * **歷史追蹤**: 檢視過往執行紀錄 (Run History) 與其持久化 artifacts。
-    * **多維檢視**: 透過 axis-aware Table 或 Plot 檢視 Result Artifacts。
-    * **參數標記**: 進入 Identify Mode，將分析結果標記回系統核心度量。
+| Workflow step | User question |
+|---|---|
+| Design / Source Scope | 我現在要分析哪個 design、有哪些來源可用？ |
+| Data Collection Review | backend 實際會分析哪些 canonical traces / collections？ |
+| Analysis Pipeline | 哪些 analysis 現在可跑，哪些被擋住，下一步是什麼？ |
+| Active Analysis Run | 目前這一步 analysis 有沒有在跑、最近一次結果如何？ |
+| Result Preview | 這一步 analysis 產生了什麼 surface / fit / diagnostics？ |
+| Downstream Analysis / Next Step | 哪個 analysis 已被解鎖，接下來該往哪一步？ |
 
 ## UI 佈局與工作流
 
 ```mermaid
 graph LR
-    Header[Header: Active Dataset + Tasks Queue + Worker Status] --> Design[1. Design Selector]
-    Design --> Traces[2. Trace Selection]
-    Traces --> Run[3. Run Analysis]
-    Run --> Latest[4. Latest Run Summary]
-    Latest --> History[5. Run History]
-    History --> Result[6. Result View]
+    Header[Header: Active Dataset + Tasks Queue + Worker Status] --> Scope[1. Design / Source Scope]
+    Scope --> Review[2. Data Collection Review]
+    Review --> Pipeline[3. Analysis Pipeline]
+    Pipeline --> Run[4. Active Analysis Run]
+    Run --> Result[5. Result Preview]
+    Result --> Next[6. Downstream Analysis / Next Step]
     Result --> Tag[7. Identify & Tag]
 ```
 
@@ -85,48 +83,110 @@ graph LR
 
 | ID | 組件名稱 | 作用 |
 | :--- | :--- | :--- |
-| **C1** | Design Selector | 決定分析資料邊界與相容性檢查基準。 |
-| **C2** | Analysis Selector | 選擇演算法類型並顯示 `Recommended / Available / Unavailable`。 |
-| **C3** | Trace Selection Table | 展示 compatible traces 與 collection hints，支援 `All / Base / Clear` 與 sweep-aware filtering。 |
-| **C4** | Latest Run Summary | 顯示目前 characterization stage 的 compact run state、`Resume Latest Run`、`View Task`、`Open in Global Context`。 |
-| **C5** | Run History | 展示 persisted analysis runs。 |
-| **C6** | Result View Controls | 切換結果類別、artifact 頁籤與 analysis-aware preset views。 |
-| **C7** | Identify & Tag | 自動提取參數並執行 tagging 提交。 |
+| **C1** | Design / Source Scope | 決定分析資料邊界、顯示 design source coverage 與 trace source概況。 |
+| **C2** | Data Collection Review | 顯示使用者 selection 與 backend-derived scientific collection。 |
+| **C3** | Analysis Pipeline | 列出可用 analysis、prerequisite gating、upstream / downstream 關係。 |
+| **C4** | Active Analysis Run | 顯示目前 analysis 的 compact run state、`Resume Latest Run`、`View Task`、`Open in Global Context`。 |
+| **C5** | Result Preview | 顯示 analysis-aware table / plot / diagnostics 與 artifact presets。 |
+| **C6** | Downstream Analysis / Next Step | 顯示 completion 後可解鎖的下一步 analysis 與 blocking summary。 |
+| **C7** | Identify & Tag | 從 persisted result surface 提取參數並執行 tagging 提交。 |
 
-## 狀態與相容性契約
+## Workflow Sections
 
-=== "分析可用性"
-    | 狀態 | 定義 |
-    | :--- | :--- |
-    | **Recommended** | 偵測到相容 Traces，且符合 profile 建議。 |
-    | **Available** | 具備基礎執行條件。 |
-    | **Unavailable** | 當前 Design 範圍內無相容數據。 |
+| Section | Primary role | Must show |
+|---|---|---|
+| `Design / Source Scope` | 回答這次 analysis 的資料邊界 | active dataset 內的 selected design、source coverage、selection scope |
+| `Data Collection Review` | 回答 backend 將如何解讀使用者選取的 traces | selected traces、derived collection、shared axes、available sweep axes、collection members、source coverage、grouping summary、readiness |
+| `Analysis Pipeline` | 回答可跑什麼、被擋住什麼、依賴什麼 | analysis cards、prerequisite state、required upstream result、next-step hints |
+| `Active Analysis Run` | 回答目前 analysis 任務有沒有在跑 | compact task state、latest run summary、history entry、global-context handoff |
+| `Result Preview` | 回答這一步 analysis 產生了什麼 | table / plot presets、diagnostics、member-aware semantics、identify surface |
+| `Downstream Analysis / Next Step` | 回答哪個 analysis 已被解鎖 | downstream analysis availability、blocking summary、required upstream result source |
 
-=== "Trace 模式"
-    * **Base**: 基礎掃描數據。
-    * **Sideband**: 側帶或輔助測量數據。
-    * **All**: 包含所有已索引 Trace 種類。
+## Analysis Availability And Run States
 
-!!! tip "Profile 只做提示"
-    Design Profile 僅作為推薦參考。
-    analysis 是否可執行的最終判定權在於 compatible traces 的存在與否。
+| State | Meaning |
+|---|---|
+| `ready` | collection 與 prerequisite 都已滿足，可直接提交這個 analysis |
+| `blocked` | 當前 design scope / selected traces / collection 結構不滿足此 analysis 基本條件 |
+| `requires upstream result` | collection 本身足以辨識 analysis 類型，但還缺前一個 analysis 的 persisted result |
+| `running` | 此 analysis 已提交，且 latest run 仍在 queue / worker runtime 中執行 |
+| `completed` | 此 analysis 已產生可檢閱的 persisted result surface |
 
-## Trace Selection And Input Collection Contract
+!!! warning "Do not conflate page states"
+    `ready / blocked / requires upstream result` 是 analysis availability / prerequisite state。
+    `running / completed / failed` 是單一 analysis run 的 execution state。
+    page 不得把 worker state 或 queue state 混成 analysis pipeline state。
+
+## Data Collection Review Contract
 
 | Concern | Rule |
 |---|---|
-| User interaction | 使用者仍可直接選取 traces；這是 submit 的 interaction input |
-| Scientific model | backend 會依 selected traces 的 canonical axes、family、representation、source 與 lineage 派生 input collection |
-| Sweep awareness | selection/filtering 應可使用 structured sweep axis 資訊，例如 `L_jun`、`C_q` 等 axis names |
-| ND trace direction | parameter-swept traces 應以 canonical ND trace 結構參與分析；point-level rows 只可做 browse projection |
-| Collection hints | page 可顯示來自 backend 的 collection / grouping hints，但不得自行發明 scientific grouping authority |
-| No provenance parsing | page 不得靠字串解析 provenance 或 parameter label 來猜 sweep meaning |
+| User selection | page 顯示 `selected_trace_ids[]` 與 trace rows，讓使用者知道自己勾選了什麼 |
+| Derived collection | backend 依 canonical trace structure 派生 scientific collection；這是 submit 前的第一-class review surface |
+| Shared axes | review surface 必須指出 selected traces 共同可解讀的 canonical axes |
+| Available sweep axes | review surface 必須指出哪些 structured sweep axes 可供 analysis / result explorer 使用 |
+| Collection members | review surface 必須指出 backend 派生出的 collection members，以及它們對應的 source / trace membership |
+| Source coverage | review surface 必須指出 measurement / layout simulation / circuit simulation 等來源覆蓋情況 |
+| Grouping summary | review surface 必須指出 shared axes / lineage / batch 派生出的 grouping summary |
+| Readiness | review surface 必須指出 collection 本身是否 `ready`、`inspect_only` 或 `blocked` |
+| Runnable analyses | review surface 必須指出哪些 analyses 現在 runnable |
+| Blocked analyses | review surface 必須指出哪些 analyses 被擋住，以及擋住原因 |
 
 !!! warning "Selected traces are not the final scientific model"
     `selected_trace_ids[]` 仍是必要的使用者互動資料，
     但 Characterization 的 scientific meaning 來自 backend 根據 persisted trace structure 派生的 input collection。
 
-## Result View Contract
+!!! warning "Collection review is derived, not editable"
+    `Data Collection Review` 顯示的是 derived scientific collection。
+    它不是 persisted editable collection resource，也不是把 `collection_projection` 偷渡成使用者可管理的 authority。
+
+!!! tip "No saved input-set contract in this page"
+    若之後需要可命名、可重用、可分享的 reusable input sets，必須另定獨立 contract。
+    本頁目前只定義 user selection 與 backend-derived collection review。
+
+## Analysis Pipeline Contract
+
+| Concern | Rule |
+|---|---|
+| Pipeline-first model | page 必須把 Characterization 呈現成 analysis pipeline，不是單次 run page |
+| Separate runs | 每個 analysis 都是自己的 run；不得把 extraction、fitting、comparison 合成單一 mega-run |
+| Upstream prerequisite | 某些 analyses 可以依賴 upstream persisted result，而不是只依賴 raw trace collection |
+| Blocking explanation | pipeline surface 必須顯示 `blocked` 或 `requires upstream result` 的具體原因 |
+| Next-step visibility | analysis 完成後，page 必須指出哪些 downstream analyses 因此解鎖 |
+| Compact task state | inline 只保留完成 workflow 所需的 latest run summary；queue / worker 深入資訊仍在 Header / Tasks |
+
+### Extraction vs Downstream Fitting
+
+| Analysis | Input contract | Output contract | Explicit non-goal |
+|---|---|---|---|
+| `admittance_extraction` | compatible admittance trace collection | resonance surface、diagnostics、identify-ready extraction artifacts | 不做 model fitting、不宣稱 physical mode tracking |
+| `junction_parameter_identification` | extraction result surface，而不是 raw `Im(Y)` trace bag | model fit parameters、member-aware fit overlay、residual / diagnostics | 不擁有 raw resonance extraction 邏輯 |
+
+!!! warning "Fitting controls do not belong to extraction"
+    fit bounds、branch / member selection、model config 與 fit diagnostics 應屬於 downstream fitting analysis。
+    它們不得回滲到 `admittance_extraction` setup。
+
+## Cross-source Compare Contract
+
+| Concern | Rule |
+|---|---|
+| Compare eligibility | measurement、layout simulation、circuit simulation traces 只要共享相容的 scientific structure，就可成為 compare candidate |
+| Compatibility baseline | 至少必須滿足 family / representation / required axes / `axis_signature` 或等價 shared-axis compatibility |
+| Identity preservation | compare-preserving result 不得把不同 source members 平均成單一 surface；必須透過 explicit member/source dimension 或等價語意保留 identity |
+| Overlay semantics | compare plot 應能表達 `同一 sweep axis` 下的多 source members，而不是只回傳 aggregated average |
+| Downstream fit relation | 若 downstream fitting 需要逐 source/member fitting，fit output 也必須保留同一份 member/source identity |
+
+!!! warning "Current phase-1 truth"
+    目前 `admittance_extraction` runtime 會先對多筆對齊 selected traces 做平均，再執行 extraction。
+    因此現在的 phase-1 persisted extraction surface 適合單一來源或明確接受聚合語意的分析，
+    但不是真實的 cross-source compare overlay contract。
+
+!!! tip "Compare-preserving contract upgrade"
+    若要支援 `L_q` 對 resonance frequency 的多來源比較，
+    extraction result 必須升級成 compare-preserving surface：
+    讓 raw extracted resonance points、plot series 與 downstream fit lines 都能保留 member/source identity。
+
+## Result Preview Contract
 
 | Concern | Rule |
 |---|---|
@@ -135,28 +195,51 @@ graph LR
 | Table preset | table 可用 row / column axes 呈現 matrix-style result |
 | Plot preset | plot 可用 x / y / series 軸呈現 analysis-specific result view |
 | Preset ownership | preset views 由 backend artifact contract 定義；page 不得自行猜測欄列 / series 語意 |
+| Member-aware preview | 若 analysis 支援 compare-preserving result，preview 必須保留 member/source identity，不得只剩 averaged surface |
 
-### First-phase Admittance Resonance Extraction
+### Extraction Preview
 
 | Surface | Contract |
 |---|---|
-| Input axis | sweep parameter，例如 `L_jun` |
+| Input axis | sweep parameter，例如 `L_jun` 或 `L_q` |
 | Derived axis | `mode_index` |
 | Metric | `frequency_ghz` |
 | Table preset | rows=`mode_index`，columns=`L_jun`，cell=`frequency_ghz` |
 | Plot preset A | x=`mode_index`，y=`frequency_ghz`，series=`L_jun` |
 | Plot preset B | x=`L_jun`，y=`frequency_ghz`，series=`mode_index` |
+| Compare-preserving extension | 若 compare overlay 已啟用，series 或 equivalent member dimension 必須能區分不同 source members |
 
 !!! tip "First-phase mode semantics are conservative"
     `mode_index` 目前只代表單一 sweep point 內的 ordinal extracted modes。
     本頁不得宣稱已具備跨 sweep 的 physical mode tracking；
     若需此能力，應由更強的 `mode_track_id` 類型 contract 定義。
 
+### Downstream Fitting Preview
+
+| Surface | Contract |
+|---|---|
+| Fit parameter table | 顯示 fitted parameter、unit、fit metadata 與 source/member scope |
+| Overlay plot | 顯示 extracted resonance points 與 fitted curve / surface 的對照 |
+| Residual / diagnostics | 顯示 residual、fit quality、failed branch/member 或 blocked reason |
+| Member-aware output | 若 fitting 對多個 source members 分別進行，結果不得丟失 member/source identity |
+
+## User Control And Authority Split
+
+| Surface | Authority |
+|---|---|
+| trace selection | 使用者控制哪些 traces 被送入 review / submit path |
+| Data Collection Review | backend 依 selected traces + canonical structure 派生的 read model |
+| analysis pipeline gating | backend 定義哪些 analyses 可跑、被擋住、依賴哪個 upstream result |
+| persisted analysis result | backend 持久化的 run / artifact / identify surface |
+| reusable saved input sets | 本頁目前不定義；若需要，必須另立新 contract |
+
 ## Permission And Gating
 
 | Concern | Rule |
 |---|---|
-| Submit analysis task | 依 `can_submit_tasks` 與 selected trace compatibility 決定 |
+| Submit analysis task | 依 `can_submit_tasks`、selected trace compatibility 與 prerequisite state 決定 |
+| Blocked analysis | page 必須顯示為何 blocked，而不是只把按鈕 disabled |
+| Requires upstream result | page 必須指出需要哪一個 upstream analysis result 才能解鎖 |
 | Queue row actions | 依 backend `allowed_actions` 顯示，不由頁面自行推導 |
 | Deep task control | deeper attach / cancel / terminate / retry / queue browse 應回到 Header `Global Context` 或 [`Tasks`](../workspace/tasks.md) |
 | No active dataset | 不允許進入正常 design selection 流；顯示空 shell guidance |
@@ -164,21 +247,21 @@ graph LR
 
 ## 數據持續性與運行時規則
 
-* **Task Attachment**: Run 啟動後，Header queue 必須立即出現該 task；本頁可回到 compact latest-run summary，但不應長出全域 queue / log wall。
-* **Result Persistence**: 結果檢閱僅依賴持久化 artifacts，刷新頁面後必須能精確還原 axis-aware view 與 preset。
-* **非重複計算**: 切換 Table / Plot 或類別時，僅改變呈現方式，不重跑分析。
+* **Task Attachment**: 單一 analysis run 啟動後，Header queue 必須立即出現該 task；本頁只保留 compact latest-run summary。
+* **Pipeline Continuity**: refresh 或 reattach 後，page 必須回到正確的 design scope、Data Collection Review 與 active analysis result，而不是退回 generic task detail。
+* **Result Persistence**: extraction result、fit result 與 identify surface 都必須依 persisted artifacts / result payload 精確重建。
+* **非重複計算**: 切換 Table / Plot、artifact preset 或 result tab 時，只改變呈現方式，不重跑分析。
 
 ??? example "Workspace / Dataset Rebinding"
     1. Header 切換 active workspace 或 active dataset。
     2. 本頁重新抓取 design scope、compatible traces 與 run history。
     3. 若目前 focused run task 或 selected design 不再有效，頁面必須明確清除並提示原因。
 
-!!! warning "Run History 不是 Queue"
-    使用者若要重新附著到正在執行或剛完成的 task，應從 Header `Tasks Queue` 進入。
-    `Run History` 只負責回看 persisted analysis artifacts。
+!!! warning "Run History 不是 Pipeline"
+    `Run History` 回答的是哪些 persisted runs / artifacts 已存在。
+    它不是 pipeline gating owner，也不是 queue surface。
 
 !!! tip "Run History is not task management"
-    `Run History` 回答的是「這個 analysis workflow 已經產生了哪些 persisted runs / artifacts」。
     若使用者需要更深的 queue browse、worker status、control actions 或 event drill-down，應回到 Header `Global Context` 或 [`Tasks`](../workspace/tasks.md)。
 
 ## 相關參考
