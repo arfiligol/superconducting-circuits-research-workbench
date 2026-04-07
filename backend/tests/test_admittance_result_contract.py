@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.app.domain.admittance_result_contract import (
+    AdmittanceResultMember,
     AdmittanceResultSurface,
     admittance_grid_artifact_id,
     build_admittance_artifact_refs,
@@ -20,14 +21,43 @@ def _sample_surface() -> AdmittanceResultSurface:
         input_axis_label="Lj",
         input_axis_unit="pH",
         input_axis_values=(850.0, 1000.0, 1150.0),
-        frequency_grid_by_input=(
-            (4.82, 5.31, 6.08),
-            (4.76, 5.28, None),
-            (None, None, None),
+        members=(
+            AdmittanceResultMember(
+                member_key="measurement:trace_a",
+                label="measurement · admittance (complex)",
+                trace_id="trace_a",
+                source_kind="measurement",
+                trace_mode_group="base",
+                parameter="admittance",
+                representation="complex",
+                provenance_summary="Measurement member A",
+            ),
+            AdmittanceResultMember(
+                member_key="layout_simulation:trace_b",
+                label="layout simulation · admittance (complex)",
+                trace_id="trace_b",
+                source_kind="layout_simulation",
+                trace_mode_group="base",
+                parameter="admittance",
+                representation="complex",
+                provenance_summary="Layout member B",
+            ),
         ),
-        residual_rms_by_input=(0.01, 0.015, None),
+        frequency_grid_by_member=(
+            (
+                (4.82, 5.31, 6.08),
+                (4.76, 5.28, None),
+                (None, None, None),
+            ),
+            (
+                (4.79, 5.29, 6.04),
+                (4.73, 5.25, None),
+                (None, None, None),
+            ),
+        ),
+        residual_rms_by_member=((0.01, 0.015, None), (0.012, 0.018, None)),
         fit_window_ghz=(4.5, 6.5),
-        masked_input_indices=(2,),
+        masked_input_indices_by_member=((2,), (2,)),
         diagnostics=(
             CharacterizationDiagnostic(
                 severity="warning",
@@ -60,16 +90,17 @@ def test_admittance_grid_artifact_supports_multiple_mode_rows_and_preserves_mask
         1000.0,
         1150.0,
     ]
-    assert table_payload.payload["cells"] == [
+    assert table_payload.payload["compare_groups"][0]["cells"] == [
         [4.82, 4.76, None],
         [5.31, 5.28, None],
         [6.08, None, None],
     ]
-    assert table_payload.payload["mask"] == [
+    assert table_payload.payload["compare_groups"][0]["mask"] == [
         [False, False, True],
         [False, False, True],
         [False, True, True],
     ]
+    assert table_payload.payload["compare_groups"][1]["member"]["trace_id"] == "trace_b"
 
     plot_payload = query_admittance_artifact_payload(
         surface=surface,
@@ -79,8 +110,13 @@ def test_admittance_grid_artifact_supports_multiple_mode_rows_and_preserves_mask
     assert plot_payload is not None
     assert plot_payload.preset_id == "mode_profile_plot"
     assert plot_payload.view_kind == "plot"
-    assert plot_payload.payload["series"][2]["mask"] == [True, True, True]
-    assert plot_payload.payload["series"][2]["y_values"] == [None, None, None]
+    measurement_series = [
+        series
+        for series in plot_payload.payload["series"]
+        if series["compare_key"] == "measurement:trace_a"
+    ]
+    assert measurement_series[2]["mask"] == [True, True, True]
+    assert measurement_series[2]["y_values"] == [None, None, None]
 
 
 def test_admittance_grid_artifact_manifest_exposes_explicit_query_spec() -> None:

@@ -849,9 +849,9 @@ def test_dataset_service_exposes_characterization_result_summary_and_detail_surf
         "trace_flux_a_measurement",
         "trace_flux_a_layout",
     )
-    assert result_detail.payload["contract_version"] == "admittance_phase1_v1"
+    assert result_detail.payload["contract_version"] == "admittance_member_phase1_v1"
     assert result_detail.artifact_refs[0].artifact_id == "char-fit-flux-a-01:mode-frequency-grid"
-    assert artifact_payload.payload["cells"][0] == [5.612, 5.587, None]
+    assert artifact_payload.payload["compare_groups"][0]["cells"][0] == [5.612, 5.587, None]
 
 
 def test_dataset_service_exposes_characterization_analysis_registry_and_run_history_surfaces(

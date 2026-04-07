@@ -460,6 +460,11 @@ def list_characterization_analysis_registry(
                 if result.input_collection_payload is not None
                 else None
             ),
+            "data_collection_review": (
+                asdict(result.data_collection_review)
+                if result.data_collection_review is not None
+                else None
+            ),
         },
         meta={
             "generated_at": _generated_at(),
@@ -533,6 +538,7 @@ def get_characterization_result(
             "trace_count": detail.trace_count,
             "updated_at": detail.updated_at,
             "input_trace_ids": list(detail.input_trace_ids),
+            "input_result_refs": [asdict(ref) for ref in detail.input_result_refs],
             "payload": detail.payload,
             "diagnostics": [asdict(diagnostic) for diagnostic in detail.diagnostics],
             "artifact_refs": [asdict(artifact_ref) for artifact_ref in detail.artifact_refs],
@@ -549,6 +555,7 @@ def get_characterization_result(
                     asdict(applied_tag) for applied_tag in detail.identify_surface.applied_tags
                 ],
             },
+            "downstream_unlock_analysis_ids": list(detail.downstream_unlock_analysis_ids),
         }
     )
 

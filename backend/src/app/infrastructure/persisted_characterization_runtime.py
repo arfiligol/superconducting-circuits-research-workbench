@@ -14,6 +14,7 @@ import numpy as np
 from sc_core.execution import TaskResultHandle
 
 from src.app.domain.admittance_result_contract import (
+    AdmittanceResultMember,
     AdmittanceResultSurface,
     annotate_admittance_artifact_refs,
     build_admittance_artifact_refs,
@@ -24,6 +25,7 @@ from src.app.domain.admittance_result_contract import (
     serialize_admittance_surface,
     summarize_admittance_surface,
 )
+from src.app.domain.characterization_analysis import get_characterization_analysis_spec
 from src.app.domain.datasets import (
     CharacterizationAppliedTag,
     CharacterizationArtifactAxisSpec,
@@ -37,6 +39,7 @@ from src.app.domain.datasets import (
     CharacterizationDesignatedMetricOption,
     CharacterizationDiagnostic,
     CharacterizationIdentifySurface,
+    CharacterizationInputResultRef,
     CharacterizationResultDetail,
     CharacterizationResultSummary,
     CharacterizationRunHistoryRow,
@@ -93,7 +96,7 @@ class _LoadedTraceSeries:
 class _AdmittanceExtractionResult:
     selected_trace_ids: tuple[str, ...]
     surface: AdmittanceResultSurface
-    residual_grid: np.ndarray
+    residual_tensor: np.ndarray
     provenance_summary: str
     sources_summary: str
 
@@ -135,10 +138,11 @@ class PersistedCharacterizationRepository:
             task=request.task,
             analysis_run_id=persisted_run.id,
             frequencies_ghz=loaded_traces[0].frequencies_ghz,
-            residual_grid=analysis.residual_grid,
+            residual_tensor=analysis.residual_tensor,
             input_axis_key=analysis.surface.input_axis_key,
             input_axis_unit=analysis.surface.input_axis_unit,
             input_axis_values=analysis.surface.input_axis_values,
+            members=analysis.surface.members,
         )
         artifact_refs, report_path = _write_artifacts(
             result_id=_result_id_for_run(persisted_run.id),
@@ -722,62 +726,77 @@ def _run_admittance_extraction(
     frequencies = reference_trace.frequencies_ghz
     fit_window = _resolve_fit_window(task.characterization_setup.analysis_config)
     residual_tolerance = float(task.characterization_setup.analysis_config["residual_tolerance"])
-    averaged_grid = _average_trace_grids(
-        loaded_traces,
-        reference_frequencies=frequencies,
-        reference_input_axis=reference_trace.input_axis_values,
-        reference_input_axis_key=reference_trace.input_axis_key,
-    )
     fit_window_mask = np.asarray(
         [fit_window[0] <= frequency <= fit_window[1] for frequency in frequencies],
         dtype=bool,
     )
     if not np.any(fit_window_mask):
         raise ValueError("The selected fit window does not overlap the persisted trace axis.")
-    residual_grid = np.full_like(averaged_grid, np.nan, dtype=np.float64)
-    extracted_modes_by_input: list[tuple[float, ...]] = []
-    residual_rms_by_input: list[float | None] = []
-    masked_input_indices: list[int] = []
+    member_frequency_grids: list[tuple[tuple[float | None, ...], ...]] = []
+    member_residual_rms: list[tuple[float | None, ...]] = []
+    masked_input_indices_by_member: list[tuple[int, ...]] = []
+    residual_grids: list[np.ndarray] = []
+    members: list[AdmittanceResultMember] = []
+    total_masked_input_count = 0
     tolerance_exceeded_count = 0
     frequency_array = np.asarray(frequencies, dtype=np.float64)
-    for input_index in range(averaged_grid.shape[1]):
-        response_series = np.asarray(averaged_grid[:, input_index], dtype=np.float64)
-        valid_window_mask = fit_window_mask & np.isfinite(response_series)
-        if not np.any(valid_window_mask):
-            extracted_modes_by_input.append(())
-            residual_rms_by_input.append(None)
-            masked_input_indices.append(input_index)
-            continue
-        window_frequencies = frequency_array[valid_window_mask]
-        response_window = response_series[valid_window_mask]
-        fitted_window = _fit_window_response(
-            window_frequencies=window_frequencies,
-            response_window=response_window,
+    for trace in loaded_traces:
+        aligned_grid = _aligned_trace_grid(
+            trace,
+            reference_frequencies=frequencies,
+            reference_input_axis=reference_trace.input_axis_values,
+            reference_input_axis_key=reference_trace.input_axis_key,
         )
-        residual_window = np.asarray(response_window - fitted_window, dtype=np.float64)
-        residual_grid[valid_window_mask, input_index] = residual_window
-        residual_rms = float(np.sqrt(np.mean(np.square(residual_window))))
-        residual_rms_by_input.append(residual_rms)
-        if residual_rms > residual_tolerance:
-            tolerance_exceeded_count += 1
-        extracted_modes = _extract_mode_frequencies(
-            window_frequencies=window_frequencies,
-            response_window=response_window,
+        residual_grid = np.full_like(aligned_grid, np.nan, dtype=np.float64)
+        extracted_modes_by_input: list[tuple[float, ...]] = []
+        residual_rms_by_input: list[float | None] = []
+        masked_input_indices: list[int] = []
+        for input_index in range(aligned_grid.shape[1]):
+            response_series = np.asarray(aligned_grid[:, input_index], dtype=np.float64)
+            valid_window_mask = fit_window_mask & np.isfinite(response_series)
+            if not np.any(valid_window_mask):
+                extracted_modes_by_input.append(())
+                residual_rms_by_input.append(None)
+                masked_input_indices.append(input_index)
+                continue
+            window_frequencies = frequency_array[valid_window_mask]
+            response_window = response_series[valid_window_mask]
+            fitted_window = _fit_window_response(
+                window_frequencies=window_frequencies,
+                response_window=response_window,
+            )
+            residual_window = np.asarray(response_window - fitted_window, dtype=np.float64)
+            residual_grid[valid_window_mask, input_index] = residual_window
+            residual_rms = float(np.sqrt(np.mean(np.square(residual_window))))
+            residual_rms_by_input.append(residual_rms)
+            if residual_rms > residual_tolerance:
+                tolerance_exceeded_count += 1
+            extracted_modes = _extract_mode_frequencies(
+                window_frequencies=window_frequencies,
+                response_window=response_window,
+            )
+            if len(extracted_modes) == 0:
+                masked_input_indices.append(input_index)
+            extracted_modes_by_input.append(extracted_modes)
+        mode_capacity = max(1, max((len(row) for row in extracted_modes_by_input), default=0))
+        member_frequency_grids.append(
+            tuple(
+                tuple(
+                    row[mode_index] if mode_index < len(row) else None
+                    for mode_index in range(mode_capacity)
+                )
+                for row in extracted_modes_by_input
+            )
         )
-        if len(extracted_modes) == 0:
-            masked_input_indices.append(input_index)
-        extracted_modes_by_input.append(extracted_modes)
+        member_residual_rms.append(tuple(residual_rms_by_input))
+        masked_indices = tuple(masked_input_indices)
+        masked_input_indices_by_member.append(masked_indices)
+        total_masked_input_count += len(masked_indices)
+        residual_grids.append(residual_grid)
+        members.append(_result_member_from_trace(trace.summary))
 
-    mode_capacity = max(1, max((len(row) for row in extracted_modes_by_input), default=0))
-    frequency_grid_by_input = tuple(
-        tuple(
-            row[mode_index] if mode_index < len(row) else None
-            for mode_index in range(mode_capacity)
-        )
-        for row in extracted_modes_by_input
-    )
     diagnostics = _build_admittance_diagnostics(
-        masked_input_count=len(masked_input_indices),
+        masked_input_count=total_masked_input_count,
         tolerance_exceeded_count=tolerance_exceeded_count,
         residual_tolerance=residual_tolerance,
     )
@@ -786,10 +805,11 @@ def _run_admittance_extraction(
         input_axis_label=reference_trace.input_axis_label,
         input_axis_unit=reference_trace.input_axis_unit,
         input_axis_values=reference_trace.input_axis_values,
-        frequency_grid_by_input=frequency_grid_by_input,
-        residual_rms_by_input=tuple(residual_rms_by_input),
+        members=tuple(members),
+        frequency_grid_by_member=tuple(member_frequency_grids),
+        residual_rms_by_member=tuple(member_residual_rms),
         fit_window_ghz=fit_window,
-        masked_input_indices=tuple(masked_input_indices),
+        masked_input_indices_by_member=tuple(masked_input_indices_by_member),
         diagnostics=diagnostics,
     )
     input_axis_suffix = (
@@ -800,9 +820,9 @@ def _run_admittance_extraction(
     return _AdmittanceExtractionResult(
         selected_trace_ids=tuple(trace.summary.trace_id for trace in loaded_traces),
         surface=surface,
-        residual_grid=residual_grid,
+        residual_tensor=np.stack(residual_grids, axis=2),
         provenance_summary=_provenance_summary(loaded_traces),
-        sources_summary=f"Y base {len(loaded_traces)}{input_axis_suffix}",
+        sources_summary=f"Y base {len(loaded_traces)} members{input_axis_suffix}",
     )
 
 
@@ -881,6 +901,22 @@ def _aligned_trace_grid(
     return np.asarray(aligned_columns, dtype=np.float64).T
 
 
+def _result_member_from_trace(summary: TraceMetadataSummary) -> AdmittanceResultMember:
+    return AdmittanceResultMember(
+        member_key=f"{summary.source_kind}:{summary.trace_id}",
+        label=(
+            f"{summary.source_kind.replace('_', ' ')} · "
+            f"{summary.parameter} ({summary.representation})"
+        ),
+        trace_id=summary.trace_id,
+        source_kind=summary.source_kind,
+        trace_mode_group=summary.trace_mode_group,
+        parameter=summary.parameter,
+        representation=summary.representation,
+        provenance_summary=summary.provenance_summary,
+    )
+
+
 def _resolve_fit_window(
     analysis_config: Mapping[str, object],
 ) -> tuple[float, float]:
@@ -927,6 +963,17 @@ def _persist_analysis_run(
             "selected_trace_ids": list(task.characterization_setup.selected_trace_ids),
             "selected_trace_count": len(task.characterization_setup.selected_trace_ids),
             "selected_trace_mode_group": "base",
+            "input_result_refs": [
+                {
+                    "analysis_id": ref.analysis_id,
+                    "result_id": ref.result_id,
+                    "run_id": ref.run_id,
+                    "artifact_id": ref.artifact_id,
+                    "contract_version": ref.contract_version,
+                    "title": ref.title,
+                }
+                for ref in task.characterization_setup.input_result_refs
+            ],
         },
         summary_payload={},
         created_at=recorded_at,
@@ -952,10 +999,11 @@ def _write_projection_trace(
     task: TaskDetail,
     analysis_run_id: int,
     frequencies_ghz: Sequence[float],
-    residual_grid: np.ndarray,
+    residual_tensor: np.ndarray,
     input_axis_key: str,
     input_axis_unit: str | None,
     input_axis_values: Sequence[float],
+    members: Sequence[AdmittanceResultMember],
 ) -> Any:
     if task.dataset_id is None or task.characterization_setup is None:
         raise ValueError("Characterization task is missing dataset scope.")
@@ -970,28 +1018,23 @@ def _write_projection_trace(
         design_id=_stable_positive_int(task.dataset_id, task.characterization_setup.design_id),
         batch_id=analysis_run_id,
         trace_id=1,
-        values=(
-            np.asarray(residual_grid[:, 0], dtype=np.float64)
-            if residual_grid.shape[1] == 1
-            else np.asarray(residual_grid, dtype=np.float64)
-        ),
+        values=np.asarray(residual_tensor, dtype=np.float64),
         axes=(
             {
                 "name": "frequency",
                 "unit": "GHz",
                 "values": np.asarray(tuple(float(value) for value in frequencies_ghz)),
             },
-            *(
-                (
-                    {
-                        "name": input_axis_key,
-                        "unit": input_axis_unit or "",
-                        "values": np.asarray(tuple(float(value) for value in input_axis_values)),
-                    },
-                )
-                if residual_grid.shape[1] > 1
-                else ()
-            ),
+            {
+                "name": input_axis_key,
+                "unit": input_axis_unit or "",
+                "values": np.asarray(tuple(float(value) for value in input_axis_values)),
+            },
+            {
+                "name": "member_index",
+                "unit": "",
+                "values": np.asarray(tuple(float(index) for index, _ in enumerate(members))),
+            },
         ),
         store_key=store_key,
         payload_role="analysis",
@@ -1040,11 +1083,24 @@ def _write_artifacts(
     report_path.write_text(
         json.dumps(
             {
-                "contract_version": "admittance_phase1_v1",
+                "contract_version": "admittance_member_phase1_v1",
                 "input_axis_key": analysis.surface.input_axis_key,
                 "input_axis_unit": analysis.surface.input_axis_unit,
+                "member_count": len(analysis.surface.members),
+                "members": [
+                    {
+                        "member_key": member.member_key,
+                        "trace_id": member.trace_id,
+                        "source_kind": member.source_kind,
+                        "parameter": member.parameter,
+                        "representation": member.representation,
+                    }
+                    for member in analysis.surface.members
+                ],
                 "mode_capacity": len(analysis.surface.derived_axis_values),
-                "masked_input_indices": list(analysis.surface.masked_input_indices),
+                "masked_input_indices_by_member": [
+                    list(indices) for indices in analysis.surface.masked_input_indices_by_member
+                ],
                 "fit_window_ghz": list(analysis.surface.fit_window_ghz),
                 "selected_trace_ids": list(analysis.selected_trace_ids),
             },
@@ -1076,6 +1132,7 @@ def _build_persisted_run_payload(
 
     result_id = _result_id_for_run(analysis_run_id)
     updated_at = _utc_timestamp(recorded_at)
+    analysis_spec = get_characterization_analysis_spec(task.characterization_setup.analysis_id)
     identify_surface = build_admittance_identify_surface(
         result_id=result_id,
         surface=analysis.surface,
@@ -1094,6 +1151,7 @@ def _build_persisted_run_payload(
         trace_count=len(task.characterization_setup.selected_trace_ids),
         updated_at=updated_at,
         input_trace_ids=task.characterization_setup.selected_trace_ids,
+        input_result_refs=task.characterization_setup.input_result_refs,
         payload=summarize_admittance_surface(
             analysis_run_id=analysis_run_id,
             analysis_config=task.characterization_setup.analysis_config,
@@ -1102,6 +1160,9 @@ def _build_persisted_run_payload(
         diagnostics=analysis.surface.diagnostics,
         artifact_refs=tuple(artifact_refs),
         identify_surface=identify_surface,
+        downstream_unlock_analysis_ids=(
+            analysis_spec.downstream_analysis_ids if analysis_spec is not None else ()
+        ),
     )
     summary = CharacterizationResultSummary(
         result_id=result_id,
@@ -1129,6 +1190,7 @@ def _build_persisted_run_payload(
         provenance_summary=analysis.provenance_summary,
         updated_at=updated_at,
         result_id=result_id,
+        input_result_refs=task.characterization_setup.input_result_refs,
     )
     return _PersistedRunPayload(
         result_summary=_summary_to_payload(summary),
@@ -1174,6 +1236,26 @@ def _run_history_from_run(run: Any) -> CharacterizationRunHistoryRow | None:
         provenance_summary=str(payload["provenance_summary"]),
         updated_at=str(payload["updated_at"]),
         result_id=str(result_id) if isinstance(result_id, str) else None,
+        input_result_refs=tuple(
+            CharacterizationInputResultRef(
+                analysis_id=str(item.get("analysis_id", "")),
+                result_id=str(item.get("result_id", "")),
+                run_id=str(item.get("run_id")) if isinstance(item.get("run_id"), str) else None,
+                artifact_id=(
+                    str(item.get("artifact_id"))
+                    if isinstance(item.get("artifact_id"), str)
+                    else None
+                ),
+                contract_version=(
+                    str(item.get("contract_version"))
+                    if isinstance(item.get("contract_version"), str)
+                    else None
+                ),
+                title=str(item.get("title")) if isinstance(item.get("title"), str) else None,
+            )
+            for item in payload.get("input_result_refs", ())
+            if isinstance(item, Mapping)
+        ),
     )
 
 
@@ -1188,6 +1270,8 @@ def _detail_from_run(run: Any) -> CharacterizationResultDetail | None:
     designated_metrics = identify_surface.get("designated_metrics", [])
     applied_tags = identify_surface.get("applied_tags", [])
     input_trace_ids = payload.get("input_trace_ids", ())
+    input_result_refs = payload.get("input_result_refs", ())
+    downstream_unlock_analysis_ids = payload.get("downstream_unlock_analysis_ids", ())
     return CharacterizationResultDetail(
         result_id=str(payload["result_id"]),
         dataset_id=str(payload["dataset_id"]),
@@ -1201,6 +1285,26 @@ def _detail_from_run(run: Any) -> CharacterizationResultDetail | None:
         updated_at=str(payload["updated_at"]),
         input_trace_ids=tuple(
             str(trace_id) for trace_id in input_trace_ids if isinstance(trace_id, str)
+        ),
+        input_result_refs=tuple(
+            CharacterizationInputResultRef(
+                analysis_id=str(item.get("analysis_id", "")),
+                result_id=str(item.get("result_id", "")),
+                run_id=str(item.get("run_id")) if isinstance(item.get("run_id"), str) else None,
+                artifact_id=(
+                    str(item.get("artifact_id"))
+                    if isinstance(item.get("artifact_id"), str)
+                    else None
+                ),
+                contract_version=(
+                    str(item.get("contract_version"))
+                    if isinstance(item.get("contract_version"), str)
+                    else None
+                ),
+                title=str(item.get("title")) if isinstance(item.get("title"), str) else None,
+            )
+            for item in input_result_refs
+            if isinstance(item, Mapping)
         ),
         payload=dict(payload.get("payload", {})),
         diagnostics=tuple(
@@ -1280,6 +1384,11 @@ def _detail_from_run(run: Any) -> CharacterizationResultDetail | None:
                         series_axis=(
                             str(preset["series_axis"])
                             if isinstance(preset.get("series_axis"), str)
+                            else None
+                        ),
+                        compare_axis=(
+                            str(preset["compare_axis"])
+                            if isinstance(preset.get("compare_axis"), str)
                             else None
                         ),
                     )
@@ -1370,6 +1479,11 @@ def _detail_from_run(run: Any) -> CharacterizationResultDetail | None:
                 if isinstance(item, Mapping)
             ),
         ),
+        downstream_unlock_analysis_ids=tuple(
+            str(analysis_id)
+            for analysis_id in downstream_unlock_analysis_ids
+            if isinstance(analysis_id, str)
+        ),
     )
 
 
@@ -1444,6 +1558,17 @@ def _run_history_to_payload(row: CharacterizationRunHistoryRow) -> dict[str, obj
         "provenance_summary": row.provenance_summary,
         "updated_at": row.updated_at,
         "result_id": row.result_id,
+        "input_result_refs": [
+            {
+                "analysis_id": ref.analysis_id,
+                "result_id": ref.result_id,
+                "run_id": ref.run_id,
+                "artifact_id": ref.artifact_id,
+                "contract_version": ref.contract_version,
+                "title": ref.title,
+            }
+            for ref in row.input_result_refs
+        ],
     }
 
 
@@ -1460,6 +1585,17 @@ def _detail_to_payload(detail: CharacterizationResultDetail) -> dict[str, object
         "trace_count": detail.trace_count,
         "updated_at": detail.updated_at,
         "input_trace_ids": list(detail.input_trace_ids),
+        "input_result_refs": [
+            {
+                "analysis_id": ref.analysis_id,
+                "result_id": ref.result_id,
+                "run_id": ref.run_id,
+                "artifact_id": ref.artifact_id,
+                "contract_version": ref.contract_version,
+                "title": ref.title,
+            }
+            for ref in detail.input_result_refs
+        ],
         "payload": dict(detail.payload),
         "diagnostics": [
             {
@@ -1508,6 +1644,7 @@ def _detail_to_payload(detail: CharacterizationResultDetail) -> dict[str, object
                         "x_axis": preset.x_axis,
                         "y_metric": preset.y_metric,
                         "series_axis": preset.series_axis,
+                        "compare_axis": preset.compare_axis,
                     }
                     for preset in artifact.presets
                 ],
@@ -1565,6 +1702,7 @@ def _detail_to_payload(detail: CharacterizationResultDetail) -> dict[str, object
                 for tag in detail.identify_surface.applied_tags
             ],
         },
+        "downstream_unlock_analysis_ids": list(detail.downstream_unlock_analysis_ids),
     }
 
 

@@ -544,65 +544,48 @@ def test_local_characterization_registry_exposes_admittance_for_compatible_saved
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["data"]["rows"] == [
-        {
-            "analysis_id": "admittance_extraction",
-            "label": "Admittance Resonance Extraction",
-            "availability_state": "recommended",
-            "required_config_fields": ["fit_window", "residual_tolerance"],
-            "trace_compatibility": {
-                "matched_trace_count": 2,
-                "selected_trace_count": 2,
-                "recommended_trace_modes": ["base"],
-                "summary": ("2 selected traces are eligible for admittance resonance extraction."),
-            },
+    rows_by_id = {
+        row["analysis_id"]: row for row in payload["data"]["rows"]
+    }
+    assert rows_by_id["admittance_extraction"] == {
+        "analysis_id": "admittance_extraction",
+        "label": "Admittance Resonance Extraction",
+        "availability_state": "recommended",
+        "required_config_fields": ["fit_window", "residual_tolerance"],
+        "trace_compatibility": {
+            "matched_trace_count": 2,
+            "selected_trace_count": 2,
+            "recommended_trace_modes": ["base"],
+            "summary": "2 selected traces are eligible for admittance resonance extraction.",
         },
-        {
-            "analysis_id": "sideband_comparison",
-            "label": "Sideband Comparison",
-            "availability_state": "unavailable",
-            "required_config_fields": ["comparison_window"],
-            "trace_compatibility": {
-                "matched_trace_count": 0,
-                "selected_trace_count": 2,
-                "recommended_trace_modes": ["sideband"],
-                "summary": (
-                    "2 selected traces are not eligible for sideband comparison "
-                    "because Requires sideband trace mode coverage."
-                ),
-            },
-        },
-        {
-            "analysis_id": "junction_parameter_identification",
-            "label": "Junction Parameter Identification",
-            "availability_state": "unavailable",
-            "required_config_fields": ["fit_window", "prior_family"],
-            "trace_compatibility": {
-                "matched_trace_count": 0,
-                "selected_trace_count": 2,
-                "recommended_trace_modes": ["base", "sideband"],
-                "summary": (
-                    "2 selected traces are not eligible for junction parameter "
-                    "identification because Requires complex representation."
-                ),
-            },
-        },
-        {
-            "analysis_id": "screening_summary",
-            "label": "Screening Summary",
-            "availability_state": "unavailable",
-            "required_config_fields": ["screening_mode"],
-            "trace_compatibility": {
-                "matched_trace_count": 0,
-                "selected_trace_count": 2,
-                "recommended_trace_modes": ["base"],
-                "summary": (
-                    "2 selected traces are not eligible for screening summary "
-                    "because Requires s matrix traces."
-                ),
-            },
-        },
+        "prerequisite_state": "ready",
+        "upstream_result_requirement": None,
+        "downstream_unlock_analysis_ids": ["admittance_member_fit"],
+    }
+    assert rows_by_id["admittance_member_fit"]["prerequisite_state"] == (
+        "requires_upstream_result"
+    )
+    assert rows_by_id["admittance_member_fit"]["upstream_result_requirement"] == {
+        "required_upstream_analysis_ids": ["admittance_extraction"],
+        "satisfied_result_refs": [],
+        "summary": (
+            "Requires a completed admittance resonance extraction result "
+            "before this pipeline step can run."
+        ),
+    }
+    assert payload["data"]["data_collection_review"]["selected_trace_ids"] == [
+        "trace_local_flux_measurement",
+        "trace_local_flux_preview",
     ]
+    assert payload["data"]["data_collection_review"]["readiness_state"] == "ready"
+    assert {
+        row["analysis_id"]
+        for row in payload["data"]["data_collection_review"]["runnable_analyses"]
+    } == {"admittance_extraction"}
+    assert "admittance_member_fit" in {
+        row["analysis_id"]
+        for row in payload["data"]["data_collection_review"]["blocked_analyses"]
+    }
 
 
 def test_local_registry_and_submit_use_trace_capability_first_gating_for_transmon_metadata_case(
@@ -677,6 +660,9 @@ def test_local_registry_and_submit_use_trace_capability_first_gating_for_transmo
             "recommended_trace_modes": ["base"],
             "summary": "1 selected trace is eligible for admittance resonance extraction.",
         },
+        "prerequisite_state": "ready",
+        "upstream_result_requirement": None,
+        "downstream_unlock_analysis_ids": ["admittance_member_fit"],
     }
     assert "admittance_extraction" in _load_trace_capability_analysis_ids(
         dataset_id,
@@ -709,20 +695,27 @@ def test_local_trace_registry_read_repair_backfills_legacy_floating_qubit_capabi
     )
 
     assert registry_response.status_code == 200
-    assert registry_response.json()["data"]["rows"] == [
-        {
-            "analysis_id": "admittance_extraction",
-            "label": "Admittance Resonance Extraction",
-            "availability_state": "recommended",
-            "required_config_fields": ["fit_window", "residual_tolerance"],
-            "trace_compatibility": {
-                "matched_trace_count": 1,
-                "selected_trace_count": 1,
-                "recommended_trace_modes": ["base"],
-                "summary": "1 selected trace is eligible for admittance resonance extraction.",
-            },
-        }
-    ]
+    rows_by_id = {
+        row["analysis_id"]: row for row in registry_response.json()["data"]["rows"]
+    }
+    assert rows_by_id["admittance_extraction"] == {
+        "analysis_id": "admittance_extraction",
+        "label": "Admittance Resonance Extraction",
+        "availability_state": "recommended",
+        "required_config_fields": ["fit_window", "residual_tolerance"],
+        "trace_compatibility": {
+            "matched_trace_count": 1,
+            "selected_trace_count": 1,
+            "recommended_trace_modes": ["base"],
+            "summary": "1 selected trace is eligible for admittance resonance extraction.",
+        },
+        "prerequisite_state": "ready",
+        "upstream_result_requirement": None,
+        "downstream_unlock_analysis_ids": ["admittance_member_fit"],
+    }
+    assert rows_by_id["admittance_member_fit"]["prerequisite_state"] == (
+        "requires_upstream_result"
+    )
     assert _load_trace_capability_analysis_ids(dataset_id, design_id, trace_id) == (
         "admittance_extraction",
     )
@@ -754,6 +747,9 @@ def test_local_registry_read_repair_preserves_selected_scope_truthfulness() -> N
             "recommended_trace_modes": ["base"],
             "summary": "2 selected traces are eligible for admittance resonance extraction.",
         },
+        "prerequisite_state": "ready",
+        "upstream_result_requirement": None,
+        "downstream_unlock_analysis_ids": ["admittance_member_fit"],
     }
     assert {
         analysis_id
@@ -858,6 +854,57 @@ def test_local_characterization_submit_rejects_ineligible_selected_trace() -> No
     assert "not eligible for admittance resonance extraction" in error["message"]
 
 
+def test_local_downstream_characterization_requires_upstream_result_before_runtime_support_check(
+) -> None:
+    missing_upstream_response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "dataset_id": "local-dataset-001",
+            "characterization_setup": {
+                "design_id": "design_local_flux_playground",
+                "analysis_id": "admittance_member_fit",
+                "selected_trace_ids": ["trace_local_flux_measurement"],
+                "analysis_config": {"branch_selector": "mode:0"},
+            },
+        },
+    )
+
+    assert missing_upstream_response.status_code == 422
+    assert missing_upstream_response.json()["error"]["code"] == (
+        "characterization_upstream_result_required"
+    )
+
+    unsupported_response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "dataset_id": "local-dataset-001",
+            "characterization_setup": {
+                "design_id": "design_local_flux_playground",
+                "analysis_id": "admittance_member_fit",
+                "selected_trace_ids": ["trace_local_flux_measurement"],
+                "analysis_config": {"branch_selector": "mode:0"},
+                "input_result_refs": [
+                    {
+                        "analysis_id": "admittance_extraction",
+                        "result_id": "char-fit-flux-a-01",
+                        "run_id": "analysis-run-101",
+                        "artifact_id": "char-fit-flux-a-01:mode-frequency-grid",
+                        "contract_version": "admittance_member_phase1_v1",
+                        "title": "Flux Scan A admittance resonance extraction",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert unsupported_response.status_code == 409
+    assert unsupported_response.json()["error"]["code"] == (
+        "characterization_analysis_unsupported"
+    )
+
+
 def test_local_registry_marks_compatible_but_unsupported_analysis_as_unavailable() -> None:
     dataset_id, design_id, trace_id = _create_unsupported_local_characterization_trace()
     _clear_trace_capabilities(dataset_id, design_id, (trace_id,))
@@ -883,6 +930,9 @@ def test_local_registry_marks_compatible_but_unsupported_analysis_as_unavailable
                     "but the current runtime does not yet support executing this analysis."
                 ),
             },
+            "prerequisite_state": "ready",
+            "upstream_result_requirement": None,
+            "downstream_unlock_analysis_ids": [],
         }
     ]
     assert _load_trace_capability_analysis_ids(dataset_id, design_id, trace_id) == (
@@ -1021,8 +1071,9 @@ def test_local_characterization_result_surfaces_survive_refresh() -> None:
     task_detail = client.get(f"/tasks/{submitted['task_id']}").json()["data"]
     assert task_detail["result_handoff"]["availability"] == "ready"
     assert detail["payload"]["analysis_run_id"] == task_detail["result_refs"]["analysis_run_id"]
-    assert detail["payload"]["contract_version"] == "admittance_phase1_v1"
+    assert detail["payload"]["contract_version"] == "admittance_member_phase1_v1"
     assert detail["payload"]["input_axis"]["axis_key"] == "selected_scope"
+    assert detail["payload"]["member_axis"]["axis_key"] == "member_key"
     assert detail["artifact_refs"][0]["artifact_id"] == (
         f"{result_row['result_id']}:mode-frequency-grid"
     )
@@ -1047,10 +1098,18 @@ def test_local_characterization_result_surfaces_survive_refresh() -> None:
         "rows_axis": "mode_index",
         "columns_axis": "selected_scope",
         "cell_metric": "frequency_ghz",
+        "compare_axis": "member_key",
     }
     assert artifact_payload["payload"]["columns"] == [
         {"axis_value": 0.0, "label": "0", "unit": None}
     ]
+    assert len(artifact_payload["payload"]["compare_groups"]) == 2
+    assert {
+        group["member"]["trace_id"] for group in artifact_payload["payload"]["compare_groups"]
+    } == {
+        "trace_local_flux_measurement",
+        "trace_local_flux_preview",
+    }
 
     reset_runtime_state()
 
@@ -1212,9 +1271,10 @@ def test_local_persisted_admittance_runtime_exposes_axis_aware_sweep_contract() 
     )
     assert detail_response.status_code == 200
     detail = detail_response.json()["data"]
-    assert detail["payload"]["contract_version"] == "admittance_phase1_v1"
+    assert detail["payload"]["contract_version"] == "admittance_member_phase1_v1"
     assert detail["payload"]["input_axis"]["axis_key"] == "Lj"
     assert detail["payload"]["input_axis"]["length"] == 3
+    assert detail["payload"]["member_axis"]["axis_key"] == "member_key"
     assert detail["payload"]["metric"]["metric_key"] == "frequency_ghz"
     assert detail["payload"]["analysis_run_id"] == execution_result.result_refs.analysis_run_id
     assert detail["artifact_refs"][0]["view_kind"] == "preset_query"
@@ -1235,12 +1295,14 @@ def test_local_persisted_admittance_runtime_exposes_axis_aware_sweep_contract() 
         "rows_axis": "mode_index",
         "columns_axis": "Lj",
         "cell_metric": "frequency_ghz",
+        "compare_axis": "member_key",
     }
     assert [column["axis_value"] for column in artifact_payload["payload"]["columns"]] == [
         850.0,
         1000.0,
         1150.0,
     ]
+    assert len(artifact_payload["payload"]["compare_groups"]) == 1
     assert len(artifact_payload["payload"]["cells"]) >= 1
     assert all(len(row) == 3 for row in artifact_payload["payload"]["cells"])
 
@@ -1256,6 +1318,7 @@ def test_local_persisted_admittance_runtime_exposes_axis_aware_sweep_contract() 
         "x_axis": "mode_index",
         "y_metric": "frequency_ghz",
         "series_axis": "Lj",
+        "compare_axis": "member_key",
     }
 
     sweep_plot_response = client.get(
@@ -1269,6 +1332,7 @@ def test_local_persisted_admittance_runtime_exposes_axis_aware_sweep_contract() 
         "x_axis": "Lj",
         "y_metric": "frequency_ghz",
         "series_axis": "mode_index",
+        "compare_axis": "member_key",
     }
 
     reset_runtime_state()
