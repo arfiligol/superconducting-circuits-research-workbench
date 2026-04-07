@@ -9,7 +9,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: "數據處理規範：原始數據唯讀、metadata DB / TraceStore 分工、ND trace、NaN/mask、summary-first query、Unit of Work、Zarr backend 邊界"
-version: v2.3.0
+version: v2.3.1
 last_updated: 2026-03-30
 updated_by: codex
 ---
@@ -163,7 +163,8 @@ Trace numeric payload 的讀寫必須經由 TraceStore abstraction，而不是 U
 - scientific `collection_projection` 可以由 canonical trace structure 派生
 - phase-1 projection 是 read model，不是獨立 authority resource
 - 可使用 deterministic `collection_key` 支援 deep-linking、cache 與 UI restoration
-- `collection_key` 必須可由 dataset/design scope、shared axis structure / `axis_signature`、lineage 與 grouping inputs 重建
+- `collection_key` 必須可由 dataset/design scope、shared axis structure / `axis_signature`、lineage 與 trace set 內在的 stable scientific typing 重建
+- analysis-specific readiness、consumer-specific presentation choice、UI sort/filter state 不可參與 `collection_key` identity
 - 若需 persisted / editable collections，必須另定正式 resource contract
 
 ### 6.3 Access Pattern-aware Retrieval
@@ -172,9 +173,15 @@ Trace numeric payload 的讀寫必須經由 TraceStore abstraction，而不是 U
 - large matrix / tensor payload 應優先支援 slice / preset query，而不是總是整包 inline
 - chunking / retrieval 應對齊主要 scientific access pattern
 - whole dense tensor transport 不是 large result 的預設 contract
+- phase-1 sweep filtering 只支援 summary-safe axis-name / collection-level filter，不支援 coordinate-value / range filtering
 - 目前優先 access pattern：
   - fixed sweep point -> read full frequency slice
   - fixed result axes -> read one plot / table projection
+
+### 6.4 Edit Invalidation Discipline
+
+- 若 trace edit 會影響 axis structure、coordinate identity、materialized metadata summary、`collection_projection`、analysis readiness 或 persisted analysis/result truth，backend 必須同步 re-materialize 或 invalidate 這些依賴面
+- 若 backend 無法維持上述 invalidation / recomputation contract，該 trace class 不得宣告 `allowed_actions.edit=true`
 
 ### 7. Output Locations
 
@@ -229,12 +236,17 @@ Trace numeric payload 的讀寫必須經由 TraceStore abstraction，而不是 U
     - MUST preserve fully masked slice positions.
 - **Collection projection**:
     - phase-1 scientific grouping may be derived as a read model with deterministic keys.
-    - collection keys must be reconstructable from stable grouping inputs.
+    - collection keys must be reconstructable from stable structural grouping inputs.
+    - do not derive collection identity from analysis-specific readiness or consumer presentation state.
     - do not treat projection as an independent authority resource unless separately specified.
 - **Retrieval**:
     - load full coordinate arrays / dense payloads only on detail, explorer, or result paths that need them.
     - slice/preset queries should be preferred for large tensors/matrices.
     - whole dense tensor transport is not the default large-result contract.
+    - phase-1 sweep filtering is limited to summary-safe axis-name / collection-level filters.
+- **Edit invalidation**:
+    - if an editable trace changes data that affects summaries, collection derivation, readiness, or dependent results, the backend MUST re-materialize or invalidate those surfaces before reporting success.
+    - if it cannot maintain that contract, it MUST expose `allowed_actions.edit=false`.
 - **Flow**:
     - Raw -> Import/Simulation/Post-Processing -> metadata DB + TraceStore -> Characterization / Reports
 - **Legacy**:

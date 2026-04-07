@@ -10,9 +10,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Schemdraw render service 的 three-step flow、request/response、diagnostics、authoritative syntax/live preview 與 advanced mapping envelope 契約
-version: v0.7.0
-last_updated: 2026-03-23
+scope: Schemdraw render service 的 three-step flow、request/response、diagnostics、authoritative syntax/live preview、preview export ownership 與 advanced mapping envelope 契約
+version: v0.8.0
+last_updated: 2026-03-30
 updated_by: codex
 ---
 
@@ -48,7 +48,7 @@ updated_by: codex
 
 !!! tip "HTTP-first"
     這條 workflow 的正式 transport 是 HTTP request / response。
-    若未來新增 WebSocket，也只能是增量能力，不能推翻本頁 contract。
+    若新增 WebSocket，也只能是增量能力，不能推翻本頁 contract。
 
 ## Request Contract
 
@@ -87,12 +87,12 @@ linked schema object baseline：
 | `request_id` | `string` | required | 對應 request |
 | `document_version` | `integer` | required | 對應 editor version |
 | `status` | `string` | required | `rendered`, `blocked`, `syntax_error`, `runtime_error` |
-| `svg` | `string | null` | optional | render success 時的 SVG |
+| `svg` | `string | null` | optional | render success 時的 authoritative preview SVG；也是 page-level SVG download 的唯一來源 |
 | `diagnostics` | `array` | required | 結構化 diagnostics |
 | `cursor_position` | `object | null` | optional | pen cursor / pointer metadata |
 | `probe_points` | `array` | optional | probe point metadata |
 | `render_time_ms` | `number | null` | optional | render latency |
-| `preview_metadata` | `object | null` | optional | SVG 尺寸、viewBox、backend preview summary |
+| `preview_metadata` | `object | null` | optional | SVG 尺寸、viewBox、backend preview summary；可供 frontend viewer / PNG rasterization 使用 |
 
 ## Diagnostics Item
 
@@ -123,6 +123,16 @@ linked schema object baseline：
 | No implicit persistence | source、advanced mapping 與 SVG 都不能被默默保存 |
 | Latest-only safe | response 必須帶 `request_id` 與 `document_version`，讓 frontend 丟棄 stale result |
 | Cancellation is best-effort | 新 request 來時可嘗試取消舊 render |
+
+## Preview Export Ownership
+
+| Concern | Rule |
+|---|---|
+| SVG authority | backend response 中的 `svg` 是 preview 與 page-level SVG export 的唯一 authority |
+| SVG download path | frontend 可直接保存該 `svg` payload；本頁 contract 不要求額外 export-only backend endpoint |
+| PNG derivation | 在目前 contract 下，frontend 可根據 authoritative `svg` 與 `preview_metadata` 衍生 `PNG` download |
+| Backend scope limit | backend 不需另外回傳 PNG bytes、file handle 或 export job；除非另一定義更強 export contract |
+| Truthfulness | frontend 不得把 frontend-derived PNG 宣稱為獨立 backend-rendered asset；它只是由 authoritative SVG 派生的 export format |
 
 ## Request / Response Examples
 

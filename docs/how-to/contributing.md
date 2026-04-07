@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 建立開發環境、執行基本檢查，以及以短版摘要理解 canonical branch/worktree flow。
-version: v1.0.0
-last_updated: 2026-03-27
+scope: 建立開發環境、執行基本檢查、理解 canonical branch/worktree flow，並導向常用的 Codex contributor workflow。
+version: v1.0.1
+last_updated: 2026-03-30
 updated_by: codex
 ---
 
@@ -25,12 +25,17 @@ updated_by: codex
 - 如何建立開發環境
 - 如何執行基本檢查
 - normal contribution 應如何對齊 branch / worktree flow
+- 如何使用 Codex 進行 docs-first、多 agent、broad-slice + fixup iteration
 
 完整 branch roles、isolated worktree policy、merge authority 與 multi-agent delivery model，
 請以以下兩頁為準：
 
 - [Branch & Worktree Flow](../reference/guardrails/execution-verification/branch-and-worktree-flow.md)
 - [Multiple Agent Collaboration](../reference/guardrails/execution-verification/multi-agent-collaboration.md)
+
+若您想直接使用本專案常見的 Codex 協作工作流，請參考：
+
+- [使用 Codex 的分工與 Fixup 工作流](./contributing/codex-agent-workflow.md)
 
 ## 1. 環境建置
 
@@ -79,6 +84,7 @@ updated_by: codex
     本頁不重複完整 Git/worktree policy。
     若你要確認 `main` / `develop` 的角色、agent merge authority，或 sandbox/example agent 的 bounded write root，
     請直接閱讀 [Branch & Worktree Flow](../reference/guardrails/execution-verification/branch-and-worktree-flow.md)。
+    其中也明確規定：`sandbox/**` / `examples/**` 內的 source code 屬於可追蹤內容；由其產生的 `csv`、`svg`、`png` 等 disposable outputs 不屬於預設必追蹤交付物。
 
 ### 執行測試
 我們使用 `pytest` 確保功能正常。

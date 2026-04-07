@@ -98,11 +98,19 @@ Thumbs.db
 !docs/assets/*.png
 !docs/assets/*.svg
 
-# Sandbox - Experiments
-sandbox/*
-!sandbox/README.md
-!sandbox/test_sim.py
-!sandbox/legacy_circuit_model_analysis/
+# Sandbox - Track source, ignore disposable outputs
+sandbox/**/*.csv
+sandbox/**/*.tsv
+sandbox/**/*.png
+sandbox/**/*.svg
+sandbox/**/*.pdf
+sandbox/**/*.jpg
+sandbox/**/*.jpeg
+sandbox/**/*.webp
+sandbox/**/*.gif
+sandbox/**/*.log
+sandbox/**/*.tmp
+sandbox/**/*.temp
 
 # Local history
 .history/

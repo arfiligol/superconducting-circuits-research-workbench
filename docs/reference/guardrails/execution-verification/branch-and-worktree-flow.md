@@ -13,8 +13,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: main/develop branch roles、AI-agent isolated worktree policy、merge authority 與 autonomous bounded write roots。
-version: v1.0.0
-last_updated: 2026-03-27
+version: v1.0.1
+last_updated: 2026-03-30
 updated_by: codex
 ---
 
@@ -108,6 +108,8 @@ updated_by: codex
 | --- | --- |
 | Read access | 可以讀 repo 其他區域取得 context |
 | Write access | 只能寫入明確授權的 bounded write root |
+| Tracked source | bounded write root 內的 source code、scripts、notebooks、README 與其他原始研究/範例內容應視為可被 version control 追蹤的正式變更 |
+| Generated outputs | bounded write root 內由 source 產生的 `csv`、`svg`、`png`、logs、cache、臨時 export 等輸出不屬於預設必追蹤內容；除非 owner docs 另有明確規格，否則應視為 generated output |
 | Merge authority | 若完全遵守 bounded write root，且該 agent family 被明確授權，可自行 merge 回 `develop` |
 | Out-of-scope edits | 不得順手修改 bounded write root 之外的檔案 |
 
@@ -121,6 +123,11 @@ updated_by: codex
 !!! warning "Readable everywhere, writable only in assigned roots"
     autonomous sandbox/example agent 可以讀其他區域理解 API、contracts、fixtures 或 examples context。
     但只要修改超出 bounded write root，就不再屬於 autonomous merge model，必須回到一般 review / integration flow。
+
+!!! tip "Track source, not disposable outputs"
+    `sandbox/**` 或 `examples/**` 內的程式碼、研究腳本與說明文件應可被正常追蹤與 review。
+    但由這些 source 產生的 `csv`、`svg`、`png` 與其他 disposable outputs，不應因位於 bounded write root 內就被自動視為必須 versioned 的正式成果。
+    若某個輸出檔本身要成為 canonical asset，必須由 owner docs 顯式定義。
 
 ## Promotion Path
 
@@ -157,6 +164,8 @@ updated_by: codex
 - Normal implementation slices (`Frontend` / `Backend` / `Core` / `CLI`) do not merge directly to `develop`; `Planning & Reviewing Agent` is the default integration authority.
 - Autonomous sandbox/example agents may merge to `develop` only when they stay fully inside explicitly assigned bounded write roots.
 - Read access may be repo-wide for context, but write access is limited to the assigned bounded write root.
+- Source files inside `sandbox/**` or `examples/**` remain normal tracked repo content unless another owner contract says otherwise.
+- Generated outputs inside bounded write roots (`csv`, `svg`, `png`, logs, caches, temporary exports) are not default tracked deliverables unless an owner doc explicitly declares them canonical assets.
 - Promotion path is:
     - feature/task branches -> `develop`
     - verified release promotion -> `main`

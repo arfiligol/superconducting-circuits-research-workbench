@@ -10,7 +10,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Backend dataset catalog、design browse、sweep-aware trace browse / preview / mutation、characterization-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
-version: v0.13.0
+version: v0.13.1
 last_updated: 2026-03-30
 updated_by: codex
 ---
@@ -152,6 +152,7 @@ trace surface 必須嚴格拆成以下 path families：
 | Point-level browse | implementation 可提供 point / slice read model，但必須能回指 canonical `trace_id`，不得把 projection 當唯一 persisted authority |
 | Axis discoverability | trace browse 與 trace detail 至少必須讓 consumer 知道 axis names、是否存在 sweep axes，以及哪些 axes 可供 Characterization / explorer 使用 |
 | Structured filtering | backend 應支援以 family、representation、source、stage、axis name、available sweep axes 等 structured characteristics 篩選 traces |
+| Phase-1 sweep filtering scope | phase-1 只支援 axis-name / collection-level / summary-safe filters；若需 coordinate-value / range filtering，必須另定 coordinate-domain summary contract，不得預設打開 dense coordinates |
 | Collection projection | backend 可回傳 UI-safe `collection_projection`，表示由 shared axes / lineage 派生的 scientific grouping；但它是 read model，不取代 trace identity |
 | Characterization selection | Characterization 可以從 selected traces 派生 collection；raw checkbox list 不是最終 scientific model |
 
@@ -169,6 +170,7 @@ minimum direction：
 | coordinate identity | `axis_signature` 或等價 hash / signature summary |
 | scientific typing | `family`、`parameter`、`representation`、`source_kind`、`stage_kind` |
 | grouping inputs | batch / lineage / shared-axis summary |
+| phase-1 filtering scope | axis-name / collection-level / summary-safe filters；不含 coordinate-value / range filtering |
 
 !!! warning "List paths are summary-first"
     trace list、design browse、analysis readiness 與 filter suggestion path 不得預設載入完整 ND values。
@@ -201,6 +203,7 @@ minimum direction：
 | `editable_metadata` | backend 允許修改的 summary metadata；例如 `parameter`、`representation`、`provenance_summary` |
 | `immutable_summary` | 不可改寫的 trace identity / lineage context |
 | `editable_numeric_payload` | dialog 專用 numeric edit payload；必須是完整可提交版本，而不是 sampled preview |
+| `recompute_scope` | backend edit path 影響的 dependent summary / derived surface 家族 |
 | `allowed_actions` | edit / delete gating |
 | `mutation_policy_summary` | origin / provenance 限制的 UI-safe 說明 |
 
@@ -211,6 +214,9 @@ minimum direction：
 | Stable identity | `trace_id` 是唯一 trace identity；successful edit 必須維持同一個 `trace_id` |
 | Editable scope | single-trace edit 只允許修改 numeric payload 與 backend 明確允許的 UI-safe summary metadata |
 | Immutable scope | `trace_id`、`dataset_id`、`design_id`、`family`、`trace_mode_group`、`source_kind`、`stage_kind`、`payload_ref` authority handle 與 `result_handles[]` 不可由 mutation 改寫 |
+| Edit invalidation obligation | 若 numeric edit 或 editable metadata 會影響 axis structure、coordinate identity、materialized summaries、collection derivation、analysis readiness 或 persisted analysis/result truth，backend 必須同步 re-materialize 或 invalidate 這些依賴面 |
+| Minimum downstream scope | edit path 至少必須處理 `axis_signature`、materialized metadata summary、`collection_projection`、analysis readiness summary 與所有依賴該 trace truth 的 persisted analysis/result surfaces；若 axis / coordinates 改變，axis-derived summaries 也必須重算 |
+| Edit availability rule | 若 backend 無法維持上述 invalidation / recomputation contract，該 trace class 的 `allowed_actions.edit` 必須為 `false` |
 | Origin restriction | provenance-bearing 或 system-generated traces 可以是 `edit=false`、`delete=true`；frontend 不得自行從 `source_kind` / `stage_kind` 推導，必須依 `allowed_actions` 與 `mutation_policy_summary` 呈現 |
 | Audit semantics | edit / delete 是 in-place mutation + audited operation；trace version lineage 若需要獨立保存，必須由專門 contract 定義 |
 | Batch scope | 目前只支援 batch delete；batch edit 不屬於本頁 SoT |
@@ -228,6 +234,7 @@ minimum projection direction：
 | `available_sweep_axes[]` | 當前 design scope 可見的 structured sweep axis names |
 | `collection_projection[]` | optional；由 shared axes / source batch lineage 派生的 scientific grouping summary |
 | `analysis_readiness` | optional；某 analysis 是否在當前 trace structure 下可形成有效 collection 的摘要 |
+| `phase_1_filter_scope` | summary-safe filter capability 描述；至少指出 phase-1 不支援 coordinate-value / range filtering |
 
 !!! tip "Selection remains user-driven"
     使用者仍可明確勾選 traces。
@@ -239,7 +246,8 @@ minimum projection direction：
 | --- | --- |
 | Authority | `collection_projection` 是由 canonical trace structure 派生的 read model，不是獨立 owner |
 | Identity | phase-1 projection 可暴露 deterministic `collection_key`，供 deep-linking、caching 與 UI restoration 使用 |
-| Derivation inputs | `collection_key` 與 projection summary 應來自 dataset/design scope、shared axes / `axis_signature`、lineage / batch grouping 與 scientific compatibility inputs 等可重建資料 |
+| Allowed derivation inputs | `collection_key` 與 projection summary 只能來自 dataset/design scope、shared axes / `axis_signature`、lineage / batch grouping，以及 trace set 內在的 scientific typing 等 stable structural inputs |
+| Disallowed derivation inputs | analysis-specific readiness outcome、per-analysis compatibility verdict、consumer-specific presentation choice、UI sort/filter state 不可參與 `collection_key` identity |
 | Phase-1 scope | phase-1 不要求 persisted `TraceCollectionRecord` 或可編輯 collection resource |
 | Stronger contract path | 若需可儲存 / bookmark / edit 的 collection，必須另定更強 contract，而不是直接把 projection 當成 authority |
 | Identity discipline | `collection_key` 可作 projection identity，但不得被當成獨立 persisted resource existence proof |
@@ -266,9 +274,10 @@ minimum projection direction：
 ### Mutation result rules
 
 1. single edit 成功後，backend 至少必須回傳更新後的 trace summary，讓 Raw Data Browser 可立即刷新 row 與 focused preview。
-2. single delete 成功後，backend 至少必須回傳 `deleted_trace_id`、`deleted_count=1` 與更新後的 design browse row。
-3. batch delete 成功後，backend 至少必須回傳 `deleted_trace_ids[]`、`deleted_count` 與更新後的 design browse row。
-4. batch delete 必須是單一 request contract；partial silent delete 不可成為預設行為。
+2. single edit 若影響 axis structure、coordinate identity、collection derivation、analysis readiness 或 persisted result truth，backend 必須先完成對應的 re-materialize / invalidate，再回傳成功結果。
+3. single delete 成功後，backend 至少必須回傳 `deleted_trace_id`、`deleted_count=1` 與更新後的 design browse row。
+4. batch delete 成功後，backend 至少必須回傳 `deleted_trace_ids[]`、`deleted_count` 與更新後的 design browse row。
+5. batch delete 必須是單一 request contract；partial silent delete 不可成為預設行為。
 
 ### Mutation failure family
 
@@ -522,6 +531,12 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
             {"frequency": 1.1, "value": 0.018}
           ]
         },
+        "recompute_scope": {
+          "materialized_metadata_summary": true,
+          "collection_projection": true,
+          "analysis_readiness_summary": true,
+          "persisted_analysis_results": "invalidate_or_recompute_if_dependent"
+        },
         "allowed_actions": {
           "edit": true,
           "delete": true
@@ -554,6 +569,12 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
       "ok": true,
       "data": {
         "operation": "updated",
+        "recompute_status": {
+          "materialized_metadata_summary": "refreshed",
+          "collection_projection": "refreshed",
+          "analysis_readiness_summary": "refreshed",
+          "dependent_results": "invalidated"
+        },
         "trace": {
           "trace_id": "trace_manual_014",
           "dataset_id": "ds_xy_001",

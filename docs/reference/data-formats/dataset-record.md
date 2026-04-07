@@ -12,8 +12,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: DatasetRecord、dataset-local design scope、TraceRecord、TraceBatchRecord、AnalysisRunRecord、DerivedParameterRecord 與 TraceStore contract
-version: v3.3.0
-last_updated: 2026-03-30
+version: v3.4.0
+last_updated: 2026-04-06
 updated_by: codex
 title: Dataset / Design / Trace Schema
 ---
@@ -241,6 +241,7 @@ recommended materialization targets：
 | grid rank / shape | `ndim`、`shape` |
 | axis structure | `axis_names`、`axis_units`、`axis_lengths` |
 | sweep readiness | `available_sweep_axes` |
+| phase-1 filtering scope | summary-safe axis existence / shape / typing；不含 coordinate-value / range filtering |
 | coordinate identity | `axis_signature` 或等價的 coordinate/hash summary |
 | scientific identity | `family`、`parameter`、`representation`、`source_kind`、`stage_kind` |
 | collection derivation | lineage / batch summary、shared-axis summary |
@@ -327,6 +328,7 @@ batch 與 trace 的 membership 關聯。
 | `input_trace_ids` | JSON | required | user-selected trace ids |
 | `input_batch_ids` | JSON | optional | source batch refs |
 | `input_collection_payload` | JSON | optional | 由 persisted trace structure 派生的 scientific input collection；保留 shared axes、sweep values 與 grouping summary |
+| `input_result_refs` | JSON | optional | downstream analysis 消費的 upstream run / artifact refs；當 input 來自 persisted analysis result surface 時使用 |
 | `config_payload` | JSON | required | analysis config |
 | `status` | string | required | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |
 | `artifact_manifest` | JSON | optional | result artifact summary |
@@ -345,6 +347,16 @@ batch 與 trace 的 membership 關聯。
 | Preserved structure | `input_collection_payload` 至少應保留 selected traces、shared axes、axis labels / units / values、compatible grouping 與 source batch lineage |
 | ND sweep input | 若 source traces 本身是 parameter-swept ND traces，collection contract 應直接保留 sweep axes，而不是先降成散落的 1D point rows |
 | No free-form recovery | collection 的 sweep meaning 不得依賴解析 `parameter` label、檔名或 provenance prose |
+| Upstream result lineage | 若 analysis 消費的是前一個 analysis 的 persisted result surface，必須透過 `input_result_refs` 或等價 lineage refs 顯式記錄，而不是只保留 raw trace selection |
+
+### Analysis Pipeline Lineage Rules
+
+| Concern | Rule |
+| --- | --- |
+| Separate analysis runs | extraction、fitting、comparison 等每個 analysis 都維持獨立 `AnalysisRunRecord` |
+| Upstream dependency | 下游 analysis 若依賴上游 persisted result，必須在 run lineage 中明確指向 upstream run / artifact refs |
+| No synthetic mega-run | pipeline relation 以 lineage 串接，不得把多步分析壓成單一 do-everything run record |
+| Compare-preserving path | 若 result 需要同時保留多個 collection members / source identities，該 identity 必須進入 result artifact / manifest contract，而不是在 runtime 中被平均後丟失 |
 
 ### Result Axes Manifest Rules
 
@@ -352,6 +364,7 @@ batch 與 trace 的 membership 關聯。
 | --- | --- |
 | Input axes | `result_axes_manifest` 必須可指出 analysis 消費了哪些 input axes，例如 `L_jun` |
 | Derived axes | analysis 若產生 derived axes，例如 `mode_index`，必須顯式標示為 derived，不得假裝是 source trace 自帶 axis |
+| Compare dimension | 若 analysis 需要保留多個 collection members / source identities，`result_axes_manifest` 或 artifact query spec 必須明示 member/source compare dimension，而不是把 identity 藏在 prose |
 | Metric axes | table / plot cell metric 例如 `frequency_ghz`，必須可由 manifest 清楚識別 |
 | Explorer presets | 若結果預設支援 table / plot 視圖，row / column / x / y / series 的 axis semantics 應由 manifest 或 artifact query spec 明示 |
 | First-phase mode semantics | `mode_index` 只代表單一 sweep point 內的 ordinal extracted modes；它不是跨 sweep 的 physical mode identity |

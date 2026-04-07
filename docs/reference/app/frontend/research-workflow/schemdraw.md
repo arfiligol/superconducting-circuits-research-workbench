@@ -14,15 +14,15 @@ route: /circuit-schemdraw
 status: draft
 owner: docs-team
 audience: team
-scope: "/circuit-schemdraw 的 linked schema context、source editor、SVG live preview、backend diagnostics 與 advanced mapping disclosure 契約"
-version: v0.9.0
-last_updated: 2026-03-23
+scope: "/circuit-schemdraw 的 linked schema context、source editor、SVG live preview、compact guidance card、preview download dialog、backend diagnostics 與 advanced mapping disclosure 契約"
+version: v0.10.1
+last_updated: 2026-03-31
 updated_by: codex
 ---
 
 # Schemdraw
 
-本頁定義 Schemdraw workspace 的 linked schema context、source editor、SVG live preview、backend diagnostics 與 advanced mapping disclosure 契約。
+本頁定義 Schemdraw workspace 的 linked schema context、source editor、SVG live preview、compact guidance card、preview download dialog、backend diagnostics 與 advanced mapping disclosure 契約。
 
 !!! info "Page Frame"
     Frontend 只負責編輯 source、顯示 linked schema context、送出 render request、呈現 diagnostics 與 SVG preview。
@@ -44,6 +44,8 @@ updated_by: codex
 | Page header utilities | 只允許 compact adjacent-navigation，例如 `Back to Catalog` 與 `Open Schema Editor`；不應長成 handoff button wall |
 | Source editing | 使用者在 code editor 中撰寫 Schemdraw Python source |
 | SVG live preview | 直接檢視最新成功 render 的 SVG |
+| Preview download | 從最新成功 preview 下載 `SVG` 或 `PNG` |
+| Compact guidance | 提供本頁成功撰寫 Schemdraw source 所需的簡短規則，但不搶主工作區注意力 |
 | Linked schema context | 在工作區頂部顯示 linked schema 選擇與 lightweight context summary |
 | Backend diagnostics | 需要時查看 authoritative syntax / runtime diagnostics |
 | Advanced mapping | optional advanced metadata / mapping UI，用於精修 relation metadata，不得搶過 editor / preview |
@@ -74,7 +76,8 @@ flowchart TD
     Context --> Main["Primary Work Area"]
     Main --> Editor["Schemdraw Source Editor"]
     Main --> Preview["SVG Live Preview"]
-    Main --> Diagnostics["Backend Diagnostics"]
+    Preview --> Guidance["Compact Guidance Card"]
+    Guidance --> Diagnostics["Backend Diagnostics"]
     Diagnostics --> Snapshot["Linked Schema Snapshot"]
 ```
 
@@ -85,11 +88,12 @@ flowchart TD
 | `C0` | Page Header Actions | 只保留 compact utilities，例如 `Back to Catalog`、`Open Schema Editor` |
 | `C1` | Linked Schema Context | 全寬顯示 linked schema selection、summary cards 與 lightweight chips |
 | `C2` | Schemdraw Source Editor | 左側 primary editor，負責 source editing |
-| `C3` | SVG Live Preview | 右側 primary preview，顯示最新成功 render 的 SVG |
+| `C3` | SVG Live Preview | 右側 primary preview，顯示最新成功 render 的 SVG 與單一 `Download` action |
 | `C4` | Render Controls | 主要為 `Render Now`；`Reset Template` 屬於 advanced mapping disclosure 的附屬動作 |
-| `C5` | Backend Diagnostics | 全寬 support/debug surface，顯示 backend diagnostics 與 render status |
-| `C6` | Linked Schema Snapshot | 全寬 read-only code surface，顯示 linked schema snapshot |
-| `C7` | Advanced Mapping Disclosure | optional advanced disclosure，用於 relation metadata / mapping，不得佔據 main workspace slot |
+| `C5` | Compact Guidance Card | 全寬但低密度的 support card，放在 editor / preview 之後，說明本頁 authoring 成功條件，不得變成 tutorial wall |
+| `C6` | Backend Diagnostics | 全寬 support/debug surface，顯示 backend diagnostics 與 render status |
+| `C7` | Linked Schema Snapshot | 全寬 read-only code surface，顯示 linked schema snapshot |
+| `C8` | Advanced Mapping Disclosure | optional advanced disclosure，用於 relation metadata / mapping，不得佔據 main workspace slot |
 
 ## Three-step Processing Flow
 
@@ -117,6 +121,8 @@ flowchart TD
 | Rule | Meaning |
 |---|---|
 | Local cues are lightweight | editor 可做 syntax highlighting、indent guides、cursor hints |
+| Guidance is compact | guidance card 只服務本頁 authoring 成功條件，不可擴張成嵌入式教學長文 |
+| Guidance follows the main work area | guidance card 應位於 source editor / live preview 之後，作為 secondary support surface |
 | Preview becomes stale on edit | 任何 source / advanced mapping 變動都應把 preview 標為 `Stale` |
 | Latest-only apply | 前端只採用最新 `document_version` / `request_id` 的 response |
 | No implicit persistence | 本頁不保存 schema source、不保存 render draft |
@@ -124,6 +130,30 @@ flowchart TD
 | Diagnostics are support-only | diagnostics 應位於 editor / preview 之下，不得和 primary work area 同級競爭注意力 |
 | Snapshot is reference-only | linked schema snapshot 為 read-only code surface，不得壓過 editor / preview 的主要工作流 |
 | No cross-page CTA wall | 除了 compact adjacent-navigation 之外，不得額外堆疊 handoff / preview / authority buttons |
+| Download stays singular | preview area 只允許單一 `Download` action，不得長成多個常駐 export buttons |
+
+## Guidance Card Contract
+
+| Concern | Rule |
+|---|---|
+| Primary purpose | guidance card 只回答「如何在本頁寫出可 render 的 Schemdraw source」，不負責完整教學 |
+| Placement | guidance card 應位於 source editor / live preview 之後，讓熟悉工作流的使用者先進入主工作區 |
+| Content scope | 應提醒 source 必須符合 page/backend render contract、保持結構可讀、可供 AI 與人類之後繼續修改 |
+| Readability expectation | source 應維持明確 import、明確 entrypoint、可追蹤命名與可掃讀的程式結構；不得鼓勵 opaque 或 magical authoring style |
+| Authority wording | guidance card 必須明示 backend 才是 syntax / render authority，本地 editor 只提供 cue 與 draft feedback |
+| Density limit | guidance card 應保持 compact card 規模；不得展開成多段 tutorial wall、長範例集或 secondary documentation panel |
+
+## Preview Download Contract
+
+| Concern | Rule |
+|---|---|
+| Entry point | live preview 區只允許一個 `Download` action |
+| Format selection | 點擊 `Download` 後，使用單一 dialog 讓使用者選擇 `SVG` 或 `PNG` |
+| Availability | 只有當最新 authoritative render response 為 `Rendered` 且 `svg` 存在時，download action 才可用 |
+| Stale protection | download 必須綁定最新成功且未被 newer response 淘汰的 preview；不得導出被丟棄的 stale response |
+| SVG ownership | `SVG` download 直接保存 authoritative backend `svg` payload，不另造第二份 preview authority |
+| PNG ownership | `PNG` 可由 frontend 根據同一份 authoritative `svg` payload 衍生 raster export；本頁 contract 不要求 backend 另提供 PNG export endpoint |
+| UI density | download format selection 必須留在 dialog，不得把 preview header 擴成多顆 export buttons |
 
 ??? example "Edit-to-preview behavior"
     1. 使用者修改 Python source。
@@ -151,6 +181,7 @@ flowchart TD
 | linked schema 在 workspace switch 後不可見 | 清除 linked schema 並提示使用者重新選擇 |
 | advanced mapping 與 backend schema contract 不符 | diagnostics 顯示為 blocking，不更新 preview |
 | manual render during stale response race | 只保留最新 response；舊回應直接丟棄 |
+| download after render race | `Download` dialog 只能對應目前被採用的 latest successful preview，不可回指被淘汰的 request |
 
 ## Authority Pair
 
@@ -166,8 +197,11 @@ flowchart TD
     * [ ] frontend 只負責 source editing、response 呈現與 linked schema context
     * [ ] backend 擁有 authoritative syntax check 與 live preview
     * [ ] three-step flow 已明確：edit -> send snapshot -> backend validate/render
+    * [ ] guidance card 被定義為 compact in-page guidance，而不是 tutorial wall
     * [ ] stale preview 與 latest-only apply 有正式定義
-    * [ ] main hierarchy 明確是 `Linked Schema Context -> Source Editor + SVG Live Preview -> Backend Diagnostics -> Linked Schema Snapshot`
+    * [ ] `Download` action 被定義為 preview area 的單一入口，格式選擇在 dialog 中完成
+    * [ ] `SVG` 與 `PNG` download ownership 已明確：`SVG` 直接來自 backend preview，`PNG` 可由 frontend 從同一份 SVG 衍生
+    * [ ] main hierarchy 明確是 `Linked Schema Context -> Source Editor + SVG Live Preview -> Compact Guidance Card -> Backend Diagnostics -> Linked Schema Snapshot`
     * [ ] relation mapping / config 被定義為 optional advanced concern，不佔 main workspace slot
     * [ ] linked schema snapshot 被定義為 read-only code surface，而不是壓扁的文字 blob
     * [ ] page 不會把 preview workflow誤寫成 task queue 或 persistence workflow
