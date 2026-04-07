@@ -19,7 +19,7 @@ from src.app.domain.datasets import (
     CharacterizationSourceParameterOption,
 )
 
-ADMITTANCE_RESULT_CONTRACT_VERSION = "admittance_phase1_v1"
+ADMITTANCE_RESULT_CONTRACT_VERSION = "admittance_member_phase1_v1"
 ADMITTANCE_GRID_ARTIFACT_SUFFIX = "mode-frequency-grid"
 ADMITTANCE_IDENTIFY_ARTIFACT_SUFFIX = "identify-summary"
 ADMITTANCE_REPORT_ARTIFACT_SUFFIX = "report"
@@ -32,6 +32,20 @@ ADMITTANCE_METRIC_LABEL = "Frequency"
 ADMITTANCE_METRIC_UNIT = "GHz"
 ADMITTANCE_MODE_AXIS_KEY = "mode_index"
 ADMITTANCE_MODE_AXIS_LABEL = "Mode index"
+ADMITTANCE_MEMBER_AXIS_KEY = "member_key"
+ADMITTANCE_MEMBER_AXIS_LABEL = "Collection member"
+
+
+@dataclass(frozen=True)
+class AdmittanceResultMember:
+    member_key: str
+    label: str
+    trace_id: str
+    source_kind: str
+    trace_mode_group: str
+    parameter: str
+    representation: str
+    provenance_summary: str
 
 
 @dataclass(frozen=True)
@@ -48,17 +62,25 @@ class AdmittanceResultSurface:
     input_axis_label: str
     input_axis_unit: str | None
     input_axis_values: tuple[float, ...]
-    frequency_grid_by_input: tuple[tuple[float | None, ...], ...]
-    residual_rms_by_input: tuple[float | None, ...]
+    members: tuple[AdmittanceResultMember, ...]
+    frequency_grid_by_member: tuple[tuple[tuple[float | None, ...], ...], ...]
+    residual_rms_by_member: tuple[tuple[float | None, ...], ...]
     fit_window_ghz: tuple[float, float]
-    masked_input_indices: tuple[int, ...]
+    masked_input_indices_by_member: tuple[tuple[int, ...], ...]
     diagnostics: tuple[CharacterizationDiagnostic, ...] = ()
 
     @property
     def derived_axis_values(self) -> tuple[int, ...]:
         mode_count = 0
-        if len(self.frequency_grid_by_input) > 0:
-            mode_count = max(len(row) for row in self.frequency_grid_by_input)
+        if len(self.frequency_grid_by_member) > 0:
+            mode_count = max(
+                (
+                    len(row)
+                    for member_grid in self.frequency_grid_by_member
+                    for row in member_grid
+                ),
+                default=0,
+            )
         return tuple(range(mode_count))
 
     @property
@@ -79,6 +101,16 @@ class AdmittanceResultSurface:
             role="derived",
             unit=None,
             length=len(self.derived_axis_values),
+        )
+
+    @property
+    def member_axis_spec(self) -> CharacterizationArtifactAxisSpec:
+        return CharacterizationArtifactAxisSpec(
+            axis_key=ADMITTANCE_MEMBER_AXIS_KEY,
+            label=ADMITTANCE_MEMBER_AXIS_LABEL,
+            role="member",
+            unit=None,
+            length=len(self.members),
         )
 
     @property
@@ -106,6 +138,11 @@ def summarize_admittance_surface(
             "unit": surface.input_axis_unit,
             "length": len(surface.input_axis_values),
         },
+        "member_axis": {
+            "axis_key": ADMITTANCE_MEMBER_AXIS_KEY,
+            "label": ADMITTANCE_MEMBER_AXIS_LABEL,
+            "length": len(surface.members),
+        },
         "derived_axis": {
             "axis_key": ADMITTANCE_MODE_AXIS_KEY,
             "label": ADMITTANCE_MODE_AXIS_LABEL,
@@ -117,8 +154,13 @@ def summarize_admittance_surface(
             "unit": ADMITTANCE_METRIC_UNIT,
         },
         "fit_window_ghz": list(surface.fit_window_ghz),
-        "masked_input_indices": list(surface.masked_input_indices),
-        "masked_input_count": len(surface.masked_input_indices),
+        "member_count": len(surface.members),
+        "masked_input_indices_by_member": [
+            list(indices) for indices in surface.masked_input_indices_by_member
+        ],
+        "masked_member_count": sum(
+            1 for indices in surface.masked_input_indices_by_member if len(indices) > 0
+        ),
         "mode_capacity": len(surface.derived_axis_values),
     }
 
@@ -147,7 +189,7 @@ def build_admittance_artifact_refs(
             title="Mode frequency grid",
             payload_format="json",
             payload_locator=f"characterization/{result_id}/mode-frequency-grid.json",
-            axes=(input_axis, _mode_axis_spec()),
+            axes=(input_axis, _member_axis_spec(), _mode_axis_spec()),
             metric=metric,
             presets=(
                 CharacterizationArtifactPreset(
@@ -157,6 +199,7 @@ def build_admittance_artifact_refs(
                     rows_axis=ADMITTANCE_MODE_AXIS_KEY,
                     columns_axis="input_axis",
                     cell_metric=ADMITTANCE_METRIC_KEY,
+                    compare_axis=ADMITTANCE_MEMBER_AXIS_KEY,
                 ),
                 CharacterizationArtifactPreset(
                     preset_id=ADMITTANCE_MODE_PROFILE_PRESET_ID,
@@ -165,6 +208,7 @@ def build_admittance_artifact_refs(
                     x_axis=ADMITTANCE_MODE_AXIS_KEY,
                     y_metric=ADMITTANCE_METRIC_KEY,
                     series_axis="input_axis",
+                    compare_axis=ADMITTANCE_MEMBER_AXIS_KEY,
                 ),
                 CharacterizationArtifactPreset(
                     preset_id=ADMITTANCE_SWEEP_PROFILE_PRESET_ID,
@@ -173,6 +217,7 @@ def build_admittance_artifact_refs(
                     x_axis="input_axis",
                     y_metric=ADMITTANCE_METRIC_KEY,
                     series_axis=ADMITTANCE_MODE_AXIS_KEY,
+                    compare_axis=ADMITTANCE_MEMBER_AXIS_KEY,
                 ),
             ),
             default_preset_id=ADMITTANCE_TABLE_PRESET_ID,
@@ -259,7 +304,11 @@ def annotate_admittance_artifact_refs(
                     title=ref.title,
                     payload_format=ref.payload_format,
                     payload_locator=ref.payload_locator,
-                    axes=(surface.input_axis_spec, surface.mode_axis_spec),
+                    axes=(
+                        surface.input_axis_spec,
+                        surface.member_axis_spec,
+                        surface.mode_axis_spec,
+                    ),
                     metric=surface.metric_spec,
                     presets=tuple(
                         CharacterizationArtifactPreset(
@@ -288,6 +337,7 @@ def annotate_admittance_artifact_refs(
                                 if preset.series_axis == "input_axis"
                                 else preset.series_axis
                             ),
+                            compare_axis=preset.compare_axis,
                         )
                         for preset in ref.presets
                     ),
@@ -334,9 +384,18 @@ def build_admittance_summary_metrics(
     surface: AdmittanceResultSurface,
 ) -> tuple[AdmittanceSummaryMetric, ...]:
     values = [
-        value for row in surface.frequency_grid_by_input for value in row if value is not None
+        value
+        for member_grid in surface.frequency_grid_by_member
+        for row in member_grid
+        for value in row
+        if value is not None
     ]
-    residuals = [value for value in surface.residual_rms_by_input if value is not None]
+    residuals = [
+        value
+        for member_residuals in surface.residual_rms_by_member
+        for value in member_residuals
+        if value is not None
+    ]
     return (
         AdmittanceSummaryMetric(
             parameter="lowest_observed_frequency_ghz",
@@ -368,15 +427,34 @@ def serialize_admittance_surface(
         "input_axis_label": surface.input_axis_label,
         "input_axis_unit": surface.input_axis_unit,
         "input_axis_values": list(surface.input_axis_values),
-        "frequency_grid_by_input": [
-            [float(value) if value is not None else None for value in row]
-            for row in surface.frequency_grid_by_input
+        "members": [
+            {
+                "member_key": member.member_key,
+                "label": member.label,
+                "trace_id": member.trace_id,
+                "source_kind": member.source_kind,
+                "trace_mode_group": member.trace_mode_group,
+                "parameter": member.parameter,
+                "representation": member.representation,
+                "provenance_summary": member.provenance_summary,
+            }
+            for member in surface.members
         ],
-        "residual_rms_by_input": [
-            float(value) if value is not None else None for value in surface.residual_rms_by_input
+        "frequency_grid_by_member": [
+            [
+                [float(value) if value is not None else None for value in row]
+                for row in member_grid
+            ]
+            for member_grid in surface.frequency_grid_by_member
+        ],
+        "residual_rms_by_member": [
+            [float(value) if value is not None else None for value in member_residuals]
+            for member_residuals in surface.residual_rms_by_member
         ],
         "fit_window_ghz": list(surface.fit_window_ghz),
-        "masked_input_indices": list(surface.masked_input_indices),
+        "masked_input_indices_by_member": [
+            list(indices) for indices in surface.masked_input_indices_by_member
+        ],
         "diagnostics": [
             {
                 "severity": diagnostic.severity,
@@ -399,10 +477,41 @@ def parse_admittance_surface(
         for value in payload.get("input_axis_values", ())
         if isinstance(value, int | float)
     )
-    grid_payload = payload.get("frequency_grid_by_input", ())
-    residual_payload = payload.get("residual_rms_by_input", ())
+    members_payload = payload.get("members", ())
+    grid_payload = payload.get("frequency_grid_by_member", ())
+    residual_payload = payload.get("residual_rms_by_member", ())
     fit_window = payload.get("fit_window_ghz", ())
     diagnostics = payload.get("diagnostics", ())
+    if not (
+        isinstance(grid_payload, Sequence)
+        and not isinstance(grid_payload, str | bytes)
+        and len(grid_payload) > 0
+    ):
+        legacy_grid_payload = payload.get("frequency_grid_by_input", ())
+        if isinstance(legacy_grid_payload, Sequence) and not isinstance(
+            legacy_grid_payload, str | bytes
+        ):
+            grid_payload = (legacy_grid_payload,)
+            residual_payload = (payload.get("residual_rms_by_input", ()),)
+            members_payload = (
+                {
+                    "member_key": "selected_scope:0",
+                    "label": "Selected trace bundle",
+                    "trace_id": "selected_scope",
+                    "source_kind": "measurement",
+                    "trace_mode_group": "base",
+                    "parameter": "member",
+                    "representation": "derived",
+                    "provenance_summary": "Legacy single-member admittance result",
+                },
+            )
+    masked_input_indices_payload = payload.get("masked_input_indices_by_member", ())
+    if not (
+        isinstance(masked_input_indices_payload, Sequence)
+        and not isinstance(masked_input_indices_payload, str | bytes)
+        and len(masked_input_indices_payload) > 0
+    ):
+        masked_input_indices_payload = (payload.get("masked_input_indices", ()),)
     return AdmittanceResultSurface(
         input_axis_key=str(payload.get("input_axis_key", "input_axis")),
         input_axis_label=str(payload.get("input_axis_label", "Input axis")),
@@ -412,23 +521,38 @@ def parse_admittance_surface(
             else None
         ),
         input_axis_values=input_axis_values,
-        frequency_grid_by_input=tuple(
-            tuple(float(value) if isinstance(value, int | float) else None for value in row)
-            for row in grid_payload
-            if isinstance(row, Sequence) and not isinstance(row, str | bytes)
+        members=_parse_members(members_payload, grid_payload),
+        frequency_grid_by_member=tuple(
+            tuple(
+                tuple(float(value) if isinstance(value, int | float) else None for value in row)
+                for row in member_grid
+                if isinstance(row, Sequence) and not isinstance(row, str | bytes)
+            )
+            for member_grid in grid_payload
+            if isinstance(member_grid, Sequence) and not isinstance(member_grid, str | bytes)
         ),
-        residual_rms_by_input=tuple(
-            float(value) if isinstance(value, int | float) else None
-            for value in residual_payload
-            if value is None or isinstance(value, int | float)
+        residual_rms_by_member=tuple(
+            tuple(
+                float(value) if isinstance(value, int | float) else None
+                for value in member_residuals
+                if value is None or isinstance(value, int | float)
+            )
+            for member_residuals in residual_payload
+            if isinstance(member_residuals, Sequence)
+            and not isinstance(member_residuals, str | bytes)
         ),
         fit_window_ghz=tuple(
             float(value) for value in fit_window if isinstance(value, int | float)
         )[:2],
-        masked_input_indices=tuple(
-            int(index)
-            for index in payload.get("masked_input_indices", ())
-            if isinstance(index, int | float)
+        masked_input_indices_by_member=tuple(
+            tuple(
+                int(index)
+                for index in member_indices
+                if isinstance(index, int | float)
+            )
+            for member_indices in masked_input_indices_payload
+            if isinstance(member_indices, Sequence)
+            and not isinstance(member_indices, str | bytes)
         ),
         diagnostics=tuple(
             CharacterizationDiagnostic(
@@ -495,8 +619,16 @@ def query_admittance_artifact_payload(
                     "unit": surface.input_axis_unit,
                     "length": len(surface.input_axis_values),
                 },
+                "member_axis": {
+                    "axis_key": ADMITTANCE_MEMBER_AXIS_KEY,
+                    "label": ADMITTANCE_MEMBER_AXIS_LABEL,
+                    "length": len(surface.members),
+                },
                 "mode_capacity": len(surface.derived_axis_values),
-                "masked_input_indices": list(surface.masked_input_indices),
+                "member_count": len(surface.members),
+                "masked_input_indices_by_member": [
+                    list(indices) for indices in surface.masked_input_indices_by_member
+                ],
                 "fit_window_ghz": list(surface.fit_window_ghz),
             },
             diagnostics=surface.diagnostics,
@@ -528,13 +660,14 @@ def _query_grid_artifact_payload(
             title="Mode frequency grid",
             preset_id=preset_id,
             view_kind="table",
-            axes=(surface.mode_axis_spec, surface.input_axis_spec),
+            axes=(surface.mode_axis_spec, surface.input_axis_spec, surface.member_axis_spec),
             metric=surface.metric_spec,
             payload={
                 "layout": {
                     "rows_axis": ADMITTANCE_MODE_AXIS_KEY,
                     "columns_axis": surface.input_axis_key,
                     "cell_metric": ADMITTANCE_METRIC_KEY,
+                    "compare_axis": ADMITTANCE_MEMBER_AXIS_KEY,
                 },
                 "rows": [
                     {"axis_value": mode_index, "label": f"Mode {mode_index}"}
@@ -548,8 +681,17 @@ def _query_grid_artifact_payload(
                     }
                     for axis_value in surface.input_axis_values
                 ],
-                "cells": _table_cells(surface),
-                "mask": _table_mask(surface),
+                "compare_groups": [
+                    {
+                        "compare_key": member.member_key,
+                        "compare_label": member.label,
+                        "member": _member_payload(member),
+                        "cells": _table_cells_for_member(surface, member_index=index),
+                        "mask": _table_mask_for_member(surface, member_index=index),
+                    }
+                    for index, member in enumerate(surface.members)
+                ],
+                **_single_member_table_projection(surface),
             },
             diagnostics=surface.diagnostics,
         )
@@ -559,33 +701,34 @@ def _query_grid_artifact_payload(
             title="Mode frequency grid",
             preset_id=preset_id,
             view_kind="plot",
-            axes=(surface.mode_axis_spec, surface.input_axis_spec),
+            axes=(surface.mode_axis_spec, surface.input_axis_spec, surface.member_axis_spec),
             metric=surface.metric_spec,
             payload={
                 "layout": {
                     "x_axis": ADMITTANCE_MODE_AXIS_KEY,
                     "y_metric": ADMITTANCE_METRIC_KEY,
                     "series_axis": surface.input_axis_key,
+                    "compare_axis": ADMITTANCE_MEMBER_AXIS_KEY,
                 },
-                "series": [
+                "compare_groups": [
                     {
-                        "series_key": f"{surface.input_axis_key}:{index}",
-                        "series_label": _format_axis_value(
-                            surface.input_axis_values[index],
-                            surface.input_axis_unit,
+                        "compare_key": member.member_key,
+                        "compare_label": member.label,
+                        "member": _member_payload(member),
+                        "series": _mode_profile_series_for_member(
+                            surface=surface,
+                            member_index=index,
                         ),
-                        "series_value": surface.input_axis_values[index],
-                        "x_values": list(surface.derived_axis_values),
-                        "y_values": [
-                            row[mode_index] if mode_index < len(row) else None
-                            for mode_index in surface.derived_axis_values
-                        ],
-                        "mask": [
-                            mode_index >= len(row) or row[mode_index] is None
-                            for mode_index in surface.derived_axis_values
-                        ],
                     }
-                    for index, row in enumerate(surface.frequency_grid_by_input)
+                    for index, member in enumerate(surface.members)
+                ],
+                "series": [
+                    series_payload
+                    for index, member in enumerate(surface.members)
+                    for series_payload in _series_with_member_context(
+                        _mode_profile_series_for_member(surface=surface, member_index=index),
+                        member=member,
+                    )
                 ],
             },
             diagnostics=surface.diagnostics,
@@ -596,30 +739,34 @@ def _query_grid_artifact_payload(
             title="Mode frequency grid",
             preset_id=preset_id,
             view_kind="plot",
-            axes=(surface.input_axis_spec, surface.mode_axis_spec),
+            axes=(surface.input_axis_spec, surface.mode_axis_spec, surface.member_axis_spec),
             metric=surface.metric_spec,
             payload={
                 "layout": {
                     "x_axis": surface.input_axis_key,
                     "y_metric": ADMITTANCE_METRIC_KEY,
                     "series_axis": ADMITTANCE_MODE_AXIS_KEY,
+                    "compare_axis": ADMITTANCE_MEMBER_AXIS_KEY,
                 },
-                "series": [
+                "compare_groups": [
                     {
-                        "series_key": f"{ADMITTANCE_MODE_AXIS_KEY}:{mode_index}",
-                        "series_label": f"Mode {mode_index}",
-                        "series_value": mode_index,
-                        "x_values": list(surface.input_axis_values),
-                        "y_values": [
-                            row[mode_index] if mode_index < len(row) else None
-                            for row in surface.frequency_grid_by_input
-                        ],
-                        "mask": [
-                            mode_index >= len(row) or row[mode_index] is None
-                            for row in surface.frequency_grid_by_input
-                        ],
+                        "compare_key": member.member_key,
+                        "compare_label": member.label,
+                        "member": _member_payload(member),
+                        "series": _sweep_profile_series_for_member(
+                            surface=surface,
+                            member_index=index,
+                        ),
                     }
-                    for mode_index in surface.derived_axis_values
+                    for index, member in enumerate(surface.members)
+                ],
+                "series": [
+                    series_payload
+                    for index, member in enumerate(surface.members)
+                    for series_payload in _series_with_member_context(
+                        _sweep_profile_series_for_member(surface=surface, member_index=index),
+                        member=member,
+                    )
                 ],
             },
             diagnostics=surface.diagnostics,
@@ -663,20 +810,32 @@ def _grid_preset_view_kind(preset_id: str) -> str | None:
     return None
 
 
-def _table_cells(surface: AdmittanceResultSurface) -> list[list[float | None]]:
+def _table_cells_for_member(
+    surface: AdmittanceResultSurface,
+    *,
+    member_index: int,
+) -> list[list[float | None]]:
     rows: list[list[float | None]] = []
+    member_grid = surface.frequency_grid_by_member[member_index]
     for mode_index in surface.derived_axis_values:
         rows.append(
             [
                 row[mode_index] if mode_index < len(row) else None
-                for row in surface.frequency_grid_by_input
+                for row in member_grid
             ]
         )
     return rows
 
 
-def _table_mask(surface: AdmittanceResultSurface) -> list[list[bool]]:
-    return [[value is None for value in row] for row in _table_cells(surface)]
+def _table_mask_for_member(
+    surface: AdmittanceResultSurface,
+    *,
+    member_index: int,
+) -> list[list[bool]]:
+    return [
+        [value is None for value in row]
+        for row in _table_cells_for_member(surface, member_index=member_index)
+    ]
 
 
 def _identify_designated_metrics() -> tuple[CharacterizationDesignatedMetricOption, ...]:
@@ -710,3 +869,149 @@ def _mode_axis_spec() -> CharacterizationArtifactAxisSpec:
         unit=None,
         length=0,
     )
+
+
+def _member_axis_spec() -> CharacterizationArtifactAxisSpec:
+    return CharacterizationArtifactAxisSpec(
+        axis_key=ADMITTANCE_MEMBER_AXIS_KEY,
+        label=ADMITTANCE_MEMBER_AXIS_LABEL,
+        role="member",
+        unit=None,
+        length=0,
+    )
+
+
+def _member_payload(member: AdmittanceResultMember) -> dict[str, object]:
+    return {
+        "member_key": member.member_key,
+        "label": member.label,
+        "trace_id": member.trace_id,
+        "source_kind": member.source_kind,
+        "trace_mode_group": member.trace_mode_group,
+        "parameter": member.parameter,
+        "representation": member.representation,
+        "provenance_summary": member.provenance_summary,
+    }
+
+
+def _parse_members(
+    members_payload: object,
+    grid_payload: object,
+) -> tuple[AdmittanceResultMember, ...]:
+    members = (
+        tuple(
+            AdmittanceResultMember(
+                member_key=str(item.get("member_key", "")),
+                label=str(item.get("label", "")),
+                trace_id=str(item.get("trace_id", "")),
+                source_kind=str(item.get("source_kind", "")),
+                trace_mode_group=str(item.get("trace_mode_group", "")),
+                parameter=str(item.get("parameter", "")),
+                representation=str(item.get("representation", "")),
+                provenance_summary=str(item.get("provenance_summary", "")),
+            )
+            for item in members_payload
+            if isinstance(item, Mapping)
+        )
+        if isinstance(members_payload, Sequence)
+        and not isinstance(members_payload, str | bytes)
+        else ()
+    )
+    if len(members) > 0:
+        return members
+    member_count = (
+        len(grid_payload)
+        if isinstance(grid_payload, Sequence) and not isinstance(grid_payload, str | bytes)
+        else 0
+    )
+    return tuple(
+        AdmittanceResultMember(
+            member_key=f"selected_scope:{index}",
+            label=f"Selected member {index + 1}",
+            trace_id=f"selected_scope:{index}",
+            source_kind="measurement",
+            trace_mode_group="base",
+            parameter="member",
+            representation="derived",
+            provenance_summary="Backfilled member identity from persisted admittance result.",
+        )
+        for index in range(member_count)
+    )
+
+
+def _single_member_table_projection(surface: AdmittanceResultSurface) -> dict[str, object]:
+    if len(surface.members) != 1:
+        return {}
+    return {
+        "cells": _table_cells_for_member(surface, member_index=0),
+        "mask": _table_mask_for_member(surface, member_index=0),
+    }
+
+
+def _mode_profile_series_for_member(
+    *,
+    surface: AdmittanceResultSurface,
+    member_index: int,
+) -> list[dict[str, object]]:
+    member_grid = surface.frequency_grid_by_member[member_index]
+    return [
+        {
+            "series_key": f"{surface.input_axis_key}:{index}",
+            "series_label": _format_axis_value(
+                surface.input_axis_values[index],
+                surface.input_axis_unit,
+            ),
+            "series_value": surface.input_axis_values[index],
+            "x_values": list(surface.derived_axis_values),
+            "y_values": [
+                row[mode_index] if mode_index < len(row) else None
+                for mode_index in surface.derived_axis_values
+            ],
+            "mask": [
+                mode_index >= len(row) or row[mode_index] is None
+                for mode_index in surface.derived_axis_values
+            ],
+        }
+        for index, row in enumerate(member_grid)
+    ]
+
+
+def _sweep_profile_series_for_member(
+    *,
+    surface: AdmittanceResultSurface,
+    member_index: int,
+) -> list[dict[str, object]]:
+    member_grid = surface.frequency_grid_by_member[member_index]
+    return [
+        {
+            "series_key": f"{ADMITTANCE_MODE_AXIS_KEY}:{mode_index}",
+            "series_label": f"Mode {mode_index}",
+            "series_value": mode_index,
+            "x_values": list(surface.input_axis_values),
+            "y_values": [
+                row[mode_index] if mode_index < len(row) else None
+                for row in member_grid
+            ],
+            "mask": [
+                mode_index >= len(row) or row[mode_index] is None
+                for row in member_grid
+            ],
+        }
+        for mode_index in surface.derived_axis_values
+    ]
+
+
+def _series_with_member_context(
+    series: list[dict[str, object]],
+    *,
+    member: AdmittanceResultMember,
+) -> list[dict[str, object]]:
+    return [
+        {
+            **item,
+            "compare_key": member.member_key,
+            "compare_label": member.label,
+            "member": _member_payload(member),
+        }
+        for item in series
+    ]

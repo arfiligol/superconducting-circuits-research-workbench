@@ -13,6 +13,7 @@ from src.app.api.presenters.storage import (
     build_trace_payload_ref_response,
 )
 from src.app.domain.datasets import (
+    CharacterizationInputResultRef,
     ResultTracePublicationDraft,
     SimulationResultPublicationDraft,
 )
@@ -947,6 +948,7 @@ def _parse_characterization_setup(payload: object) -> CharacterizationSetup | No
     body = _as_mapping(payload)
     raw_selected_trace_ids = body.get("selected_trace_ids")
     raw_analysis_config = body.get("analysis_config")
+    raw_input_result_refs = body.get("input_result_refs", [])
     if not isinstance(raw_selected_trace_ids, list):
         raise service_error(
             400,
@@ -960,6 +962,13 @@ def _parse_characterization_setup(payload: object) -> CharacterizationSetup | No
             code="request_validation_failed",
             category="validation_error",
             message="characterization_setup.analysis_config must be an object.",
+        )
+    if not isinstance(raw_input_result_refs, list):
+        raise service_error(
+            400,
+            code="request_validation_failed",
+            category="validation_error",
+            message="characterization_setup.input_result_refs must be an array.",
         )
     return CharacterizationSetup(
         design_id=_required_string(
@@ -981,6 +990,59 @@ def _parse_characterization_setup(payload: object) -> CharacterizationSetup | No
             for index, trace_id in enumerate(raw_selected_trace_ids)
         ),
         analysis_config=dict(raw_analysis_config or {}),
+        input_result_refs=tuple(
+            _parse_characterization_input_result_ref(item, index=index)
+            for index, item in enumerate(raw_input_result_refs)
+        ),
+    )
+
+
+def _parse_characterization_input_result_ref(
+    payload: object,
+    *,
+    index: int,
+) -> CharacterizationInputResultRef:
+    body = _require_mapping(
+        payload,
+        field_name=f"characterization_setup.input_result_refs[{index}]",
+    )
+    return CharacterizationInputResultRef(
+        analysis_id=_required_string(
+            body.get("analysis_id"),
+            field_name=(
+                "characterization_setup.input_result_refs"
+                f"[{index}].analysis_id"
+            ),
+        ),
+        result_id=_required_string(
+            body.get("result_id"),
+            field_name=(
+                "characterization_setup.input_result_refs"
+                f"[{index}].result_id"
+            ),
+        ),
+        run_id=_optional_string(
+            body.get("run_id"),
+            field_name=f"characterization_setup.input_result_refs[{index}].run_id",
+        ),
+        artifact_id=_optional_string(
+            body.get("artifact_id"),
+            field_name=(
+                "characterization_setup.input_result_refs"
+                f"[{index}].artifact_id"
+            ),
+        ),
+        contract_version=_optional_string(
+            body.get("contract_version"),
+            field_name=(
+                "characterization_setup.input_result_refs"
+                f"[{index}].contract_version"
+            ),
+        ),
+        title=_optional_string(
+            body.get("title"),
+            field_name=f"characterization_setup.input_result_refs[{index}].title",
+        ),
     )
 
 

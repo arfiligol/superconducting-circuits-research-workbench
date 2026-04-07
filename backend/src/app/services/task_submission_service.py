@@ -10,6 +10,7 @@ from src.app.domain.audit import AuditRecord
 from src.app.domain.characterization_analysis import (
     evaluate_characterization_analysis_scope,
     get_characterization_analysis_spec,
+    resolve_characterization_prerequisite_state,
     validate_characterization_analysis_config,
 )
 from src.app.domain.datasets import (
@@ -506,6 +507,29 @@ class TaskSubmissionService:
                 category="validation",
                 message="analysis_id is not recognized for the selected design.",
             )
+        prerequisite_state, prerequisite_requirement = (
+            resolve_characterization_prerequisite_state(
+                spec=spec,
+                upstream_results_by_analysis_id=_input_result_refs_by_analysis_id(
+                    setup.input_result_refs
+                ),
+            )
+        )
+        if prerequisite_state != "ready":
+            raise service_error(
+                422,
+                code="characterization_upstream_result_required",
+                category="validation",
+                message=(
+                    prerequisite_requirement.summary
+                    if prerequisite_requirement is not None
+                    and len(prerequisite_requirement.summary) > 0
+                    else (
+                        "The selected characterization analysis requires an upstream "
+                        "persisted result before it can run."
+                    )
+                ),
+            )
         if not spec.local_runtime_supported:
             raise service_error(
                 409,
@@ -561,6 +585,7 @@ class TaskSubmissionService:
             analysis_id=setup.analysis_id,
             selected_trace_ids=setup.selected_trace_ids,
             analysis_config=dict(setup.analysis_config),
+            input_result_refs=setup.input_result_refs,
             input_collection_payload=(
                 self._trace_collection_service.derive_input_collection_payload_from_trace_details(
                     tuple(trace_details)
@@ -649,6 +674,13 @@ def _dispatch_error_payload(
 
 def _normalize_runtime_lane(lane: str) -> str:
     return "simulation" if lane == "post_processing" else lane
+
+
+def _input_result_refs_by_analysis_id(input_result_refs):
+    refs_by_analysis_id: dict[str, list[object]] = {}
+    for ref in input_result_refs:
+        refs_by_analysis_id.setdefault(ref.analysis_id, []).append(ref)
+    return {analysis_id: tuple(refs) for analysis_id, refs in refs_by_analysis_id.items()}
 
 
 def _task_resource(task: TaskDetail | str):

@@ -17,12 +17,14 @@ TraceStageKind = Literal["raw", "preprocess", "postprocess"]
 CharacterizationResultStatus = Literal["completed", "failed", "blocked"]
 CharacterizationTaggingStatus = Literal["applied", "already_applied"]
 CharacterizationAvailabilityState = Literal["recommended", "available", "unavailable"]
+CharacterizationPrerequisiteState = Literal["ready", "requires_upstream_result", "blocked"]
+CharacterizationCollectionReadinessState = Literal["ready", "inspect_only", "blocked"]
 TraceCapabilityStatus = Literal["eligible", "ineligible"]
 RawDataIngestionKind = Literal["measurement", "layout_simulation"]
 SimulationResultPublicationState = Literal["published", "already_published"]
 ResultTracePublicationState = SimulationResultPublicationState
 CharacterizationArtifactViewKind = Literal["table", "plot", "text", "json", "preset_query"]
-CharacterizationArtifactAxisRole = Literal["input", "derived"]
+CharacterizationArtifactAxisRole = Literal["input", "derived", "member"]
 CharacterizationArtifactQueryStyle = Literal["preset_driven", "static"]
 CharacterizationArtifactQueryField = Literal["view_mode", "preset_id"]
 
@@ -254,6 +256,63 @@ class CharacterizationInputCollectionPayload:
 
 
 @dataclass(frozen=True)
+class CharacterizationCollectionMemberSummary:
+    member_key: str
+    trace_id: str
+    label: str
+    source_kind: TraceSourceKind
+    stage_kind: TraceStageKind
+    trace_mode_group: TraceModeGroup
+    family: TraceFamily
+    parameter: str
+    representation: str
+    provenance_summary: str
+    axis_signature: str
+    collection_key: str | None = None
+
+
+@dataclass(frozen=True)
+class CharacterizationInputResultRef:
+    analysis_id: str
+    result_id: str
+    run_id: str | None = None
+    artifact_id: str | None = None
+    contract_version: str | None = None
+    title: str | None = None
+
+
+@dataclass(frozen=True)
+class CharacterizationUpstreamResultRequirement:
+    required_upstream_analysis_ids: tuple[str, ...]
+    satisfied_result_refs: tuple[CharacterizationInputResultRef, ...] = ()
+    summary: str = ""
+
+
+@dataclass(frozen=True)
+class CharacterizationReviewAnalysisSummary:
+    analysis_id: str
+    label: str
+    availability_state: CharacterizationAvailabilityState
+    prerequisite_state: CharacterizationPrerequisiteState
+    summary: str
+
+
+@dataclass(frozen=True)
+class CharacterizationDataCollectionReview:
+    selected_trace_ids: tuple[str, ...]
+    selection_summary: str
+    shared_axes: tuple[InputCollectionAxis, ...]
+    available_sweep_axes: tuple[str, ...]
+    collection_members: tuple[CharacterizationCollectionMemberSummary, ...]
+    source_coverage: dict[str, int]
+    grouping_summary: str
+    readiness_state: CharacterizationCollectionReadinessState
+    runnable_analyses: tuple[CharacterizationReviewAnalysisSummary, ...]
+    blocked_analyses: tuple[CharacterizationReviewAnalysisSummary, ...]
+    collection_projection: TraceCollectionProjection | None = None
+
+
+@dataclass(frozen=True)
 class TraceMetadataSummary:
     trace_id: str
     dataset_id: str
@@ -454,6 +513,9 @@ class CharacterizationAnalysisRegistryRow:
     availability_state: CharacterizationAvailabilityState
     required_config_fields: tuple[str, ...]
     trace_compatibility: CharacterizationAnalysisTraceCompatibility
+    prerequisite_state: CharacterizationPrerequisiteState = "ready"
+    upstream_result_requirement: CharacterizationUpstreamResultRequirement | None = None
+    downstream_unlock_analysis_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -465,6 +527,7 @@ class CharacterizationAnalysisRegistryQuery:
 class CharacterizationAnalysisRegistryResult:
     rows: tuple[CharacterizationAnalysisRegistryRow, ...]
     input_collection_payload: CharacterizationInputCollectionPayload | None = None
+    data_collection_review: CharacterizationDataCollectionReview | None = None
 
     def __iter__(self):
         return iter(self.rows)
@@ -490,6 +553,7 @@ class CharacterizationRunHistoryRow:
     provenance_summary: str
     updated_at: str
     result_id: str | None = None
+    input_result_refs: tuple[CharacterizationInputResultRef, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -532,6 +596,7 @@ class CharacterizationArtifactPreset:
     x_axis: str | None = None
     y_metric: str | None = None
     series_axis: str | None = None
+    compare_axis: str | None = None
 
 
 @dataclass(frozen=True)
@@ -632,6 +697,8 @@ class CharacterizationResultDetail:
     diagnostics: tuple[CharacterizationDiagnostic, ...]
     artifact_refs: tuple[CharacterizationArtifactRef, ...]
     identify_surface: CharacterizationIdentifySurface
+    input_result_refs: tuple[CharacterizationInputResultRef, ...] = ()
+    downstream_unlock_analysis_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
