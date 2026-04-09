@@ -339,10 +339,10 @@ export function useCharacterizationWorkflowData({
         : Promise.resolve(undefined),
   );
 
-  const resolvedResultId = resolveSelectedCharacterizationResultId(
-    selectedResultId,
-    resultsQuery.data?.rows,
-  );
+  const resolvedResultId =
+    resultsQuery.data?.rows && resultsQuery.data.rows.length > 0
+      ? resolveSelectedCharacterizationResultId(selectedResultId, resultsQuery.data.rows)
+      : selectedResultId;
   const detailKey =
     activeDatasetId && resolvedDesignId && resolvedResultId
       ? characterizationResultDetailKey(activeDatasetId, resolvedDesignId, resolvedResultId)
@@ -362,8 +362,13 @@ export function useCharacterizationWorkflowData({
   }, [designsQuery.data?.rows]);
 
   useEffect(() => {
+    const rows = resultsQuery.data?.rows;
+    if (!rows || rows.length === 0) {
+      return;
+    }
+
     setSelectedResultId((current) =>
-      resolveSelectedCharacterizationResultId(current, resultsQuery.data?.rows),
+      resolveSelectedCharacterizationResultId(current, rows),
     );
   }, [resultsQuery.data?.rows]);
 

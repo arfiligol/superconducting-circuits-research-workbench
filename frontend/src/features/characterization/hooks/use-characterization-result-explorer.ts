@@ -11,6 +11,7 @@ import type {
 } from "@/features/characterization/lib/contracts";
 import {
   buildCharacterizationArtifactPayloadRequest,
+  resolveCharacterizationArtifactCompatibilityPayload,
   resolveCharacterizationArtifactPresetId,
   resolveCharacterizationArtifactPresetViews,
   resolveCharacterizationArtifactSelection,
@@ -63,6 +64,14 @@ export function useCharacterizationResultExplorer({
         presetId: resolvedPresetId,
       }),
     [resolvedPresetId, resolvedViewMode, selectedArtifact],
+  );
+  const compatibilityPayload = useMemo(
+    () =>
+      resolveCharacterizationArtifactCompatibilityPayload({
+        resultDetail,
+        artifact: selectedArtifact,
+      }),
+    [resultDetail, selectedArtifact],
   );
 
   useEffect(() => {
@@ -122,10 +131,14 @@ export function useCharacterizationResultExplorer({
     availablePresetViews,
     resolvedPresetId,
     setSelectedPresetId,
-    payload: (payloadQuery.data as CharacterizationArtifactPayload | undefined) ?? null,
-    payloadError: payloadQuery.error as Error | undefined,
-    isPayloadLoading: payloadQuery.isLoading,
-    isPayloadRefreshing: payloadQuery.isValidating && !payloadQuery.isLoading,
+    payload:
+      (payloadQuery.data as CharacterizationArtifactPayload | undefined) ??
+      compatibilityPayload ??
+      null,
+    payloadError: compatibilityPayload ? undefined : (payloadQuery.error as Error | undefined),
+    isPayloadLoading: payloadQuery.isLoading && compatibilityPayload === null,
+    isPayloadRefreshing:
+      payloadQuery.isValidating && !payloadQuery.isLoading && compatibilityPayload === null,
   };
 }
 
