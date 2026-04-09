@@ -2,37 +2,44 @@ import { apiRequest, apiRequestEnvelope } from "@/lib/api/client";
 import { traceListKey } from "@/lib/api/datasets";
 
 import type {
+  CharacterizationAnalysisRegistry,
   CharacterizationAnalysisRegistryRow,
-  CharacterizationArtifactAxisContract,
-  CharacterizationArtifactAxisDescriptor,
-  CharacterizationArtifactAxisSummary,
-  CharacterizationArtifactManifestEntry,
+  CharacterizationArtifactAxisRole,
+  CharacterizationArtifactAxisSpec,
   CharacterizationArtifactManifestViewKind,
   CharacterizationArtifactPayload,
-  CharacterizationArtifactPayloadColumn,
-  CharacterizationArtifactPayloadSeries,
-  CharacterizationArtifactPresetView,
+  CharacterizationArtifactPayloadViewKind,
+  CharacterizationArtifactPreset,
   CharacterizationArtifactQueryField,
   CharacterizationArtifactQuerySpec,
   CharacterizationArtifactQueryStyle,
-  CharacterizationArtifactViewMode,
+  CharacterizationArtifactRef,
   CharacterizationArtifactViewModeDefault,
   CharacterizationAppliedTag,
   CharacterizationAvailabilityState,
+  CharacterizationCollectionMemberSummary,
+  CharacterizationCollectionReadinessState,
+  CharacterizationDataCollectionReview,
   CharacterizationDesignatedMetricOption,
   CharacterizationDiagnostic,
   CharacterizationIdentifySurface,
+  CharacterizationInputCollectionAxis,
   CharacterizationInputCollectionPayload,
+  CharacterizationInputCollectionTraceSummary,
+  CharacterizationInputResultRef,
   CharacterizationPagedRows,
+  CharacterizationPrerequisiteState,
   CharacterizationResultDetail,
   CharacterizationResultStatus,
   CharacterizationResultSummary,
+  CharacterizationReviewAnalysisSummary,
   CharacterizationRunHistoryRow,
   CharacterizationSourceParameterOption,
   CharacterizationTaggingInput,
   CharacterizationTaggingResult,
   CharacterizationTraceCollectionProjection,
   CharacterizationTraceSelectionRow,
+  CharacterizationUpstreamResultRequirement,
 } from "@/features/characterization/lib/contracts";
 
 type CharacterizationAnalysisRegistryRowResponse = Readonly<{
@@ -46,6 +53,15 @@ type CharacterizationAnalysisRegistryRowResponse = Readonly<{
     recommended_trace_modes: readonly string[];
     summary: string;
   }>;
+  prerequisite_state: CharacterizationPrerequisiteState;
+  upstream_result_requirement:
+    | Readonly<{
+        required_upstream_analysis_ids: readonly string[];
+        satisfied_result_refs: readonly CharacterizationInputResultRefResponse[];
+        summary: string;
+      }>
+    | null;
+  downstream_unlock_analysis_ids: readonly string[];
 }>;
 
 type CharacterizationRunHistoryRowResponse = Readonly<{
@@ -84,72 +100,150 @@ type CharacterizationDiagnosticResponse = Readonly<{
   blocking: boolean;
 }>;
 
-type CharacterizationArtifactAxisDescriptorResponse = Readonly<{
-  key: string;
+type CharacterizationInputCollectionAxisResponse = Readonly<{
+  name: string;
+  unit: string | null;
+  length: number;
+  values?: readonly number[] | null;
+}>;
+
+type CharacterizationInputCollectionTraceSummaryResponse = Readonly<{
+  trace_id: string;
+  family: string;
+  parameter: string;
+  representation: string;
+  axis_signature: string;
+  collection_key?: string | null;
+}>;
+
+type CharacterizationTraceCollectionProjectionResponse =
+  | Readonly<{
+      collection_id?: string | null;
+      label: string;
+      summary: string;
+      trace_count?: number | null;
+    }>
+  | Readonly<{
+      collection_key?: string | null;
+      kind?: string | null;
+      group_label?: string | null;
+    }>;
+
+type CharacterizationInputCollectionPayloadResponse = Readonly<{
+  selected_trace_ids: readonly string[];
+  trace_count: number;
+  axis_signature: string | null;
+  available_sweep_axes: readonly string[];
+  shared_axes: readonly CharacterizationInputCollectionAxisResponse[];
+  grouping_summary: string;
+  collection_projection?: CharacterizationTraceCollectionProjectionResponse | null;
+  traces?: readonly CharacterizationInputCollectionTraceSummaryResponse[] | null;
+}>;
+
+type CharacterizationCollectionMemberSummaryResponse = Readonly<{
+  member_key: string;
+  trace_id: string;
+  label: string;
+  source_kind: string;
+  stage_kind: string;
+  trace_mode_group: string;
+  family: string;
+  parameter: string;
+  representation: string;
+  provenance_summary: string;
+  axis_signature: string;
+  collection_key?: string | null;
+}>;
+
+type CharacterizationReviewAnalysisSummaryResponse = Readonly<{
+  analysis_id: string;
+  label: string;
+  availability_state: CharacterizationAvailabilityState;
+  prerequisite_state: CharacterizationPrerequisiteState;
+  summary: string;
+}>;
+
+type CharacterizationDataCollectionReviewResponse = Readonly<{
+  selected_trace_ids: readonly string[];
+  selection_summary: string;
+  shared_axes: readonly CharacterizationInputCollectionAxisResponse[];
+  available_sweep_axes: readonly string[];
+  collection_members: readonly CharacterizationCollectionMemberSummaryResponse[];
+  source_coverage: Readonly<Record<string, number>>;
+  grouping_summary: string;
+  readiness_state: CharacterizationCollectionReadinessState;
+  runnable_analyses: readonly CharacterizationReviewAnalysisSummaryResponse[];
+  blocked_analyses: readonly CharacterizationReviewAnalysisSummaryResponse[];
+  collection_projection?: CharacterizationTraceCollectionProjectionResponse | null;
+}>;
+
+type CharacterizationAnalysisRegistryResponse = Readonly<{
+  rows: readonly CharacterizationAnalysisRegistryRowResponse[];
+  input_collection_payload: CharacterizationInputCollectionPayloadResponse | null;
+  data_collection_review: CharacterizationDataCollectionReviewResponse | null;
+}>;
+
+type CharacterizationInputResultRefResponse = Readonly<{
+  analysis_id: string;
+  result_id: string;
+  run_id?: string | null;
+  artifact_id?: string | null;
+  contract_version?: string | null;
+  title?: string | null;
+}>;
+
+type CharacterizationArtifactAxisSpecResponse = Readonly<{
+  axis_key: string;
+  label: string;
+  role: CharacterizationArtifactAxisRole;
+  unit: string | null;
+  length: number;
+}>;
+
+type CharacterizationArtifactMetricSpecResponse = Readonly<{
+  metric_key: string;
   label: string;
   unit: string | null;
-  family: CharacterizationArtifactAxisDescriptor["family"];
 }>;
 
-type CharacterizationArtifactAxisSummaryResponse = Readonly<{
-  input_axes: readonly CharacterizationArtifactAxisDescriptorResponse[];
-  derived_axes: readonly CharacterizationArtifactAxisDescriptorResponse[];
-  metrics: readonly CharacterizationArtifactAxisDescriptorResponse[];
-}>;
-
-type CharacterizationArtifactAxisContractResponse = Readonly<{
-  row_axis: string | null;
-  column_axis: string | null;
-  x_axis: string | null;
-  y_axis: string | null;
-  series_axis: string | null;
-  metric: string | null;
-}>;
-
-type CharacterizationArtifactPresetViewResponse = Readonly<{
+type CharacterizationArtifactPresetResponse = Readonly<{
   preset_id: string;
   label: string;
-  description: string;
-  view_mode: CharacterizationArtifactViewMode;
-  is_default: boolean;
-  axis_contract: CharacterizationArtifactAxisContractResponse;
+  view_kind: "table" | "plot";
+  rows_axis?: string | null;
+  columns_axis?: string | null;
+  cell_metric?: string | null;
+  x_axis?: string | null;
+  y_metric?: string | null;
+  series_axis?: string | null;
+  compare_axis?: string | null;
 }>;
 
 type CharacterizationArtifactQuerySpecResponse = Readonly<{
   query_style: CharacterizationArtifactQueryStyle;
   supported_query_fields: readonly CharacterizationArtifactQueryField[];
-  supported_view_modes: readonly CharacterizationArtifactViewMode[];
-  supported_preset_ids: readonly string[];
-  default_preset_id: string | null;
-  default_presets_by_view_mode: readonly Readonly<{
-    view_mode: CharacterizationArtifactViewMode;
+  supported_view_modes: readonly CharacterizationArtifactPayloadViewKind[];
+  supported_preset_ids?: readonly string[] | null;
+  default_preset_id?: string | null;
+  default_presets_by_view_mode?: readonly Readonly<{
+    view_mode: CharacterizationArtifactPayloadViewKind;
     preset_id: string;
-  }>[];
+  }>[] | null;
 }>;
 
-type CharacterizationArtifactManifestEntryResponse = Readonly<{
+type CharacterizationArtifactRefResponse = Readonly<{
   artifact_id: string;
   category: string;
   view_kind: CharacterizationArtifactManifestViewKind;
   title: string;
-  summary: string;
   payload_format: "json" | "markdown" | "svg" | "csv";
   payload_locator: string | null;
-  supported_view_modes: readonly CharacterizationArtifactViewMode[];
-  supported_preset_ids: readonly string[];
-  default_preset_id: string | null;
-  axis_summary: CharacterizationArtifactAxisSummaryResponse;
-  preset_views: readonly CharacterizationArtifactPresetViewResponse[];
-  query_spec: CharacterizationArtifactQuerySpecResponse;
-}>;
-
-type CharacterizationInputCollectionPayloadResponse = Readonly<{
-  source_trace_ids: readonly string[];
-  available_sweep_axes: readonly string[];
-  shared_axes: readonly CharacterizationArtifactAxisDescriptorResponse[];
-  grouping_summary: string;
-  readiness_state: CharacterizationInputCollectionPayload["readinessState"];
-  collection_count: number;
+  axes?: readonly CharacterizationArtifactAxisSpecResponse[] | null;
+  metric?: CharacterizationArtifactMetricSpecResponse | null;
+  presets?: readonly CharacterizationArtifactPresetResponse[] | null;
+  default_preset_id?: string | null;
+  query_spec?: CharacterizationArtifactQuerySpecResponse | null;
+  identify_source?: boolean | null;
 }>;
 
 type CharacterizationResultDetailResponse = Readonly<{
@@ -164,15 +258,16 @@ type CharacterizationResultDetailResponse = Readonly<{
   trace_count: number;
   updated_at: string;
   input_trace_ids: readonly string[];
-  input_collection_payload: CharacterizationInputCollectionPayloadResponse | null;
+  input_result_refs: readonly CharacterizationInputResultRefResponse[];
   payload: Readonly<Record<string, unknown>>;
   diagnostics: readonly CharacterizationDiagnosticResponse[];
-  artifact_manifest: readonly CharacterizationArtifactManifestEntryResponse[];
+  artifact_refs: readonly CharacterizationArtifactRefResponse[];
   identify_surface: Readonly<{
     source_parameters: readonly CharacterizationSourceParameterResponse[];
     designated_metrics: readonly CharacterizationDesignatedMetricOptionResponse[];
     applied_tags: readonly CharacterizationAppliedTagResponse[];
   }>;
+  downstream_unlock_analysis_ids: readonly string[];
 }>;
 
 type CharacterizationSourceParameterResponse = Readonly<{
@@ -264,62 +359,18 @@ type CharacterizationTraceSelectionRowResponse = Readonly<{
     | null;
   axis_signature?: string | null;
   available_sweep_axes?: readonly string[] | null;
-  collection_projection?:
-    | Readonly<{
-        collection_id?: string | null;
-        label: string;
-        summary: string;
-        trace_count?: number | null;
-      }>
-    | Readonly<{
-        collection_key?: string | null;
-        kind?: string | null;
-        group_label?: string | null;
-      }>
-    | null;
-}>;
-
-type CharacterizationArtifactPayloadColumnResponse = Readonly<{
-  key: string;
-  label: string;
-  role: CharacterizationArtifactPayloadColumn["role"];
-}>;
-
-type CharacterizationArtifactPayloadSeriesResponse = Readonly<{
-  series_id: string;
-  label: string;
-  values: readonly (number | null)[];
+  collection_projection?: CharacterizationTraceCollectionProjectionResponse | null;
 }>;
 
 type CharacterizationArtifactPayloadResponse = Readonly<{
-  result_id?: string | null;
-  run_id?: string | null;
   artifact_id: string;
   title: string;
-  summary: string;
-  view_mode: CharacterizationArtifactViewMode;
-  preset_id: string | null;
-  axis_contract: CharacterizationArtifactAxisContractResponse;
-  preset_views: readonly CharacterizationArtifactPresetViewResponse[];
-  warnings?: readonly string[] | null;
-  columns?: readonly CharacterizationArtifactPayloadColumnResponse[] | null;
-  rows?: readonly Readonly<Record<string, string | number | null>>[] | null;
-  plot?:
-    | Readonly<{
-        x_axis: Readonly<{
-          key: string;
-          label: string;
-          values: readonly (string | number)[];
-        }>;
-        y_axis: Readonly<{
-          key: string;
-          label: string;
-        }>;
-        series: readonly CharacterizationArtifactPayloadSeriesResponse[];
-      }>
-    | null;
-  text_payload?: string | null;
-  json_payload?: Readonly<Record<string, unknown>> | readonly unknown[] | null;
+  preset_id: string;
+  view_kind: CharacterizationArtifactPayloadViewKind;
+  axes: readonly CharacterizationArtifactAxisSpecResponse[];
+  metric?: CharacterizationArtifactMetricSpecResponse | null;
+  payload: Readonly<Record<string, unknown>>;
+  diagnostics?: readonly CharacterizationDiagnosticResponse[] | null;
 }>;
 
 export function characterizationResultsListKey(datasetId: string, designId: string) {
@@ -350,20 +401,24 @@ export function characterizationArtifactPayloadKey(
   resultId: string,
   artifactId: string,
   options: Readonly<{
-    viewMode: CharacterizationArtifactViewMode;
+    viewMode?: CharacterizationArtifactPayloadViewKind | null;
     presetId?: string | null;
   }>,
 ) {
   const params = new URLSearchParams();
-  params.set("view_mode", options.viewMode);
+  if (options.viewMode) {
+    params.set("view_mode", options.viewMode);
+  }
   if (options.presetId) {
     params.set("preset_id", options.presetId);
   }
-  return `${characterizationResultDetailKey(
+  const search = params.toString();
+  const path = `${characterizationResultDetailKey(
     datasetId,
     designId,
     resultId,
-  )}/artifacts/${encodeURIComponent(artifactId)}/payload?${params.toString()}`;
+  )}/artifacts/${encodeURIComponent(artifactId)}`;
+  return search ? `${path}?${search}` : path;
 }
 
 export function characterizationAnalysisRegistryKey(
@@ -430,70 +485,251 @@ function mapCharacterizationDiagnostic(
   };
 }
 
-function mapCharacterizationArtifactAxisDescriptor(
-  payload: CharacterizationArtifactAxisDescriptorResponse,
-): CharacterizationArtifactAxisDescriptor {
+function mapCharacterizationInputCollectionAxis(
+  payload: CharacterizationInputCollectionAxisResponse,
+): CharacterizationInputCollectionAxis {
   return {
-    key: payload.key,
-    label: payload.label,
-    unit: payload.unit,
+    name: payload.name,
+    unit: payload.unit ?? null,
+    length: payload.length,
+    values: [...(payload.values ?? [])],
+  };
+}
+
+function mapCharacterizationTraceCollectionProjection(
+  payload: CharacterizationTraceCollectionProjectionResponse | null | undefined,
+): CharacterizationTraceCollectionProjection | null {
+  if (!payload) {
+    return null;
+  }
+
+  if ("label" in payload && "summary" in payload) {
+    return {
+      collectionId: payload.collection_id ?? null,
+      label: payload.label,
+      summary: payload.summary,
+      traceCount: payload.trace_count ?? 0,
+    };
+  }
+
+  return {
+    collectionId: payload.collection_key ?? null,
+    label: payload.group_label?.trim() || payload.collection_key || "Collection",
+    summary:
+      payload.kind === "trace_structure_group"
+        ? "Shared trace structure"
+        : payload.kind?.replaceAll("_", " ") || "Sweep-aware grouping",
+    traceCount: 0,
+  };
+}
+
+function mapCharacterizationInputCollectionTraceSummary(
+  payload: CharacterizationInputCollectionTraceSummaryResponse,
+): CharacterizationInputCollectionTraceSummary {
+  return {
+    traceId: payload.trace_id,
     family: payload.family,
+    parameter: payload.parameter,
+    representation: payload.representation,
+    axisSignature: payload.axis_signature,
+    collectionKey: payload.collection_key ?? null,
   };
 }
 
-function mapCharacterizationArtifactAxisSummary(
-  payload: CharacterizationArtifactAxisSummaryResponse,
-): CharacterizationArtifactAxisSummary {
+function mapCharacterizationInputCollectionPayload(
+  payload: CharacterizationInputCollectionPayloadResponse | null,
+): CharacterizationInputCollectionPayload | null {
+  if (!payload) {
+    return null;
+  }
+
   return {
-    inputAxes: payload.input_axes.map(mapCharacterizationArtifactAxisDescriptor),
-    derivedAxes: payload.derived_axes.map(mapCharacterizationArtifactAxisDescriptor),
-    metrics: payload.metrics.map(mapCharacterizationArtifactAxisDescriptor),
+    selectedTraceIds: [...payload.selected_trace_ids],
+    traceCount: payload.trace_count,
+    axisSignature: payload.axis_signature ?? null,
+    availableSweepAxes: [...payload.available_sweep_axes],
+    sharedAxes: payload.shared_axes.map(mapCharacterizationInputCollectionAxis),
+    groupingSummary: payload.grouping_summary,
+    collectionProjection: mapCharacterizationTraceCollectionProjection(
+      payload.collection_projection,
+    ),
+    traces: (payload.traces ?? []).map(mapCharacterizationInputCollectionTraceSummary),
   };
 }
 
-function mapCharacterizationArtifactAxisContract(
-  payload: CharacterizationArtifactAxisContractResponse,
-): CharacterizationArtifactAxisContract {
+function mapCharacterizationInputResultRef(
+  payload: CharacterizationInputResultRefResponse,
+): CharacterizationInputResultRef {
   return {
-    rowAxis: payload.row_axis,
-    columnAxis: payload.column_axis,
-    xAxis: payload.x_axis,
-    yAxis: payload.y_axis,
-    seriesAxis: payload.series_axis,
-    metric: payload.metric,
+    analysisId: payload.analysis_id,
+    resultId: payload.result_id,
+    runId: payload.run_id ?? null,
+    artifactId: payload.artifact_id ?? null,
+    contractVersion: payload.contract_version ?? null,
+    title: payload.title ?? null,
   };
 }
 
-function mapCharacterizationArtifactPresetView(
-  payload: CharacterizationArtifactPresetViewResponse,
-): CharacterizationArtifactPresetView {
+function mapCharacterizationUpstreamResultRequirement(
+  payload: CharacterizationAnalysisRegistryRowResponse["upstream_result_requirement"],
+): CharacterizationUpstreamResultRequirement | null {
+  if (!payload) {
+    return null;
+  }
+
   return {
-    presetId: payload.preset_id,
+    requiredUpstreamAnalysisIds: [...payload.required_upstream_analysis_ids],
+    satisfiedResultRefs: payload.satisfied_result_refs.map(mapCharacterizationInputResultRef),
+    summary: payload.summary,
+  };
+}
+
+function mapCharacterizationReviewAnalysisSummary(
+  payload: CharacterizationReviewAnalysisSummaryResponse,
+): CharacterizationReviewAnalysisSummary {
+  return {
+    analysisId: payload.analysis_id,
     label: payload.label,
-    description: payload.description,
-    viewMode: payload.view_mode,
-    isDefault: payload.is_default,
-    axisContract: mapCharacterizationArtifactAxisContract(payload.axis_contract),
+    availabilityState: payload.availability_state,
+    prerequisiteState: payload.prerequisite_state,
+    summary: payload.summary,
   };
 }
 
-function mapCharacterizationArtifactQuerySpec(
-  payload: CharacterizationArtifactQuerySpecResponse,
-): CharacterizationArtifactQuerySpec {
+function mapCharacterizationCollectionMemberSummary(
+  payload: CharacterizationCollectionMemberSummaryResponse,
+): CharacterizationCollectionMemberSummary {
   return {
-    queryStyle: payload.query_style,
-    supportedQueryFields: [...payload.supported_query_fields],
-    supportedViewModes: [...payload.supported_view_modes],
-    supportedPresetIds: [...payload.supported_preset_ids],
-    defaultPresetId: payload.default_preset_id,
-    defaultPresetsByViewMode: payload.default_presets_by_view_mode.map(
-      mapCharacterizationArtifactViewModeDefault,
+    memberKey: payload.member_key,
+    traceId: payload.trace_id,
+    label: payload.label,
+    sourceKind: payload.source_kind,
+    stageKind: payload.stage_kind,
+    traceModeGroup: payload.trace_mode_group,
+    family: payload.family,
+    parameter: payload.parameter,
+    representation: payload.representation,
+    provenanceSummary: payload.provenance_summary,
+    axisSignature: payload.axis_signature,
+    collectionKey: payload.collection_key ?? null,
+  };
+}
+
+function mapCharacterizationDataCollectionReview(
+  payload: CharacterizationDataCollectionReviewResponse | null,
+): CharacterizationDataCollectionReview | null {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    selectedTraceIds: [...payload.selected_trace_ids],
+    selectionSummary: payload.selection_summary,
+    sharedAxes: payload.shared_axes.map(mapCharacterizationInputCollectionAxis),
+    availableSweepAxes: [...payload.available_sweep_axes],
+    collectionMembers: payload.collection_members.map(
+      mapCharacterizationCollectionMemberSummary,
+    ),
+    sourceCoverage: payload.source_coverage,
+    groupingSummary: payload.grouping_summary,
+    readinessState: payload.readiness_state,
+    runnableAnalyses: payload.runnable_analyses.map(mapCharacterizationReviewAnalysisSummary),
+    blockedAnalyses: payload.blocked_analyses.map(mapCharacterizationReviewAnalysisSummary),
+    collectionProjection: mapCharacterizationTraceCollectionProjection(
+      payload.collection_projection,
     ),
   };
 }
 
+function mapCharacterizationAnalysisRegistryRow(
+  payload: CharacterizationAnalysisRegistryRowResponse,
+): CharacterizationAnalysisRegistryRow {
+  return {
+    analysisId: payload.analysis_id,
+    label: payload.label,
+    availabilityState: payload.availability_state,
+    requiredConfigFields: [...payload.required_config_fields],
+    traceCompatibility: {
+      matchedTraceCount: payload.trace_compatibility.matched_trace_count,
+      selectedTraceCount: payload.trace_compatibility.selected_trace_count,
+      recommendedTraceModes: [...payload.trace_compatibility.recommended_trace_modes],
+      summary: payload.trace_compatibility.summary,
+    },
+    prerequisiteState: payload.prerequisite_state,
+    upstreamResultRequirement: mapCharacterizationUpstreamResultRequirement(
+      payload.upstream_result_requirement,
+    ),
+    downstreamUnlockAnalysisIds: [...payload.downstream_unlock_analysis_ids],
+  };
+}
+
+function mapCharacterizationRunHistoryRow(
+  payload: CharacterizationRunHistoryRowResponse,
+): CharacterizationRunHistoryRow {
+  return {
+    runId: payload.run_id,
+    datasetId: payload.dataset_id,
+    designId: payload.design_id,
+    analysisId: payload.analysis_id,
+    label: payload.label,
+    status: payload.status,
+    scope: payload.scope,
+    traceCount: payload.trace_count,
+    sourcesSummary: payload.sources_summary,
+    provenanceSummary: payload.provenance_summary,
+    updatedAt: payload.updated_at,
+    resultId: payload.result_id,
+  };
+}
+
+function mapCharacterizationArtifactAxisSpec(
+  payload: CharacterizationArtifactAxisSpecResponse,
+): CharacterizationArtifactAxisSpec {
+  return {
+    axisKey: payload.axis_key,
+    label: payload.label,
+    role: payload.role,
+    unit: payload.unit,
+    length: payload.length,
+  };
+}
+
+function mapCharacterizationArtifactMetricSpec(
+  payload: CharacterizationArtifactMetricSpecResponse | null | undefined,
+) {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    metricKey: payload.metric_key,
+    label: payload.label,
+    unit: payload.unit,
+  };
+}
+
+function mapCharacterizationArtifactPreset(
+  payload: CharacterizationArtifactPresetResponse,
+): CharacterizationArtifactPreset {
+  return {
+    presetId: payload.preset_id,
+    label: payload.label,
+    viewKind: payload.view_kind,
+    rowsAxis: payload.rows_axis ?? null,
+    columnsAxis: payload.columns_axis ?? null,
+    cellMetric: payload.cell_metric ?? null,
+    xAxis: payload.x_axis ?? null,
+    yMetric: payload.y_metric ?? null,
+    seriesAxis: payload.series_axis ?? null,
+    compareAxis: payload.compare_axis ?? null,
+  };
+}
+
 function mapCharacterizationArtifactViewModeDefault(
-  payload: CharacterizationArtifactQuerySpecResponse["default_presets_by_view_mode"][number],
+  payload: Readonly<{
+    view_mode: CharacterizationArtifactPayloadViewKind;
+    preset_id: string;
+  }>,
 ): CharacterizationArtifactViewModeDefault {
   return {
     viewMode: payload.view_mode,
@@ -501,23 +737,41 @@ function mapCharacterizationArtifactViewModeDefault(
   };
 }
 
-function mapCharacterizationArtifactManifestEntry(
-  payload: CharacterizationArtifactManifestEntryResponse,
-): CharacterizationArtifactManifestEntry {
+function mapCharacterizationArtifactQuerySpec(
+  payload: CharacterizationArtifactQuerySpecResponse | null | undefined,
+): CharacterizationArtifactQuerySpec | null {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    queryStyle: payload.query_style,
+    supportedQueryFields: [...payload.supported_query_fields],
+    supportedViewModes: [...payload.supported_view_modes],
+    supportedPresetIds: [...(payload.supported_preset_ids ?? [])],
+    defaultPresetId: payload.default_preset_id ?? null,
+    defaultPresetsByViewMode: (payload.default_presets_by_view_mode ?? []).map(
+      mapCharacterizationArtifactViewModeDefault,
+    ),
+  };
+}
+
+function mapCharacterizationArtifactRef(
+  payload: CharacterizationArtifactRefResponse,
+): CharacterizationArtifactRef {
   return {
     artifactId: payload.artifact_id,
     category: payload.category,
     viewKind: payload.view_kind,
     title: payload.title,
-    summary: payload.summary,
     payloadFormat: payload.payload_format,
     payloadLocator: payload.payload_locator,
-    supportedViewModes: [...payload.supported_view_modes],
-    supportedPresetIds: [...payload.supported_preset_ids],
-    defaultPresetId: payload.default_preset_id,
-    axisSummary: mapCharacterizationArtifactAxisSummary(payload.axis_summary),
-    presetViews: payload.preset_views.map(mapCharacterizationArtifactPresetView),
+    axes: (payload.axes ?? []).map(mapCharacterizationArtifactAxisSpec),
+    metric: mapCharacterizationArtifactMetricSpec(payload.metric),
+    presets: (payload.presets ?? []).map(mapCharacterizationArtifactPreset),
+    defaultPresetId: payload.default_preset_id ?? null,
     querySpec: mapCharacterizationArtifactQuerySpec(payload.query_spec),
+    identifySource: payload.identify_source ?? false,
   };
 }
 
@@ -566,23 +820,6 @@ function mapCharacterizationIdentifySurface(
   };
 }
 
-function mapCharacterizationInputCollectionPayload(
-  payload: CharacterizationInputCollectionPayloadResponse | null,
-): CharacterizationInputCollectionPayload | null {
-  if (!payload) {
-    return null;
-  }
-
-  return {
-    sourceTraceIds: [...payload.source_trace_ids],
-    availableSweepAxes: [...payload.available_sweep_axes],
-    sharedAxes: payload.shared_axes.map(mapCharacterizationArtifactAxisDescriptor),
-    groupingSummary: payload.grouping_summary,
-    readinessState: payload.readiness_state,
-    collectionCount: payload.collection_count,
-  };
-}
-
 function mapCharacterizationResultDetail(
   payload: CharacterizationResultDetailResponse,
 ): CharacterizationResultDetail {
@@ -598,13 +835,12 @@ function mapCharacterizationResultDetail(
     traceCount: payload.trace_count,
     updatedAt: payload.updated_at,
     inputTraceIds: [...payload.input_trace_ids],
-    inputCollectionPayload: mapCharacterizationInputCollectionPayload(
-      payload.input_collection_payload,
-    ),
+    inputResultRefs: payload.input_result_refs.map(mapCharacterizationInputResultRef),
     payload: payload.payload,
     diagnostics: payload.diagnostics.map(mapCharacterizationDiagnostic),
-    artifactManifest: payload.artifact_manifest.map(mapCharacterizationArtifactManifestEntry),
+    artifactRefs: payload.artifact_refs.map(mapCharacterizationArtifactRef),
     identifySurface: mapCharacterizationIdentifySurface(payload.identify_surface),
+    downstreamUnlockAnalysisIds: [...payload.downstream_unlock_analysis_ids],
   };
 }
 
@@ -626,72 +862,6 @@ function mapCharacterizationTaggingResult(
       designatedMetric: payload.tagged_metric.designated_metric,
       taggedAt: payload.tagged_metric.tagged_at,
     },
-  };
-}
-
-function mapCharacterizationAnalysisRegistryRow(
-  payload: CharacterizationAnalysisRegistryRowResponse,
-): CharacterizationAnalysisRegistryRow {
-  return {
-    analysisId: payload.analysis_id,
-    label: payload.label,
-    availabilityState: payload.availability_state,
-    requiredConfigFields: [...payload.required_config_fields],
-    traceCompatibility: {
-      matchedTraceCount: payload.trace_compatibility.matched_trace_count,
-      selectedTraceCount: payload.trace_compatibility.selected_trace_count,
-      recommendedTraceModes: [...payload.trace_compatibility.recommended_trace_modes],
-      summary: payload.trace_compatibility.summary,
-    },
-  };
-}
-
-function mapCharacterizationRunHistoryRow(
-  payload: CharacterizationRunHistoryRowResponse,
-): CharacterizationRunHistoryRow {
-  return {
-    runId: payload.run_id,
-    datasetId: payload.dataset_id,
-    designId: payload.design_id,
-    analysisId: payload.analysis_id,
-    label: payload.label,
-    status: payload.status,
-    scope: payload.scope,
-    traceCount: payload.trace_count,
-    sourcesSummary: payload.sources_summary,
-    provenanceSummary: payload.provenance_summary,
-    updatedAt: payload.updated_at,
-    resultId: payload.result_id,
-  };
-}
-
-function mapCharacterizationTraceCollectionProjection(
-  payload:
-    | CharacterizationTraceSelectionRowResponse["collection_projection"]
-    | null
-    | undefined,
-): CharacterizationTraceCollectionProjection | null {
-  if (!payload) {
-    return null;
-  }
-
-  if ("label" in payload && "summary" in payload) {
-    return {
-      collectionId: payload.collection_id ?? null,
-      label: payload.label,
-      summary: payload.summary,
-      traceCount: payload.trace_count ?? 0,
-    };
-  }
-
-  return {
-    collectionId: payload.collection_key ?? null,
-    label: payload.group_label?.trim() || payload.collection_key || "Collection",
-    summary:
-      payload.kind === "trace_structure_group"
-        ? "Shared trace structure"
-        : payload.kind?.replaceAll("_", " ") || "Sweep-aware grouping",
-    traceCount: 0,
   };
 }
 
@@ -744,7 +914,8 @@ function mapCharacterizationTraceSelectionRow(
     family: payload.family as CharacterizationTraceSelectionRow["family"],
     parameter: payload.parameter,
     representation: payload.representation,
-    trace_mode_group: payload.trace_mode_group as CharacterizationTraceSelectionRow["trace_mode_group"],
+    trace_mode_group:
+      payload.trace_mode_group as CharacterizationTraceSelectionRow["trace_mode_group"],
     source_kind: payload.source_kind as CharacterizationTraceSelectionRow["source_kind"],
     stage_kind: payload.stage_kind as CharacterizationTraceSelectionRow["stage_kind"],
     provenance_summary: payload.provenance_summary,
@@ -759,62 +930,18 @@ function mapCharacterizationTraceSelectionRow(
   };
 }
 
-function mapCharacterizationArtifactPayloadColumn(
-  payload: CharacterizationArtifactPayloadColumnResponse,
-): CharacterizationArtifactPayloadColumn {
-  return {
-    key: payload.key,
-    label: payload.label,
-    role: payload.role,
-  };
-}
-
-function mapCharacterizationArtifactPayloadSeries(
-  payload: CharacterizationArtifactPayloadSeriesResponse,
-): CharacterizationArtifactPayloadSeries {
-  return {
-    seriesId: payload.series_id,
-    label: payload.label,
-    values: [...payload.values],
-  };
-}
-
 function mapCharacterizationArtifactPayload(
   payload: CharacterizationArtifactPayloadResponse,
 ): CharacterizationArtifactPayload {
   return {
-    resultId: payload.result_id ?? payload.run_id ?? "",
     artifactId: payload.artifact_id,
     title: payload.title,
-    summary: payload.summary,
-    viewMode: payload.view_mode,
     presetId: payload.preset_id,
-    axisContract: mapCharacterizationArtifactAxisContract(payload.axis_contract),
-    presetViews: payload.preset_views.map(mapCharacterizationArtifactPresetView),
-    warnings: [...(payload.warnings ?? [])],
-    table:
-      payload.columns && payload.rows
-        ? {
-            columns: payload.columns.map(mapCharacterizationArtifactPayloadColumn),
-            rows: [...payload.rows],
-          }
-        : null,
-    plot: payload.plot
-      ? {
-          xAxis: {
-            key: payload.plot.x_axis.key,
-            label: payload.plot.x_axis.label,
-            values: [...payload.plot.x_axis.values],
-          },
-          yAxis: {
-            key: payload.plot.y_axis.key,
-            label: payload.plot.y_axis.label,
-          },
-          series: payload.plot.series.map(mapCharacterizationArtifactPayloadSeries),
-        }
-      : null,
-    textPayload: payload.text_payload ?? null,
-    jsonPayload: payload.json_payload ?? null,
+    viewKind: payload.view_kind,
+    axes: payload.axes.map(mapCharacterizationArtifactAxisSpec),
+    metric: mapCharacterizationArtifactMetricSpec(payload.metric),
+    payload: payload.payload,
+    diagnostics: (payload.diagnostics ?? []).map(mapCharacterizationDiagnostic),
   };
 }
 
@@ -882,12 +1009,19 @@ export async function listCharacterizationAnalysisRegistry(
   datasetId: string,
   designId: string,
   query?: CharacterizationAnalysisRegistryQuery,
-): Promise<readonly CharacterizationAnalysisRegistryRow[]> {
-  const response = await apiRequestEnvelope<
-    { rows: readonly CharacterizationAnalysisRegistryRowResponse[] },
-    unknown
-  >(characterizationAnalysisRegistryKey(datasetId, designId, query?.selectedTraceIds));
-  return response.data.rows.map(mapCharacterizationAnalysisRegistryRow);
+): Promise<CharacterizationAnalysisRegistry> {
+  const response = await apiRequestEnvelope<CharacterizationAnalysisRegistryResponse, unknown>(
+    characterizationAnalysisRegistryKey(datasetId, designId, query?.selectedTraceIds),
+  );
+  return {
+    rows: response.data.rows.map(mapCharacterizationAnalysisRegistryRow),
+    inputCollectionPayload: mapCharacterizationInputCollectionPayload(
+      response.data.input_collection_payload,
+    ),
+    dataCollectionReview: mapCharacterizationDataCollectionReview(
+      response.data.data_collection_review,
+    ),
+  };
 }
 
 export async function listCharacterizationRunHistory(
@@ -929,7 +1063,7 @@ export async function getCharacterizationArtifactPayload(
   resultId: string,
   artifactId: string,
   options: Readonly<{
-    viewMode: CharacterizationArtifactViewMode;
+    viewMode?: CharacterizationArtifactPayloadViewKind | null;
     presetId?: string | null;
   }>,
 ) {
@@ -943,17 +1077,17 @@ export async function applyCharacterizationTagging(
   datasetId: string,
   designId: string,
   resultId: string,
-  payload: CharacterizationTaggingInput,
+  input: CharacterizationTaggingInput,
 ) {
   const response = await apiRequest<CharacterizationTaggingResultResponse>(
     characterizationTaggingsKey(datasetId, designId, resultId),
     {
       method: "POST",
-      body: {
-        artifact_id: payload.artifactId,
-        source_parameter: payload.sourceParameter,
-        designated_metric: payload.designatedMetric,
-      },
+      body: JSON.stringify({
+        artifact_id: input.artifactId,
+        source_parameter: input.sourceParameter,
+        designated_metric: input.designatedMetric,
+      }),
     },
   );
   return mapCharacterizationTaggingResult(response);

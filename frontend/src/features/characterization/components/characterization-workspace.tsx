@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { LoaderCircle, Play, Search } from "lucide-react";
+import { ArrowRight, LoaderCircle, Play, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { CharacterizationResultExplorer } from "@/features/characterization/components/characterization-result-explorer";
 import { useCharacterizationResultExplorer } from "@/features/characterization/hooks/use-characterization-result-explorer";
 import { useCharacterizationWorkflowData } from "@/features/characterization/hooks/use-characterization-workflow-data";
+import type {
+  CharacterizationAnalysisRegistryRow,
+  CharacterizationCollectionReadinessState,
+  CharacterizationDataCollectionReview,
+  CharacterizationPrerequisiteState,
+} from "@/features/characterization/lib/contracts";
 import {
   buildCharacterizationCollectionOptions,
   buildCharacterizationSweepAxisOptions,
@@ -64,51 +70,9 @@ function buildSectionError(summary: string, error: Error | undefined) {
   return { summary, detail };
 }
 
-function uniqueStrings(values: readonly string[]) {
-  return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
-}
-
 function formatCoverageLabel(sourceCoverage: Record<string, number>) {
   const segments = Object.entries(sourceCoverage).map(([source, count]) => `${source} ${count}`);
   return segments.length > 0 ? segments.join(" · ") : "No indexed source coverage";
-}
-
-function formatTraceCompatibilityLabel(input: Readonly<{
-  matchedTraceCount: number;
-  selectedTraceCount: number;
-  recommendedTraceModes: readonly string[];
-  summary: string;
-}>) {
-  const modeLabel =
-    input.recommendedTraceModes.length > 0
-      ? input.recommendedTraceModes.join(", ")
-      : "No preferred modes";
-  const selectedLabel =
-    input.selectedTraceCount > 0
-      ? `${input.matchedTraceCount}/${input.selectedTraceCount} match`
-      : `${input.matchedTraceCount} compatible`;
-
-  return `${input.summary} · ${selectedLabel} · ${modeLabel}`;
-}
-
-function analysisAvailabilityTone(state: "recommended" | "available" | "unavailable") {
-  if (state === "recommended") {
-    return "primary" as const;
-  }
-  if (state === "unavailable") {
-    return "warning" as const;
-  }
-  return "default" as const;
-}
-
-function analysisAvailabilityGroup(state: "recommended" | "available" | "unavailable") {
-  if (state === "recommended") {
-    return "Recommended";
-  }
-  if (state === "available") {
-    return "Available";
-  }
-  return "Unavailable";
 }
 
 function formatRepresentationLabel(value: string) {
@@ -131,7 +95,7 @@ function formatRepresentationLabel(value: string) {
 function formatSourceLabel(value: string) {
   switch (value) {
     case "measurement":
-      return "Measure";
+      return "Measurement";
     case "layout_simulation":
       return "Layout";
     case "circuit_simulation":
@@ -148,7 +112,7 @@ function formatModeLabel(value: string) {
     case "sideband":
       return "Sideband";
     default:
-      return "All";
+      return value.replaceAll("_", " ");
   }
 }
 
@@ -190,6 +154,44 @@ function configPlaceholder(field: string) {
       return "baseline";
     default:
       return "Enter value";
+  }
+}
+
+function formatPipelineState(value: CharacterizationPrerequisiteState) {
+  return value.replaceAll("_", " ");
+}
+
+function pipelineStateTone(value: CharacterizationPrerequisiteState) {
+  switch (value) {
+    case "ready":
+      return "success" as const;
+    case "requires_upstream_result":
+      return "primary" as const;
+    case "blocked":
+    default:
+      return "warning" as const;
+  }
+}
+
+function availabilityTone(state: CharacterizationAnalysisRegistryRow["availabilityState"]) {
+  if (state === "recommended") {
+    return "primary" as const;
+  }
+  if (state === "unavailable") {
+    return "warning" as const;
+  }
+  return "default" as const;
+}
+
+function collectionReadinessTone(state: CharacterizationCollectionReadinessState) {
+  switch (state) {
+    case "ready":
+      return "success" as const;
+    case "inspect_only":
+      return "primary" as const;
+    case "blocked":
+    default:
+      return "warning" as const;
   }
 }
 
@@ -268,6 +270,87 @@ function SectionNotice({
   );
 }
 
+function pipelineExplanation(analysis: CharacterizationAnalysisRegistryRow | null, selectedTraceCount: number) {
+  if (!analysis) {
+    return {
+      tone: "default" as const,
+      title: "Pipeline Guidance",
+      detail:
+        selectedTraceCount > 0
+          ? "Select one pipeline step to review readiness, prerequisites, and next-step unlocks."
+          : "Select traces first, then review how the pipeline reads this collection.",
+    };
+  }
+
+  if (analysis.prerequisiteState === "ready") {
+    return {
+      tone: "success" as const,
+      title: "Runnable Now",
+      detail: analysis.traceCompatibility.summary,
+    };
+  }
+
+  if (analysis.prerequisiteState === "requires_upstream_result") {
+    return {
+      tone: "primary" as const,
+      title: "Needs Upstream Result",
+      detail:
+        analysis.upstreamResultRequirement?.summary ||
+        "This analysis depends on an upstream persisted result before it can run.",
+    };
+  }
+
+  return {
+    tone: "warning" as const,
+    title: "Blocked For This Collection",
+    detail: analysis.traceCompatibility.summary,
+  };
+}
+
+function latestRunStatusDetail(activeTask: ReturnType<typeof useCharacterizationWorkflowData>["activeTask"]) {
+  if (!activeTask) {
+    return null;
+  }
+
+  if (activeTask.resultHandoff?.availability === "ready") {
+    return {
+      title: "Result ready",
+      message: `Updated ${activeTask.progress.updatedAt}. The latest result is ready in Result Preview.`,
+    };
+  }
+
+  if (
+    activeTask.status === "failed" ||
+    activeTask.status === "terminated" ||
+    activeTask.status === "cancelled"
+  ) {
+    return {
+      title: "Run ended",
+      message: `Updated ${activeTask.progress.updatedAt}. This run ended before a saved result was available.`,
+    };
+  }
+
+  if (activeTask.resultHandoff?.availability === "pending" || activeTask.status === "completed") {
+    return {
+      title: "Saving result",
+      message: `Updated ${activeTask.progress.updatedAt}. The analysis finished and the persisted result is still being prepared.`,
+    };
+  }
+
+  return {
+    title: "In progress",
+    message: `Updated ${activeTask.progress.updatedAt}. This analysis is still running.`,
+  };
+}
+
+function reviewSummary(review: CharacterizationDataCollectionReview | null, fallbackCount: number) {
+  if (!review) {
+    return fallbackCount === 0 ? "No traces selected" : `${fallbackCount} traces selected`;
+  }
+
+  return review.selectionSummary;
+}
+
 export function CharacterizationWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
@@ -293,6 +376,8 @@ export function CharacterizationWorkspace() {
     selectedDesignId,
     setSelectedDesignId,
     analysisRegistry,
+    inputCollectionPayload,
+    dataCollectionReview,
     analysisRegistryError,
     isAnalysisRegistryLoading,
     selectedAnalysis,
@@ -300,6 +385,13 @@ export function CharacterizationWorkspace() {
     setSelectedAnalysisId,
     analysisConfigValues,
     updateAnalysisConfigValue,
+    runHistory,
+    runHistoryMeta,
+    runHistoryError,
+    isRunHistoryLoading,
+    goToNextRunHistoryPage,
+    goToPrevRunHistoryPage,
+    focusRunHistoryResult,
     results,
     resultsError,
     isResultsLoading,
@@ -342,12 +434,13 @@ export function CharacterizationWorkspace() {
   const designsErrorNotice = buildSectionError("Could not load designs.", designsError);
   const tracesErrorNotice = buildSectionError("Could not load traces.", tracesError);
   const analysisRegistryErrorNotice = buildSectionError(
-    "Could not load analyses.",
+    "Could not load characterization pipeline state.",
     analysisRegistryError,
   );
+  const runHistoryErrorNotice = buildSectionError("Could not load run history.", runHistoryError);
   const resultsErrorNotice = buildSectionError("Could not load saved results.", resultsError);
   const activeTaskErrorNotice = buildSectionError(
-    "Could not load the latest analysis.",
+    "Could not load the active analysis run.",
     activeTaskError,
   );
   const resultDetailErrorNotice = buildSectionError(
@@ -361,25 +454,8 @@ export function CharacterizationWorkspace() {
     requestedResultId,
     resolvedResultId: selectedResultId,
   });
-  const analysisOptions = useMemo(
-    () =>
-      analysisRegistry.map((analysis) => ({
-        value: analysis.analysisId,
-        label: analysis.label,
-        description: formatTraceCompatibilityLabel(analysis.traceCompatibility),
-        disabled: analysis.availabilityState === "unavailable",
-        group: analysisAvailabilityGroup(analysis.availabilityState),
-      })),
-    [analysisRegistry],
-  );
-  const sweepAxisOptions = useMemo(
-    () => buildCharacterizationSweepAxisOptions(traces),
-    [traces],
-  );
-  const collectionOptions = useMemo(
-    () => buildCharacterizationCollectionOptions(traces),
-    [traces],
-  );
+  const sweepAxisOptions = useMemo(() => buildCharacterizationSweepAxisOptions(traces), [traces]);
+  const collectionOptions = useMemo(() => buildCharacterizationCollectionOptions(traces), [traces]);
   const visibleTraces = useMemo(
     () =>
       filterCharacterizationTraceRows(traces, {
@@ -409,68 +485,23 @@ export function CharacterizationWorkspace() {
         : "border-border bg-surface";
   const showResultControls =
     results.length > 0 || resultSearch.trim() !== "" || statusFilter !== "all";
-  const noRunnableAnalyses =
-    analysisRegistry.length > 0 &&
-    analysisRegistry.every((analysis) => analysis.availabilityState === "unavailable");
-  const analysisExplanation = selectedAnalysis
-    ? {
-        tone:
-          selectedAnalysis.availabilityState === "recommended"
-            ? ("primary" as const)
-            : selectedAnalysis.availabilityState === "unavailable"
-              ? ("warning" as const)
-              : ("default" as const),
-        title:
-          selectedAnalysis.availabilityState === "unavailable"
-            ? "Readiness Explanation"
-            : "Validation Explanation",
-        detail:
-          selectedAnalysis.availabilityState === "unavailable"
-            ? formatTraceCompatibilityLabel(selectedAnalysis.traceCompatibility)
-            : `Ready for the current trace scope. ${formatTraceCompatibilityLabel(
-                selectedAnalysis.traceCompatibility,
-              )}`,
-      }
-    : noRunnableAnalyses
-      ? {
-          tone: "warning" as const,
-          title: "Readiness Explanation",
-          detail:
-            uniqueStrings(
-              analysisRegistry.map((analysis) => analysis.traceCompatibility.summary),
-            ).join(" · ") || "No analysis is runnable for this trace scope yet.",
-        }
-      : {
-          tone: "default" as const,
-          title: "Validation Explanation",
-          detail:
-            selectedTraceIds.length > 0
-              ? "Choose an analysis to review how it fits the current trace scope."
-              : "Select traces to see which analyses can run for this scope.",
-        };
-  const latestRunStatusDetail = activeTask
-    ? activeTask.resultHandoff?.availability === "ready"
-      ? {
-          title: "Result ready",
-          message: `Updated ${activeTask.progress.updatedAt}. The latest result is ready below.`,
-        }
-      : activeTask.status === "failed" ||
-          activeTask.status === "terminated" ||
-          activeTask.status === "cancelled"
-        ? {
-            title: "Run ended",
-            message: `Updated ${activeTask.progress.updatedAt}. This run ended before a saved result was available.`,
-          }
-        : activeTask.resultHandoff?.availability === "pending" || activeTask.status === "completed"
-          ? {
-              title: "Saving result",
-              message: `Updated ${activeTask.progress.updatedAt}. The analysis finished and the saved result is still being prepared.`,
-            }
-          : {
-              title: "In progress",
-              message: `Updated ${activeTask.progress.updatedAt}. This analysis is still running.`,
-            }
-    : null;
+  const selectedPipelineExplanation = pipelineExplanation(
+    selectedAnalysis,
+    selectedTraceIds.length,
+  );
+  const activeRunDetail = latestRunStatusDetail(activeTask);
+  const downstreamAnalysisIds =
+    resultDetail?.downstreamUnlockAnalysisIds.length
+      ? resultDetail.downstreamUnlockAnalysisIds
+      : selectedAnalysis?.downstreamUnlockAnalysisIds ?? [];
+  const downstreamAnalyses = downstreamAnalysisIds
+    .map((analysisId) => analysisRegistry.find((analysis) => analysis.analysisId === analysisId))
+    .filter((analysis): analysis is CharacterizationAnalysisRegistryRow => Boolean(analysis));
+  const additionalBlockedPipelineAnalyses = analysisRegistry.filter(
+    (analysis) =>
+      analysis.prerequisiteState === "requires_upstream_result" &&
+      !downstreamAnalysisIds.includes(analysis.analysisId),
+  );
 
   useEffect(() => {
     const sourceParameters = resultDetail?.identifySurface.sourceParameters ?? [];
@@ -571,7 +602,7 @@ export function CharacterizationWorkspace() {
       <SurfaceHeader
         eyebrow="Research Workflow"
         title="Characterization"
-        description="Choose a design, run a characterization analysis, and keep the latest saved result in view."
+        description="Review the backend-derived data collection, run one pipeline step at a time, and inspect member-aware results without leaving the workbench."
         actions={
           <button
             type="button"
@@ -581,9 +612,7 @@ export function CharacterizationWorkspace() {
             disabled={isRefreshingWorkflow}
             className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isRefreshingWorkflow ? (
-              <LoaderCircle className="h-4 w-4 animate-spin" />
-            ) : null}
+            {isRefreshingWorkflow ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
             Refresh
           </button>
         }
@@ -606,10 +635,10 @@ export function CharacterizationWorkspace() {
       {!activeDatasetState.activeDataset ? (
         <SurfacePanel
           title="Select Active Dataset"
-          description="Choose a dataset before running characterization analyses."
+          description="Choose a dataset before entering the characterization pipeline workbench."
         >
           <p className="text-sm leading-6 text-muted-foreground">
-            Pick a dataset in the shell to start characterization work.
+            Pick a dataset in the shell to review the design scope, derived data collection, and analysis pipeline.
           </p>
           {activeDatasetErrorNotice ? (
             <div className="mt-4">
@@ -623,15 +652,13 @@ export function CharacterizationWorkspace() {
       ) : (
         <div className="space-y-6">
           <SurfacePanel
-            title="Select Data Scope"
-            description="Choose a design and the traces that define this analysis."
+            title="Design / Source Scope"
+            description="Choose the design and raw trace scope that anchor the derived collection review."
           >
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <SurfaceTag tone="default">{activeDatasetState.activeDataset.name}</SurfaceTag>
-                <SurfaceTag tone="default">
-                  {activeDatasetState.activeDataset.datasetId}
-                </SurfaceTag>
+                <SurfaceTag tone="default">{activeDatasetState.activeDataset.datasetId}</SurfaceTag>
                 {selectedDesign ? (
                   <SurfaceTag
                     tone={selectedDesign.compare_readiness === "ready" ? "success" : "default"}
@@ -654,12 +681,13 @@ export function CharacterizationWorkspace() {
                 }))}
                 placeholder={isDesignsLoading ? "Loading designs" : "Select a design"}
               />
+
               {selectedDesign ? (
                 <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <SurfaceTag tone="default">{selectedDesign.design_id}</SurfaceTag>
                     <p className="text-sm font-medium text-foreground">
-                      {selectedDesign.trace_count} traces in view
+                      {selectedDesign.trace_count} traces in this design scope
                     </p>
                   </div>
                   <p className="mt-3 text-sm text-muted-foreground">
@@ -679,9 +707,7 @@ export function CharacterizationWorkspace() {
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {traceSelectionSummary}
-                      {visibleTraces.length !== traces.length
-                        ? ` · ${visibleTraces.length} shown`
-                        : ""}
+                      {visibleTraces.length !== traces.length ? ` · ${visibleTraces.length} shown` : ""}
                       {visibleSelectedTraceCount > 0 &&
                       visibleSelectedTraceCount !== selectedTraceIds.length
                         ? ` · ${visibleSelectedTraceCount} shown selected`
@@ -756,10 +782,10 @@ export function CharacterizationWorkspace() {
 
                   <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
                     <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Collection Projection
+                      Derived Collection Hint
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Backend grouping hints keep sweep-aware traces together without claiming value-level or provenance-derived meaning.
+                      Sweep-aware grouping stays backend-derived. These filters help you review the selected scope without inventing frontend-owned scientific meaning.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {sweepAxisOptions.map((axis) => (
@@ -813,9 +839,7 @@ export function CharacterizationWorkspace() {
                             </td>
                             <td className="px-3 py-3 align-top">
                               <p className="font-medium text-foreground">{trace.parameter}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {trace.trace_id}
-                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">{trace.trace_id}</p>
                               <p className="mt-2 text-xs text-muted-foreground">
                                 {trace.provenance_summary}
                               </p>
@@ -845,13 +869,10 @@ export function CharacterizationWorkspace() {
                                     <SurfaceTag tone="default">No sweep axis</SurfaceTag>
                                   )}
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {trace.axesSummary}
-                                </p>
+                                <p className="text-xs text-muted-foreground">{trace.axesSummary}</p>
                                 {trace.collectionProjection ? (
                                   <p className="text-xs text-muted-foreground">
-                                    {trace.collectionProjection.label} ·{" "}
-                                    {trace.collectionProjection.summary}
+                                    {trace.collectionProjection.label} · {trace.collectionProjection.summary}
                                   </p>
                                 ) : null}
                               </div>
@@ -878,36 +899,10 @@ export function CharacterizationWorkspace() {
           </SurfacePanel>
 
           <SurfacePanel
-            title="Choose Analysis & Setup"
-            description="Pick an analysis for this scope, then fill the required setup."
+            title="Data Collection Review"
+            description="Review the backend-derived scientific collection before starting any analysis run."
           >
             <div className="space-y-4">
-              <AppSelectField
-                label="Analysis"
-                value={selectedAnalysisId ?? ""}
-                onChange={setSelectedAnalysisId}
-                options={analysisOptions}
-                placeholder={
-                  isAnalysisRegistryLoading
-                    ? "Loading analyses"
-                    : noRunnableAnalyses
-                      ? "None available"
-                      : "Select an analysis"
-                }
-              />
-              <SectionNotice
-                title={analysisExplanation.title}
-                detail={analysisExplanation.detail}
-                tone={analysisExplanation.tone}
-              />
-              {selectedAnalysis ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <SurfaceTag tone={analysisAvailabilityTone(selectedAnalysis.availabilityState)}>
-                    {selectedAnalysis.availabilityState}
-                  </SurfaceTag>
-                  <SurfaceTag tone="default">{selectedAnalysis.analysisId}</SurfaceTag>
-                </div>
-              ) : null}
               {analysisRegistryErrorNotice ? (
                 <SectionNotice
                   title={analysisRegistryErrorNotice.summary}
@@ -915,67 +910,350 @@ export function CharacterizationWorkspace() {
                 />
               ) : null}
 
-              {selectedAnalysis?.requiredConfigFields.length ? (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {selectedAnalysis.requiredConfigFields.map((field) => (
-                    <label
-                      key={field}
-                      className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3"
-                    >
-                      <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        {formatConfigLabel(field)}
+              {dataCollectionReview ? (
+                <>
+                  <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Review Summary
+                        </p>
+                        <p className="mt-2 text-sm font-medium text-foreground">
+                          {reviewSummary(dataCollectionReview, selectedTraceIds.length)}
+                        </p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {dataCollectionReview.groupingSummary}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-[11px]">
+                        <SurfaceTag tone={collectionReadinessTone(dataCollectionReview.readinessState)}>
+                          {dataCollectionReview.readinessState.replaceAll("_", " ")}
+                        </SurfaceTag>
+                        <SurfaceTag tone="default">
+                          {dataCollectionReview.collectionMembers.length} members
+                        </SurfaceTag>
+                        <SurfaceTag tone="default">
+                          {dataCollectionReview.runnableAnalyses.length} runnable
+                        </SurfaceTag>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {dataCollectionReview.availableSweepAxes.map((axis) => (
+                        <SurfaceTag key={axis} tone="default">
+                          {axis}
+                        </SurfaceTag>
+                      ))}
+                      {dataCollectionReview.sharedAxes.map((axis) => (
+                        <SurfaceTag key={`${axis.name}-${axis.length}`} tone="default">
+                          {axis.name}
+                          {axis.unit ? ` (${axis.unit})` : ""}
+                        </SurfaceTag>
+                      ))}
+                      {dataCollectionReview.collectionProjection ? (
+                        <SurfaceTag tone="default">
+                          {dataCollectionReview.collectionProjection.label}
+                        </SurfaceTag>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                    <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Source Coverage
                       </p>
-                      <input
-                        value={analysisConfigValues[field] ?? ""}
-                        onChange={(event) => {
-                          updateAnalysisConfigValue(field, event.target.value);
-                        }}
-                        placeholder={configPlaceholder(field)}
-                        className="w-full rounded-[0.8rem] border border-border/85 bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
-                      />
-                    </label>
-                  ))}
-                </div>
-              ) : null}
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {formatCoverageLabel(dataCollectionReview.sourceCoverage)}
+                      </p>
 
-              {taskMutationState.message ? (
-                <div
-                  className={cx(
-                    "rounded-[0.95rem] border px-4 py-3 text-sm",
-                    resolveSurfaceInsetToneClass(taskMutationTone),
-                  )}
-                >
-                  {taskMutationState.message}
-                </div>
-              ) : null}
+                      {inputCollectionPayload ? (
+                        <div className="mt-4 space-y-2">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Input Collection
+                          </p>
+                          <p className="text-sm text-foreground">
+                            {inputCollectionPayload.groupingSummary}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <SurfaceTag tone="default">
+                              {inputCollectionPayload.traceCount} traces
+                            </SurfaceTag>
+                            {inputCollectionPayload.axisSignature ? (
+                              <SurfaceTag tone="default">{inputCollectionPayload.axisSignature}</SurfaceTag>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  void handleRunAnalysis();
-                }}
-                disabled={
-                  taskMutationState.state === "submitting" ||
-                  !selectedDesignId ||
-                  !selectedAnalysis ||
-                  selectedAnalysis.availabilityState === "unavailable" ||
-                  selectedTraceIds.length === 0
-                }
-                className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {taskMutationState.state === "submitting" ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-                Run Analysis
-              </button>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Runnable Analyses
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {dataCollectionReview.runnableAnalyses.length > 0 ? (
+                            dataCollectionReview.runnableAnalyses.map((analysis) => (
+                              <div
+                                key={analysis.analysisId}
+                                className="rounded-xl border border-border bg-surface px-3 py-3"
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                                    {formatPipelineState(analysis.prerequisiteState)}
+                                  </SurfaceTag>
+                                  <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                                    {analysis.availabilityState}
+                                  </SurfaceTag>
+                                </div>
+                                <p className="mt-2 text-sm font-medium text-foreground">
+                                  {analysis.label}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {analysis.summary}
+                                </p>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              No analysis is runnable for the current collection yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Blocked Analyses
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {dataCollectionReview.blockedAnalyses.length > 0 ? (
+                            dataCollectionReview.blockedAnalyses.map((analysis) => (
+                              <div
+                                key={analysis.analysisId}
+                                className="rounded-xl border border-border bg-surface px-3 py-3"
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                                    {formatPipelineState(analysis.prerequisiteState)}
+                                  </SurfaceTag>
+                                  <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                                    {analysis.availabilityState}
+                                  </SurfaceTag>
+                                </div>
+                                <p className="mt-2 text-sm font-medium text-foreground">
+                                  {analysis.label}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {analysis.summary}
+                                </p>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              No blocked analyses are reported for this collection.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Collection Members
+                    </p>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                      {dataCollectionReview.collectionMembers.map((member) => (
+                        <div
+                          key={member.memberKey}
+                          className="rounded-xl border border-border bg-surface px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <SurfaceTag tone="default">{member.memberKey}</SurfaceTag>
+                            <SurfaceTag tone="default">{formatSourceLabel(member.sourceKind)}</SurfaceTag>
+                            <SurfaceTag tone="default">{formatModeLabel(member.traceModeGroup)}</SurfaceTag>
+                          </div>
+                          <p className="mt-2 text-sm font-medium text-foreground">{member.label}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {member.parameter} · {formatRepresentationLabel(member.representation)} · {member.traceId}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">{member.provenanceSummary}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : isAnalysisRegistryLoading ? (
+                <p className="text-sm text-muted-foreground">Loading data collection review…</p>
+              ) : (
+                <SectionNotice
+                  title="No collection review available"
+                  detail={
+                    selectedTraceIds.length > 0
+                      ? "The backend did not return a derived collection review for this trace scope."
+                      : "Select traces to see the backend-derived data collection review."
+                  }
+                  tone="default"
+                />
+              )}
             </div>
           </SurfacePanel>
 
           <SurfacePanel
-            title="Inspect Result"
-            description="Review saved results for this design and keep the current analysis context light."
+            title="Analysis Pipeline"
+            description="Choose the current pipeline step, inspect prerequisites, and run only when the backend says the collection is ready."
+          >
+            <div className="space-y-4">
+              <SectionNotice
+                title={selectedPipelineExplanation.title}
+                detail={selectedPipelineExplanation.detail}
+                tone={selectedPipelineExplanation.tone}
+              />
+
+              <div className="grid gap-3 xl:grid-cols-2">
+                {analysisRegistry.map((analysis) => (
+                  <button
+                    key={analysis.analysisId}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAnalysisId(analysis.analysisId);
+                    }}
+                    className={cx(
+                      "rounded-[1rem] border px-4 py-4 text-left transition",
+                      selectedAnalysisId === analysis.analysisId
+                        ? "border-primary/35 bg-primary/10"
+                        : "border-border bg-background hover:border-primary/25 hover:bg-primary/5",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{analysis.label}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                          {analysis.analysisId}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                          {analysis.availabilityState}
+                        </SurfaceTag>
+                        <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                          {formatPipelineState(analysis.prerequisiteState)}
+                        </SurfaceTag>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      {analysis.prerequisiteState === "requires_upstream_result"
+                        ? analysis.upstreamResultRequirement?.summary || analysis.traceCompatibility.summary
+                        : analysis.traceCompatibility.summary}
+                    </p>
+
+                    {analysis.downstreamUnlockAnalysisIds.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {analysis.downstreamUnlockAnalysisIds.map((analysisId) => (
+                          <SurfaceTag key={`${analysis.analysisId}-${analysisId}`} tone="default">
+                            Unlocks {analysisId}
+                          </SurfaceTag>
+                        ))}
+                      </div>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+
+              {analysisRegistryErrorNotice ? (
+                <SectionNotice
+                  title={analysisRegistryErrorNotice.summary}
+                  detail={analysisRegistryErrorNotice.detail}
+                />
+              ) : null}
+
+              {selectedAnalysis ? (
+                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Selected Analysis
+                      </p>
+                      <p className="mt-2 text-sm font-medium text-foreground">
+                        {selectedAnalysis.label}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <SurfaceTag tone={availabilityTone(selectedAnalysis.availabilityState)}>
+                        {selectedAnalysis.availabilityState}
+                      </SurfaceTag>
+                      <SurfaceTag tone={pipelineStateTone(selectedAnalysis.prerequisiteState)}>
+                        {formatPipelineState(selectedAnalysis.prerequisiteState)}
+                      </SurfaceTag>
+                    </div>
+                  </div>
+
+                  {selectedAnalysis.requiredConfigFields.length > 0 ? (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      {selectedAnalysis.requiredConfigFields.map((field) => (
+                        <label
+                          key={field}
+                          className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3"
+                        >
+                          <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            {formatConfigLabel(field)}
+                          </p>
+                          <input
+                            value={analysisConfigValues[field] ?? ""}
+                            onChange={(event) => {
+                              updateAnalysisConfigValue(field, event.target.value);
+                            }}
+                            placeholder={configPlaceholder(field)}
+                            className="w-full rounded-[0.8rem] border border-border/85 bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {taskMutationState.message ? (
+                    <div
+                      className={cx(
+                        "mt-4 rounded-[0.95rem] border px-4 py-3 text-sm",
+                        resolveSurfaceInsetToneClass(taskMutationTone),
+                      )}
+                    >
+                      {taskMutationState.message}
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleRunAnalysis();
+                    }}
+                    disabled={
+                      taskMutationState.state === "submitting" ||
+                      !selectedDesignId ||
+                      !selectedAnalysis ||
+                      selectedAnalysis.availabilityState === "unavailable" ||
+                      selectedAnalysis.prerequisiteState !== "ready" ||
+                      selectedTraceIds.length === 0
+                    }
+                    className="mt-4 inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {taskMutationState.state === "submitting" ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
+                    Run Analysis
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </SurfacePanel>
+
+          <SurfacePanel
+            title="Active Analysis Run"
+            description="Keep the latest page-local run state visible without turning the workbench into a task dashboard."
           >
             <div className="space-y-4">
               {activeTask ? (
@@ -987,19 +1265,22 @@ export function CharacterizationWorkspace() {
                     <p className="mt-2 text-sm font-medium text-foreground">
                       {activeTask.progress.summary}
                     </p>
-                    {latestRunStatusDetail ? (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {latestRunStatusDetail.message}
-                      </p>
+                    {activeRunDetail ? (
+                      <p className="mt-1 text-sm text-muted-foreground">{activeRunDetail.message}</p>
                     ) : null}
                   </div>
-                  <SurfaceTag tone={taskStatusTone(activeTask.status)}>
-                    {activeTask.status}
-                  </SurfaceTag>
+                  <SurfaceTag tone={taskStatusTone(activeTask.status)}>{activeTask.status}</SurfaceTag>
                 </div>
-              ) : null}
+              ) : (
+                <SectionNotice
+                  title="No active run attached"
+                  detail="Start an analysis or reattach through the shared queue to keep the current pipeline step in view here."
+                  tone="default"
+                />
+              )}
+
               {isTaskTransitioning ? (
-                <p className="text-sm text-muted-foreground">Refreshing current analysis…</p>
+                <p className="text-sm text-muted-foreground">Refreshing active analysis run…</p>
               ) : null}
               {activeTaskErrorNotice ? (
                 <SectionNotice
@@ -1008,6 +1289,86 @@ export function CharacterizationWorkspace() {
                 />
               ) : null}
 
+              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Run History
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Compact history for the current design scope.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <SurfaceActionButton
+                      type="button"
+                      onClick={goToPrevRunHistoryPage}
+                      disabled={!runHistoryMeta?.prevCursor}
+                      className="px-3 py-1.5 text-xs"
+                    >
+                      Prev
+                    </SurfaceActionButton>
+                    <SurfaceActionButton
+                      type="button"
+                      onClick={goToNextRunHistoryPage}
+                      disabled={!runHistoryMeta?.nextCursor}
+                      className="px-3 py-1.5 text-xs"
+                    >
+                      Next
+                    </SurfaceActionButton>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {runHistory.map((run) => (
+                    <button
+                      key={run.runId}
+                      type="button"
+                      onClick={() => {
+                        focusRunHistoryResult(run.resultId);
+                      }}
+                      disabled={!run.resultId}
+                      className="w-full rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-left transition hover:border-primary/25 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{run.label}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {run.analysisId} · {run.updatedAt}
+                          </p>
+                        </div>
+                        <SurfaceTag tone={characterizationStatusTone(run.status)}>{run.status}</SurfaceTag>
+                      </div>
+                      <p className="mt-3 text-sm text-muted-foreground">{run.provenanceSummary}</p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                        <SurfaceTag tone="default">{run.traceCount} traces</SurfaceTag>
+                        <SurfaceTag tone="default">{run.scope}</SurfaceTag>
+                        {run.resultId ? <SurfaceTag tone="default">Open result</SurfaceTag> : null}
+                      </div>
+                    </button>
+                  ))}
+
+                  {isRunHistoryLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading run history…</p>
+                  ) : null}
+                  {!isRunHistoryLoading && runHistory.length === 0 ? (
+                    <p className="rounded-[0.95rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                      No run history is available for this design scope yet.
+                    </p>
+                  ) : null}
+                  {runHistoryErrorNotice ? (
+                    <SectionNotice title={runHistoryErrorNotice.summary} detail={runHistoryErrorNotice.detail} />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </SurfacePanel>
+
+          <SurfacePanel
+            title="Result Preview"
+            description="Inspect persisted results, member-aware artifacts, diagnostics, and identify-ready surfaces."
+          >
+            <div className="space-y-4">
               <div className="grid gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
                 <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
                   <div>
@@ -1015,7 +1376,7 @@ export function CharacterizationWorkspace() {
                       Results
                     </h4>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Saved analysis results for the current design.
+                      Persisted results for the current design.
                     </p>
                   </div>
 
@@ -1080,12 +1441,8 @@ export function CharacterizationWorkspace() {
                           <SurfaceTag tone="default">{result.artifactCount} artifacts</SurfaceTag>
                         </div>
 
-                        <p className="mt-3 text-sm text-muted-foreground">
-                          {result.freshnessSummary}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {result.provenanceSummary}
-                        </p>
+                        <p className="mt-3 text-sm text-muted-foreground">{result.freshnessSummary}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{result.provenanceSummary}</p>
                       </button>
                     ))}
 
@@ -1095,10 +1452,7 @@ export function CharacterizationWorkspace() {
                       </p>
                     ) : null}
                     {resultsErrorNotice ? (
-                      <SectionNotice
-                        title={resultsErrorNotice.summary}
-                        detail={resultsErrorNotice.detail}
-                      />
+                      <SectionNotice title={resultsErrorNotice.summary} detail={resultsErrorNotice.detail} />
                     ) : null}
                   </div>
                 </div>
@@ -1109,13 +1463,13 @@ export function CharacterizationWorkspace() {
                       Result Detail
                     </h4>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Inspect one saved result, then tag parameters from it.
+                      Inspect one persisted result, then tag parameters from the artifact surface that is currently in focus.
                     </p>
                   </div>
 
                   {!selectedResultId ? (
                     <p className="mt-4 rounded-[1rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                      Select a saved result to inspect its details, diagnostics, and tags.
+                      Select a saved result to inspect its artifacts, diagnostics, and identify surface.
                     </p>
                   ) : null}
 
@@ -1123,9 +1477,7 @@ export function CharacterizationWorkspace() {
                     <div className="mt-4 space-y-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <h3 className="text-base font-semibold text-foreground">
-                            {resultDetail.title}
-                          </h3>
+                          <h3 className="text-base font-semibold text-foreground">{resultDetail.title}</h3>
                           <p className="mt-1 text-sm text-muted-foreground">
                             {resultDetail.analysisId} · {resultDetail.updatedAt}
                           </p>
@@ -1154,16 +1506,15 @@ export function CharacterizationWorkspace() {
                             </p>
                           </div>
                         </div>
-                        {resultDetail.inputCollectionPayload ? (
-                          <div className="mt-4">
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Collection Scope
-                            </p>
-                            <p className="mt-2 text-sm text-foreground">
-                              {resultDetail.inputCollectionPayload.groupingSummary}
-                            </p>
-                          </div>
-                        ) : null}
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <SurfaceTag tone="default">{resultDetail.traceCount} traces</SurfaceTag>
+                          {resultDetail.inputResultRefs.map((ref) => (
+                            <SurfaceTag key={`${ref.analysisId}-${ref.resultId}`} tone="default">
+                              Upstream {ref.analysisId}
+                            </SurfaceTag>
+                          ))}
+                        </div>
                       </div>
 
                       {resultDetail.diagnostics.length > 0 ? (
@@ -1345,6 +1696,81 @@ export function CharacterizationWorkspace() {
                   ) : null}
                 </div>
               </div>
+            </div>
+          </SurfacePanel>
+
+          <SurfacePanel
+            title="Downstream Analysis / Next Step"
+            description="Keep the next pipeline step visible without implying runtime support that the backend has not granted yet."
+          >
+            <div className="space-y-4">
+              {downstreamAnalyses.length > 0 ? (
+                <div className="grid gap-3 xl:grid-cols-2">
+                  {downstreamAnalyses.map((analysis) => (
+                    <div
+                      key={analysis.analysisId}
+                      className="rounded-[1rem] border border-border bg-background px-4 py-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{analysis.label}</p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                            {analysis.analysisId}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                            {formatPipelineState(analysis.prerequisiteState)}
+                          </SurfaceTag>
+                          <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                            {analysis.availabilityState}
+                          </SurfaceTag>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        {analysis.prerequisiteState === "requires_upstream_result"
+                          ? analysis.upstreamResultRequirement?.summary || analysis.traceCompatibility.summary
+                          : analysis.traceCompatibility.summary}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <SectionNotice
+                  title="No downstream step unlocked yet"
+                  detail="Complete or select a persisted result to see which next pipeline step becomes available from this workbench state."
+                  tone="default"
+                />
+              )}
+
+              {additionalBlockedPipelineAnalyses.length > 0 ? (
+                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Still Waiting On Upstream Results
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {additionalBlockedPipelineAnalyses.map((analysis) => (
+                      <div
+                        key={analysis.analysisId}
+                        className="rounded-xl border border-border bg-surface px-3 py-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                            {formatPipelineState(analysis.prerequisiteState)}
+                          </SurfaceTag>
+                          <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                            {analysis.availabilityState}
+                          </SurfaceTag>
+                        </div>
+                        <p className="mt-2 text-sm font-medium text-foreground">{analysis.label}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {analysis.upstreamResultRequirement?.summary || analysis.traceCompatibility.summary}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </SurfacePanel>
         </div>
