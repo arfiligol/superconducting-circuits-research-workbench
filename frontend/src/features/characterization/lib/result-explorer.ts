@@ -7,6 +7,8 @@ import type {
   CharacterizationArtifactPlotSeries,
   CharacterizationArtifactPreset,
   CharacterizationArtifactRef,
+  CharacterizationEmbeddedFallbackTable,
+  CharacterizationResultDetail,
 } from "@/features/characterization/lib/contracts";
 
 function readString(value: unknown) {
@@ -15,6 +17,14 @@ function readString(value: unknown) {
 
 function readNullableNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readStringOrNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  return readString(value);
 }
 
 function readSeriesMask(value: unknown) {
@@ -278,6 +288,113 @@ export function buildCharacterizationArtifactPayloadRequest(input: Readonly<{
   };
 }
 
+function resolveLegacyFitTable(
+  resultDetail: CharacterizationResultDetail,
+): CharacterizationEmbeddedFallbackTable | null {
+  const fitTable = resultDetail.payload.fit_table;
+  if (!Array.isArray(fitTable) || fitTable.length === 0) {
+    return null;
+  }
+
+  const rows: Readonly<Record<string, string | number | null>>[] = [];
+
+  for (const item of fitTable) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const payload = item as Record<string, unknown>;
+    const parameter = readString(payload.parameter);
+    if (!parameter) {
+      continue;
+    }
+
+    rows.push({
+      parameter,
+      value: readStringOrNumber(payload.value),
+      unit: readString(payload.unit),
+    });
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    columns: [
+      { key: "parameter", label: "Parameter" },
+      { key: "value", label: "Value" },
+      { key: "unit", label: "Unit" },
+    ],
+    rows,
+  };
+}
+
+function hasRecordEntries(value: unknown) {
+  return typeof value === "object" && value !== null && Object.keys(value).length > 0;
+}
+
+export function resolveCharacterizationArtifactCompatibilityPayload(input: Readonly<{
+  resultDetail: CharacterizationResultDetail | null;
+  artifact: CharacterizationArtifactRef | null;
+}>) {
+  if (!input.resultDetail || !input.artifact) {
+    return null;
+  }
+
+  const fallbackSummary =
+    "Using the persisted result detail because this older result does not expose artifact payload routes.";
+
+  const category = input.artifact.category;
+  const artifactId = input.artifact.artifactId.toLowerCase();
+
+  if (category === "fit_table" || artifactId.includes("fit-table")) {
+    const embeddedFallbackTable = resolveLegacyFitTable(input.resultDetail);
+    if (!embeddedFallbackTable) {
+      return null;
+    }
+
+    return {
+      artifactId: input.artifact.artifactId,
+      title: input.artifact.title,
+      presetId: "embedded_fit_table",
+      viewKind: "table",
+      axes: input.artifact.axes,
+      metric: input.artifact.metric,
+      payload: input.resultDetail.payload,
+      diagnostics: [],
+      embeddedFallbackTable,
+      compatibilityFallback: {
+        source: "embedded_result_payload",
+        summary: fallbackSummary,
+      },
+    } satisfies CharacterizationArtifactPayload;
+  }
+
+  if (
+    (category === "report" || input.artifact.viewKind === "json") &&
+    hasRecordEntries(input.resultDetail.payload)
+  ) {
+    return {
+      artifactId: input.artifact.artifactId,
+      title: input.artifact.title,
+      presetId: "embedded_result_payload",
+      viewKind: "json",
+      axes: input.artifact.axes,
+      metric: input.artifact.metric,
+      payload: input.resultDetail.payload,
+      diagnostics: [],
+      embeddedFallbackTable: null,
+      compatibilityFallback: {
+        source: "embedded_result_payload",
+        summary: fallbackSummary,
+      },
+    } satisfies CharacterizationArtifactPayload;
+  }
+
+  return null;
+}
+
 export function resolveCharacterizationArtifactLayout(
   payload: CharacterizationArtifactPayload | null,
 ): CharacterizationArtifactPayloadLayout | null {
@@ -337,6 +454,12 @@ export function resolveCharacterizationArtifactPlotSeries(
   payload: CharacterizationArtifactPayload | null,
 ) {
   return readPlotSeries(payload?.payload.series);
+}
+
+export function resolveCharacterizationEmbeddedFallbackTable(
+  payload: CharacterizationArtifactPayload | null,
+) {
+  return payload?.embeddedFallbackTable ?? null;
 }
 
 export function resolveCharacterizationArtifactTableRows(

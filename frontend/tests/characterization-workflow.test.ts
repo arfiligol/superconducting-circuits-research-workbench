@@ -15,6 +15,8 @@ import {
 import {
   buildCharacterizationArtifactPayloadRequest,
   resolveCharacterizationArtifactCompareGroups,
+  resolveCharacterizationArtifactCompatibilityPayload,
+  resolveCharacterizationEmbeddedFallbackTable,
   resolveCharacterizationArtifactPresetId,
   resolveCharacterizationArtifactPlotSeries,
   resolveCharacterizationArtifactSelection,
@@ -70,6 +72,12 @@ const characterizationExplorerSource = readFileSync(
       "../src/features/characterization/components/characterization-result-explorer.tsx",
       import.meta.url,
     ),
+  ),
+  "utf8",
+);
+const characterizationApiSource = readFileSync(
+  fileURLToPath(
+    new URL("../src/features/characterization/lib/api.ts", import.meta.url),
   ),
   "utf8",
 );
@@ -348,6 +356,8 @@ describe("characterization explorer helpers", () => {
     axes: artifactRefs[0].axes,
     metric: artifactRefs[0].metric,
     diagnostics: [],
+    embeddedFallbackTable: null,
+    compatibilityFallback: null,
     payload: {
       layout: {
         rows_axis: "mode_index",
@@ -432,6 +442,78 @@ describe("characterization explorer helpers", () => {
         },
       ],
     },
+  } as const;
+
+  const legacyPersistedResultDetail = {
+    resultId: "char-admittance-run-24",
+    datasetId: "local-floatingqubit-100",
+    designId: "design_floatingqubitwithxy",
+    analysisId: "admittance_extraction",
+    title: "FloatingQubitWithXY admittance resonance extraction",
+    status: "completed",
+    freshnessSummary: "Persisted admittance resonance extraction completed from saved design traces.",
+    provenanceSummary: "Published from post-processing task 484 (PTC Y11)",
+    traceCount: 20,
+    updatedAt: "2026-03-27T16:41:26.885905Z",
+    inputTraceIds: [],
+    inputResultRefs: [],
+    payload: {
+      analysis_run_id: 24,
+      fit_window: [3.0, 5.0],
+      analysis_config: {
+        fit_window: [3, 5],
+        residual_tolerance: 0.02,
+      },
+      fit_table: [
+        {
+          parameter: "f01",
+          value: 4.996044,
+          unit: "GHz",
+        },
+        {
+          parameter: "residual_rms",
+          value: 0.0,
+          unit: "S",
+        },
+      ],
+    },
+    diagnostics: [],
+    artifactRefs: [
+      {
+        artifactId: "char-admittance-run-24:fit-table",
+        category: "fit_table",
+        viewKind: "table",
+        title: "Admittance fit table",
+        payloadFormat: "json",
+        payloadLocator: "characterization/char-admittance-run-24/fit-table.json",
+        axes: [],
+        metric: null,
+        presets: [],
+        defaultPresetId: null,
+        querySpec: null,
+        identifySource: false,
+      },
+      {
+        artifactId: "char-admittance-run-24:report",
+        category: "report",
+        viewKind: "json",
+        title: "Characterization report",
+        payloadFormat: "json",
+        payloadLocator: "characterization/char-admittance-run-24/fit-report.json",
+        axes: [],
+        metric: null,
+        presets: [],
+        defaultPresetId: null,
+        querySpec: null,
+        identifySource: false,
+      },
+    ],
+    identifySurface: {
+      sourceParameters: [],
+      designatedMetrics: [],
+      appliedTags: [],
+    },
+    downstreamUnlockAnalysisIds: [],
   } as const;
 
   const traceRows = [
@@ -522,6 +604,34 @@ describe("characterization explorer helpers", () => {
     expect(resolveCharacterizationArtifactPlotSeries(compareAwarePayload)[0]?.compareKey).toBe(
       "measurement:trace_a",
     );
+  });
+
+  it("falls back to embedded persisted result payload when legacy artifact routes are unavailable", () => {
+    const fallbackPayload = resolveCharacterizationArtifactCompatibilityPayload({
+      resultDetail: legacyPersistedResultDetail,
+      artifact: legacyPersistedResultDetail.artifactRefs[0],
+    });
+
+    expect(fallbackPayload?.viewKind).toBe("table");
+    expect(fallbackPayload?.compatibilityFallback?.source).toBe("embedded_result_payload");
+    expect(resolveCharacterizationEmbeddedFallbackTable(fallbackPayload ?? null)).toEqual({
+      columns: [
+        { key: "parameter", label: "Parameter" },
+        { key: "value", label: "Value" },
+        { key: "unit", label: "Unit" },
+      ],
+      rows: [
+        { parameter: "f01", value: 4.996044, unit: "GHz" },
+        { parameter: "residual_rms", value: 0, unit: "S" },
+      ],
+    });
+
+    const reportFallback = resolveCharacterizationArtifactCompatibilityPayload({
+      resultDetail: legacyPersistedResultDetail,
+      artifact: legacyPersistedResultDetail.artifactRefs[1],
+    });
+    expect(reportFallback?.viewKind).toBe("json");
+    expect(reportFallback?.payload.fit_window).toEqual([3.0, 5.0]);
   });
 
   it("builds sweep-aware and collection-aware filters without parsing provenance strings", () => {
@@ -710,6 +820,8 @@ describe("characterization source contracts", () => {
     expect(characterizationExplorerSource).toContain("compareGroups");
     expect(characterizationExplorerSource).toContain("availablePresetViews");
     expect(characterizationExplorerSource).toContain("MemberBadge");
+    expect(characterizationExplorerSource).toContain("compatibilityFallback");
+    expect(characterizationExplorerSource).toContain("resolveCharacterizationEmbeddedFallbackTable");
   });
 
   it("binds trace browse, characterization submit, and result continuity to shared app authority", () => {
@@ -740,6 +852,12 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain(
       "getCharacterizationResult(activeDatasetId, resolvedDesignId, resolvedResultId)",
     );
+    expect(characterizationHookSource).toContain(
+      "resultsQuery.data?.rows && resultsQuery.data.rows.length > 0",
+    );
+    expect(characterizationHookSource).toContain(
+      "if (!rows || rows.length === 0) {",
+    );
     expect(characterizationHookSource).toContain("const characterization_setup: CharacterizationSetupDraft");
     expect(characterizationHookSource).toContain('kind: "characterization"');
     expect(characterizationHookSource).toContain("selected_trace_ids: selectedTraceIds");
@@ -760,10 +878,32 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain("This session cannot start analyses.");
     expect(characterizationExplorerHookSource).toContain("getCharacterizationArtifactPayload(");
     expect(characterizationExplorerHookSource).toContain("keepPreviousData: true");
+    expect(characterizationExplorerHookSource).toContain(
+      "resolveCharacterizationArtifactCompatibilityPayload",
+    );
+    expect(characterizationExplorerHookSource).toContain("compatibilityPayload");
     expect(characterizationExplorerHookSource).toContain("resolveCharacterizationArtifactPresetId");
     expect(characterizationExplorerHookSource).toContain("const artifactRefs = resultDetail?.artifactRefs ?? [];");
     expect(characterizationExplorerHookSource).toContain(
       '"characterization-artifact-payload"',
+    );
+    expect(characterizationApiSource).toContain(
+      "payload.prerequisite_state ??",
+    );
+    expect(characterizationApiSource).toContain(
+      "[...(payload.downstream_unlock_analysis_ids ?? [])]",
+    );
+    expect(characterizationApiSource).toContain(
+      "(payload.input_result_refs ?? []).map",
+    );
+    expect(characterizationApiSource).toContain(
+      "(payload.diagnostics ?? []).map",
+    );
+    expect(characterizationApiSource).toContain(
+      "(payload.artifact_refs ?? []).map",
+    );
+    expect(characterizationApiSource).toContain(
+      "(payload?.source_parameters ?? []).map",
     );
     expect(characterizationHookSource).not.toContain("This session cannot submit tasks.");
     expect(characterizationHookSource).not.toContain("listTraceMetadata(");

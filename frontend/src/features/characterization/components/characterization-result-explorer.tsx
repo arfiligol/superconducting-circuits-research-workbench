@@ -16,6 +16,7 @@ import type {
 } from "@/features/characterization/lib/contracts";
 import {
   resolveCharacterizationArtifactCompareGroups,
+  resolveCharacterizationEmbeddedFallbackTable,
   resolveCharacterizationArtifactLayout,
   resolveCharacterizationArtifactPlotSeries,
   resolveCharacterizationArtifactTableColumns,
@@ -434,6 +435,44 @@ function CharacterizationStructuredPayload({
   payload: CharacterizationArtifactPayload;
   selectedArtifact: CharacterizationArtifactRef | null;
 }>) {
+  const embeddedFallbackTable = resolveCharacterizationEmbeddedFallbackTable(payload);
+
+  if (embeddedFallbackTable) {
+    return (
+      <div className="overflow-x-auto rounded-[0.95rem] border border-border bg-background">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-card">
+            <tr className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+              {embeddedFallbackTable.columns.map((column) => (
+                <th key={column.key} className="px-4 py-3">
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {embeddedFallbackTable.rows.map((row, rowIndex) => (
+              <tr key={`embedded-fallback-row-${rowIndex}`}>
+                {embeddedFallbackTable.columns.map((column) => {
+                  const value = row[column.key] ?? null;
+                  return (
+                    <td key={`${rowIndex}-${column.key}`} className="px-4 py-3">
+                      {value == null ? (
+                        <span className="text-muted-foreground">-</span>
+                      ) : (
+                        <span className="font-medium text-foreground">{String(value)}</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   if (payload.viewKind === "table") {
     return <CompareAwareTable payload={payload} selectedArtifact={selectedArtifact} />;
   }
@@ -581,6 +620,12 @@ export function CharacterizationResultExplorer({
 
         {explorer.payload ? (
           <div className="mt-4 space-y-4">
+            {explorer.payload.compatibilityFallback ? (
+              <div className="rounded-[0.95rem] border border-amber-500/25 bg-amber-500/10 px-4 py-4 text-sm text-amber-950 dark:text-amber-100">
+                {explorer.payload.compatibilityFallback.summary}
+              </div>
+            ) : null}
+
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 {payloadLayout?.rowsAxis ? (

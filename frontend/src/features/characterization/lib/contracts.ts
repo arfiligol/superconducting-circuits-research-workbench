@@ -269,6 +269,21 @@ export type CharacterizationArtifactPayloadLayout = Readonly<{
   compareAxis: string | null;
 }>;
 
+export type CharacterizationEmbeddedFallbackColumn = Readonly<{
+  key: string;
+  label: string;
+}>;
+
+export type CharacterizationEmbeddedFallbackTable = Readonly<{
+  columns: readonly CharacterizationEmbeddedFallbackColumn[];
+  rows: readonly Readonly<Record<string, string | number | null>>[];
+}>;
+
+export type CharacterizationArtifactPayloadFallback = Readonly<{
+  source: "embedded_result_payload";
+  summary: string;
+}>;
+
 export type CharacterizationArtifactPayload = Readonly<{
   artifactId: string;
   title: string;
@@ -278,6 +293,8 @@ export type CharacterizationArtifactPayload = Readonly<{
   metric: CharacterizationArtifactMetricSpec | null;
   payload: Readonly<Record<string, unknown>>;
   diagnostics: readonly CharacterizationDiagnostic[];
+  embeddedFallbackTable: CharacterizationEmbeddedFallbackTable | null;
+  compatibilityFallback: CharacterizationArtifactPayloadFallback | null;
 }>;
 
 export type CharacterizationSourceParameterOption = Readonly<{

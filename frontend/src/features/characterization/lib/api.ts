@@ -53,15 +53,16 @@ type CharacterizationAnalysisRegistryRowResponse = Readonly<{
     recommended_trace_modes: readonly string[];
     summary: string;
   }>;
-  prerequisite_state: CharacterizationPrerequisiteState;
+  prerequisite_state?: CharacterizationPrerequisiteState | null;
   upstream_result_requirement:
     | Readonly<{
         required_upstream_analysis_ids: readonly string[];
         satisfied_result_refs: readonly CharacterizationInputResultRefResponse[];
         summary: string;
       }>
-    | null;
-  downstream_unlock_analysis_ids: readonly string[];
+    | null
+    | undefined;
+  downstream_unlock_analysis_ids?: readonly string[] | null;
 }>;
 
 type CharacterizationRunHistoryRowResponse = Readonly<{
@@ -159,7 +160,7 @@ type CharacterizationReviewAnalysisSummaryResponse = Readonly<{
   analysis_id: string;
   label: string;
   availability_state: CharacterizationAvailabilityState;
-  prerequisite_state: CharacterizationPrerequisiteState;
+  prerequisite_state?: CharacterizationPrerequisiteState | null;
   summary: string;
 }>;
 
@@ -180,7 +181,7 @@ type CharacterizationDataCollectionReviewResponse = Readonly<{
 type CharacterizationAnalysisRegistryResponse = Readonly<{
   rows: readonly CharacterizationAnalysisRegistryRowResponse[];
   input_collection_payload: CharacterizationInputCollectionPayloadResponse | null;
-  data_collection_review: CharacterizationDataCollectionReviewResponse | null;
+  data_collection_review?: CharacterizationDataCollectionReviewResponse | null;
 }>;
 
 type CharacterizationInputResultRefResponse = Readonly<{
@@ -258,16 +259,18 @@ type CharacterizationResultDetailResponse = Readonly<{
   trace_count: number;
   updated_at: string;
   input_trace_ids: readonly string[];
-  input_result_refs: readonly CharacterizationInputResultRefResponse[];
+  input_result_refs?: readonly CharacterizationInputResultRefResponse[] | null;
   payload: Readonly<Record<string, unknown>>;
-  diagnostics: readonly CharacterizationDiagnosticResponse[];
-  artifact_refs: readonly CharacterizationArtifactRefResponse[];
-  identify_surface: Readonly<{
-    source_parameters: readonly CharacterizationSourceParameterResponse[];
-    designated_metrics: readonly CharacterizationDesignatedMetricOptionResponse[];
-    applied_tags: readonly CharacterizationAppliedTagResponse[];
-  }>;
-  downstream_unlock_analysis_ids: readonly string[];
+  diagnostics?: readonly CharacterizationDiagnosticResponse[] | null;
+  artifact_refs?: readonly CharacterizationArtifactRefResponse[] | null;
+  identify_surface?:
+    | Readonly<{
+        source_parameters?: readonly CharacterizationSourceParameterResponse[] | null;
+        designated_metrics?: readonly CharacterizationDesignatedMetricOptionResponse[] | null;
+        applied_tags?: readonly CharacterizationAppliedTagResponse[] | null;
+      }>
+    | null;
+  downstream_unlock_analysis_ids?: readonly string[] | null;
 }>;
 
 type CharacterizationSourceParameterResponse = Readonly<{
@@ -591,7 +594,7 @@ function mapCharacterizationReviewAnalysisSummary(
     analysisId: payload.analysis_id,
     label: payload.label,
     availabilityState: payload.availability_state,
-    prerequisiteState: payload.prerequisite_state,
+    prerequisiteState: payload.prerequisite_state ?? "ready",
     summary: payload.summary,
   };
 }
@@ -616,7 +619,7 @@ function mapCharacterizationCollectionMemberSummary(
 }
 
 function mapCharacterizationDataCollectionReview(
-  payload: CharacterizationDataCollectionReviewResponse | null,
+  payload: CharacterizationDataCollectionReviewResponse | null | undefined,
 ): CharacterizationDataCollectionReview | null {
   if (!payload) {
     return null;
@@ -644,6 +647,14 @@ function mapCharacterizationDataCollectionReview(
 function mapCharacterizationAnalysisRegistryRow(
   payload: CharacterizationAnalysisRegistryRowResponse,
 ): CharacterizationAnalysisRegistryRow {
+  const prerequisiteState =
+    payload.prerequisite_state ??
+    (payload.upstream_result_requirement
+      ? "requires_upstream_result"
+      : payload.availability_state === "unavailable"
+        ? "blocked"
+        : "ready");
+
   return {
     analysisId: payload.analysis_id,
     label: payload.label,
@@ -655,11 +666,11 @@ function mapCharacterizationAnalysisRegistryRow(
       recommendedTraceModes: [...payload.trace_compatibility.recommended_trace_modes],
       summary: payload.trace_compatibility.summary,
     },
-    prerequisiteState: payload.prerequisite_state,
+    prerequisiteState,
     upstreamResultRequirement: mapCharacterizationUpstreamResultRequirement(
       payload.upstream_result_requirement,
     ),
-    downstreamUnlockAnalysisIds: [...payload.downstream_unlock_analysis_ids],
+    downstreamUnlockAnalysisIds: [...(payload.downstream_unlock_analysis_ids ?? [])],
   };
 }
 
@@ -812,11 +823,13 @@ function mapCharacterizationIdentifySurface(
   payload: CharacterizationResultDetailResponse["identify_surface"],
 ): CharacterizationIdentifySurface {
   return {
-    sourceParameters: payload.source_parameters.map(mapCharacterizationSourceParameterOption),
-    designatedMetrics: payload.designated_metrics.map(
+    sourceParameters: (payload?.source_parameters ?? []).map(
+      mapCharacterizationSourceParameterOption,
+    ),
+    designatedMetrics: (payload?.designated_metrics ?? []).map(
       mapCharacterizationDesignatedMetricOption,
     ),
-    appliedTags: payload.applied_tags.map(mapCharacterizationAppliedTag),
+    appliedTags: (payload?.applied_tags ?? []).map(mapCharacterizationAppliedTag),
   };
 }
 
@@ -835,12 +848,14 @@ function mapCharacterizationResultDetail(
     traceCount: payload.trace_count,
     updatedAt: payload.updated_at,
     inputTraceIds: [...payload.input_trace_ids],
-    inputResultRefs: payload.input_result_refs.map(mapCharacterizationInputResultRef),
+    inputResultRefs: (payload.input_result_refs ?? []).map(
+      mapCharacterizationInputResultRef,
+    ),
     payload: payload.payload,
-    diagnostics: payload.diagnostics.map(mapCharacterizationDiagnostic),
-    artifactRefs: payload.artifact_refs.map(mapCharacterizationArtifactRef),
+    diagnostics: (payload.diagnostics ?? []).map(mapCharacterizationDiagnostic),
+    artifactRefs: (payload.artifact_refs ?? []).map(mapCharacterizationArtifactRef),
     identifySurface: mapCharacterizationIdentifySurface(payload.identify_surface),
-    downstreamUnlockAnalysisIds: [...payload.downstream_unlock_analysis_ids],
+    downstreamUnlockAnalysisIds: [...(payload.downstream_unlock_analysis_ids ?? [])],
   };
 }
 
@@ -942,6 +957,8 @@ function mapCharacterizationArtifactPayload(
     metric: mapCharacterizationArtifactMetricSpec(payload.metric),
     payload: payload.payload,
     diagnostics: (payload.diagnostics ?? []).map(mapCharacterizationDiagnostic),
+    embeddedFallbackTable: null,
+    compatibilityFallback: null,
   };
 }
 
