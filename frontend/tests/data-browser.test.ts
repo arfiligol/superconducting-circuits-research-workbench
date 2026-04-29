@@ -583,6 +583,149 @@ describe("upload-first ingestion helpers", () => {
     });
   });
 
+  it("keeps scalar CSV columns with units as 1D uploads", () => {
+    const validation = validateUploadFirstCsv({
+      kind: "layout_simulation",
+      fileName: "hfss_Y11.csv",
+      fileText: `Freq [GHz],Y11 [S]
+4.000,0.11
+4.001,0.12`,
+    });
+
+    expect(validation.axisName).toBe("frequency");
+    expect(validation.axisUnit).toBe("GHz");
+    expect(validation.traces).toMatchObject([
+      {
+        family: "y_matrix",
+        parameter: "Y11",
+        representation: "magnitude",
+        pointCount: 2,
+        previewPointCount: 2,
+      },
+    ]);
+    expect(validation.draftTraces[0]?.axes).toEqual([
+      { name: "frequency", unit: "GHz", length: 2 },
+    ]);
+    expect(validation.draftTraces[0]?.preview_payload).toEqual({
+      kind: "sampled_series",
+      points: [
+        [4, 0.11],
+        [4.001, 0.12],
+      ],
+    });
+  });
+
+  it("validates a 3-column HFSS sweep and emits an nd_grid payload", () => {
+    const validation = validateUploadFirstCsv({
+      kind: "layout_simulation",
+      fileName: "PF6FQ_Q0_XY_Im_Y11.csv",
+      fileText: `"L_jun [nH]","Freq [GHz]","im(Yt(Rectangle5_T1,Rectangle5_T1)) []"
+5.0,4.0,-100.0
+5.0,4.1,-105.0
+10.0,4.0,-90.0
+10.0,4.1,-95.0`,
+    });
+
+    expect(validation.axisName).toBe("frequency");
+    expect(validation.axisUnit).toBe("GHz");
+    expect(validation.traces[0]).toMatchObject({
+      family: "y_matrix",
+      parameter: "Y11",
+      representation: "imaginary",
+      pointCount: 4,
+      previewPointCount: 4,
+    });
+
+    const draft = validation.draftTraces[0];
+    expect(draft?.axes).toEqual([
+      { name: "frequency", unit: "GHz", length: 2 },
+      { name: "L_jun", unit: "nH", length: 2 },
+    ]);
+    expect(draft?.preview_payload).toEqual({
+      kind: "nd_grid",
+      axes: [
+        { name: "frequency", unit: "GHz", values: [4, 4.1] },
+        { name: "L_jun", unit: "nH", values: [5, 10] },
+      ],
+      values: [
+        [-100, -90],
+        [-105, -95],
+      ],
+    });
+  });
+
+  it("infers HFSS formula metadata with filename parameter fallback", () => {
+    const cases = [
+      {
+        fileName: "hfss_Im_Y11.csv",
+        header: "im(Yt(Rectangle5_T1,Rectangle5_T1)) []",
+        family: "y_matrix",
+        parameter: "Y11",
+        representation: "imaginary",
+      },
+      {
+        fileName: "hfss_Re_Y21.csv",
+        header: "re(Yt(Rectangle5_T2,Rectangle5_T1)) []",
+        family: "y_matrix",
+        parameter: "Y21",
+        representation: "real",
+      },
+      {
+        fileName: "hfss_Im_S21.csv",
+        header: "im(St(Rectangle5_T2,Rectangle5_T1)) []",
+        family: "s_matrix",
+        parameter: "S21",
+        representation: "imaginary",
+      },
+      {
+        fileName: "hfss_Re_S21.csv",
+        header: "re(St(Rectangle5_T2,Rectangle5_T1)) []",
+        family: "s_matrix",
+        parameter: "S21",
+        representation: "real",
+      },
+      {
+        fileName: "hfss_Phase_S21.csv",
+        header: "ang_rad(St(Rectangle5_T2,Rectangle5_T1)) []",
+        family: "s_matrix",
+        parameter: "S21",
+        representation: "phase",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const validation = validateUploadFirstCsv({
+        kind: "layout_simulation",
+        fileName: testCase.fileName,
+        fileText: `Freq [GHz],"${testCase.header}"
+4.0,0.01
+4.1,0.012`,
+      });
+
+      expect(validation.traces[0]).toMatchObject({
+        family: testCase.family,
+        parameter: testCase.parameter,
+        representation: testCase.representation,
+      });
+    }
+  });
+
+  it("infers Yin family and representation from formula and filename", () => {
+    const validation = validateUploadFirstCsv({
+      kind: "layout_simulation",
+      fileName: "PF6FQ_Q0_XY_Re_Yin.csv",
+      fileText: `"Freq [GHz]","0.02 * (1 - mag(St(Rectangle5_T1,Rectangle5_T1))**2) / (1 + mag(St(Rectangle5_T1,Rectangle5_T1))**2) []"
+4.0,0.01
+4.1,0.012`,
+    });
+
+    expect(validation.traces[0]).toMatchObject({
+      family: "y_matrix",
+      parameter: "Yin",
+      representation: "real",
+    });
+  });
+
   it("rejects unsupported complex series columns", () => {
     expect(() =>
       validateUploadFirstCsv({
