@@ -11,7 +11,10 @@ from src.app.domain.datasets import (
     DatasetProfileUpdate,
     DesignBrowseQuery,
     DesignCreateDraft,
+    RawDataIngestionDraft,
+    RawDataTraceDraft,
     SimulationResultPublicationDraft,
+    TraceAxis,
     TraceBrowseQuery,
 )
 from src.app.infrastructure.persisted_runtime import SIMULATION_PTC_BUNDLE_KEY
@@ -346,6 +349,155 @@ def test_dataset_ingestion_materializes_design_and_trace_browse_surfaces() -> No
         f"trace_store/datasets/{dataset_id}/designs/{design_id}/"
     )
     assert trace_detail["preview_payload"]["kind"] == "sampled_series"
+
+
+def test_durable_ingestion_materializes_nd_grid_to_trace_store() -> None:
+    import numpy as np
+    from core.shared.persistence import LocalZarrTraceStore
+
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "HFSS ND Grid Ingestion",
+            "family": "floatingqubit",
+            "device_type": "Floating Qubit",
+            "source": "layout_simulation",
+        },
+    ).json()["data"]["dataset"]
+    dataset_id = created["dataset_id"]
+
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "layout_simulation",
+            "design_name": "FloatingQubitWithXY",
+            "provenance_label": "HFSS Y11 sweep",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11",
+                    "representation": "imaginary",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "HFSS frequency by L_jun grid",
+                    "axes": [
+                        {"name": "frequency", "unit": "GHz", "length": 3},
+                        {"name": "L_jun", "unit": "nH", "length": 2},
+                    ],
+                    "preview_payload": {
+                        "kind": "nd_grid",
+                        "axes": [
+                            {"name": "frequency", "unit": "GHz", "values": [4.8, 4.9, 5.0]},
+                            {"name": "L_jun", "unit": "nH", "values": [8.0, 9.0]},
+                        ],
+                        "values": [
+                            [-2.0, -1.0],
+                            [0.2, 0.5],
+                            [1.2, 1.6],
+                        ],
+                    },
+                }
+            ],
+        },
+    )
+
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    design_id = payload["design"]["design_id"]
+    trace_id = payload["traces"][0]["trace_id"]
+    trace_row = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()[
+        "data"
+    ]["rows"][0]
+    assert trace_row["ndim"] == 2
+    assert trace_row["shape"] == [3, 2]
+    assert trace_row["axes_summary"]["axis_names"] == ["frequency", "L_jun"]
+    assert trace_row["available_sweep_axes"] == ["L_jun"]
+
+    detail = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}"
+    ).json()["data"]
+    assert detail["preview_payload"] == {
+        "kind": "nd_grid",
+        "axes": [
+            {"name": "frequency", "unit": "GHz", "length": 3},
+            {"name": "L_jun", "unit": "nH", "length": 2},
+        ],
+        "shape": [3, 2],
+        "values_ref": "trace_store",
+    }
+    assert detail["payload_ref"]["shape"] == [3, 2]
+
+    trace_store = LocalZarrTraceStore()
+    store_ref = {
+        key: value
+        for key, value in detail["payload_ref"].items()
+        if key != "payload_role"
+    }
+    values = trace_store.read_trace_slice(store_ref, selection=())
+    np.testing.assert_allclose(values.real, np.zeros((3, 2)))
+    np.testing.assert_allclose(
+        values.imag,
+        np.array([[-2.0, -1.0], [0.2, 0.5], [1.2, 1.6]]),
+    )
+    np.testing.assert_allclose(
+        trace_store.read_axis_slice(store_ref, axis_name="frequency"),
+        np.array([4.8, 4.9, 5.0]),
+    )
+    np.testing.assert_allclose(
+        trace_store.read_axis_slice(store_ref, axis_name="L_jun"),
+        np.array([8.0, 9.0]),
+    )
+
+
+def test_rewrite_ingestion_derives_nd_grid_structure_summary(
+    catalog_repository: InMemoryRewriteCatalogRepository,
+) -> None:
+    result = catalog_repository.ingest_raw_data(
+        "local-dataset-001",
+        RawDataIngestionDraft(
+            kind="layout_simulation",
+            design_name="HFSS Rewrite ND Grid",
+            design_id=None,
+            provenance_label="HFSS sweep",
+            traces=(
+                RawDataTraceDraft(
+                    trace_id=None,
+                    family="y_matrix",
+                    parameter="Y11",
+                    representation="imaginary",
+                    trace_mode_group="base",
+                    stage_kind="raw",
+                    provenance_summary="HFSS rewrite grid",
+                    axes=(
+                        TraceAxis(name="frequency", unit="GHz", length=3),
+                        TraceAxis(name="L_jun", unit="nH", length=2),
+                    ),
+                    preview_payload={
+                        "kind": "nd_grid",
+                        "axes": [
+                            {"name": "frequency", "unit": "GHz", "values": [4.8, 4.9, 5.0]},
+                            {"name": "L_jun", "unit": "nH", "values": [8.0, 9.0]},
+                        ],
+                        "values": [[-2.0, -1.0], [0.2, 0.5], [1.2, 1.6]],
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert result is not None
+    trace = result.traces[0]
+    assert trace.ndim == 2
+    assert trace.shape == (3, 2)
+    assert trace.axes_summary.axis_names == ("frequency", "L_jun")
+    assert trace.available_sweep_axes == ("L_jun",)
+    edit_detail = catalog_repository.get_trace_edit_detail(
+        "local-dataset-001",
+        result.design.design_id,
+        trace.trace_id,
+    )
+    assert edit_detail is not None
+    assert edit_detail.editable_numeric_payload["values_ref"] == "trace_store"
 
 
 def test_dataset_design_creation_materializes_empty_browse_row() -> None:
