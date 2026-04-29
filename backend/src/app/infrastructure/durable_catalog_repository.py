@@ -76,6 +76,7 @@ from src.app.infrastructure.persisted_characterization_runtime import (
 from src.app.infrastructure.persisted_runtime import (
     delete_trace_payload_store,
     write_complex_trace_payload,
+    write_nd_complex_trace_payload,
 )
 from src.app.infrastructure.persistence.models import (
     RewriteCharacterizationRegistryRecord,
@@ -236,12 +237,17 @@ class DurableCatalogRepository:
             )
             preview_payload = dict(trace.preview_payload)
             numeric_payload = _numeric_payload_from_preview_payload(trace.axes, preview_payload)
+            stored_preview_payload = _preview_payload_for_storage(
+                preview_payload,
+                numeric_payload=numeric_payload,
+            )
             payload_ref = _materialize_trace_payload(
                 dataset_id=dataset_id,
                 design_id=design_id,
                 trace_id=trace_id,
                 axes=trace.axes,
                 numeric_payload=numeric_payload,
+                representation=trace.representation,
             )
             self._persist_raw_trace_storage(
                 dataset_id=dataset_id,
@@ -299,7 +305,7 @@ class DurableCatalogRepository:
                     stage_kind=trace.stage_kind,
                     provenance_summary=trace.provenance_summary,
                     axes=trace.axes,
-                    preview_payload=preview_payload,
+                    preview_payload=stored_preview_payload,
                     numeric_payload=numeric_payload,
                     payload_store_key=payload_ref.store_key,
                     result_handle_ids=(),
@@ -533,29 +539,32 @@ class DurableCatalogRepository:
             if update.numeric_payload is not None
             else dict(raw_row.preview_payload_json)
         )
-        payload_ref = _materialize_trace_payload(
-            dataset_id=dataset_id,
-            design_id=design_id,
-            trace_id=trace_id,
-            axes=axes,
-            numeric_payload=numeric_payload,
-        )
-        self._persist_raw_trace_storage(
-            dataset_id=dataset_id,
-            design_id=design_id,
-            trace_id=trace_id,
-            payload_ref=payload_ref,
-        )
+        if update.numeric_payload is not None:
+            payload_ref = _materialize_trace_payload(
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_id=trace_id,
+                axes=axes,
+                numeric_payload=numeric_payload,
+                representation=update.representation or raw_row.representation,
+            )
+            self._persist_raw_trace_storage(
+                dataset_id=dataset_id,
+                design_id=design_id,
+                trace_id=trace_id,
+                payload_ref=payload_ref,
+            )
+            raw_row.payload_store_key = payload_ref.store_key
         raw_row.parameter = update.parameter or raw_row.parameter
         raw_row.representation = update.representation or raw_row.representation
         raw_row.provenance_summary = update.provenance_summary or raw_row.provenance_summary
-        raw_row.axes_json = _serialize_axes_for_storage(
-            axes,
-            numeric_payload=numeric_payload,
-        )
-        raw_row.preview_payload_json = preview_payload
-        raw_row.numeric_payload_json = numeric_payload
-        raw_row.payload_store_key = payload_ref.store_key
+        if update.numeric_payload is not None:
+            raw_row.axes_json = _serialize_axes_for_storage(
+                axes,
+                numeric_payload=numeric_payload,
+            )
+            raw_row.preview_payload_json = preview_payload
+            raw_row.numeric_payload_json = _numeric_payload_for_storage(numeric_payload)
         raw_row.updated_at = updated_at
         structure = build_trace_structure_summary(
             dataset_id=raw_row.dataset_id,
@@ -904,6 +913,7 @@ class DurableCatalogRepository:
             trace_id=summary.trace_id,
             axes=detail.axes,
             numeric_payload=numeric_payload,
+            representation=summary.representation,
             store_key=detail.payload_ref.store_key if detail.payload_ref is not None else None,
         )
         self._persist_raw_trace_storage(
@@ -1356,7 +1366,7 @@ def _apply_raw_trace_row(
             numeric_payload=draft.numeric_payload,
         )
         row.preview_payload_json = dict(draft.preview_payload)
-        row.numeric_payload_json = dict(draft.numeric_payload)
+        row.numeric_payload_json = _numeric_payload_for_storage(draft.numeric_payload)
         row.result_handle_ids_json = list(draft.result_handle_ids)
     row.payload_store_key = draft.payload_store_key
     row.editable = draft.editable
@@ -1492,6 +1502,20 @@ def _axis_coordinate_digests_from_numeric_payload(
 ) -> dict[str, str]:
     if len(axes) == 0:
         return {}
+    if numeric_payload.get("kind") == "nd_grid":
+        return {
+            axis.name: build_axis_coordinate_digest(
+                axis_name=axis.name,
+                unit=axis.unit,
+                length=axis.length,
+                values=tuple(float(value) for value in payload_axis["values"]),
+            )
+            for axis, payload_axis in zip(
+                axes,
+                _nd_grid_axes_payload(numeric_payload),
+                strict=True,
+            )
+        }
     axis_key = _numeric_payload_axis_key(numeric_payload)
     rows = numeric_payload.get("rows")
     if not isinstance(rows, list):
@@ -1597,6 +1621,9 @@ def _numeric_payload_from_preview_payload(
     axes: tuple[TraceAxis, ...],
     preview_payload: dict[str, object],
 ) -> dict[str, object]:
+    if preview_payload.get("kind") == "nd_grid":
+        return _nd_grid_numeric_payload_from_preview_payload(axes, preview_payload)
+
     axis = axes[0] if len(axes) > 0 else TraceAxis(name="frequency", unit="GHz", length=0)
     points = preview_payload.get("points")
     rows: list[dict[str, object]] = []
@@ -1616,7 +1643,121 @@ def _numeric_payload_from_preview_payload(
     }
 
 
+def _nd_grid_numeric_payload_from_preview_payload(
+    axes: tuple[TraceAxis, ...],
+    preview_payload: dict[str, object],
+) -> dict[str, object]:
+    raw_grid_axes = preview_payload.get("axes")
+    if not isinstance(raw_grid_axes, list) or len(raw_grid_axes) == 0:
+        raise ValueError("nd_grid preview_payload.axes must be a non-empty array.")
+    if len(raw_grid_axes) != len(axes):
+        raise ValueError("nd_grid axis count must match trace axes.")
+
+    normalized_axes: list[dict[str, object]] = []
+    for axis_index, (declared_axis, raw_axis) in enumerate(
+        zip(axes, raw_grid_axes, strict=True)
+    ):
+        if not isinstance(raw_axis, dict):
+            raise ValueError("nd_grid preview_payload.axes entries must be objects.")
+        axis_name = str(raw_axis.get("name", declared_axis.name)).strip()
+        axis_unit = str(raw_axis.get("unit", declared_axis.unit)).strip()
+        if axis_name != declared_axis.name:
+            raise ValueError(
+                f"nd_grid axis {axis_index} name {axis_name!r} does not match "
+                f"declared trace axis {declared_axis.name!r}."
+            )
+        if axis_unit != declared_axis.unit:
+            raise ValueError(
+                f"nd_grid axis {axis_index} unit {axis_unit!r} does not match "
+                f"declared trace axis {declared_axis.unit!r}."
+            )
+        axis_values = _coerce_float_sequence(
+            raw_axis.get("values"),
+            field=f"nd_grid.axes[{axis_index}].values",
+        )
+        if len(axis_values) != declared_axis.length:
+            raise ValueError(
+                f"nd_grid axis {axis_name!r} has {len(axis_values)} values, "
+                f"expected {declared_axis.length}."
+            )
+        normalized_axes.append(
+            {
+                "name": declared_axis.name,
+                "unit": declared_axis.unit,
+                "values": list(axis_values),
+            }
+        )
+
+    expected_shape = tuple(len(axis["values"]) for axis in normalized_axes)
+    values = np.asarray(preview_payload.get("values"), dtype=np.float64)
+    if values.shape != expected_shape:
+        raise ValueError(
+            f"nd_grid values shape {values.shape!r} does not match axes {expected_shape!r}."
+        )
+    return {
+        "kind": "nd_grid",
+        "axes": normalized_axes,
+        "shape": list(expected_shape),
+        "values": values.tolist(),
+    }
+
+
+def _coerce_float_sequence(value: object, *, field: str) -> tuple[float, ...]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field} must be an array.")
+    return tuple(float(item) for item in value)
+
+
+def _numeric_payload_for_storage(numeric_payload: dict[str, object]) -> dict[str, object]:
+    if numeric_payload.get("kind") != "nd_grid":
+        return dict(numeric_payload)
+    axes_payload = _nd_grid_axes_payload(numeric_payload)
+    return {
+        "kind": "nd_grid",
+        "axes": [
+            {
+                "name": axis["name"],
+                "unit": axis["unit"],
+                "length": len(axis["values"]),
+                "coordinate_digest": build_axis_coordinate_digest(
+                    axis_name=str(axis["name"]),
+                    unit=str(axis["unit"]),
+                    length=len(axis["values"]),
+                    values=tuple(float(value) for value in axis["values"]),
+                ),
+            }
+            for axis in axes_payload
+        ],
+        "shape": list(_nd_grid_shape(numeric_payload)),
+        "values_ref": "trace_store",
+    }
+
+
+def _preview_payload_for_storage(
+    preview_payload: dict[str, object],
+    *,
+    numeric_payload: dict[str, object],
+) -> dict[str, object]:
+    if numeric_payload.get("kind") != "nd_grid":
+        return dict(preview_payload)
+    return {
+        "kind": "nd_grid",
+        "axes": [
+            {
+                "name": axis["name"],
+                "unit": axis["unit"],
+                "length": len(axis["values"]),
+            }
+            for axis in _nd_grid_axes_payload(numeric_payload)
+        ],
+        "shape": list(_nd_grid_shape(numeric_payload)),
+        "values_ref": "trace_store",
+    }
+
+
 def _preview_payload_from_numeric_payload(numeric_payload: dict[str, object]) -> dict[str, object]:
+    if numeric_payload.get("kind") == "nd_grid":
+        return _nd_grid_preview_payload_from_numeric_payload(numeric_payload)
     rows = numeric_payload.get("rows")
     if not isinstance(rows, list):
         return {"kind": "sampled_series", "points": []}
@@ -1643,6 +1784,8 @@ def _numeric_payload_axis_key(numeric_payload: dict[str, object]) -> str:
 
 
 def _numeric_payload_axis_lengths(numeric_payload: dict[str, object]) -> tuple[int, ...] | None:
+    if numeric_payload.get("kind") == "nd_grid":
+        return _nd_grid_shape(numeric_payload)
     rows = numeric_payload.get("rows")
     if not isinstance(rows, list):
         return None
@@ -1656,6 +1799,11 @@ def _axes_with_numeric_payload(
     lengths = _numeric_payload_axis_lengths(numeric_payload)
     if lengths is None or len(axes) == 0:
         return axes
+    if len(lengths) == len(axes):
+        return tuple(
+            replace(axis, length=length)
+            for axis, length in zip(axes, lengths, strict=True)
+        )
     return (replace(axes[0], length=lengths[0]), *axes[1:])
 
 
@@ -1666,8 +1814,19 @@ def _materialize_trace_payload(
     trace_id: str,
     axes: tuple[TraceAxis, ...],
     numeric_payload: dict[str, object],
+    representation: str,
     store_key: str | None = None,
 ) -> Any:
+    if numeric_payload.get("kind") == "nd_grid":
+        return _materialize_nd_grid_trace_payload(
+            dataset_id=dataset_id,
+            design_id=design_id,
+            trace_id=trace_id,
+            numeric_payload=numeric_payload,
+            representation=representation,
+            store_key=store_key,
+        )
+
     axis_key = _numeric_payload_axis_key(numeric_payload)
     rows = numeric_payload.get("rows")
     if not isinstance(rows, list):
@@ -1680,20 +1839,117 @@ def _materialize_trace_payload(
         x_value = row.get(axis_key, float(index))
         y_value = row.get("value", 0.0)
         frequencies.append(float(x_value))
-        values.append(complex(float(y_value), 0.0))
+        values.append(float(y_value))
     if len(frequencies) == 0:
         length = axes[0].length if len(axes) > 0 else 1
         frequencies = [float(index) for index in range(length)]
-        values = [0.0j for _ in range(length)]
+        values = [0.0 for _ in range(length)]
     return write_complex_trace_payload(
         dataset_id=dataset_id,
         design_id=design_id,
         trace_id=trace_id,
         frequencies_ghz=frequencies,
-        values=np.asarray(values, dtype=np.complex128),
+        values=_component_values_as_complex(
+            np.asarray(values, dtype=np.float64),
+            representation=representation,
+        ),
         store_key=store_key
         or f"trace_store/datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr",
     )
+
+
+def _materialize_nd_grid_trace_payload(
+    *,
+    dataset_id: str,
+    design_id: str,
+    trace_id: str,
+    numeric_payload: dict[str, object],
+    representation: str,
+    store_key: str | None,
+) -> Any:
+    values = np.asarray(numeric_payload.get("values"), dtype=np.float64)
+    shape = _nd_grid_shape(numeric_payload)
+    if values.shape != shape:
+        raise ValueError(f"nd_grid values shape {values.shape!r} does not match {shape!r}.")
+    return write_nd_complex_trace_payload(
+        dataset_id=dataset_id,
+        design_id=design_id,
+        trace_id=trace_id,
+        axes=tuple(
+            {
+                "name": axis["name"],
+                "unit": axis["unit"],
+                "values": np.asarray(axis["values"], dtype=np.float64),
+            }
+            for axis in _nd_grid_axes_payload(numeric_payload)
+        ),
+        values=_component_values_as_complex(values, representation=representation),
+        store_key=store_key
+        or f"trace_store/datasets/{dataset_id}/designs/{design_id}/{trace_id}.zarr",
+    )
+
+
+def _component_values_as_complex(values: np.ndarray, *, representation: str) -> np.ndarray:
+    normalized_representation = representation.casefold()
+    if normalized_representation in {"imag", "imaginary"}:
+        return (1j * values).astype(np.complex128)
+    return values.astype(np.complex128)
+
+
+def _nd_grid_axes_payload(numeric_payload: dict[str, object]) -> tuple[dict[str, object], ...]:
+    raw_axes = numeric_payload.get("axes")
+    if not isinstance(raw_axes, list):
+        raise ValueError("nd_grid numeric payload is missing axes.")
+    axes_payload: list[dict[str, object]] = []
+    for axis in raw_axes:
+        if not isinstance(axis, dict):
+            raise ValueError("nd_grid numeric payload axes must be objects.")
+        raw_values = axis.get("values")
+        if not isinstance(raw_values, list):
+            raise ValueError("nd_grid numeric payload axes require values.")
+        axes_payload.append(
+            {
+                "name": str(axis.get("name", "")).strip(),
+                "unit": str(axis.get("unit", "")).strip(),
+                "values": [float(value) for value in raw_values],
+            }
+        )
+    return tuple(axes_payload)
+
+
+def _nd_grid_preview_payload_from_numeric_payload(
+    numeric_payload: dict[str, object],
+) -> dict[str, object]:
+    raw_axes = numeric_payload.get("axes")
+    if not isinstance(raw_axes, list):
+        return {"kind": "nd_grid", "axes": [], "shape": [], "values_ref": "trace_store"}
+    axes_payload: list[dict[str, object]] = []
+    for axis in raw_axes:
+        if not isinstance(axis, dict):
+            continue
+        axis_values = axis.get("values")
+        axis_length = (
+            len(axis_values)
+            if isinstance(axis_values, list)
+            else int(axis.get("length", 0))
+        )
+        axes_payload.append(
+            {
+                "name": str(axis.get("name", "")).strip(),
+                "unit": str(axis.get("unit", "")).strip(),
+                "length": axis_length,
+            }
+        )
+    return {
+        "kind": "nd_grid",
+        "axes": axes_payload,
+        "shape": [axis["length"] for axis in axes_payload],
+        "values_ref": "trace_store",
+    }
+
+
+def _nd_grid_shape(numeric_payload: dict[str, object]) -> tuple[int, ...]:
+    return tuple(len(axis["values"]) for axis in _nd_grid_axes_payload(numeric_payload))
 
 
 def _merge_characterization_result_rows(

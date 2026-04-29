@@ -3,11 +3,13 @@ from __future__ import annotations
 import sqlite3
 import time
 
+import numpy as np
 import pytest
 from core.shared.persistence import database as core_database
 from fastapi.testclient import TestClient
 from sc_core.execution import TaskResultHandle
 from sqlalchemy import select
+from src.app.domain.datasets import TraceAxis, TraceDetail, TraceMetadataSummary
 from src.app.domain.tasks import (
     CharacterizationSetup,
     TaskDetail,
@@ -17,6 +19,7 @@ from src.app.domain.tasks import (
 from src.app.infrastructure.persisted_characterization_runtime import (
     CharacterizationExecutionRequest,
     CharacterizationExecutionTrace,
+    _materialize_trace_grid,
 )
 from src.app.infrastructure.persistence.database import create_metadata_session_factory
 from src.app.infrastructure.persistence.models import RewriteTraceCapabilityRecord
@@ -1341,3 +1344,41 @@ def test_local_persisted_admittance_runtime_exposes_axis_aware_sweep_contract() 
     )
     assert refreshed_detail.status_code == 200
     assert refreshed_detail.json()["data"]["payload"]["input_axis"]["axis_key"] == "Lj"
+
+
+def test_persisted_admittance_runtime_rejects_multiple_non_frequency_sweeps() -> None:
+    trace = CharacterizationExecutionTrace(
+        summary=TraceMetadataSummary(
+            trace_id="trace_hfss_multi_sweep",
+            dataset_id="dataset_hfss",
+            design_id="design_hfss",
+            family="y_matrix",
+            parameter="Y11",
+            representation="imaginary",
+            trace_mode_group="base",
+            source_kind="layout_simulation",
+            stage_kind="raw",
+            provenance_summary="HFSS multi-sweep grid",
+        ),
+        detail=TraceDetail(
+            trace_id="trace_hfss_multi_sweep",
+            dataset_id="dataset_hfss",
+            design_id="design_hfss",
+            axes=(
+                TraceAxis(name="frequency", unit="GHz", length=3),
+                TraceAxis(name="L_jun", unit="nH", length=2),
+                TraceAxis(name="C_jun", unit="fF", length=2),
+            ),
+            preview_payload={"kind": "nd_grid", "values_ref": "trace_store"},
+            payload_ref=None,
+            result_handles=(),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="at most one sweep axis"):
+        _materialize_trace_grid(
+            trace=trace,
+            trace_store=object(),
+            store_ref={},
+            raw_values=np.zeros((3, 2, 2), dtype=np.complex128),
+        )

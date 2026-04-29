@@ -77,7 +77,10 @@ from src.app.domain.datasets import (
 )
 from src.app.domain.result_traces import ResultTraceSelection, build_trace_parameter
 from src.app.domain.tasks import TaskDetail
-from src.app.domain.trace_structures import build_trace_structure_summary
+from src.app.domain.trace_structures import (
+    build_axis_coordinate_digest,
+    build_trace_structure_summary,
+)
 from src.app.infrastructure.persisted_characterization_runtime import (
     CharacterizationTaggingResultPayload,
     PersistedCharacterizationRepository,
@@ -242,6 +245,20 @@ class InMemoryRewriteCatalogRepository:
                 parameter=trace.parameter,
                 index=index,
             )
+            structure = build_trace_structure_summary(
+                dataset_id=dataset_id,
+                design_id=design_id,
+                family=trace.family,
+                parameter=trace.parameter,
+                representation=trace.representation,
+                trace_mode_group=trace.trace_mode_group,
+                source_kind=draft.kind,
+                stage_kind=trace.stage_kind,
+                axes=_structure_axes_from_preview_payload(
+                    trace.axes,
+                    trace.preview_payload,
+                ),
+            )
             summary = TraceMetadataSummary(
                 trace_id=trace_id,
                 dataset_id=dataset_id,
@@ -253,6 +270,12 @@ class InMemoryRewriteCatalogRepository:
                 source_kind=draft.kind,
                 stage_kind=trace.stage_kind,
                 provenance_summary=trace.provenance_summary,
+                ndim=structure.ndim,
+                shape=structure.shape,
+                axes_summary=structure.axes_summary,
+                axis_signature=structure.axis_signature,
+                available_sweep_axes=structure.available_sweep_axes,
+                collection_projection=structure.collection_projection,
             )
             detail = TraceDetail(
                 trace_id=trace_id,
@@ -271,6 +294,18 @@ class InMemoryRewriteCatalogRepository:
                     chunk_shape=tuple(axis.length for axis in trace.axes),
                 ),
                 result_handles=(),
+                family=trace.family,
+                parameter=trace.parameter,
+                representation=trace.representation,
+                trace_mode_group=trace.trace_mode_group,
+                source_kind=draft.kind,
+                stage_kind=trace.stage_kind,
+                ndim=structure.ndim,
+                shape=structure.shape,
+                axes_summary=structure.axes_summary,
+                axis_signature=structure.axis_signature,
+                available_sweep_axes=structure.available_sweep_axes,
+                collection_projection=structure.collection_projection,
             )
             self._trace_details[(dataset_id, design_id, trace_id)] = detail
             self._trace_edit_payloads[(dataset_id, design_id, trace_id)] = (
@@ -1370,7 +1405,7 @@ def _enrich_in_memory_trace_summary(
         trace_mode_group=summary.trace_mode_group,
         source_kind=summary.source_kind,
         stage_kind=summary.stage_kind,
-        axes=tuple(detail.axes),
+        axes=_structure_axes_from_preview_payload(detail.axes, detail.preview_payload),
     )
     return replace(
         summary,
@@ -1401,7 +1436,7 @@ def _enrich_in_memory_trace_detail(
         ),
         source_kind=summary.source_kind if summary is not None else detail.source_kind,
         stage_kind=summary.stage_kind if summary is not None else detail.stage_kind,
-        axes=tuple(detail.axes),
+        axes=_structure_axes_from_preview_payload(detail.axes, detail.preview_payload),
     )
     return replace(
         detail,
@@ -1432,6 +1467,9 @@ def _editable_numeric_payload_from_preview_payload(
     axes: tuple[TraceAxis, ...],
     preview_payload: dict[str, object],
 ) -> dict[str, object]:
+    if preview_payload.get("kind") == "nd_grid":
+        return _nd_grid_editable_payload_from_preview_payload(axes, preview_payload)
+
     axis = axes[0] if len(axes) > 0 else TraceAxis(name="axis", unit="", length=0)
     points = preview_payload.get("points")
     if isinstance(points, list):
@@ -1454,6 +1492,74 @@ def _editable_numeric_payload_from_preview_payload(
             {"key": "value", "label": "Value", "unit": None, "role": "value"},
         ],
         "rows": [],
+    }
+
+
+def _structure_axes_from_preview_payload(
+    axes: tuple[TraceAxis, ...],
+    preview_payload: dict[str, object],
+) -> tuple[TraceAxis | dict[str, object], ...]:
+    if preview_payload.get("kind") != "nd_grid":
+        return axes
+    raw_axes = preview_payload.get("axes")
+    if not isinstance(raw_axes, list) or len(raw_axes) != len(axes):
+        return axes
+    structure_axes: list[dict[str, object]] = []
+    for declared_axis, raw_axis in zip(axes, raw_axes, strict=True):
+        if not isinstance(raw_axis, dict):
+            return axes
+        raw_values = raw_axis.get("values")
+        if not isinstance(raw_values, list) or len(raw_values) != declared_axis.length:
+            return axes
+        axis_values = tuple(float(value) for value in raw_values)
+        structure_axes.append(
+            {
+                "name": declared_axis.name,
+                "unit": declared_axis.unit,
+                "length": declared_axis.length,
+                "coordinate_digest": build_axis_coordinate_digest(
+                    axis_name=declared_axis.name,
+                    unit=declared_axis.unit,
+                    length=declared_axis.length,
+                    values=axis_values,
+                ),
+            }
+        )
+    return tuple(structure_axes)
+
+
+def _nd_grid_editable_payload_from_preview_payload(
+    axes: tuple[TraceAxis, ...],
+    preview_payload: dict[str, object],
+) -> dict[str, object]:
+    raw_axes = preview_payload.get("axes")
+    if not isinstance(raw_axes, list) or len(raw_axes) != len(axes):
+        return {"kind": "nd_grid", "axes": [], "shape": [], "values_ref": "trace_store"}
+    normalized_axes: list[dict[str, object]] = []
+    for declared_axis, raw_axis in zip(axes, raw_axes, strict=True):
+        if not isinstance(raw_axis, dict):
+            continue
+        raw_values = raw_axis.get("values")
+        if not isinstance(raw_values, list):
+            continue
+        normalized_axes.append(
+            {
+                "name": declared_axis.name,
+                "unit": declared_axis.unit,
+                "length": declared_axis.length,
+                "coordinate_digest": build_axis_coordinate_digest(
+                    axis_name=declared_axis.name,
+                    unit=declared_axis.unit,
+                    length=declared_axis.length,
+                    values=tuple(float(value) for value in raw_values),
+                ),
+            }
+        )
+    return {
+        "kind": "nd_grid",
+        "axes": normalized_axes,
+        "shape": [axis["length"] for axis in normalized_axes],
+        "values_ref": "trace_store",
     }
 
 
