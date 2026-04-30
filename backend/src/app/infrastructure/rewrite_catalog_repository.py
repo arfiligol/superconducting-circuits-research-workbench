@@ -55,6 +55,9 @@ from src.app.domain.datasets import (
     DatasetProfileUpdate,
     DesignBrowseRow,
     DesignCreateDraft,
+    DesignRenameDraft,
+    DesignScopeAllowedActions,
+    DesignScopeMergeResult,
     RawDataIngestionDraft,
     RawDataIngestionResult,
     ResultTracePublicationDraft,
@@ -398,6 +401,220 @@ class InMemoryRewriteCatalogRepository:
         return DatasetDesignMutationResult(
             dataset=updated_dataset,
             design=design_row,
+        )
+
+    def rename_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+        draft: DesignRenameDraft,
+    ) -> DatasetDesignMutationResult | None:
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None:
+            return None
+        if self._durable_publication_repository is not None:
+            result = self._durable_publication_repository.rename_design(
+                dataset_id,
+                design_id,
+                draft,
+            )
+            if result is not None:
+                self._datasets[dataset_id] = result.dataset
+                return result
+        design_rows = list(self._designs.get(dataset_id, ()))
+        current = next((row for row in design_rows if row.design_id == design_id), None)
+        if current is None:
+            return None
+        if any(
+            row.lifecycle_state == "active"
+            and row.design_id != design_id
+            and row.name.casefold() == draft.name.casefold()
+            for row in design_rows
+        ):
+            raise ValueError("dataset design already exists")
+        updated_at = _current_timestamp()
+        updated = replace(current, name=draft.name, updated_at=updated_at)
+        design_rows = [row for row in design_rows if row.design_id != design_id]
+        design_rows.append(updated)
+        self._designs[dataset_id] = tuple(sorted(design_rows, key=lambda row: row.design_id))
+        updated_dataset = replace(dataset, updated_at=updated_at)
+        self._datasets[dataset_id] = updated_dataset
+        return DatasetDesignMutationResult(dataset=updated_dataset, design=updated)
+
+    def set_design_lifecycle_state(
+        self,
+        dataset_id: str,
+        design_id: str,
+        lifecycle_state: str,
+    ) -> DatasetDesignMutationResult | None:
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None:
+            return None
+        if self._durable_publication_repository is not None:
+            result = self._durable_publication_repository.set_design_lifecycle_state(
+                dataset_id,
+                design_id,
+                lifecycle_state,
+            )
+            if result is not None:
+                self._datasets[dataset_id] = result.dataset
+                return result
+        design_rows = list(self._designs.get(dataset_id, ()))
+        current = next((row for row in design_rows if row.design_id == design_id), None)
+        if current is None:
+            return None
+        updated_at = _current_timestamp()
+        updated = _design_row_with_lifecycle(
+            design_id=current.design_id,
+            dataset_id=current.dataset_id,
+            name=current.name,
+            source_coverage=current.source_coverage,
+            compare_readiness=current.compare_readiness,
+            trace_count=current.trace_count,
+            updated_at=updated_at,
+            lifecycle_state=lifecycle_state,
+            redirect_design_id=None,
+        )
+        design_rows = [row for row in design_rows if row.design_id != design_id]
+        design_rows.append(updated)
+        self._designs[dataset_id] = tuple(sorted(design_rows, key=lambda row: row.design_id))
+        updated_dataset = replace(dataset, updated_at=updated_at)
+        self._datasets[dataset_id] = updated_dataset
+        return DatasetDesignMutationResult(dataset=updated_dataset, design=updated)
+
+    def merge_design_scopes(
+        self,
+        dataset_id: str,
+        source_design_id: str,
+        target_design_id: str,
+    ) -> DesignScopeMergeResult | None:
+        dataset = self._datasets.get(dataset_id)
+        if dataset is None:
+            return None
+        if self._durable_publication_repository is not None:
+            result = self._durable_publication_repository.merge_design_scopes(
+                dataset_id,
+                source_design_id,
+                target_design_id,
+            )
+            if result is not None:
+                self._datasets[dataset_id] = result.dataset
+                return result
+        target_trace_ids = {
+            row.trace_id
+            for row in self._trace_summaries.get((dataset_id, target_design_id), ())
+        }
+        source_trace_rows = tuple(
+            self._trace_summaries.get((dataset_id, source_design_id), ())
+        )
+        source_trace_ids = {row.trace_id for row in source_trace_rows}
+        if target_trace_ids.intersection(source_trace_ids):
+            raise ValueError("trace identity collision")
+
+        target_rows = list(self._trace_summaries.get((dataset_id, target_design_id), ()))
+        moved_rows = tuple(replace(row, design_id=target_design_id) for row in source_trace_rows)
+        self._trace_summaries[(dataset_id, target_design_id)] = tuple(
+            sorted((*target_rows, *moved_rows), key=lambda row: row.trace_id)
+        )
+        self._trace_summaries[(dataset_id, source_design_id)] = ()
+        for key in list(self._trace_details.keys()):
+            key_dataset_id, key_design_id, trace_id = key
+            if key_dataset_id == dataset_id and key_design_id == source_design_id:
+                detail = self._trace_details.pop(key)
+                self._trace_details[(dataset_id, target_design_id, trace_id)] = replace(
+                    detail,
+                    design_id=target_design_id,
+                )
+        for key in list(self._trace_edit_payloads.keys()):
+            key_dataset_id, key_design_id, trace_id = key
+            if key_dataset_id == dataset_id and key_design_id == source_design_id:
+                payload = self._trace_edit_payloads.pop(key)
+                self._trace_edit_payloads[(dataset_id, target_design_id, trace_id)] = payload
+        self._mutable_trace_keys = {
+            (
+                key_dataset_id,
+                (
+                    target_design_id
+                    if key_dataset_id == dataset_id and key_design_id == source_design_id
+                    else key_design_id
+                ),
+                trace_id,
+            )
+            for key_dataset_id, key_design_id, trace_id in self._mutable_trace_keys
+        }
+        for mapping in (
+            self._characterization_results,
+            self._characterization_run_history,
+            self._characterization_analysis_registry,
+        ):
+            source_key = (dataset_id, source_design_id)
+            target_key = (dataset_id, target_design_id)
+            if source_key in mapping:
+                mapping[target_key] = (*mapping.get(target_key, ()), *mapping.pop(source_key))
+        for key in list(self._characterization_result_details.keys()):
+            key_dataset_id, key_design_id, result_id = key
+            if key_dataset_id == dataset_id and key_design_id == source_design_id:
+                detail = self._characterization_result_details.pop(key)
+                self._characterization_result_details[
+                    (dataset_id, target_design_id, result_id)
+                ] = replace(detail, design_id=target_design_id)
+
+        updated_at = _current_timestamp()
+        design_rows = list(self._designs.get(dataset_id, ()))
+        source = next((row for row in design_rows if row.design_id == source_design_id), None)
+        target = next((row for row in design_rows if row.design_id == target_design_id), None)
+        if source is None or target is None:
+            return None
+        source_updated = _design_row_with_lifecycle(
+            design_id=source.design_id,
+            dataset_id=source.dataset_id,
+            name=source.name,
+            source_coverage=source.source_coverage,
+            compare_readiness=source.compare_readiness,
+            trace_count=0,
+            updated_at=updated_at,
+            lifecycle_state="archived",
+            redirect_design_id=target_design_id,
+        )
+        target_trace_rows = self._trace_summaries.get((dataset_id, target_design_id), ())
+        target_coverage = _build_source_coverage(target_trace_rows)
+        target_updated = _design_row_with_lifecycle(
+            design_id=target.design_id,
+            dataset_id=target.dataset_id,
+            name=target.name,
+            source_coverage=target_coverage,
+            compare_readiness=_compare_readiness_for(target_coverage),
+            trace_count=len(target_trace_rows),
+            updated_at=updated_at,
+        )
+        self._designs[dataset_id] = tuple(
+            sorted(
+                (
+                    *(
+                        row
+                        for row in design_rows
+                        if row.design_id not in {source_design_id, target_design_id}
+                    ),
+                    source_updated,
+                    target_updated,
+                ),
+                key=lambda row: row.design_id,
+            )
+        )
+        updated_dataset = replace(dataset, updated_at=updated_at)
+        self._datasets[dataset_id] = updated_dataset
+        return DesignScopeMergeResult(
+            dataset=updated_dataset,
+            source_design=source_updated,
+            target_design=target_updated,
+            reparented_counts={
+                "raw_traces": len(source_trace_rows),
+                "characterization_results": len(
+                    self._characterization_results.get((dataset_id, target_design_id), ())
+                ),
+                "design_assets": 0,
+            },
+            recompute_status="refreshed",
         )
 
     def publish_simulation_result(
@@ -1657,6 +1874,12 @@ def _merge_design_rows(
                 *durable_row.source_coverage.keys(),
             }
         }
+        lifecycle_state = (
+            existing.lifecycle_state
+            if existing.lifecycle_state != "active"
+            else durable_row.lifecycle_state
+        )
+        redirect_design_id = existing.redirect_design_id or durable_row.redirect_design_id
         merged[durable_row.design_id] = replace(
             durable_row,
             name=durable_row.name or existing.name,
@@ -1664,8 +1887,67 @@ def _merge_design_rows(
             compare_readiness=_compare_readiness_for(combined_coverage),
             trace_count=existing.trace_count + durable_row.trace_count,
             updated_at=max(existing.updated_at, durable_row.updated_at),
+            lifecycle_state=lifecycle_state,
+            redirect_design_id=redirect_design_id,
+            allowed_actions=_design_scope_allowed_actions(lifecycle_state),
+            mutation_policy_summary=_design_scope_policy_summary(
+                lifecycle_state,
+                redirect_design_id,
+            ),
         )
     return tuple(sorted(merged.values(), key=lambda row: row.design_id))
+
+
+def _design_row_with_lifecycle(
+    *,
+    design_id: str,
+    dataset_id: str,
+    name: str,
+    source_coverage: dict[str, int],
+    compare_readiness: str,
+    trace_count: int,
+    updated_at: str,
+    lifecycle_state: str = "active",
+    redirect_design_id: str | None = None,
+) -> DesignBrowseRow:
+    return DesignBrowseRow(
+        design_id=design_id,
+        dataset_id=dataset_id,
+        name=name,
+        source_coverage=source_coverage,
+        compare_readiness=compare_readiness,
+        trace_count=trace_count,
+        updated_at=updated_at,
+        lifecycle_state=lifecycle_state,
+        redirect_design_id=redirect_design_id,
+        allowed_actions=_design_scope_allowed_actions(lifecycle_state),
+        mutation_policy_summary=_design_scope_policy_summary(
+            lifecycle_state,
+            redirect_design_id,
+        ),
+    )
+
+
+def _design_scope_allowed_actions(lifecycle_state: str) -> DesignScopeAllowedActions:
+    active = lifecycle_state == "active"
+    return DesignScopeAllowedActions(
+        rename=active,
+        merge=active,
+        archive=active,
+        delete=active,
+        use_as_target=active,
+    )
+
+
+def _design_scope_policy_summary(
+    lifecycle_state: str,
+    redirect_design_id: str | None,
+) -> str:
+    if lifecycle_state == "active":
+        return "Active design scope; usable as a target."
+    if redirect_design_id is not None:
+        return f"Archived design scope; redirected to {redirect_design_id}."
+    return f"{lifecycle_state.title()} design scope; not usable as a target."
 
 
 def _merge_trace_summaries(

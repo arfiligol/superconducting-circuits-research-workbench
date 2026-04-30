@@ -167,6 +167,7 @@ class RewriteDatasetDesignRecord(RewriteMetadataBase):
             "ix_rewrite_dataset_designs_dataset_normalized_name",
             "dataset_id",
             "normalized_name",
+            "lifecycle_state",
             unique=True,
         ),
     )
@@ -176,6 +177,8 @@ class RewriteDatasetDesignRecord(RewriteMetadataBase):
     design_id: Mapped[str] = mapped_column(String(128), nullable=False)
     normalized_name: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    redirect_design_id: Mapped[str | None] = mapped_column(String(128))
     updated_at: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         nullable=False,

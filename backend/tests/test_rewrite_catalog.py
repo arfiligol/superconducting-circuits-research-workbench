@@ -333,6 +333,16 @@ def test_dataset_ingestion_materializes_design_and_trace_browse_surfaces() -> No
             "compare_readiness": "ready",
             "trace_count": 2,
             "updated_at": "2026-03-17T10:20:00Z",
+            "lifecycle_state": "active",
+            "redirect_design_id": None,
+            "allowed_actions": {
+                "rename": True,
+                "merge": True,
+                "archive": True,
+                "delete": True,
+                "use_as_target": True,
+            },
+            "mutation_policy_summary": "Active design scope; usable as a target.",
         }
     ]
 
@@ -630,6 +640,16 @@ def test_dataset_design_creation_materializes_empty_browse_row() -> None:
         "compare_readiness": "blocked",
         "trace_count": 0,
         "updated_at": payload["design"]["updated_at"],
+        "lifecycle_state": "active",
+        "redirect_design_id": None,
+        "allowed_actions": {
+            "rename": True,
+            "merge": True,
+            "archive": True,
+            "delete": True,
+            "use_as_target": True,
+        },
+        "mutation_policy_summary": "Active design scope; usable as a target.",
     }
     assert payload["design_rows"] == [payload["design"]]
 
@@ -662,7 +682,185 @@ def test_dataset_design_creation_rejects_duplicate_name_conflicts() -> None:
         json={"name": "Conflict Target"},
     )
     assert second.status_code == 409
-    assert second.json()["error"]["code"] == "dataset_design_conflict"
+    assert second.json()["error"]["code"] == "design_scope_name_conflict"
+
+
+def test_design_scope_rename_preserves_design_id() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Design Rename Demo",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    design = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "Original Scope"},
+    ).json()["data"]["design"]
+
+    renamed = client.patch(
+        f"/datasets/{dataset_id}/designs/{design['design_id']}",
+        json={"name": "Renamed Scope"},
+    )
+
+    assert renamed.status_code == 200
+    renamed_design = renamed.json()["data"]["design"]
+    assert renamed_design["design_id"] == design["design_id"]
+    assert renamed_design["name"] == "Renamed Scope"
+    assert renamed_design["lifecycle_state"] == "active"
+
+
+def test_archived_design_scope_is_hidden_from_default_browse_and_blocked_as_target() -> None:
+    dataset_id, design_id, _ = _create_ingested_trace_design()
+
+    archived = client.post(f"/datasets/{dataset_id}/designs/{design_id}/archive")
+
+    assert archived.status_code == 200
+    assert archived.json()["data"]["design"]["lifecycle_state"] == "archived"
+    assert archived.json()["data"]["design"]["allowed_actions"]["use_as_target"] is False
+    assert client.get(f"/datasets/{dataset_id}/designs").json()["data"]["rows"] == []
+    rows_with_archived = client.get(
+        f"/datasets/{dataset_id}/designs",
+        params={"include_archived": True},
+    ).json()["data"]["rows"]
+    assert [row["design_id"] for row in rows_with_archived] == [design_id]
+
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": "Trace CRUD Target",
+            "design_id": design_id,
+            "provenance_label": "blocked-target",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11_blocked",
+                    "representation": "complex",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Blocked target trace",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.1], [5.2, 0.2]],
+                    },
+                }
+            ],
+        },
+    )
+    assert ingestion.status_code == 409
+    assert ingestion.json()["error"]["code"] == "target_design_scope_invalid"
+
+
+def test_create_new_ingestion_does_not_hidden_match_existing_design_name() -> None:
+    dataset_id, _, _ = _create_ingested_trace_design()
+
+    duplicate_name_ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": "Trace CRUD Target",
+            "provenance_label": "duplicate-free-text",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11_duplicate",
+                    "representation": "complex",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Duplicate free-text target trace",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.1], [5.2, 0.2]],
+                    },
+                }
+            ],
+        },
+    )
+
+    assert duplicate_name_ingestion.status_code == 409
+    assert duplicate_name_ingestion.json()["error"]["code"] == "design_scope_name_conflict"
+
+
+def test_merge_reparents_trace_metadata_and_redirects_source_scope() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Design Merge Demo",
+            "family": "fluxonium",
+            "device_type": "Fluxonium",
+            "source": "measurement",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    target = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "Target Scope"},
+    ).json()["data"]["design"]
+    source = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "Source Scope"},
+    ).json()["data"]["design"]
+
+    for design, parameter in ((target, "Y11_target"), (source, "Y11_source")):
+        ingestion = client.post(
+            f"/datasets/{dataset_id}/ingestions",
+            json={
+                "kind": "measurement",
+                "design_name": design["name"],
+                "design_id": design["design_id"],
+                "provenance_label": parameter,
+                "traces": [
+                    {
+                        "family": "y_matrix",
+                        "parameter": parameter,
+                        "representation": "complex",
+                        "trace_mode_group": "base",
+                        "stage_kind": "raw",
+                        "provenance_summary": parameter,
+                        "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                        "preview_payload": {
+                            "kind": "sampled_series",
+                            "points": [[5.0, 0.1], [5.2, 0.2]],
+                        },
+                    }
+                ],
+            },
+        )
+        assert ingestion.status_code == 200
+
+    merged = client.post(
+        f"/datasets/{dataset_id}/designs/{source['design_id']}/merge",
+        json={"target_design_id": target["design_id"]},
+    )
+
+    assert merged.status_code == 200
+    payload = merged.json()["data"]
+    assert payload["source_design"]["lifecycle_state"] == "archived"
+    assert payload["source_design"]["redirect_design_id"] == target["design_id"]
+    assert payload["target_design"]["trace_count"] == 2
+    assert payload["reparented_counts"]["raw_traces"] == 1
+    assert payload["reparented_counts"]["trace_capabilities"] > 0
+    assert payload["reparented_counts"]["published_simulation_traces"] == 0
+    target_traces = client.get(
+        f"/datasets/{dataset_id}/designs/{target['design_id']}/traces"
+    ).json()["data"]["rows"]
+    assert {row["parameter"] for row in target_traces} == {"Y11_target", "Y11_source"}
+
+    stale_source = client.get(f"/datasets/{dataset_id}/designs/{source['design_id']}/traces")
+    assert stale_source.status_code == 409
+    assert stale_source.json()["error"]["code"] == "design_scope_redirected"
+    assert (
+        stale_source.json()["error"]["details"]["redirect_design_id"]
+        == target["design_id"]
+    )
 
 
 def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contract(
@@ -1037,6 +1235,16 @@ def test_ingested_trace_can_be_deleted_from_a_design() -> None:
             "compare_readiness": "blocked",
             "trace_count": 0,
             "updated_at": payload["design"]["updated_at"],
+            "lifecycle_state": "active",
+            "redirect_design_id": None,
+            "allowed_actions": {
+                "rename": True,
+                "merge": True,
+                "archive": True,
+                "delete": True,
+                "use_as_target": True,
+            },
+            "mutation_policy_summary": "Active design scope; usable as a target.",
         },
     }
     rows = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()["data"]["rows"]

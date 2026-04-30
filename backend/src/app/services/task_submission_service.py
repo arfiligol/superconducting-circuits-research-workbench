@@ -463,9 +463,39 @@ class TaskSubmissionService:
         if design is None:
             raise service_error(
                 404,
-                code="design_not_found",
+                code="target_design_scope_invalid",
                 category="not_found",
                 message="The selected design is not available in the target dataset.",
+            )
+        if design.lifecycle_state != "active":
+            if design.redirect_design_id is not None:
+                raise service_error(
+                    409,
+                    code="design_scope_redirected",
+                    category="conflict",
+                    message=(
+                        f"Design {setup.design_id} was redirected to "
+                        f"{design.redirect_design_id}."
+                    ),
+                    details={
+                        "dataset_id": dataset_id,
+                        "design_id": setup.design_id,
+                        "redirect_design_id": design.redirect_design_id,
+                    },
+                )
+            raise service_error(
+                409,
+                code="target_design_scope_invalid",
+                category="conflict",
+                message=(
+                    f"Design {setup.design_id} is {design.lifecycle_state} and cannot "
+                    "be used for characterization submission."
+                ),
+                details={
+                    "dataset_id": dataset_id,
+                    "design_id": setup.design_id,
+                    "lifecycle_state": design.lifecycle_state,
+                },
             )
         if len(setup.selected_trace_ids) == 0:
             raise service_error(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from src.app.domain.storage import ResultHandleRef, TracePayloadRef
@@ -8,6 +8,7 @@ from src.app.domain.storage import ResultHandleRef, TracePayloadRef
 DatasetStatus = Literal["Ready", "Queued", "Review"]
 DatasetVisibilityScope = Literal["local", "private", "workspace"]
 DatasetLifecycleState = Literal["active", "archived", "deleted"]
+DesignScopeLifecycleState = DatasetLifecycleState
 DatasetProfileField = Literal["device_type", "capabilities", "source"]
 CompareReadiness = Literal["ready", "inspect_only", "blocked"]
 TraceFamily = Literal["s_matrix", "y_matrix", "z_matrix"]
@@ -132,6 +133,35 @@ class DesignCreateDraft:
 
 
 @dataclass(frozen=True)
+class DesignRenameDraft:
+    name: str
+
+
+@dataclass(frozen=True)
+class DesignMergeDraft:
+    target_design_id: str
+
+
+@dataclass(frozen=True)
+class DesignScopeAllowedActions:
+    rename: bool
+    merge: bool
+    archive: bool
+    delete: bool
+    use_as_target: bool
+
+
+@dataclass(frozen=True)
+class DesignScopeMergeResult:
+    dataset: DatasetDetail
+    source_design: DesignBrowseRow
+    target_design: DesignBrowseRow
+    reparented_counts: dict[str, int]
+    recompute_status: str
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class DatasetDesignMutationResult:
     dataset: DatasetDetail
     design: DesignBrowseRow
@@ -203,11 +233,24 @@ class DesignBrowseRow:
     compare_readiness: CompareReadiness
     trace_count: int
     updated_at: str
+    lifecycle_state: DesignScopeLifecycleState = "active"
+    redirect_design_id: str | None = None
+    allowed_actions: DesignScopeAllowedActions = field(
+        default_factory=lambda: DesignScopeAllowedActions(
+            rename=True,
+            merge=True,
+            archive=True,
+            delete=True,
+            use_as_target=True,
+        )
+    )
+    mutation_policy_summary: str = "Active design scope; usable as a target."
 
 
 @dataclass(frozen=True)
 class DesignBrowseQuery:
     search: str | None = None
+    include_archived: bool = False
 
 
 @dataclass(frozen=True)

@@ -13,9 +13,14 @@ from src.app.domain.characterization_analysis import (
     evaluate_trace_analysis_capabilities,
 )
 from src.app.domain.datasets import (
+    DatasetAllowedActions,
+    DatasetDesignMutationResult,
     DatasetDetail,
     DesignBrowseRow,
     DesignCreateDraft,
+    DesignRenameDraft,
+    DesignScopeAllowedActions,
+    DesignScopeMergeResult,
     ResultTracePublicationDraft,
     ResultTracePublicationResult,
     SimulationResultPublicationDraft,
@@ -103,13 +108,14 @@ class SqliteResearchDataPublicationRepository:
         dataset_id: str,
         draft: DesignCreateDraft,
     ) -> DesignBrowseRow:
-        design_id = _build_design_id(draft.name)
         updated_at = _timestamp_now()
         normalized_name = _normalize_design_name(draft.name)
         with self._session_factory() as session:
+            design_id = _available_design_id(session, dataset_id, draft.name)
             design_row = session.scalar(
                 select(RewriteDatasetDesignRecord).where(
                     RewriteDatasetDesignRecord.dataset_id == dataset_id,
+                    RewriteDatasetDesignRecord.lifecycle_state == "active",
                     or_(
                         RewriteDatasetDesignRecord.design_id == design_id,
                         RewriteDatasetDesignRecord.normalized_name == normalized_name,
@@ -124,11 +130,13 @@ class SqliteResearchDataPublicationRepository:
                     design_id=design_id,
                     normalized_name=normalized_name,
                     name=draft.name,
+                    lifecycle_state="active",
+                    redirect_design_id=None,
                     updated_at=updated_at,
                 )
             )
             session.commit()
-        return DesignBrowseRow(
+        return _design_row_with_lifecycle(
             design_id=design_id,
             dataset_id=dataset_id,
             name=draft.name,
@@ -136,6 +144,168 @@ class SqliteResearchDataPublicationRepository:
             compare_readiness="blocked",
             trace_count=0,
             updated_at=updated_at,
+        )
+
+    def rename_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+        draft: DesignRenameDraft,
+    ) -> DatasetDesignMutationResult | None:
+        updated_at = _timestamp_now()
+        normalized_name = _normalize_design_name(draft.name)
+        with self._session_factory() as session:
+            conflict = session.scalar(
+                select(RewriteDatasetDesignRecord).where(
+                    RewriteDatasetDesignRecord.dataset_id == dataset_id,
+                    RewriteDatasetDesignRecord.lifecycle_state == "active",
+                    RewriteDatasetDesignRecord.design_id != design_id,
+                    RewriteDatasetDesignRecord.normalized_name == normalized_name,
+                )
+            )
+            if conflict is not None:
+                raise ValueError("dataset design already exists")
+            row = session.scalar(
+                select(RewriteDatasetDesignRecord).where(
+                    RewriteDatasetDesignRecord.dataset_id == dataset_id,
+                    RewriteDatasetDesignRecord.design_id == design_id,
+                )
+            )
+            if row is None:
+                return None
+            row.name = draft.name
+            row.normalized_name = normalized_name
+            row.updated_at = updated_at
+            session.commit()
+        dataset = self._dataset_for_mutation(dataset_id, updated_at)
+        design = self.get_design(dataset_id, design_id)
+        if dataset is None or design is None:
+            return None
+        return DatasetDesignMutationResult(dataset=dataset, design=design)
+
+    def set_design_lifecycle_state(
+        self,
+        dataset_id: str,
+        design_id: str,
+        lifecycle_state: str,
+    ) -> DatasetDesignMutationResult | None:
+        updated_at = _timestamp_now()
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(RewriteDatasetDesignRecord).where(
+                    RewriteDatasetDesignRecord.dataset_id == dataset_id,
+                    RewriteDatasetDesignRecord.design_id == design_id,
+                )
+            )
+            if row is None:
+                return None
+            row.lifecycle_state = lifecycle_state
+            if lifecycle_state != "archived":
+                row.redirect_design_id = None
+            row.updated_at = updated_at
+            session.commit()
+        dataset = self._dataset_for_mutation(dataset_id, updated_at)
+        design = self.get_design(dataset_id, design_id)
+        if dataset is None or design is None:
+            return None
+        return DatasetDesignMutationResult(dataset=dataset, design=design)
+
+    def merge_design_scopes(
+        self,
+        dataset_id: str,
+        source_design_id: str,
+        target_design_id: str,
+    ) -> DesignScopeMergeResult | None:
+        updated_at = _timestamp_now()
+        reparented_counts = {
+            "published_simulation_results": 0,
+            "published_simulation_traces": 0,
+            "trace_capabilities": 0,
+            "design_assets": 0,
+        }
+        with self._session_factory() as session:
+            source = session.scalar(
+                select(RewriteDatasetDesignRecord).where(
+                    RewriteDatasetDesignRecord.dataset_id == dataset_id,
+                    RewriteDatasetDesignRecord.design_id == source_design_id,
+                )
+            )
+            target = session.scalar(
+                select(RewriteDatasetDesignRecord).where(
+                    RewriteDatasetDesignRecord.dataset_id == dataset_id,
+                    RewriteDatasetDesignRecord.design_id == target_design_id,
+                )
+            )
+            if source is None or target is None:
+                return None
+            target_trace_ids = {
+                row.trace_id
+                for row in session.scalars(
+                    select(RewritePublishedSimulationTraceRecord).where(
+                        RewritePublishedSimulationTraceRecord.dataset_id == dataset_id,
+                        RewritePublishedSimulationTraceRecord.design_id == target_design_id,
+                    )
+                )
+            }
+            source_trace_ids = {
+                row.trace_id
+                for row in session.scalars(
+                    select(RewritePublishedSimulationTraceRecord).where(
+                        RewritePublishedSimulationTraceRecord.dataset_id == dataset_id,
+                        RewritePublishedSimulationTraceRecord.design_id == source_design_id,
+                    )
+                )
+            }
+            if target_trace_ids.intersection(source_trace_ids):
+                raise ValueError("trace identity collision")
+            publication_rows = session.scalars(
+                select(RewritePublishedSimulationResultRecord).where(
+                    RewritePublishedSimulationResultRecord.target_dataset_id == dataset_id,
+                    RewritePublishedSimulationResultRecord.target_design_id == source_design_id,
+                )
+            ).all()
+            for row in publication_rows:
+                row.target_design_id = target_design_id
+                row.target_design_name = target.name
+                row.published_at = updated_at
+            reparented_counts["published_simulation_results"] = len(publication_rows)
+            trace_rows = session.scalars(
+                select(RewritePublishedSimulationTraceRecord).where(
+                    RewritePublishedSimulationTraceRecord.dataset_id == dataset_id,
+                    RewritePublishedSimulationTraceRecord.design_id == source_design_id,
+                )
+            ).all()
+            for row in trace_rows:
+                row.design_id = target_design_id
+                row.published_at = updated_at
+            reparented_counts["published_simulation_traces"] = len(trace_rows)
+            from src.app.infrastructure.persistence.models import RewriteTraceCapabilityRecord
+
+            capability_rows = session.scalars(
+                select(RewriteTraceCapabilityRecord).where(
+                    RewriteTraceCapabilityRecord.dataset_id == dataset_id,
+                    RewriteTraceCapabilityRecord.design_id == source_design_id,
+                )
+            ).all()
+            for row in capability_rows:
+                row.design_id = target_design_id
+            reparented_counts["trace_capabilities"] = len(capability_rows)
+            source.lifecycle_state = "archived"
+            source.redirect_design_id = target_design_id
+            source.updated_at = updated_at
+            target.updated_at = updated_at
+            session.commit()
+        dataset = self._dataset_for_mutation(dataset_id, updated_at)
+        source_row = self.get_design(dataset_id, source_design_id)
+        target_row = self.get_design(dataset_id, target_design_id)
+        if dataset is None or source_row is None or target_row is None:
+            return None
+        return DesignScopeMergeResult(
+            dataset=dataset,
+            source_design=source_row,
+            target_design=target_row,
+            reparented_counts=reparented_counts,
+            recompute_status="refreshed",
         )
 
     def publish_simulation_result(
@@ -415,7 +585,7 @@ class SqliteResearchDataPublicationRepository:
                 .order_by(RewritePublishedSimulationResultRecord.target_design_id.asc())
             ).all()
             rows_by_design: dict[str, DesignBrowseRow] = {
-                row.design_id: DesignBrowseRow(
+                row.design_id: _design_row_with_lifecycle(
                     design_id=row.design_id,
                     dataset_id=row.dataset_id,
                     name=row.name,
@@ -423,6 +593,8 @@ class SqliteResearchDataPublicationRepository:
                     compare_readiness="blocked",
                     trace_count=0,
                     updated_at=row.updated_at,
+                    lifecycle_state=row.lifecycle_state,
+                    redirect_design_id=row.redirect_design_id,
                 )
                 for row in created_design_rows
             }
@@ -444,10 +616,21 @@ class SqliteResearchDataPublicationRepository:
                 traces_by_design[trace_row.design_id].append(trace_row)
             for publication_row in publication_rows:
                 design_trace_rows = traces_by_design.get(publication_row.target_design_id, [])
-                design_row = DesignBrowseRow(
+                design_metadata = rows_by_design.get(publication_row.target_design_id)
+                lifecycle_state = (
+                    design_metadata.lifecycle_state if design_metadata is not None else "active"
+                )
+                redirect_design_id = (
+                    design_metadata.redirect_design_id if design_metadata is not None else None
+                )
+                design_row = _design_row_with_lifecycle(
                     design_id=publication_row.target_design_id,
                     dataset_id=dataset_id,
-                    name=publication_row.target_design_name,
+                    name=(
+                        design_metadata.name
+                        if design_metadata is not None
+                        else publication_row.target_design_name
+                    ),
                     source_coverage=_build_source_coverage_from_trace_rows(
                         design_trace_rows
                     ),
@@ -456,6 +639,8 @@ class SqliteResearchDataPublicationRepository:
                     ),
                     trace_count=len(design_trace_rows),
                     updated_at=publication_row.published_at,
+                    lifecycle_state=lifecycle_state,
+                    redirect_design_id=redirect_design_id,
                 )
                 existing = rows_by_design.get(design_row.design_id)
                 if existing is None:
@@ -469,7 +654,7 @@ class SqliteResearchDataPublicationRepository:
                         *design_row.source_coverage.keys(),
                     }
                 }
-                rows_by_design[design_row.design_id] = DesignBrowseRow(
+                rows_by_design[design_row.design_id] = _design_row_with_lifecycle(
                     design_id=design_row.design_id,
                     dataset_id=dataset_id,
                     name=existing.name or design_row.name,
@@ -477,6 +662,8 @@ class SqliteResearchDataPublicationRepository:
                     compare_readiness=_compare_readiness_for(combined_coverage),
                     trace_count=existing.trace_count + design_row.trace_count,
                     updated_at=max(existing.updated_at, design_row.updated_at),
+                    lifecycle_state=existing.lifecycle_state,
+                    redirect_design_id=existing.redirect_design_id,
                 )
             return tuple(sorted(rows_by_design.values(), key=lambda row: row.design_id))
 
@@ -489,6 +676,21 @@ class SqliteResearchDataPublicationRepository:
             (row for row in self.list_designs(dataset_id) if row.design_id == design_id),
             None,
         )
+
+    def _dataset_for_mutation(
+        self,
+        dataset_id: str,
+        updated_at: str,
+    ) -> DatasetDetail | None:
+        with self._session_factory() as session:
+            row = session.scalar(
+                select(RewriteDatasetRecord).where(RewriteDatasetRecord.dataset_id == dataset_id)
+            )
+            if row is None:
+                return None
+            row.updated_at = updated_at
+            session.commit()
+            return _to_dataset_detail(row)
 
     def list_trace_metadata(
         self,
@@ -1457,6 +1659,96 @@ def _build_simulation_publication_key(
 
 def _build_design_id(name: str) -> str:
     return f"design_{_slugify(name)}"
+
+
+def _available_design_id(
+    session: Session,
+    dataset_id: str,
+    name: str,
+) -> str:
+    base_design_id = _build_design_id(name)
+    existing_ids = {
+        row.design_id
+        for row in session.scalars(
+            select(RewriteDatasetDesignRecord).where(
+                RewriteDatasetDesignRecord.dataset_id == dataset_id
+            )
+        ).all()
+    }
+    if base_design_id not in existing_ids:
+        return base_design_id
+    suffix = 2
+    while f"{base_design_id}-{suffix}" in existing_ids:
+        suffix += 1
+    return f"{base_design_id}-{suffix}"
+
+
+def _design_row_with_lifecycle(
+    *,
+    design_id: str,
+    dataset_id: str,
+    name: str,
+    source_coverage: dict[str, int],
+    compare_readiness: str,
+    trace_count: int,
+    updated_at: str,
+    lifecycle_state: str = "active",
+    redirect_design_id: str | None = None,
+) -> DesignBrowseRow:
+    active = lifecycle_state == "active"
+    return DesignBrowseRow(
+        design_id=design_id,
+        dataset_id=dataset_id,
+        name=name,
+        source_coverage=source_coverage,
+        compare_readiness=cast(str, compare_readiness),
+        trace_count=trace_count,
+        updated_at=updated_at,
+        lifecycle_state=cast(str, lifecycle_state),
+        redirect_design_id=redirect_design_id,
+        allowed_actions=DesignScopeAllowedActions(
+            rename=active,
+            merge=active,
+            archive=active,
+            delete=active,
+            use_as_target=active,
+        ),
+        mutation_policy_summary=(
+            "Active design scope; usable as a target."
+            if active
+            else (
+                f"Archived design scope; redirected to {redirect_design_id}."
+                if redirect_design_id is not None
+                else f"{lifecycle_state.title()} design scope; not usable as a target."
+            )
+        ),
+    )
+
+
+def _to_dataset_detail(row: RewriteDatasetRecord) -> DatasetDetail:
+    return DatasetDetail(
+        dataset_id=row.dataset_id,
+        name=row.name,
+        family=row.family,
+        owner=row.owner_display_name,
+        owner_user_id=row.owner_user_id,
+        workspace_id=row.workspace_id,
+        visibility_scope=cast(str, row.visibility_scope),
+        lifecycle_state=cast(str, row.lifecycle_state),
+        updated_at=row.updated_at,
+        device_type=row.device_type,
+        capabilities=tuple(str(item) for item in row.capabilities_json),
+        source=row.source,
+        status=cast(str, row.status),
+        allowed_actions=DatasetAllowedActions(
+            select=True,
+            update_profile=True,
+            publish=True,
+            archive=True,
+            delete=True,
+            ingest_raw_data=True,
+        ),
+    )
 
 
 def _slugify(value: str) -> str:

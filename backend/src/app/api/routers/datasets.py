@@ -18,6 +18,8 @@ from src.app.domain.datasets import (
     DatasetProfileUpdate,
     DesignBrowseQuery,
     DesignCreateDraft,
+    DesignMergeDraft,
+    DesignRenameDraft,
     RawDataIngestionDraft,
     RawDataTraceDraft,
     TraceAxis,
@@ -193,6 +195,7 @@ def list_designs(
     limit: Annotated[str | None, Query()] = None,
     cursor: Annotated[str | None, Query()] = None,
     search: Annotated[str | None, Query()] = None,
+    include_archived: Annotated[bool, Query()] = False,
 ) -> JSONResponse:
     try:
         resolved_limit = _parse_limit(limit)
@@ -200,7 +203,10 @@ def list_designs(
             asdict(row)
             for row in dataset_service.list_designs(
                 dataset_id,
-                DesignBrowseQuery(search=_normalize_optional_text(search)),
+                DesignBrowseQuery(
+                    search=_normalize_optional_text(search),
+                    include_archived=include_archived,
+                ),
             )
         ]
     except ServiceError as exc:
@@ -213,6 +219,7 @@ def list_designs(
         filter_echo={
             "dataset_id": dataset_id,
             "search": _normalize_optional_text(search),
+            "include_archived": include_archived,
         },
     )
     return _success_response(data={"rows": page_rows}, meta=meta)
@@ -241,6 +248,100 @@ def create_design(
             "design_rows": design_rows,
         },
         status_code=201,
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.patch("/{dataset_id}/designs/{design_id}")
+def rename_design(
+    dataset_id: str,
+    design_id: str,
+    payload: Annotated[object, Body(...)],
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        result = dataset_service.rename_design(
+            dataset_id,
+            design_id,
+            _parse_design_rename_payload(payload),
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "renamed",
+            "dataset": _serialize_dataset_profile(result.dataset),
+            "design": _serialize_design_browse_row(result.design),
+        },
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/{dataset_id}/designs/{design_id}/archive")
+def archive_design(
+    dataset_id: str,
+    design_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        result = dataset_service.archive_design(dataset_id, design_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "archived",
+            "dataset": _serialize_dataset_profile(result.dataset),
+            "design": _serialize_design_browse_row(result.design),
+        },
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.delete("/{dataset_id}/designs/{design_id}")
+def delete_design(
+    dataset_id: str,
+    design_id: str,
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        result = dataset_service.delete_design(dataset_id, design_id)
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "deleted",
+            "dataset": _serialize_dataset_profile(result.dataset),
+            "design": _serialize_design_browse_row(result.design),
+        },
+        meta={"generated_at": _generated_at()},
+    )
+
+
+@router.post("/{dataset_id}/designs/{design_id}/merge")
+def merge_design_scopes(
+    dataset_id: str,
+    design_id: str,
+    payload: Annotated[object, Body(...)],
+    dataset_service: Annotated[DatasetService, Depends(get_dataset_service)],
+) -> JSONResponse:
+    try:
+        result = dataset_service.merge_design_scopes(
+            dataset_id,
+            design_id,
+            _parse_design_merge_payload(payload),
+        )
+    except ServiceError as exc:
+        return _service_error_response(exc)
+    return _success_response(
+        data={
+            "operation": "merged",
+            "dataset_id": result.dataset.dataset_id,
+            "source_design": _serialize_design_browse_row(result.source_design),
+            "target_design": _serialize_design_browse_row(result.target_design),
+            "reparented_counts": result.reparented_counts,
+            "recompute_status": result.recompute_status,
+            "warnings": list(result.warnings),
+        },
         meta={"generated_at": _generated_at()},
     )
 
@@ -772,6 +873,20 @@ def _parse_design_create_payload(payload: object) -> DesignCreateDraft:
     )
 
 
+def _parse_design_rename_payload(payload: object) -> DesignRenameDraft:
+    body = _as_mapping(payload)
+    return DesignRenameDraft(
+        name=_require_text(body.get("name"), field="name"),
+    )
+
+
+def _parse_design_merge_payload(payload: object) -> DesignMergeDraft:
+    body = _as_mapping(payload)
+    return DesignMergeDraft(
+        target_design_id=_require_text(body.get("target_design_id"), field="target_design_id"),
+    )
+
+
 def _parse_dataset_profile_payload(payload: object) -> DatasetProfileUpdate:
     body = _as_mapping(payload)
     device_type = _require_text(body.get("device_type"), field="device_type")
@@ -1193,17 +1308,20 @@ def _success_response(
 
 
 def _service_error_response(exc: ServiceError) -> JSONResponse:
+    error_payload = {
+        "code": exc.code,
+        "category": exc.category,
+        "message": exc.message,
+        "retryable": exc.category == "internal_error",
+        "debug_ref": current_debug_ref(),
+    }
+    if len(exc.details) > 0:
+        error_payload["details"] = exc.details
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "ok": False,
-            "error": {
-                "code": exc.code,
-                "category": exc.category,
-                "message": exc.message,
-                "retryable": exc.category == "internal_error",
-                "debug_ref": current_debug_ref(),
-            },
+            "error": error_payload,
         },
     )
 

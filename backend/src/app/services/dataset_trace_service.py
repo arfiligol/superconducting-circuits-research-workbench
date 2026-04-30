@@ -103,6 +103,7 @@ class DatasetTraceService:
         query: TraceBrowseQuery,
     ) -> list[TraceBrowseRow]:
         self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         rows = list(self._repository.list_trace_metadata(dataset_id, design_id))
         filtered = rows
         if query.search is not None:
@@ -147,6 +148,7 @@ class DatasetTraceService:
         trace_id: str,
     ) -> TraceDetail:
         self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         detail = self._repository.get_trace_detail(dataset_id, design_id, trace_id)
         if detail is None:
             raise service_error(
@@ -164,6 +166,7 @@ class DatasetTraceService:
         trace_id: str,
     ) -> TraceEditDetail:
         self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         detail = self._repository.get_trace_edit_detail(dataset_id, design_id, trace_id)
         if detail is None:
             raise service_error(
@@ -182,6 +185,7 @@ class DatasetTraceService:
         update: TraceUpdateDraft,
     ) -> TraceUpdateResult:
         dataset = self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         state = self._session_repository.get_session_state()
         if not dataset.allowed_actions.ingest_raw_data:
             raise service_error(
@@ -234,6 +238,7 @@ class DatasetTraceService:
         trace_ids: Sequence[str],
     ) -> TraceDeleteResult:
         dataset = self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         state = self._session_repository.get_session_state()
         if not dataset.allowed_actions.ingest_raw_data:
             raise service_error(
@@ -319,6 +324,48 @@ class DatasetTraceService:
     ) -> DesignBrowseRow | None:
         design_rows = self._repository.list_designs(dataset_id)
         return next((row for row in design_rows if row.design_id == design_id), None)
+
+    def _require_active_design_scope(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> DesignBrowseRow:
+        design = self._current_design_row(dataset_id, design_id)
+        if design is None:
+            raise service_error(
+                404,
+                code="target_design_scope_invalid",
+                category="not_found",
+                message=f"Design {design_id} was not found in dataset {dataset_id}.",
+            )
+        if design.lifecycle_state == "active":
+            return design
+        if design.redirect_design_id is not None:
+            raise service_error(
+                409,
+                code="design_scope_redirected",
+                category="conflict",
+                message=(
+                    f"Design {design_id} was redirected to "
+                    f"{design.redirect_design_id}."
+                ),
+                details={
+                    "dataset_id": dataset_id,
+                    "design_id": design_id,
+                    "redirect_design_id": design.redirect_design_id,
+                },
+            )
+        raise service_error(
+            409,
+            code="target_design_scope_invalid",
+            category="conflict",
+            message=f"Design {design_id} is {design.lifecycle_state} and is not a normal target.",
+            details={
+                "dataset_id": dataset_id,
+                "design_id": design_id,
+                "lifecycle_state": design.lifecycle_state,
+            },
+        )
 
     def _require_trace_mutation_policy(
         self,
