@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 定義 current platform 的 top-level canonical development surfaces 與 migration residue 邊界。
-version: v3.0.0
-last_updated: 2026-03-21
+version: v3.1.0
+last_updated: 2026-04-29
 updated_by: codex
 ---
 
@@ -39,6 +39,7 @@ superconducting-circuits-tutorial/
 ├── legacy/
 │   └── legacy_nicegui_archived/ # archived UI payload; not a new-work target
 ├── docs/                      # zh-TW docs, guardrails, and docs staging tree
+├── Plans/                     # active multi-agent planning artifacts; not long-term SoT
 ├── data/                      # raw / processed / trace-store / local DB
 ├── openapi.json               # committed OpenAPI snapshot for contract sync
 └── scripts/                   # repo helpers only
@@ -59,6 +60,7 @@ superconducting-circuits-tutorial/
 | CLI command or batch workflow | `cli/` |
 | 可被 API / CLI / simulation 共用的科學邏輯 | `core/` |
 | repo automation, docs helper, migration helper | `scripts/` |
+| multi-agent planning, prompt handoff, test backlog | `Plans/`，由 Planning & Reviewing Agent 建立/退休/刪除 |
 | archived NiceGUI residue | `legacy/legacy_nicegui_archived/`（current archived residue 仍可能在 `src/app/`） |
 | worker runtime residue / redesign staging | 不屬於 target layout；若仍需碰 `src/worker/`，只能以 migration/redesign context 理解 |
 | committed OpenAPI contract snapshot | root `openapi.json` |
@@ -73,6 +75,21 @@ superconducting-circuits-tutorial/
 | --- | --- |
 | `src/app/` | archived legacy UI residue，pending relocation to `legacy/legacy_nicegui_archived/` |
 | `src/worker/` | transition residue / pending backend worker-runtime redesign；不是 canonical current runtime folder，也不是新實作 owner |
+
+## Planning Artifacts
+
+`Plans/` 是協作型 delivery artifacts 的暫存與交接區。
+它可以被 commit 以支援多 agents 共享同一份 plan/prompt/test backlog，但它不是長期產品 SoT。
+
+| Concern | Rule |
+| --- | --- |
+| Owner | Planning & Reviewing Agent |
+| Purpose | active plan、lane prompts、test backlog、review/fixup coordination |
+| Not for | 產品規格、長期 architecture contract、完成後仍有效的操作手冊 |
+| Promotion | 長期決策必須移到 `docs/reference/**` |
+| Cleanup | merge/cleanup pass 必須刪除、退休或明確保留 active backlog |
+
+若 `Plans/` 內容與 `docs/reference/**` 衝突，以 `docs/reference/**` 為準；Planning & Reviewing Agent 必須更新 plan 或回交 Documentation Agent。
 
 ## Related Blueprints
 
@@ -103,6 +120,7 @@ superconducting-circuits-tutorial/
 - **Archived NiceGUI residue** targets `legacy/legacy_nicegui_archived/`; current `src/app/` should be read as archived payload pending relocation.
 - **`src/worker/`** is transition residue under redesign, not a canonical development surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
+- **Plans** go to `Plans/` only as active multi-agent coordination artifacts; Planning & Reviewing Agents own creation and cleanup, and long-term decisions must move to `docs/reference/**`.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
 - Root-level `src/` is not the future canonical umbrella.
 - Dependency direction:

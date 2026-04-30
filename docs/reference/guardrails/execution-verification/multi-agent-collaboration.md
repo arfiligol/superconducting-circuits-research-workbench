@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: "Documentation / Planning & Reviewing / Implementation / Test Agents 的責任分工、交接順序與並行協作規範"
-version: v2.6.0
-last_updated: 2026-03-27
+version: v2.7.0
+last_updated: 2026-04-29
 updated_by: codex
 ---
 
@@ -134,6 +134,58 @@ updated_by: codex
 | Test | `Test Report`，含 scenarios、evidence、integration / E2E results |
 | Planning & Reviewing (merge pass) | `Review Merge Report`，含 accepted commits、conflicts、final verification、`develop` integration status，必要時再附 release-promotion note |
 
+## `Plans/` Lifecycle
+
+`Plans/` 是多 agent 協作期間的 active coordination workspace。
+它的目的是讓不同 agents 在同一條 delivery line 中共享計劃、prompt、test backlog、review findings 與 verification expectations。
+
+`Plans/` 不是產品規格的長期 Source of Truth：
+
+- 產品、架構、資料契約與流程規格的長期 SoT 仍在 `docs/reference/**`。
+- `Plans/` 只能引用 SoT、拆分工作、記錄當前協作狀態。
+- 若 plan 中出現新的規格決策，Planning & Reviewing Agent 必須回交 Documentation Agent 或另開 docs update，把決策移到正式 SoT。
+
+### Lifecycle States
+
+| State | Meaning | Owner action |
+| --- | --- | --- |
+| `draft` | Planning & Reviewing Agent 正在整理上下文，尚未派工 | 不可直接交給 Implementation/Test Agent |
+| `active` | 已可作為當前 delivery line 的派工基準 | 可發給對應 agents |
+| `blocked` | 需要人類或 Documentation Agent 決策 | 暫停 implementation/test 派工 |
+| `superseded` | 被較新的 plan/fixup plan 取代 | 不可再作為派工基準 |
+| `accepted` | 對應 delivery reports 已被 review 接受 | 等待整合或測試 |
+| `integrated` | accepted commits 已整合並完成 final verification | 準備 cleanup |
+| `retired` | plan 已完成協作使命 | 從 active `Plans/` 移除，或只在明確需要時封存 |
+
+### Creation Rules
+
+Planning & Reviewing Agent 應在以下時機產生 `Plans/` artifacts：
+
+- 需要把一個需求拆給多個 Implementation/Test Agents。
+- 需要在 broad implementation 前固定 delivery line 的 scope、non-goals、verification matrix。
+- review 後需要把 findings 轉成 multi-agent fixup slices。
+- Test Agent 需要一份 integration/E2E backlog 與 tested-commit boundary。
+
+Implementation Agents 與 Test Agents 不應自行建立新的 active plan 來改變 scope。
+若他們發現現有 plan 不足，應在 Delivery/Test Report 中回交 Planning & Reviewing Agent。
+
+### Active Plan Rules
+
+- 同一條 delivery line 同一時間只能有一組 active plan baseline。
+- 同一組 active plan 可以包含多個 lane-specific prompts，例如 backend/frontend/test prompts。
+- 若產生新的 fixup plan，Planning & Reviewing Agent 必須明確標示它取代哪個 plan 或只補哪個 finding。
+- Dirty/rejected prototype worktree 不得成為 active plan 的隱性 SoT；只能作為 read-only evidence/reference。
+
+### Cleanup / Retirement Rules
+
+Planning & Reviewing Agent 在 merge pass 必須處理 `Plans/` cleanup：
+
+- 若 plan 只為一次性 agent 派工服務，accepted commits 整合並驗證後，應刪除該 delivery line 的 `Plans/` artifacts。
+- 若 plan 仍代表未完成的 workstream backlog，應保留但更新狀態，明確標示 active/superseded/blocked。
+- 若 plan 內容包含需要長期保存的設計決策，應把決策移到 `docs/reference/**`，再退休原 plan。
+- 不得讓 stale active prompts 留在 `develop`，以免後續 agents 誤用過期指令。
+- `Review Merge Report` 應記錄 plan 是已刪除、已退休、還是保留為後續 active backlog。
+
 ## Plan Artifact Minimum Content
 
 Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
@@ -147,9 +199,12 @@ Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
 - `Test Backlog`
 - `Verification Matrix`
 - `Open Decisions / Risks`
+- `Lifecycle State`
+- `Cleanup / Retirement Criteria`
 
 !!! tip "Plan artifacts are first-class docs"
-    若該計劃需要被持續追蹤或多人共同引用，應把它寫成可保存的文件紀錄，而不是只留在短訊息或臨時聊天上下文中。
+    若該計劃需要被多人共同引用，應把它寫成可保存的協作文件紀錄，而不是只留在短訊息或臨時聊天上下文中。
+    但它仍是 active coordination artifact，不是長期產品 SoT；完成使命後必須被退休或刪除。
 
 ## Parallelism Rules
 
@@ -219,6 +274,8 @@ Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
     - enumerate missing integration/E2E coverage for Test Agents
     - own final verification and accepted-slice integration for the delivery line
     - may edit `Plans/` artifacts only; if SoT must change, hand off to Documentation Agents
+    - own the full `Plans/` lifecycle: create, mark active/blocked/superseded, retire, archive, or delete
+    - remove or retire stale `Plans/` artifacts during merge/cleanup so old prompts are not reused as current instructions
     - define `Allowed Area` + `Do Not Touch` for implementation prompts by default
     - review implementation against SoT and product need, not prompt literalism alone
     - use Playwright-based smoke verification plus screenshot or equivalent visual evidence when reviewing user-visible frontend changes

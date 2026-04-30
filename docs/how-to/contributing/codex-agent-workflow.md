@@ -11,8 +11,8 @@ status: draft
 owner: docs-team
 audience: contributor
 scope: 以 Codex 作為 orchestration hub，進行 docs-first、多 agent、broad-slice + fixup iteration 的實務工作流。
-version: v0.1.0
-last_updated: 2026-03-30
+version: v0.2.0
+last_updated: 2026-04-29
 updated_by: codex
 ---
 
@@ -43,13 +43,13 @@ updated_by: codex
 ```mermaid
 flowchart TD
     A["收斂需求 / 語意"] --> B["補 SoT / 文件"]
-    B --> C["請 Codex 寫 context / prompt"]
+    B --> C["產生 Plans/ artifacts"]
     C --> D["派出 broad implementation slice"]
     D --> E["Review Delivery Report"]
     E --> F{"accepted?"}
-    F -- "no" --> G["寫 Fixup Prompt"]
+    F -- "no" --> G["更新 / 取代 Plans/ fixup prompt"]
     G --> D
-    F -- "yes" --> H["Merge + Cleanup + Verify"]
+    F -- "yes" --> H["Merge + Verify + Retire Plans"]
 ```
 
 ## 3. 步驟
@@ -69,9 +69,10 @@ flowchart TD
 - `幫我先整理成 Document Agent Context`
 - `這件事先討論清楚，然後幫我寫進文件的 context`
 
-### 步驟 2：讓 Codex 寫 agent prompt
+### 步驟 2：讓 Codex 產生 `Plans/` artifacts
 
 SoT 到位後，再請 Codex 寫 prompt 給對應 agent。
+若這次工作會跨多個 agents、需要固定 test backlog，或需要後續 review/merge，請讓 Codex 把 plan 與 prompts 放在 `Plans/`。
 
 最常見的是：
 
@@ -80,6 +81,9 @@ SoT 到位後，再請 Codex 寫 prompt 給對應 agent。
 - `Backend Prompt`
 - `Fixup Prompt`
 - `Merge / cleanup / verify` 收尾指令
+
+`Plans/` 的用途是 active collaboration，不是長期 SoT。
+它可以暫時被 commit 讓多個 agents 共用，但完成整合後應由 Planning & Reviewing Agent 刪除、退休，或把長期決策轉寫到 `docs/reference/**`。
 
 推薦直接使用：
 
@@ -165,6 +169,8 @@ worker agent 回來後，不要直接 merge。
 
 - merge / cherry-pick accepted work
 - cleanup worktrees / branches
+- retire / delete stale `Plans/` artifacts
+- promote lasting decisions from `Plans/` to `docs/reference/**` when needed
 - 保留必要的 parking branch
 - 重啟服務
 - 跑 smoke / API / browser verification
@@ -188,12 +194,13 @@ worker agent 回來後，不要直接 merge。
 先把 SoT 補好，再讓 implementation agent 開工。
 ```
 
-### 4.2 寫 implementation prompt
+### 4.2 產生 Plans + implementation prompt
 
 ```text
-幫我寫一份 Backend Prompt。
+幫我在 Plans/ 下整理一份 Backend Prompt。
 slice 不要切太窄，盡可能讓 agent 把整段 flow 做完，
 只要清楚列 Allowed Area、Do Not Touch、Verification 就好。
+這份 plan 完成整合後請由 Planning & Review Agent 清掉或退休。
 ```
 
 ### 4.3 review Delivery Report
@@ -214,7 +221,7 @@ slice 不要切太窄，盡可能讓 agent 把整段 flow 做完，
 
 ```text
 沒問題就幫我 merge 回 develop，
-再 cleanup worktree / branch，最後做一次 live verify。
+再 cleanup worktree / branch / stale Plans，最後做一次 live verify。
 ```
 
 ## 5. 建議搭配的技能 (Skills)
