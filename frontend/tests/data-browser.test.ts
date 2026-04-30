@@ -357,6 +357,79 @@ describe("page-boundary source contracts", () => {
     expect(dataIngestionWorkspaceSource).not.toContain("Upload complete");
   });
 
+  it("keeps create-new multi-file ingestion pinned to the first backend-created design id", () => {
+    const firstValidation = validateUploadFirstCsv({
+      kind: "layout_simulation",
+      fileName: "PF6FQ_Q0_XY_Im_Y11.csv",
+      fileText: [
+        "Freq [GHz],L_jun [nH],im(Yt(Port1,Port1)) []",
+        "4.8,8,-0.1",
+        "4.8,9,-0.2",
+        "4.9,8,0.1",
+        "4.9,9,0.2",
+      ].join("\n"),
+    });
+    const secondValidation = validateUploadFirstCsv({
+      kind: "layout_simulation",
+      fileName: "PF6FQ_Q0_Readout_Im_Y11.csv",
+      fileText: [
+        "Freq [GHz],L_jun [nH],im(Yt(Port1,Port1)) []",
+        "4.8,8,-0.3",
+        "4.8,9,-0.4",
+        "4.9,8,0.3",
+        "4.9,9,0.4",
+      ].join("\n"),
+    });
+
+    let batchCreatedDesignId: string | null = null;
+    const firstDraft = buildUploadFirstIngestionDraft({
+      kind: "layout_simulation",
+      designName: "PF6FQ Q0",
+      designId: batchCreatedDesignId,
+      provenanceLabel: "PF6FQ import · first",
+      validation: firstValidation,
+    });
+    expect(firstDraft.design_id).toBeNull();
+
+    batchCreatedDesignId = "design_pf6fq_q0";
+    const secondDraft = buildUploadFirstIngestionDraft({
+      kind: "layout_simulation",
+      designName: "PF6FQ Q0",
+      designId: batchCreatedDesignId,
+      provenanceLabel: "PF6FQ import · second",
+      validation: secondValidation,
+    });
+    expect(secondDraft.design_id).toBe("design_pf6fq_q0");
+    expect(secondDraft.design_id).not.toBeNull();
+    expect(dataIngestionWorkspaceSource).toContain("let batchCreatedDesignId: string | null = null;");
+    expect(dataIngestionWorkspaceSource).toContain(": batchCreatedDesignId");
+    expect(dataIngestionWorkspaceSource).toContain("batchCreatedDesignId = result.design.design_id;");
+  });
+
+  it("keeps existing-target ingestion drafts on the explicitly selected active design id", () => {
+    const validation = validateUploadFirstCsv({
+      kind: "measurement",
+      fileName: "scalar_Y11_imaginary.csv",
+      fileText: ["Freq [GHz],Y11 [S]", "4.8,-0.1", "4.9,0.1"].join("\n"),
+    });
+
+    const draft = buildUploadFirstIngestionDraft({
+      kind: "measurement",
+      designName: "Existing Scope",
+      designId: "design_existing_active",
+      provenanceLabel: "Explicit target import",
+      validation,
+    });
+
+    expect(draft.design_id).toBe("design_existing_active");
+    expect(dataIngestionWorkspaceSource).toContain(
+      "? targetDesignDecision.designId",
+    );
+    expect(dataIngestionWorkspaceSource).toContain(
+      "buildDesignOptions(designsQuery.data?.rows ?? [])",
+    );
+  });
+
   it("keeps raw-data summary-first and metadata-read-only", () => {
     expect(rawDataUiSource).toContain("Choose a design");
     expect(rawDataUiSource).toContain("Focused preview stays single-trace");
