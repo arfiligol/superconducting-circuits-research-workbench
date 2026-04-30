@@ -376,6 +376,7 @@ export function DataIngestionWorkspace() {
     let successCount = 0;
     let failureCount = 0;
     let traceCount = 0;
+    let batchCreatedDesignId: string | null = null;
 
     for (const file of fileSummary.validFiles) {
       const validation = file.validation;
@@ -389,15 +390,16 @@ export function DataIngestionWorkspace() {
       }));
 
       try {
+        const ingestionDesignId =
+          targetDesignDecision.mode === "existing"
+            ? targetDesignDecision.designId
+            : batchCreatedDesignId;
         const result = await ingestRawData(
           activeDataset.datasetId,
           buildUploadFirstIngestionDraft({
             kind: selectedScope,
             designName: targetDesignDecision.designName,
-            designId:
-              targetDesignDecision.mode === "existing"
-                ? targetDesignDecision.designId
-                : null,
+            designId: ingestionDesignId,
             provenanceLabel:
               fileSummary.validFiles.length > 1
                 ? `${provenanceLabel} · ${file.name}`
@@ -407,6 +409,9 @@ export function DataIngestionWorkspace() {
         );
         successCount += 1;
         traceCount += result.traces.length;
+        if (targetDesignDecision.mode === "create" && !batchCreatedDesignId) {
+          batchCreatedDesignId = result.design.design_id;
+        }
         setFileImportStatuses((current) => ({
           ...current,
           [file.id]: {

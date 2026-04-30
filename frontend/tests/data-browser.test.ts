@@ -333,6 +333,11 @@ describe("page-boundary source contracts", () => {
     expect(dataIngestionWorkspaceSource).toContain("designId:");
     expect(dataIngestionWorkspaceSource).toContain("New-scope names are create defaults only");
     expect(dataIngestionWorkspaceSource).toContain("never select an existing scope implicitly");
+    expect(dataIngestionWorkspaceSource).toContain("let batchCreatedDesignId: string | null = null;");
+    expect(dataIngestionWorkspaceSource).toContain("const ingestionDesignId =");
+    expect(dataIngestionWorkspaceSource).toContain("targetDesignDecision.designId");
+    expect(dataIngestionWorkspaceSource).toContain(": batchCreatedDesignId");
+    expect(dataIngestionWorkspaceSource).toContain("batchCreatedDesignId = result.design.design_id;");
     expect(dataIngestionWorkspaceSource).toContain("buildUploadFirstIngestionDraft(");
     expect(dataIngestionWorkspaceSource).toContain("validateUploadFirstCsv(");
     expect(dataIngestionWorkspaceSource).toContain("multiple");
