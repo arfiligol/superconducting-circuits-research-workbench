@@ -13,9 +13,9 @@ route: /raw-data
 status: draft
 owner: docs-team
 audience: team
-scope: "/raw-data 的 dataset-local design browse、trace summary CRUD、single-trace preview、batch delete 與 mutation gating contract"
-version: v0.10.0
-last_updated: 2026-03-26
+scope: "/raw-data 的 dataset-local DesignScope lifecycle、trace summary CRUD、single-trace preview、batch delete 與 mutation gating contract"
+version: v0.11.0
+last_updated: 2026-04-30
 updated_by: codex
 ---
 
@@ -24,7 +24,7 @@ updated_by: codex
 本頁定義 active dataset 內 design-local trace browse、single-trace preview 與 trace-summary-level CRUD 的正式頁面契約。
 
 !!! info "Page Frame"
-    本頁負責 design list、trace filtering、trace summary selection、single-trace preview、single-trace edit / delete 與 batch delete。
+    本頁負責 design list、DesignScope create / rename / merge / archive request、trace filtering、trace summary selection、single-trace preview、single-trace edit / delete 與 batch delete。
     raw data upload、dataset metadata 編輯、analysis execution、result publication 與 shell context 管理不屬於本頁責任。
 
 !!! tip "Shared Shell"
@@ -43,6 +43,7 @@ updated_by: codex
 1. 哪些 design / traces 可見。
 2. 哪一筆 trace 目前被聚焦預覽。
 3. 哪些 trace 允許被編輯或刪除。
+4. 哪些 dataset-local DesignScope lifecycle action 可由 backend 執行。
 
 !!! warning "Browse page, not handoff page"
     本頁是 browse / preview surface，不應因為看起來方便，就再塞 `Open Dataset`、`Open Data Ingestion` 等 cross-page CTA 牆。
@@ -52,7 +53,7 @@ updated_by: codex
 
 | 類型 | 內容 |
 | --- | --- |
-| Primary goals | 選擇 design、篩選 trace summaries、聚焦單筆 preview、對允許的 trace 執行 edit / delete、對多筆允許刪除的 trace 執行 batch delete |
+| Primary goals | 選擇 design、管理 DesignScope lifecycle request、篩選 trace summaries、聚焦單筆 preview、對允許的 trace 執行 edit / delete、對多筆允許刪除的 trace 執行 batch delete |
 | Non-goals | dataset profile 編輯、raw data ingest、simulation / characterization execution、system-generated trace 的來源重建或 republish |
 
 !!! tip "Preview 與 Selection 分離"
@@ -90,7 +91,7 @@ graph TD
 | Area | Rule |
 | --- | --- |
 | Design scopes | 維持在頁面上半部；desktop 為兩欄 section，左側是 `Search Design` + paged design list，右側是 `Selected Design` companion summary |
-| Selected design summary | 是 `Design Scopes` section 內的 companion summary，不是獨立中段 panel；內容為 `Source Coverage`、`Browse State`、`Trace Count`、`Updated` |
+| Selected design summary | 是 `Design Scopes` section 內的 companion summary，不是獨立中段 panel；內容為 `Source Coverage`、`Browse State`、`Trace Count`、`Updated` 與 low-noise lifecycle actions |
 | Browse controls | design scopes 與 trace summaries 都必須顯示明確 pagination controls，而不是把 cursor browse 藏成隱性行為 |
 | Trace summaries pane | 主要工作區，視覺寬度必須大於 preview rail，以容納 row selection、row actions、filter rows 與 batch action bar |
 | Preview rail / drawer | mobile 維持 inline；desktop 先佔右側 rail，當 trace section 進入 active scroll threshold 後可轉成固定右側 drawer |
@@ -100,8 +101,8 @@ graph TD
 
 | ID | 組件名稱 | 類型 / 位置 | 作用 | 關鍵行為 |
 | --- | --- | --- | --- | --- |
-| `C1` | Design Scopes Panel | top section | 定義 design browse 邊界 | 左側提供 `Search Design` 與 paged design list；右側提供 selected-design companion summary |
-| `C2` | Selected Design Companion Summary | design scopes right column | 顯示目前 design 的 key browse summary | 顯示 `design_id`、compare readiness 與 `Source Coverage` / `Browse State` / `Trace Count` / `Updated` tiles |
+| `C1` | Design Scopes Panel | top section | 定義 design browse / lifecycle request 邊界 | 左側提供 `Search Design` 與 paged design list；右側提供 selected-design companion summary 與 backend-allowed lifecycle actions |
+| `C2` | Selected Design Companion Summary | design scopes right column | 顯示目前 design 的 key browse summary | 顯示 `design_id`、lifecycle state、compare readiness 與 `Source Coverage` / `Browse State` / `Trace Count` / `Updated` tiles |
 | `C3` | Trace Summaries Table | trace section primary pane | 顯示 trace metadata rows 與 per-row actions | 支援 row focus、checkbox selection、search/filter、row-level `Edit` / `Delete` |
 | `C4` | Batch Action Bar | trace summaries section內穩定 action card | 顯示已選取 trace 數量與 batch delete CTA | 只對 `delete=true` 的 rows 開放 destructive action；不是 sticky toolbar |
 | `C5` | Single Trace Preview | trace section secondary rail / drawer | 顯示目前 `focused_trace_id` 的 sampled preview | mobile inline；desktop 先在 rail 內顯示，必要時轉成固定右側 drawer |
@@ -115,6 +116,7 @@ graph TD
 | Concern | Authority | Page rule |
 | --- | --- | --- |
 | design list | [Backend / Datasets & Results](../../backend/datasets-results.md) `Design Browse` | 只能在 active dataset 內瀏覽 |
+| design lifecycle | [Backend / Datasets & Results](../../backend/datasets-results.md) `Design Scope Lifecycle Contract` | create / rename / merge / archive / delete 只可作為 backend request，不可 page-local re-parent |
 | trace summaries | [Backend / Datasets & Results](../../backend/datasets-results.md) `Trace Metadata List Path` | 只載 summary-safe 欄位與 row-level mutation gating，不載大型 numeric payload |
 | single-trace preview | [Backend / Datasets & Results](../../backend/datasets-results.md) `Trace Preview Path` | 只由 `focused_trace_id` 驅動 |
 | trace edit dialog | [Backend / Datasets & Results](../../backend/datasets-results.md) `Trace Edit Path` 與 `Trace Mutation Contract` | edit payload 與 mutation gating 由 backend 決定；preview payload 不得直接當 edit authority |
@@ -125,12 +127,34 @@ graph TD
 | State | Meaning |
 | --- | --- |
 | `selected_design_id` | 目前 design scope |
+| `design_lifecycle_dialog` | `create`, `rename`, `merge`, `archive`, `delete` 或 `null` |
 | `focused_trace_id` | 目前預覽中的單筆 trace |
 | `selected_trace_ids[]` | 目前 batch action 選中的 trace identities |
 | `design_cursor` / `trace_cursor` | design scopes 與 trace summaries 的顯式分頁狀態 |
 | `trace_filters` | trace search / family / representation / source filters |
 | `active_dialog` | `edit`, `single_delete`, `batch_delete` 或 `null` |
 | `pending_mutation` | 目前正在提交的 edit / delete action |
+
+### Design Scope Lifecycle Rules
+
+| Concern | Rule |
+| --- | --- |
+| Canonical resource | page 使用 `DesignScope` / `design_id`；merge target selector 可顯示 `Target Design Scope` |
+| Create | page 可請 backend 建立 active scope；成功後以返回 row 作為 selected design 候選 |
+| Rename | page 只修改 display name；`design_id` 不變 |
+| Merge | page 選 source + target 並提交 backend merge；不得自行改 trace / batch / run 的 `design_id` |
+| Source after merge | source scope 顯示為 archived / redirected，並清空或跳轉 stale `selected_design_id` |
+| Archive / delete | destructive action 需要 confirm dialog；可用性只依 backend `allowed_actions` |
+| Store refs | page 不解析、不移動、不重寫 `store_ref` 或 TraceStore path |
+
+### Stale Design Handling
+
+| Situation | Page behavior |
+| --- | --- |
+| selected design becomes archived with redirect | show stale-link notice and switch to backend-provided target design summary |
+| selected design becomes archived without redirect | clear selection and show archived-state explanation |
+| selected design becomes deleted | clear selection and show unavailable / tombstone state |
+| merge succeeds while source selected | reset trace filters / preview / selected trace rows before loading target scope |
 
 ### Mutation Rules
 
@@ -169,6 +193,22 @@ graph TD
     2. 點擊 row 後，`selected_design_id` 更新。
     3. 頁面重綁 `Trace Metadata List Path`，清除前一個 design 的 `focused_trace_id` 與 `selected_trace_ids[]`。
     4. `Selected Design` companion summary 與 `Trace Summaries` 以同一個 `dataset_id + design_id` 重新載入。
+
+??? example "流程 A2: Create / Rename Design Scope"
+    1. 使用者從 `Design Scopes Panel` 開啟 create 或 rename dialog。
+    2. page 提交 display name；backend 驗證 active-name uniqueness。
+    3. 成功後 page 只使用 backend 回傳的 design row 更新 browse list。
+
+??? warning "流程 A3: Merge Design Scope"
+    1. 使用者在 selected source scope 上開啟 merge dialog。
+    2. dialog 要求選擇同 dataset 內的 active target scope，並顯示會 re-parent traces / batches / runs / results / assets 的 destructive summary。
+    3. page 提交 merge request，不自行改任何 record identity。
+    4. 成功後 source scope 顯示 archived redirect，target scope 刷新；若 source 原本被選中，page 切到 target 並清空 stale trace preview / selection。
+
+??? warning "流程 A4: Archive / Delete Design Scope"
+    1. 使用者點擊 archive 或 delete。
+    2. page 顯示 confirm dialog，明確說明 scope 不會再出現在 normal target selector。
+    3. 成功後 page 依 backend row 更新 list；若目前 selected scope 不再 active，清空 trace table 或跟隨 redirect。
 
 ??? tip "流程 B: 聚焦單筆 Preview"
     1. 使用者點擊 trace row 本體，更新 `focused_trace_id`。
@@ -218,6 +258,8 @@ graph TD
 
 - [ ] design scopes section 使用左側 browse + 右側 selected-design companion summary 的 desktop 兩欄布局
 - [ ] design browse、trace summaries、single-trace preview 仍維持 `dataset_id + design_id` 綁定
+- [ ] DesignScope create / rename / merge / archive / delete 只透過 backend contract 執行，不由 page-local 重寫 records
+- [ ] merge 成功後 source scope 以 archived redirect 呈現，page 清除 stale trace preview / selection
 - [ ] trace summaries 支援 row selection、per-row `Edit` / `Delete` 與 batch delete
 - [ ] design 與 trace browse 都有明確 pagination controls 與 visible page-size summary
 - [ ] preview 仍是 single-trace-focused，不因 batch selection 變成 multi-trace compare

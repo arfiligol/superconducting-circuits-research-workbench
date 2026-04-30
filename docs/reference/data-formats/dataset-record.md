@@ -11,9 +11,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: DatasetRecord、dataset-local design scope、TraceRecord、TraceBatchRecord、AnalysisRunRecord、DerivedParameterRecord 與 TraceStore contract
-version: v3.4.0
-last_updated: 2026-04-06
+scope: DatasetRecord、dataset-local DesignScope lifecycle、TraceRecord、TraceBatchRecord、AnalysisRunRecord、DerivedParameterRecord 與 TraceStore contract
+version: v3.5.0
+last_updated: 2026-04-30
 updated_by: codex
 title: Dataset / Design / Trace Schema
 ---
@@ -35,9 +35,11 @@ title: Dataset / Design / Trace Schema
 ```text
 DatasetRecord
 ├── DesignScope
+│   ├── DesignAssetRecord[]
 │   ├── TraceBatchRecord[]
 │   ├── TraceRecord[]
 │   ├── AnalysisRunRecord[]
+│   ├── ResultArtifactRecord[]
 │   └── DerivedParameterRecord[]
 └── Dataset-level profile / tags / shared metadata
 ```
@@ -45,7 +47,7 @@ DatasetRecord
 | Object | Canonical meaning |
 | --- | --- |
 | `DatasetRecord` | app-level persisted research container；也是 session `active_dataset` 的綁定對象 |
-| `DesignScope` | dataset 內的分析 / browse 邊界；供 Raw Data Browser、Characterization、部分 result views 使用 |
+| `DesignScope` | dataset 內 lifecycle-managed analytical scope；供 Raw Data Browser、Characterization、simulation publication 與 result views 使用 |
 | `TraceRecord` | one logical observable over ordered axes 的 canonical metadata record |
 | `TraceBatchRecord` | import / simulation / preprocess / postprocess / analysis 的 persisted execution boundary |
 | `AnalysisRunRecord` | trace-consuming analysis run 的 persisted identity |
@@ -93,13 +95,15 @@ DatasetRecord
 
 ## DesignScope
 
-`DesignScope` 是 dataset 內的 analytical / browse boundary。
+`DesignScope` 是 dataset 內的 analytical / browse boundary，也是跨來源資料對齊的正式 scope resource。
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `design_id` | string or int | required | design scope identity；只在 dataset 內保證穩定 |
 | `dataset_id` | string or int | required | parent dataset |
 | `name` | string | required | design label |
+| `lifecycle_state` | enum | required | `active`, `archived`, `deleted` |
+| `redirect_design_id` | string or int | optional | merge / archive redirect target；若沒有 redirect 則為 `null` |
 | `design_meta` | JSON | optional | design-scoped metadata / source coverage / readiness summary |
 | `source_coverage` | JSON | optional | 來源覆蓋摘要 |
 | `created_at` | datetime | required | creation time |
@@ -110,10 +114,70 @@ DatasetRecord
 1. `DesignScope` 必須永遠屬於單一 `dataset_id`。
 2. `Characterization`、`Raw Data Browser` 與 design-scoped results 都以 `design_id + dataset_id` 決定邊界。
 3. `DesignScope` 不是 session global context；切換 dataset 會先改變可見 design scope 集合。
+4. `active` design scopes 才能作為 Data Ingestion、Simulation publication、Raw Data trace mutation 與 Characterization 的正常 target。
+5. `DesignScope.name` 是 display label，不是 identity；同一 dataset 內的 active scope name 應保持唯一，rename 不改變 `design_id`。
+6. UI 可把 selector label 命名為 `Target Design Scope`，但 backend/domain canonical resource name 仍是 `DesignScope`。
 
 !!! info "Browse projection is allowed"
     implementation 可以用 dedicated table 或 derived read model 產生 design browse rows。
-    但對 frontend / backend contract 而言，`design_id`、`dataset_id`、`name`、`source_coverage` 的語意必須穩定。
+    但對 frontend / backend contract 而言，`design_id`、`dataset_id`、`name`、`lifecycle_state`、`redirect_design_id`、`source_coverage` 的語意必須穩定。
+
+### Design Scope Lifecycle Contract
+
+| Operation | Backend contract | Frontend rule |
+| --- | --- | --- |
+| create | backend mints `design_id` inside one `dataset_id` and creates an `active` scope | may request create with a display `name`; must not synthesize authority locally |
+| rename | updates `name` / display metadata only; `design_id` remains stable | may submit requested label and refresh returned row |
+| merge | re-parents source-scope records into target scope, archives source scope, and writes `redirect_design_id=target_design_id` | may request source + target, then follow backend redirect / returned rows |
+| archive | removes scope from default target selectors and normal analysis targets while preserving persisted history | may hide from normal selectors and expose archived state in browse/history contexts |
+| delete | terminal soft lifecycle state for scopes that are not usable as targets; physical purge is not phase-1 contract | may show destructive confirmation, but must rely on backend `allowed_actions` |
+
+### Target Design Scope Selection
+
+Data Ingestion and Simulation publication both require an explicit target scope decision.
+
+| Submit mode | Contract |
+| --- | --- |
+| Existing scope | request carries explicit `dataset_id + design_id` |
+| Create-new scope | request carries create intent and display name; backend creates `DesignScope` before attaching imported / published records |
+| Free-text name | only a create-new default; it is not hidden authority and must not silently match or override an existing scope |
+| Circuit Definition hint | a linked Circuit Definition may suggest a target scope, but user-visible target selection remains the authority |
+
+### Design Scope Merge Re-parenting
+
+`merge(source_design_id, target_design_id)` is backend-owned metadata re-parenting inside one dataset.
+
+| Concern | Rule |
+| --- | --- |
+| Dataset boundary | source and target must share the same `dataset_id` |
+| Scope state | source and target must be usable active scopes before merge; archived/deleted scopes are not normal merge targets |
+| Re-parented objects | backend must re-parent trace metadata, trace batches, trace-batch links, analysis runs, result artifacts, derived parameters, design assets, readiness summaries and design-scoped read models |
+| Source scope after merge | source scope becomes `archived` with `redirect_design_id` pointing to target |
+| Target scope after merge | target keeps its `design_id`; source coverage, trace counts, compare readiness, collection projections, analysis readiness and tagged metric summaries must be refreshed or invalidated |
+| TraceStore | phase-1 merge may leave physical TraceStore paths untouched; `store_ref` is backend-owned opaque locator and remains valid after metadata re-parenting |
+| Identity stability | trace, batch, run, artifact and derived-parameter identities remain stable unless a dedicated migration contract says otherwise |
+
+!!! warning "Frontend does not re-parent"
+    Frontend may request merge, show confirmation and consume returned rows.
+    It must not locally rewrite `design_id`, parse `store_ref`, move TraceStore payloads or delete/recreate records to simulate merge.
+
+### Merge Conflict Rules
+
+| Conflict | Required behavior |
+| --- | --- |
+| active name collision | backend rejects rename / create with `design_scope_name_conflict` or returns a confirmed disambiguated name |
+| trace identity collision | backend must reject; trace identities are stable and cannot be silently overwritten |
+| duplicate design asset | exact duplicates may be coalesced by backend; non-identical conflicts require explicit backend conflict response |
+| analysis / artifact display label collision | preserve stable ids and disambiguate display labels or grouping summary |
+
+### Deep Links And Stale Design IDs
+
+| Stored `design_id` state | Consumer behavior |
+| --- | --- |
+| `active` | load normally inside its `dataset_id` |
+| `archived` with `redirect_design_id` | backend should return redirect / replacement summary so page can move to target scope with a stale-link notice |
+| `archived` without redirect | page should clear active design selection and show archived-state explanation |
+| `deleted` | treat as tombstone / unavailable target; do not auto-create a replacement scope |
 
 ## DesignAssetRecord
 
@@ -132,6 +196,15 @@ DatasetRecord
 !!! important "Circuit Definition stays document-first"
     Circuit Definition 的原子單位仍是一份 revisioned source document，
     不先拆成 relational components/topology rows。
+
+### Circuit Definition Relationship
+
+| Concern | Rule |
+| --- | --- |
+| Definition authority | Circuit Definition remains a document-first source owned by the definition contract |
+| Scope association | a definition may be associated with a `DesignScope` through `DesignAssetRecord` or equivalent backend-owned association |
+| Simulation publication | linked definition context may suggest a `Target Design Scope`, but publication still sends an explicit existing `design_id` or create-new intent |
+| Non-goal | `CircuitDefinition` must not become a relational design-scope table or replace `DesignScope` identity |
 
 ## TraceRecord
 

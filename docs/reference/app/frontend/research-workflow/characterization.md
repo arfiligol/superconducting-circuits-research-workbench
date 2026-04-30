@@ -13,9 +13,9 @@ route: /characterization
 status: draft
 owner: docs-team
 audience: team
-scope: "/characterization 的 design scope、Data Collection Review、analysis pipeline、active analysis run、axis-aware result preview、downstream analysis gating 與 identify mode 契約"
-version: v0.18.0
-last_updated: 2026-04-06
+scope: "/characterization 的 active DesignScope、Data Collection Review、analysis pipeline、active analysis run、axis-aware result preview、downstream analysis gating 與 identify mode 契約"
+version: v0.19.0
+last_updated: 2026-04-30
 updated_by: codex
 ---
 
@@ -49,11 +49,13 @@ updated_by: codex
 |---|---|
 | active workspace | design list、trace visibility、run history 與 queue 都受其限制 |
 | active dataset | design scope 必須來自 active dataset；本頁不得自行擁有另一份 dataset authority |
+| selected design scope | 必須解析為 active `DesignScope`；archived / deleted / redirected scope 不得作為 normal analysis target |
 | focused run task | 只要 task 對目前 session 仍可見，就可從 queue 或 refresh recovery 重建 compact run state |
 
 !!! info "Design selector meaning"
     本頁的 Design Selector 選的是 active dataset 內的 dataset-local `design_id`。
     它不是第二個 global dataset context。
+    若 stored `design_id` 已 merge / archived，page 必須依 backend redirect / stale-state response 清除或切換 selection。
 
 ## User Mental Model
 
@@ -141,7 +143,7 @@ graph LR
     它不是 persisted editable collection resource，也不是把 `collection_projection` 偷渡成使用者可管理的 authority。
 
 !!! tip "No saved input-set contract in this page"
-    若之後需要可命名、可重用、可分享的 reusable input sets，必須另定獨立 contract。
+    若需要可命名、可重用、可分享的 reusable input sets，必須另定獨立 contract。
     本頁目前只定義 user selection 與 backend-derived collection review。
 
 ## Analysis Pipeline Contract
@@ -172,6 +174,7 @@ graph LR
 |---|---|
 | Compare eligibility | measurement、layout simulation、circuit simulation traces 只要共享相容的 scientific structure，就可成為 compare candidate |
 | Compatibility baseline | 至少必須滿足 family / representation / required axes / `axis_signature` 或等價 shared-axis compatibility |
+| Scope baseline | cross-source compare candidates 必須位於同一 active `DesignScope`；HFSS / layout data 與 circuit simulation data 的對齊應先透過 target scope selection 或 DesignScope merge 完成 |
 | Identity preservation | compare-preserving result 不得把不同 source members 平均成單一 surface；必須透過 explicit member/source dimension 或等價語意保留 identity |
 | Overlay semantics | compare plot 應能表達 `同一 sweep axis` 下的多 source members，而不是只回傳 aggregated average |
 | Downstream fit relation | 若 downstream fitting 需要逐 source/member fitting，fit output 也必須保留同一份 member/source identity |
@@ -243,6 +246,7 @@ graph LR
 | Queue row actions | 依 backend `allowed_actions` 顯示，不由頁面自行推導 |
 | Deep task control | deeper attach / cancel / terminate / retry / queue browse 應回到 Header `Global Context` 或 [`Tasks`](../workspace/tasks.md) |
 | No active dataset | 不允許進入正常 design selection 流；顯示空 shell guidance |
+| Archived / redirected design | 不允許提交新 analysis；page 必須顯示 backend stale / redirect reason |
 | Workspace switch | design scope、trace table、run history 與 focused run task 都必須重驗 |
 
 ## 數據持續性與運行時規則
@@ -256,6 +260,7 @@ graph LR
     1. Header 切換 active workspace 或 active dataset。
     2. 本頁重新抓取 design scope、compatible traces 與 run history。
     3. 若目前 focused run task 或 selected design 不再有效，頁面必須明確清除並提示原因。
+    4. 若 selected design 已 archived 且有 redirect，page 應提示 stale selection 並切換到 backend 回傳的 target scope。
 
 !!! warning "Run History 不是 Pipeline"
     `Run History` 回答的是哪些 persisted runs / artifacts 已存在。

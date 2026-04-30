@@ -13,9 +13,9 @@ route: /circuit-simulation
 status: draft
 owner: docs-team
 audience: team
-scope: "/circuit-simulation 的 canonical definition 選擇、simulation setup、task submission、attached-task review 與 post-processing 契約"
-version: v0.25.0
-last_updated: 2026-03-28
+scope: "/circuit-simulation 的 canonical definition 選擇、simulation setup、task submission、attached-task review、Target Design Scope publication 與 post-processing 契約"
+version: v0.26.0
+last_updated: 2026-04-30
 updated_by: codex
 ---
 
@@ -198,11 +198,21 @@ graph TD
 |---|---|
 | 只有一條 visible trace | 儲存一條 canonical trace |
 | 有多條 visible traces | 每條 visible trace 都必須個別儲存成獨立 canonical trace |
-| save target | active dataset 內、目前使用者選定的 design |
+| save target | active dataset 內、目前使用者明確選定或建立的 `Target Design Scope` |
 | saved output shape | 儲存結果仍是 individual trace records，不是整張 plot blob 或 compare snapshot |
 | parameter naming | 儲存時允許使用者輸入 parameter 名稱；多條 trace 時它作為此次保存的命名基底 |
 | canonical sweep structure | parameter-swept published traces 應保留 simulation setup 對應的 canonical ND axes；point / slice compare views 只可作為 projection |
 | publication boundary | save semantics 只看 explorer-visible traces，不由 page 其他 stage state 重新定義 |
+
+### Target Design Scope Rules
+
+| Concern | Rule |
+|---|---|
+| Existing target | `Save Traces` 對既有 scope 必須送出 explicit `dataset_id + design_id` |
+| Create-new target | 使用者可提供 create-new display name；backend 建立 `DesignScope` 後才保存 traces |
+| Free-text name | 只作為 create-new default，不可隱性匹配既有 scope |
+| Definition hint | linked Circuit Definition 可提供 suggested target，但 explicit user selection 才是 publication authority |
+| Archived scope | archived / redirected scope 不得作為 normal save target；page 應跟隨 backend stale target response |
 
 !!! info "Visible traces means explorer-visible traces"
     `Save Traces` 使用的是 result explorer 目前可見的 trace 集合。
@@ -287,7 +297,7 @@ graph TD
     1. 使用者在 `Simulation Result` 或 `Post Processing Result` explorer 中選定 family / source / metric / ports。
     2. 若存在 parameter sweep，使用者先決定 compare axis 與其餘固定值，形成目前 visible traces。
     3. 點擊 `Save Traces`。
-    4. 使用者選擇 active dataset 內的 target design，並輸入 parameter 名稱。
+    4. 使用者選擇 active dataset 內既有 `Target Design Scope`，或明確選擇 create-new target，並輸入 parameter 名稱。
     5. backend 將每條 visible trace 各自保存為 canonical trace records。
 
 ## Acceptance Checklist
@@ -302,7 +312,7 @@ graph TD
 | Result explorer wording | `Simulation Result` 與 `Post Processing Result` 都必須以 visible traces / active trace 的 explorer 語意描述，而不是舊的 current-trace-only wording |
 | Compare model | 單一 sweep 軸可顯示 all visible traces 或聚焦 active trace；多軸 sweep 只能選一個 compare axis，其他軸固定 |
 | Save behavior | `Save Traces` 必須反映目前 visible traces；一條 visible trace 存一條，多條 visible traces 各自存成 individual canonical traces |
-| Save target | 保存目標仍是 active dataset 內選定 design，不得描述成 plot blob publish |
+| Save target | 保存目標是 active dataset 內選定或新建的 `Target Design Scope`；既有 target 必須使用 explicit `design_id` |
 | Trace identity | metric / view state 不得被描述成重新定義 trace identity |
 | Recovery language | 使用 workflow-oriented wording，不以 infrastructure wording 主導 |
 | Shared boundary | global queue / worker / deep task control 必須回到 `Global Context` |
