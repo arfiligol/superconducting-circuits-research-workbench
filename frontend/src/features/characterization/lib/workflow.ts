@@ -84,6 +84,51 @@ export function resolveSelectedCharacterizationResultId(
   return results[0]?.resultId ?? null;
 }
 
+export function resolveCharacterizationResultDetailId(input: Readonly<{
+  selectedResultId: string | null;
+  requestedResultId: string | null;
+  results: readonly CharacterizationResultSummary[] | undefined;
+  hasResolvedResults: boolean;
+}>) {
+  if (input.results && input.results.length > 0) {
+    return resolveSelectedCharacterizationResultId(input.selectedResultId, input.results);
+  }
+
+  if (input.requestedResultId) {
+    return input.requestedResultId;
+  }
+
+  if (input.hasResolvedResults) {
+    return null;
+  }
+
+  return input.selectedResultId;
+}
+
+export function shouldHydrateCharacterizationSelectionFromTask(input: Readonly<{
+  scopeDesignId: string | null;
+  taskDesignId: string | null | undefined;
+}>) {
+  return Boolean(input.scopeDesignId) && input.taskDesignId === input.scopeDesignId;
+}
+
+export function resolveScopedCharacterizationTaskId(input: Readonly<{
+  taskId: number | null;
+  taskDesignId: string | null | undefined;
+  selectedDesignId: string | null;
+  hasTaskDetail: boolean;
+}>) {
+  if (!input.taskId) {
+    return null;
+  }
+
+  if (!input.hasTaskDetail || !input.taskDesignId || !input.selectedDesignId) {
+    return input.taskId;
+  }
+
+  return input.taskDesignId === input.selectedDesignId ? input.taskId : null;
+}
+
 export function summarizeCharacterizationResults(
   results: readonly CharacterizationResultSummary[],
 ): CharacterizationResultSummaryCounts {

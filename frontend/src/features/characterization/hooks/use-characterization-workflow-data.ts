@@ -19,9 +19,12 @@ import type {
   CharacterizationTraceSelectionRow,
 } from "@/features/characterization/lib/contracts";
 import {
+  resolveCharacterizationResultDetailId,
   resolveLatestCharacterizationTask,
+  resolveScopedCharacterizationTaskId,
   resolveSelectedCharacterizationDesignId,
   resolveSelectedCharacterizationResultId,
+  shouldHydrateCharacterizationSelectionFromTask,
   type CharacterizationResultStatusFilter,
 } from "@/features/characterization/lib/workflow";
 import {
@@ -235,15 +238,17 @@ export function useCharacterizationWorkflowData({
   const activeTask = taskDetailQuery.data;
   const hasAttachedTask =
     typeof resolvedTaskId === "number" && activeTask?.taskId === resolvedTaskId;
+  const activeTaskDesignId = activeTask?.characterizationSetup?.design_id ?? null;
+  const taskHydrationDesignId = requestedDesignId ?? selectedDesignId;
 
   useEffect(() => {
-    if ((attachedTaskId === null && selectedTaskId === null) || !activeTask?.characterizationSetup) {
-      return;
-    }
-
     if (
-      requestedDesignId &&
-      activeTask.characterizationSetup.design_id !== requestedDesignId
+      (attachedTaskId === null && selectedTaskId === null) ||
+      !activeTask?.characterizationSetup ||
+      !shouldHydrateCharacterizationSelectionFromTask({
+        scopeDesignId: taskHydrationDesignId,
+        taskDesignId: activeTask.characterizationSetup.design_id,
+      })
     ) {
       return;
     }
@@ -269,6 +274,7 @@ export function useCharacterizationWorkflowData({
     requestedDesignId,
     selectedTaskId,
     activeTask?.datasetId,
+    taskHydrationDesignId,
   ]);
 
   const designsQuery = useSWR(
@@ -353,10 +359,12 @@ export function useCharacterizationWorkflowData({
         : Promise.resolve(undefined),
   );
 
-  const resolvedResultId =
-    resultsQuery.data?.rows && resultsQuery.data.rows.length > 0
-      ? resolveSelectedCharacterizationResultId(selectedResultId, resultsQuery.data.rows)
-      : selectedResultId;
+  const resolvedResultId = resolveCharacterizationResultDetailId({
+    selectedResultId,
+    requestedResultId,
+    results: resultsQuery.data?.rows,
+    hasResolvedResults: Boolean(resultsQuery.data),
+  });
   const detailKey =
     activeDatasetId && resolvedDesignId && resolvedResultId
       ? characterizationResultDetailKey(activeDatasetId, resolvedDesignId, resolvedResultId)
@@ -500,6 +508,14 @@ export function useCharacterizationWorkflowData({
       message: null,
     });
   }, [resolvedResultId]);
+
+  const scopedResolvedTaskId = resolveScopedCharacterizationTaskId({
+    taskId: resolvedTaskId,
+    taskDesignId: activeTaskDesignId,
+    selectedDesignId: resolvedDesignId,
+    hasTaskDetail: Boolean(activeTask),
+  });
+  const scopedActiveTask = scopedResolvedTaskId === resolvedTaskId ? activeTask : undefined;
 
   useEffect(() => {
     if (
@@ -836,11 +852,11 @@ export function useCharacterizationWorkflowData({
     setSelectedResultId,
     characterizationTasks,
     latestCharacterizationTask,
-    resolvedTaskId,
-    activeTask,
+    resolvedTaskId: scopedResolvedTaskId,
+    activeTask: scopedActiveTask,
     activeTaskError: taskDetailQuery.error as Error | undefined,
     isTaskTransitioning:
-      typeof resolvedTaskId === "number" && (!hasAttachedTask || taskDetailQuery.isLoading),
+      typeof scopedResolvedTaskId === "number" && (!hasAttachedTask || taskDetailQuery.isLoading),
     resultDetail: detailQuery.data,
     resultDetailError: detailQuery.error as Error | undefined,
     isResultDetailLoading: detailQuery.isLoading,

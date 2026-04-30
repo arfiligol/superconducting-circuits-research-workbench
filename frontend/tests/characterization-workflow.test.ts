@@ -31,10 +31,13 @@ import {
 } from "../src/features/characterization/lib/trace-selection";
 import {
   filterCharacterizationTasks,
-  resolveLatestCharacterizationTask,
+  resolveCharacterizationResultDetailId,
   resolveCharacterizationSelectionRecovery,
+  resolveLatestCharacterizationTask,
+  resolveScopedCharacterizationTaskId,
   resolveSelectedCharacterizationDesignId,
   resolveSelectedCharacterizationResultId,
+  shouldHydrateCharacterizationSelectionFromTask,
   summarizeCharacterizationResults,
   summarizeCharacterizationTasks,
 } from "../src/features/characterization/lib/workflow";
@@ -287,6 +290,73 @@ describe("characterization browse helpers", () => {
       message:
         "The active dataset now exposes design_target_active instead of design_source_archived. Browse state was rebound to stay within PF6FQ lifecycle dataset.",
     });
+  });
+
+  it("does not load stale result details when the selected design has no results", () => {
+    expect(
+      resolveCharacterizationResultDetailId({
+        selectedResultId: "char-old-scope-result",
+        requestedResultId: null,
+        results: [],
+        hasResolvedResults: true,
+      }),
+    ).toBeNull();
+
+    expect(
+      resolveCharacterizationResultDetailId({
+        selectedResultId: null,
+        requestedResultId: "char-direct-result",
+        results: [],
+        hasResolvedResults: true,
+      }),
+    ).toBe("char-direct-result");
+
+    expect(
+      resolveCharacterizationResultDetailId({
+        selectedResultId: "char-current-selection",
+        requestedResultId: null,
+        results: undefined,
+        hasResolvedResults: false,
+      }),
+    ).toBe("char-current-selection");
+  });
+
+  it("keeps task-driven characterization selection scoped to the active design", () => {
+    expect(
+      shouldHydrateCharacterizationSelectionFromTask({
+        scopeDesignId: "design_pf6fq-q0",
+        taskDesignId: "design_floatingqubitwithxy",
+      }),
+    ).toBe(false);
+    expect(
+      shouldHydrateCharacterizationSelectionFromTask({
+        scopeDesignId: "design_pf6fq-q0",
+        taskDesignId: "design_pf6fq-q0",
+      }),
+    ).toBe(true);
+    expect(
+      shouldHydrateCharacterizationSelectionFromTask({
+        scopeDesignId: null,
+        taskDesignId: "design_floatingqubitwithxy",
+      }),
+    ).toBe(false);
+
+    expect(
+      resolveScopedCharacterizationTaskId({
+        taskId: 490,
+        taskDesignId: "design_floatingqubitwithxy",
+        selectedDesignId: "design_pf6fq-q0",
+        hasTaskDetail: true,
+      }),
+    ).toBeNull();
+    expect(
+      resolveScopedCharacterizationTaskId({
+        taskId: 490,
+        taskDesignId: "design_pf6fq-q0",
+        selectedDesignId: "design_pf6fq-q0",
+        hasTaskDetail: true,
+      }),
+    ).toBe(490);
   });
 
   it("summarizes persisted results and emits recovery notices for stale browse state", () => {
@@ -900,8 +970,9 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain("() => (resolvedTaskId ? getTask(resolvedTaskId) : Promise.resolve(undefined))");
     expect(characterizationHookSource).toContain("listDesignBrowseRows(activeDatasetId)");
     expect(characterizationHookSource).toContain(
-      "activeTask.characterizationSetup.design_id !== requestedDesignId",
+      "shouldHydrateCharacterizationSelectionFromTask",
     );
+    expect(characterizationHookSource).toContain("taskHydrationDesignId");
     expect(characterizationHookSource).toContain(
       "activeTask.datasetId && activeTask.datasetId !== activeDatasetId",
     );
@@ -926,11 +997,16 @@ describe("characterization source contracts", () => {
       "characterizationResultDetailKey(activeDatasetId, requestedDesignId",
     );
     expect(characterizationHookSource).toContain(
-      "resultsQuery.data?.rows && resultsQuery.data.rows.length > 0",
+      "resultsQuery.data?.rows",
     );
+    expect(characterizationHookSource).toContain("resolveCharacterizationResultDetailId({");
     expect(characterizationHookSource).toContain(
       "if (!rows || rows.length === 0) {",
     );
+    expect(characterizationHookSource).toContain(
+      "shouldHydrateCharacterizationSelectionFromTask({",
+    );
+    expect(characterizationHookSource).toContain("resolveScopedCharacterizationTaskId({");
     expect(characterizationHookSource).toContain("const characterization_setup: CharacterizationSetupDraft");
     expect(characterizationHookSource).toContain('kind: "characterization"');
     expect(characterizationHookSource).toContain("selected_trace_ids: selectedTraceIds");
