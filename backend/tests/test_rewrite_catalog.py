@@ -2,6 +2,7 @@ from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
+from sc_core.execution import TaskResultHandle
 from src.app.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
     CharacterizationArtifactPayloadQuery,
@@ -17,6 +18,16 @@ from src.app.domain.datasets import (
     TraceAxis,
     TraceBrowseQuery,
 )
+from src.app.domain.tasks import (
+    CharacterizationSetup,
+    TaskDetail,
+    TaskProgress,
+    TaskResultRefs,
+)
+from src.app.infrastructure.persisted_characterization_runtime import (
+    CharacterizationExecutionRequest,
+    CharacterizationExecutionTrace,
+)
 from src.app.infrastructure.persisted_runtime import SIMULATION_PTC_BUNDLE_KEY
 from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
 from src.app.infrastructure.rewrite_catalog_repository import (
@@ -25,7 +36,12 @@ from src.app.infrastructure.rewrite_catalog_repository import (
     FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
     InMemoryRewriteCatalogRepository,
 )
-from src.app.infrastructure.runtime import get_task_service, reset_runtime_state
+from src.app.infrastructure.runtime import (
+    get_catalog_repository,
+    get_persisted_characterization_repository,
+    get_task_service,
+    reset_runtime_state,
+)
 from src.app.main import app
 from src.app.services.dataset_catalog_service import DatasetCatalogService
 from src.app.services.dataset_characterization_service import (
@@ -167,6 +183,55 @@ def _strip_completed_bundle_metadata(task, bundle_key: str):
             if event.event_type == "task_completed" and bundle_key in event.metadata
             else event
             for event in task.events
+        ),
+    )
+
+
+def _build_direct_characterization_task(
+    *,
+    dataset_id: str,
+    design_id: str,
+    selected_trace_ids: tuple[str, ...],
+) -> TaskDetail:
+    return TaskDetail(
+        task_id=99201,
+        kind="characterization",
+        lane="characterization",
+        execution_mode="run",
+        status="running",
+        submitted_at="2026-04-01T00:00:00Z",
+        owner_user_id="rewrite-local-user",
+        owner_display_name="Rewrite Local User",
+        workspace_id="workspace-local",
+        workspace_slug="local",
+        visibility_scope="local",
+        dataset_id=dataset_id,
+        definition_id=None,
+        summary="Direct persisted admittance runtime scope test.",
+        queue_backend="rq_redis",
+        worker_task_name="characterization_run_task",
+        request_ready=True,
+        submitted_from_active_dataset=True,
+        progress=TaskProgress(
+            phase="running",
+            percent_complete=50,
+            summary="Executing persisted admittance extraction.",
+            updated_at="2026-04-01T00:00:00Z",
+        ),
+        result_refs=TaskResultRefs(
+            result_handle=TaskResultHandle(),
+            metadata_records=(),
+            trace_payload=None,
+            result_handles=(),
+        ),
+        characterization_setup=CharacterizationSetup(
+            design_id=design_id,
+            analysis_id="admittance_extraction",
+            selected_trace_ids=selected_trace_ids,
+            analysis_config={
+                "fit_window": [4.8, 5.2],
+                "residual_tolerance": 10.0,
+            },
         ),
     )
 
@@ -861,6 +926,261 @@ def test_merge_reparents_trace_metadata_and_redirects_source_scope() -> None:
         stale_source.json()["error"]["details"]["redirect_design_id"]
         == target["design_id"]
     )
+
+
+def test_design_scope_lifecycle_integrates_ingestion_merge_and_characterization_scope() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Integrated DesignScope Lifecycle",
+            "family": "floatingqubit",
+            "device_type": "Floating Qubit",
+            "source": "layout_simulation",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    target = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "Target Lifecycle Scope"},
+    ).json()["data"]["design"]
+    source = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "Source Lifecycle Scope"},
+    ).json()["data"]["design"]
+
+    target_ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "measurement",
+            "design_name": target["name"],
+            "design_id": target["design_id"],
+            "provenance_label": "target-measurement",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11_target",
+                    "representation": "complex",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Target measurement branch",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.1], [5.2, 0.2]],
+                    },
+                }
+            ],
+        },
+    )
+    assert target_ingestion.status_code == 200
+    assert target_ingestion.json()["data"]["design"]["design_id"] == target["design_id"]
+
+    source_ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "layout_simulation",
+            "design_name": source["name"],
+            "design_id": source["design_id"],
+            "provenance_label": "source-hfss-sweep",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11",
+                    "representation": "imaginary",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Source HFSS L_jun sweep",
+                    "axes": [
+                        {"name": "frequency", "unit": "GHz", "length": 5},
+                        {"name": "L_jun", "unit": "nH", "length": 2},
+                    ],
+                    "preview_payload": {
+                        "kind": "nd_grid",
+                        "axes": [
+                            {
+                                "name": "frequency",
+                                "unit": "GHz",
+                                "values": [4.8, 4.9, 5.0, 5.1, 5.2],
+                            },
+                            {"name": "L_jun", "unit": "nH", "values": [8.0, 9.0]},
+                        ],
+                        "values": [
+                            [-1.0, -0.5],
+                            [0.2, 0.6],
+                            [1.2, 1.6],
+                            [0.2, 0.4],
+                            [-0.5, -0.2],
+                        ],
+                    },
+                }
+            ],
+        },
+    )
+    assert source_ingestion.status_code == 200
+    source_trace_id = source_ingestion.json()["data"]["traces"][0]["trace_id"]
+    assert source_ingestion.json()["data"]["design"]["design_id"] == source["design_id"]
+
+    active_designs = client.get(f"/datasets/{dataset_id}/designs")
+    assert active_designs.status_code == 200
+    assert {row["design_id"] for row in active_designs.json()["data"]["rows"]} == {
+        source["design_id"],
+        target["design_id"],
+    }
+
+    source_registry = client.get(
+        f"/datasets/{dataset_id}/designs/{source['design_id']}/characterization-analysis-registry",
+        params={"selected_trace_ids": source_trace_id},
+    )
+    assert source_registry.status_code == 200
+    source_registry_rows = {
+        row["analysis_id"]: row for row in source_registry.json()["data"]["rows"]
+    }
+    assert source_registry_rows["admittance_extraction"]["availability_state"] == "recommended"
+
+    catalog_repository = get_catalog_repository()
+    design = catalog_repository.get_design(dataset_id, source["design_id"])
+    assert design is not None
+    trace_summary = next(
+        row
+        for row in catalog_repository.list_trace_metadata(dataset_id, source["design_id"])
+        if row.trace_id == source_trace_id
+    )
+    trace_detail = catalog_repository.get_trace_detail(
+        dataset_id,
+        source["design_id"],
+        source_trace_id,
+    )
+    assert trace_detail is not None
+    execution_result = get_persisted_characterization_repository().run_admittance_extraction(
+        CharacterizationExecutionRequest(
+            task=_build_direct_characterization_task(
+                dataset_id=dataset_id,
+                design_id=source["design_id"],
+                selected_trace_ids=(source_trace_id,),
+            ),
+            design=design,
+            traces=(
+                CharacterizationExecutionTrace(
+                    summary=trace_summary,
+                    detail=trace_detail,
+                ),
+            ),
+        )
+    )
+    result_id = execution_result.result_summary_payload["characterization_result_id"]
+    source_result = client.get(
+        f"/datasets/{dataset_id}/designs/{source['design_id']}/characterization-results/{result_id}"
+    )
+    assert source_result.status_code == 200
+    assert source_result.json()["data"]["design_id"] == source["design_id"]
+
+    merged = client.post(
+        f"/datasets/{dataset_id}/designs/{source['design_id']}/merge",
+        json={"target_design_id": target["design_id"]},
+    )
+    assert merged.status_code == 200
+    merge_payload = merged.json()["data"]
+    assert merge_payload["source_design"]["lifecycle_state"] == "archived"
+    assert merge_payload["source_design"]["redirect_design_id"] == target["design_id"]
+    assert merge_payload["target_design"]["trace_count"] == 2
+    assert merge_payload["reparented_counts"]["raw_traces"] == 1
+    assert merge_payload["reparented_counts"]["trace_capabilities"] > 0
+    assert merge_payload["reparented_counts"]["characterization_registry_rows"] == 0
+
+    active_after_merge = client.get(f"/datasets/{dataset_id}/designs")
+    assert active_after_merge.status_code == 200
+    assert [row["design_id"] for row in active_after_merge.json()["data"]["rows"]] == [
+        target["design_id"]
+    ]
+    all_designs = client.get(
+        f"/datasets/{dataset_id}/designs",
+        params={"include_archived": True},
+    )
+    assert all_designs.status_code == 200
+    designs_by_id = {
+        row["design_id"]: row for row in all_designs.json()["data"]["rows"]
+    }
+    assert designs_by_id[source["design_id"]]["redirect_design_id"] == target["design_id"]
+
+    target_traces = client.get(f"/datasets/{dataset_id}/designs/{target['design_id']}/traces")
+    assert target_traces.status_code == 200
+    assert {row["trace_id"] for row in target_traces.json()["data"]["rows"]} == {
+        target_ingestion.json()["data"]["traces"][0]["trace_id"],
+        source_trace_id,
+    }
+    reparented_detail = client.get(
+        f"/datasets/{dataset_id}/designs/{target['design_id']}/traces/{source_trace_id}"
+    )
+    assert reparented_detail.status_code == 200
+    assert reparented_detail.json()["data"]["design_id"] == target["design_id"]
+    assert reparented_detail.json()["data"]["available_sweep_axes"] == ["L_jun"]
+
+    stale_trace_access = client.get(
+        f"/datasets/{dataset_id}/designs/{source['design_id']}/traces"
+    )
+    assert stale_trace_access.status_code == 409
+    assert stale_trace_access.json()["error"]["code"] == "design_scope_redirected"
+    assert (
+        stale_trace_access.json()["error"]["details"]["redirect_design_id"]
+        == target["design_id"]
+    )
+    stale_ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "layout_simulation",
+            "design_name": source["name"],
+            "design_id": source["design_id"],
+            "provenance_label": "stale-source-target",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11_stale",
+                    "representation": "imaginary",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "Rejected stale target trace",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 2}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[5.0, 0.1], [5.2, 0.2]],
+                    },
+                }
+            ],
+        },
+    )
+    assert stale_ingestion.status_code == 409
+    assert stale_ingestion.json()["error"]["code"] == "design_scope_redirected"
+    assert stale_ingestion.json()["error"]["details"]["redirect_design_id"] == target["design_id"]
+
+    stale_registry = client.get(
+        f"/datasets/{dataset_id}/designs/{source['design_id']}/characterization-analysis-registry",
+        params={"selected_trace_ids": source_trace_id},
+    )
+    assert stale_registry.status_code == 409
+    assert stale_registry.json()["error"]["code"] == "design_scope_redirected"
+    stale_result = client.get(
+        f"/datasets/{dataset_id}/designs/{source['design_id']}/characterization-results/{result_id}"
+    )
+    assert stale_result.status_code == 409
+    assert stale_result.json()["error"]["code"] == "design_scope_redirected"
+
+    target_registry = client.get(
+        f"/datasets/{dataset_id}/designs/{target['design_id']}/characterization-analysis-registry",
+        params={"selected_trace_ids": source_trace_id},
+    )
+    assert target_registry.status_code == 200
+    target_registry_rows = {
+        row["analysis_id"]: row for row in target_registry.json()["data"]["rows"]
+    }
+    assert target_registry_rows["admittance_extraction"]["availability_state"] == "recommended"
+
+    wrong_scope_detail = client.get(
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_b/"
+        "characterization-results/char-fit-flux-a-01"
+    )
+    assert wrong_scope_detail.status_code == 404
+    assert wrong_scope_detail.json()["error"]["code"] == "run_not_found"
 
 
 def test_dataset_service_exposes_tagged_metrics_and_summary_first_browse_contract(

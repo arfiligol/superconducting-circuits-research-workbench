@@ -253,6 +253,42 @@ describe("characterization browse helpers", () => {
     );
   });
 
+  it("rebounds stale task and result selections to the selected active design scope", () => {
+    const lifecycleRows = [
+      {
+        design_id: "design_source_archived",
+        lifecycle_state: "archived",
+      },
+      {
+        design_id: "design_target_active",
+        lifecycle_state: "active",
+      },
+    ] as const;
+
+    const resolvedDesignId = resolveSelectedCharacterizationDesignId(
+      "design_source_archived",
+      lifecycleRows,
+    );
+    expect(resolvedDesignId).toBe("design_target_active");
+    expect(resolveSelectedCharacterizationResultId("stale-source-result", results)).toBe(
+      "char-fit-flux-a-01",
+    );
+    expect(
+      resolveCharacterizationSelectionRecovery({
+        activeDatasetName: "PF6FQ lifecycle dataset",
+        requestedDesignId: "design_source_archived",
+        resolvedDesignId,
+        requestedResultId: "stale-source-result",
+        resolvedResultId: "char-fit-flux-a-01",
+      }),
+    ).toEqual({
+      tone: "warning",
+      title: "Design scope rebound",
+      message:
+        "The active dataset now exposes design_target_active instead of design_source_archived. Browse state was rebound to stay within PF6FQ lifecycle dataset.",
+    });
+  });
+
   it("summarizes persisted results and emits recovery notices for stale browse state", () => {
     expect(summarizeCharacterizationResults(results)).toEqual({
       total: 2,
@@ -882,6 +918,12 @@ describe("characterization source contracts", () => {
     );
     expect(characterizationHookSource).toContain(
       "getCharacterizationResult(activeDatasetId, resolvedDesignId, resolvedResultId)",
+    );
+    expect(characterizationHookSource).not.toContain(
+      "getCharacterizationResult(activeDatasetId, requestedDesignId",
+    );
+    expect(characterizationHookSource).not.toContain(
+      "characterizationResultDetailKey(activeDatasetId, requestedDesignId",
     );
     expect(characterizationHookSource).toContain(
       "resultsQuery.data?.rows && resultsQuery.data.rows.length > 0",
