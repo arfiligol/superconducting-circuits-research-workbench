@@ -7,6 +7,9 @@ import {
   buildRawDataBrowseHref,
   parseRawDataBrowseState,
   datasetCatalogKey,
+  datasetDesignArchiveKey,
+  datasetDesignKey,
+  datasetDesignMergeKey,
   datasetDesignsKey,
   datasetMetricsKey,
   datasetProfileKey,
@@ -136,6 +139,15 @@ describe("data browser api keys", () => {
     expect(datasetDesignsKey("fluxonium-2025-031")).toBe(
       "/api/backend/datasets/fluxonium-2025-031/designs",
     );
+    expect(datasetDesignKey("fluxonium-2025-031", "design_flux_scan_a")).toBe(
+      "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a",
+    );
+    expect(datasetDesignMergeKey("fluxonium-2025-031", "design_flux_scan_a")).toBe(
+      "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/merge",
+    );
+    expect(datasetDesignArchiveKey("fluxonium-2025-031", "design_flux_scan_a")).toBe(
+      "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/archive",
+    );
     expect(traceListKey("fluxonium-2025-031", "design_flux_scan_a")).toBe(
       "/api/backend/datasets/fluxonium-2025-031/designs/design_flux_scan_a/traces",
     );
@@ -161,6 +173,9 @@ describe("data browser api keys", () => {
     );
     expect(traceEditDetailKey("dataset/a", "design b", "trace/c")).toBe(
       "/api/backend/datasets/dataset%2Fa/designs/design%20b/traces/trace%2Fc/edit",
+    );
+    expect(datasetDesignMergeKey("dataset/a", "design b")).toBe(
+      "/api/backend/datasets/dataset%2Fa/designs/design%20b/merge",
     );
   });
 });
@@ -311,6 +326,18 @@ describe("page-boundary source contracts", () => {
     expect(dataIngestionWorkspaceSource).toContain("Upload-first intake");
     expect(dataIngestionWorkspaceSource).toContain("Choose CSV files");
     expect(dataIngestionWorkspaceSource).toContain("Validation & Preprocess");
+    expect(dataIngestionWorkspaceSource).toContain("Target Design Scope");
+    expect(dataIngestionWorkspaceSource).toContain("Use Existing");
+    expect(dataIngestionWorkspaceSource).toContain("Create New");
+    expect(dataIngestionWorkspaceSource).toContain("targetDesignDecision.mode === \"existing\"");
+    expect(dataIngestionWorkspaceSource).toContain("designId:");
+    expect(dataIngestionWorkspaceSource).toContain("New-scope names are create defaults only");
+    expect(dataIngestionWorkspaceSource).toContain("never select an existing scope implicitly");
+    expect(dataIngestionWorkspaceSource).toContain("let batchCreatedDesignId: string | null = null;");
+    expect(dataIngestionWorkspaceSource).toContain("const ingestionDesignId =");
+    expect(dataIngestionWorkspaceSource).toContain("targetDesignDecision.designId");
+    expect(dataIngestionWorkspaceSource).toContain(": batchCreatedDesignId");
+    expect(dataIngestionWorkspaceSource).toContain("batchCreatedDesignId = result.design.design_id;");
     expect(dataIngestionWorkspaceSource).toContain("buildUploadFirstIngestionDraft(");
     expect(dataIngestionWorkspaceSource).toContain("validateUploadFirstCsv(");
     expect(dataIngestionWorkspaceSource).toContain("multiple");
@@ -346,6 +373,25 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("useRawDataPreviewDrawer");
     expect(rawDataDesignScopesSource).toContain('title="Design Scopes"');
     expect(rawDataDesignScopesSource).toContain("Selected Design");
+    expect(rawDataDesignScopesSource).toContain("Create Design Scope");
+    expect(rawDataDesignScopesSource).toContain("Rename Design Scope");
+    expect(rawDataDesignScopesSource).toContain("Merge Design Scope");
+    expect(rawDataDesignScopesSource).toContain("Archive Design Scope");
+    expect(rawDataDesignScopesSource).toContain("Delete Design Scope");
+    expect(rawDataDesignScopesSource).toContain("selectedDesign.allowed_actions.rename");
+    expect(rawDataDesignScopesSource).toContain("selectedDesign.allowed_actions.merge");
+    expect(rawDataDesignScopesSource).toContain("selectedDesign.allowed_actions.archive");
+    expect(rawDataDesignScopesSource).toContain("selectedDesign.allowed_actions.delete");
+    expect(rawDataDesignScopesSource).toContain("Mutation Policy");
+    expect(rawDataDesignScopesSource).toContain("Redirect target");
+    expect(rawDataHookSource).toContain("createDatasetDesign(activeDatasetId");
+    expect(rawDataHookSource).toContain("renameDatasetDesign(activeDatasetId");
+    expect(rawDataHookSource).toContain("mergeDatasetDesign(activeDatasetId");
+    expect(rawDataHookSource).toContain("archiveDatasetDesign(activeDatasetId");
+    expect(rawDataHookSource).toContain("deleteDatasetDesign(activeDatasetId");
+    expect(rawDataHookSource).toContain("clearTraceBrowseState()");
+    expect(rawDataHookSource).toContain("setSelectedDesignId(result.target_design?.design_id ?? targetDesignId)");
+    expect(rawDataDesignScopesSource).toContain("The backend owns all re-parenting");
     expect(rawDataDesignScopesSource).toContain("Browse State");
     expect(rawDataDesignScopesSource).toContain(
       'xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]',
@@ -581,12 +627,14 @@ describe("upload-first ingestion helpers", () => {
       buildUploadFirstIngestionDraft({
         kind: "measurement",
         designName: "Flux Scan A",
+        designId: "design_flux_scan_a",
         provenanceLabel: "Measurement import · Flux Scan A",
         validation,
       }),
     ).toMatchObject({
       kind: "measurement",
       design_name: "Flux Scan A",
+      design_id: "design_flux_scan_a",
       provenance_label: "Measurement import · Flux Scan A",
       traces: [
         {

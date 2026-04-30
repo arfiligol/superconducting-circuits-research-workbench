@@ -536,13 +536,14 @@ export function validateUploadFirstCsv(input: Readonly<{
 export function buildUploadFirstIngestionDraft(input: Readonly<{
   kind: RawDataIngestionKind;
   designName: string;
+  designId?: string | null;
   provenanceLabel: string;
   validation: UploadValidationResult;
 }>): RawDataIngestionDraft {
   return {
     kind: input.kind,
     design_name: input.designName.trim(),
-    design_id: null,
+    design_id: input.designId ?? null,
     provenance_label: input.provenanceLabel.trim(),
     traces: [...input.validation.draftTraces],
   };

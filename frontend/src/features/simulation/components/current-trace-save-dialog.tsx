@@ -82,10 +82,10 @@ export function CurrentTraceSaveDialog({
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {traceCount > 1
-                ? `${traceCount} visible traces will be saved as separate traces in the selected design.`
+                ? `${traceCount} visible traces will be saved as separate traces in the selected Target Design Scope.`
                 : traceLabel
-                  ? `${traceLabel} will be saved into the selected design.`
-                  : "Save the current explorer trace into a design."}
+                  ? `${traceLabel} will be saved into the selected Target Design Scope.`
+                  : "Save the current explorer trace into a Target Design Scope."}
             </p>
           </div>
           <button
@@ -99,11 +99,11 @@ export function CurrentTraceSaveDialog({
 
         <div className="space-y-4 px-5 py-5">
           <AppSelectField
-            label="Design"
+            label="Target Design Scope"
             value={designValue}
             onChange={onDesignChange}
             options={designOptions}
-            placeholder="Select a design"
+            placeholder="Select an active design scope"
           />
 
           <label className="block">
@@ -127,7 +127,7 @@ export function CurrentTraceSaveDialog({
               className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
             >
               <Plus className="h-4 w-4" />
-              New Design
+              Create New Scope
             </button>
           </div>
 
@@ -135,14 +135,14 @@ export function CurrentTraceSaveDialog({
             <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
               <label className="block">
                 <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Design Name
+                  New Target Design Scope Name
                 </p>
                 <input
                   value={createName}
                   onChange={(event) => {
                     onCreateNameChange(event.target.value);
                   }}
-                  placeholder="Enter a design name"
+                  placeholder="Enter a design scope name"
                   className="w-full rounded-[0.95rem] border border-border/85 bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
                 />
               </label>
@@ -158,7 +158,7 @@ export function CurrentTraceSaveDialog({
                   ) : (
                     <Plus className="h-4 w-4" />
                   )}
-                  {createState.state === "creating" ? "Creating..." : "Create Design"}
+                  {createState.state === "creating" ? "Creating..." : "Create Scope"}
                 </button>
               </div>
             </div>

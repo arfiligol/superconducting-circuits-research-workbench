@@ -1594,10 +1594,15 @@ describe("simulation workflow source contract", () => {
     expect(currentTraceSaveDialogSource).toContain(
       "visible traces will be saved as separate traces",
     );
-    expect(currentTraceSaveDialogSource).toContain("New Design");
+    expect(currentTraceSaveDialogSource).toContain("Target Design Scope");
+    expect(currentTraceSaveDialogSource).toContain("Create New Scope");
+    expect(currentTraceSaveDialogSource).toContain("New Target Design Scope Name");
+    expect(currentTraceSaveControlSource).toContain("design.lifecycle_state === \"active\"");
     expect(tasksApiSource).toContain("/result-traces/publish");
     expect(tasksApiSource).toContain("trace_keys: [...payload.traceKeys]");
     expect(tasksApiSource).toContain("metric: payload.metric");
+    expect(tasksApiSource).toContain("design_id: payload.designId");
+    expect(tasksApiSource).toContain("design_name: payload.designName ?? undefined");
     expect(tasksApiSource).toContain("parameter_name: payload.parameterName ?? undefined");
     expect(tasksApiSource).toContain("compare_axis_index");
     expect(currentTraceSaveControlSource).toContain("dataset_design_conflict");

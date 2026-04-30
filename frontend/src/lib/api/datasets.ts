@@ -1,14 +1,19 @@
-import { apiRequest } from "@/lib/api/client";
 export {
   archiveDataset,
+  archiveDatasetDesign,
   batchDeleteTraces,
   createDataset,
+  createDatasetDesign,
   datasetArchiveKey,
   datasetCatalogKey,
+  datasetDesignArchiveKey,
+  datasetDesignKey,
+  datasetDesignMergeKey,
   datasetDesignsKey,
   datasetIngestionsKey,
   datasetMetricsKey,
   datasetProfileKey,
+  deleteDatasetDesign,
   deleteDataset,
   deleteTrace,
   getDatasetProfile,
@@ -19,6 +24,8 @@ export {
   listDesignBrowseRows,
   listTaggedCoreMetrics,
   listTraceMetadata,
+  mergeDatasetDesign,
+  renameDatasetDesign,
   traceDetailKey,
   traceEditDetailKey,
   traceBatchDeleteKey,
@@ -30,6 +37,10 @@ export {
 export type {
   DatasetCatalogRow,
   DatasetCreateDraft,
+  DatasetDesignCreateDraft,
+  DatasetDesignCreateResult,
+  DatasetDesignLifecycleMutationResult,
+  DatasetDesignRenameDraft,
   DatasetLifecycleMutationResult,
   DatasetProfile,
   DatasetProfileUpdate,
@@ -50,29 +61,3 @@ export type {
   TraceUpdateDraft,
   TraceUpdateResult,
 } from "@/features/data-browser/lib/contracts";
-
-import type { DesignBrowseRow } from "@/features/data-browser/lib/contracts";
-
-export type DatasetDesignCreateDraft = Readonly<{
-  name: string;
-}>;
-
-export type DatasetDesignCreateResult = Readonly<{
-  operation: "created";
-  design: DesignBrowseRow;
-}>;
-
-export async function createDatasetDesign(
-  datasetId: string,
-  payload: DatasetDesignCreateDraft,
-): Promise<DatasetDesignCreateResult> {
-  return apiRequest<DatasetDesignCreateResult>(
-    `/api/backend/datasets/${encodeURIComponent(datasetId)}/designs`,
-    {
-      method: "POST",
-      body: {
-        name: payload.name,
-      },
-    },
-  );
-}

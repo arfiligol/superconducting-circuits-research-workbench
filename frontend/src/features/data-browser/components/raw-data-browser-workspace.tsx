@@ -172,6 +172,13 @@ export function RawDataBrowserWorkspace() {
         designsMeta={browser.designsMeta}
         goToPrevDesignPage={browser.goToPrevDesignPage}
         goToNextDesignPage={browser.goToNextDesignPage}
+        activeDesigns={browser.activeDesigns}
+        designLifecycleState={browser.designLifecycleState}
+        createDesignScope={browser.createDesignScope}
+        renameSelectedDesignScope={browser.renameSelectedDesignScope}
+        mergeSelectedDesignScope={browser.mergeSelectedDesignScope}
+        archiveSelectedDesignScope={browser.archiveSelectedDesignScope}
+        deleteSelectedDesignScope={browser.deleteSelectedDesignScope}
       />
 
       <section

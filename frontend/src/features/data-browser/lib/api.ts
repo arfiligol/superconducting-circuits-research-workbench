@@ -3,6 +3,10 @@ import { apiRequest, apiRequestEnvelope } from "@/lib/api/client";
 import type {
   DatasetCatalogRow,
   DatasetCreateDraft,
+  DatasetDesignCreateDraft,
+  DatasetDesignCreateResult,
+  DatasetDesignLifecycleMutationResult,
+  DatasetDesignRenameDraft,
   DatasetLifecycleMutationResult,
   DatasetProfile,
   DatasetProfileUpdate,
@@ -135,6 +139,20 @@ export function traceBatchDeleteKey(datasetId: string, designId: string) {
   )}/traces/batch-delete`;
 }
 
+export function datasetDesignKey(datasetId: string, designId: string) {
+  return `/api/backend/datasets/${encodeURIComponent(datasetId)}/designs/${encodeURIComponent(
+    designId,
+  )}`;
+}
+
+export function datasetDesignMergeKey(datasetId: string, sourceDesignId: string) {
+  return `${datasetDesignKey(datasetId, sourceDesignId)}/merge`;
+}
+
+export function datasetDesignArchiveKey(datasetId: string, designId: string) {
+  return `${datasetDesignKey(datasetId, designId)}/archive`;
+}
+
 export async function listDatasetCatalog(): Promise<PagedRows<DatasetCatalogRow>> {
   const rows: DatasetCatalogRow[] = [];
   let cursor: string | null = null;
@@ -215,6 +233,92 @@ export async function ingestRawData(
   });
 }
 
+export async function createDatasetDesign(
+  datasetId: string,
+  payload: DatasetDesignCreateDraft,
+): Promise<DatasetDesignCreateResult> {
+  const response = await apiRequest<{
+    operation: "created";
+    design: DesignBrowseRow;
+    design_rows?: readonly DesignBrowseRow[];
+  }>(datasetDesignsKey(datasetId), {
+    method: "POST",
+    body: {
+      name: payload.name,
+    },
+  });
+
+  return {
+    operation: response.operation,
+    design: normalizeDesignBrowseRow(response.design),
+    design_rows: (response.design_rows ?? [response.design]).map(normalizeDesignBrowseRow),
+  };
+}
+
+export async function renameDatasetDesign(
+  datasetId: string,
+  designId: string,
+  payload: DatasetDesignRenameDraft,
+): Promise<DatasetDesignLifecycleMutationResult> {
+  return normalizeDesignLifecycleMutationResult(
+    await apiRequest<DatasetDesignLifecycleMutationResult>(
+      datasetDesignKey(datasetId, designId),
+      {
+        method: "PATCH",
+        body: {
+          name: payload.name,
+        },
+      },
+    ),
+  );
+}
+
+export async function mergeDatasetDesign(
+  datasetId: string,
+  sourceDesignId: string,
+  targetDesignId: string,
+): Promise<DatasetDesignLifecycleMutationResult> {
+  return normalizeDesignLifecycleMutationResult(
+    await apiRequest<DatasetDesignLifecycleMutationResult>(
+      datasetDesignMergeKey(datasetId, sourceDesignId),
+      {
+        method: "POST",
+        body: {
+          target_design_id: targetDesignId,
+        },
+      },
+    ),
+  );
+}
+
+export async function archiveDatasetDesign(
+  datasetId: string,
+  designId: string,
+): Promise<DatasetDesignLifecycleMutationResult> {
+  return normalizeDesignLifecycleMutationResult(
+    await apiRequest<DatasetDesignLifecycleMutationResult>(
+      datasetDesignArchiveKey(datasetId, designId),
+      {
+        method: "POST",
+      },
+    ),
+  );
+}
+
+export async function deleteDatasetDesign(
+  datasetId: string,
+  designId: string,
+): Promise<DatasetDesignLifecycleMutationResult> {
+  return normalizeDesignLifecycleMutationResult(
+    await apiRequest<DatasetDesignLifecycleMutationResult>(
+      datasetDesignKey(datasetId, designId),
+      {
+        method: "DELETE",
+      },
+    ),
+  );
+}
+
 export async function listDesignBrowseRows(
   datasetId: string,
   options?: Readonly<{
@@ -230,7 +334,7 @@ export async function listDesignBrowseRows(
     datasetDesignsKey(datasetId, options?.search, options?.cursor, options?.limit),
   );
   return {
-    rows: response.data.rows,
+    rows: response.data.rows.map(normalizeDesignBrowseRow),
     meta: response.meta,
   };
 }
@@ -344,5 +448,38 @@ function normalizeTraceDeleteResult(result: {
       : result.deleted_trace_id
         ? [result.deleted_trace_id]
         : [],
+  };
+}
+
+export function normalizeDesignBrowseRow(row: DesignBrowseRow): DesignBrowseRow {
+  return {
+    ...row,
+    lifecycle_state: row.lifecycle_state ?? "active",
+    redirect_design_id: row.redirect_design_id ?? null,
+    allowed_actions: {
+      rename: row.allowed_actions?.rename ?? false,
+      merge: row.allowed_actions?.merge ?? false,
+      archive: row.allowed_actions?.archive ?? false,
+      delete: row.allowed_actions?.delete ?? false,
+    },
+    mutation_policy_summary:
+      row.mutation_policy_summary ??
+      "Lifecycle availability is controlled by the backend for this design scope.",
+  };
+}
+
+function normalizeDesignLifecycleMutationResult(
+  result: DatasetDesignLifecycleMutationResult,
+): DatasetDesignLifecycleMutationResult {
+  return {
+    ...result,
+    design: result.design ? normalizeDesignBrowseRow(result.design) : null,
+    source_design: result.source_design
+      ? normalizeDesignBrowseRow(result.source_design)
+      : result.source_design,
+    target_design: result.target_design
+      ? normalizeDesignBrowseRow(result.target_design)
+      : result.target_design,
+    design_rows: (result.design_rows ?? []).map(normalizeDesignBrowseRow),
   };
 }

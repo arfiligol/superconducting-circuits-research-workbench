@@ -228,6 +228,31 @@ describe("characterization browse helpers", () => {
     expect(resolveSelectedCharacterizationResultId("missing", [])).toBeNull();
   });
 
+  it("does not present archived or deleted design scopes as runnable targets", () => {
+    const lifecycleRows = [
+      {
+        design_id: "design_archived",
+        lifecycle_state: "archived",
+      },
+      {
+        design_id: "design_deleted",
+        lifecycle_state: "deleted",
+      },
+      {
+        design_id: "design_active",
+        lifecycle_state: "active",
+      },
+    ] as const;
+
+    expect(resolveSelectedCharacterizationDesignId(null, lifecycleRows)).toBe("design_active");
+    expect(resolveSelectedCharacterizationDesignId("design_archived", lifecycleRows)).toBe(
+      "design_active",
+    );
+    expect(resolveSelectedCharacterizationDesignId("design_deleted", lifecycleRows)).toBe(
+      "design_active",
+    );
+  });
+
   it("summarizes persisted results and emits recovery notices for stale browse state", () => {
     expect(summarizeCharacterizationResults(results)).toEqual({
       total: 2,
@@ -838,6 +863,12 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain("const taskKey = resolvedTaskId ? taskDetailKey(resolvedTaskId) : null;");
     expect(characterizationHookSource).toContain("() => (resolvedTaskId ? getTask(resolvedTaskId) : Promise.resolve(undefined))");
     expect(characterizationHookSource).toContain("listDesignBrowseRows(activeDatasetId)");
+    expect(characterizationHookSource).toContain(
+      "activeTask.characterizationSetup.design_id !== requestedDesignId",
+    );
+    expect(characterizationHookSource).toContain(
+      "activeTask.datasetId && activeTask.datasetId !== activeDatasetId",
+    );
     expect(characterizationHookSource).toContain(
       "listCharacterizationAnalysisRegistry(activeDatasetId, resolvedDesignId",
     );

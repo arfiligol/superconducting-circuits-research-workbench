@@ -241,6 +241,17 @@ export function useCharacterizationWorkflowData({
       return;
     }
 
+    if (
+      requestedDesignId &&
+      activeTask.characterizationSetup.design_id !== requestedDesignId
+    ) {
+      return;
+    }
+
+    if (activeDatasetId && activeTask.datasetId && activeTask.datasetId !== activeDatasetId) {
+      return;
+    }
+
     setSelectedDesignId(activeTask.characterizationSetup.design_id);
     setSelectedAnalysisId(activeTask.characterizationSetup.analysis_id);
     setSelectedTraceIds([...activeTask.characterizationSetup.selected_trace_ids]);
@@ -253,8 +264,11 @@ export function useCharacterizationWorkflowData({
     );
   }, [
     activeTask?.characterizationSetup,
+    activeDatasetId,
     attachedTaskId,
+    requestedDesignId,
     selectedTaskId,
+    activeTask?.datasetId,
   ]);
 
   const designsQuery = useSWR(

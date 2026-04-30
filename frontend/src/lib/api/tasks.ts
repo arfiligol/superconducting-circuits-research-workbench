@@ -1828,6 +1828,7 @@ export async function publishSimulationResultTraces(
         trace_keys: [...payload.traceKeys],
         metric: payload.metric,
         design_id: payload.designId,
+        design_name: payload.designName ?? undefined,
         parameter_name: payload.parameterName ?? undefined,
       },
     },
