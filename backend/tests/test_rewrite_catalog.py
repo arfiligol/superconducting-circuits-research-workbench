@@ -449,6 +449,103 @@ def test_durable_ingestion_materializes_nd_grid_to_trace_store() -> None:
     )
 
 
+def test_durable_hfss_nd_imports_do_not_overwrite_same_design_parameter_collision() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "HFSS Multi File Identity",
+            "family": "floatingqubit",
+            "device_type": "Floating Qubit",
+            "source": "layout_simulation",
+        },
+    ).json()["data"]["dataset"]
+    dataset_id = created["dataset_id"]
+
+    first = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json=_hfss_nd_ingestion_payload(
+            design_name="FloatingQubitWithXY",
+            provenance_label="HFSS XY.csv",
+            provenance_summary="HFSS XY branch",
+            values=[[-2.0, -1.0], [0.2, 0.5], [1.2, 1.6]],
+        ),
+    )
+    assert first.status_code == 200
+    design_id = first.json()["data"]["design"]["design_id"]
+
+    second = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json=_hfss_nd_ingestion_payload(
+            design_name="FloatingQubitWithXY",
+            design_id=design_id,
+            provenance_label="HFSS Readout.csv",
+            provenance_summary="HFSS readout branch",
+            values=[[-3.0, -2.0], [0.4, 0.7], [1.4, 1.8]],
+        ),
+    )
+
+    assert second.status_code == 200
+    trace_ids = {
+        first.json()["data"]["traces"][0]["trace_id"],
+        second.json()["data"]["traces"][0]["trace_id"],
+    }
+    assert len(trace_ids) == 2
+    assert any("hfss-xy-csv" in trace_id for trace_id in trace_ids)
+    assert any("hfss-readout-csv" in trace_id for trace_id in trace_ids)
+
+    rows = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()[
+        "data"
+    ]["rows"]
+    assert len(rows) == 2
+    assert {row["trace_id"] for row in rows} == trace_ids
+    assert {row["parameter"] for row in rows} == {"Y11"}
+    assert all(row["shape"] == [3, 2] for row in rows)
+    assert all(row["available_sweep_axes"] == ["L_jun"] for row in rows)
+    provenance_by_trace = {row["trace_id"]: row["provenance_summary"] for row in rows}
+    assert any("HFSS XY.csv" in summary for summary in provenance_by_trace.values())
+    assert any("HFSS Readout.csv" in summary for summary in provenance_by_trace.values())
+
+
+def _hfss_nd_ingestion_payload(
+    *,
+    design_name: str,
+    provenance_label: str,
+    provenance_summary: str,
+    values: list[list[float]],
+    design_id: str | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "kind": "layout_simulation",
+        "design_name": design_name,
+        "provenance_label": provenance_label,
+        "traces": [
+            {
+                "family": "y_matrix",
+                "parameter": "Y11",
+                "representation": "imaginary",
+                "trace_mode_group": "base",
+                "stage_kind": "raw",
+                "provenance_summary": provenance_summary,
+                "axes": [
+                    {"name": "frequency", "unit": "GHz", "length": 3},
+                    {"name": "L_jun", "unit": "nH", "length": 2},
+                ],
+                "preview_payload": {
+                    "kind": "nd_grid",
+                    "axes": [
+                        {"name": "frequency", "unit": "GHz", "values": [4.8, 4.9, 5.0]},
+                        {"name": "L_jun", "unit": "nH", "values": [8.0, 9.0]},
+                    ],
+                    "values": values,
+                },
+            }
+        ],
+    }
+    if design_id is not None:
+        payload["design_id"] = design_id
+    return payload
+
+
 def test_rewrite_ingestion_derives_nd_grid_structure_summary(
     catalog_repository: InMemoryRewriteCatalogRepository,
 ) -> None:
