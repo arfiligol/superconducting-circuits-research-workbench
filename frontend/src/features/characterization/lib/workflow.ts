@@ -8,6 +8,13 @@ import type { TaskSummary } from "@/lib/api/tasks";
 export type CharacterizationResultStatusFilter = "all" | CharacterizationResultStatus;
 export type CharacterizationTaskScope = "all" | "dataset";
 export type CharacterizationTaskStatusFilter = "all" | "active" | "completed" | "failed";
+export type CharacterizationResultSelectionSource =
+  | "route"
+  | "user"
+  | "completed_run"
+  | "task_handoff"
+  | "results_default"
+  | "none";
 type SelectableCharacterizationDesignRow = Readonly<{
   design_id: string;
   lifecycle_state?: DesignLifecycleState;
@@ -33,6 +40,12 @@ export type CharacterizationTaskSummaryCounts = Readonly<{
   completedCount: number;
   failedCount: number;
   resultBackedCount: number;
+}>;
+
+export type CharacterizationResultSelectionResolution = Readonly<{
+  resultId: string | null;
+  source: CharacterizationResultSelectionSource;
+  isExplicitRoutePending: boolean;
 }>;
 
 type FilterCharacterizationTasksOptions = Readonly<{
@@ -84,25 +97,127 @@ export function resolveSelectedCharacterizationResultId(
   return results[0]?.resultId ?? null;
 }
 
+function hasResultSummary(
+  results: readonly CharacterizationResultSummary[] | undefined,
+  resultId: string,
+) {
+  return results?.some((result) => result.resultId === resultId) ?? false;
+}
+
+export function resolveCharacterizationResultSelection(input: Readonly<{
+  requestedResultId: string | null;
+  userSelectedResultId: string | null;
+  completedRunResultId?: string | null;
+  taskHandoffResultId?: string | null;
+  results: readonly CharacterizationResultSummary[] | undefined;
+  hasResolvedResults: boolean;
+  requestedResultUnavailable?: boolean;
+}>): CharacterizationResultSelectionResolution {
+  if (input.requestedResultId && !input.requestedResultUnavailable) {
+    return {
+      resultId: input.requestedResultId,
+      source: "route",
+      isExplicitRoutePending:
+        !input.hasResolvedResults || !hasResultSummary(input.results, input.requestedResultId),
+    };
+  }
+
+  if (input.userSelectedResultId) {
+    return {
+      resultId: input.userSelectedResultId,
+      source: "user",
+      isExplicitRoutePending: false,
+    };
+  }
+
+  if (input.completedRunResultId) {
+    return {
+      resultId: input.completedRunResultId,
+      source: "completed_run",
+      isExplicitRoutePending: false,
+    };
+  }
+
+  if (input.taskHandoffResultId) {
+    return {
+      resultId: input.taskHandoffResultId,
+      source: "task_handoff",
+      isExplicitRoutePending: false,
+    };
+  }
+
+  if (input.results && input.results.length > 0) {
+    return {
+      resultId: input.results[0]?.resultId ?? null,
+      source: "results_default",
+      isExplicitRoutePending: false,
+    };
+  }
+
+  return {
+    resultId: null,
+    source: "none",
+    isExplicitRoutePending: false,
+  };
+}
+
 export function resolveCharacterizationResultDetailId(input: Readonly<{
   selectedResultId: string | null;
   requestedResultId: string | null;
   results: readonly CharacterizationResultSummary[] | undefined;
   hasResolvedResults: boolean;
 }>) {
-  if (input.results && input.results.length > 0) {
-    return resolveSelectedCharacterizationResultId(input.selectedResultId, input.results);
-  }
-
-  if (input.requestedResultId) {
-    return input.requestedResultId;
-  }
-
-  if (input.hasResolvedResults) {
+  if (
+    !input.requestedResultId &&
+    input.hasResolvedResults &&
+    (!input.results || input.results.length === 0)
+  ) {
     return null;
   }
 
-  return input.selectedResultId;
+  return resolveCharacterizationResultSelection({
+    requestedResultId: input.requestedResultId,
+    userSelectedResultId: input.selectedResultId,
+    results: input.results,
+    hasResolvedResults: input.hasResolvedResults,
+  }).resultId;
+}
+
+export function buildCharacterizationSearchHref(
+  pathname: string,
+  searchParamsValue: string,
+  updates: Readonly<Record<string, string | null>>,
+) {
+  const params = new URLSearchParams(searchParamsValue);
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === null) {
+      params.delete(key);
+    } else {
+      params.set(key, value);
+    }
+  }
+
+  const nextSearch = params.toString();
+  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+}
+
+export function shouldSyncCharacterizationUrl(input: Readonly<{
+  currentHref: string;
+  nextHref: string;
+  hasExplicitRouteResult: boolean;
+  isExplicitRouteResultPending: boolean;
+  resolvedResultSource: CharacterizationResultSelectionSource;
+}>) {
+  if (input.currentHref === input.nextHref) {
+    return false;
+  }
+
+  return !(
+    input.hasExplicitRouteResult &&
+    input.isExplicitRouteResultPending &&
+    input.resolvedResultSource !== "route"
+  );
 }
 
 export function shouldHydrateCharacterizationSelectionFromTask(input: Readonly<{

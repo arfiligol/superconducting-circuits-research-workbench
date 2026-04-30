@@ -4,13 +4,11 @@ import { useEffect, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
 import {
+  useCharacterizationResultSelection,
+} from "@/features/characterization/hooks/use-characterization-result-selection";
+import { useCharacterizationScopeData } from "@/features/characterization/hooks/use-characterization-scope-data";
+import {
   applyCharacterizationTagging,
-  characterizationResultDetailKey,
-  getCharacterizationResult,
-  listCharacterizationAnalysisRegistry,
-  listCharacterizationResults,
-  listCharacterizationRunHistory,
-  listCharacterizationTraceSelectionRows,
 } from "@/features/characterization/lib/api";
 import type {
   CharacterizationAnalysisRegistry,
@@ -19,18 +17,13 @@ import type {
   CharacterizationTraceSelectionRow,
 } from "@/features/characterization/lib/contracts";
 import {
-  resolveCharacterizationResultDetailId,
   resolveLatestCharacterizationTask,
   resolveScopedCharacterizationTaskId,
   resolveSelectedCharacterizationDesignId,
-  resolveSelectedCharacterizationResultId,
   shouldHydrateCharacterizationSelectionFromTask,
   type CharacterizationResultStatusFilter,
 } from "@/features/characterization/lib/workflow";
-import {
-  datasetMetricsKey,
-  listDesignBrowseRows,
-} from "@/lib/api/datasets";
+import { datasetMetricsKey } from "@/lib/api/datasets";
 import { getTaskEnqueueFailureDetails } from "@/lib/api/client";
 import { useActiveDataset } from "@/lib/app-state/active-dataset";
 import { useAppSession } from "@/lib/app-state/app-session";
@@ -58,6 +51,7 @@ type TaskMutationState = Readonly<{
 type CompletedRunSync = Readonly<{
   taskId: number;
   analysisId: string;
+  resultId: string | null;
 }>;
 
 type UseCharacterizationWorkflowDataOptions = Readonly<{
@@ -197,9 +191,6 @@ export function useCharacterizationWorkflowData({
   const [selectedDesignId, setSelectedDesignId] = useState<string | null>(
     requestedDesignId,
   );
-  const [selectedResultId, setSelectedResultId] = useState<string | null>(
-    requestedResultId,
-  );
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
   const [selectedTraceIds, setSelectedTraceIds] = useState<readonly string[]>([]);
   const [runHistoryCursor, setRunHistoryCursor] = useState<string | null>(null);
@@ -277,122 +268,47 @@ export function useCharacterizationWorkflowData({
     taskHydrationDesignId,
   ]);
 
-  const designsQuery = useSWR(
-    activeDatasetId ? ["characterization-designs", activeDatasetId] : null,
-    () =>
-      activeDatasetId
-        ? listDesignBrowseRows(activeDatasetId)
-        : Promise.resolve(undefined),
-  );
-
-  const resolvedDesignId = resolveSelectedCharacterizationDesignId(
+  const {
+    resolvedDesignId,
+    designsQuery,
+    tracesQuery,
+    analysisRegistryQuery,
+    runHistoryQuery,
+    resultsQuery,
+  } = useCharacterizationScopeData({
+    activeDatasetId,
     selectedDesignId,
-    designsQuery.data?.rows,
-  );
-
-  const tracesQuery = useSWR(
-    activeDatasetId && resolvedDesignId
-      ? ["characterization-traces", activeDatasetId, resolvedDesignId]
-      : null,
-    () =>
-      activeDatasetId && resolvedDesignId
-        ? listCharacterizationTraceSelectionRows(activeDatasetId, resolvedDesignId)
-        : Promise.resolve(undefined),
-  );
-
-  const analysisRegistryQuery = useSWR(
-    activeDatasetId && resolvedDesignId
-      ? [
-          "characterization-analysis-registry",
-          activeDatasetId,
-          resolvedDesignId,
-          ...selectedTraceIds,
-        ]
-      : null,
-    () =>
-      activeDatasetId && resolvedDesignId
-        ? listCharacterizationAnalysisRegistry(activeDatasetId, resolvedDesignId, {
-            selectedTraceIds,
-          })
-        : Promise.resolve(undefined),
-  );
+    selectedTraceIds,
+    selectedAnalysisId,
+    runHistoryCursor,
+    resultSearch,
+    statusFilter,
+  });
 
   const selectedAnalysis =
     analysisRegistryQuery.data?.rows.find((analysis) => analysis.analysisId === selectedAnalysisId) ??
     null;
 
-  const runHistoryQuery = useSWR(
-    activeDatasetId && resolvedDesignId
-      ? [
-          "characterization-run-history",
-          activeDatasetId,
-          resolvedDesignId,
-          selectedAnalysisId,
-          runHistoryCursor,
-        ]
-      : null,
-    () =>
-      activeDatasetId && resolvedDesignId
-        ? listCharacterizationRunHistory(activeDatasetId, resolvedDesignId, {
-            analysisId: selectedAnalysisId,
-            cursor: runHistoryCursor,
-          })
-        : Promise.resolve(undefined),
-  );
-
-  const resultsQuery = useSWR(
-    activeDatasetId && resolvedDesignId
-      ? [
-          "characterization-results",
-          activeDatasetId,
-          resolvedDesignId,
-          resultSearch,
-          statusFilter,
-        ]
-      : null,
-    () =>
-      activeDatasetId && resolvedDesignId
-        ? listCharacterizationResults(activeDatasetId, resolvedDesignId, {
-            search: resultSearch || null,
-            status: statusFilter === "all" ? null : statusFilter,
-          })
-        : Promise.resolve(undefined),
-  );
-
-  const resolvedResultId = resolveCharacterizationResultDetailId({
-    selectedResultId,
+  const resultSelection = useCharacterizationResultSelection({
+    activeDatasetId,
+    resolvedDesignId,
     requestedResultId,
     results: resultsQuery.data?.rows,
     hasResolvedResults: Boolean(resultsQuery.data),
+    completedRunIntent: completedRunSync,
+    taskHandoffResultId:
+      activeTask?.resultHandoff?.availability === "ready"
+        ? activeTask.resultHandoff.primaryResultHandleId
+        : null,
   });
-  const detailKey =
-    activeDatasetId && resolvedDesignId && resolvedResultId
-      ? characterizationResultDetailKey(activeDatasetId, resolvedDesignId, resolvedResultId)
-      : null;
-  const detailQuery = useSWR(
-    detailKey,
-    () =>
-      activeDatasetId && resolvedDesignId && resolvedResultId
-        ? getCharacterizationResult(activeDatasetId, resolvedDesignId, resolvedResultId)
-        : Promise.resolve(undefined),
-  );
+  const resolvedResultId = resultSelection.selectedResultId;
+  const detailKey = resultSelection.resultDetailKey;
 
   useEffect(() => {
     setSelectedDesignId((current) =>
       resolveSelectedCharacterizationDesignId(current, designsQuery.data?.rows),
     );
   }, [designsQuery.data?.rows]);
-
-  useEffect(() => {
-    const rows = resultsQuery.data?.rows;
-    if (!rows || rows.length === 0) {
-      return;
-    }
-
-    setSelectedResultId((current) =>
-      resolveSelectedCharacterizationResultId(current, rows),
-    );
-  }, [resultsQuery.data?.rows]);
 
   useEffect(() => {
     setSelectedAnalysisId((current) => {
@@ -453,18 +369,6 @@ export function useCharacterizationWorkflowData({
   }, [selectedAnalysis?.analysisId, selectedAnalysis?.requiredConfigFields]);
 
   useEffect(() => {
-    if (requestedDesignId !== selectedDesignId) {
-      setSelectedDesignId(requestedDesignId);
-    }
-  }, [requestedDesignId, selectedDesignId]);
-
-  useEffect(() => {
-    if (requestedResultId !== selectedResultId) {
-      setSelectedResultId(requestedResultId);
-    }
-  }, [requestedResultId, selectedResultId]);
-
-  useEffect(() => {
     setAttachedTaskId(selectedTaskId);
   }, [selectedTaskId]);
 
@@ -472,7 +376,6 @@ export function useCharacterizationWorkflowData({
     setResultSearch("");
     setStatusFilter("all");
     setSelectedDesignId(requestedDesignId);
-    setSelectedResultId(requestedResultId);
     setSelectedAnalysisId(null);
     setSelectedTraceIds([]);
     setRunHistoryCursor(null);
@@ -490,7 +393,6 @@ export function useCharacterizationWorkflowData({
   }, [activeDatasetId, requestedDesignId, requestedResultId, selectedTaskId]);
 
   useEffect(() => {
-    setSelectedResultId(null);
     setSelectedAnalysisId(null);
     setSelectedTraceIds([]);
     setRunHistoryCursor(null);
@@ -528,11 +430,23 @@ export function useCharacterizationWorkflowData({
 
     setResultSearch("");
     setStatusFilter("all");
+    if (activeTask.resultHandoff?.availability === "ready") {
+      setCompletedRunSync((current) =>
+        current &&
+        current.taskId === activeTask.taskId &&
+        current.resultId !== activeTask.resultHandoff?.primaryResultHandleId
+          ? {
+              ...current,
+              resultId: activeTask.resultHandoff?.primaryResultHandleId ?? current.resultId,
+            }
+          : current,
+      );
+    }
     void Promise.all([runHistoryQuery.mutate(), resultsQuery.mutate()]);
   }, [activeTask, completedRunSync, resultsQuery, runHistoryQuery]);
 
   useEffect(() => {
-    if (!completedRunSync || !resultsQuery.data?.rows.length) {
+    if (requestedResultId || !completedRunSync || !resultsQuery.data?.rows.length) {
       return;
     }
 
@@ -545,9 +459,15 @@ export function useCharacterizationWorkflowData({
       return;
     }
 
-    setSelectedResultId(matchingResult.resultId);
-    setCompletedRunSync(null);
-  }, [completedRunSync, resultsQuery.data?.rows]);
+    if (completedRunSync.resultId === matchingResult.resultId) {
+      return;
+    }
+
+    setCompletedRunSync({
+      ...completedRunSync,
+      resultId: matchingResult.resultId,
+    });
+  }, [completedRunSync, requestedResultId, resultsQuery.data?.rows]);
 
   async function submitTagging(input: CharacterizationTaggingInput) {
     if (!activeDatasetId || !resolvedDesignId || !resolvedResultId) {
@@ -686,6 +606,7 @@ export function useCharacterizationWorkflowData({
       setCompletedRunSync({
         taskId: task.taskId,
         analysisId: selectedAnalysis.analysisId,
+        resultId: null,
       });
 
       await Promise.all([
@@ -767,7 +688,7 @@ export function useCharacterizationWorkflowData({
 
     setResultSearch("");
     setStatusFilter("all");
-    setSelectedResultId(resultId);
+    resultSelection.setSelectedResultId(resultId);
   }
 
   function goToNextRunHistoryPage() {
@@ -794,7 +715,7 @@ export function useCharacterizationWorkflowData({
       designsQuery.mutate(),
       tracesQuery.mutate(),
       resultsQuery.mutate(),
-      detailQuery.mutate(),
+      resultSelection.mutateResultDetail(),
       analysisRegistryQuery.mutate(),
       runHistoryQuery.mutate(),
     ]);
@@ -849,7 +770,9 @@ export function useCharacterizationWorkflowData({
     isResultsLoading: resultsQuery.isLoading,
     requestedResultId,
     selectedResultId: resolvedResultId,
-    setSelectedResultId,
+    setSelectedResultId: resultSelection.setSelectedResultId,
+    resultSelectionSource: resultSelection.resultSelectionSource,
+    isExplicitRouteResultPending: resultSelection.isExplicitRouteResultPending,
     characterizationTasks,
     latestCharacterizationTask,
     resolvedTaskId: scopedResolvedTaskId,
@@ -857,9 +780,9 @@ export function useCharacterizationWorkflowData({
     activeTaskError: taskDetailQuery.error as Error | undefined,
     isTaskTransitioning:
       typeof scopedResolvedTaskId === "number" && (!hasAttachedTask || taskDetailQuery.isLoading),
-    resultDetail: detailQuery.data,
-    resultDetailError: detailQuery.error as Error | undefined,
-    isResultDetailLoading: detailQuery.isLoading,
+    resultDetail: resultSelection.resultDetail,
+    resultDetailError: resultSelection.resultDetailError,
+    isResultDetailLoading: resultSelection.isResultDetailLoading,
     taskMutationState,
     submitCharacterizationTask,
     taggingMutationState,

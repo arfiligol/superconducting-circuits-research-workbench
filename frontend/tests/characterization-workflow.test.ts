@@ -31,12 +31,15 @@ import {
 } from "../src/features/characterization/lib/trace-selection";
 import {
   filterCharacterizationTasks,
+  buildCharacterizationSearchHref,
+  resolveCharacterizationResultSelection,
   resolveCharacterizationResultDetailId,
   resolveCharacterizationSelectionRecovery,
   resolveLatestCharacterizationTask,
   resolveScopedCharacterizationTaskId,
   resolveSelectedCharacterizationDesignId,
   resolveSelectedCharacterizationResultId,
+  shouldSyncCharacterizationUrl,
   shouldHydrateCharacterizationSelectionFromTask,
   summarizeCharacterizationResults,
   summarizeCharacterizationTasks,
@@ -55,6 +58,33 @@ const characterizationHookSource = readFileSync(
   fileURLToPath(
     new URL(
       "../src/features/characterization/hooks/use-characterization-workflow-data.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const characterizationRouteHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/characterization/hooks/use-characterization-route-state.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const characterizationScopeHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/characterization/hooks/use-characterization-scope-data.ts",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
+const characterizationResultSelectionHookSource = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../src/features/characterization/hooks/use-characterization-result-selection.ts",
       import.meta.url,
     ),
   ),
@@ -319,6 +349,127 @@ describe("characterization browse helpers", () => {
         hasResolvedResults: false,
       }),
     ).toBe("char-current-selection");
+  });
+
+  it("keeps an explicit route result ahead of result-list ordering", () => {
+    const orderedResults = [
+      {
+        ...results[0],
+        resultId: "char-admittance-run-25",
+        title: "Run 25",
+      },
+      {
+        ...results[1],
+        resultId: "char-admittance-run-24",
+        title: "Run 24",
+      },
+    ] as const;
+
+    expect(
+      resolveCharacterizationResultSelection({
+        requestedResultId: "char-admittance-run-24",
+        userSelectedResultId: null,
+        completedRunResultId: null,
+        taskHandoffResultId: null,
+        results: orderedResults,
+        hasResolvedResults: true,
+      }),
+    ).toEqual({
+      resultId: "char-admittance-run-24",
+      source: "route",
+      isExplicitRoutePending: false,
+    });
+  });
+
+  it("does not let task handoff override an explicit route result", () => {
+    expect(
+      resolveCharacterizationResultSelection({
+        requestedResultId: "char-admittance-run-24",
+        userSelectedResultId: null,
+        completedRunResultId: null,
+        taskHandoffResultId: "char-admittance-run-25",
+        results: [],
+        hasResolvedResults: true,
+      }),
+    ).toEqual({
+      resultId: "char-admittance-run-24",
+      source: "route",
+      isExplicitRoutePending: true,
+    });
+  });
+
+  it("keeps a direct route result detail loadable when the result list is stale or empty", () => {
+    expect(
+      resolveCharacterizationResultSelection({
+        requestedResultId: "char-direct-route-result",
+        userSelectedResultId: null,
+        completedRunResultId: null,
+        taskHandoffResultId: null,
+        results: [],
+        hasResolvedResults: true,
+      }),
+    ).toEqual({
+      resultId: "char-direct-route-result",
+      source: "route",
+      isExplicitRoutePending: true,
+    });
+  });
+
+  it("rebounds a missing route result only after it is proven unavailable", () => {
+    expect(
+      resolveCharacterizationResultSelection({
+        requestedResultId: "missing-result",
+        userSelectedResultId: null,
+        completedRunResultId: null,
+        taskHandoffResultId: null,
+        results,
+        hasResolvedResults: true,
+      }).resultId,
+    ).toBe("missing-result");
+
+    expect(
+      resolveCharacterizationResultSelection({
+        requestedResultId: "missing-result",
+        userSelectedResultId: null,
+        completedRunResultId: null,
+        taskHandoffResultId: null,
+        results,
+        hasResolvedResults: true,
+        requestedResultUnavailable: true,
+      }),
+    ).toEqual({
+      resultId: "char-fit-flux-a-01",
+      source: "results_default",
+      isExplicitRoutePending: false,
+    });
+  });
+
+  it("preserves datasetId and unrelated query params during characterization URL sync", () => {
+    expect(
+      buildCharacterizationSearchHref(
+        "/characterization",
+        "datasetId=local-floatingqubit-100&view=compact&resultId=char-old",
+        {
+          designId: "design_floatingqubitwithxy",
+          resultId: "char-admittance-run-24",
+          taskId: "490",
+        },
+      ),
+    ).toBe(
+      "/characterization?datasetId=local-floatingqubit-100&view=compact&resultId=char-admittance-run-24&designId=design_floatingqubitwithxy&taskId=490",
+    );
+
+    expect(
+      shouldSyncCharacterizationUrl({
+        currentHref:
+          "/characterization?datasetId=local-floatingqubit-100&resultId=char-admittance-run-24",
+        nextHref:
+          "/characterization?datasetId=local-floatingqubit-100&resultId=char-admittance-run-25",
+        hasExplicitRouteResult: true,
+        isExplicitRouteResultPending: true,
+        resolvedResultSource: "results_default",
+      }),
+    ).toBe(false);
   });
 
   it("keeps task-driven characterization selection scoped to the active design", () => {
@@ -963,12 +1114,12 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain("const taskQueueState = useTaskQueue();");
     expect(characterizationHookSource).toContain("const characterizationTasks = taskQueueState.tasks");
     expect(characterizationHookSource).toContain(".map(normalizeTaskSummary)");
-    expect(characterizationHookSource).toContain(
-      "listCharacterizationTraceSelectionRows(activeDatasetId, resolvedDesignId)",
+    expect(characterizationScopeHookSource).toContain(
+      "listCharacterizationTraceSelectionRows(input.activeDatasetId, resolvedDesignId)",
     );
     expect(characterizationHookSource).toContain("const taskKey = resolvedTaskId ? taskDetailKey(resolvedTaskId) : null;");
     expect(characterizationHookSource).toContain("() => (resolvedTaskId ? getTask(resolvedTaskId) : Promise.resolve(undefined))");
-    expect(characterizationHookSource).toContain("listDesignBrowseRows(activeDatasetId)");
+    expect(characterizationScopeHookSource).toContain("listDesignBrowseRows(input.activeDatasetId)");
     expect(characterizationHookSource).toContain(
       "shouldHydrateCharacterizationSelectionFromTask",
     );
@@ -976,32 +1127,32 @@ describe("characterization source contracts", () => {
     expect(characterizationHookSource).toContain(
       "activeTask.datasetId && activeTask.datasetId !== activeDatasetId",
     );
-    expect(characterizationHookSource).toContain(
-      "listCharacterizationAnalysisRegistry(activeDatasetId, resolvedDesignId",
+    expect(characterizationScopeHookSource).toContain(
+      "listCharacterizationAnalysisRegistry(input.activeDatasetId, resolvedDesignId",
     );
     expect(characterizationHookSource).toContain("analysisRegistryQuery.data?.inputCollectionPayload");
     expect(characterizationHookSource).toContain("analysisRegistryQuery.data?.dataCollectionReview");
-    expect(characterizationHookSource).toContain(
-      "listCharacterizationRunHistory(activeDatasetId, resolvedDesignId",
+    expect(characterizationScopeHookSource).toContain(
+      "listCharacterizationRunHistory(input.activeDatasetId, resolvedDesignId",
     );
-    expect(characterizationHookSource).toContain(
-      "listCharacterizationResults(activeDatasetId, resolvedDesignId",
+    expect(characterizationScopeHookSource).toContain(
+      "listCharacterizationResults(input.activeDatasetId, resolvedDesignId",
     );
-    expect(characterizationHookSource).toContain(
-      "getCharacterizationResult(activeDatasetId, resolvedDesignId, resolvedResultId)",
+    expect(characterizationResultSelectionHookSource).toContain(
+      "getCharacterizationResult(",
     );
-    expect(characterizationHookSource).not.toContain(
+    expect(characterizationResultSelectionHookSource).not.toContain(
       "getCharacterizationResult(activeDatasetId, requestedDesignId",
     );
-    expect(characterizationHookSource).not.toContain(
+    expect(characterizationResultSelectionHookSource).not.toContain(
       "characterizationResultDetailKey(activeDatasetId, requestedDesignId",
     );
     expect(characterizationHookSource).toContain(
       "resultsQuery.data?.rows",
     );
-    expect(characterizationHookSource).toContain("resolveCharacterizationResultDetailId({");
-    expect(characterizationHookSource).toContain(
-      "if (!rows || rows.length === 0) {",
+    expect(characterizationHookSource).toContain("useCharacterizationResultSelection({");
+    expect(characterizationResultSelectionHookSource).toContain(
+      "resolveCharacterizationResultSelection({",
     );
     expect(characterizationHookSource).toContain(
       "shouldHydrateCharacterizationSelectionFromTask({",
@@ -1063,5 +1214,16 @@ describe("characterization source contracts", () => {
     expect(taskApiSource).toContain("export type CharacterizationSetupDraft");
     expect(taskApiSource).toContain("characterizationSetup?: CharacterizationSetupDraft | null");
     expect(taskApiSource).toContain("characterization_setup?: CharacterizationSetupDraft");
+  });
+
+  it("keeps route sync separate from characterization server-state hooks", () => {
+    expect(characterizationWorkspaceSource).toContain("useCharacterizationRouteState()");
+    expect(characterizationRouteHookSource).toContain("router.replace(nextHref, { scroll: false })");
+    expect(characterizationRouteHookSource).toContain("buildCharacterizationSearchHref");
+    expect(characterizationRouteHookSource).toContain("shouldSyncCharacterizationUrl");
+    expect(characterizationScopeHookSource).not.toContain("router.replace");
+    expect(characterizationScopeHookSource).not.toContain("useRouter");
+    expect(characterizationHookSource).not.toContain("router.replace");
+    expect(characterizationResultSelectionHookSource).not.toContain("router.replace");
   });
 });
