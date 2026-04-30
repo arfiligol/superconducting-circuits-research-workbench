@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: 目前 App / CLI / Core / Data Formats 的 cross-layer 對齊矩陣
-version: v0.11.0
-last_updated: 2026-03-28
+version: v0.12.0
+last_updated: 2026-04-30
 updated_by: codex
 ---
 
@@ -46,7 +46,7 @@ updated_by: codex
 | Schemdraw live render | [Schemdraw](../app/frontend/research-workflow/schemdraw.md) | [Schemdraw Render](../app/backend/schemdraw-render.md) | `defined` | three-step flow 與 backend authority 已定義 |
 | Worker / processor runtime | Header queue worker summary | [Task Runtime & Processors](../app/shared/task-runtime-and-processors.md) | `defined` | processor summary、cancel/terminate semantics 已寫清楚 |
 | Audit logging | queue controls, privileged actions, admin governance | [Audit Logging](../app/shared/audit-logging.md), [Audit Logs](../app/backend/audit-logs.md) | `partial` | separate audit store 與 read surface 已定義； governance UI adoption 仍待完成 |
-| Dataset / Design / Trace model | Dashboard, Raw Data Browser, Characterization, CLI datasets | [Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [Datasets & Results](../app/backend/datasets-results.md) | `defined` | dataset-first、dataset-local design scope 與 canonical ND sweep trace model 已定義； persistence / consumer adoption 尚未完成 |
+| Dataset / Design / Trace model | Dashboard, Raw Data Browser, Data Ingestion, Simulation publication, Characterization, CLI datasets | [Dataset / Design / Trace Schema](../data-formats/dataset-record.md), [Datasets & Results](../app/backend/datasets-results.md) | `defined` | dataset-first、DesignScope lifecycle / merge / target selection 與 canonical ND sweep trace model 已定義； implementation adoption 仍待跟上 |
 | Standalone CLI runtime | [CLI / Standalone Runtime](../cli/standalone-runtime.md), [sc session](../cli/sc-session.md), [sc tasks](../cli/sc-tasks.md) | [CLI Options](../cli/index.md), [Core / Python Core](../core/python-core.md), [Data Formats](../data-formats/index.md) | `partial` | local context、local run registry 已定義； interchange 與 implementation adoption 仍待完成 |
 | CLI / App interchange | [CLI / Local / App Interchange](../cli/local-app-interchange.md) | [Local / App Interchange](../cli/local-app-interchange.md), [Resource Ownership & Visibility](../app/shared/resource-ownership-and-visibility.md) | `defined` | import/export/copy-with-lineage 邊界已定義；不做 live sync |
 

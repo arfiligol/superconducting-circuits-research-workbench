@@ -10,9 +10,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Characterization analysis registry、Data Collection Review、analysis pipeline gating、run history、axis-aware artifact manifest、artifact payload 與 identify/tagging 的 backend reference surface。
-version: v0.11.0
-last_updated: 2026-04-06
+scope: Characterization analysis registry、active DesignScope gating、Data Collection Review、analysis pipeline gating、run history、axis-aware artifact manifest、artifact payload 與 identify/tagging 的 backend reference surface。
+version: v0.12.0
+last_updated: 2026-04-30
 updated_by: codex
 ---
 
@@ -69,7 +69,7 @@ updated_by: codex
     | Field | Meaning |
     |---|---|
     | `dataset_id` | active dataset scope |
-    | `design_id` | 目前 design scope |
+    | `design_id` | active DesignScope identity；archived / redirected scopes are not normal submit targets |
     | `selected_trace_ids[]` | compatibility 計算可參考的明確 selection；仍屬於 UI interaction input |
 
 === "Data Collection Review"
@@ -191,11 +191,12 @@ updated_by: codex
 | Concern | Contract |
 |---|---|
 | Pipeline-first model | Characterization 應被視為 analysis pipeline，而不是單次 one-off run surface |
+| Active scope gate | registry、Data Collection Review、submit path 與 run history normal query 必須先解析 `dataset_id + design_id` 為 active DesignScope |
 | Separate run identity | extraction、fitting、comparison 等每個 analysis 都保有自己的 `run_id` |
 | Upstream result dependency | 某 analysis 若依賴上游 analysis 結果，contract 必須顯式指出 `required_upstream_analysis_ids[]` 與可接受的 upstream result surface |
 | Submit lineage | downstream analysis submit path 應能攜帶 `input_result_refs[]` 或等價 upstream lineage，而不是只保留 raw `selected_trace_ids[]` |
 | Blocking truth | backend 必須能回答是 `blocked`，還是 `requires_upstream_result`；frontend 不得自行猜測 |
-| Next-step truth | backend 應能指出某 successful run 之後可解鎖哪些 downstream analyses |
+| Next-step truth | backend 應能指出某 successful run 完成時可解鎖哪些 downstream analyses |
 
 ### Availability vs Run Status
 
@@ -255,6 +256,7 @@ Characterization results 必須同時區分 source input axes 與 analysis-deriv
 |---|---|
 | Compare eligibility | `measurement`、`layout_simulation`、`circuit_simulation` 只要共享相容的 canonical scientific structure，就可成為 compare candidates |
 | Structural compatibility | 至少需滿足 family、representation、required axes 與 `axis_signature` / shared-axis compatibility |
+| Scope compatibility | compare candidates 必須先位於同一 active DesignScope；跨來源對齊由 ingestion / publication target selection 或 DesignScope merge 完成 |
 | Identity preservation | compare-preserving result 必須保留 member/source identity，不得把多個 compatible members 平均成單一 surface |
 | Result preview | table / plot preset 應能表達 raw extracted resonance points per source/member，並支援 downstream fit lines per source/member |
 | Implementation honesty | phase-1 runtime 若仍做 aggregation，docs 必須將它標示為 phase-1 truth，而不是 compare-preserving surface |

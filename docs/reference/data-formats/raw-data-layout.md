@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: raw source layout 與 dataset/design ingest boundary
-version: v1.1.0
-last_updated: 2026-03-14
+scope: raw source layout 與 dataset/DesignScope ingest boundary
+version: v1.2.0
+last_updated: 2026-04-30
 updated_by: codex
 ---
 
@@ -36,7 +36,7 @@ data/raw/
 
 ## Dataset-first / Design-scoped Layout
 
-建議以 dataset 為主、design 為子目錄做外部來源彙整：
+建議以 dataset 為主、design label 為子目錄做外部來源彙整：
 
 ```text
 data/raw/
@@ -53,10 +53,10 @@ data/raw/
 
 ## Ingest Boundary
 
-ingest/import 完成後應產生：
+ingest/import 完成後應綁定或產生：
 
-1. `DatasetRecord`
-2. dataset-local `DesignScope`
+1. existing `DatasetRecord`
+2. existing or newly created dataset-local `DesignScope`
 3. `DesignAssetRecord`
 4. `TraceBatchRecord`
 5. `TraceRecord`
@@ -65,6 +65,10 @@ ingest/import 完成後應產生：
 !!! warning "Do not skip dataset scope"
     原始來源即使只有單一 design，也必須先歸入一個 `DatasetRecord`。
     `design` 不能直接取代 dataset，否則無法與 active dataset、workspace visibility 與 publish lifecycle 對齊。
+
+!!! warning "Raw directory names are not authority"
+    `data/raw/**` 目錄名只能作為 source label 或 create-new default。
+    Data Ingestion 若要落到既有 scope，必須使用 explicit `design_id`；若要建立新 scope，必須走 backend create-new DesignScope contract。
 
 !!! important "Raw file is provenance, not the working trace authority"
     raw 檔負責保留來源完整性；

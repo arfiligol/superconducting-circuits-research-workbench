@@ -9,9 +9,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Backend dataset catalog、design browse、sweep-aware trace browse / preview / mutation、characterization-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
-version: v0.13.1
-last_updated: 2026-03-30
+scope: Backend dataset catalog、DesignScope lifecycle / target selection、sweep-aware trace browse / preview / mutation、characterization-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
+version: v0.14.0
+last_updated: 2026-04-30
 updated_by: codex
 ---
 
@@ -20,7 +20,7 @@ updated_by: codex
 本頁定義 Dashboard、Header dataset switcher、Raw Data Browser、Characterization 與部分 Result View 依賴的 dataset / design / trace / result surface。
 
 !!! info "Surface Boundary"
-    本頁負責 dataset catalog、dataset profile、dataset-local design browse、sweep-aware trace browse / preview / edit payload、trace mutation gating、characterization-facing trace filtering projection、tagged core metrics summary 與 provenance-bearing result handles。
+    本頁負責 dataset catalog、dataset profile、dataset-local DesignScope browse / lifecycle / target selection、sweep-aware trace browse / preview / edit payload、trace mutation gating、characterization-facing trace filtering projection、tagged core metrics summary 與 provenance-bearing result handles。
     task lifecycle、analysis-specific artifact manifest 與 audit query 不屬於本頁責任。
 
 !!! tip "Primary Consumers"
@@ -32,7 +32,9 @@ updated_by: codex
 | --- | --- |
 | Dataset Catalog | Header / Dashboard 可見 dataset 列表 |
 | Dataset Profile | Dashboard 唯一正式 metadata write surface |
-| Design Browse | active dataset 內的 dataset-local design scope list |
+| Design Browse | active dataset 內的 dataset-local `DesignScope` list |
+| Design Scope Lifecycle | create / rename / merge / archive / delete gating 與 stale `design_id` resolution |
+| Target Design Scope | Data Ingestion 與 Simulation publication 使用的 explicit existing-scope / create-new contract |
 | Trace Surface | trace metadata list、sweep-aware filter projection、single-trace preview、trace edit payload、single / batch delete gating |
 | Tagged Core Metrics Summary | Dashboard 唯讀摘要 |
 | Result Handles | 指向 persisted artifacts / trace payload 的 result refs |
@@ -76,23 +78,92 @@ backend 必須支援 Dashboard 對應的 profile 讀寫：
 ## Design Browse Contract
 
 `Raw Data Browser` 與 `Characterization` 選擇的是 active dataset 內的 `design_id`。
+Data Ingestion 與 Simulation publication 使用 `Target Design Scope` selector，但 backend/domain canonical resource name 仍是 `DesignScope`。
 
 | Field | Meaning |
 | --- | --- |
 | `design_id` | dataset-local design identity |
 | `dataset_id` | parent dataset |
 | `name` | design label |
+| `lifecycle_state` | `active`, `archived`, `deleted` |
+| `redirect_design_id` | stale-link / merge redirect target；無 redirect 時為 `null` |
 | `source_coverage` | source summary / provenance coverage |
 | `compare_readiness` | `ready`, `inspect_only`, `blocked` |
 | `trace_count` | trace metadata row count |
+| `allowed_actions` | row-level lifecycle gating，例如 rename / merge / archive / delete |
+| `mutation_policy_summary` | UI-safe lifecycle restriction summary |
 | `updated_at` | freshness summary |
 
 ### Design browse rules
 
 1. `design_id` 只在對應 `dataset_id` 內保證穩定。
-2. design browse 預設為 cursor-based。
-3. 切換 dataset 後，design browse 必須整批 rebinding。
-4. successful trace delete responses 必須同時回傳更新後的 design browse row，讓 Raw Data Browser 可立即同步 `trace_count` 與 compare/browse readiness。
+2. normal browse / target selectors 預設只列 `active` scopes；archived scopes 只能在 explicit history / stale-link context 顯示。
+3. design browse 預設為 cursor-based。
+4. 切換 dataset 後，design browse 必須整批 rebinding。
+5. successful trace delete responses 必須同時回傳更新後的 design browse row，讓 Raw Data Browser 可立即同步 `trace_count` 與 compare/browse readiness。
+
+## Design Scope Lifecycle Contract
+
+| Operation | Backend-owned behavior | Minimum response |
+| --- | --- | --- |
+| create | create active `DesignScope` inside one dataset and enforce active-name uniqueness | new design browse row |
+| rename | update display `name` without changing `design_id` | updated design browse row |
+| merge | re-parent source design-scoped metadata to target, archive source and set redirect | source archived row, target updated row, recompute / invalidation summary |
+| archive | remove scope from default target selectors while preserving history and optional redirect | archived row |
+| delete | mark terminal soft state when backend policy allows; no frontend physical purge | deleted / tombstone summary |
+
+### Lifecycle ownership rules
+
+1. backend is the only authority that creates `design_id`, changes `lifecycle_state`, writes `redirect_design_id`, or re-parents design-scoped records.
+2. frontend may request lifecycle actions and render returned rows, but must not rewrite `design_id` locally.
+3. archive / delete availability must come from `allowed_actions` and `mutation_policy_summary`, not frontend inference from trace counts.
+4. `DesignScope.name` is a display label; matching an existing scope by free-text name is not an authority rule.
+
+## Target Design Scope Contract
+
+Data Ingestion and Simulation publication must bind output to an explicit target decision.
+
+| Mode | Request contract | Backend rule |
+| --- | --- | --- |
+| existing target | `dataset_id + design_id` | validate active scope and attach imported / published records to that scope |
+| create-new target | `dataset_id + requested_name` plus create intent | create active scope first, then attach records to the new `design_id` |
+| invalid / archived target | request carries `design_id` that is not active | reject with target-scope error and optional redirect summary |
+
+!!! warning "No hidden auto-match"
+    A free-text design name is only a create-new default.
+    Backend must not silently treat a name as an existing target unless the request carries the explicit existing `design_id`.
+
+## Design Scope Merge Contract
+
+| Concern | Rule |
+| --- | --- |
+| Scope boundary | source and target must be different active scopes under the same `dataset_id` |
+| Re-parented records | traces、trace batches、trace-batch links、analysis runs、result artifacts、derived parameters、design assets、design-scoped summaries / read models |
+| Source lifecycle | source scope becomes `archived` and carries `redirect_design_id=target_design_id` |
+| Target refresh | target row must reflect refreshed or invalidated `source_coverage`、`trace_count`、`compare_readiness`、`collection_projection`、analysis readiness and tagged metrics summaries |
+| TraceStore | physical payload paths may remain unchanged; `store_ref` is opaque backend-owned locator |
+| Conflict handling | backend must reject trace identity collisions and return explicit conflict details for non-coalescible design assets |
+
+### Merge response minimum
+
+| Field | Meaning |
+| --- | --- |
+| `operation` | `merged` |
+| `dataset_id` | dataset boundary |
+| `source_design` | archived source row with redirect |
+| `target_design` | updated active target row |
+| `reparented_counts` | counts by record family |
+| `recompute_status` | refreshed / invalidated materialized summaries |
+| `warnings[]` | optional conflict / stale-link notes |
+
+## Deep Link And Stale Design Scope Resolution
+
+| Input state | Backend response rule |
+| --- | --- |
+| active `design_id` | return normal design row / trace browse |
+| archived `design_id` with redirect | return `design_scope_redirected` metadata and target design summary |
+| archived `design_id` without redirect | return archived-state summary and no normal target selection |
+| deleted `design_id` | return tombstone / not-found style response; do not create replacement scope |
 
 ## Trace Surface Contract
 
@@ -399,12 +470,21 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
             "design_id": "design_flux_scan_a",
             "dataset_id": "ds_xy_001",
             "name": "Flux Scan A",
+            "lifecycle_state": "active",
+            "redirect_design_id": null,
             "source_coverage": {
               "measurement": 2,
               "layout_simulation": 1
             },
             "compare_readiness": "ready",
             "trace_count": 18,
+            "allowed_actions": {
+              "rename": true,
+              "merge": true,
+              "archive": true,
+              "delete": false
+            },
+            "mutation_policy_summary": "Active design scope with persisted traces.",
             "updated_at": "2026-03-14T10:24:00Z"
           }
         ]
@@ -417,6 +497,56 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
         "filter_echo": {
           "dataset_id": "ds_xy_001"
         }
+      }
+    }
+    ```
+
+!!! example "Design scope merge"
+    Request:
+    ```json
+    {
+      "source_design_id": "design_hfss_import_01",
+      "target_design_id": "design_flux_scan_a"
+    }
+    ```
+
+    Response:
+    ```json
+    {
+      "ok": true,
+      "data": {
+        "operation": "merged",
+        "dataset_id": "ds_xy_001",
+        "source_design": {
+          "design_id": "design_hfss_import_01",
+          "dataset_id": "ds_xy_001",
+          "name": "HFSS import 01",
+          "lifecycle_state": "archived",
+          "redirect_design_id": "design_flux_scan_a"
+        },
+        "target_design": {
+          "design_id": "design_flux_scan_a",
+          "dataset_id": "ds_xy_001",
+          "name": "Flux Scan A",
+          "lifecycle_state": "active",
+          "redirect_design_id": null,
+          "trace_count": 27
+        },
+        "reparented_counts": {
+          "traces": 9,
+          "trace_batches": 1,
+          "analysis_runs": 2,
+          "result_artifacts": 4,
+          "derived_parameters": 3,
+          "design_assets": 1
+        },
+        "recompute_status": {
+          "source_coverage": "refreshed",
+          "collection_projection": "invalidated",
+          "analysis_readiness": "invalidated",
+          "tagged_metrics": "refreshed"
+        },
+        "warnings": []
       }
     }
     ```
@@ -618,6 +748,8 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
           "design_id": "design_flux_scan_a",
           "dataset_id": "ds_xy_001",
           "name": "Flux Scan A",
+          "lifecycle_state": "active",
+          "redirect_design_id": null,
           "source_coverage": {
             "measurement": 1,
             "layout_simulation": 1
@@ -659,6 +791,12 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
 | `dataset_profile_update_denied` | `permission_denied` | session 無 dataset metadata write 權限 |
 | `dataset_profile_invalid` | `validation_error` | device type 或 capability payload 不符合 contract |
 | `design_not_found` | `not_found` | dataset 內找不到 design scope |
+| `design_scope_name_conflict` | `validation_error` | active design scope name 與同 dataset 內現有 active scope 衝突 |
+| `target_design_scope_required` | `validation_error` | ingest / publication request 未提供 existing target 或 create-new intent |
+| `target_design_scope_invalid` | `validation_error` | target scope 不屬於 dataset、不是 active，或不可見 |
+| `design_scope_redirected` | `stale_reference` | stale `design_id` 已 archived 並指向 target scope |
+| `design_scope_merge_denied` | `permission_denied` | session 或 lifecycle policy 不允許 merge |
+| `design_scope_merge_conflict` | `conflict` | merge 遇到不可自動處理的 trace / asset / summary 衝突 |
 | `trace_not_found` | `not_found` | trace detail 指向不存在 trace |
 | `trace_payload_not_ready` | `task_not_ready` | trace payload 尚未 materialize |
 
