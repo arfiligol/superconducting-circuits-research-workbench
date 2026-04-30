@@ -846,6 +846,9 @@ def test_merge_reparents_trace_metadata_and_redirects_source_scope() -> None:
     assert payload["source_design"]["lifecycle_state"] == "archived"
     assert payload["source_design"]["redirect_design_id"] == target["design_id"]
     assert payload["target_design"]["trace_count"] == 2
+    assert payload["reparented_counts"]["raw_traces"] == 1
+    assert payload["reparented_counts"]["trace_capabilities"] > 0
+    assert payload["reparented_counts"]["published_simulation_traces"] == 0
     target_traces = client.get(
         f"/datasets/{dataset_id}/designs/{target['design_id']}/traces"
     ).json()["data"]["rows"]

@@ -452,7 +452,10 @@ class DurableCatalogRepository:
         )
         if published_result is None:
             return None
-        reparented_counts.update(published_result.reparented_counts)
+        for record_family, count in published_result.reparented_counts.items():
+            reparented_counts[record_family] = (
+                reparented_counts.get(record_family, 0) + count
+            )
         self._touch_design(dataset_id, target_design_id, updated_at)
         source_design = self.get_design(dataset_id, source_design_id)
         target_design = self.get_design(dataset_id, target_design_id)
