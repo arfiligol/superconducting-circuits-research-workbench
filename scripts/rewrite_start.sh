@@ -99,7 +99,7 @@ require_path "$ROOT_DIR/frontend/node_modules" "npm run rewrite:install"
 require_path "$ROOT_DIR/backend/.venv" "npm run rewrite:install"
 
 start_service backend bash -lc "cd '$ROOT_DIR/backend' && export PYTHONPATH='$ROOT_DIR/backend' && exec ./.venv/bin/uvicorn src.app.main:app --host 127.0.0.1 --port 8000"
-start_service frontend bash -lc "cd '$ROOT_DIR/frontend' && exec ./node_modules/.bin/next dev --hostname 127.0.0.1 --port 3000"
+start_service frontend bash -lc "cd '$ROOT_DIR/frontend' && exec ./node_modules/.bin/next dev --webpack --hostname 127.0.0.1 --port 3000"
 
 wait_for_url "backend" "http://127.0.0.1:8000/health" "$LOG_DIR/backend.log"
 wait_for_url "frontend" "http://127.0.0.1:3000" "$LOG_DIR/frontend.log"

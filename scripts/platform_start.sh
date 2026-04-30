@@ -22,7 +22,7 @@ platform_require_free_port "$APP_PORT" app
 platform_check_redis "$ROOT_DIR"
 
 platform_start_service "$PID_DIR" "$LOG_DIR" frontend \
-  bash -lc "cd '$ROOT_DIR/frontend' && exec ./node_modules/.bin/next dev --hostname 127.0.0.1 --port 3000"
+  bash -lc "cd '$ROOT_DIR/frontend' && exec ./node_modules/.bin/next dev --webpack --hostname 127.0.0.1 --port 3000"
 platform_start_service "$PID_DIR" "$LOG_DIR" app \
   bash -lc "cd '$ROOT_DIR' && exec uv run sc-app"
 platform_start_service "$PID_DIR" "$LOG_DIR" worker-simulation \
