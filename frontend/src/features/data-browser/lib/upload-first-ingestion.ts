@@ -46,13 +46,41 @@ function normalizeText(value: string) {
     .replace(/[^a-z0-9]+/g, " ");
 }
 
-function humanizeFileStem(fileName: string) {
-  return fileName
-    .replace(/\.[^.]+$/, "")
+function fileStem(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "");
+}
+
+function humanizeStem(value: string) {
+  return value
     .split(/[_\-\s]+/)
     .filter((segment) => segment.length > 0)
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
+}
+
+function humanizeFileStem(fileName: string) {
+  return humanizeStem(fileStem(fileName));
+}
+
+function resolveDesignNameSuggestion(fileName: string) {
+  const stem = fileStem(fileName);
+  const hfssMatch = stem.match(/^([A-Za-z0-9]+)_Q(\d+)(?:[_\-\s]|$)/i);
+  if (hfssMatch) {
+    return `${hfssMatch[1]?.toUpperCase()} Q${hfssMatch[2]}`;
+  }
+
+  return humanizeStem(stem);
+}
+
+function formatTraceProvenance(input: Readonly<{
+  kind: RawDataIngestionKind;
+  fileName: string;
+  header: string;
+  parameter: string;
+  representation: string;
+}>) {
+  const source = input.kind === "measurement" ? "Measurement" : "Layout simulation";
+  return `${source} import · ${input.fileName} · ${input.header} · ${input.parameter} ${input.representation}`;
 }
 
 function parseAxisHeader(header: string) {
@@ -386,9 +414,13 @@ function buildTraceDrafts(
         representation: metadata.representation,
         trace_mode_group: "base",
         stage_kind: "raw",
-        provenance_summary: `${
-          kind === "measurement" ? "Measurement" : "Layout simulation"
-        } import · ${metadata.parameter} ${metadata.representation}`,
+        provenance_summary: formatTraceProvenance({
+          kind,
+          fileName,
+          header,
+          parameter: metadata.parameter,
+          representation: metadata.representation,
+        }),
         axes: [
           {
             name: axisName,
@@ -431,9 +463,13 @@ function buildTraceDrafts(
       representation: metadata.representation,
       trace_mode_group: "base",
       stage_kind: "raw",
-      provenance_summary: `${
-        kind === "measurement" ? "Measurement" : "Layout simulation"
-      } import · ${metadata.parameter} ${metadata.representation}`,
+      provenance_summary: formatTraceProvenance({
+        kind,
+        fileName,
+        header,
+        parameter: metadata.parameter,
+        representation: metadata.representation,
+      }),
       axes: [
         {
           name: axisName,
@@ -473,7 +509,7 @@ export function validateUploadFirstCsv(input: Readonly<{
 
   return {
     fileName: input.fileName,
-    designNameSuggestion: humanizeFileStem(input.fileName),
+    designNameSuggestion: resolveDesignNameSuggestion(input.fileName),
     provenanceLabelSuggestion: `${
       input.kind === "measurement" ? "Measurement" : "Layout simulation"
     } import · ${humanizeFileStem(input.fileName)}`,
