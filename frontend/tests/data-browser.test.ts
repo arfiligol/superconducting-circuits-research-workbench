@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
@@ -33,6 +33,19 @@ import {
   buildUploadFirstIngestionDraft,
   validateUploadFirstCsv,
 } from "../src/features/data-browser/lib/upload-first-ingestion";
+
+const runHfssRealDataE2e = process.env.RUN_HFSS_REAL_DATA_E2E === "1";
+const defaultPf6fqRawDataRoot =
+  "/Users/arfiligol/Github/superconducting-circuits-tutorial/data/raw/layout_simulation/PF6FQ";
+const pf6fqRawDataRoot = process.env.PF6FQ_RAW_DATA_ROOT ?? defaultPf6fqRawDataRoot;
+const pf6fqRealFiles = {
+  xyImY11: `${pf6fqRawDataRoot}/Q0/PF6FQ_Q0_XY_Im_Y11.csv`,
+  readoutImY11: `${pf6fqRawDataRoot}/Q0/PF6FQ_Q0_Readout_Im_Y11.csv`,
+  xyReYin: `${pf6fqRawDataRoot}/Q0/PF6FQ_Q0_XY_Re_Yin.csv`,
+} as const;
+const missingPf6fqRealFiles = runHfssRealDataE2e
+  ? Object.values(pf6fqRealFiles).filter((path) => !existsSync(path))
+  : [];
 
 const dashboardWorkspaceSource = readFileSync(
   fileURLToPath(
@@ -741,6 +754,67 @@ describe("upload-first ingestion helpers", () => {
       "PF6FQ_Q0_XY_Re_Yin.csv",
     );
     expect(validation.draftTraces[0]?.provenance_summary).toContain("Yin real");
+  });
+
+  it.skipIf(
+    !runHfssRealDataE2e || missingPf6fqRealFiles.length > 0,
+  )("validates real PF6FQ HFSS files from the read-only raw-data tree", () => {
+    for (const [path, expectedHeader] of [
+      [pf6fqRealFiles.xyImY11, "PF6FQ_Q0_XY_Im_Y11.csv"],
+      [pf6fqRealFiles.readoutImY11, "PF6FQ_Q0_Readout_Im_Y11.csv"],
+    ] as const) {
+      const validation = validateUploadFirstCsv({
+        kind: "layout_simulation",
+        fileName: expectedHeader,
+        fileText: readFileSync(path, "utf8"),
+      });
+      const draft = validation.draftTraces[0];
+
+      expect(validation.designNameSuggestion).toBe("PF6FQ Q0");
+      expect(validation.traces[0]).toMatchObject({
+        family: "y_matrix",
+        parameter: "Y11",
+        representation: "imaginary",
+        pointCount: 250000,
+        previewPointCount: 250000,
+      });
+      expect(draft?.axes).toEqual([
+        { name: "frequency", unit: "GHz", length: 25000 },
+        { name: "L_jun", unit: "nH", length: 10 },
+      ]);
+      expect(draft?.preview_payload.kind).toBe("nd_grid");
+      expect(draft?.preview_payload.axes).toEqual([
+        {
+          name: "frequency",
+          unit: "GHz",
+          values: expect.arrayContaining([0, 20]),
+        },
+        {
+          name: "L_jun",
+          unit: "nH",
+          values: [0, 5, 10, 15, 18, 20, 22, 24, 26, 28],
+        },
+      ]);
+      const values = draft?.preview_payload.values as unknown[][] | undefined;
+      expect(values).toHaveLength(25000);
+      expect(values?.[0]).toHaveLength(10);
+    }
+
+    const yinValidation = validateUploadFirstCsv({
+      kind: "layout_simulation",
+      fileName: "PF6FQ_Q0_XY_Re_Yin.csv",
+      fileText: readFileSync(pf6fqRealFiles.xyReYin, "utf8"),
+    });
+
+    expect(yinValidation.designNameSuggestion).toBe("PF6FQ Q0");
+    expect(yinValidation.traces[0]).toMatchObject({
+      family: "y_matrix",
+      parameter: "Yin",
+      representation: "real",
+      pointCount: 8,
+      previewPointCount: 8,
+    });
+    expect(yinValidation.draftTraces[0]?.preview_payload.kind).toBe("sampled_series");
   });
 
   it("rejects unsupported complex series columns", () => {
