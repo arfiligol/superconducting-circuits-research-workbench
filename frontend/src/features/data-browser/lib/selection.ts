@@ -1,18 +1,26 @@
-import type { DesignBrowseRow, TraceMetadataRow } from "@/features/data-browser/lib/contracts";
+import type { DesignLifecycleState, TraceMetadataRow } from "@/features/data-browser/lib/contracts";
 
 export const emptyTraceRows: readonly TraceMetadataRow[] = [];
 
+type SelectableDesignRow = Readonly<{
+  design_id: string;
+  lifecycle_state?: DesignLifecycleState;
+}>;
+
 export function resolveSelectedDesignId(
   selectedDesignId: string | null,
-  rows: readonly DesignBrowseRow[] | undefined,
+  rows: readonly SelectableDesignRow[] | undefined,
 ) {
-  if (!rows || rows.length === 0) {
+  const activeRows = (rows ?? []).filter(
+    (row) => (row.lifecycle_state ?? "active") === "active",
+  );
+  if (activeRows.length === 0) {
     return null;
   }
-  if (selectedDesignId && rows.some((row) => row.design_id === selectedDesignId)) {
+  if (selectedDesignId && activeRows.some((row) => row.design_id === selectedDesignId)) {
     return selectedDesignId;
   }
-  return rows[0]?.design_id ?? null;
+  return activeRows[0]?.design_id ?? null;
 }
 
 export function resolveSelectedTraceId(

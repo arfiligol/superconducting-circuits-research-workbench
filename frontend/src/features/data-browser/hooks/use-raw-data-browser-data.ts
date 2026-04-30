@@ -5,12 +5,17 @@ import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 
 import {
+  archiveDatasetDesign,
   batchDeleteTraces,
+  createDatasetDesign,
+  deleteDatasetDesign,
   deleteTrace,
   getTraceDetail,
   getTraceEditDetail,
   listDesignBrowseRows,
   listTraceMetadata,
+  mergeDatasetDesign,
+  renameDatasetDesign,
   traceDetailKey,
   traceEditDetailKey,
   traceListKey,
@@ -26,6 +31,7 @@ import {
 } from "@/features/data-browser/lib/selection";
 
 import type {
+  DesignBrowseRow,
   TraceMetadataRow,
   TraceUpdateDraft,
 } from "@/features/data-browser/lib/contracts";
@@ -42,6 +48,11 @@ type BrowserNotice = Readonly<{
   tone: "success" | "warning";
   message: string;
 }> | null;
+
+type DesignLifecycleState = Readonly<{
+  state: "idle" | "submitting" | "error";
+  message: string | null;
+}>;
 
 type PendingDeleteRequest =
   | Readonly<{
@@ -74,6 +85,24 @@ const defaultFilters: TraceFilters = {
 
 const DESIGN_SCOPE_PAGE_LIMIT = 6;
 const TRACE_SUMMARY_PAGE_LIMIT = 12;
+const designLifecycleIdle: DesignLifecycleState = { state: "idle", message: null };
+
+function mergeDesignRows(
+  currentRows: readonly DesignBrowseRow[],
+  incomingRows: readonly DesignBrowseRow[],
+) {
+  const incomingById = new Map(incomingRows.map((row) => [row.design_id, row]));
+  const mergedRows = currentRows.map((row) => incomingById.get(row.design_id) ?? row);
+  const existingIds = new Set(mergedRows.map((row) => row.design_id));
+
+  for (const row of incomingRows) {
+    if (!existingIds.has(row.design_id)) {
+      mergedRows.push(row);
+    }
+  }
+
+  return mergedRows;
+}
 
 export function useRawDataBrowserData() {
   const searchParams = useSearchParams();
@@ -93,6 +122,8 @@ export function useRawDataBrowserData() {
   const [editSaveErrorMessage, setEditSaveErrorMessage] = useState<string | null>(null);
   const [pendingDeleteRequest, setPendingDeleteRequest] = useState<PendingDeleteRequest>(null);
   const [isDeletePending, setIsDeletePending] = useState(false);
+  const [designLifecycleState, setDesignLifecycleState] =
+    useState<DesignLifecycleState>(designLifecycleIdle);
 
   const designsQuery = useSWR(
     activeDatasetId
@@ -109,6 +140,10 @@ export function useRawDataBrowserData() {
   );
 
   const resolvedDesignId = resolveSelectedDesignId(selectedDesignId, designsQuery.data?.rows);
+  const activeDesigns = useMemo(
+    () => (designsQuery.data?.rows ?? []).filter((design) => design.lifecycle_state === "active"),
+    [designsQuery.data?.rows],
+  );
 
   const tracesQuery = useSWR(
     activeDatasetId && resolvedDesignId
@@ -299,6 +334,185 @@ export function useRawDataBrowserData() {
     setPendingDeleteRequest(null);
   }
 
+  async function rebindDesignRows(rows: readonly DesignBrowseRow[]) {
+    await designsQuery.mutate(
+      (current) =>
+        current
+          ? {
+              ...current,
+              rows: mergeDesignRows(current.rows, rows),
+            }
+          : current,
+      { revalidate: false },
+    );
+  }
+
+  function clearTraceBrowseState() {
+    setTraceCursor(null);
+    setFocusedTraceId(null);
+    setSelectedTraceIds([]);
+    setEditTraceId(null);
+    setPendingDeleteRequest(null);
+    setEditSaveErrorMessage(null);
+  }
+
+  async function createDesignScope(name: string) {
+    if (!activeDatasetId || !name.trim()) {
+      setDesignLifecycleState({
+        state: "error",
+        message: "Enter a design scope name before creating it.",
+      });
+      return;
+    }
+
+    setDesignLifecycleState({ state: "submitting", message: null });
+    try {
+      const result = await createDatasetDesign(activeDatasetId, { name: name.trim() });
+      await rebindDesignRows(result.design_rows.length > 0 ? result.design_rows : [result.design]);
+      setSelectedDesignId(result.design.design_id);
+      clearTraceBrowseState();
+      setNotice({
+        tone: "success",
+        message: `Created design scope ${result.design.name}.`,
+      });
+      setDesignLifecycleState(designLifecycleIdle);
+    } catch (error) {
+      setDesignLifecycleState({
+        state: "error",
+        message: error instanceof Error ? error.message : "Unable to create the design scope.",
+      });
+    }
+  }
+
+  async function renameSelectedDesignScope(name: string) {
+    if (!activeDatasetId || !resolvedDesignId || !name.trim()) {
+      setDesignLifecycleState({
+        state: "error",
+        message: "Enter a design scope name before renaming it.",
+      });
+      return;
+    }
+
+    setDesignLifecycleState({ state: "submitting", message: null });
+    try {
+      const result = await renameDatasetDesign(activeDatasetId, resolvedDesignId, {
+        name: name.trim(),
+      });
+      const rows = result.design_rows.length > 0
+        ? result.design_rows
+        : result.design
+          ? [result.design]
+          : [];
+      await rebindDesignRows(rows);
+      setNotice({
+        tone: "success",
+        message: `Renamed design scope to ${name.trim()}.`,
+      });
+      setDesignLifecycleState(designLifecycleIdle);
+    } catch (error) {
+      setDesignLifecycleState({
+        state: "error",
+        message: error instanceof Error ? error.message : "Unable to rename the design scope.",
+      });
+    }
+  }
+
+  async function mergeSelectedDesignScope(targetDesignId: string) {
+    if (!activeDatasetId || !resolvedDesignId || !targetDesignId) {
+      setDesignLifecycleState({
+        state: "error",
+        message: "Choose an active target design scope before merging.",
+      });
+      return;
+    }
+
+    setDesignLifecycleState({ state: "submitting", message: null });
+    try {
+      const result = await mergeDatasetDesign(activeDatasetId, resolvedDesignId, targetDesignId);
+      const rows = result.design_rows.length > 0
+        ? result.design_rows
+        : [result.source_design, result.target_design].filter(
+            (row): row is DesignBrowseRow => Boolean(row),
+          );
+      await rebindDesignRows(rows);
+      clearTraceBrowseState();
+      setSelectedDesignId(result.target_design?.design_id ?? targetDesignId);
+      setNotice({
+        tone: "success",
+        message: result.warnings?.[0]
+          ? `Merged design scope. ${result.warnings[0]}`
+          : "Merged the source design scope into the selected active target.",
+      });
+      setDesignLifecycleState(designLifecycleIdle);
+    } catch (error) {
+      setDesignLifecycleState({
+        state: "error",
+        message: error instanceof Error ? error.message : "Unable to merge the design scope.",
+      });
+    }
+  }
+
+  async function archiveSelectedDesignScope() {
+    if (!activeDatasetId || !resolvedDesignId) {
+      return;
+    }
+
+    setDesignLifecycleState({ state: "submitting", message: null });
+    try {
+      const result = await archiveDatasetDesign(activeDatasetId, resolvedDesignId);
+      const rows = result.design_rows.length > 0
+        ? result.design_rows
+        : result.design
+          ? [result.design]
+          : [];
+      await rebindDesignRows(rows);
+      clearTraceBrowseState();
+      const redirectDesignId = result.design?.redirect_design_id ?? result.target_design?.design_id ?? null;
+      setSelectedDesignId(redirectDesignId);
+      setNotice({
+        tone: redirectDesignId ? "warning" : "success",
+        message: redirectDesignId
+          ? `This design scope is archived. Switched to redirect target ${redirectDesignId}.`
+          : "Archived the design scope and cleared stale trace browse state.",
+      });
+      setDesignLifecycleState(designLifecycleIdle);
+    } catch (error) {
+      setDesignLifecycleState({
+        state: "error",
+        message: error instanceof Error ? error.message : "Unable to archive the design scope.",
+      });
+    }
+  }
+
+  async function deleteSelectedDesignScope() {
+    if (!activeDatasetId || !resolvedDesignId) {
+      return;
+    }
+
+    setDesignLifecycleState({ state: "submitting", message: null });
+    try {
+      const result = await deleteDatasetDesign(activeDatasetId, resolvedDesignId);
+      const rows = result.design_rows.length > 0
+        ? result.design_rows
+        : result.design
+          ? [result.design]
+          : [];
+      await rebindDesignRows(rows);
+      clearTraceBrowseState();
+      setSelectedDesignId(null);
+      setNotice({
+        tone: "success",
+        message: "Deleted the design scope and cleared stale trace browse state.",
+      });
+      setDesignLifecycleState(designLifecycleIdle);
+    } catch (error) {
+      setDesignLifecycleState({
+        state: "error",
+        message: error instanceof Error ? error.message : "Unable to delete the design scope.",
+      });
+    }
+  }
+
   async function saveEditedTrace(draft: TraceUpdateDraft) {
     if (!activeDatasetId || !resolvedDesignId || !editTraceId) {
       return;
@@ -427,11 +641,18 @@ export function useRawDataBrowserData() {
     filters,
     setFilters,
     designs: designsQuery.data?.rows ?? [],
+    activeDesigns,
     designsMeta: designsQuery.data?.meta,
     designsError: designsQuery.error as Error | undefined,
     isDesignsLoading: designsQuery.isLoading,
     selectedDesignId: resolvedDesignId,
     setSelectedDesignId,
+    designLifecycleState,
+    createDesignScope,
+    renameSelectedDesignScope,
+    mergeSelectedDesignScope,
+    archiveSelectedDesignScope,
+    deleteSelectedDesignScope,
     goToNextDesignPage() {
       setDesignCursor(designsQuery.data?.meta?.next_cursor ?? null);
     },

@@ -1,13 +1,17 @@
 import type {
-  CharacterizationDesignBrowseRow,
   CharacterizationResultStatus,
   CharacterizationResultSummary,
 } from "@/features/characterization/lib/contracts";
+import type { DesignLifecycleState } from "@/features/data-browser/lib/contracts";
 import type { TaskSummary } from "@/lib/api/tasks";
 
 export type CharacterizationResultStatusFilter = "all" | CharacterizationResultStatus;
 export type CharacterizationTaskScope = "all" | "dataset";
 export type CharacterizationTaskStatusFilter = "all" | "active" | "completed" | "failed";
+type SelectableCharacterizationDesignRow = Readonly<{
+  design_id: string;
+  lifecycle_state?: DesignLifecycleState;
+}>;
 
 export type CharacterizationSelectionRecovery = Readonly<{
   tone: "default" | "warning";
@@ -48,17 +52,21 @@ function isActiveTask(task: TaskSummary) {
 
 export function resolveSelectedCharacterizationDesignId(
   selectedDesignId: string | null,
-  designs: readonly CharacterizationDesignBrowseRow[] | undefined,
+  designs: readonly SelectableCharacterizationDesignRow[] | undefined,
 ) {
-  if (!designs || designs.length === 0) {
+  const activeDesigns = (designs ?? []).filter(
+    (design) => (design.lifecycle_state ?? "active") === "active",
+  );
+
+  if (activeDesigns.length === 0) {
     return null;
   }
 
-  if (selectedDesignId && designs.some((design) => design.design_id === selectedDesignId)) {
+  if (selectedDesignId && activeDesigns.some((design) => design.design_id === selectedDesignId)) {
     return selectedDesignId;
   }
 
-  return designs[0]?.design_id ?? null;
+  return activeDesigns[0]?.design_id ?? null;
 }
 
 export function resolveSelectedCharacterizationResultId(

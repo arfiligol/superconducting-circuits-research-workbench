@@ -2,6 +2,7 @@ export type DatasetVisibilityScope = "local" | "private" | "workspace";
 export type DatasetLifecycleState = "active" | "archived" | "deleted";
 export type DatasetStatus = "Ready" | "Queued" | "Review";
 export type CompareReadiness = "ready" | "inspect_only" | "blocked";
+export type DesignLifecycleState = "active" | "archived" | "deleted";
 export type TraceFamily = "s_matrix" | "y_matrix" | "z_matrix";
 export type TraceModeGroup = "base" | "sideband" | "all";
 export type TraceSourceKind = "circuit_simulation" | "layout_simulation" | "measurement";
@@ -89,14 +90,25 @@ export type TaggedCoreMetricSummary = Readonly<{
   tagged_at: string;
 }>;
 
+export type DesignAllowedActions = Readonly<{
+  rename: boolean;
+  merge: boolean;
+  archive: boolean;
+  delete: boolean;
+}>;
+
 export type DesignBrowseRow = Readonly<{
   design_id: string;
   dataset_id: string;
   name: string;
+  lifecycle_state: DesignLifecycleState;
+  redirect_design_id: string | null;
   source_coverage: Record<string, number>;
   compare_readiness: CompareReadiness;
   trace_count: number;
   updated_at: string;
+  allowed_actions: DesignAllowedActions;
+  mutation_policy_summary: string;
 }>;
 
 export type TraceMetadataRow = Readonly<{
@@ -192,6 +204,30 @@ export type RawDataIngestionResult = Readonly<{
   dataset: DatasetProfile;
   design: DesignBrowseRow;
   traces: TraceMetadataRow[];
+}>;
+
+export type DatasetDesignCreateDraft = Readonly<{
+  name: string;
+}>;
+
+export type DatasetDesignCreateResult = Readonly<{
+  operation: "created";
+  design: DesignBrowseRow;
+  design_rows: readonly DesignBrowseRow[];
+}>;
+
+export type DatasetDesignRenameDraft = Readonly<{
+  name: string;
+}>;
+
+export type DatasetDesignLifecycleMutationResult = Readonly<{
+  operation: "created" | "renamed" | "merged" | "archived" | "deleted";
+  design: DesignBrowseRow | null;
+  source_design?: DesignBrowseRow | null;
+  target_design?: DesignBrowseRow | null;
+  design_rows: readonly DesignBrowseRow[];
+  reparented_counts?: Readonly<Record<string, number>>;
+  warnings?: readonly string[];
 }>;
 
 export type TracePayloadRef = Readonly<{

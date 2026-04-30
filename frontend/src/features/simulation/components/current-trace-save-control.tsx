@@ -63,7 +63,9 @@ async function listAllDatasetDesigns(datasetId: string) {
 }
 
 function sortDesignRows(rows: readonly DesignBrowseRow[]) {
-  return [...rows].sort((left, right) => left.name.localeCompare(right.name));
+  return [...rows]
+    .filter((design) => design.lifecycle_state === "active")
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function describePublishError(error: unknown) {
@@ -213,7 +215,7 @@ export function CurrentTraceSaveControl({
         name: newDesignName.trim(),
       });
       await designListQuery.mutate(
-        (current) => sortDesignRows([...(current ?? []), result.design]),
+        (current) => sortDesignRows([...(current ?? []), ...result.design_rows]),
         { revalidate: false },
       );
       setSelectedDesignId(result.design.design_id);
@@ -256,6 +258,7 @@ export function CurrentTraceSaveControl({
         traceKeys,
         metric,
         designId: selectedDesignId,
+        designName: null,
         parameterName: normalizedParameterName,
       });
       await mutate(taskDetailKey(task.taskId), result.task, { revalidate: false });

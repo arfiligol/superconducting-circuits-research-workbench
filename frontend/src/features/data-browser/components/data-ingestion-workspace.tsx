@@ -16,8 +16,10 @@ import {
   datasetProfileKey,
   getDatasetProfile,
   ingestRawData,
+  listDesignBrowseRows,
 } from "@/lib/api/datasets";
 import { useActiveDataset } from "@/lib/app-state";
+import { AppSelectField, type AppSelectOption } from "@/features/shared/components/app-select";
 import {
   SurfaceHeader,
   SurfacePanel,
@@ -29,8 +31,10 @@ import {
   validateUploadFirstCsv,
   type UploadValidationResult,
 } from "@/features/data-browser/lib/upload-first-ingestion";
+import type { DesignBrowseRow } from "@/features/data-browser/lib/contracts";
 
 type IngestionScope = "measurement" | "layout_simulation";
+type TargetDesignMode = "existing" | "create";
 
 const ingestionScopes: ReadonlyArray<
   Readonly<{
@@ -77,6 +81,12 @@ type BatchSummary = Readonly<{
   axisLabels: readonly string[];
   shapeLabels: readonly string[];
   sweepAxisLabels: readonly string[];
+}>;
+
+type TargetDesignDecision = Readonly<{
+  mode: TargetDesignMode;
+  designId: string | null;
+  designName: string;
 }>;
 
 function fileImportIdle(): FileImportStatus {
@@ -170,9 +180,23 @@ function buildBatchProvenanceLabel(
     : `${scopeLabel} · ${fileCount} files`;
 }
 
+function isActiveDesign(design: DesignBrowseRow) {
+  return design.lifecycle_state === "active";
+}
+
+function buildDesignOptions(designs: readonly DesignBrowseRow[]): readonly AppSelectOption[] {
+  return designs.filter(isActiveDesign).map((design) => ({
+    value: design.design_id,
+    label: design.name,
+    description: `${design.trace_count} traces · ${design.design_id}`,
+  }));
+}
+
 export function DataIngestionWorkspace() {
   const [selectedScope, setSelectedScope] = useState<IngestionScope>("measurement");
-  const [designName, setDesignName] = useState("");
+  const [targetDesignMode, setTargetDesignMode] = useState<TargetDesignMode>("create");
+  const [selectedDesignId, setSelectedDesignId] = useState("");
+  const [createDesignName, setCreateDesignName] = useState("");
   const [provenanceLabel, setProvenanceLabel] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<readonly UploadFileValidation[]>([]);
   const [submitState, setSubmitState] = useState<SubmitState>(null);
@@ -186,12 +210,19 @@ export function DataIngestionWorkspace() {
   const activeDatasetId = activeDataset?.datasetId ?? null;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastSuggestedLabelsRef = useRef({
-    designName: "",
+    createDesignName: "",
     provenanceLabel: "",
   });
   const profileQuery = useSWR(
     activeDatasetId ? datasetProfileKey(activeDatasetId) : null,
     () => (activeDatasetId ? getDatasetProfile(activeDatasetId) : Promise.resolve(undefined)),
+  );
+  const designsQuery = useSWR(
+    activeDatasetId ? ["data-ingestion-designs", activeDatasetId] : null,
+    () =>
+      activeDatasetId
+        ? listDesignBrowseRows(activeDatasetId, { limit: 50 })
+        : Promise.resolve(undefined),
   );
 
   const selectedScopeSummary = useMemo(
@@ -199,7 +230,29 @@ export function DataIngestionWorkspace() {
     [selectedScope],
   );
   const fileSummary = useMemo(() => summarizeFiles(selectedFiles), [selectedFiles]);
+  const targetDesignOptions = useMemo(
+    () => buildDesignOptions(designsQuery.data?.rows ?? []),
+    [designsQuery.data?.rows],
+  );
   const canIngest = Boolean(profileQuery.data?.allowed_actions.ingest_raw_data);
+  const targetDesignDecision: TargetDesignDecision = useMemo(() => {
+    if (targetDesignMode === "existing") {
+      const selectedDesign = (designsQuery.data?.rows ?? []).find(
+        (design) => design.design_id === selectedDesignId && isActiveDesign(design),
+      );
+      return {
+        mode: "existing",
+        designId: selectedDesign?.design_id ?? null,
+        designName: selectedDesign?.name ?? "",
+      };
+    }
+
+    return {
+      mode: "create",
+      designId: null,
+      designName: createDesignName.trim(),
+    };
+  }, [createDesignName, designsQuery.data?.rows, selectedDesignId, targetDesignMode]);
 
   const submitBlockedReason = !activeDataset
     ? "Attach an active dataset in the shell before importing raw data."
@@ -211,8 +264,12 @@ export function DataIngestionWorkspace() {
           ? "Choose one or more CSV files to validate and preprocess."
           : fileSummary.validFiles.length === 0
             ? "Resolve at least one CSV validation issue before importing."
-            : designName.trim().length === 0
-              ? "Design name is required."
+            : designsQuery.isLoading
+              ? "Loading target design scopes..."
+              : targetDesignMode === "existing" && !targetDesignDecision.designId
+                ? "Choose an active target design scope."
+                : targetDesignMode === "create" && targetDesignDecision.designName.length === 0
+                  ? "Enter a new target design scope name."
               : provenanceLabel.trim().length === 0
                 ? "Provenance label is required."
                 : null;
@@ -266,8 +323,10 @@ export function DataIngestionWorkspace() {
         designSuggestion,
       );
       const previousSuggestions = lastSuggestedLabelsRef.current;
-      setDesignName((current) =>
-        !current || current === previousSuggestions.designName ? designSuggestion : current,
+      setCreateDesignName((current) =>
+        !current || current === previousSuggestions.createDesignName
+          ? designSuggestion
+          : current,
       );
       setProvenanceLabel((current) =>
         !current || current === previousSuggestions.provenanceLabel
@@ -275,7 +334,7 @@ export function DataIngestionWorkspace() {
           : current,
       );
       lastSuggestedLabelsRef.current = {
-        designName: designSuggestion,
+        createDesignName: designSuggestion,
         provenanceLabel: provenanceSuggestion,
       };
     } catch (error) {
@@ -294,7 +353,7 @@ export function DataIngestionWorkspace() {
     setSubmitState(null);
     setFileImportStatuses({});
     lastSuggestedLabelsRef.current = {
-      designName: "",
+      createDesignName: "",
       provenanceLabel: "",
     };
   }
@@ -334,7 +393,11 @@ export function DataIngestionWorkspace() {
           activeDataset.datasetId,
           buildUploadFirstIngestionDraft({
             kind: selectedScope,
-            designName,
+            designName: targetDesignDecision.designName,
+            designId:
+              targetDesignDecision.mode === "existing"
+                ? targetDesignDecision.designId
+                : null,
             provenanceLabel:
               fileSummary.validFiles.length > 1
                 ? `${provenanceLabel} · ${file.name}`
@@ -440,6 +503,84 @@ export function DataIngestionWorkspace() {
                     : "Attach a dataset in the header before importing raw data."}
                 </p>
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Target Design Scope
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  Choose an existing active scope or create a new one
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Existing targets submit an explicit design_id. New-scope names are create defaults only.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(["existing", "create"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      setTargetDesignMode(mode);
+                    }}
+                    aria-pressed={targetDesignMode === mode}
+                    className={cx(
+                      "inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 text-sm font-medium transition",
+                      targetDesignMode === mode
+                        ? "border-primary/35 bg-primary/10 text-foreground"
+                        : "border-border bg-surface text-muted-foreground hover:border-primary/30 hover:text-foreground",
+                    )}
+                  >
+                    {mode === "existing" ? "Use Existing" : "Create New"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              {targetDesignMode === "existing" ? (
+                <>
+                  <AppSelectField
+                    label="Existing Target Design Scope"
+                    value={selectedDesignId}
+                    onChange={setSelectedDesignId}
+                    options={targetDesignOptions}
+                    placeholder={
+                      targetDesignOptions.length > 0
+                        ? "Select an active design scope"
+                        : "No active design scopes"
+                    }
+                    disabled={isSubmitting || designsQuery.isLoading}
+                  />
+                  {designsQuery.error ? (
+                    <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+                      Unable to load target design scopes. {String(designsQuery.error.message)}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <label className="block rounded-xl border border-border bg-surface px-4 py-3">
+                  <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    New Target Design Scope Name
+                  </span>
+                  <input
+                    value={createDesignName}
+                    onChange={(event) => {
+                      setCreateDesignName(event.target.value);
+                    }}
+                    disabled={isSubmitting}
+                    className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    placeholder="PF6FQ Q0"
+                  />
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Filename-derived suggestions prefill this field, but they never select an existing scope implicitly.
+                  </p>
+                </label>
+              )}
             </div>
           </div>
 
@@ -656,21 +797,7 @@ export function DataIngestionWorkspace() {
                       })}
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Design Name
-                        </span>
-                        <input
-                          value={designName}
-                          onChange={(event) => {
-                            setDesignName(event.target.value);
-                          }}
-                          disabled={isSubmitting}
-                          className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                          placeholder="PF6FQ Q0"
-                        />
-                      </label>
+                    <div className="grid gap-3">
                       <label className="block rounded-xl border border-border bg-surface px-4 py-3">
                         <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
                           Provenance Label
