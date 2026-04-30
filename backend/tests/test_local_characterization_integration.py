@@ -1382,3 +1382,122 @@ def test_persisted_admittance_runtime_rejects_multiple_non_frequency_sweeps() ->
             store_ref={},
             raw_values=np.zeros((3, 2, 2), dtype=np.complex128),
         )
+
+
+def test_hfss_nd_ingestion_can_run_admittance_extraction() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "HFSS Characterization Run Through",
+            "family": "floatingqubit",
+            "device_type": "Floating Qubit",
+            "source": "layout_simulation",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "layout_simulation",
+            "design_name": "FloatingQubitWithXY",
+            "provenance_label": "HFSS XY_and_Readout.csv",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11",
+                    "representation": "imaginary",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "HFSS XY and readout branch",
+                    "axes": [
+                        {"name": "frequency", "unit": "GHz", "length": 5},
+                        {"name": "L_jun", "unit": "nH", "length": 2},
+                    ],
+                    "preview_payload": {
+                        "kind": "nd_grid",
+                        "axes": [
+                            {
+                                "name": "frequency",
+                                "unit": "GHz",
+                                "values": [4.8, 4.9, 5.0, 5.1, 5.2],
+                            },
+                            {"name": "L_jun", "unit": "nH", "values": [8.0, 9.0]},
+                        ],
+                        "values": [
+                            [-1.0, -0.5],
+                            [0.2, 0.6],
+                            [1.2, 1.6],
+                            [0.2, 0.4],
+                            [-0.5, -0.2],
+                        ],
+                    },
+                }
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    design_id = ingestion.json()["data"]["design"]["design_id"]
+    trace_id = ingestion.json()["data"]["traces"][0]["trace_id"]
+
+    registry_response = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/characterization-analysis-registry",
+        params={"selected_trace_ids": trace_id},
+    )
+    assert registry_response.status_code == 200
+    registry_rows = {
+        row["analysis_id"]: row for row in registry_response.json()["data"]["rows"]
+    }
+    assert registry_rows["admittance_extraction"]["availability_state"] == "recommended"
+
+    catalog_repository = get_catalog_repository()
+    design = catalog_repository.get_design(dataset_id, design_id)
+    assert design is not None
+    trace_summary = next(
+        trace
+        for trace in catalog_repository.list_trace_metadata(dataset_id, design_id)
+        if trace.trace_id == trace_id
+    )
+    assert trace_summary.shape == (5, 2)
+    assert trace_summary.available_sweep_axes == ("L_jun",)
+    trace_detail = catalog_repository.get_trace_detail(dataset_id, design_id, trace_id)
+    assert trace_detail is not None
+    assert trace_detail.preview_payload["values_ref"] == "trace_store"
+
+    execution_result = get_persisted_characterization_repository().run_admittance_extraction(
+        CharacterizationExecutionRequest(
+            task=_build_direct_characterization_task(
+                dataset_id=dataset_id,
+                design_id=design_id,
+                selected_trace_ids=(trace_id,),
+                fit_window=(4.8, 5.2),
+                residual_tolerance=10.0,
+            ),
+            design=design,
+            traces=(
+                CharacterizationExecutionTrace(
+                    summary=trace_summary,
+                    detail=trace_detail,
+                ),
+            ),
+        )
+    )
+    result_id = execution_result.result_summary_payload["characterization_result_id"]
+    detail_response = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/characterization-results/{result_id}"
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["payload"]["input_axis"]["axis_key"] == "L_jun"
+    assert detail["payload"]["input_axis"]["length"] == 2
+    assert detail["payload"]["metric"]["metric_key"] == "frequency_ghz"
+    artifact_response = client.get(
+        f"/datasets/{dataset_id}/designs/{design_id}/"
+        f"characterization-results/{result_id}/artifacts/"
+        f"{result_id}:mode-frequency-grid",
+        params={"preset_id": "mode_by_input_table"},
+    )
+    assert artifact_response.status_code == 200
+    artifact_payload = artifact_response.json()["data"]["payload"]
+    assert [column["axis_value"] for column in artifact_payload["columns"]] == [8.0, 9.0]
+    assert artifact_payload["cells"]

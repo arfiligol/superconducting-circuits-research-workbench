@@ -77,6 +77,10 @@ from src.app.domain.datasets import (
 )
 from src.app.domain.result_traces import ResultTraceSelection, build_trace_parameter
 from src.app.domain.tasks import TaskDetail
+from src.app.domain.trace_ingestion import (
+    build_ingested_trace_id,
+    build_ingested_trace_provenance_summary,
+)
 from src.app.domain.trace_structures import (
     build_axis_coordinate_digest,
     build_trace_structure_summary,
@@ -239,11 +243,21 @@ class InMemoryRewriteCatalogRepository:
             self._trace_summaries.get((dataset_id, design_id), ())
         )
         ingested_trace_rows: list[TraceMetadataSummary] = []
+        existing_trace_ids = {row.trace_id for row in trace_rows}
         for index, trace in enumerate(draft.traces, start=1):
-            trace_id = trace.trace_id or _build_trace_id(
+            trace_id = trace.trace_id or build_ingested_trace_id(
                 kind=draft.kind,
                 parameter=trace.parameter,
                 index=index,
+                provenance_label=draft.provenance_label,
+                preview_payload=trace.preview_payload,
+                existing_trace_ids=existing_trace_ids,
+            )
+            existing_trace_ids.add(trace_id)
+            provenance_summary = build_ingested_trace_provenance_summary(
+                provenance_summary=trace.provenance_summary,
+                provenance_label=draft.provenance_label,
+                preview_payload=trace.preview_payload,
             )
             structure = build_trace_structure_summary(
                 dataset_id=dataset_id,
@@ -269,7 +283,7 @@ class InMemoryRewriteCatalogRepository:
                 trace_mode_group=trace.trace_mode_group,
                 source_kind=draft.kind,
                 stage_kind=trace.stage_kind,
-                provenance_summary=trace.provenance_summary,
+                provenance_summary=provenance_summary,
                 ndim=structure.ndim,
                 shape=structure.shape,
                 axes_summary=structure.axes_summary,
@@ -1354,10 +1368,6 @@ def _build_dataset_id(*, workspace_id: str, name: str, counter: int) -> str:
 
 def _build_design_id(name: str) -> str:
     return f"design_{_slugify(name)}"
-
-
-def _build_trace_id(*, kind: str, parameter: str, index: int) -> str:
-    return f"trace_{_slugify(kind)}_{_slugify(parameter)}_{index}"
 
 
 def _current_timestamp() -> str:
