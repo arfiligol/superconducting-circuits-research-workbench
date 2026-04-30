@@ -296,11 +296,20 @@ describe("page-boundary source contracts", () => {
     expect(dataIngestionWorkspaceSource).toContain("Measurement");
     expect(dataIngestionWorkspaceSource).toContain("Layout Simulation");
     expect(dataIngestionWorkspaceSource).toContain("Upload-first intake");
-    expect(dataIngestionWorkspaceSource).toContain("Choose CSV file");
+    expect(dataIngestionWorkspaceSource).toContain("Choose CSV files");
     expect(dataIngestionWorkspaceSource).toContain("Validation & Preprocess");
     expect(dataIngestionWorkspaceSource).toContain("buildUploadFirstIngestionDraft(");
     expect(dataIngestionWorkspaceSource).toContain("validateUploadFirstCsv(");
-    expect(dataIngestionWorkspaceSource).toContain("Import {selectedScopeSummary.title} CSV");
+    expect(dataIngestionWorkspaceSource).toContain("multiple");
+    expect(dataIngestionWorkspaceSource).toContain("Promise.all(");
+    expect(dataIngestionWorkspaceSource).toContain("selectedFiles");
+    expect(dataIngestionWorkspaceSource).toContain("fileImportStatuses");
+    expect(dataIngestionWorkspaceSource).toContain("for (const file of fileSummary.validFiles)");
+    expect(dataIngestionWorkspaceSource).toContain("Trace Count");
+    expect(dataIngestionWorkspaceSource).toContain("Sweep Axis");
+    expect(dataIngestionWorkspaceSource).toContain("Shape");
+    expect(dataIngestionWorkspaceSource).toContain("Axes");
+    expect(dataIngestionWorkspaceSource).toContain("validFiles");
     expect(dataIngestionWorkspaceSource).not.toContain("Preview Payload JSON");
     expect(dataIngestionWorkspaceSource).not.toContain("Trace Mode Group");
     expect(dataIngestionWorkspaceSource).not.toContain("Axis Unit");
@@ -628,6 +637,7 @@ describe("upload-first ingestion helpers", () => {
 
     expect(validation.axisName).toBe("frequency");
     expect(validation.axisUnit).toBe("GHz");
+    expect(validation.designNameSuggestion).toBe("PF6FQ Q0");
     expect(validation.traces[0]).toMatchObject({
       family: "y_matrix",
       parameter: "Y11",
@@ -641,6 +651,9 @@ describe("upload-first ingestion helpers", () => {
       { name: "frequency", unit: "GHz", length: 2 },
       { name: "L_jun", unit: "nH", length: 2 },
     ]);
+    expect(draft?.provenance_summary).toContain("PF6FQ_Q0_XY_Im_Y11.csv");
+    expect(draft?.provenance_summary).toContain("im(Yt(Rectangle5_T1,Rectangle5_T1)) []");
+    expect(draft?.provenance_summary).toContain("Y11 imaginary");
     expect(draft?.preview_payload).toEqual({
       kind: "nd_grid",
       axes: [
@@ -724,6 +737,10 @@ describe("upload-first ingestion helpers", () => {
       parameter: "Yin",
       representation: "real",
     });
+    expect(validation.draftTraces[0]?.provenance_summary).toContain(
+      "PF6FQ_Q0_XY_Re_Yin.csv",
+    );
+    expect(validation.draftTraces[0]?.provenance_summary).toContain("Yin real");
   });
 
   it("rejects unsupported complex series columns", () => {

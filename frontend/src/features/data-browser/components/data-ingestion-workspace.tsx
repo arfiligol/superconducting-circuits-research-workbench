@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import useSWR from "swr";
 import {
+  AlertTriangle,
   CheckCircle2,
   Database,
   FileSpreadsheet,
@@ -41,47 +42,143 @@ const ingestionScopes: ReadonlyArray<
   {
     id: "measurement",
     title: "Measurement",
-    description: "Import measured traces from a CSV file into the active dataset.",
+    description: "Import measured traces from CSV files into the active dataset.",
   },
   {
     id: "layout_simulation",
     title: "Layout Simulation",
-    description: "Import EM or layout-solver traces from a CSV file into the active dataset.",
+    description: "Import EM or layout-solver traces from one or more CSV files.",
   },
 ] as const;
+
+type UploadFileValidation = Readonly<{
+  id: string;
+  name: string;
+  text: string;
+  validation: UploadValidationResult | null;
+  error: string | null;
+}>;
 
 type SubmitState = Readonly<{
   tone: "success" | "warning";
   message: string;
 }> | null;
 
-type IngestionResultState = Readonly<{
-  datasetId: string;
-  datasetName: string;
-  designId: string;
-  designName: string;
-  traceCount: number;
-}> | null;
-
-type FileDraft = Readonly<{
-  name: string;
-  text: string;
+type FileImportStatus = Readonly<{
+  state: "idle" | "submitting" | "success" | "error";
+  message: string | null;
 }>;
 
-type ValidationState = Readonly<{
-  tone: "success" | "warning";
-  message: string;
-}> | null;
+type BatchSummary = Readonly<{
+  validFiles: readonly UploadFileValidation[];
+  invalidFiles: readonly UploadFileValidation[];
+  traceCount: number;
+  ndFileCount: number;
+  axisLabels: readonly string[];
+  shapeLabels: readonly string[];
+  sweepAxisLabels: readonly string[];
+}>;
+
+function fileImportIdle(): FileImportStatus {
+  return { state: "idle", message: null };
+}
+
+function buildFileId(file: File, index: number) {
+  return `${file.name}:${file.size}:${file.lastModified}:${index}`;
+}
+
+function formatAxisLabel(axis: Readonly<{ name: string; unit: string }>) {
+  return axis.unit ? `${axis.name} (${axis.unit})` : axis.name;
+}
+
+function validationAxes(validation: UploadValidationResult) {
+  return validation.draftTraces[0]?.axes ?? [];
+}
+
+function validationIsNd(validation: UploadValidationResult) {
+  return validation.draftTraces.some((trace) => trace.preview_payload.kind === "nd_grid");
+}
+
+function validationShapeLabel(validation: UploadValidationResult) {
+  const axes = validationAxes(validation);
+  return axes.length > 0 ? axes.map((axis) => axis.length).join(" x ") : "Unknown";
+}
+
+function validationAxisLabel(validation: UploadValidationResult) {
+  const axes = validationAxes(validation);
+  return axes.length > 0 ? axes.map(formatAxisLabel).join(" / ") : "Axis unavailable";
+}
+
+function validationSweepAxisLabel(validation: UploadValidationResult) {
+  const axes = validationAxes(validation);
+  const sweepAxis = axes[1];
+  return sweepAxis ? formatAxisLabel(sweepAxis) : "1D scalar";
+}
+
+function summarizeFiles(files: readonly UploadFileValidation[]): BatchSummary {
+  const validFiles = files.filter((file) => file.validation);
+  const invalidFiles = files.filter((file) => file.error);
+  const traceCount = validFiles.reduce(
+    (total, file) => total + (file.validation?.traces.length ?? 0),
+    0,
+  );
+  const ndFileCount = validFiles.filter(
+    (file) => file.validation && validationIsNd(file.validation),
+  ).length;
+
+  return {
+    validFiles,
+    invalidFiles,
+    traceCount,
+    ndFileCount,
+    axisLabels: [...new Set(validFiles.map((file) => validationAxisLabel(file.validation!)))],
+    shapeLabels: [...new Set(validFiles.map((file) => validationShapeLabel(file.validation!)))],
+    sweepAxisLabels: [
+      ...new Set(validFiles.map((file) => validationSweepAxisLabel(file.validation!))),
+    ],
+  };
+}
+
+function resolveBatchDesignSuggestion(files: readonly UploadFileValidation[]) {
+  const suggestions = files
+    .map((file) => file.validation?.designNameSuggestion)
+    .filter((value): value is string => Boolean(value));
+  if (suggestions.length === 0) {
+    return "";
+  }
+
+  const [firstSuggestion] = suggestions;
+  return suggestions.every((suggestion) => suggestion === firstSuggestion)
+    ? firstSuggestion
+    : firstSuggestion ?? "";
+}
+
+function buildBatchProvenanceLabel(
+  scopeTitle: string,
+  files: readonly UploadFileValidation[],
+  designSuggestion: string,
+) {
+  const validFiles = files.filter((file) => file.validation);
+  const fileCount = validFiles.length;
+  const scopeLabel = `${scopeTitle} import`;
+  if (fileCount <= 1) {
+    return validFiles[0]?.validation?.provenanceLabelSuggestion ?? scopeLabel;
+  }
+
+  return designSuggestion
+    ? `${scopeLabel} · ${designSuggestion} · ${fileCount} files`
+    : `${scopeLabel} · ${fileCount} files`;
+}
 
 export function DataIngestionWorkspace() {
   const [selectedScope, setSelectedScope] = useState<IngestionScope>("measurement");
   const [designName, setDesignName] = useState("");
   const [provenanceLabel, setProvenanceLabel] = useState("");
-  const [selectedFile, setSelectedFile] = useState<FileDraft | null>(null);
-  const [validation, setValidation] = useState<UploadValidationResult | null>(null);
-  const [validationState, setValidationState] = useState<ValidationState>(null);
+  const [selectedFiles, setSelectedFiles] = useState<readonly UploadFileValidation[]>([]);
   const [submitState, setSubmitState] = useState<SubmitState>(null);
-  const [submitResult, setSubmitResult] = useState<IngestionResultState>(null);
+  const [fileImportStatuses, setFileImportStatuses] = useState<
+    Readonly<Record<string, FileImportStatus>>
+  >({});
   const [isParsingFile, setIsParsingFile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const activeDatasetState = useActiveDataset();
@@ -101,64 +198,8 @@ export function DataIngestionWorkspace() {
     () => ingestionScopes.find((scope) => scope.id === selectedScope) ?? ingestionScopes[0],
     [selectedScope],
   );
+  const fileSummary = useMemo(() => summarizeFiles(selectedFiles), [selectedFiles]);
   const canIngest = Boolean(profileQuery.data?.allowed_actions.ingest_raw_data);
-
-  useEffect(() => {
-    if (!selectedFile) {
-      setValidation(null);
-      setValidationState(null);
-      lastSuggestedLabelsRef.current = {
-        designName: "",
-        provenanceLabel: "",
-      };
-      return;
-    }
-
-    setIsParsingFile(true);
-    setSubmitState(null);
-    setSubmitResult(null);
-
-    try {
-      const nextValidation = validateUploadFirstCsv({
-        kind: selectedScope,
-        fileName: selectedFile.name,
-        fileText: selectedFile.text,
-      });
-      setValidation(nextValidation);
-      setValidationState({
-        tone: "success",
-        message:
-          "CSV contract looks valid. The frontend prepared a dataset-ingestion payload from the uploaded file.",
-      });
-
-      const previousSuggestions = lastSuggestedLabelsRef.current;
-      setDesignName((current) =>
-        !current || current === previousSuggestions.designName
-          ? nextValidation.designNameSuggestion
-          : current,
-      );
-      setProvenanceLabel((current) =>
-        !current || current === previousSuggestions.provenanceLabel
-          ? nextValidation.provenanceLabelSuggestion
-          : current,
-      );
-      lastSuggestedLabelsRef.current = {
-        designName: nextValidation.designNameSuggestion,
-        provenanceLabel: nextValidation.provenanceLabelSuggestion,
-      };
-    } catch (error) {
-      setValidation(null);
-      setValidationState({
-        tone: "warning",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to validate the uploaded CSV against the intake contract.",
-      });
-    } finally {
-      setIsParsingFile(false);
-    }
-  }, [selectedFile, selectedScope]);
 
   const submitBlockedReason = !activeDataset
     ? "Attach an active dataset in the shell before importing raw data."
@@ -166,10 +207,10 @@ export function DataIngestionWorkspace() {
       ? "Checking whether this dataset can accept imports..."
       : !canIngest
         ? "Raw-data import is unavailable for the current dataset."
-        : !selectedFile
-          ? "Choose a CSV file to validate and preprocess."
-          : !validation
-            ? "Resolve the CSV validation issue before importing."
+        : selectedFiles.length === 0
+          ? "Choose one or more CSV files to validate and preprocess."
+          : fileSummary.validFiles.length === 0
+            ? "Resolve at least one CSV validation issue before importing."
             : designName.trim().length === 0
               ? "Design name is required."
               : provenanceLabel.trim().length === 0
@@ -177,75 +218,159 @@ export function DataIngestionWorkspace() {
                 : null;
 
   async function handleFileSelection(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) {
       return;
     }
 
     setIsParsingFile(true);
     setSubmitState(null);
-    setSubmitResult(null);
+    setFileImportStatuses({});
 
     try {
-      const text = await file.text();
-      setSelectedFile({
-        name: file.name,
-        text,
-      });
+      const parsedFiles = await Promise.all(
+        files.map(async (file, index): Promise<UploadFileValidation> => {
+          const text = await file.text();
+          try {
+            return {
+              id: buildFileId(file, index),
+              name: file.name,
+              text,
+              validation: validateUploadFirstCsv({
+                kind: selectedScope,
+                fileName: file.name,
+                fileText: text,
+              }),
+              error: null,
+            };
+          } catch (error) {
+            return {
+              id: buildFileId(file, index),
+              name: file.name,
+              text,
+              validation: null,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Unable to validate the uploaded CSV against the intake contract.",
+            };
+          }
+        }),
+      );
+
+      setSelectedFiles(parsedFiles);
+      const designSuggestion = resolveBatchDesignSuggestion(parsedFiles);
+      const provenanceSuggestion = buildBatchProvenanceLabel(
+        selectedScopeSummary.title,
+        parsedFiles,
+        designSuggestion,
+      );
+      const previousSuggestions = lastSuggestedLabelsRef.current;
+      setDesignName((current) =>
+        !current || current === previousSuggestions.designName ? designSuggestion : current,
+      );
+      setProvenanceLabel((current) =>
+        !current || current === previousSuggestions.provenanceLabel
+          ? provenanceSuggestion
+          : current,
+      );
+      lastSuggestedLabelsRef.current = {
+        designName: designSuggestion,
+        provenanceLabel: provenanceSuggestion,
+      };
     } catch (error) {
-      setValidation(null);
-      setValidationState({
+      setSubmitState({
         tone: "warning",
-        message: error instanceof Error ? error.message : "Unable to read the selected CSV file.",
+        message: error instanceof Error ? error.message : "Unable to read the selected CSV files.",
       });
-      setIsParsingFile(false);
     } finally {
+      setIsParsingFile(false);
       event.target.value = "";
     }
   }
 
+  function clearFiles() {
+    setSelectedFiles([]);
+    setSubmitState(null);
+    setFileImportStatuses({});
+    lastSuggestedLabelsRef.current = {
+      designName: "",
+      provenanceLabel: "",
+    };
+  }
+
   async function handleSubmit() {
-    if (!activeDataset || !validation || submitBlockedReason) {
+    if (!activeDataset || submitBlockedReason) {
       setSubmitState({
         tone: "warning",
-        message: submitBlockedReason ?? "Upload and validate a CSV file before importing.",
+        message: submitBlockedReason ?? "Upload and validate CSV files before importing.",
       });
       return;
     }
 
     setIsSubmitting(true);
     setSubmitState(null);
-    setSubmitResult(null);
+    setFileImportStatuses(
+      Object.fromEntries(selectedFiles.map((file) => [file.id, fileImportIdle()])),
+    );
 
-    try {
-      const result = await ingestRawData(
-        activeDataset.datasetId,
-        buildUploadFirstIngestionDraft({
-          kind: selectedScope,
-          designName,
-          provenanceLabel,
-          validation,
-        }),
-      );
-      setSubmitState({
-        tone: "success",
-        message: `Imported ${result.traces.length} trace(s) into design ${result.design.name}.`,
-      });
-      setSubmitResult({
-        datasetId: result.dataset.dataset_id,
-        datasetName: result.dataset.name,
-        designId: result.design.design_id,
-        designName: result.design.name,
-        traceCount: result.traces.length,
-      });
-    } catch (error) {
-      setSubmitState({
-        tone: "warning",
-        message: error instanceof Error ? error.message : "Unable to submit ingestion.",
-      });
-    } finally {
-      setIsSubmitting(false);
+    let successCount = 0;
+    let failureCount = 0;
+    let traceCount = 0;
+
+    for (const file of fileSummary.validFiles) {
+      const validation = file.validation;
+      if (!validation) {
+        continue;
+      }
+
+      setFileImportStatuses((current) => ({
+        ...current,
+        [file.id]: { state: "submitting", message: "Importing..." },
+      }));
+
+      try {
+        const result = await ingestRawData(
+          activeDataset.datasetId,
+          buildUploadFirstIngestionDraft({
+            kind: selectedScope,
+            designName,
+            provenanceLabel:
+              fileSummary.validFiles.length > 1
+                ? `${provenanceLabel} · ${file.name}`
+                : provenanceLabel,
+            validation,
+          }),
+        );
+        successCount += 1;
+        traceCount += result.traces.length;
+        setFileImportStatuses((current) => ({
+          ...current,
+          [file.id]: {
+            state: "success",
+            message: `Imported ${result.traces.length} trace(s) into ${result.design.name}.`,
+          },
+        }));
+      } catch (error) {
+        failureCount += 1;
+        setFileImportStatuses((current) => ({
+          ...current,
+          [file.id]: {
+            state: "error",
+            message: error instanceof Error ? error.message : "Unable to submit ingestion.",
+          },
+        }));
+      }
     }
+
+    setSubmitState({
+      tone: failureCount > 0 ? "warning" : "success",
+      message:
+        failureCount > 0
+          ? `Imported ${successCount} file(s); ${failureCount} file(s) failed.`
+          : `Imported ${successCount} file(s) and ${traceCount} trace(s).`,
+    });
+    setIsSubmitting(false);
   }
 
   return (
@@ -253,13 +378,13 @@ export function DataIngestionWorkspace() {
       <SurfaceHeader
         eyebrow="Raw-Data Intake"
         title="Data Ingestion"
-        description="Upload a CSV file, review the parsed result, and import it into the active dataset."
+        description="Upload CSV files, review parsed results, and import them into the active dataset."
         actions={<SurfaceTag tone="primary">{selectedScopeSummary.title}</SurfaceTag>}
       />
 
       <SurfacePanel
         title="Upload-first intake"
-        description="Choose the trace type, confirm the target dataset, upload a CSV file, and review the validation result before import."
+        description="Choose the trace type, confirm the target dataset, upload one or more CSV files, and review validation before import."
       >
         <div className="space-y-5">
           <div className="grid gap-4 md:grid-cols-2">
@@ -271,6 +396,7 @@ export function DataIngestionWorkspace() {
                   type="button"
                   onClick={() => {
                     setSelectedScope(scope.id);
+                    clearFiles();
                   }}
                   aria-pressed={isSelected}
                   className={cx(
@@ -321,15 +447,18 @@ export function DataIngestionWorkspace() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  CSV File
+                  CSV Files
                 </p>
                 <p className="mt-2 text-sm font-semibold text-foreground">
-                  {selectedFile?.name ?? "Choose CSV file"}
+                  {selectedFiles.length > 0
+                    ? `${selectedFiles.length} file(s) selected`
+                    : "Choose CSV files"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Accepted contract: one frequency column plus one or more series columns named like
-                  <span className="font-medium text-foreground"> Y11_imaginary</span> or
-                  <span className="font-medium text-foreground"> S21_magnitude</span>.
+                  HFSS sweeps can use three columns such as
+                  <span className="font-medium text-foreground"> L_jun [nH]</span>,
+                  <span className="font-medium text-foreground"> Freq [GHz]</span>, and
+                  <span className="font-medium text-foreground"> im(Yt(...)) []</span>.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -345,26 +474,16 @@ export function DataIngestionWorkspace() {
                   ) : (
                     <Upload className="h-4 w-4" />
                   )}
-                  Choose CSV file
+                  Choose CSV files
                 </button>
-                {selectedFile ? (
+                {selectedFiles.length > 0 ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      setValidation(null);
-                      setValidationState(null);
-                      setSubmitState(null);
-                      setSubmitResult(null);
-                      lastSuggestedLabelsRef.current = {
-                        designName: "",
-                        provenanceLabel: "",
-                      };
-                    }}
+                    onClick={clearFiles}
                     className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
                   >
                     <X className="h-4 w-4" />
-                    Clear file
+                    Clear files
                   </button>
                 ) : null}
               </div>
@@ -372,6 +491,7 @@ export function DataIngestionWorkspace() {
                 ref={fileInputRef}
                 type="file"
                 accept=".csv,text/csv"
+                multiple
                 className="sr-only"
                 onChange={handleFileSelection}
               />
@@ -386,80 +506,154 @@ export function DataIngestionWorkspace() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-semibold text-foreground">Validation & Preprocess</p>
-                  {validation ? <SurfaceTag tone="primary">Ready to import</SurfaceTag> : null}
+                  {fileSummary.validFiles.length > 0 ? (
+                    <SurfaceTag tone="primary">
+                      {fileSummary.validFiles.length} ready
+                    </SurfaceTag>
+                  ) : null}
+                  {fileSummary.invalidFiles.length > 0 ? (
+                    <SurfaceTag tone="warning">
+                      {fileSummary.invalidFiles.length} error
+                    </SurfaceTag>
+                  ) : null}
                 </div>
-                {validationState ? (
-                  <div
-                    className={cx(
-                      "mt-3 rounded-[0.95rem] border px-4 py-3 text-sm",
-                      validationState.tone === "success"
-                        ? "border-emerald-500/35 bg-emerald-500/10 text-foreground"
-                        : "border-amber-500/35 bg-amber-500/10 text-foreground",
-                    )}
-                  >
-                    {validationState.message}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Upload a CSV file to validate it against the fixed intake contract.
-                  </p>
-                )}
 
-                {validation ? (
+                {selectedFiles.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Upload CSV files to validate them against the fixed intake contract.
+                  </p>
+                ) : (
                   <div className="mt-4 space-y-4">
                     <div className="grid gap-3 md:grid-cols-4">
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Files
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-foreground">
+                          {fileSummary.validFiles.length} valid / {selectedFiles.length} total
+                        </p>
+                      </div>
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Trace Count
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-foreground">
+                          {fileSummary.traceCount}
+                        </p>
+                      </div>
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Shape
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-foreground">
+                          {fileSummary.shapeLabels.join(", ") || "No valid shape"}
+                        </p>
+                      </div>
                       <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
                         <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                           Sweep Axis
                         </p>
                         <p className="mt-2 text-sm font-semibold text-foreground">
-                          {validation.axisName} ({validation.axisUnit})
-                        </p>
-                      </div>
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Points
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-foreground">
-                          {validation.pointCount}
-                        </p>
-                      </div>
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Preview Series
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-foreground">
-                          {validation.traces.length}
-                        </p>
-                      </div>
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Intake Type
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-foreground">
-                          {selectedScopeSummary.title}
+                          {fileSummary.sweepAxisLabels.join(", ") || "No valid sweep"}
                         </p>
                       </div>
                     </div>
 
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Axes
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-foreground">
+                        {fileSummary.axisLabels.join(", ") || "No valid axes"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {fileSummary.ndFileCount} ND file(s),{" "}
+                        {fileSummary.validFiles.length - fileSummary.ndFileCount} scalar file(s)
+                      </p>
+                    </div>
+
                     <div className="space-y-3">
-                      {validation.traces.map((trace) => (
-                        <div
-                          key={`${trace.parameter}-${trace.representation}-${trace.headerLabel}`}
-                          className="rounded-[0.95rem] border border-border bg-surface px-4 py-3"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-sm font-semibold text-foreground">
-                              {trace.parameter} · {trace.representation}
-                            </p>
-                            <SurfaceTag>{trace.family}</SurfaceTag>
+                      {selectedFiles.map((file) => {
+                        const validation = file.validation;
+                        const importStatus = fileImportStatuses[file.id] ?? fileImportIdle();
+                        return (
+                          <div
+                            key={file.id}
+                            className="rounded-[0.95rem] border border-border bg-surface px-4 py-3"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {file.name}
+                                </p>
+                                {validation ? (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {validation.traces.length} trace(s) ·{" "}
+                                    {validationShapeLabel(validation)} ·{" "}
+                                    {validationSweepAxisLabel(validation)}
+                                  </p>
+                                ) : (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Validation failed
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <SurfaceTag tone={validation ? "success" : "warning"}>
+                                  {validation ? "Ready" : "Error"}
+                                </SurfaceTag>
+                                {importStatus.state !== "idle" ? (
+                                  <SurfaceTag
+                                    tone={
+                                      importStatus.state === "success"
+                                        ? "success"
+                                        : importStatus.state === "error"
+                                          ? "warning"
+                                          : "primary"
+                                    }
+                                  >
+                                    {importStatus.state}
+                                  </SurfaceTag>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            {file.error ? (
+                              <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-3 text-sm text-foreground">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+                                <span>{file.error}</span>
+                              </div>
+                            ) : null}
+
+                            {validation ? (
+                              <div className="mt-3 space-y-2">
+                                {validation.traces.map((trace) => (
+                                  <div
+                                    key={`${file.id}-${trace.parameter}-${trace.representation}-${trace.headerLabel}`}
+                                    className="rounded-xl border border-border bg-background px-3 py-3"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <p className="text-sm font-semibold text-foreground">
+                                        {trace.parameter} · {trace.representation}
+                                      </p>
+                                      <SurfaceTag>{trace.family}</SurfaceTag>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      Column {trace.headerLabel} · {trace.pointCount} value(s)
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+
+                            {importStatus.message ? (
+                              <p className="mt-3 text-sm text-muted-foreground">
+                                {importStatus.message}
+                              </p>
+                            ) : null}
                           </div>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            Column {trace.headerLabel} · {trace.pointCount} points prepared for preview
-                            and import.
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div className="grid gap-3 md:grid-cols-2">
@@ -474,7 +668,7 @@ export function DataIngestionWorkspace() {
                           }}
                           disabled={isSubmitting}
                           className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                          placeholder="Flux Scan A"
+                          placeholder="PF6FQ Q0"
                         />
                       </label>
                       <label className="block rounded-xl border border-border bg-surface px-4 py-3">
@@ -488,12 +682,12 @@ export function DataIngestionWorkspace() {
                           }}
                           disabled={isSubmitting}
                           className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                          placeholder="Measurement import · Flux Scan A"
+                          placeholder="Layout Simulation import · PF6FQ Q0"
                         />
                       </label>
                     </div>
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
           </div>
@@ -517,7 +711,8 @@ export function DataIngestionWorkspace() {
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            Import {selectedScopeSummary.title} CSV
+            Import {fileSummary.validFiles.length || ""} {selectedScopeSummary.title} CSV
+            {fileSummary.validFiles.length === 1 ? "" : "s"}
           </button>
 
           {submitState ? (
@@ -533,7 +728,7 @@ export function DataIngestionWorkspace() {
             </div>
           ) : null}
 
-          {submitResult ? (
+          {Object.values(fileImportStatuses).some((status) => status.state === "success") ? (
             <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
               <div className="flex items-start gap-3">
                 <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-700 dark:text-emerald-300">
@@ -541,11 +736,10 @@ export function DataIngestionWorkspace() {
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">
-                    Imported {submitResult.traceCount} trace(s) into {submitResult.designName}.
+                    Imported files stay listed with their individual status.
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Dataset {submitResult.datasetName} ({submitResult.datasetId}) now includes design{" "}
-                    {submitResult.designId}. Review it from Raw Data when you are ready.
+                    Review the imported design from Raw Data when you are ready.
                   </p>
                 </div>
               </div>
