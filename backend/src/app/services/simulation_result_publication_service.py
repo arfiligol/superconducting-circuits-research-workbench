@@ -32,6 +32,8 @@ class SimulationResultPublicationDatasetRepository(Protocol):
 
     def get_design(self, dataset_id: str, design_id: str) -> DesignBrowseRow | None: ...
 
+    def list_designs(self, dataset_id: str) -> tuple[DesignBrowseRow, ...]: ...
+
     def publish_simulation_result(
         self,
         *,
@@ -132,6 +134,21 @@ class SimulationResultPublicationService:
             )
 
         existing_publication = host.get_task_publication_summary(task_id)
+        if (
+            existing_publication.state == "published"
+            and draft.design_id is None
+            and draft.design_name is not None
+            and existing_publication.target_dataset_id == source_dataset_id
+            and existing_publication.target_design_name.casefold() == draft.design_name.casefold()
+        ):
+            return self._persist_publication_result(
+                task=task,
+                dataset_id=source_dataset_id,
+                draft=SimulationResultPublicationDraft(
+                    design_name=existing_publication.target_design_name,
+                    design_id=existing_publication.target_design_id,
+                ),
+            )
         resolved_design = self._resolve_publication_design_target(
             target_dataset_id=source_dataset_id,
             draft=draft,
@@ -252,23 +269,75 @@ class SimulationResultPublicationService:
             if design is None:
                 raise service_error(
                     404,
-                    code="design_not_found",
+                    code="target_design_scope_invalid",
                     category="not_found",
                     message=(
                         "The selected design is not available in the target dataset. "
                         "Create it first or choose an existing design."
                     ),
                 )
-            return design
+            if design.lifecycle_state == "active":
+                return design
+            if design.redirect_design_id is not None:
+                raise service_error(
+                    409,
+                    code="design_scope_redirected",
+                    category="conflict",
+                    message=(
+                        f"Design {draft.design_id} was redirected to "
+                        f"{design.redirect_design_id}."
+                    ),
+                    details={
+                        "dataset_id": target_dataset_id,
+                        "design_id": draft.design_id,
+                        "redirect_design_id": design.redirect_design_id,
+                    },
+                )
+            raise service_error(
+                409,
+                code="target_design_scope_invalid",
+                category="conflict",
+                message=(
+                    f"Design {draft.design_id} is {design.lifecycle_state} and cannot "
+                    "be used as a publication target."
+                ),
+                details={
+                    "dataset_id": target_dataset_id,
+                    "design_id": draft.design_id,
+                    "lifecycle_state": design.lifecycle_state,
+                },
+            )
         if draft.design_name is None:
             raise service_error(
                 422,
-                code="simulation_result_publish_target_required",
+                code="target_design_scope_required",
                 category="validation",
                 message="Simulation result publication requires design_id or design_name.",
             )
+        requested_design_id = _build_publication_design_id(draft.design_name)
+        conflict = next(
+            (
+                row
+                for row in self._dataset_repository.list_designs(target_dataset_id)
+                if row.lifecycle_state == "active"
+                if row.design_id == requested_design_id
+                or row.name.casefold() == draft.design_name.casefold()
+            ),
+            None,
+        )
+        if conflict is not None:
+            raise service_error(
+                409,
+                code="design_scope_name_conflict",
+                category="conflict",
+                message=(
+                    "A design scope with this active name already exists. "
+                    "Select the existing design scope explicitly instead of relying "
+                    "on a free-text name."
+                ),
+            )
         return DesignBrowseRow(
-            design_id=_build_publication_design_id(draft.design_name),
+            design_id=requested_design_id,
             dataset_id=target_dataset_id,
             name=draft.design_name,
             source_coverage={},

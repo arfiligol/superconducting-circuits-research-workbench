@@ -506,11 +506,17 @@ def _create_transmon_metadata_floating_qubit_trace() -> tuple[str, str, str]:
     )
     assert created.status_code == 201
     dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    design_create = client.post(
+        f"/datasets/{dataset_id}/designs",
+        json={"name": "FloatingQubitWithXY"},
+    )
+    assert design_create.status_code == 201
+    design_id = design_create.json()["data"]["design"]["design_id"]
     ingestion = client.post(
         f"/datasets/{dataset_id}/ingestions",
         json={
             "kind": "layout_simulation",
-            "design_id": "design_floatingqubitwithxy",
+            "design_id": design_id,
             "design_name": "FloatingQubitWithXY",
             "provenance_label": "floating-qubit-transmon-metadata",
             "traces": [
@@ -799,7 +805,7 @@ def test_local_characterization_runtime_summary_reports_idle_worker_presence() -
         (
             _characterization_payload(design_id="missing-design"),
             404,
-            "design_not_found",
+            "target_design_scope_invalid",
         ),
         (
             _characterization_payload(analysis_id="unknown-analysis"),

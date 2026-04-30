@@ -10,6 +10,8 @@ from src.app.domain.datasets import (
     DatasetProfileUpdateResult,
     DesignBrowseQuery,
     DesignCreateDraft,
+    DesignMergeDraft,
+    DesignRenameDraft,
     RawDataIngestionDraft,
     RawDataIngestionResult,
     TraceBrowseQuery,
@@ -69,6 +71,28 @@ class DatasetService:
         draft: DesignCreateDraft,
     ):
         return self._catalog_service.create_design(dataset_id, draft)
+
+    def rename_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+        draft: DesignRenameDraft,
+    ):
+        return self._catalog_service.rename_design(dataset_id, design_id, draft)
+
+    def archive_design(self, dataset_id: str, design_id: str):
+        return self._catalog_service.archive_design(dataset_id, design_id)
+
+    def delete_design(self, dataset_id: str, design_id: str):
+        return self._catalog_service.delete_design(dataset_id, design_id)
+
+    def merge_design_scopes(
+        self,
+        dataset_id: str,
+        source_design_id: str,
+        draft: DesignMergeDraft,
+    ):
+        return self._catalog_service.merge_design_scopes(dataset_id, source_design_id, draft)
 
     def list_tagged_core_metrics(self, dataset_id: str):
         return self._catalog_service.list_tagged_core_metrics(dataset_id)

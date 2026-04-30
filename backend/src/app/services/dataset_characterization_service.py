@@ -21,6 +21,7 @@ from src.app.domain.datasets import (
     CharacterizationTaggingRequest,
     CharacterizationTaggingResult,
     DatasetDetail,
+    DesignBrowseRow,
     TaggedCoreMetricSummary,
     TraceDetail,
     TraceMetadataSummary,
@@ -34,6 +35,8 @@ from src.app.services.trace_collection_service import TraceCollectionService
 
 class DatasetCharacterizationRepository(Protocol):
     def get_dataset(self, dataset_id: str) -> DatasetDetail | None: ...
+
+    def get_design(self, dataset_id: str, design_id: str) -> DesignBrowseRow | None: ...
 
     def list_tagged_core_metrics(
         self,
@@ -122,6 +125,7 @@ class DatasetCharacterizationService:
         query: CharacterizationResultBrowseQuery,
     ) -> list[CharacterizationResultSummary]:
         self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         rows = list(self._repository.list_characterization_results(dataset_id, design_id))
         filtered = rows
         if query.search is not None:
@@ -149,6 +153,7 @@ class DatasetCharacterizationService:
         query: CharacterizationAnalysisRegistryQuery,
     ) -> CharacterizationAnalysisRegistryResult:
         self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         trace_rows = tuple(self._repository.list_trace_metadata(dataset_id, design_id))
         upstream_results = self._available_upstream_results(
             dataset_id=dataset_id,
@@ -213,6 +218,7 @@ class DatasetCharacterizationService:
         query: CharacterizationRunHistoryQuery,
     ) -> list[CharacterizationRunHistoryRow]:
         self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         rows = list(self._repository.list_characterization_run_history(dataset_id, design_id))
         if query.analysis_id is None:
             return rows
@@ -226,6 +232,7 @@ class DatasetCharacterizationService:
         result_id: str,
     ) -> CharacterizationResultDetail:
         self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         detail = self._repository.get_characterization_result(dataset_id, design_id, result_id)
         if detail is None:
             raise service_error(
@@ -248,6 +255,7 @@ class DatasetCharacterizationService:
         query: CharacterizationArtifactPayloadQuery,
     ) -> CharacterizationArtifactPayload:
         self._require_visible_dataset(dataset_id)
+        self._require_active_design_scope(dataset_id, design_id)
         payload = self._repository.get_characterization_artifact_payload(
             dataset_id,
             design_id,
@@ -384,6 +392,48 @@ class DatasetCharacterizationService:
                 message="The selected dataset is not visible in the active workspace.",
             )
         return dataset
+
+    def _require_active_design_scope(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> DesignBrowseRow:
+        design = self._repository.get_design(dataset_id, design_id)
+        if design is None:
+            raise service_error(
+                404,
+                code="target_design_scope_invalid",
+                category="not_found",
+                message=f"Design {design_id} was not found in dataset {dataset_id}.",
+            )
+        if design.lifecycle_state == "active":
+            return design
+        if design.redirect_design_id is not None:
+            raise service_error(
+                409,
+                code="design_scope_redirected",
+                category="conflict",
+                message=(
+                    f"Design {design_id} was redirected to "
+                    f"{design.redirect_design_id}."
+                ),
+                details={
+                    "dataset_id": dataset_id,
+                    "design_id": design_id,
+                    "redirect_design_id": design.redirect_design_id,
+                },
+            )
+        raise service_error(
+            409,
+            code="target_design_scope_invalid",
+            category="conflict",
+            message=f"Design {design_id} is {design.lifecycle_state} and is not a normal target.",
+            details={
+                "dataset_id": dataset_id,
+                "design_id": design_id,
+                "lifecycle_state": design.lifecycle_state,
+            },
+        )
 
     def _derive_input_collection_payload(
         self,

@@ -619,6 +619,26 @@ def test_repeated_publish_is_idempotent_and_does_not_duplicate_dataset_records()
     )
 
 
+def test_simulation_publication_rejects_archived_explicit_design_target() -> None:
+    design = client.post(
+        "/datasets/local-dataset-001/designs",
+        json={"name": "Archived Publication Target"},
+    )
+    assert design.status_code == 201
+    design_id = design.json()["data"]["design"]["design_id"]
+    archived = client.post(f"/datasets/local-dataset-001/designs/{design_id}/archive")
+    assert archived.status_code == 200
+    task = _submit_local_simulation(ptc_enabled=False)
+
+    publish = client.post(
+        f"/tasks/{task['task_id']}/simulation-results/publish",
+        json={"dataset_id": "local-dataset-001", "design_id": design_id},
+    )
+
+    assert publish.status_code == 409
+    assert publish.json()["error"]["code"] == "target_design_scope_invalid"
+
+
 def test_published_trace_records_keep_source_task_provenance_and_are_browse_visible() -> None:
     task = _submit_local_simulation(ptc_enabled=True)
     publish = client.post(

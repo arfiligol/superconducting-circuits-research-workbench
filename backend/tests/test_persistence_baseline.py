@@ -537,7 +537,7 @@ def test_bootstrap_metadata_schema_migrates_legacy_numeric_definition_ids_to_uui
     assert task.definition_id == child_definition.definition_id
     assert event is not None
     assert event.metadata_json["definition_id"] == child_definition.definition_id
-    assert session_scalar_text(engine, "SELECT version_num FROM alembic_version") == "20260327_0009"
+    assert session_scalar_text(engine, "SELECT version_num FROM alembic_version") == "20260430_0010"
 
 
 def _build_alembic_config(database_path: Path) -> Config:

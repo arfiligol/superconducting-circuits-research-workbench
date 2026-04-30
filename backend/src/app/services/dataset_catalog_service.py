@@ -16,6 +16,9 @@ from src.app.domain.datasets import (
     DesignBrowseQuery,
     DesignBrowseRow,
     DesignCreateDraft,
+    DesignMergeDraft,
+    DesignRenameDraft,
+    DesignScopeMergeResult,
     RawDataIngestionDraft,
     RawDataIngestionResult,
     TaggedCoreMetricSummary,
@@ -67,6 +70,27 @@ class DatasetCatalogRepository(Protocol):
         dataset_id: str,
         draft: DesignCreateDraft,
     ) -> DatasetDesignMutationResult | None: ...
+
+    def rename_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+        draft: DesignRenameDraft,
+    ) -> DatasetDesignMutationResult | None: ...
+
+    def set_design_lifecycle_state(
+        self,
+        dataset_id: str,
+        design_id: str,
+        lifecycle_state: str,
+    ) -> DatasetDesignMutationResult | None: ...
+
+    def merge_design_scopes(
+        self,
+        dataset_id: str,
+        source_design_id: str,
+        target_design_id: str,
+    ) -> DesignScopeMergeResult | None: ...
 
     def list_tagged_core_metrics(
         self,
@@ -278,6 +302,7 @@ class DatasetCatalogService:
                 category="permission_denied",
                 message="The active session cannot ingest raw data into this dataset.",
             )
+        draft = self._resolve_raw_ingestion_target(dataset_id, draft)
         result = self._repository.ingest_raw_data(dataset_id, draft)
         if result is None:
             raise service_error(
@@ -325,6 +350,7 @@ class DatasetCatalogService:
             (
                 row
                 for row in self._repository.list_designs(dataset_id)
+                if row.lifecycle_state == "active"
                 if row.design_id == requested_design_id
                 or row.name.casefold() == draft.name.casefold()
             ),
@@ -333,7 +359,7 @@ class DatasetCatalogService:
         if conflict is not None:
             raise service_error(
                 409,
-                code="dataset_design_conflict",
+                code="design_scope_name_conflict",
                 category="conflict",
                 message=(
                     "A design with this name already exists in the selected dataset. "
@@ -346,7 +372,7 @@ class DatasetCatalogService:
         except ValueError as exc:
             raise service_error(
                 409,
-                code="dataset_design_conflict",
+                code="design_scope_name_conflict",
                 category="conflict",
                 message=(
                     "A design with this name already exists in the selected dataset. "
@@ -377,6 +403,88 @@ class DatasetCatalogService:
             design=result.design,
         )
 
+    def rename_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+        draft: DesignRenameDraft,
+    ) -> DatasetDesignMutationResult:
+        dataset = self._require_visible_dataset(dataset_id)
+        state = self._session_repository.get_session_state()
+        self._require_active_design_scope(dataset_id, design_id, for_target=False)
+        self._ensure_active_design_name_available(
+            dataset_id,
+            draft.name,
+            exclude_design_id=design_id,
+        )
+        result = self._repository.rename_design(dataset_id, design_id, draft)
+        if result is None:
+            raise service_error(
+                404,
+                code="target_design_scope_invalid",
+                category="not_found",
+                message=f"Design {design_id} was not found in dataset {dataset_id}.",
+            )
+        self._append_audit_record(
+            state=state,
+            action_kind="dataset.design_renamed",
+            dataset=dataset,
+            payload={"dataset_id": dataset_id, "design_id": design_id, "name": draft.name},
+        )
+        return result
+
+    def archive_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> DatasetDesignMutationResult:
+        return self._set_design_lifecycle_state(dataset_id, design_id, "archived")
+
+    def delete_design(
+        self,
+        dataset_id: str,
+        design_id: str,
+    ) -> DatasetDesignMutationResult:
+        return self._set_design_lifecycle_state(dataset_id, design_id, "deleted")
+
+    def merge_design_scopes(
+        self,
+        dataset_id: str,
+        source_design_id: str,
+        draft: DesignMergeDraft,
+    ) -> DesignScopeMergeResult:
+        self._require_visible_dataset(dataset_id)
+        if source_design_id == draft.target_design_id:
+            raise service_error(
+                409,
+                code="design_scope_merge_denied",
+                category="conflict",
+                message="Source and target design scopes must be different.",
+            )
+        self._require_active_design_scope(dataset_id, source_design_id, for_target=False)
+        self._require_active_design_scope(dataset_id, draft.target_design_id, for_target=False)
+        try:
+            result = self._repository.merge_design_scopes(
+                dataset_id,
+                source_design_id,
+                draft.target_design_id,
+            )
+        except ValueError as exc:
+            raise service_error(
+                409,
+                code="design_scope_merge_conflict",
+                category="conflict",
+                message=str(exc) or "Design scope merge could not be completed.",
+            ) from exc
+        if result is None:
+            raise service_error(
+                404,
+                code="target_design_scope_invalid",
+                category="not_found",
+                message="The requested design scope merge target was not found.",
+            )
+        return result
+
     def list_tagged_core_metrics(self, dataset_id: str) -> list[TaggedCoreMetricSummary]:
         self._require_visible_dataset(dataset_id)
         return list(self._repository.list_tagged_core_metrics(dataset_id))
@@ -387,11 +495,151 @@ class DatasetCatalogService:
         query: DesignBrowseQuery,
     ) -> list[DesignBrowseRow]:
         self._require_visible_dataset(dataset_id)
-        rows = list(self._repository.list_designs(dataset_id))
+        rows = [
+            row
+            for row in self._repository.list_designs(dataset_id)
+            if query.include_archived or row.lifecycle_state == "active"
+        ]
         if query.search is None:
             return rows
         token = query.search.casefold()
         return [row for row in rows if token in row.name.casefold()]
+
+    def _resolve_raw_ingestion_target(
+        self,
+        dataset_id: str,
+        draft: RawDataIngestionDraft,
+    ) -> RawDataIngestionDraft:
+        if draft.design_id is not None:
+            design = self._require_active_design_scope(dataset_id, draft.design_id)
+            return RawDataIngestionDraft(
+                kind=draft.kind,
+                design_name=design.name,
+                design_id=design.design_id,
+                provenance_label=draft.provenance_label,
+                traces=draft.traces,
+            )
+        self._ensure_active_design_name_available(dataset_id, draft.design_name)
+        return draft
+
+    def _ensure_active_design_name_available(
+        self,
+        dataset_id: str,
+        name: str,
+        *,
+        exclude_design_id: str | None = None,
+    ) -> None:
+        requested_design_id = _build_design_id(name)
+        conflict = next(
+            (
+                row
+                for row in self._repository.list_designs(dataset_id)
+                if row.lifecycle_state == "active"
+                if row.design_id != exclude_design_id
+                if row.design_id == requested_design_id or row.name.casefold() == name.casefold()
+            ),
+            None,
+        )
+        if conflict is None:
+            return
+        raise service_error(
+            409,
+            code="design_scope_name_conflict",
+            category="conflict",
+            message=(
+                "A design scope with this active name already exists. "
+                "Select the existing design scope instead of relying on a free-text match."
+            ),
+        )
+
+    def _require_active_design_scope(
+        self,
+        dataset_id: str,
+        design_id: str,
+        *,
+        for_target: bool = True,
+    ) -> DesignBrowseRow:
+        design = next(
+            (
+                row
+                for row in self._repository.list_designs(dataset_id)
+                if row.design_id == design_id
+            ),
+            None,
+        )
+        if design is None:
+            raise service_error(
+                404,
+                code="target_design_scope_invalid",
+                category="not_found",
+                message=f"Design {design_id} was not found in dataset {dataset_id}.",
+            )
+        if design.lifecycle_state == "active":
+            return design
+        if design.redirect_design_id is not None:
+            raise service_error(
+                409,
+                code="design_scope_redirected",
+                category="conflict",
+                message=(
+                    f"Design {design_id} was merged or redirected to "
+                    f"{design.redirect_design_id}."
+                ),
+                details={
+                    "dataset_id": dataset_id,
+                    "design_id": design_id,
+                    "redirect_design_id": design.redirect_design_id,
+                    "target_required": for_target,
+                },
+            )
+        raise service_error(
+            409,
+            code="target_design_scope_invalid",
+            category="conflict",
+            message=(
+                f"Design {design_id} is {design.lifecycle_state} and cannot be used "
+                "as a normal target."
+            ),
+            details={
+                "dataset_id": dataset_id,
+                "design_id": design_id,
+                "lifecycle_state": design.lifecycle_state,
+                "target_required": for_target,
+            },
+        )
+
+    def _set_design_lifecycle_state(
+        self,
+        dataset_id: str,
+        design_id: str,
+        lifecycle_state: str,
+    ) -> DatasetDesignMutationResult:
+        dataset = self._require_visible_dataset(dataset_id)
+        state = self._session_repository.get_session_state()
+        self._require_active_design_scope(dataset_id, design_id, for_target=False)
+        result = self._repository.set_design_lifecycle_state(
+            dataset_id,
+            design_id,
+            lifecycle_state,
+        )
+        if result is None:
+            raise service_error(
+                404,
+                code="target_design_scope_invalid",
+                category="not_found",
+                message=f"Design {design_id} was not found in dataset {dataset_id}.",
+            )
+        self._append_audit_record(
+            state=state,
+            action_kind=f"dataset.design_{lifecycle_state}",
+            dataset=dataset,
+            payload={
+                "dataset_id": dataset_id,
+                "design_id": design_id,
+                "lifecycle_state": lifecycle_state,
+            },
+        )
+        return result
 
     def _require_visible_dataset(self, dataset_id: str) -> DatasetDetail:
         state = self._session_repository.get_session_state()
