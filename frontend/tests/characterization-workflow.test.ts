@@ -35,6 +35,7 @@ import {
   resolveCharacterizationResultSelection,
   resolveCharacterizationResultDetailId,
   resolveCharacterizationSelectionRecovery,
+  resolveCharacterizationTaskHandoffResultId,
   resolveLatestCharacterizationTask,
   resolveScopedCharacterizationTaskId,
   resolveSelectedCharacterizationDesignId,
@@ -395,6 +396,57 @@ describe("characterization browse helpers", () => {
       resultId: "char-admittance-run-24",
       source: "route",
       isExplicitRoutePending: true,
+    });
+  });
+
+  it("ignores task result handle ids that are not characterization result ids", () => {
+    expect(
+      resolveCharacterizationTaskHandoffResultId({
+        primaryResultHandleId: "analysis-run:25:report",
+        results,
+      }),
+    ).toBeNull();
+
+    expect(
+      resolveCharacterizationResultSelection({
+        requestedResultId: null,
+        userSelectedResultId: null,
+        completedRunResultId: null,
+        taskHandoffResultId: resolveCharacterizationTaskHandoffResultId({
+          primaryResultHandleId: "analysis-run:25:report",
+          results,
+        }),
+        results,
+        hasResolvedResults: true,
+      }),
+    ).toEqual({
+      resultId: "char-fit-flux-a-01",
+      source: "results_default",
+      isExplicitRoutePending: false,
+    });
+  });
+
+  it("accepts task handoff only when it maps to a listed characterization result", () => {
+    expect(
+      resolveCharacterizationTaskHandoffResultId({
+        primaryResultHandleId: "char-sideband-flux-a-02",
+        results,
+      }),
+    ).toBe("char-sideband-flux-a-02");
+
+    expect(
+      resolveCharacterizationResultSelection({
+        requestedResultId: null,
+        userSelectedResultId: null,
+        completedRunResultId: null,
+        taskHandoffResultId: "char-sideband-flux-a-02",
+        results,
+        hasResolvedResults: true,
+      }),
+    ).toEqual({
+      resultId: "char-sideband-flux-a-02",
+      source: "task_handoff",
+      isExplicitRoutePending: false,
     });
   });
 
@@ -1151,6 +1203,10 @@ describe("characterization source contracts", () => {
       "resultsQuery.data?.rows",
     );
     expect(characterizationHookSource).toContain("useCharacterizationResultSelection({");
+    expect(characterizationHookSource).toContain("resolveCharacterizationTaskHandoffResultId({");
+    expect(characterizationHookSource).not.toContain(
+      "taskHandoffResultId:\n      activeTask?.resultHandoff?.availability === \"ready\"",
+    );
     expect(characterizationResultSelectionHookSource).toContain(
       "resolveCharacterizationResultSelection({",
     );

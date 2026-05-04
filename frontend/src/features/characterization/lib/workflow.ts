@@ -104,6 +104,19 @@ function hasResultSummary(
   return results?.some((result) => result.resultId === resultId) ?? false;
 }
 
+export function resolveCharacterizationTaskHandoffResultId(input: Readonly<{
+  primaryResultHandleId: string | null | undefined;
+  results: readonly CharacterizationResultSummary[] | undefined;
+}>) {
+  if (!input.primaryResultHandleId) {
+    return null;
+  }
+
+  return hasResultSummary(input.results, input.primaryResultHandleId)
+    ? input.primaryResultHandleId
+    : null;
+}
+
 export function resolveCharacterizationResultSelection(input: Readonly<{
   requestedResultId: string | null;
   userSelectedResultId: string | null;

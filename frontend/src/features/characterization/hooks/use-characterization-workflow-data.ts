@@ -20,6 +20,7 @@ import {
   resolveLatestCharacterizationTask,
   resolveScopedCharacterizationTaskId,
   resolveSelectedCharacterizationDesignId,
+  resolveCharacterizationTaskHandoffResultId,
   shouldHydrateCharacterizationSelectionFromTask,
   type CharacterizationResultStatusFilter,
 } from "@/features/characterization/lib/workflow";
@@ -288,6 +289,13 @@ export function useCharacterizationWorkflowData({
   const selectedAnalysis =
     analysisRegistryQuery.data?.rows.find((analysis) => analysis.analysisId === selectedAnalysisId) ??
     null;
+  const taskHandoffResultId = resolveCharacterizationTaskHandoffResultId({
+    primaryResultHandleId:
+      activeTask?.resultHandoff?.availability === "ready"
+        ? activeTask.resultHandoff.primaryResultHandleId
+        : null,
+    results: resultsQuery.data?.rows,
+  });
 
   const resultSelection = useCharacterizationResultSelection({
     activeDatasetId,
@@ -296,10 +304,7 @@ export function useCharacterizationWorkflowData({
     results: resultsQuery.data?.rows,
     hasResolvedResults: Boolean(resultsQuery.data),
     completedRunIntent: completedRunSync,
-    taskHandoffResultId:
-      activeTask?.resultHandoff?.availability === "ready"
-        ? activeTask.resultHandoff.primaryResultHandleId
-        : null,
+    taskHandoffResultId,
   });
   const resolvedResultId = resultSelection.selectedResultId;
   const detailKey = resultSelection.resultDetailKey;
@@ -430,20 +435,20 @@ export function useCharacterizationWorkflowData({
 
     setResultSearch("");
     setStatusFilter("all");
-    if (activeTask.resultHandoff?.availability === "ready") {
+    if (taskHandoffResultId) {
       setCompletedRunSync((current) =>
         current &&
         current.taskId === activeTask.taskId &&
-        current.resultId !== activeTask.resultHandoff?.primaryResultHandleId
+        current.resultId !== taskHandoffResultId
           ? {
               ...current,
-              resultId: activeTask.resultHandoff?.primaryResultHandleId ?? current.resultId,
+              resultId: taskHandoffResultId,
             }
           : current,
       );
     }
     void Promise.all([runHistoryQuery.mutate(), resultsQuery.mutate()]);
-  }, [activeTask, completedRunSync, resultsQuery, runHistoryQuery]);
+  }, [activeTask, completedRunSync, resultsQuery, runHistoryQuery, taskHandoffResultId]);
 
   useEffect(() => {
     if (requestedResultId || !completedRunSync || !resultsQuery.data?.rows.length) {
