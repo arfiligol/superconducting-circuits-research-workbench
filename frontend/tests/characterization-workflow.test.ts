@@ -27,6 +27,7 @@ import {
 import {
   buildCharacterizationCollectionOptions,
   buildCharacterizationSweepAxisOptions,
+  defaultCharacterizationTraceSelection,
   filterCharacterizationTraceRows,
 } from "../src/features/characterization/lib/trace-selection";
 import {
@@ -986,6 +987,55 @@ describe("characterization explorer helpers", () => {
         collection: "collection_b",
       }).map((trace) => trace.trace_id),
     ).toEqual(["trace_b"]);
+  });
+
+  it("defaults trace selection to one structural collection instead of every base trace", () => {
+    const mixedBaseRows = [
+      {
+        ...traceRows[0],
+        trace_id: "trace_y11_xy",
+        parameter: "Y11",
+        availableSweepAxes: ["L_jun"],
+        axisSignature: "axis:frequency-l-jun",
+        collectionProjection: {
+          collectionId: "collection_y11",
+          label: "Y11 L_jun sweep",
+          summary: "Shared HFSS sweep",
+          traceCount: 2,
+        },
+      },
+      {
+        ...traceRows[0],
+        trace_id: "trace_y11_readout",
+        parameter: "Y11",
+        availableSweepAxes: ["L_jun"],
+        axisSignature: "axis:frequency-l-jun",
+        collectionProjection: {
+          collectionId: "collection_y11",
+          label: "Y11 L_jun sweep",
+          summary: "Shared HFSS sweep",
+          traceCount: 2,
+        },
+      },
+      {
+        ...traceRows[0],
+        trace_id: "trace_yin_scalar",
+        parameter: "Yin",
+        availableSweepAxes: [],
+        axisSignature: "axis:frequency-only",
+        collectionProjection: {
+          collectionId: "collection_yin",
+          label: "Yin scalar frequency trace",
+          summary: "Different HFSS structure",
+          traceCount: 1,
+        },
+      },
+    ];
+
+    expect(defaultCharacterizationTraceSelection(mixedBaseRows)).toEqual([
+      "trace_y11_xy",
+      "trace_y11_readout",
+    ]);
   });
 
   it("formats structured trace axes summaries from the dataset trace browse contract", () => {

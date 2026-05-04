@@ -16,6 +16,7 @@ from src.app.domain.characterization_analysis import (
 from src.app.domain.datasets import (
     DatasetDetail,
     DesignBrowseRow,
+    TraceDetail,
     TraceMetadataSummary,
 )
 from src.app.domain.session import SessionState
@@ -67,7 +68,7 @@ class TaskSubmissionDatasetRepository(Protocol):
         dataset_id: str,
         design_id: str,
         trace_id: str,
-    ) -> object | None: ...
+    ) -> TraceDetail | None: ...
 
 
 class TaskSubmissionCircuitDefinitionRepository(Protocol):
@@ -610,17 +611,39 @@ class TaskSubmissionService:
                     ),
                 )
             trace_details.append(detail)
+        input_collection_payload = (
+            self._trace_collection_service.derive_input_collection_payload_from_trace_details(
+                tuple(trace_details)
+            )
+        )
+        if (
+            input_collection_payload is not None
+            and input_collection_payload.trace_count > 1
+            and len(
+                {
+                    _characterization_input_axis_structure_key(detail)
+                    for detail in trace_details
+                }
+            )
+            > 1
+        ):
+            raise service_error(
+                422,
+                code="characterization_trace_collection_incompatible",
+                category="validation",
+                message=(
+                    "Selected traces must share one persisted input axis structure before "
+                    f"{setup.analysis_id} can run. "
+                    f"{input_collection_payload.grouping_summary}"
+                ),
+            )
         return CharacterizationSetup(
             design_id=setup.design_id,
             analysis_id=setup.analysis_id,
             selected_trace_ids=setup.selected_trace_ids,
             analysis_config=dict(setup.analysis_config),
             input_result_refs=setup.input_result_refs,
-            input_collection_payload=(
-                self._trace_collection_service.derive_input_collection_payload_from_trace_details(
-                    tuple(trace_details)
-                )
-            ),
+            input_collection_payload=input_collection_payload,
         )
 
     def _with_derived_characterization_collection(
@@ -680,6 +703,22 @@ def _serialize_post_processing_setup(setup: PostProcessingSetup) -> dict[str, ob
 
 def _serialize_characterization_setup(setup: CharacterizationSetup) -> dict[str, object]:
     return setup.to_mapping()
+
+
+def _characterization_input_axis_structure_key(
+    detail: TraceDetail,
+) -> tuple[str, str | None, int]:
+    sweep_axes = tuple(
+        axis
+        for axis in detail.axes
+        if axis.name != "frequency" and axis.length > 1
+    )
+    if len(sweep_axes) == 0:
+        return ("selected_scope", None, 1)
+    if len(sweep_axes) > 1:
+        return ("unsupported_multi_sweep", None, len(sweep_axes))
+    sweep_axis = sweep_axes[0]
+    return (sweep_axis.name, sweep_axis.unit, sweep_axis.length)
 
 
 def _session_user_id(session: SessionState) -> str:

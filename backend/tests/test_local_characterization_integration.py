@@ -847,6 +847,78 @@ def test_local_characterization_submit_accepts_single_eligible_trace() -> None:
     assert task["characterization_setup"]["selected_trace_ids"] == ["trace_local_flux_measurement"]
 
 
+def test_local_characterization_submit_rejects_mixed_input_axis_structures() -> None:
+    created = client.post(
+        "/datasets",
+        json={
+            "name": "Mixed HFSS Characterization Dataset",
+            "family": "floatingqubit",
+            "device_type": "Floating Qubit",
+            "source": "layout_simulation",
+        },
+    )
+    assert created.status_code == 201
+    dataset_id = created.json()["data"]["dataset"]["dataset_id"]
+    ingestion = client.post(
+        f"/datasets/{dataset_id}/ingestions",
+        json={
+            "kind": "layout_simulation",
+            "design_name": "Mixed HFSS Scope",
+            "provenance_label": "HFSS mixed batch",
+            "traces": [
+                {
+                    "family": "y_matrix",
+                    "parameter": "Y11",
+                    "representation": "imaginary",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "HFSS L_jun sweep",
+                    "axes": [
+                        {"name": "frequency", "unit": "GHz", "length": 3},
+                        {"name": "L_jun", "unit": "nH", "length": 2},
+                    ],
+                    "preview_payload": {
+                        "kind": "nd_grid",
+                        "axes": [
+                            {"name": "frequency", "unit": "GHz", "values": [4.8, 5.0, 5.2]},
+                            {"name": "L_jun", "unit": "nH", "values": [8.0, 9.0]},
+                        ],
+                        "values": [[-1.0, -0.5], [1.2, 1.6], [-0.5, -0.2]],
+                    },
+                },
+                {
+                    "family": "y_matrix",
+                    "parameter": "Yin",
+                    "representation": "real",
+                    "trace_mode_group": "base",
+                    "stage_kind": "raw",
+                    "provenance_summary": "HFSS scalar Yin sample",
+                    "axes": [{"name": "frequency", "unit": "GHz", "length": 3}],
+                    "preview_payload": {
+                        "kind": "sampled_series",
+                        "points": [[4.8, 0.1], [5.0, 0.2], [5.2, 0.3]],
+                    },
+                },
+            ],
+        },
+    )
+    assert ingestion.status_code == 200
+    payload = ingestion.json()["data"]
+    response = client.post(
+        "/tasks",
+        json=_characterization_payload(
+            design_id=payload["design"]["design_id"],
+            selected_trace_ids=tuple(trace["trace_id"] for trace in payload["traces"]),
+        )
+        | {"dataset_id": dataset_id},
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "characterization_trace_collection_incompatible"
+    assert "2 selected traces span 2 structural collections" in error["message"]
+
+
 def test_local_characterization_submit_rejects_ineligible_selected_trace() -> None:
     dataset_id, design_id, trace_id = _create_ineligible_local_characterization_trace()
     payload = _characterization_payload(

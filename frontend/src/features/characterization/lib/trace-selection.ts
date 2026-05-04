@@ -10,6 +10,57 @@ export function buildCharacterizationTraceCollectionValue(
   return trace.collectionProjection.collectionId ?? trace.collectionProjection.label;
 }
 
+function buildTraceSelectionGroupValue(trace: CharacterizationTraceSelectionRow) {
+  return (
+    buildCharacterizationTraceCollectionValue(trace) ||
+    trace.axisSignature ||
+    trace.trace_id
+  );
+}
+
+export function defaultCharacterizationTraceSelection(
+  rows: readonly CharacterizationTraceSelectionRow[],
+) {
+  const candidateRows = rows.filter((trace) => trace.trace_mode_group === "base");
+  const selectableRows = candidateRows.length > 0 ? candidateRows : rows;
+  const groups = new Map<
+    string,
+    {
+      firstIndex: number;
+      hasSweepAxis: boolean;
+      traceIds: string[];
+    }
+  >();
+
+  for (const [index, trace] of selectableRows.entries()) {
+    const groupValue = buildTraceSelectionGroupValue(trace);
+    const group = groups.get(groupValue);
+    if (group) {
+      group.traceIds.push(trace.trace_id);
+      group.hasSweepAxis = group.hasSweepAxis || trace.availableSweepAxes.length > 0;
+      continue;
+    }
+
+    groups.set(groupValue, {
+      firstIndex: index,
+      hasSweepAxis: trace.availableSweepAxes.length > 0,
+      traceIds: [trace.trace_id],
+    });
+  }
+
+  return (
+    Array.from(groups.values()).sort((left, right) => {
+      if (left.hasSweepAxis !== right.hasSweepAxis) {
+        return left.hasSweepAxis ? -1 : 1;
+      }
+      if (left.traceIds.length !== right.traceIds.length) {
+        return right.traceIds.length - left.traceIds.length;
+      }
+      return left.firstIndex - right.firstIndex;
+    })[0]?.traceIds ?? []
+  );
+}
+
 export function buildCharacterizationSweepAxisOptions(
   rows: readonly CharacterizationTraceSelectionRow[],
 ) {

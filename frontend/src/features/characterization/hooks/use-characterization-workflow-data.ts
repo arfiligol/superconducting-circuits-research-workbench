@@ -14,8 +14,8 @@ import type {
   CharacterizationAnalysisRegistry,
   CharacterizationAnalysisRegistryRow,
   CharacterizationTaggingInput,
-  CharacterizationTraceSelectionRow,
 } from "@/features/characterization/lib/contracts";
+import { defaultCharacterizationTraceSelection } from "@/features/characterization/lib/trace-selection";
 import {
   resolveLatestCharacterizationTask,
   resolveScopedCharacterizationTaskId,
@@ -162,18 +162,6 @@ function shouldRefreshTask(task: TaskDetail | undefined) {
     task?.status === "termination_requested" ||
     (task?.status === "completed" && task.resultHandoff?.availability === "pending")
   );
-}
-
-function defaultSelectedTraceIds(rows: readonly CharacterizationTraceSelectionRow[]) {
-  const baseTraceIds = rows
-    .filter((trace) => trace.trace_mode_group === "base")
-    .map((trace) => trace.trace_id);
-
-  if (baseTraceIds.length > 0) {
-    return baseTraceIds;
-  }
-
-  return rows.map((trace) => trace.trace_id);
 }
 
 export function useCharacterizationWorkflowData({
@@ -354,7 +342,7 @@ export function useCharacterizationWorkflowData({
       if (nextSelectedTraceIds.length > 0) {
         return nextSelectedTraceIds;
       }
-      return defaultSelectedTraceIds(traces);
+      return defaultCharacterizationTraceSelection(traces);
     });
   }, [tracesQuery.data?.rows]);
 

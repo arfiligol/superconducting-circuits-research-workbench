@@ -441,6 +441,20 @@ export function CharacterizationWorkspace() {
     selectedTraceIds.length === 0
       ? "No traces selected"
       : `${selectedTraceIds.length} traces selected`;
+  const selectedTraceRows = traces.filter((trace) =>
+    selectedTraceIds.includes(trace.trace_id),
+  );
+  const selectedTraceInputAxisStructures = new Set(
+    selectedTraceRows.map((trace) =>
+      trace.availableSweepAxes.length > 0
+        ? trace.availableSweepAxes.join("::")
+        : "selected_scope",
+    ),
+  );
+  const selectedTracesShareOneAxisStructure =
+    selectedTraceIds.length <= 1 ||
+    selectedTraceRows.length !== selectedTraceIds.length ||
+    selectedTraceInputAxisStructures.size <= 1;
   const taskMutationTone =
     taskMutationState.state === "success"
       ? "success"
@@ -1186,6 +1200,18 @@ export function CharacterizationWorkspace() {
                     </div>
                   ) : null}
 
+                  {!selectedTracesShareOneAxisStructure ? (
+                    <div className="mt-4">
+                      <SectionNotice
+                        title="Select One Input Axis Structure"
+                        detail={
+                          inputCollectionPayload?.groupingSummary ||
+                          "Selected traces must share one persisted axis structure before this analysis can run."
+                        }
+                      />
+                    </div>
+                  ) : null}
+
                   <button
                     type="button"
                     onClick={() => {
@@ -1197,7 +1223,8 @@ export function CharacterizationWorkspace() {
                       !selectedAnalysis ||
                       selectedAnalysis.availabilityState === "unavailable" ||
                       selectedAnalysis.prerequisiteState !== "ready" ||
-                      selectedTraceIds.length === 0
+                      selectedTraceIds.length === 0 ||
+                      !selectedTracesShareOneAxisStructure
                     }
                     className="mt-4 inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
