@@ -18,6 +18,7 @@ import {
   traceEditDetailKey,
   traceListKey,
 } from "../src/features/data-browser/lib/api";
+import { resolvePreviewPoints } from "../src/features/data-browser/lib/raw-data-browser-formatters";
 import {
   resolveTracePreviewContextTags,
   resolveTracePreviewSemantics,
@@ -606,6 +607,35 @@ describe("page-boundary source contracts", () => {
     expect(rawDataTracePreviewSource).toContain("previewSemantics.yAxisTitle");
     expect(rawDataTracePreviewSource).not.toContain("{axis.length} {axis.unit}");
     expect(rawDataTracePreviewSource).not.toContain(">Value<");
+  });
+
+  it("can plot a TraceStore-backed ND grid when detail includes a sampled slice", () => {
+    const previewPayload = {
+      kind: "nd_grid",
+      axes: [
+        { name: "frequency", unit: "GHz", length: 25000 },
+        { name: "L_jun", unit: "nH", length: 10 },
+      ],
+      shape: [25000, 10],
+      values_ref: "trace_store",
+      points: [
+        [4.8, -2.0],
+        [4.9, 0.2],
+        [5.0, 1.2],
+      ],
+      preview_sample: {
+        source: "trace_store",
+        fixed_axes: [{ name: "L_jun", unit: "nH", index: 0, value: 8.0 }],
+      },
+    };
+
+    expect(resolvePreviewPoints(previewPayload.points)).toEqual([
+      [4.8, -2.0],
+      [4.9, 0.2],
+      [5.0, 1.2],
+    ]);
+    expect(rawDataTracePreviewSource).toContain("previewSeries.isPlotReady");
+    expect(rawDataTracePreviewSource).not.toContain("previewPayload.values");
   });
 
   it("switches the desktop single-trace preview into a fixed drawer only after the trace section is reached", () => {

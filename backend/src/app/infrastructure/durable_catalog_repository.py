@@ -67,6 +67,7 @@ from src.app.domain.datasets import (
     TraceUpdateDraft,
     TraceUpdateResult,
 )
+from src.app.domain.storage import TracePayloadRef
 from src.app.domain.tasks import TaskDetail
 from src.app.domain.trace_ingestion import (
     build_ingested_trace_id,
@@ -115,6 +116,9 @@ class CircuitDefinitionReadRepository(Protocol):
 
 class CharacterizationTaskRepository(Protocol):
     def list_tasks(self) -> Sequence[TaskDetail]: ...
+
+
+TRACE_DETAIL_PREVIEW_SAMPLE_LIMIT = 800
 
 
 class DurableCatalogRepository:
@@ -1262,6 +1266,7 @@ class DurableCatalogRepository:
             if (handle := self._storage_metadata_repository.get_result_handle(handle_id))
             is not None
         )
+        axes = tuple(_deserialize_axis(item) for item in row.axes_json)
         return TraceDetail(
             trace_id=row.trace_id,
             dataset_id=row.dataset_id,
@@ -1272,14 +1277,20 @@ class DurableCatalogRepository:
             trace_mode_group=cast(str, row.trace_mode_group),
             source_kind=cast(str, row.source_kind),
             stage_kind=cast(str, row.stage_kind),
-            axes=tuple(_deserialize_axis(item) for item in row.axes_json),
+            axes=axes,
             ndim=structure.ndim,
             shape=structure.shape,
             axes_summary=structure.axes_summary,
             axis_signature=structure.axis_signature,
             available_sweep_axes=structure.available_sweep_axes,
             collection_projection=structure.collection_projection,
-            preview_payload=dict(row.preview_payload_json),
+            preview_payload=_trace_preview_payload_with_sampled_slice(
+                preview_payload=dict(row.preview_payload_json),
+                payload_ref=payload_ref,
+                axes=axes,
+                parameter=row.parameter,
+                representation=row.representation,
+            ),
             payload_ref=payload_ref,
             result_handles=result_handles,
             analysis_capabilities=analysis_capabilities,
@@ -2092,6 +2103,190 @@ def _component_values_as_complex(values: np.ndarray, *, representation: str) -> 
     if normalized_representation in {"imag", "imaginary"}:
         return (1j * values).astype(np.complex128)
     return values.astype(np.complex128)
+
+
+def _trace_preview_payload_with_sampled_slice(
+    *,
+    preview_payload: dict[str, object],
+    payload_ref: TracePayloadRef | None,
+    axes: tuple[TraceAxis, ...],
+    parameter: str,
+    representation: str,
+) -> dict[str, object]:
+    if (
+        preview_payload.get("kind") != "nd_grid"
+        or preview_payload.get("values_ref") != "trace_store"
+        or payload_ref is None
+    ):
+        return preview_payload
+    sampled_preview = _sample_trace_store_nd_preview(
+        payload_ref=payload_ref,
+        axes=axes,
+        representation=representation,
+    )
+    if sampled_preview is None:
+        return preview_payload
+
+    return {
+        **preview_payload,
+        "points": sampled_preview["points"],
+        "x_axis": sampled_preview["x_axis"],
+        "y_axis": {
+            "label": f"{parameter} · {_format_preview_representation(representation)}",
+            "unit": None,
+        },
+        "preview_sample": sampled_preview["preview_sample"],
+    }
+
+
+def _sample_trace_store_nd_preview(
+    *,
+    payload_ref: TracePayloadRef,
+    axes: tuple[TraceAxis, ...],
+    representation: str,
+) -> dict[str, object] | None:
+    if len(axes) == 0:
+        return None
+    frequency_axis_index = next(
+        (index for index, axis in enumerate(axes) if axis.name == "frequency"),
+        0,
+    )
+    frequency_axis = axes[frequency_axis_index]
+    try:
+        from core.shared.persistence import LocalZarrTraceStore, get_trace_store_path
+
+        trace_store = LocalZarrTraceStore(root_path=get_trace_store_path())
+        store_ref = _trace_payload_ref_to_store_ref(payload_ref)
+        x_values = np.asarray(
+            trace_store.read_axis_slice(
+                store_ref,
+                axis_name=frequency_axis.name,
+                selection=slice(None),
+            ),
+            dtype=np.float64,
+        ).reshape(-1)
+        selection: list[object] = []
+        fixed_axes: list[dict[str, object]] = []
+        for index, axis in enumerate(axes):
+            if index == frequency_axis_index:
+                selection.append(slice(None))
+                continue
+            selection.append(0)
+            axis_value = _read_trace_axis_value(trace_store, store_ref, axis.name, index=0)
+            fixed_axes.append(
+                {
+                    "name": axis.name,
+                    "unit": axis.unit,
+                    "index": 0,
+                    "value": axis_value,
+                }
+            )
+        raw_values = np.asarray(
+            trace_store.read_trace_slice(store_ref, selection=tuple(selection))
+        ).reshape(-1)
+    except Exception:
+        return None
+
+    if x_values.shape[0] != raw_values.shape[0]:
+        return None
+    sampled_indices = _sample_indices(len(x_values), TRACE_DETAIL_PREVIEW_SAMPLE_LIMIT)
+    component_values = _preview_component_values(raw_values, representation=representation)
+    points = [
+        [float(x_values[index]), float(component_values[index])]
+        for index in sampled_indices
+        if np.isfinite(x_values[index]) and np.isfinite(component_values[index])
+    ]
+    return {
+        "points": points,
+        "x_axis": {
+            "label": _format_preview_axis_label(frequency_axis.name),
+            "unit": frequency_axis.unit or None,
+            "sampled": len(sampled_indices) < len(x_values),
+        },
+        "preview_sample": {
+            "source": "trace_store",
+            "sample_limit": TRACE_DETAIL_PREVIEW_SAMPLE_LIMIT,
+            "sample_count": len(points),
+            "total_point_count": len(x_values),
+            "fixed_axes": fixed_axes,
+        },
+    }
+
+
+def _trace_payload_ref_to_store_ref(payload_ref: TracePayloadRef) -> dict[str, object]:
+    return {
+        "backend": payload_ref.backend,
+        "store_key": payload_ref.store_key,
+        "store_uri": payload_ref.store_uri,
+        "group_path": payload_ref.group_path,
+        "array_path": payload_ref.array_path,
+        "dtype": payload_ref.dtype,
+        "shape": tuple(payload_ref.shape),
+        "chunk_shape": tuple(payload_ref.chunk_shape),
+        "schema_version": payload_ref.schema_version,
+    }
+
+
+def _read_trace_axis_value(
+    trace_store: object,
+    store_ref: dict[str, object],
+    axis_name: str,
+    *,
+    index: int,
+) -> float | None:
+    try:
+        raw_values = np.asarray(
+            trace_store.read_axis_slice(
+                store_ref,
+                axis_name=axis_name,
+                selection=slice(index, index + 1),
+            ),
+            dtype=np.float64,
+        ).reshape(-1)
+    except Exception:
+        return None
+    return float(raw_values[0]) if len(raw_values) > 0 else None
+
+
+def _sample_indices(point_count: int, sample_limit: int) -> tuple[int, ...]:
+    if point_count <= 0:
+        return ()
+    if point_count <= sample_limit:
+        return tuple(range(point_count))
+    return tuple(
+        dict.fromkeys(
+            int(index)
+            for index in np.linspace(0, point_count - 1, sample_limit, dtype=np.int64)
+        )
+    )
+
+
+def _preview_component_values(values: np.ndarray, *, representation: str) -> np.ndarray:
+    normalized = representation.casefold()
+    if normalized in {"imag", "imaginary"}:
+        return np.asarray(values.imag, dtype=np.float64)
+    if normalized in {"real", "re"}:
+        return np.asarray(values.real, dtype=np.float64)
+    if normalized in {"phase", "angle"}:
+        return np.asarray(np.angle(values), dtype=np.float64)
+    return np.asarray(np.abs(values), dtype=np.float64)
+
+
+def _format_preview_axis_label(axis_name: str) -> str:
+    return " ".join(part.capitalize() for part in axis_name.split("_") if part) or axis_name
+
+
+def _format_preview_representation(representation: str) -> str:
+    normalized = representation.casefold()
+    if normalized in {"imag", "imaginary"}:
+        return "Imaginary"
+    if normalized in {"real", "re"}:
+        return "Real"
+    if normalized == "phase":
+        return "Phase"
+    if normalized in {"mag", "magnitude"}:
+        return "Magnitude"
+    return _format_preview_axis_label(representation)
 
 
 def _nd_grid_axes_payload(numeric_payload: dict[str, object]) -> tuple[dict[str, object], ...]:

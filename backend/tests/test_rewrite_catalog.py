@@ -491,14 +491,26 @@ def test_durable_ingestion_materializes_nd_grid_to_trace_store() -> None:
     detail = client.get(
         f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}"
     ).json()["data"]
-    assert detail["preview_payload"] == {
-        "kind": "nd_grid",
-        "axes": [
-            {"name": "frequency", "unit": "GHz", "length": 3},
-            {"name": "L_jun", "unit": "nH", "length": 2},
+    assert detail["preview_payload"]["kind"] == "nd_grid"
+    assert detail["preview_payload"]["axes"] == [
+        {"name": "frequency", "unit": "GHz", "length": 3},
+        {"name": "L_jun", "unit": "nH", "length": 2},
+    ]
+    assert detail["preview_payload"]["shape"] == [3, 2]
+    assert detail["preview_payload"]["values_ref"] == "trace_store"
+    assert detail["preview_payload"]["points"] == [
+        [4.8, -2.0],
+        [4.9, 0.2],
+        [5.0, 1.2],
+    ]
+    assert detail["preview_payload"]["preview_sample"] == {
+        "source": "trace_store",
+        "sample_limit": 800,
+        "sample_count": 3,
+        "total_point_count": 3,
+        "fixed_axes": [
+            {"name": "L_jun", "unit": "nH", "index": 0, "value": 8.0},
         ],
-        "shape": [3, 2],
-        "values_ref": "trace_store",
     }
     assert detail["payload_ref"]["shape"] == [3, 2]
 
