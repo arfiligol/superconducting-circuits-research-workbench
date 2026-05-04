@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, LoaderCircle, Play, Search } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { CharacterizationResultExplorer } from "@/features/characterization/components/characterization-result-explorer";
+import { useCharacterizationRouteState } from "@/features/characterization/hooks/use-characterization-route-state";
 import { useCharacterizationResultExplorer } from "@/features/characterization/hooks/use-characterization-result-explorer";
 import { useCharacterizationWorkflowData } from "@/features/characterization/hooks/use-characterization-workflow-data";
 import type {
@@ -220,34 +220,6 @@ function buildSourceSelectionValue(artifactId: string, sourceParameter: string) 
   return `${artifactId}::${sourceParameter}`;
 }
 
-function parseTaskIdParam(value: string | null): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsedValue = Number.parseInt(value, 10);
-  return Number.isFinite(parsedValue) ? parsedValue : null;
-}
-
-function buildCharacterizationSearchHref(
-  pathname: string,
-  searchParamsValue: string,
-  updates: Readonly<Record<string, string | null>>,
-) {
-  const params = new URLSearchParams(searchParamsValue);
-
-  for (const [key, value] of Object.entries(updates)) {
-    if (value === null) {
-      params.delete(key);
-    } else {
-      params.set(key, value);
-    }
-  }
-
-  const nextSearch = params.toString();
-  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
-}
-
 function SectionNotice({
   title,
   detail,
@@ -352,11 +324,7 @@ function reviewSummary(review: CharacterizationDataCollectionReview | null, fall
 }
 
 export function CharacterizationWorkspace() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const searchParamsValue = searchParams.toString();
-  const [, startTransition] = useTransition();
+  const { routeIntent, syncRouteState } = useCharacterizationRouteState();
   const {
     activeDatasetState,
     traces,
@@ -398,6 +366,8 @@ export function CharacterizationWorkspace() {
     requestedResultId,
     selectedResultId,
     setSelectedResultId,
+    resultSelectionSource,
+    isExplicitRouteResultPending,
     resolvedTaskId,
     activeTask,
     activeTaskError,
@@ -411,9 +381,9 @@ export function CharacterizationWorkspace() {
     submitTagging,
     refreshCharacterizationWorkflow,
   } = useCharacterizationWorkflowData({
-    selectedTaskId: parseTaskIdParam(searchParams.get("taskId")),
-    requestedDesignId: searchParams.get("designId"),
-    requestedResultId: searchParams.get("resultId"),
+    selectedTaskId: routeIntent.selectedTaskId,
+    requestedDesignId: routeIntent.requestedDesignId,
+    requestedResultId: routeIntent.requestedResultId,
   });
   const [selectedSourceSelection, setSelectedSourceSelection] = useState("");
   const [selectedDesignatedMetric, setSelectedDesignatedMetric] = useState("");
@@ -527,28 +497,20 @@ export function CharacterizationWorkspace() {
   }, [selectedDesignId]);
 
   useEffect(() => {
-    const nextHref = buildCharacterizationSearchHref(pathname, searchParamsValue, {
+    syncRouteState({
       designId: selectedDesignId,
       resultId: selectedResultId,
-      taskId: resolvedTaskId ? String(resolvedTaskId) : null,
-    });
-    const currentHref = searchParamsValue ? `${pathname}?${searchParamsValue}` : pathname;
-
-    if (nextHref === currentHref) {
-      return;
-    }
-
-    startTransition(() => {
-      router.replace(nextHref, { scroll: false });
+      taskId: resolvedTaskId,
+      isExplicitRouteResultPending,
+      resolvedResultSource: resultSelectionSource,
     });
   }, [
-    pathname,
+    isExplicitRouteResultPending,
+    resultSelectionSource,
     resolvedTaskId,
-    router,
-    searchParamsValue,
     selectedDesignId,
     selectedResultId,
-    startTransition,
+    syncRouteState,
   ]);
 
   async function handleSubmitTagging() {
