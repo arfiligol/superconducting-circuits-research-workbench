@@ -46,7 +46,6 @@ from src.app.domain.datasets import (
     CharacterizationSourceParameterOption,
     DesignBrowseRow,
     TaggedCoreMetricSummary,
-    TraceAxis,
     TraceDetail,
     TraceMetadataSummary,
 )
@@ -512,27 +511,6 @@ def _load_trace_series(
             )
         )
     except Exception:
-        preview_grid = _materialize_nd_grid_preview(trace)
-        if preview_grid is not None:
-            (
-                frequencies,
-                input_axis_key,
-                input_axis_label,
-                input_axis_unit,
-                input_axis_values,
-                values_grid,
-            ) = preview_grid
-            return _LoadedTraceSeries(
-                summary=trace.summary,
-                input_axis_key=input_axis_key,
-                input_axis_label=input_axis_label,
-                input_axis_unit=input_axis_unit,
-                input_axis_values=tuple(float(value) for value in input_axis_values),
-                frequencies_ghz=tuple(
-                    float(value) for value in np.asarray(frequencies).reshape(-1)
-                ),
-                values_grid=np.asarray(values_grid, dtype=np.float64),
-            )
         preview_points = _preview_points(detail.preview_payload)
         if preview_points is None:
             raise
@@ -569,81 +547,6 @@ def _load_trace_series(
         input_axis_values=tuple(float(value) for value in input_axis_values),
         frequencies_ghz=tuple(float(value) for value in np.asarray(frequencies).reshape(-1)),
         values_grid=np.asarray(values_grid, dtype=np.float64),
-    )
-
-
-def _materialize_nd_grid_preview(
-    trace: CharacterizationExecutionTrace,
-) -> tuple[np.ndarray, str, str, str | None, tuple[float, ...], np.ndarray] | None:
-    detail = trace.detail
-    preview_payload = detail.preview_payload
-    if preview_payload.get("kind") != "nd_grid":
-        return None
-    if "values" not in preview_payload:
-        return None
-    raw_axes = preview_payload.get("axes")
-    if not isinstance(raw_axes, list) or len(raw_axes) != len(detail.axes):
-        raise ValueError("nd_grid preview payload axes do not match trace axes.")
-
-    axes_with_values: list[tuple[TraceAxis, np.ndarray]] = []
-    for axis, raw_axis in zip(detail.axes, raw_axes, strict=True):
-        if not isinstance(raw_axis, Mapping):
-            raise ValueError("nd_grid preview payload axes must be objects.")
-        if raw_axis.get("name") != axis.name or raw_axis.get("unit") != axis.unit:
-            raise ValueError("nd_grid preview payload axis metadata does not match trace axes.")
-        axis_values = np.asarray(raw_axis.get("values"), dtype=np.float64).reshape(-1)
-        if len(axis_values) != axis.length:
-            raise ValueError("nd_grid preview payload axis values do not match trace axes.")
-        axes_with_values.append((axis, axis_values))
-
-    expected_shape = tuple(axis.length for axis in detail.axes)
-    values = np.asarray(preview_payload.get("values"), dtype=np.float64)
-    if values.shape != expected_shape:
-        raise ValueError("nd_grid preview payload values do not match trace axes.")
-
-    axis_names = [axis.name for axis in detail.axes]
-    if "frequency" not in axis_names:
-        raise ValueError("Admittance extraction requires a persisted frequency axis.")
-    frequency_axis_index = axis_names.index("frequency")
-    frequency_values = axes_with_values[frequency_axis_index][1]
-    if frequency_axis_index != 0:
-        values = np.moveaxis(values, frequency_axis_index, 0)
-
-    remaining_axes = [
-        (axis, axis_values)
-        for axis, axis_values in axes_with_values
-        if axis.name != "frequency"
-    ]
-    sweep_axes = [
-        (axis, axis_values)
-        for axis, axis_values in remaining_axes
-        if axis.length > 1
-    ]
-    if len(sweep_axes) == 0:
-        return (
-            frequency_values,
-            "selected_scope",
-            "Selected trace bundle",
-            None,
-            (0.0,),
-            np.asarray(values, dtype=np.float64).reshape(values.shape[0], 1),
-        )
-    if len(sweep_axes) > 1:
-        raise ValueError(
-            "Admittance extraction currently supports traces with at most one sweep axis."
-        )
-
-    sweep_axis, sweep_axis_values = sweep_axes[0]
-    values_grid = np.asarray(values, dtype=np.float64).reshape(values.shape[0], -1)
-    if values_grid.shape[1] != len(sweep_axis_values):
-        raise ValueError("nd_grid preview payload does not match its declared sweep axis.")
-    return (
-        frequency_values,
-        sweep_axis.name,
-        sweep_axis.name,
-        sweep_axis.unit,
-        tuple(float(value) for value in sweep_axis_values),
-        values_grid,
     )
 
 

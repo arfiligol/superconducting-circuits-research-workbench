@@ -2,17 +2,10 @@ from __future__ import annotations
 
 import sqlite3
 import time
-from dataclasses import replace
 
 import numpy as np
 import pytest
-from core.shared.persistence import (
-    LocalZarrTraceStore,
-    get_trace_store_path,
-)
-from core.shared.persistence import (
-    database as core_database,
-)
+from core.shared.persistence import database as core_database
 from fastapi.testclient import TestClient
 from sc_core.execution import TaskResultHandle
 from sqlalchemy import select
@@ -1476,44 +1469,6 @@ def test_hfss_nd_ingestion_can_run_admittance_extraction() -> None:
     trace_detail = catalog_repository.get_trace_detail(dataset_id, design_id, trace_id)
     assert trace_detail is not None
     assert trace_detail.preview_payload["values_ref"] == "trace_store"
-    assert trace_detail.payload_ref is not None
-
-    # Legacy HFSS imports could persist truthful ND preview metadata while the TraceStore
-    # payload was still a 1D frequency slice. Characterization must recover from the
-    # embedded ND preview rather than failing before users can re-ingest.
-    LocalZarrTraceStore(root_path=get_trace_store_path()).write_trace(
-        design_id=1,
-        batch_id=1,
-        trace_id=1,
-        values=1j * np.asarray([-1.0, 0.2, 1.2, 0.2, -0.5], dtype=np.float64),
-        axes=(
-            {
-                "name": "frequency",
-                "unit": "GHz",
-                "values": np.asarray([4.8, 4.9, 5.0, 5.1, 5.2], dtype=np.float64),
-            },
-        ),
-        store_key=trace_detail.payload_ref.store_key,
-        payload_role="raw",
-        writer_version="test.legacy_hfss_1d_payload",
-    )
-    trace_detail = replace(
-        trace_detail,
-        preview_payload={
-            "kind": "nd_grid",
-            "axes": [
-                {"name": "frequency", "unit": "GHz", "values": [4.8, 4.9, 5.0, 5.1, 5.2]},
-                {"name": "L_jun", "unit": "nH", "values": [8.0, 9.0]},
-            ],
-            "values": [
-                [-1.0, -0.5],
-                [0.2, 0.6],
-                [1.2, 1.6],
-                [0.2, 0.4],
-                [-0.5, -0.2],
-            ],
-        },
-    )
 
     execution_result = get_persisted_characterization_repository().run_admittance_extraction(
         CharacterizationExecutionRequest(
