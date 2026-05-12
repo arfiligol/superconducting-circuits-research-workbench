@@ -1,3 +1,5 @@
 .npm-cache/
 dist/
+release/
+resources/runtime/
 node_modules/

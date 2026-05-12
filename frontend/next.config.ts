@@ -3,8 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  output: "standalone",
   async rewrites() {
-    const backendBaseUrl = process.env.BACKEND_BASE_URL ?? "http://127.0.0.1:8000";
+    const backendBaseUrl =
+      process.env.BACKEND_BASE_URL ??
+      (process.env.NODE_ENV === "production"
+        ? "http://127.0.0.1:8020"
+        : "http://127.0.0.1:8000");
 
     return [
       {

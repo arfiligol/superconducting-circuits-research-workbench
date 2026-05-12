@@ -1,7 +1,18 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
+import { loadDesktopStartupState } from "./state";
+import { DesktopRuntimeSupervisor } from "./supervisor";
 
-function createFallbackHtml(): string {
+const userDataDir = process.env.SC_DESKTOP_USER_DATA_DIR;
+if (userDataDir) {
+  app.setPath("userData", userDataDir);
+}
+
+const supervisor = new DesktopRuntimeSupervisor();
+let shutdownInProgress = false;
+let supervisorStoppedForQuit = false;
+
+function createFallbackHtml(startUrl: string): string {
   return [
     "<!doctype html>",
     "<html lang=\"en\">",
@@ -20,8 +31,7 @@ function createFallbackHtml(): string {
     "  <body>",
     "    <main>",
     "      <h1>Desktop shell ready</h1>",
-    "      <p>This Electron wrapper will load the frontend workspace once a dev server or production bundle is wired in.</p>",
-    "      <p>Set <code>DESKTOP_START_URL</code> to wrap a running frontend during migration.</p>",
+    `      <p>Loading <code>${startUrl}</code>.</p>`,
     "    </main>",
     "  </body>",
     "</html>",
@@ -45,19 +55,41 @@ function createWindow(): BrowserWindow {
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  supervisor.setWindow(window);
 
   const startUrl = process.env.DESKTOP_START_URL;
   if (startUrl) {
+    void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(createFallbackHtml(startUrl))}`);
     void window.loadURL(startUrl);
-  } else {
-    void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(createFallbackHtml())}`);
   }
 
   return window;
 }
 
+ipcMain.handle("desktop:start-local", async (_event, options: unknown) => {
+  const state = await loadDesktopStartupState();
+  const autoStartLocalRuntime =
+    isRecord(options) && typeof options.autoStartLocalRuntime === "boolean"
+      ? options.autoStartLocalRuntime
+      : undefined;
+  await supervisor.startLocal(state, { autoStartLocalRuntime });
+});
+
+ipcMain.handle("desktop:start-online", async (_event, options: unknown) => {
+  const state = await loadDesktopStartupState();
+  const origin = isRecord(options) && typeof options.origin === "string" ? options.origin : undefined;
+  await supervisor.startOnline(state, origin);
+});
+
+ipcMain.handle("desktop:retry-startup", async () => {
+  await supervisor.startFromSavedState();
+});
+
 app.whenReady().then(() => {
   createWindow();
+  if (!process.env.DESKTOP_START_URL) {
+    void supervisor.startFromSavedState();
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -71,3 +103,45 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+app.on("before-quit", (event) => {
+  if (supervisorStoppedForQuit) {
+    return;
+  }
+
+  event.preventDefault();
+  void stopSupervisorThenQuit();
+});
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function stopSupervisorThenQuit(): Promise<void> {
+  if (shutdownInProgress) {
+    return;
+  }
+
+  shutdownInProgress = true;
+  await supervisor.stop();
+  supervisorStoppedForQuit = true;
+  app.quit();
+}
+
+process.once("SIGTERM", () => {
+  void stopSupervisorThenExit();
+});
+
+process.once("SIGINT", () => {
+  void stopSupervisorThenExit();
+});
+
+async function stopSupervisorThenExit(): Promise<void> {
+  if (shutdownInProgress) {
+    return;
+  }
+
+  shutdownInProgress = true;
+  await supervisor.stop();
+  process.exit(0);
+}
