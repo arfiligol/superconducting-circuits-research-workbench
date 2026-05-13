@@ -25,6 +25,7 @@ async function main() {
   const stagedAppPath = join(dmgRootDir, `${appName}.app`);
   await execFileAsync("ditto", [appBundlePath, stagedAppPath]);
   await validateAppBundle(stagedAppPath);
+  await verifyCodeSignature(stagedAppPath);
   await symlink("/Applications", join(dmgRootDir, "Applications"));
   await execFileAsync("hdiutil", [
     "create",
@@ -58,6 +59,16 @@ async function validateAppBundle(stagedAppPath) {
       );
     }
   }
+}
+
+async function verifyCodeSignature(stagedAppPath) {
+  await execFileAsync("codesign", [
+    "--verify",
+    "--deep",
+    "--strict",
+    "--verbose=4",
+    stagedAppPath,
+  ]);
 }
 
 async function listSymlinks(rootPath) {

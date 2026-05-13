@@ -1,6 +1,6 @@
 {
   "name": "superconducting-circuits-desktop",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "main": "dist/main/index.js",
   "scripts": {
@@ -9,7 +9,8 @@
     "lint": "eslint src --max-warnings=0",
     "prepare:runtime": "npm run build --prefix ../frontend && node scripts/prepare-runtime.mjs",
     "package": "npm run package:mac-arm64",
-    "package:mac-arm64": "npm run prepare:runtime && npm run build && electron-packager . \"Superconducting Circuits\" --platform=darwin --arch=arm64 --out=release --overwrite --prune=true --app-version=$npm_package_version --ignore='^/src($|/)' --ignore='^/\\.npm-cache($|/)' --ignore='^/release($|/)'",
+    "sign:mac-arm64": "node scripts/sign-macos-app.mjs",
+    "package:mac-arm64": "npm run prepare:runtime && npm run build && electron-packager . \"Superconducting Circuits\" --platform=darwin --arch=arm64 --out=release --overwrite --prune=true --app-version=$npm_package_version --ignore='^/src($|/)' --ignore='^/\\.npm-cache($|/)' --ignore='^/release($|/)' && npm run sign:mac-arm64",
     "package:dmg": "npm run package:mac-arm64:dmg",
     "package:mac-arm64:dmg": "npm run package:mac-arm64 && node scripts/create-dmg.mjs"
   },
