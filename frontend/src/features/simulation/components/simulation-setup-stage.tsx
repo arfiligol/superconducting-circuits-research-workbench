@@ -1,14 +1,12 @@
 "use client";
 
-import { LoaderCircle, Play, RefreshCcw, Save, Settings2, WandSparkles } from "lucide-react";
+import { RefreshCcw, Save, Settings2, WandSparkles } from "lucide-react";
 import type { UseFieldArrayReturn, UseFormReturn } from "react-hook-form";
 
 import type { OfficialSimulationExamplePreset } from "@/features/simulation/lib/official-example";
 import type { CircuitDefinitionId } from "@/features/circuit-definition-editor/lib/schema-identity";
 import type { SimulationRequestValues } from "@/features/simulation/lib/request-form";
 import {
-  StageTaskActions,
-  SummaryCard,
   WorkflowStageSection,
 } from "@/features/simulation/components/simulation-workbench-stage-kit";
 import { SimulationAdvancedHbsolveSection } from "@/features/simulation/components/simulation-advanced-hbsolve-section";
@@ -19,20 +17,13 @@ import { SimulationPtcSection } from "@/features/simulation/components/simulatio
 import { SimulationSavedSetupDialogs } from "@/features/simulation/components/simulation-saved-setup-dialogs";
 import { SimulationSourcesSection } from "@/features/simulation/components/simulation-sources-section";
 import type { WorkflowStageState } from "@/features/simulation/lib/stage-state";
-import { formatSimulationTaskStatusLabel } from "@/features/simulation/lib/workflow";
-import { taskStatusTone } from "@/features/simulation/lib/stage-state";
 import type {
   AppSelectOption,
 } from "@/features/shared/components/app-select";
 import { SurfaceTag } from "@/features/shared/components/surface-kit";
-import type { SimulationTaskMutationStatus } from "@/features/simulation/hooks/use-simulation-task-submit-mutation";
 import type {
   CircuitDefinitionSummary,
 } from "@/features/circuit-definition-editor/lib/contracts";
-import type {
-  TaskDetail,
-  TaskSummary,
-} from "@/lib/api/tasks";
 import type { SavedSimulationSetupRecord } from "@/features/simulation/lib/saved-setups";
 
 type SimulationSetupAuthorityPresentation = Readonly<{
@@ -47,8 +38,6 @@ export function SimulationSetupStage({
   applyOfficialExamplePreset,
   applySavedSetup,
   deleteSavedSetup,
-  displayedSimulationStageAuthority,
-  displayedSimulationTaskDetail,
   form,
   harmonicBalanceEnabled,
   isAdvancedHbsolveExpanded,
@@ -59,14 +48,12 @@ export function SimulationSetupStage({
   onAddSource,
   onOpenManageDialog,
   onOpenSaveDialog,
-  onSubmit,
   openSaveAsNewFromManage,
   parameterSweepEnabled,
   parameterSweepFieldArray,
   ptcEnabled,
   ptcPortOptions,
   resolvedDefinitionId,
-  resolvedTaskId,
   restoreSimulationSetupFromCurrentSource,
   saveDialogMode,
   saveDialogOverwriteTargetId,
@@ -78,10 +65,7 @@ export function SimulationSetupStage({
   setIsManageDialogOpen,
   setIsSaveDialogOpen,
   setSaveSetupNameDraft,
-  simulationResultReady,
   simulationSetupAuthorityPresentation,
-  simulationSetupBlockedReason,
-  simulationSetupBuildError,
   sourceFieldArray,
   sourcePortSelectOptions,
   state,
@@ -89,16 +73,12 @@ export function SimulationSetupStage({
   sweepTargetOptions,
   sweepTargetOptionsByValue,
   sweepTargetSelectOptions,
-  taskMutationStatus,
-  attachTask,
   visibleSavedSetups,
 }: Readonly<{
   activeSavedSetup: SavedSimulationSetupRecord | null;
   applyOfficialExamplePreset: () => void;
   applySavedSetup: (record: SavedSimulationSetupRecord) => void;
   deleteSavedSetup: (recordId: string) => void;
-  displayedSimulationStageAuthority: TaskSummary | undefined;
-  displayedSimulationTaskDetail: TaskDetail | undefined;
   form: UseFormReturn<SimulationRequestValues>;
   harmonicBalanceEnabled: boolean;
   isAdvancedHbsolveExpanded: boolean;
@@ -109,14 +89,12 @@ export function SimulationSetupStage({
   onAddSource: () => void;
   onOpenManageDialog: () => void;
   onOpenSaveDialog: () => void;
-  onSubmit: () => void;
   openSaveAsNewFromManage: () => void;
   parameterSweepEnabled: boolean;
   parameterSweepFieldArray: UseFieldArrayReturn<SimulationRequestValues, "simulationParameterSweepAxes", "id">;
   ptcEnabled: boolean;
   ptcPortOptions: readonly { value: string; label: string }[];
   resolvedDefinitionId: CircuitDefinitionId | null;
-  resolvedTaskId: number | null;
   restoreSimulationSetupFromCurrentSource: () => void;
   saveDialogMode: "new-only" | "choose";
   saveDialogOverwriteTargetId: string | null;
@@ -128,10 +106,7 @@ export function SimulationSetupStage({
   setIsManageDialogOpen: (open: boolean) => void;
   setIsSaveDialogOpen: (open: boolean) => void;
   setSaveSetupNameDraft: (value: string) => void;
-  simulationResultReady: boolean;
   simulationSetupAuthorityPresentation: SimulationSetupAuthorityPresentation;
-  simulationSetupBlockedReason: string | null;
-  simulationSetupBuildError: string | null;
   sourceFieldArray: UseFieldArrayReturn<SimulationRequestValues, "simulationSources", "id">;
   sourcePortSelectOptions: readonly AppSelectOption[];
   state: WorkflowStageState;
@@ -139,16 +114,14 @@ export function SimulationSetupStage({
   sweepTargetOptions: readonly { value: string; unit: string | null }[];
   sweepTargetOptionsByValue: ReadonlyMap<string, { value: string; unit: string | null }>;
   sweepTargetSelectOptions: readonly AppSelectOption[];
-  taskMutationStatus: SimulationTaskMutationStatus;
-  attachTask: (taskId: number) => void;
   visibleSavedSetups: readonly SavedSimulationSetupRecord[];
 }>) {
   return (
     <>
       <WorkflowStageSection
         step={2}
-        title="Simulation Setup"
-        description="Configure the runnable simulation setup in six focused sections."
+        title="Current Setup"
+        description="Configure the runnable simulation setup."
         status={state}
         actions={
           <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
@@ -183,7 +156,7 @@ export function SimulationSetupStage({
           </div>
         }
       >
-        <div className="flex flex-wrap items-center gap-2 rounded-[0.95rem] border border-border bg-surface px-4 py-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           <SurfaceTag tone={simulationSetupAuthorityPresentation.primaryTag.tone}>
             {simulationSetupAuthorityPresentation.primaryTag.label}
           </SurfaceTag>
@@ -192,9 +165,6 @@ export function SimulationSetupStage({
               {simulationSetupAuthorityPresentation.secondaryTag.label}
             </SurfaceTag>
           ) : null}
-          <span className="leading-5 text-muted-foreground">
-            {simulationSetupAuthorityPresentation.message}
-          </span>
           {simulationSetupAuthorityPresentation.restoreLabel ? (
             <button
               type="button"
@@ -260,83 +230,6 @@ export function SimulationSetupStage({
           <p className="text-sm text-rose-700 dark:text-rose-300">
             {form.formState.errors.simulationNote.message}
           </p>
-        ) : null}
-        {simulationSetupBuildError ? (
-          <p className="text-sm text-rose-700 dark:text-rose-300">
-            {simulationSetupBuildError}
-          </p>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={
-            taskMutationStatus.state === "submitting" || simulationSetupBlockedReason !== null
-          }
-          className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {taskMutationStatus.state === "submitting" ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
-          Run Simulation
-        </button>
-
-        {displayedSimulationStageAuthority ? (
-          <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  {displayedSimulationStageAuthority.taskId === displayedSimulationTaskDetail?.taskId
-                    ? "Attached Simulation Run"
-                    : "Latest Simulation Run"}
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  Task #{displayedSimulationStageAuthority.taskId}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {displayedSimulationTaskDetail?.progress.summary ??
-                    displayedSimulationStageAuthority.summary}
-                </p>
-              </div>
-              <SurfaceTag tone={taskStatusTone(displayedSimulationStageAuthority.status)}>
-                {formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)}
-              </SurfaceTag>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <SummaryCard
-                label="Submitted"
-                value={displayedSimulationStageAuthority.submittedAt ?? "Pending"}
-              />
-              <SummaryCard
-                label="Result"
-                value={simulationResultReady ? "Ready" : "Pending"}
-                detail={
-                  displayedSimulationTaskDetail?.resultHandoff?.availability
-                    ? `Persisted result handoff: ${displayedSimulationTaskDetail.resultHandoff.availability}`
-                    : displayedSimulationStageAuthority.resultAvailability
-                      ? `Backend result availability: ${displayedSimulationStageAuthority.resultAvailability}`
-                      : "Result status is inferred from persisted task detail."
-                }
-              />
-              <SummaryCard
-                label="Progress"
-                value={
-                  displayedSimulationTaskDetail
-                    ? `${Math.round(displayedSimulationTaskDetail.progress.percentComplete)}%`
-                    : formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)
-                }
-              />
-            </div>
-            <div className="mt-4">
-              <StageTaskActions
-                task={displayedSimulationStageAuthority}
-                resolvedTaskId={resolvedTaskId}
-                onViewTask={attachTask}
-              />
-            </div>
-          </div>
         ) : null}
       </WorkflowStageSection>
 

@@ -2,18 +2,7 @@
   "name": "superconducting-circuits-tutorial-root",
   "private": true,
   "scripts": {
-    "platform:install": "./scripts/platform_install.sh",
-    "platform:check": "./scripts/platform_check.sh",
-    "platform:build": "./scripts/platform_build.sh",
-    "platform:dev": "./scripts/platform_start.sh",
-    "platform:stop": "./scripts/platform_stop.sh",
-    "openapi:export": "cd backend && uv run python ../scripts/export_openapi.py",
-    "openapi:check": "cd backend && uv run python ../scripts/check_openapi_drift.py",
-    "rewrite:install": "npm run platform:install",
-    "rewrite:check": "./scripts/rewrite_check.sh",
-    "rewrite:build": "npm run platform:build",
-    "rewrite:dev": "npm run platform:dev",
-    "rewrite:stop": "npm run platform:stop",
-    "sync:types": "./scripts/sync_api_types.sh"
+    "start": "./scripts/start.sh",
+    "stop": "./scripts/stop.sh"
   }
 }

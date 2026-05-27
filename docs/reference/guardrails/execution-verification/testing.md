@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: rewrite branch 的 backend、frontend、desktop、CLI 與 docs 測試規範。
-version: v2.3.0
-last_updated: 2026-03-16
+version: v2.4.0
+last_updated: 2026-05-27
 updated_by: codex
 ---
 
@@ -28,16 +28,18 @@ updated_by: codex
 
 | Area | Minimum baseline |
 | --- | --- |
-| Rewrite root | `npm run rewrite:check` |
+| Foundation workspace | backend pytest + frontend unit + desktop lint |
 | Backend / Core | `pytest` |
 | Frontend | unit tests，必要時 E2E |
 | Desktop foundation | lint + build |
 | Docs | source check + build + built-route check |
 
-## Rewrite Root Check
+## Foundation Workspace Check
 
 ```bash
-npm run rewrite:check
+cd backend && uv run pytest
+npm run test --prefix frontend
+npm run lint --prefix desktop
 ```
 
 ## Backend / Core
@@ -108,7 +110,10 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 
 ```markdown
 ## Testing Commands
-- **Root rewrite check**: `npm run rewrite:check`
+- **Foundation workspace check**:
+    - `cd backend && uv run pytest`
+    - `npm run test --prefix frontend`
+    - `npm run lint --prefix desktop`
 - **Backend/core tests**:
     - `cd backend && uv run pytest`
     - `uv run pytest`

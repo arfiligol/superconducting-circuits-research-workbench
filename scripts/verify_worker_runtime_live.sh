@@ -113,7 +113,7 @@ wait_for_task() {
 }
 
 maybe_start_redis
-platform_require_path "$ROOT_DIR/.venv" "npm run platform:install" "runtime-verify"
+platform_require_path "$ROOT_DIR/.venv" "uv sync" "runtime-verify"
 platform_require_free_port "$APP_PORT" app "runtime-verify"
 platform_start_service "$PID_DIR" "$LOG_DIR" app bash -lc "cd '$ROOT_DIR' && exec uv run sc-app"
 platform_start_service "$PID_DIR" "$LOG_DIR" worker-simulation bash -lc "cd '$ROOT_DIR' && exec uv run sc-worker-simulation"

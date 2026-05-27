@@ -11,7 +11,6 @@ import { useDashboardData } from "@/features/data-browser/hooks/use-dashboard-da
 import {
   SurfaceHeader,
   SurfacePanel,
-  SurfaceStat,
   SurfaceTag,
   cx,
 } from "@/features/shared/components/surface-kit";
@@ -65,10 +64,6 @@ function parseCapabilities(value: string) {
     .split(",")
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
-}
-
-function formatCapabilities(values: readonly string[]) {
-  return values.length > 0 ? values.join(", ") : "None tagged";
 }
 
 function filterDatasetRows<
@@ -269,9 +264,6 @@ export function DatasetWorkspace() {
     profile,
     profileError,
     isProfileLoading,
-    metrics,
-    metricsError,
-    isMetricsLoading,
     saveProfile,
     createDataset,
     archiveActiveDataset,
@@ -312,7 +304,7 @@ export function DatasetWorkspace() {
       });
       setSaveState({
         tone: "success",
-        message: "Dataset profile saved through the dedicated dataset management surface.",
+        message: "Dataset profile saved.",
       });
     } catch (error) {
       setSaveState({
@@ -384,10 +376,9 @@ export function DatasetWorkspace() {
   }
 
   const activeDatasetId = activeDatasetState.activeDataset?.datasetId ?? "";
-  const catalogRows = catalog?.rows ?? [];
   const filteredRows = useMemo(
-    () => filterDatasetRows(catalogRows, datasetSearch),
-    [catalogRows, datasetSearch],
+    () => filterDatasetRows(catalog?.rows ?? [], datasetSearch),
+    [catalog?.rows, datasetSearch],
   );
   const canSwitchDataset = session?.capabilities.canSwitchDataset ?? false;
   const canManageDatasets = session?.capabilities.canManageDatasets ?? false;
@@ -395,11 +386,11 @@ export function DatasetWorkspace() {
   const canDeleteDataset = Boolean(profile?.allowed_actions.delete);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <SurfaceHeader
         eyebrow="Dataset Workspace"
         title="Dataset"
-        description="Browse visible datasets, switch the active session dataset, and manage dataset profile metadata without pushing shell context or cross-page navigation back into the page body."
+        description="Browse datasets and manage the selected profile."
         actions={
           canManageDatasets ? (
             <button
@@ -421,35 +412,10 @@ export function DatasetWorkspace() {
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        <SurfaceStat label="Visible Datasets" value={String(catalogRows.length)} />
-        <SurfaceStat
-          label="Writable Profiles"
-          value={profile?.allowed_actions.update_profile ? "Current dataset" : "Authority-gated"}
-          tone="primary"
-        />
-        <SurfaceStat
-          label="Profile Status"
-          value={
-            profile?.allowed_actions.update_profile
-              ? "Writable"
-              : activeDatasetState.activeDataset
-                ? "Read-only"
-                : "Awaiting dataset"
-          }
-          tone={profile?.allowed_actions.update_profile ? "primary" : "default"}
-        />
-        <SurfaceStat
-          label="Tagged Metrics"
-          value={String(metrics.length)}
-          tone="primary"
-        />
-      </div>
-
       <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.86fr)_minmax(0,1.14fr)]">
         <SurfacePanel
           title="Visible Datasets"
-          description="This page owns dataset browse and active selection. Dashboard stays summary-first, and cross-page navigation stays in the shell."
+          description="Search and select the active dataset."
         >
           {catalogError ? (
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
@@ -482,7 +448,7 @@ export function DatasetWorkspace() {
 
           {!canSwitchDataset ? (
             <div className="mt-4 rounded-xl border border-amber-500/35 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/35 dark:text-amber-200">
-              Dataset switching is disabled for the current session authority.
+              Dataset switching is unavailable for this session.
             </div>
           ) : null}
 
@@ -553,8 +519,8 @@ export function DatasetWorkspace() {
 
         <div className="space-y-5">
           <SurfacePanel
-            title="Dataset Profile"
-            description="Edit device type, capability tags, and source metadata here when backend authority allows profile updates."
+            title="Selected Dataset"
+            description={profile ? profile.name : "Select a dataset to view details."}
             actions={
               profile ? (
                 <div className="flex flex-wrap gap-2">
@@ -601,11 +567,6 @@ export function DatasetWorkspace() {
                 Unable to load the dataset profile. {profileError.message}
               </div>
             ) : null}
-            {metricsError ? (
-              <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
-                Unable to load tagged core metrics. {metricsError.message}
-              </div>
-            ) : null}
             {saveState ? (
               <div
                 className={cx(
@@ -642,12 +603,6 @@ export function DatasetWorkspace() {
                     </div>
                   </dl>
                 </div>
-
-                {!canArchiveDataset && !canDeleteDataset ? (
-                  <div className="mb-4 rounded-xl border border-border/80 bg-surface px-4 py-3 text-sm text-muted-foreground">
-                    This dataset does not expose archive or delete actions for the current session.
-                  </div>
-                ) : null}
 
                 <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
                   <div className="grid gap-3 xl:grid-cols-2">
@@ -698,15 +653,7 @@ export function DatasetWorkspace() {
                     />
                   </label>
 
-                  <div className="flex items-center justify-between rounded-xl border border-border/80 bg-surface px-4 py-3 text-sm">
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {formatCapabilities(profile.capabilities)}
-                      </p>
-                      <p className="mt-1 text-muted-foreground">
-                        Dataset profile editing is backend-owned and stays on this page.
-                      </p>
-                    </div>
+                  <div className="flex justify-end">
                     <button
                       type="submit"
                       disabled={
@@ -731,45 +678,6 @@ export function DatasetWorkspace() {
         </div>
       </section>
 
-      <SurfacePanel
-        title="Tagged Core Metrics"
-        description="Tagged core metrics stay read-only here and follow the current active dataset."
-      >
-        {isMetricsLoading ? (
-          <div className="rounded-xl border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-            Loading tagged core metrics...
-          </div>
-        ) : metrics.length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {metrics.map((metric) => (
-              <article
-                key={metric.metric_id}
-                className="rounded-xl border border-border/80 bg-surface px-4 py-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-semibold text-foreground">{metric.label}</h3>
-                  <SurfaceTag tone="success">{metric.designated_metric}</SurfaceTag>
-                </div>
-                <dl className="mt-4 space-y-2 text-sm">
-                  <div className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">Source Parameter</dt>
-                    <dd className="font-medium text-foreground">{metric.source_parameter}</dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">Tagged At</dt>
-                    <dd className="font-medium text-foreground">{metric.tagged_at}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
-            No tagged core metrics are available yet for the current active dataset.
-          </div>
-        )}
-      </SurfacePanel>
-
       <ConfirmActionDialog
         open={pendingLifecycleAction !== null}
         title={
@@ -777,8 +685,8 @@ export function DatasetWorkspace() {
         }
         description={
           pendingLifecycleAction?.kind === "archive"
-            ? `Archive ${pendingLifecycleAction.datasetName}. The dataset remains visible for historical context but exits active workflow use.`
-            : `Delete ${pendingLifecycleAction?.datasetName ?? "this dataset"}. This lifecycle change is backend-authoritative and cannot be undone from this page.`
+            ? `Archive ${pendingLifecycleAction.datasetName}. The dataset remains visible for historical context.`
+            : `Delete ${pendingLifecycleAction?.datasetName ?? "this dataset"}. This action cannot be undone from this page.`
         }
         confirmLabel={
           pendingLifecycleAction?.kind === "archive" ? "Archive dataset" : "Delete dataset"

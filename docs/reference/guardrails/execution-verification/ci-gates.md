@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: develop 日常整合與 main release promotion 的 PR 品質門檻，含 desktop shell 與 docs route validation。
-version: v2.4.0
-last_updated: 2026-03-27
+version: v2.5.0
+last_updated: 2026-05-27
 updated_by: codex
 ---
 
@@ -28,7 +28,7 @@ updated_by: codex
 
 | touched area | 至少要過的 gate |
 | --- | --- |
-| rewrite root orchestration | install + check + build |
+| foundation workspaces | backend pytest + frontend test/build + desktop lint/build |
 | backend | startup smoke + backend pytest |
 | frontend | lint + typecheck + test + build |
 | desktop | lint + build |
@@ -36,11 +36,11 @@ updated_by: codex
 
 ## Mandatory Gates
 
-=== "Rewrite Root"
+=== "Foundation Workspaces"
 
-    - `npm run rewrite:install`
-    - `npm run rewrite:check`
-    - `npm run rewrite:build`
+    - install：`cd backend && uv sync`、`npm install --prefix frontend`、`npm install --prefix desktop`
+    - check：`cd backend && uv run pytest`、`npm run test --prefix frontend`、`npm run lint --prefix desktop`
+    - build：`npm run build --prefix frontend`、`npm run build --prefix desktop`
 
 === "Backend / Frontend / Desktop"
 
@@ -74,9 +74,6 @@ updated_by: codex
 ```markdown
 ## CI Gates
 - Mandatory checks include:
-    - `npm run rewrite:install`
-    - `npm run rewrite:check`
-    - `npm run rewrite:build`
     - backend startup smoke and `cd backend && uv run pytest`
     - `npm run lint --prefix frontend`
     - `npm run typecheck --prefix frontend`

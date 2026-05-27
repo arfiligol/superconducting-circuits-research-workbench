@@ -1,4 +1,4 @@
-name: Rewrite Foundation
+name: Foundation
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
       - "package.json"
       - "README.md"
       - ".gitignore"
-      - "scripts/rewrite_*.sh"
+      - "scripts/*.sh"
       - "frontend/**"
       - "backend/**"
       - "desktop/**"
@@ -17,13 +17,13 @@ on:
       - "package.json"
       - "README.md"
       - ".gitignore"
-      - "scripts/rewrite_*.sh"
+      - "scripts/*.sh"
       - "frontend/**"
       - "backend/**"
       - "desktop/**"
 
 jobs:
-  rewrite-foundation:
+  foundation:
     runs-on: ubuntu-latest
 
     steps:
@@ -43,11 +43,20 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Install rewrite dependencies
-        run: npm run rewrite:install
+      - name: Install dependencies
+        run: |
+          mkdir -p .cache/npm/frontend .cache/npm/desktop
+          npm install --prefix frontend --cache "$PWD/.cache/npm/frontend"
+          (cd backend && uv sync)
+          npm install --prefix desktop --cache "$PWD/.cache/npm/desktop"
 
-      - name: Run rewrite checks
-        run: npm run rewrite:check
+      - name: Run checks
+        run: |
+          (cd backend && uv run pytest -q)
+          npm run test --prefix frontend
+          npm run lint --prefix desktop
 
-      - name: Build rewrite workspaces
-        run: npm run rewrite:build
+      - name: Build workspaces
+        run: |
+          npm run build --prefix frontend
+          npm run build --prefix desktop

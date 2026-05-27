@@ -45,7 +45,6 @@ import type { RuntimeAuthTransition, RuntimeMode } from "@/lib/api/session";
 import {
   formatTaskExecutionStatusLabel,
   formatTaskVisibilityScopeLabel,
-  formatWorkerLaneLabel,
 } from "@/lib/task-presenters/presentation";
 
 type WorkspaceStatusStripProps = Readonly<{
@@ -106,7 +105,7 @@ function RuntimeModeCard({
       onClick={onClick}
       disabled={disabled}
       className={cx(
-        "flex min-h-[188px] w-full cursor-pointer flex-col items-start justify-between rounded-[1.1rem] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:opacity-60",
+        "flex min-h-[128px] w-full cursor-pointer flex-col items-start justify-between rounded-[1rem] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:opacity-60",
         active
           ? "border-primary/40 bg-primary/12 text-foreground shadow-[0_16px_34px_rgba(37,99,235,0.16)]"
           : "border-border bg-background text-foreground hover:border-primary/35 hover:bg-primary/10 hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]",
@@ -119,8 +118,8 @@ function RuntimeModeCard({
         <p className="mt-2 text-base font-semibold text-foreground">{title}</p>
       </div>
       <div className="space-y-2">
-        {details.map((detail) => (
-          <p key={detail} className="text-sm leading-6 text-foreground/74 dark:text-foreground/74">
+        {details.slice(0, 2).map((detail) => (
+          <p key={detail} className="text-sm leading-5 text-foreground/74 dark:text-foreground/74">
             {detail}
           </p>
         ))}
@@ -263,8 +262,8 @@ function buildContextResetSearch(
 function summarizeWorkerRuntime(workerSummary: readonly WorkerLaneSummary[]) {
   if (workerSummary.length === 0) {
     return {
-      value: "Runtime summary pending",
-      detail: "Backend authority has not reported any worker lanes yet.",
+      value: "Workers pending",
+      detail: "No runtime health reported yet.",
     } as const;
   }
 
@@ -286,25 +285,17 @@ function summarizeWorkerRuntime(workerSummary: readonly WorkerLaneSummary[]) {
   );
 
   return {
-    value: `${workerSummary.length} lane${workerSummary.length === 1 ? "" : "s"} reported`,
-    detail: `${totals.idle} idle · ${totals.running} running · ${totals.degraded} degraded · ${totals.draining} draining · ${totals.offline} offline`,
+    value:
+      totals.degraded + totals.offline > 0
+        ? `${totals.degraded + totals.offline} need review`
+        : totals.running > 0
+          ? `${totals.running} running`
+          : `${totals.idle} idle`,
+    detail:
+      totals.degraded + totals.offline > 0
+        ? "Open Tasks for lane detail."
+        : "Worker health is nominal.",
   } as const;
-}
-
-function summarizeLaneRuntimeStatus(laneSummary: WorkerLaneSummary) {
-  if (laneSummary.offlineProcessors > 0 || laneSummary.degradedProcessors > 0) {
-    return "Needs attention";
-  }
-  if (laneSummary.drainingProcessors > 0) {
-    return "Draining";
-  }
-  if (laneSummary.runningProcessors > 0) {
-    return "Running";
-  }
-  if (laneSummary.idleProcessors > 0) {
-    return "Idle";
-  }
-  return "Pending";
 }
 
 function isRetryableError(error: Error | undefined): boolean {
@@ -444,7 +435,7 @@ export function WorkspaceStatusStrip({
     activeDataset?.datasetId ?? null,
   );
   const workspaceMemberships = resolveShellWorkspaceMemberships(session?.memberships);
-  const queueRows = (activeTasks.length > 0 ? activeTasks : tasks).slice(0, 6);
+  const queueRows = (activeTasks.length > 0 ? activeTasks : tasks).slice(0, 4);
   const canSwitchDataset = session?.capabilities.canSwitchDataset ?? false;
   const canSwitchRuntimeMode = session?.capabilities.canSwitchRuntimeMode ?? true;
   const workerRuntimeSummary = summarizeWorkerRuntime(workerSummary);
@@ -505,8 +496,8 @@ export function WorkspaceStatusStrip({
       : runtimeTargetInput.trim()) || "Server target pending";
   const runtimeRefreshCopy =
     runtimeMode === "local"
-      ? "Refresh only re-fetches the Local Space session envelope. It does not call online auth refresh."
-      : "Refresh revalidates the current online session and target summary without switching modes.";
+      ? "Refresh Local Space session."
+      : "Refresh the current online session.";
 
   async function handleWorkspaceSwitch(workspaceId: string) {
     setWorkspaceNotice(null);
@@ -643,7 +634,7 @@ export function WorkspaceStatusStrip({
           onOpenChange(false);
         }}
         title="Global Context"
-        subtitle="Runtime mode, workspace, dataset, queue, and worker state live here as one selected-section shell surface."
+        subtitle="Compact shell context. Open a section only when you need to change it."
         variant="context"
         interactionBoundaryRef={interactionBoundaryRef}
       >
@@ -700,7 +691,7 @@ export function WorkspaceStatusStrip({
             <SectionFrame
               icon={Globe}
               title="Runtime Mode"
-              description="Runtime mode is the outer shell boundary. Choose the backend-owned context you want to operate in, then manage the server target beneath it."
+              description="Choose Local or Online context."
             >
               {runtimeNotice ? (
                 <ShellNotice className="mb-4" tone={runtimeNotice.tone}>
@@ -714,9 +705,7 @@ export function WorkspaceStatusStrip({
                     label="Mode"
                     title="Local Mode"
                     details={[
-                      "Workspace: Local Space · no remote sign-in required.",
-                      "Datasets, schemas, results, and tasks stay local until you explicitly import or export them.",
-                      "Queue and dataset context rebuild for Local Space on every mode switch.",
+                      "Local Space · no remote sign-in.",
                     ]}
                     active={runtimeMode === "local"}
                     disabled={!canSwitchRuntimeMode || runtimeSwitchingTo !== null}
@@ -729,9 +718,7 @@ export function WorkspaceStatusStrip({
                     title="Online Mode"
                     details={[
                       `Target: ${modeTargetValue}.`,
-                      "Validates the server target before rebuilding the online shell context.",
-                      "Requires sign-in when auth is missing and never silently carries a previous remote session across mode switches.",
-                      "Context reset is mode-only. Switching online never bridges local datasets, schemas, results, or tasks.",
+                      "Requires sign-in when auth is missing.",
                     ]}
                     active={runtimeMode === "online"}
                     disabled={!canSwitchRuntimeMode || runtimeSwitchingTo !== null}
@@ -1110,8 +1097,8 @@ export function WorkspaceStatusStrip({
               title="Tasks & Runtime"
               description={
                 runtimeMode === "local"
-                  ? "Local tasks and runtime status are isolated to Local Space and rebuilt on every mode switch."
-                  : "Online task rows and runtime status come from active workspace authority and never merge with local task context."
+                  ? "Recent Local Space tasks."
+                  : "Recent workspace tasks."
               }
               actions={
                 <>
@@ -1123,7 +1110,7 @@ export function WorkspaceStatusStrip({
                     }}
                     className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-background px-3.5 py-2 text-xs font-medium uppercase tracking-[0.16em] text-foreground transition hover:border-primary/35 hover:bg-primary/10"
                   >
-                    Open Tasks Page
+                    Tasks
                   </button>
                   <ActionButton
                     label="Refresh queue"
@@ -1177,121 +1164,6 @@ export function WorkspaceStatusStrip({
                         : workerRuntimeSummary.detail
                     }
                   />
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-                  <CompactContextCard
-                    icon={Workflow}
-                    label="Pending"
-                    value={String(summary.pendingCount)}
-                    detail="Queued or dispatching tasks."
-                  />
-                  <CompactContextCard
-                    icon={Workflow}
-                    label="Running"
-                    value={String(summary.runningCount)}
-                    detail="Running or draining tasks."
-                  />
-                  <CompactContextCard
-                    icon={Workflow}
-                    label="Completed"
-                    value={String(summary.completedCount)}
-                    detail="Tasks finished successfully."
-                  />
-                  <CompactContextCard
-                    icon={AlertTriangle}
-                    label="Failed"
-                    value={String(summary.failedCount)}
-                    detail="Tasks that need review or retry."
-                  />
-                  <CompactContextCard
-                    icon={AlertTriangle}
-                    label="Cancelled"
-                    value={String(summary.cancelledCount)}
-                    detail="Tasks stopped through graceful cancellation."
-                  />
-                  <CompactContextCard
-                    icon={AlertTriangle}
-                    label="Terminated"
-                    value={String(summary.terminatedCount)}
-                    detail="Tasks force-stopped by runtime control."
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Worker lanes
-                  </p>
-                  {workerSummary.length > 0 ? (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {workerSummary.map((laneSummary) => (
-                        <div
-                          key={laneSummary.lane}
-                          className="rounded-[0.9rem] border border-border bg-background px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.06)]"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                {formatWorkerLaneLabel(laneSummary.lane)}
-                              </p>
-                              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                                Lane runtime summary
-                              </p>
-                            </div>
-                            <span className="rounded-full border border-border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                              {summarizeLaneRuntimeStatus(laneSummary)}
-                            </span>
-                          </div>
-                          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Idle
-                              </p>
-                              <p className="mt-1 font-semibold text-foreground">
-                                {laneSummary.idleProcessors}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Running
-                              </p>
-                              <p className="mt-1 font-semibold text-foreground">
-                                {laneSummary.runningProcessors}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Degraded
-                              </p>
-                              <p className="mt-1 font-semibold text-foreground">
-                                {laneSummary.degradedProcessors}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Draining
-                              </p>
-                              <p className="mt-1 font-semibold text-foreground">
-                                {laneSummary.drainingProcessors}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                Offline
-                              </p>
-                              <p className="mt-1 font-semibold text-foreground">
-                                {laneSummary.offlineProcessors}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-[0.9rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                      Backend authority has not reported any lane runtime rows yet.
-                    </div>
-                  )}
                 </div>
 
                 <div className="space-y-3">

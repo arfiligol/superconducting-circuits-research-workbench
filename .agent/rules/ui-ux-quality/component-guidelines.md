@@ -1,9 +1,15 @@
 ## Component Guidelines
 - Prefer components from `@/components/ui/` for interactive primitives.
 - Put feature-specific UI in `frontend/src/features/<feature>/components/`.
+- Do not expose browser-default styled controls as the final product UI.
+- If a platform-native control is unavoidable, wrap it with app-owned trigger, labels, helper text, and error handling.
 - Do not use `alert()`, `confirm()`, or `prompt()` for product interactions.
 - Destructive actions require an explicit confirmation flow.
 - Forms need labels, validation, and visible error states.
 - Clickable icons must provide a clear hover state, including pointer feedback and visible hover styling.
 - Data-dense tables must support sorting, filtering, and pagination or a clear virtualization strategy.
 - Load summary rows first; fetch heavy detail payload only on explicit detail interaction.
+- Prefer hierarchy, metadata, and status over long helper copy in dense product UI.
+- Keep error, empty, and recovery copy concise; do not turn product surfaces into diagnostics walls.
+- Keep page bodies focused on one primary task; do not add duplicated shell context cards, authority summaries, or cross-page CTA walls unless they are strictly required.
+- Treat helper components, handoff cards, and debug-heavy surfaces as secondary; remove them when they start competing with the page's main workflow.

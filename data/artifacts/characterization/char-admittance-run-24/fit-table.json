@@ -1,0 +1,17 @@
+[
+  {
+    "parameter": "f01",
+    "value": 4.996044,
+    "unit": "GHz"
+  },
+  {
+    "parameter": "residual_rms",
+    "value": 0.0,
+    "unit": "S"
+  },
+  {
+    "parameter": "window_span",
+    "value": 2.0,
+    "unit": "GHz"
+  }
+]

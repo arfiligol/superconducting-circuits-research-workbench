@@ -13,14 +13,14 @@ status: draft
 owner: docs-team
 audience: team
 scope: Frontend runtime-mode-aware shared header task queue、task attachment、worker summary、control actions、refresh recovery 與 standalone tasks-page boundary contract
-version: v0.16.0
-last_updated: 2026-03-27
+version: v0.17.0
+last_updated: 2026-05-27
 updated_by: codex
 ---
 
 # Task Management
 
-本頁定義 frontend shared task management surface：Header `Tasks Queue`、attached task、worker summary、control actions、result handoff、refresh recovery 與 standalone `Tasks` page boundary。
+本頁定義 frontend shared task management surface：Header `Tasks Queue` compact entry、attached task、control actions、result handoff、refresh recovery 與 standalone `Tasks` page boundary。
 
 !!! info "Surface Boundary"
     這裡定義的是 shared task-centric contract，供 `Circuit Simulation` 與 `Characterization` 共用。
@@ -56,10 +56,10 @@ updated_by: codex
 |---|---|
 | Header Task Trigger | 在所有 app pages 上可直接打開右側 shell-side panel 的 queue section |
 | Shell-Side Panel | shared shell 的右側 management surface，承接 `Global Context` 與 `Account` 兩大 panel families |
-| Global Context Panel | 先以 summary cards 呈現 runtime mode、workspace、dataset、queue、worker 五個 sections，再顯示 selected section detail |
-| Task Queue Section | `Global Context` 內的一個 selectable section；顯示最近可見的 tasks，支援 filter、attach、cancel、terminate、retry |
+| Global Context Panel | 以 compact triggers 呈現 runtime mode、workspace、dataset、queue sections，再顯示 selected section detail |
+| Task Queue Section | `Global Context` 內的一個 selectable section；只顯示少量最近可見 tasks，支援 filter、attach、cancel、terminate、retry |
 | Standalone Tasks Page | `/tasks`；extended browse / history / detail / audit surface，不取代 Header quick management |
-| Worker Summary | Header 顯示 compact summary；drawer 顯示 lane-level detail |
+| Worker Summary | Header / drawer 顯示 compact health badge；lane-level detail 屬於 `/tasks` 或 developer disclosure |
 | Attached Task | 表示目前 page body 正在關注的單一 persisted task |
 | Lifecycle Summary | 顯示 queued / running / completed / failed / cancelled / terminated 與最近 event 概況 |
 | Result Handoff | terminal task 完成後，將 page context 切到 persisted result surface |
@@ -81,12 +81,12 @@ updated_by: codex
 
 | Surface | Owns | Should not become |
 |---|---|---|
-| `Header -> Global Context -> Tasks Queue` | quick management、recent queue visibility、compact worker summary、cross-page recovery、常見 control actions | 大型 history / audit / full-detail wall |
+| `Header -> Global Context -> Tasks Queue` | quick management、recent queue visibility、compact worker health、cross-page recovery、常見 control actions | 大型 history / audit / full-detail wall |
 | [`/tasks`](../workspace/tasks.md) | extended browse、longer history、deeper filters、master-detail inspection、event timeline、extended worker / lane inspection | workflow page 的替代品，或 page body 裡的 shell context dump |
 
 !!! tip "Canonical entry first"
     queue 的 canonical shared-shell 入口仍然是 `Header -> Global Context -> Tasks Queue`。
-    `/tasks` 是第二層 extended surface，用來承接較重的 browse / history / audit 需求，而不是讓 workflow pages 自己長出 queue dashboard。
+    `/tasks` 是 extended surface，用來承接較重的 browse / history / audit / worker lane 需求，而不是讓 Global Context 或 workflow pages 長出 queue dashboard。
 
 ## Task Queue Section Contract
 
@@ -144,13 +144,15 @@ updated_by: codex
 
 !!! info "Section switcher, not stacked dump"
     `Tasks Queue` 是 `Global Context` panel 內的一個 section。
-    queue detail 只有在 queue card 為 selected section 時才展開；workspace、dataset、worker 在非 selected 狀態只保留 cards 摘要。
+    queue detail 只有在 queue trigger 為 selected section 時才展開；runtime、workspace、dataset 在非 selected 狀態只保留 compact trigger 摘要。
 
 !!! warning "Single Active Shell Panel"
     queue section 與 account section 屬於同一套右側 shell-side panel interaction model。
     同一時間只能有一個 active panel section；切換 trigger 時應切換 active section，而不是留下被 overlay 擋住的不可點 header trigger。
 
 ## Worker Summary Contract
+
+Worker summary is intentionally compact outside `/tasks`. The shared shell may show aggregate health, but lane tables, processor counts, event histories, and recovery details belong to the standalone Tasks page or a developer disclosure.
 
 | Field | Required meaning |
 |---|---|

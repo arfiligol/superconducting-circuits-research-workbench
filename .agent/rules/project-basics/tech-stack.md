@@ -13,13 +13,24 @@
     - FastAPI
     - Pydantic
     - SQLModel / SQLAlchemy
+    - Casbin as the backend authorization baseline for the multi-user app
     - Rich-compatible logging
+- **Local runtime backbone**:
+    - `rq`
+    - `redis`
+    - `uv run sc-app`
+    - `uv run sc-worker-simulation`
+    - `uv run sc-worker-characterization`
+    - desktop local-managed profile supervises Redis + app + worker sidecars; remote-server profile does not start local heavy runtime
 - **CLI**:
     - Typer
     - must remain first-class, not a second-tier wrapper
 - **Scientific core**:
     - JosephsonCircuits.jl via juliacall
     - plotly + schemdraw for visualization output
+- **Topology**:
+    - canonical architecture boundaries are top-level `backend/`, `frontend/`, `core/`, `cli/`, `desktop/`, `legacy/`
+    - root-level `src/` is not the future umbrella
 - **Quality tools**:
     - Ruff
     - BasedPyright
@@ -27,6 +38,7 @@
     - Vitest / Playwright when frontend exists
 - **Storage direction**:
     - metadata DB: SQLite now, PostgreSQL target
+    - metadata DB schema versioning: Alembic; detailed rules live in App / Backend / Circuit Definitions
     - numeric trace store: Zarr
-- New UI work should target Next.js, not NiceGUI.
-- Desktop packaging should use Electron around the frontend instead of reviving NiceGUI-native desktop assumptions.
+- New UI work should target Next.js, not the legacy UI layer.
+- Desktop packaging should use Electron around the frontend instead of reviving legacy-UI-native desktop assumptions.

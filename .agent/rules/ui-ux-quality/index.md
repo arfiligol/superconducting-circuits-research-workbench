@@ -2,6 +2,8 @@
 - Use Next.js App Router for the frontend.
 - Electron desktop packaging must preserve the same frontend UI/UX rules instead of inventing a separate desktop-only UI system.
 - Use Radix UI + shadcn/ui for interactive components.
+- Do not expose browser-default interactive controls as the final product UI surface.
+- If a platform-native control is unavoidable, wrap it in app-owned components and keep labels, state, and error handling in the product surface.
 - Use next-themes for theme switching.
 - Use semantic design tokens; avoid hardcoded colors.
 - Use SWR for server state and React Hook Form + Zod for forms.

@@ -1,11 +1,12 @@
 function build_plot(traces, title, xaxis_title, yaxis_title; legend_title="Legend")
-    return plot(
+    @eval using PlotlyJS
+    return PlotlyJS.plot(
         traces,
-        Layout(
+        PlotlyJS.Layout(
             title=title,
-            xaxis=attr(title=xaxis_title),
-            yaxis=attr(title=yaxis_title),
-            legend=attr(title=attr(text=legend_title)),
+            xaxis=PlotlyJS.attr(title=xaxis_title),
+            yaxis=PlotlyJS.attr(title=yaxis_title),
+            legend=PlotlyJS.attr(title=PlotlyJS.attr(text=legend_title)),
         ),
     )
 end

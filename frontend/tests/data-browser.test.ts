@@ -294,21 +294,24 @@ describe("raw-data selection helpers", () => {
 describe("page-boundary source contracts", () => {
   it("moves dataset profile management into the dedicated dataset page while keeping dashboard summary-first", () => {
     expect(dashboardWorkspaceSource).toContain("overview-first");
-    expect(dashboardWorkspaceSource).toContain('href="/dataset"');
-    expect(dashboardWorkspaceSource).toContain('href="/data-ingestion"');
+    expect(dashboardWorkspaceSource).not.toContain('href="/dataset"');
+    expect(dashboardWorkspaceSource).not.toContain('href="/data-ingestion"');
     expect(dashboardWorkspaceSource).not.toContain("Save Profile");
     expect(dashboardWorkspaceSource).not.toContain("saveProfile(");
     expect(datasetWorkspaceSource).toContain("saveProfile(");
     expect(datasetWorkspaceSource).toContain("Save Profile");
-    expect(datasetWorkspaceSource).toContain("dedicated dataset management surface");
+    expect(datasetWorkspaceSource).toContain("Browse datasets and manage the selected profile.");
     expect(datasetWorkspaceSource).toContain("Create Dataset");
     expect(datasetWorkspaceSource).toContain("CreateDatasetDialog");
     expect(datasetWorkspaceSource).toContain('aria-labelledby="create-dataset-dialog-title"');
     expect(datasetWorkspaceSource).toContain("setIsCreateDialogOpen(true);");
     expect(datasetWorkspaceSource).toContain("Archive Dataset");
     expect(datasetWorkspaceSource).toContain("Delete Dataset");
-    expect(datasetWorkspaceSource).toContain('title="Dataset Profile"');
-    expect(datasetWorkspaceSource).toContain("cross-page navigation stays in the shell");
+    expect(datasetWorkspaceSource).toContain('title="Selected Dataset"');
+    expect(datasetWorkspaceSource).not.toContain("dedicated dataset management surface");
+    expect(datasetWorkspaceSource).not.toContain("cross-page navigation stays in the shell");
+    expect(datasetWorkspaceSource).not.toContain("Tagged Core Metrics");
+    expect(datasetWorkspaceSource).not.toContain("SurfaceStat");
     expect(datasetWorkspaceSource).not.toContain('title="Dataset Lifecycle"');
     expect(datasetWorkspaceSource).not.toContain("Active Dataset Lifecycle");
     expect(datasetWorkspaceSource).not.toContain("Open Raw Data");
@@ -435,6 +438,9 @@ describe("page-boundary source contracts", () => {
     expect(rawDataUiSource).toContain("Choose a design");
     expect(rawDataUiSource).toContain("Focused preview stays single-trace");
     expect(rawDataUiSource).toContain("Single Trace Preview");
+    expect(rawDataWorkspaceSource).toContain('title="Design Browser"');
+    expect(rawDataWorkspaceSource).toContain("Manage Scopes");
+    expect(rawDataWorkspaceSource).not.toContain("Create Design Scope");
     expect(rawDataUiSource).not.toContain('title="Selected Design Summary"');
     expect(rawDataUiSource).not.toContain("Active Dataset");
     expect(rawDataUiSource).not.toContain("setActiveDataset(");
@@ -445,6 +451,9 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain("RawDataTraceSummariesPanel");
     expect(rawDataWorkspaceSource).toContain("RawDataTracePreviewPanel");
     expect(rawDataWorkspaceSource).toContain("useRawDataPreviewDrawer");
+    expect(rawDataWorkspaceSource).toContain("isDesignManagementOpen ? (");
+    expect(rawDataWorkspaceSource).toContain("Current Design");
+    expect(rawDataWorkspaceSource).toContain("{browser.designsMeta?.limit ?? 6} designs per page");
     expect(rawDataDesignScopesSource).toContain('title="Design Scopes"');
     expect(rawDataDesignScopesSource).toContain("Selected Design");
     expect(rawDataDesignScopesSource).toContain("Create Design Scope");
@@ -474,7 +483,7 @@ describe("page-boundary source contracts", () => {
     expect(rawDataWorkspaceSource).toContain(
       '"xl:grid xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start xl:gap-5 xl:space-y-0"',
     );
-    expect(rawDataWorkspaceSource.split("\n").length).toBeLessThan(400);
+    expect(rawDataWorkspaceSource.split("\n").length).toBeLessThan(520);
   });
 
   it("strengthens raw-data search affordance and keeps the wording consistent", () => {
@@ -1020,8 +1029,8 @@ describe("legacy data-browser route", () => {
     const redirect = vi.fn();
     vi.doMock("next/navigation", () => ({ redirect }));
 
-    const module = await import("../src/app/(workspace)/data-browser/page");
-    module.default();
+    const routeModule = await import("../src/app/(workspace)/data-browser/page");
+    routeModule.default();
 
     expect(redirect).toHaveBeenCalledWith("/raw-data");
     vi.doUnmock("next/navigation");

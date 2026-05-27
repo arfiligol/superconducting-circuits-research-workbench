@@ -1,15 +1,27 @@
-## Contributor Reporting Format
-- Contributors MUST use `Contributor Report v1` structure for handoff.
-- Mandatory sections:
-    - Task info
-    - Commit hashes
-    - Changed files with reason
-    - Test commands and results
-    - API touched matrix
-    - Known risks
-- If Playwright is required:
-    - MUST include scenarios, evidence paths, and pass/fail result.
+## Agent Handoff Formats
+- Planning & Reviewing Agents MUST produce a written `Plan Artifact v1`.
+- Plan artifacts MUST include lifecycle state, owner, supersedes, and retirement criteria.
+- `Plans/` artifacts are active collaboration artifacts, not long-term product SoT.
+- Planning & Reviewing Agents own cleanup/retirement of `Plans/` artifacts during merge pass.
+- Implementation Agents and Test Agents MUST hand off using `Delivery Report v1`.
+- Planning & Reviewing Agents MUST summarize integration and verification using `Review Merge Report v1`.
+- Delivery reports MUST include:
+    - assigned branch/worktree
+    - allowed area
+    - do-not-touch boundary
+    - assigned slice
+    - commit hashes
+    - changed files with reason
+    - test commands and results
+    - API / contract touched matrix
+    - known risks
+- Review merge reports MUST include:
+    - plans lifecycle cleanup result
+    - SoT pages reread
+    - code context reread
+    - UI evidence for user-visible frontend changes
+    - explicit judgement against current docs and product need
 - Reporting quality rules:
-    - Lead with conclusion, then evidence.
-    - Summarize logs; do not dump long raw logs.
-    - Explicitly separate completed work vs verified work vs items needing integrator decision.
+    - lead with conclusion, then evidence
+    - summarize logs instead of dumping long raw output
+    - explicitly separate completed work, verified work, and items needing planning/reviewing decisions

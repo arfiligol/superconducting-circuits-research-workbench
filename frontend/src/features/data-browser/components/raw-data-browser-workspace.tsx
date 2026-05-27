@@ -3,13 +3,174 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
 import { RawDataDesignScopesPanel } from "@/features/data-browser/components/raw-data-design-scopes-panel";
+import { SearchField } from "@/features/data-browser/components/raw-data-browser-controls";
 import { RawDataTracePreviewPanel } from "@/features/data-browser/components/raw-data-trace-preview-panel";
 import { RawDataTraceSummariesPanel } from "@/features/data-browser/components/raw-data-trace-summaries-panel";
 import { TraceEditDialog } from "@/features/data-browser/components/trace-edit-dialog";
-import { useRawDataBrowserData } from "@/features/data-browser/hooks/use-raw-data-browser-data";
+import {
+  formatCoverage,
+  readinessTone,
+} from "@/features/data-browser/lib/raw-data-browser-formatters";
+import {
+  useRawDataBrowserData,
+  type RawDataBrowserState,
+} from "@/features/data-browser/hooks/use-raw-data-browser-data";
 import { useRawDataPreviewDrawer } from "@/features/data-browser/hooks/use-raw-data-preview-drawer";
 import { ConfirmActionDialog } from "@/lib/confirm-action-dialog";
-import { SurfaceHeader, cx } from "@/features/shared/components/surface-kit";
+import {
+  SurfaceActionButton,
+  SurfaceHeader,
+  SurfacePanel,
+  SurfaceTag,
+  cx,
+} from "@/features/shared/components/surface-kit";
+
+import type { DesignBrowseRow } from "@/features/data-browser/lib/contracts";
+
+function designLifecycleTone(state: DesignBrowseRow["lifecycle_state"]) {
+  if (state === "active") {
+    return "success" as const;
+  }
+  if (state === "archived") {
+    return "warning" as const;
+  }
+  return "default" as const;
+}
+
+function DesignBrowserPanel({
+  deferredDesignSearch,
+  browser,
+  selectedDesign,
+  isDesignManagementOpen,
+  toggleDesignManagement,
+}: Readonly<{
+  deferredDesignSearch: string;
+  browser: RawDataBrowserState;
+  selectedDesign: DesignBrowseRow | null;
+  isDesignManagementOpen: boolean;
+  toggleDesignManagement: () => void;
+}>) {
+  return (
+    <SurfacePanel
+      title="Design Browser"
+      actions={
+        <SurfaceActionButton
+          aria-expanded={isDesignManagementOpen}
+          onClick={toggleDesignManagement}
+          shape="soft"
+        >
+          {isDesignManagementOpen ? "Hide Management" : "Manage Scopes"}
+        </SurfaceActionButton>
+      }
+    >
+      {browser.designsError ? (
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+          Unable to load designs. {browser.designsError.message}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)] lg:items-start">
+        <SearchField
+          label="Search Design"
+          placeholder="Search design name or id"
+          value={browser.designSearch}
+          onChange={browser.setDesignSearch}
+        />
+        <div className="min-w-0 rounded-[0.95rem] border border-border/80 bg-surface px-4 py-3">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            Current Design
+          </p>
+          {selectedDesign ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
+                {selectedDesign.name}
+              </span>
+              <SurfaceTag tone={readinessTone(selectedDesign.compare_readiness)}>
+                {selectedDesign.compare_readiness}
+              </SurfaceTag>
+              <SurfaceTag tone={designLifecycleTone(selectedDesign.lifecycle_state)}>
+                {selectedDesign.lifecycle_state}
+              </SurfaceTag>
+              <SurfaceTag tone="default">{selectedDesign.trace_count} traces</SurfaceTag>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">No design selected.</p>
+          )}
+        </div>
+      </div>
+
+      {browser.isDesignsLoading ? (
+        <div className="mt-4 rounded-xl border border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
+          Loading designs for {deferredDesignSearch || "the active dataset"}...
+        </div>
+      ) : browser.designs.length > 0 ? (
+        <>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {browser.designs.map((design) => (
+              <button
+                key={design.design_id}
+                type="button"
+                aria-pressed={design.design_id === browser.selectedDesignId}
+                title={design.design_id}
+                onClick={() => {
+                  browser.setSelectedDesignId(design.design_id);
+                }}
+                className={cx(
+                  "min-h-[6.5rem] cursor-pointer rounded-xl border px-4 py-3 text-left transition hover:border-primary/30 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                  design.design_id === browser.selectedDesignId
+                    ? "border-primary/40 bg-primary/10"
+                    : "border-border bg-background",
+                )}
+              >
+                <div className="flex h-full flex-col justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
+                      {design.name}
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatCoverage(design.source_coverage)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <SurfaceTag tone={readinessTone(design.compare_readiness)}>
+                      {design.compare_readiness}
+                    </SurfaceTag>
+                    <SurfaceTag tone="default">{design.trace_count} traces</SurfaceTag>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-4 text-sm">
+            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+              {browser.designsMeta?.limit ?? 6} designs per page
+            </p>
+            <div className="flex items-center gap-2">
+              <SurfaceActionButton
+                onClick={browser.goToPrevDesignPage}
+                disabled={!browser.designsMeta?.prev_cursor}
+                shape="soft"
+              >
+                Previous
+              </SurfaceActionButton>
+              <SurfaceActionButton
+                onClick={browser.goToNextDesignPage}
+                disabled={!browser.designsMeta?.next_cursor}
+                shape="soft"
+              >
+                Next
+              </SurfaceActionButton>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="mt-4 rounded-xl border border-dashed border-border bg-surface px-4 py-5 text-sm text-muted-foreground">
+          No design scopes are available for this dataset.
+        </div>
+      )}
+    </SurfacePanel>
+  );
+}
 
 function DeleteScopeCard({
   title,
@@ -85,6 +246,7 @@ export function RawDataBrowserWorkspace() {
   const deferredDesignSearch = useDeferredValue(browser.designSearch);
   const deferredTraceSearch = useDeferredValue(browser.filters.search);
   const [previewMode, setPreviewMode] = useState<"plot" | "table">("plot");
+  const [isDesignManagementOpen, setIsDesignManagementOpen] = useState(false);
 
   const selectedDesign =
     browser.designs.find((row) => row.design_id === browser.selectedDesignId) ?? null;
@@ -152,34 +314,46 @@ export function RawDataBrowserWorkspace() {
   }, [browser.pendingDeleteRequest]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <SurfaceHeader
         eyebrow="Raw Data Browser"
         title="Raw Data"
-        description="Choose a design, narrow the trace summaries, edit or delete allowed rows, and keep the preview scoped to one focused trace."
+        description="Choose a design, browse trace summaries, and preview one focused trace."
       />
 
-      <RawDataDesignScopesPanel
-        designsError={browser.designsError}
-        isDesignsLoading={browser.isDesignsLoading}
+      <DesignBrowserPanel
         deferredDesignSearch={deferredDesignSearch}
-        designSearch={browser.designSearch}
-        setDesignSearch={browser.setDesignSearch}
-        designs={browser.designs}
-        selectedDesignId={browser.selectedDesignId}
-        setSelectedDesignId={browser.setSelectedDesignId}
+        browser={browser}
         selectedDesign={selectedDesign}
-        designsMeta={browser.designsMeta}
-        goToPrevDesignPage={browser.goToPrevDesignPage}
-        goToNextDesignPage={browser.goToNextDesignPage}
-        activeDesigns={browser.activeDesigns}
-        designLifecycleState={browser.designLifecycleState}
-        createDesignScope={browser.createDesignScope}
-        renameSelectedDesignScope={browser.renameSelectedDesignScope}
-        mergeSelectedDesignScope={browser.mergeSelectedDesignScope}
-        archiveSelectedDesignScope={browser.archiveSelectedDesignScope}
-        deleteSelectedDesignScope={browser.deleteSelectedDesignScope}
+        isDesignManagementOpen={isDesignManagementOpen}
+        toggleDesignManagement={() => {
+          setIsDesignManagementOpen((current) => !current);
+        }}
       />
+
+      {isDesignManagementOpen ? (
+        <RawDataDesignScopesPanel
+          designsError={browser.designsError}
+          isDesignsLoading={browser.isDesignsLoading}
+          deferredDesignSearch={deferredDesignSearch}
+          designSearch={browser.designSearch}
+          setDesignSearch={browser.setDesignSearch}
+          designs={browser.designs}
+          selectedDesignId={browser.selectedDesignId}
+          setSelectedDesignId={browser.setSelectedDesignId}
+          selectedDesign={selectedDesign}
+          designsMeta={browser.designsMeta}
+          goToPrevDesignPage={browser.goToPrevDesignPage}
+          goToNextDesignPage={browser.goToNextDesignPage}
+          activeDesigns={browser.activeDesigns}
+          designLifecycleState={browser.designLifecycleState}
+          createDesignScope={browser.createDesignScope}
+          renameSelectedDesignScope={browser.renameSelectedDesignScope}
+          mergeSelectedDesignScope={browser.mergeSelectedDesignScope}
+          archiveSelectedDesignScope={browser.archiveSelectedDesignScope}
+          deleteSelectedDesignScope={browser.deleteSelectedDesignScope}
+        />
+      ) : null}
 
       <section
         ref={traceSummariesSectionRef}

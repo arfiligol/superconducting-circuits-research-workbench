@@ -28,6 +28,12 @@ Everything needed by the loss-decomposition study is intentionally kept inside t
 ```text
 qubit_external_coupling_analysis/
 ├── README.md
+├── run_reusable_framework_v1_smoke.jl
+├── docs/
+│   ├── reusable-component-framework-v1.md
+│   └── reusable-component-framework-v1/
+│       ├── authoring.md
+│       └── learn.md
 ├── outputs/
 ├── run_loss_decomposition_study/
 │   ├── run_simulation.jl
@@ -50,10 +56,7 @@ qubit_external_coupling_analysis/
         ├── ReusableComponents.jl
         ├── common.jl
         ├── coupled_window.jl
-        ├── circuit_draft.jl
-        ├── half_wave_purcell_filter.jl
-        ├── quarter_wave_resonator.jl
-        └── readout_line.jl
+        └── circuit_draft.jl
 ```
 
 ### Boundary Rule
@@ -66,6 +69,14 @@ qubit_external_coupling_analysis/
 
 ## File Responsibilities
 
+- `docs/reusable-component-framework-v1.md`
+  Entry point for the sandbox reusable-component semantic layer. It links the Learn and Authoring source-of-truth pages and records the design-health review.
+- `docs/reusable-component-framework-v1/learn.md`
+  User-facing source of truth for assembling circuits with components, pins, anchors, and coupling helpers.
+- `docs/reusable-component-framework-v1/authoring.md`
+  Implementation-facing source of truth for helper contracts, responsibility boundaries, segmentation, finalization, and provenance.
+- `run_reusable_framework_v1_smoke.jl`
+  Julia smoke test for the Framework v1 semantic layer, including Learn recipes, MTL windows, finalization artifacts, and rejection cases.
 - `run_loss_decomposition_study/run_simulation.jl`
   Runnable entrypoint for simulation plus persisted outputs.
 - `run_loss_decomposition_study/run_plots.jl`
@@ -93,7 +104,7 @@ qubit_external_coupling_analysis/
 - `src/plot_helpers.jl`
   Shared plot construction helper.
 - `src/reusable_components/`
-  Local copy of the distributed netlist authoring utilities needed by this study.
+  Julia implementation of the Framework v1 semantic layer plus low-level distributed-line and MTL lowering utilities.
 - `tools/fit_readout_s21_vector_fitting.py`
   Local Python helper for `scikit-rf.VectorFitting`.
 - `outputs/`

@@ -1,8 +1,5 @@
 ## CI Gates
 - Mandatory checks include:
-    - `npm run rewrite:install`
-    - `npm run rewrite:check`
-    - `npm run rewrite:build`
     - backend startup smoke and `cd backend && uv run pytest`
     - `npm run lint --prefix frontend`
     - `npm run typecheck --prefix frontend`
@@ -14,6 +11,9 @@
     - `./scripts/build_docs_sites.sh` when docs are touched
     - `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
 - `main` must not receive direct pushes.
+- Daily feature/docs/test integration targets `develop` by default.
+- `main` only receives verified release promotion from `develop`.
+- Branch roles, worktree policy, and merge authority are defined in `Branch & Worktree Flow`.
 - Guardrail source changes must keep `.agent/rules` in sync.
 - Benign `404` warnings from docs preview builds do not fail CI by themselves.
 - Any failing required check blocks merge.

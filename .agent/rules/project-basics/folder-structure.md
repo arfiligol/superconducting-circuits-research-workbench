@@ -2,13 +2,17 @@
 - **Frontend** work goes to `frontend/`.
 - **Desktop shell** work goes to `desktop/`.
 - **Backend** work goes to `backend/`.
+- **Shared scientific logic** goes to top-level `core/`.
 - **CLI** work goes to `cli/`.
-- **Shared scientific logic** goes to `src/core/`.
-- **Docs and guardrails** go to `docs/`.
-- Existing `src/app/` NiceGUI code is legacy and should only receive migration-support fixes.
+- **Archived NiceGUI residue** targets `legacy/legacy_nicegui_archived/`; current `src/app/` should be read as archived payload pending relocation.
+- **`src/worker/`** is transition residue under redesign, not a canonical development surface.
+- **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
+- **Plans** go to `Plans/` only as active multi-agent coordination artifacts; Planning & Reviewing Agents own creation and cleanup, and long-term decisions must move to `docs/reference/**`.
+- **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
+- Root-level `src/` is not the future canonical umbrella.
 - Dependency direction:
     - frontend depends on API contracts, not backend internals
     - desktop depends on frontend outputs and secure IPC, not business logic ownership
     - backend API layer depends inward on services/domain
-    - CLI reuses shared services/core instead of duplicating workflow logic
-    - `src/core/` must stay framework-agnostic
+    - standalone CLI shared logic belongs in CLI-local runtime abstractions or top-level `core/`; do not assume backend services are the default owner
+    - top-level `core/` must stay framework-agnostic

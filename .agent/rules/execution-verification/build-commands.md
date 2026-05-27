@@ -1,10 +1,7 @@
 ## Run / Build Commands
-- **Rewrite root orchestration**:
-    - `npm run rewrite:install`
-    - `npm run rewrite:check`
-    - `npm run rewrite:build`
-    - `npm run rewrite:dev`
-    - `npm run rewrite:stop`
+- **Repo-root orchestration**:
+    - `npm run start`
+    - `npm run stop`
 - **Python install**: `uv sync`
 - **Julia install**: `julia --project=. -e 'using Pkg; Pkg.instantiate()'`
 - **Frontend**:
@@ -17,7 +14,11 @@
 - **Backend**:
     - `cd backend && uv sync`
     - `cd backend && uv run pytest`
-    - `cd backend && uv run uvicorn src.app.main:app --reload --port 8000`
+    - `export SC_RQ_REDIS_URL=redis://127.0.0.1:6379/0`
+    - `uv run sc-app`
+    - `uv run sc-worker-simulation`
+    - `uv run sc-worker-characterization`
+    - `cd backend && uv run uvicorn src.app.main:app --reload --port 8000` (`uvicorn` 只適用於 backend-only API debug，不是 isolated worker topology 驗證 baseline)
 - **Desktop**:
     - `npm install --prefix desktop`
     - `npm run dev --prefix desktop`

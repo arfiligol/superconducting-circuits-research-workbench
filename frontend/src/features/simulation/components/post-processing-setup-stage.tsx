@@ -86,7 +86,7 @@ export function PostProcessingSetupStage({
     <WorkflowStageSection
       step={4}
       title="Post Processing Setup"
-      description="Author the processing steps, keep their order intentional, and launch the next run."
+      description="Configure optional downstream result processing."
       status={state}
       actions={
         displayedSimulationStageAuthority ? (
@@ -111,7 +111,7 @@ export function PostProcessingSetupStage({
               Steps
             </p>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Choose a step type, then add it in the order it should run.
+              Add steps in execution order.
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -145,7 +145,7 @@ export function PostProcessingSetupStage({
 
         {postProcessingSteps.length === 0 ? (
           <div className="mt-4 rounded-[0.95rem] border border-dashed border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-            No steps yet. Add the transformations you want to apply after the simulation result.
+            No steps yet.
           </div>
         ) : (
           <div className="mt-4 space-y-3">
@@ -181,8 +181,8 @@ export function PostProcessingSetupStage({
                       </div>
                       <p className="mt-2 text-sm text-muted-foreground">
                         {step.type === "coordinate_transform"
-                          ? "Build a common/differential transform from two ports."
-                          : "Reduce the basis to the ports you want to keep."}
+                          ? "Common/differential transform."
+                          : "Keep selected basis ports."}
                       </p>
                     </div>
                     <button
@@ -319,11 +319,6 @@ export function PostProcessingSetupStage({
               <p className="mt-2 text-sm text-muted-foreground">
                 {latestPostProcessingTaskDetail?.progress.summary ??
                   latestPostProcessingStageAuthority.summary}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {postProcessingResultReady
-                  ? "The processed result is attached and ready to review below."
-                  : "The processed result appears below as soon as the downstream run finishes."}
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">

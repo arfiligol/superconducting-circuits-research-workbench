@@ -100,104 +100,135 @@ function build_floating_qubit_environment_netlist(cfg::StudyConfig)
 
     draft = CircuitDraft("floating_qubit_loss_decomposition")
 
-    left_readout = add_readout_line_component!(draft; id="left_readout", line_spec=left_readout_spec)
-    purcell_filter = add_half_wave_purcell_filter_component!(
-        draft;
-        id="purcell_filter",
+    left_readout = cpw_line!(draft, "left_readout"; line=left_readout_spec)
+    purcell_filter = purcell_filter!(
+        draft,
+        "purcell_filter";
+        line=purcell_filter_spec,
         left_coupling_cap_f=cfg.pf_coupling_cap_in_f,
         right_coupling_cap_f=cfg.pf_coupling_cap_out_f,
-        line_spec=purcell_filter_spec,
     )
-    right_readout = add_readout_line_component!(draft; id="right_readout", line_spec=right_readout_spec)
-    apply_series_chain!(draft, left_readout, purcell_filter, right_readout)
+    right_readout = cpw_line!(draft, "right_readout"; line=right_readout_spec)
 
-    connect!(draft, left_readout, :left, "readout_in")
-    connect!(draft, right_readout, :right, "readout_out")
-    add_port_with_termination!(
-        draft;
+    connect_pins!(draft, pin(left_readout, :right), pin(purcell_filter, :left); id="left_readout_to_pf")
+    connect_pins!(draft, pin(purcell_filter, :right), pin(right_readout, :left); id="pf_to_right_readout")
+
+    readout_in = external_pin!(draft, "readout_in")
+    readout_out = external_pin!(draft, "readout_out")
+    connect_pins!(draft, pin(left_readout, :left), pin(readout_in, :node); id="readout_in_connection")
+    connect_pins!(draft, pin(right_readout, :right), pin(readout_out, :node); id="readout_out_connection")
+    terminated_port!(
+        draft,
+        pin(readout_in, :node);
         port_number=4,
-        node="readout_in",
         resistance_ohm=cfg.readout_port_res_ohm,
-        prefix="readout",
+        id="readout_in_port",
     )
-    add_port_with_termination!(
-        draft;
+    terminated_port!(
+        draft,
+        pin(readout_out, :node);
         port_number=5,
-        node="readout_out",
         resistance_ohm=cfg.readout_port_res_ohm,
-        prefix="readout",
+        id="readout_out_port",
     )
 
-    qwr_open_node = "qwr_open_node"
-    qwr_line = add_transmission_line!(
-        draft;
-        id="qwr_line",
-        prefix="qwr",
-        start_node=qwr_open_node,
-        end_node=draft.ground_node,
-        spec=qwr_spec,
-        ground_node=draft.ground_node,
-        add_shunt_at_last_node=false,
-    )
+    qwr = quarter_wave_resonator!(draft, "qwr"; line=qwr_spec, boundary=:short, prefix="qwr")
 
-    apply_coupled_window!(
-        draft;
-        prefix="pf_qwr_window",
-        line_a=purcell_filter,
-        span_a=LineSpan(cfg.pf_window_start_m, cfg.pf_window_start_m + cfg.coupled_window_length_m),
-        line_b=qwr_line,
-        span_b=LineSpan(cfg.qwr_window_start_m, cfg.qwr_window_start_m + cfg.coupled_window_length_m),
+    coupled_window!(
+        draft,
+        section_m(
+            purcell_filter,
+            cfg.pf_window_start_m,
+            cfg.pf_window_start_m + cfg.coupled_window_length_m,
+        ),
+        section_m(
+            qwr,
+            cfg.qwr_window_start_m,
+            cfg.qwr_window_start_m + cfg.coupled_window_length_m,
+        );
+        id="pf_qwr_window",
         spec=coupled_window_spec,
     )
 
-    q1_pad = "q1_pad"
-    q2_pad = "q2_pad"
-    xy_node = "xy_node"
-
-    add_component!(draft; name="C_g1", node1=q1_pad, node2=draft.ground_node, value=cfg.c_g1_f)
-    add_component!(draft; name="C_g2", node1=q2_pad, node2=draft.ground_node, value=cfg.c_g2_f)
-    add_component!(draft; name="C_q", node1=q1_pad, node2=q2_pad, value=cfg.c_q_f)
-    add_component!(draft; name="L_q", node1=q1_pad, node2=q2_pad, value=cfg.l_q_h)
+    qubit = differential_lc_qubit!(
+        draft,
+        "floating_qubit";
+        Cg1=cfg.c_g1_f,
+        Cg2=cfg.c_g2_f,
+        Cq=cfg.c_q_f,
+        Lq=cfg.l_q_h,
+        prefix="q",
+    )
+    xy = external_pin!(draft, "xy_node")
 
     if cfg.c_xy1_f > 0
-        add_component!(draft; name="C_xy1", node1=q1_pad, node2=xy_node, value=cfg.c_xy1_f)
+        couple_capacitive!(
+            draft,
+            pin(qubit, :pad1),
+            pin(xy, :node);
+            C=cfg.c_xy1_f,
+            id="xy_to_q1",
+        )
     end
     if cfg.c_xy2_f > 0
-        add_component!(draft; name="C_xy2", node1=q2_pad, node2=xy_node, value=cfg.c_xy2_f)
+        couple_capacitive!(
+            draft,
+            pin(qubit, :pad2),
+            pin(xy, :node);
+            C=cfg.c_xy2_f,
+            id="xy_to_q2",
+        )
     end
     if cfg.c_rq1_f > 0
-        add_component!(draft; name="C_rq1", node1=qwr_open_node, node2=q1_pad, value=cfg.c_rq1_f)
+        couple_capacitive!(
+            draft,
+            pin(qwr, :open),
+            pin(qubit, :pad1);
+            C=cfg.c_rq1_f,
+            id="qwr_to_q1",
+        )
     end
     if cfg.c_rq2_f > 0
-        add_component!(draft; name="C_rq2", node1=qwr_open_node, node2=q2_pad, value=cfg.c_rq2_f)
+        couple_capacitive!(
+            draft,
+            pin(qwr, :open),
+            pin(qubit, :pad2);
+            C=cfg.c_rq2_f,
+            id="qwr_to_q2",
+        )
     end
 
-    add_port_with_termination!(
-        draft;
+    terminated_port!(
+        draft,
+        pin(qubit, :pad1);
         port_number=1,
-        node=q1_pad,
         resistance_ohm=cfg.qubit_port_res_ohm,
-        prefix="qubit",
+        id="qubit_pad1_port",
     )
-    add_port_with_termination!(
-        draft;
+    terminated_port!(
+        draft,
+        pin(qubit, :pad2);
         port_number=2,
-        node=q2_pad,
         resistance_ohm=cfg.qubit_port_res_ohm,
-        prefix="qubit",
+        id="qubit_pad2_port",
     )
-    add_port_with_termination!(
-        draft;
+    terminated_port!(
+        draft,
+        pin(xy, :node);
         port_number=3,
-        node=xy_node,
         resistance_ohm=cfg.xy_port_res_ohm,
-        prefix="xy",
+        id="xy_port",
     )
+
+    symbolic_artifact = finalize_circuit(draft; renumber_nodes=false)
+    numeric_artifact = finalize_circuit(draft; renumber_nodes=true)
 
     return (
         draft=draft,
-        symbolic_netlist=finalize_to_josephson_netlist(draft; renumber_nodes=false),
-        numeric_netlist=finalize_to_josephson_netlist(draft; renumber_nodes=true),
+        symbolic_netlist=symbolic_artifact.netlist,
+        numeric_netlist=numeric_artifact.netlist,
+        symbolic_artifact=symbolic_artifact,
+        numeric_artifact=numeric_artifact,
         left_readout_spec=left_readout_spec,
         purcell_filter_spec=purcell_filter_spec,
         right_readout_spec=right_readout_spec,

@@ -39,7 +39,7 @@ export function SimulationResultStage({
     <WorkflowStageSection
       step={3}
       title="Simulation Result"
-      description="Browse the latest simulation result, inspect the current trace, and save it when you want to carry it forward."
+      description="Inspect saved simulation output."
       status={state}
     >
       {(errorMessage || (state.label !== "Completed" && state.label !== "Not started")) ? (
@@ -52,31 +52,22 @@ export function SimulationResultStage({
 
       {displayedSimulationStageAuthority ? (
         <>
-          <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  {attachedSimulationStageTask ? "Attached Run" : "Latest Run"}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {displayedSimulationTaskDetail?.progress.summary ??
-                    displayedSimulationStageAuthority.summary}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {simulationResultReady
-                    ? "This persisted result stays attached to the current page context and is ready for Post Processing."
-                    : "The explorer and save target appear as soon as the backend publishes the persisted result handoff."}
-                </p>
-              </div>
+          <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="min-w-0 text-sm leading-6 text-muted-foreground">
+                {displayedSimulationTaskDetail?.progress.summary ??
+                  displayedSimulationStageAuthority.summary}
+              </p>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <SurfaceTag tone="default">
-                  Task #{displayedSimulationStageAuthority.taskId}
+                  {attachedSimulationStageTask ? "Attached" : "Latest"} · Task #
+                  {displayedSimulationStageAuthority.taskId}
                 </SurfaceTag>
                 <SurfaceTag tone={taskStatusTone(displayedSimulationStageAuthority.status)}>
                   {formatSimulationTaskStatusLabel(displayedSimulationStageAuthority.status)}
                 </SurfaceTag>
                 <SurfaceTag tone={simulationResultReady ? "success" : "default"}>
-                  {simulationResultReady ? "Explorer ready" : "Preparing result"}
+                  {simulationResultReady ? "Ready" : "Pending"}
                 </SurfaceTag>
                 <StageTaskActions
                   task={displayedSimulationStageAuthority}
@@ -87,16 +78,6 @@ export function SimulationResultStage({
             </div>
           </div>
 
-          {displayedSimulationTaskDetail &&
-          (displayedSimulationTaskDetail.status === "queued" ||
-            displayedSimulationTaskDetail.status === "running") ? (
-            <StageNotice
-              tone="primary"
-              title="Live result refresh"
-              message="This stage refreshes every 2 seconds while the run is active, then attaches the saved result as soon as it is ready."
-            />
-          ) : null}
-
           {displayedSimulationTaskDetail && simulationResultReady ? (
             <SimulationResultExplorer
               task={displayedSimulationTaskDetail}
@@ -106,10 +87,15 @@ export function SimulationResultStage({
 
           {displayedSimulationTaskDetail && !simulationResultReady ? (
             <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-              Persisted refs and task result handles stay available after the result handoff is ready.
+              Result pending for task #{displayedSimulationTaskDetail.taskId}.
             </div>
           ) : null}
         </>
+      ) : null}
+      {!displayedSimulationStageAuthority ? (
+        <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4 text-sm text-muted-foreground">
+          No simulation result yet.
+        </div>
       ) : null}
     </WorkflowStageSection>
   );

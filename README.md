@@ -19,27 +19,22 @@
   - 使用同一個 shell，但改連到獨立的 backend server target
   - 需要明確啟動 server，並在 app 內輸入 target (`IP:Port` / origin) 後再進入 online flow
 
-!!! info "Contributor shorthand"
-    如果你只是想把 app 跑起來並開始操作，先用 `npm run platform:dev`。
-    這會啟動 repo 內的 frontend + local backend pairing，作為本機開發 baseline。
+如果你只是想把 app 跑起來並開始操作，root 只需要 `npm run start` / `npm run stop`。
+其他 install、test、build 指令都留在各 workspace 裡直接執行。
 
-### Platform Quick Start
+### App Quick Start
 
 ```bash
-# Install platform workspace dependencies
-npm run platform:install
+# Install prerequisites once
+uv sync
+cd backend && uv sync
+npm install --prefix frontend
 
-# Run platform checks from repo root
-npm run platform:check
+# Start frontend + app + workers
+npm run start
 
-# Build platform workspaces
-npm run platform:build
-
-# Start frontend + backend dev stack
-npm run platform:dev
-
-# Stop platform stack
-npm run platform:stop
+# Stop frontend + app + workers
+npm run stop
 ```
 
 ### Runtime Startup Paths
@@ -49,8 +44,8 @@ npm run platform:stop
 如果你要的是本機 baseline：
 
 ```bash
-# Repo-root orchestration: frontend + local backend
-npm run platform:dev
+# Repo-root orchestration: frontend + local app + workers
+npm run start
 ```
 
 常用入口：
@@ -104,14 +99,6 @@ uv run sc --help
 # Proof commands wired to sc-core
 uv run sc core preview-artifacts
 uv run sc circuit-definition inspect path/to/draft.circuit.yaml
-```
-
-### Legacy Runtime
-
-```bash
-# Legacy runtime remains separate
-./scripts/dev_start.sh
-./scripts/dev_stop.sh
 ```
 
 ## 📚 文件網站

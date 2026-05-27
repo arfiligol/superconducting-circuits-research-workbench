@@ -69,15 +69,6 @@ const schemdrawViewerSource = readFileSync(
   ),
   "utf8",
 );
-const schemdrawGuidanceCardSource = readFileSync(
-  fileURLToPath(
-    new URL(
-      "../src/features/circuit-schemdraw/components/schemdraw-guidance-card.tsx",
-      import.meta.url,
-    ),
-  ),
-  "utf8",
-);
 const schemdrawDownloadDialogSource = readFileSync(
   fileURLToPath(
     new URL(
@@ -919,9 +910,8 @@ describe("circuit schemdraw svg viewer helpers", () => {
 });
 
 describe("circuit schemdraw workspace source contracts", () => {
-  it("keeps linked schema context first, editor/preview as the primary row, then diagnostics and snapshot", () => {
+  it("keeps linked schema context first, editor/preview as the primary row, then issue disclosures", () => {
     const linkedIndex = schemdrawWorkspaceSource.indexOf("Linked Schema Context");
-    const guidanceIndex = schemdrawWorkspaceSource.indexOf("<SchemdrawGuidanceCard />");
     const editorIndex = schemdrawWorkspaceSource.indexOf("Schemdraw Source Editor");
     const previewIndex = schemdrawWorkspaceSource.indexOf("SVG Live Preview");
     const diagnosticsIndex = schemdrawWorkspaceSource.indexOf("Render Diagnostics");
@@ -930,16 +920,16 @@ describe("circuit schemdraw workspace source contracts", () => {
     expect(linkedIndex).toBeGreaterThan(-1);
     expect(editorIndex).toBeGreaterThan(linkedIndex);
     expect(previewIndex).toBeGreaterThan(editorIndex);
-    expect(guidanceIndex).toBeGreaterThan(previewIndex);
     expect(diagnosticsIndex).toBeGreaterThan(previewIndex);
-    expect(diagnosticsIndex).toBeGreaterThan(guidanceIndex);
     expect(snapshotIndex).toBeGreaterThan(diagnosticsIndex);
+    expect(schemdrawWorkspaceSource).not.toContain("<SchemdrawGuidanceCard />");
   });
 
-  it("renders the linked schema snapshot as a read-only code surface instead of a text blob", () => {
+  it("renders the linked schema snapshot as a read-only code surface inside a disclosure", () => {
     expect(schemdrawWorkspaceSource).toContain("Linked Schema Snapshot");
     expect(schemdrawWorkspaceSource).toContain("editable={false}");
     expect(schemdrawWorkspaceSource).toContain("extensions={[json()]}");
+    expect(schemdrawWorkspaceSource).toContain("hasLinkedSchemaIssues");
     expect(schemdrawWorkspaceSource).not.toContain("<pre className=\"overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6 text-muted-foreground\">");
   });
 
@@ -965,13 +955,10 @@ describe("circuit schemdraw workspace source contracts", () => {
     expect(schemdrawViewerSource).toContain("dangerouslySetInnerHTML");
   });
 
-  it("keeps guidance compact and download choices inside one focused dialog", () => {
-    expect(schemdrawGuidanceCardSource).toContain("Writing Rules");
-    expect(schemdrawGuidanceCardSource).toContain("build_drawing(relation)");
-    expect(schemdrawGuidanceCardSource).toContain("schemdraw.Drawing");
-    expect(schemdrawGuidanceCardSource).toContain("Avoid opaque helper magic");
-    expect(schemdrawGuidanceCardSource).toContain("backend response");
-    expect(schemdrawGuidanceCardSource).not.toContain("tutorial");
+  it("removes in-page guidance copy and keeps download choices inside one focused dialog", () => {
+    expect(schemdrawWorkspaceSource).not.toContain("Writing Rules");
+    expect(schemdrawWorkspaceSource).not.toContain("AI assistants");
+    expect(schemdrawWorkspaceSource).not.toContain("Avoid opaque helper magic");
     expect(schemdrawDownloadDialogSource).toContain("Download Preview");
     expect(schemdrawDownloadDialogSource).toContain("SVG");
     expect(schemdrawDownloadDialogSource).toContain("PNG");
@@ -991,10 +978,10 @@ describe("circuit schemdraw workspace boundaries", () => {
     expect(workspaceSource).toContain("No linked schema");
     expect(workspaceSource).toContain("Edit source, render again");
     expect(workspaceSource).toContain("Stale preview");
-    expect(workspaceSource).toContain("showDebugDisclosure");
+    expect(workspaceSource).toContain("showTechnicalDisclosure");
     expect(workspaceSource).toContain("Transport failure");
     expect(workspaceSource).toContain("Error message");
-    expect(workspaceSource).toContain("Debug detail");
+    expect(workspaceSource).toContain("Technical details");
     expect(workspaceSource).toContain("EditorHintNotice");
     expect(workspaceSource).toContain("sourceEditorExtensions");
     expect(workspaceSource).toContain("relationEditorExtensions");

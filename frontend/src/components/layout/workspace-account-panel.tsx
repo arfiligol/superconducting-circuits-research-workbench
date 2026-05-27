@@ -120,7 +120,7 @@ export function WorkspaceAccountPanel({
         onOpenChange(false);
       }}
       title="Account"
-      subtitle="Preferences first, plus mode-aware account and connection actions."
+      subtitle="Preferences and account actions."
       eyebrow={null}
       variant="account"
       className="max-w-[448px]"
@@ -164,9 +164,6 @@ export function WorkspaceAccountPanel({
               className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
               placeholder="http://127.0.0.1:8000"
             />
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Account can start runtime-mode entry, but queue, workspace, and dataset management stay in Global Context.
-            </p>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -240,7 +237,7 @@ export function WorkspaceAccountPanel({
               Preferences
             </p>
             <p className="mt-2 text-sm text-foreground/72 dark:text-foreground/74">
-              App-level controls stay lightweight here.
+              App-level controls.
             </p>
           </div>
 

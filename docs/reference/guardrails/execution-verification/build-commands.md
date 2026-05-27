@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的 frontend、backend、desktop、CLI、docs 與 repo-root orchestration 常用指令。
-version: v2.4.0
-last_updated: 2026-03-21
+version: v2.5.0
+last_updated: 2026-05-27
 updated_by: codex
 ---
 
@@ -41,6 +41,8 @@ platform foundation 必須使用獨立於 legacy UI runtime 的 entrypoints。
 
 ```bash
 uv sync
+cd backend && uv sync
+npm install --prefix frontend
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ./scripts/prepare_docs_locales.sh
 ```
@@ -50,11 +52,8 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 !!! info "Use these when you want repo-level orchestration"
 
 ```bash
-npm run platform:install
-npm run platform:check
-npm run platform:build
-npm run platform:dev
-npm run platform:stop
+npm run start
+npm run stop
 ```
 
 ## Workspace Commands
@@ -109,7 +108,7 @@ npm run platform:stop
 | app process | `uv run sc-app` |
 | simulation lane worker | `uv run sc-worker-simulation` |
 | characterization lane worker | `uv run sc-worker-characterization` |
-| optional repo helper | `npm run platform:dev` 或 `./scripts/platform_start.sh` 目前可協助拉起 frontend/backend shell，但不取代 Redis + worker bring-up |
+| optional repo helper | `npm run start` 或 `./scripts/start.sh` 會在 Redis 可連線後拉起 frontend、app 與兩條 worker lanes |
 
 !!! example "Minimal local runtime bring-up"
     ```bash
@@ -134,13 +133,13 @@ npm run platform:stop
 
 | Concern | Command / expectation |
 | --- | --- |
-| repo helper processes | `npm run platform:stop` 或 `./scripts/platform_stop.sh`（目前只處理 frontend/backend helper processes） |
+| repo helper processes | `npm run stop` 或 `./scripts/stop.sh` |
 | worker processes | 在各自 shell 中停止 `sc-worker-simulation`、`sc-worker-characterization`，或以 PID-aware tooling 關閉 |
 | Redis | 依本機 Redis 管理方式停止；repo 目前沒有代管 Redis 的 stop script |
 
-!!! tip "Helper scripts are partial helpers"
-    `scripts/platform_start.sh`、`scripts/platform_stop.sh`、`scripts/platform_check.sh` 目前主要覆蓋 frontend/backend shell baseline。
-    若你要驗證 isolated worker topology，仍必須額外確認 Redis 與兩條 worker lanes。
+!!! tip "Helper scripts manage app processes only"
+    `scripts/start.sh` 與 `scripts/stop.sh` 只管理 frontend、app 與 workers。
+    Redis 仍是外部 prerequisite，不由 repo script 啟停。
 
 ## Docs
 
@@ -164,11 +163,8 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 ```markdown
 ## Run / Build Commands
 - **Repo-root orchestration**:
-    - `npm run platform:install`
-    - `npm run platform:check`
-    - `npm run platform:build`
-    - `npm run platform:dev`
-    - `npm run platform:stop`
+    - `npm run start`
+    - `npm run stop`
 - **Python install**: `uv sync`
 - **Julia install**: `julia --project=. -e 'using Pkg; Pkg.instantiate()'`
 - **Frontend**:

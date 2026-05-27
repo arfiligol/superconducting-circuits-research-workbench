@@ -5,8 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "==> Exporting OpenAPI spec from backend..."
-cd "$REPO_ROOT"
-npm run openapi:export
+(cd "$REPO_ROOT/backend" && uv run python ../scripts/export_openapi.py)
 
 echo "==> Generating TypeScript types..."
 cd "$REPO_ROOT/frontend"

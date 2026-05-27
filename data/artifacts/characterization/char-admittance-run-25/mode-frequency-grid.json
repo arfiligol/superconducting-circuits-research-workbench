@@ -1,0 +1,68 @@
+{
+  "contract_version": "admittance_member_phase1_v1",
+  "input_axis_key": "selected_scope",
+  "input_axis_label": "Selected trace bundle",
+  "input_axis_unit": null,
+  "input_axis_values": [
+    0.0
+  ],
+  "members": [
+    {
+      "member_key": "circuit_simulation:trace_task_484_y-dm-in-l-jun-13-157895-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_3_z0_50",
+      "label": "circuit simulation \u00b7 Y_{dm, in} \u00b7 L_jun = 13.157895 nH (imaginary)",
+      "trace_id": "trace_task_484_y-dm-in-l-jun-13-157895-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_3_z0_50",
+      "source_kind": "circuit_simulation",
+      "trace_mode_group": "base",
+      "parameter": "Y_{dm, in} \u00b7 L_jun = 13.157895 nH",
+      "representation": "imaginary",
+      "provenance_summary": "Published from post-processing task 484 (PTC Y11)"
+    },
+    {
+      "member_key": "circuit_simulation:trace_task_484_y-dm-in-l-jun-18-421053-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_8_z0_50",
+      "label": "circuit simulation \u00b7 Y_{dm, in} \u00b7 L_jun = 18.421053 nH (imaginary)",
+      "trace_id": "trace_task_484_y-dm-in-l-jun-18-421053-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_8_z0_50",
+      "source_kind": "circuit_simulation",
+      "trace_mode_group": "base",
+      "parameter": "Y_{dm, in} \u00b7 L_jun = 18.421053 nH",
+      "representation": "imaginary",
+      "provenance_summary": "Published from post-processing task 484 (PTC Y11)"
+    }
+  ],
+  "frequency_grid_by_member": [
+    [
+      [
+        5.806053400000001,
+        7.1920688
+      ]
+    ],
+    [
+      [
+        7.1920688
+      ]
+    ]
+  ],
+  "residual_rms_by_member": [
+    [
+      7.055284868560614e-07
+    ],
+    [
+      5.039489184810812e-07
+    ]
+  ],
+  "fit_window_ghz": [
+    5.8,
+    7.2
+  ],
+  "masked_input_indices_by_member": [
+    [],
+    []
+  ],
+  "diagnostics": [
+    {
+      "severity": "info",
+      "code": "fit_residual_rms_evaluated",
+      "message": "All persisted input positions stay within the configured residual tolerance.",
+      "blocking": false
+    }
+  ]
+}

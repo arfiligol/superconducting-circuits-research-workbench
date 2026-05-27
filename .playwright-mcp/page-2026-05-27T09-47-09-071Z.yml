@@ -1,0 +1,103 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - button "Toggle navigation menu" [ref=e5] [cursor=pointer]:
+          - img [ref=e6]
+        - generic [ref=e7]:
+          - generic [ref=e8]:
+            - paragraph [ref=e9]: SUPERCONDUCTING CIRCUITS
+            - generic [ref=e10]:
+              - generic [ref=e11]: Workspace
+              - img [ref=e12]
+              - paragraph [ref=e14]: Dashboard
+          - generic [ref=e15]:
+            - button "Runtime Mode Online Mode" [ref=e16] [cursor=pointer]:
+              - generic [ref=e17]: Runtime Mode
+              - generic [ref=e18]: Online Mode
+            - button "Active Dataset No active dataset" [ref=e19] [cursor=pointer]:
+              - generic [ref=e20]: Active Dataset
+              - generic [ref=e21]: No active dataset
+            - button "Open global context panel" [ref=e22] [cursor=pointer]:
+              - img [ref=e24]
+            - button "Open account panel" [ref=e26] [cursor=pointer]:
+              - img [ref=e28]
+              - generic [ref=e30]:
+                - generic [ref=e31]: Connection warning
+                - generic [ref=e32]: Recover
+    - generic [ref=e33]:
+      - complementary [ref=e34]:
+        - generic [ref=e36]:
+          - generic [ref=e37]:
+            - paragraph [ref=e39]: Workspace
+            - navigation [ref=e40]:
+              - link "Dashboard" [ref=e41] [cursor=pointer]:
+                - /url: /dashboard
+                - generic [ref=e42]:
+                  - img [ref=e44]
+                  - generic [ref=e50]: Dashboard
+              - link "Dataset" [ref=e51] [cursor=pointer]:
+                - /url: /dataset
+                - generic [ref=e52]:
+                  - img [ref=e54]
+                  - generic [ref=e59]: Dataset
+              - link "Tasks" [ref=e60] [cursor=pointer]:
+                - /url: /tasks
+                - generic [ref=e61]:
+                  - img [ref=e63]
+                  - generic [ref=e68]: Tasks
+          - generic [ref=e69]:
+            - paragraph [ref=e71]: Pipeline
+            - navigation [ref=e72]:
+              - link "Data Ingestion" [ref=e73] [cursor=pointer]:
+                - /url: /data-ingestion
+                - generic [ref=e74]:
+                  - img [ref=e76]
+                  - generic [ref=e80]: Data Ingestion
+              - link "Raw Data" [ref=e81] [cursor=pointer]:
+                - /url: /raw-data
+                - generic [ref=e82]:
+                  - img [ref=e84]
+                  - generic [ref=e89]: Raw Data
+              - link "Characterization" [ref=e90] [cursor=pointer]:
+                - /url: /characterization
+                - generic [ref=e91]:
+                  - img [ref=e93]
+                  - generic [ref=e99]: Characterization
+          - generic [ref=e100]:
+            - paragraph [ref=e102]: Circuit Simulation
+            - navigation [ref=e103]:
+              - link "Schemas" [ref=e104] [cursor=pointer]:
+                - /url: /schemas
+                - generic [ref=e105]:
+                  - img [ref=e107]
+                  - generic [ref=e111]: Schemas
+              - link "Schemdraw" [ref=e112] [cursor=pointer]:
+                - /url: /circuit-schemdraw
+                - generic [ref=e113]:
+                  - img [ref=e115]
+                  - generic [ref=e122]: Schemdraw
+              - link "Simulation" [ref=e123] [cursor=pointer]:
+                - /url: /circuit-simulation
+                - generic [ref=e124]:
+                  - img [ref=e126]
+                  - generic [ref=e130]: Simulation
+      - main [ref=e132]:
+        - generic [ref=e134]:
+          - generic [ref=e137]:
+            - paragraph [ref=e138]: Workspace Dashboard
+            - heading "Dashboard" [level=2] [ref=e139]
+            - paragraph [ref=e140]: Dashboard keeps an overview-first summary of dataset availability and tagged core metrics.
+          - generic [ref=e141]:
+            - generic [ref=e142]:
+              - paragraph [ref=e143]: Visible Datasets
+              - paragraph [ref=e144]: Loading
+            - generic [ref=e145]:
+              - paragraph [ref=e146]: Tagged Metrics
+              - paragraph [ref=e147]: "0"
+          - generic [ref=e148]:
+            - heading "Tagged Core Metrics" [level=3] [ref=e151]
+            - generic [ref=e153]: No tagged core metrics are available yet.
+  - button "Open Next.js Dev Tools" [ref=e159] [cursor=pointer]:
+    - img [ref=e160]
+  - alert [ref=e163]

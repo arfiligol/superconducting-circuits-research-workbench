@@ -6,9 +6,10 @@ import {
   useRouter,
   useSearchParams,
 } from "next/navigation";
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import {
+  ChevronDown,
   LoaderCircle,
   PlugZap,
   RefreshCw,
@@ -143,27 +144,6 @@ const laneOptions: readonly AppSelectOption[] = [
   { value: "characterization", label: formatTaskLaneLabel("characterization") },
 ];
 
-function ActionGateChip({
-  label,
-  enabled,
-}: Readonly<{
-  label: string;
-  enabled: boolean;
-}>) {
-  return (
-    <span
-      className={cx(
-        "rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
-        enabled
-          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-          : "border-border bg-background text-muted-foreground",
-      )}
-    >
-      {label}
-    </span>
-  );
-}
-
 function DetailActionButton({
   label,
   onClick,
@@ -192,6 +172,38 @@ function DetailActionButton({
       <Icon className="h-4 w-4" />
       {label}
     </button>
+  );
+}
+
+function TasksDisclosure({
+  title,
+  eyebrow,
+  meta,
+  children,
+}: Readonly<{
+  title: string;
+  eyebrow?: string;
+  meta?: string;
+  children: ReactNode;
+}>) {
+  return (
+    <details className="group rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 marker:hidden">
+        <span className="min-w-0">
+          {eyebrow ? (
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              {eyebrow}
+            </span>
+          ) : null}
+          <span className="mt-1 block text-sm font-semibold text-foreground">{title}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          {meta ? <span>{meta}</span> : null}
+          <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+        </span>
+      </summary>
+      <div className="mt-4 space-y-4">{children}</div>
+    </details>
   );
 }
 
@@ -383,36 +395,34 @@ export function TasksWorkspace() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[1.15rem] border border-border bg-card px-5 py-5 shadow-[0_12px_30px_rgba(0,0,0,0.08)]">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/80 pb-4">
+      <section className="rounded-[1rem] border border-border bg-card px-5 py-4 shadow-[0_10px_24px_rgba(0,0,0,0.07)]">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Extended Queue Surface
             </p>
             <h1 className="mt-2 text-2xl font-semibold text-foreground">Tasks</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Browse longer queue history, inspect task detail and event timeline, and review lane
-              runtime summary without pushing task dashboards back into workflow pages.
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Queue browse with selected task detail. Diagnostics stay folded until needed.
             </p>
           </div>
-        </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <SurfaceStat label="Visible Tasks" value={String(tasksSummary.visibleCount)} tone="primary" />
-          <SurfaceStat label="Active" value={String(tasksSummary.activeCount)} />
-          <SurfaceStat label="Result Ready" value={String(tasksSummary.resultReadyCount)} />
-          <SurfaceStat label="Failed" value={String(tasksSummary.failedCount)} />
-          <SurfaceStat
-            label="Worker Lanes"
-            value={String(tasksSummary.workerLaneCount)}
-            tone={tasksSummary.workerLaneCount > 0 ? "primary" : "default"}
-          />
+          <div className="grid w-full gap-2 sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-5">
+            <SurfaceStat label="Visible Tasks" value={String(tasksSummary.visibleCount)} tone="primary" />
+            <SurfaceStat label="Active" value={String(tasksSummary.activeCount)} />
+            <SurfaceStat label="Result Ready" value={String(tasksSummary.resultReadyCount)} />
+            <SurfaceStat label="Failed" value={String(tasksSummary.failedCount)} />
+            <SurfaceStat
+              label="Worker Lanes"
+              value={String(tasksSummary.workerLaneCount)}
+              tone={tasksSummary.workerLaneCount > 0 ? "primary" : "default"}
+            />
+          </div>
         </div>
       </section>
 
       <SurfacePanel
         title="Browse Filters"
-        description="Keep queue browse state bound to the URL so refresh and shared links reopen the same task, scope, lane, and status context."
       >
         <form
           className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.75fr)_minmax(0,0.75fr)_minmax(0,0.75fr)]"
@@ -501,7 +511,6 @@ export function TasksWorkspace() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)]">
         <SurfacePanel
           title="Queue History"
-          description="Recent persisted tasks stay sortable by backend authority, with current filters echoed in the URL instead of page-local memory."
           actions={
             <button
               type="button"
@@ -515,7 +524,7 @@ export function TasksWorkspace() {
             </button>
           }
         >
-          <div className="overflow-hidden rounded-[1rem] border border-border/80">
+          <div className="overflow-x-auto rounded-[1rem] border border-border/80">
             <table className="min-w-full divide-y divide-border text-sm">
               <thead className="bg-card">
                 <tr className="text-left text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -526,7 +535,6 @@ export function TasksWorkspace() {
                   <th className="px-4 py-3">Owner</th>
                   <th className="px-4 py-3">Updated</th>
                   <th className="px-4 py-3">Result</th>
-                  <th className="px-4 py-3">Allowed Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-surface">
@@ -594,20 +602,12 @@ export function TasksWorkspace() {
                             {formatTaskResultAvailabilityLabel(task.resultAvailability)}
                           </SurfaceTag>
                         </td>
-                        <td className="px-4 py-3 align-top">
-                          <div className="flex flex-wrap gap-2">
-                            <ActionGateChip label="Attach" enabled={task.allowedActions.attach} />
-                            <ActionGateChip label="Cancel" enabled={task.allowedActions.cancel} />
-                            <ActionGateChip label="Terminate" enabled={task.allowedActions.terminate} />
-                            <ActionGateChip label="Retry" enabled={task.allowedActions.retry} />
-                          </div>
-                        </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-sm text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-6 text-sm text-muted-foreground">
                       {queueQuery.isLoading
                         ? "Loading persisted queue rows..."
                         : "No tasks match the current filter set."}
@@ -622,7 +622,6 @@ export function TasksWorkspace() {
         <div className="space-y-5">
           <SurfacePanel
             title="Task Detail"
-            description="Inspect persisted lifecycle, lineage, result handoff, and setup snapshots for the selected task."
             actions={
               selectedTaskId ? (
                 <Link
@@ -658,10 +657,17 @@ export function TasksWorkspace() {
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <div className="rounded-[0.9rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                      <p className="font-medium text-foreground">
-                        {selectedTaskResultHandoff.title}
+                      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        Result Handoff
                       </p>
-                      <p className="mt-2">{selectedTaskResultHandoff.message}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <SurfaceTag tone={selectedTaskResultHandoff.tone}>
+                          {selectedTaskResultHandoff.title}
+                        </SurfaceTag>
+                        <SurfaceTag tone={resolveTaskResultAvailabilityTone(selectedTask.resultAvailability)}>
+                          {formatTaskResultAvailabilityLabel(selectedTask.resultAvailability)}
+                        </SurfaceTag>
+                      </div>
                     </div>
                     <div className="rounded-[0.9rem] border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
                       <p className="font-medium text-foreground">Lineage</p>
@@ -759,32 +765,35 @@ export function TasksWorkspace() {
                   ) : null}
                 </div>
 
-                <TaskLifecyclePanel task={selectedTask} summary={selectedTaskLifecycle} />
+                <TasksDisclosure
+                  title="Execution, payloads, and events"
+                  eyebrow="Detail drill-down"
+                  meta={setupSnapshot ? "Includes setup snapshot" : "Open"}
+                >
+                  <TaskLifecyclePanel task={selectedTask} summary={selectedTaskLifecycle} />
 
-                {setupSnapshot ? (
-                  <SurfacePanel
-                    title={setupSnapshot.label}
-                    description="Persisted setup snapshots stay visible here so task inspection does not depend on workflow-page local form state."
-                  >
-                    <pre className="overflow-x-auto rounded-[0.95rem] border border-border bg-background px-4 py-4 text-xs leading-6 text-foreground">
-                      {setupSnapshot.value}
-                    </pre>
-                  </SurfacePanel>
-                ) : null}
+                  {setupSnapshot ? (
+                    <SurfacePanel title={setupSnapshot.label}>
+                      <pre className="overflow-x-auto rounded-[0.95rem] border border-border bg-background px-4 py-4 text-xs leading-6 text-foreground">
+                        {setupSnapshot.value}
+                      </pre>
+                    </SurfacePanel>
+                  ) : null}
 
-                <TaskResultPanel
-                  task={selectedTask}
-                  summary={selectedTaskResultSurface}
-                  showTasksPageLink={false}
-                />
+                  <TaskResultPanel
+                    task={selectedTask}
+                    summary={selectedTaskResultSurface}
+                    showTasksPageLink={false}
+                  />
 
-                <TaskEventHistoryPanel
-                  title="Event Timeline"
-                  description="Append-only persisted task events, ordered for extended queue inspection."
-                  task={selectedTaskWithEvents}
-                  narrative="This timeline stays bound to persisted task events so queue recovery, retries, and runtime control requests remain auditable."
-                  emptyMessage="No persisted task events were recorded for this task."
-                />
+                  <TaskEventHistoryPanel
+                    title="Event Timeline"
+                    description="Append-only persisted task events."
+                    task={selectedTaskWithEvents}
+                    narrative="Persisted events for recovery, retries, and runtime control requests."
+                    emptyMessage="No persisted task events were recorded for this task."
+                  />
+                </TasksDisclosure>
               </div>
             ) : detailQuery.isLoading ? (
               <div className="flex items-center gap-3 rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
@@ -800,9 +809,10 @@ export function TasksWorkspace() {
         </div>
       </div>
 
-      <SurfacePanel
+      <TasksDisclosure
         title="Worker / Lane Inspection"
-        description="This extended surface goes deeper than the header by pairing lane summary with current queue bindings, while keeping unavailable processor-heartbeat detail honest."
+        eyebrow="Diagnostics"
+        meta={`${workerInspectionRows.length} lanes`}
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {workerInspectionRows.length > 0 ? (
@@ -883,11 +893,10 @@ export function TasksWorkspace() {
           <p className="font-medium text-foreground">Processor heartbeat detail</p>
           <p className="mt-2">
             The current backend `/tasks` contract only exposes lane summary, not per-processor
-            heartbeat rows. This page keeps lane inspection truthful and backend-owned instead of
-            inventing processor ids, runtime metadata, or heartbeat freshness in the frontend.
+            heartbeat rows.
           </p>
         </div>
-      </SurfacePanel>
+      </TasksDisclosure>
     </div>
   );
 }

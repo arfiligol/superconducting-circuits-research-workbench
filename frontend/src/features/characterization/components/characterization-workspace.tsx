@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, LoaderCircle, Play, Search } from "lucide-react";
+import { LoaderCircle, Play, Search } from "lucide-react";
 
 import { CharacterizationResultExplorer } from "@/features/characterization/components/characterization-result-explorer";
 import { useCharacterizationRouteState } from "@/features/characterization/hooks/use-characterization-route-state";
@@ -242,6 +242,38 @@ function SectionNotice({
   );
 }
 
+function SecondaryDisclosure({
+  title,
+  meta,
+  children,
+  defaultOpen = false,
+  className,
+}: Readonly<{
+  title: string;
+  meta?: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+}>) {
+  return (
+    <details
+      open={defaultOpen}
+      className={cx(
+        "rounded-[0.95rem] border border-border bg-background px-4 py-3",
+        className,
+      )}
+    >
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 text-left marker:hidden">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          {title}
+        </span>
+        {meta ? <span className="text-xs text-muted-foreground">{meta}</span> : null}
+      </summary>
+      <div className="mt-4">{children}</div>
+    </details>
+  );
+}
+
 function pipelineExplanation(analysis: CharacterizationAnalysisRegistryRow | null, selectedTraceCount: number) {
   if (!analysis) {
     return {
@@ -287,7 +319,7 @@ function latestRunStatusDetail(activeTask: ReturnType<typeof useCharacterization
   if (activeTask.resultHandoff?.availability === "ready") {
     return {
       title: "Result ready",
-      message: `Updated ${activeTask.progress.updatedAt}. The latest result is ready in Result Preview.`,
+      message: `Updated ${activeTask.progress.updatedAt}. The latest result is ready below.`,
     };
   }
 
@@ -503,7 +535,12 @@ export function CharacterizationWorkspace() {
         : "",
     );
     setSelectedDesignatedMetric(firstDesignatedMetric?.metricKey ?? "");
-  }, [resultDetail?.resultId, resultExplorer.selectedArtifactId]);
+  }, [
+    resultDetail?.identifySurface.designatedMetrics,
+    resultDetail?.identifySurface.sourceParameters,
+    resultDetail?.resultId,
+    resultExplorer.selectedArtifactId,
+  ]);
 
   useEffect(() => {
     setSweepAxisFilter("");
@@ -627,272 +664,244 @@ export function CharacterizationWorkspace() {
         </SurfacePanel>
       ) : (
         <div className="space-y-6">
-          <SurfacePanel
-            title="Design / Source Scope"
-            description="Choose the design and raw trace scope that anchor the derived collection review."
-          >
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <SurfaceTag tone="default">{activeDatasetState.activeDataset.name}</SurfaceTag>
-                <SurfaceTag tone="default">{activeDatasetState.activeDataset.datasetId}</SurfaceTag>
-                {selectedDesign ? (
-                  <SurfaceTag
-                    tone={selectedDesign.compare_readiness === "ready" ? "success" : "default"}
-                  >
-                    {selectedDesign.compare_readiness}
-                  </SurfaceTag>
-                ) : null}
-              </div>
-
-              <AppSelectField
-                label="Design"
-                value={selectedDesignId ?? ""}
-                onChange={setSelectedDesignId}
-                options={designs.map((design) => ({
-                  value: design.design_id,
-                  label: design.name,
-                  description: `${design.trace_count} traces · ${formatCoverageLabel(
-                    design.source_coverage,
-                  )}`,
-                }))}
-                placeholder={isDesignsLoading ? "Loading designs" : "Select a design"}
-              />
-
-              {selectedDesign ? (
-                <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <SurfaceTag tone="default">{selectedDesign.design_id}</SurfaceTag>
-                    <p className="text-sm font-medium text-foreground">
-                      {selectedDesign.trace_count} traces in this design scope
-                    </p>
-                  </div>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    {formatCoverageLabel(selectedDesign.source_coverage)}
-                  </p>
-                </div>
-              ) : null}
-              {designsErrorNotice ? (
-                <SectionNotice title={designsErrorNotice.summary} detail={designsErrorNotice.detail} />
-              ) : null}
-
-              <div className="rounded-[1rem] border border-border bg-background px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Trace Selection
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {traceSelectionSummary}
-                      {visibleTraces.length !== traces.length ? ` · ${visibleTraces.length} shown` : ""}
-                      {visibleSelectedTraceCount > 0 &&
-                      visibleSelectedTraceCount !== selectedTraceIds.length
-                        ? ` · ${visibleSelectedTraceCount} shown selected`
-                        : ""}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <SurfaceActionButton
-                      type="button"
-                      onClick={handleSelectAllVisibleTraces}
-                      className="px-3 py-1.5 text-xs"
+          <div className="grid gap-6 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,0.9fr)_minmax(0,1.15fr)]">
+            <SurfacePanel
+              title="Design Scope"
+              description="Choose the design and trace scope for this run."
+            >
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <SurfaceTag tone="default">{activeDatasetState.activeDataset.name}</SurfaceTag>
+                  <SurfaceTag tone="default">{activeDatasetState.activeDataset.datasetId}</SurfaceTag>
+                  {selectedDesign ? (
+                    <SurfaceTag
+                      tone={selectedDesign.compare_readiness === "ready" ? "success" : "default"}
                     >
-                      All
-                    </SurfaceActionButton>
-                    <SurfaceActionButton
-                      type="button"
-                      onClick={handleSelectBaseVisibleTraces}
-                      className="px-3 py-1.5 text-xs"
-                    >
-                      Base
-                    </SurfaceActionButton>
-                    <SurfaceActionButton
-                      type="button"
-                      onClick={handleClearTraceSelection}
-                      className="px-3 py-1.5 text-xs"
-                    >
-                      Clear
-                    </SurfaceActionButton>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1.3fr)]">
-                  {sweepAxisOptions.length > 0 ? (
-                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                      <p className="mb-3 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Sweep Axis
-                      </p>
-                      <AppInlineSelect
-                        ariaLabel="Characterization sweep axis filter"
-                        value={sweepAxisFilter}
-                        onChange={setSweepAxisFilter}
-                        options={[
-                          { value: "", label: "All sweep axes" },
-                          ...sweepAxisOptions.map((axis) => ({
-                            value: axis,
-                            label: axis,
-                          })),
-                        ]}
-                      />
-                    </div>
+                      {selectedDesign.compare_readiness}
+                    </SurfaceTag>
                   ) : null}
-
-                  {collectionOptions.length > 0 ? (
-                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                      <p className="mb-3 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Collection Hint
-                      </p>
-                      <AppInlineSelect
-                        ariaLabel="Characterization trace collection filter"
-                        value={collectionFilter}
-                        onChange={setCollectionFilter}
-                        options={[
-                          { value: "", label: "All collections" },
-                          ...collectionOptions.map((option) => ({
-                            value: option.value,
-                            label: option.label,
-                          })),
-                        ]}
-                      />
-                    </div>
-                  ) : null}
-
-                  <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Derived Collection Hint
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Sweep-aware grouping stays backend-derived. These filters help you review the selected scope without inventing frontend-owned scientific meaning.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {sweepAxisOptions.map((axis) => (
-                        <SurfaceTag key={axis} tone="default">
-                          {axis}
-                        </SurfaceTag>
-                      ))}
-                      {collectionOptions.slice(0, 4).map((option) => (
-                        <SurfaceTag key={option.value} tone="default">
-                          {option.label}
-                        </SurfaceTag>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
-                <div className="mt-4 overflow-x-auto rounded-[0.95rem] border border-border">
-                  <table className="min-w-full table-fixed text-left text-sm">
-                    <thead className="bg-surface text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      <tr>
-                        <th className="w-14 px-3 py-3">Use</th>
-                        <th className="min-w-[220px] px-3 py-3">Trace</th>
-                        <th className="w-28 px-3 py-3">Family</th>
-                        <th className="w-28 px-3 py-3">View</th>
-                        <th className="w-24 px-3 py-3">Source</th>
-                        <th className="w-24 px-3 py-3">Mode</th>
-                        <th className="w-52 px-3 py-3">Sweep / Collection</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border bg-background">
-                      {visibleTraces.map((trace) => {
-                        const isSelected = selectedTraceIds.includes(trace.trace_id);
-                        return (
-                          <tr
-                            key={trace.trace_id}
-                            className={cx(
-                              "cursor-pointer transition hover:bg-primary/[0.05]",
-                              isSelected && "bg-primary/[0.08]",
-                            )}
-                            onClick={() => {
-                              toggleTraceSelection(trace.trace_id);
-                            }}
-                          >
-                            <td className="px-3 py-3 align-top">
-                              <input
-                                checked={isSelected}
-                                readOnly
-                                type="checkbox"
-                                className="mt-1 h-4 w-4 rounded border-border text-primary"
-                              />
-                            </td>
-                            <td className="px-3 py-3 align-top">
-                              <p className="font-medium text-foreground">{trace.parameter}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">{trace.trace_id}</p>
-                              <p className="mt-2 text-xs text-muted-foreground">
-                                {trace.provenance_summary}
-                              </p>
-                            </td>
-                            <td className="px-3 py-3 align-top text-muted-foreground">
-                              {trace.family.replaceAll("_", " ")}
-                            </td>
-                            <td className="px-3 py-3 align-top text-muted-foreground">
-                              {formatRepresentationLabel(trace.representation)}
-                            </td>
-                            <td className="px-3 py-3 align-top text-muted-foreground">
-                              {formatSourceLabel(trace.source_kind)}
-                            </td>
-                            <td className="px-3 py-3 align-top text-muted-foreground">
-                              {formatModeLabel(trace.trace_mode_group)}
-                            </td>
-                            <td className="px-3 py-3 align-top">
-                              <div className="space-y-2">
-                                <div className="flex flex-wrap gap-2">
-                                  {trace.availableSweepAxes.length > 0 ? (
-                                    trace.availableSweepAxes.map((axis) => (
-                                      <SurfaceTag key={`${trace.trace_id}-${axis}`} tone="default">
-                                        {axis}
-                                      </SurfaceTag>
-                                    ))
-                                  ) : (
-                                    <SurfaceTag tone="default">No sweep axis</SurfaceTag>
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground">{trace.axesSummary}</p>
-                                {trace.collectionProjection ? (
-                                  <p className="text-xs text-muted-foreground">
-                                    {trace.collectionProjection.label} · {trace.collectionProjection.summary}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {!isTracesLoading && visibleTraces.length === 0 ? (
-                  <p className="mt-4 rounded-[0.95rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                    No traces match the current design scope and sweep-aware filters yet.
-                  </p>
-                ) : null}
-                {tracesErrorNotice ? (
-                  <div className="mt-4">
-                    <SectionNotice title={tracesErrorNotice.summary} detail={tracesErrorNotice.detail} />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel
-            title="Data Collection Review"
-            description="Review the backend-derived scientific collection before starting any analysis run."
-          >
-            <div className="space-y-4">
-              {analysisRegistryErrorNotice ? (
-                <SectionNotice
-                  title={analysisRegistryErrorNotice.summary}
-                  detail={analysisRegistryErrorNotice.detail}
+                <AppSelectField
+                  label="Design"
+                  value={selectedDesignId ?? ""}
+                  onChange={setSelectedDesignId}
+                  options={designs.map((design) => ({
+                    value: design.design_id,
+                    label: design.name,
+                    description: `${design.trace_count} traces · ${formatCoverageLabel(
+                      design.source_coverage,
+                    )}`,
+                  }))}
+                  placeholder={isDesignsLoading ? "Loading designs" : "Select a design"}
                 />
-              ) : null}
 
-              {dataCollectionReview ? (
-                <>
+                {selectedDesign ? (
+                  <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <SurfaceTag tone="default">{selectedDesign.design_id}</SurfaceTag>
+                      <SurfaceTag tone="default">
+                        {selectedDesign.trace_count} traces
+                      </SurfaceTag>
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      {formatCoverageLabel(selectedDesign.source_coverage)}
+                    </p>
+                  </div>
+                ) : null}
+                {designsErrorNotice ? (
+                  <SectionNotice title={designsErrorNotice.summary} detail={designsErrorNotice.detail} />
+                ) : null}
+
+                <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Trace Scope
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {traceSelectionSummary}
+                        {visibleTraces.length !== traces.length ? ` · ${visibleTraces.length} shown` : ""}
+                        {visibleSelectedTraceCount > 0 &&
+                        visibleSelectedTraceCount !== selectedTraceIds.length
+                          ? ` · ${visibleSelectedTraceCount} shown selected`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <SurfaceActionButton
+                        type="button"
+                        onClick={handleSelectAllVisibleTraces}
+                        className="px-3 py-1.5 text-xs"
+                      >
+                        All
+                      </SurfaceActionButton>
+                      <SurfaceActionButton
+                        type="button"
+                        onClick={handleSelectBaseVisibleTraces}
+                        className="px-3 py-1.5 text-xs"
+                      >
+                        Base
+                      </SurfaceActionButton>
+                      <SurfaceActionButton
+                        type="button"
+                        onClick={handleClearTraceSelection}
+                        className="px-3 py-1.5 text-xs"
+                      >
+                        Clear
+                      </SurfaceActionButton>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {sweepAxisOptions.length > 0 ? (
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                        <p className="mb-3 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Sweep Axis
+                        </p>
+                        <AppInlineSelect
+                          ariaLabel="Characterization sweep axis filter"
+                          value={sweepAxisFilter}
+                          onChange={setSweepAxisFilter}
+                          options={[
+                            { value: "", label: "All sweep axes" },
+                            ...sweepAxisOptions.map((axis) => ({
+                              value: axis,
+                              label: axis,
+                            })),
+                          ]}
+                        />
+                      </div>
+                    ) : null}
+
+                    {collectionOptions.length > 0 ? (
+                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                        <p className="mb-3 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Collection
+                        </p>
+                        <AppInlineSelect
+                          ariaLabel="Characterization trace collection filter"
+                          value={collectionFilter}
+                          onChange={setCollectionFilter}
+                          options={[
+                            { value: "", label: "All collections" },
+                            ...collectionOptions.map((option) => ({
+                              value: option.value,
+                              label: option.label,
+                            })),
+                          ]}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <SecondaryDisclosure
+                    title="Browse Traces"
+                    meta={`${visibleTraces.length} shown`}
+                    defaultOpen={selectedTraceIds.length === 0}
+                    className="mt-4 bg-surface"
+                  >
+                    <div className="overflow-x-auto rounded-[0.95rem] border border-border">
+                      <table className="min-w-full table-fixed text-left text-sm">
+                        <thead className="bg-surface text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                          <tr>
+                            <th className="w-14 px-3 py-3">Use</th>
+                            <th className="min-w-[220px] px-3 py-3">Trace</th>
+                            <th className="w-28 px-3 py-3">Family</th>
+                            <th className="w-28 px-3 py-3">View</th>
+                            <th className="w-24 px-3 py-3">Source</th>
+                            <th className="w-24 px-3 py-3">Mode</th>
+                            <th className="w-52 px-3 py-3">Sweep / Collection</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-background">
+                          {visibleTraces.map((trace) => {
+                            const isSelected = selectedTraceIds.includes(trace.trace_id);
+                            return (
+                              <tr
+                                key={trace.trace_id}
+                                className={cx(
+                                  "cursor-pointer transition hover:bg-primary/[0.05]",
+                                  isSelected && "bg-primary/[0.08]",
+                                )}
+                                onClick={() => {
+                                  toggleTraceSelection(trace.trace_id);
+                                }}
+                              >
+                                <td className="px-3 py-3 align-top">
+                                  <input
+                                    checked={isSelected}
+                                    readOnly
+                                    type="checkbox"
+                                    className="mt-1 h-4 w-4 rounded border-border text-primary"
+                                  />
+                                </td>
+                                <td className="px-3 py-3 align-top">
+                                  <p className="font-medium text-foreground">{trace.parameter}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">{trace.trace_id}</p>
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    {trace.provenance_summary}
+                                  </p>
+                                </td>
+                                <td className="px-3 py-3 align-top text-muted-foreground">
+                                  {trace.family.replaceAll("_", " ")}
+                                </td>
+                                <td className="px-3 py-3 align-top text-muted-foreground">
+                                  {formatRepresentationLabel(trace.representation)}
+                                </td>
+                                <td className="px-3 py-3 align-top text-muted-foreground">
+                                  {formatSourceLabel(trace.source_kind)}
+                                </td>
+                                <td className="px-3 py-3 align-top text-muted-foreground">
+                                  {formatModeLabel(trace.trace_mode_group)}
+                                </td>
+                                <td className="px-3 py-3 align-top">
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap gap-2">
+                                      {trace.availableSweepAxes.length > 0 ? (
+                                        trace.availableSweepAxes.map((axis) => (
+                                          <SurfaceTag key={`${trace.trace_id}-${axis}`} tone="default">
+                                            {axis}
+                                          </SurfaceTag>
+                                        ))
+                                      ) : (
+                                        <SurfaceTag tone="default">No sweep axis</SurfaceTag>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{trace.axesSummary}</p>
+                                    {trace.collectionProjection ? (
+                                      <p className="text-xs text-muted-foreground">
+                                        {trace.collectionProjection.label} · {trace.collectionProjection.summary}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {!isTracesLoading && visibleTraces.length === 0 ? (
+                      <p className="mt-4 rounded-[0.95rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                        No traces match the current design scope and filters.
+                      </p>
+                    ) : null}
+                    {tracesErrorNotice ? (
+                      <div className="mt-4">
+                        <SectionNotice title={tracesErrorNotice.summary} detail={tracesErrorNotice.detail} />
+                      </div>
+                    ) : null}
+                  </SecondaryDisclosure>
+                </div>
+
+                {dataCollectionReview ? (
                   <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Review Summary
+                          Collection Summary
                         </p>
                         <p className="mt-2 text-sm font-medium text-foreground">
                           {reviewSummary(dataCollectionReview, selectedTraceIds.length)}
@@ -908,469 +917,448 @@ export function CharacterizationWorkspace() {
                         <SurfaceTag tone="default">
                           {dataCollectionReview.collectionMembers.length} members
                         </SurfaceTag>
-                        <SurfaceTag tone="default">
-                          {dataCollectionReview.runnableAnalyses.length} runnable
-                        </SurfaceTag>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {dataCollectionReview.availableSweepAxes.map((axis) => (
-                        <SurfaceTag key={axis} tone="default">
-                          {axis}
-                        </SurfaceTag>
-                      ))}
-                      {dataCollectionReview.sharedAxes.map((axis) => (
-                        <SurfaceTag key={`${axis.name}-${axis.length}`} tone="default">
-                          {axis.name}
-                          {axis.unit ? ` (${axis.unit})` : ""}
-                        </SurfaceTag>
-                      ))}
-                      {dataCollectionReview.collectionProjection ? (
-                        <SurfaceTag tone="default">
-                          {dataCollectionReview.collectionProjection.label}
-                        </SurfaceTag>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                    <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Source Coverage
-                      </p>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {formatCoverageLabel(dataCollectionReview.sourceCoverage)}
-                      </p>
-
-                      {inputCollectionPayload ? (
-                        <div className="mt-4 space-y-2">
-                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Input Collection
-                          </p>
-                          <p className="text-sm text-foreground">
-                            {inputCollectionPayload.groupingSummary}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <SurfaceTag tone="default">
-                              {inputCollectionPayload.traceCount} traces
-                            </SurfaceTag>
-                            {inputCollectionPayload.axisSignature ? (
-                              <SurfaceTag tone="default">{inputCollectionPayload.axisSignature}</SurfaceTag>
-                            ) : null}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Runnable Analyses
-                        </p>
-                        <div className="mt-3 space-y-2">
-                          {dataCollectionReview.runnableAnalyses.length > 0 ? (
-                            dataCollectionReview.runnableAnalyses.map((analysis) => (
-                              <div
-                                key={analysis.analysisId}
-                                className="rounded-xl border border-border bg-surface px-3 py-3"
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
-                                    {formatPipelineState(analysis.prerequisiteState)}
-                                  </SurfaceTag>
-                                  <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
-                                    {analysis.availabilityState}
-                                  </SurfaceTag>
-                                </div>
-                                <p className="mt-2 text-sm font-medium text-foreground">
-                                  {analysis.label}
-                                </p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {analysis.summary}
-                                </p>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              No analysis is runnable for the current collection yet.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Blocked Analyses
-                        </p>
-                        <div className="mt-3 space-y-2">
-                          {dataCollectionReview.blockedAnalyses.length > 0 ? (
-                            dataCollectionReview.blockedAnalyses.map((analysis) => (
-                              <div
-                                key={analysis.analysisId}
-                                className="rounded-xl border border-border bg-surface px-3 py-3"
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
-                                    {formatPipelineState(analysis.prerequisiteState)}
-                                  </SurfaceTag>
-                                  <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
-                                    {analysis.availabilityState}
-                                  </SurfaceTag>
-                                </div>
-                                <p className="mt-2 text-sm font-medium text-foreground">
-                                  {analysis.label}
-                                </p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {analysis.summary}
-                                </p>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              No blocked analyses are reported for this collection.
-                            </p>
-                          )}
-                        </div>
                       </div>
                     </div>
                   </div>
+                ) : null}
+              </div>
+            </SurfacePanel>
 
+            <SurfacePanel
+              title="Selected Analysis"
+              description="Configure and submit the current pipeline step."
+            >
+              <div className="space-y-4">
+                {selectedAnalysis &&
+                (selectedAnalysis.prerequisiteState !== "ready" || selectedTraceIds.length === 0) ? (
+                  <SectionNotice
+                    title={selectedPipelineExplanation.title}
+                    detail={selectedPipelineExplanation.detail}
+                    tone={selectedPipelineExplanation.tone}
+                  />
+                ) : null}
+
+                {analysisRegistryErrorNotice ? (
+                  <SectionNotice
+                    title={analysisRegistryErrorNotice.summary}
+                    detail={analysisRegistryErrorNotice.detail}
+                  />
+                ) : null}
+
+                {selectedAnalysis ? (
                   <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Collection Members
-                    </p>
-                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                      {dataCollectionReview.collectionMembers.map((member) => (
-                        <div
-                          key={member.memberKey}
-                          className="rounded-xl border border-border bg-surface px-4 py-3"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <SurfaceTag tone="default">{member.memberKey}</SurfaceTag>
-                            <SurfaceTag tone="default">{formatSourceLabel(member.sourceKind)}</SurfaceTag>
-                            <SurfaceTag tone="default">{formatModeLabel(member.traceModeGroup)}</SurfaceTag>
-                          </div>
-                          <p className="mt-2 text-sm font-medium text-foreground">{member.label}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {member.parameter} · {formatRepresentationLabel(member.representation)} · {member.traceId}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">{member.provenanceSummary}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : isAnalysisRegistryLoading ? (
-                <p className="text-sm text-muted-foreground">Loading data collection review…</p>
-              ) : (
-                <SectionNotice
-                  title="No collection review available"
-                  detail={
-                    selectedTraceIds.length > 0
-                      ? "The backend did not return a derived collection review for this trace scope."
-                      : "Select traces to see the backend-derived data collection review."
-                  }
-                  tone="default"
-                />
-              )}
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel
-            title="Analysis Pipeline"
-            description="Choose the current pipeline step, inspect prerequisites, and run only when the backend says the collection is ready."
-          >
-            <div className="space-y-4">
-              <SectionNotice
-                title={selectedPipelineExplanation.title}
-                detail={selectedPipelineExplanation.detail}
-                tone={selectedPipelineExplanation.tone}
-              />
-
-              <div className="grid gap-3 xl:grid-cols-2">
-                {analysisRegistry.map((analysis) => (
-                  <button
-                    key={analysis.analysisId}
-                    type="button"
-                    onClick={() => {
-                      setSelectedAnalysisId(analysis.analysisId);
-                    }}
-                    className={cx(
-                      "rounded-[1rem] border px-4 py-4 text-left transition",
-                      selectedAnalysisId === analysis.analysisId
-                        ? "border-primary/35 bg-primary/10"
-                        : "border-border bg-background hover:border-primary/25 hover:bg-primary/5",
-                    )}
-                  >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-foreground">{analysis.label}</p>
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Current Step
+                        </p>
+                        <p className="mt-2 text-base font-semibold text-foreground">
+                          {selectedAnalysis.label}
+                        </p>
                         <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                          {analysis.analysisId}
+                          {selectedAnalysis.analysisId}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
-                          {analysis.availabilityState}
+                        <SurfaceTag tone={availabilityTone(selectedAnalysis.availabilityState)}>
+                          {selectedAnalysis.availabilityState}
                         </SurfaceTag>
-                        <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
-                          {formatPipelineState(analysis.prerequisiteState)}
+                        <SurfaceTag tone={pipelineStateTone(selectedAnalysis.prerequisiteState)}>
+                          {formatPipelineState(selectedAnalysis.prerequisiteState)}
                         </SurfaceTag>
                       </div>
                     </div>
 
                     <p className="mt-3 text-sm text-muted-foreground">
-                      {analysis.prerequisiteState === "requires_upstream_result"
-                        ? analysis.upstreamResultRequirement?.summary || analysis.traceCompatibility.summary
-                        : analysis.traceCompatibility.summary}
+                      {selectedAnalysis.prerequisiteState === "requires_upstream_result"
+                        ? selectedAnalysis.upstreamResultRequirement?.summary ||
+                          selectedAnalysis.traceCompatibility.summary
+                        : selectedAnalysis.traceCompatibility.summary}
                     </p>
 
-                    {analysis.downstreamUnlockAnalysisIds.length > 0 ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {analysis.downstreamUnlockAnalysisIds.map((analysisId) => (
-                          <SurfaceTag key={`${analysis.analysisId}-${analysisId}`} tone="default">
-                            Unlocks {analysisId}
-                          </SurfaceTag>
+                    {selectedAnalysis.requiredConfigFields.length > 0 ? (
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {selectedAnalysis.requiredConfigFields.map((field) => (
+                          <label
+                            key={field}
+                            className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3"
+                          >
+                            <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              {formatConfigLabel(field)}
+                            </p>
+                            <input
+                              value={analysisConfigValues[field] ?? ""}
+                              onChange={(event) => {
+                                updateAnalysisConfigValue(field, event.target.value);
+                              }}
+                              placeholder={configPlaceholder(field)}
+                              className="w-full rounded-[0.8rem] border border-border/85 bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
+                            />
+                          </label>
                         ))}
                       </div>
                     ) : null}
-                  </button>
-                ))}
-              </div>
 
-              {analysisRegistryErrorNotice ? (
-                <SectionNotice
-                  title={analysisRegistryErrorNotice.summary}
-                  detail={analysisRegistryErrorNotice.detail}
-                />
-              ) : null}
+                    {taskMutationState.message ? (
+                      <div
+                        className={cx(
+                          "mt-4 rounded-[0.95rem] border px-4 py-3 text-sm",
+                          resolveSurfaceInsetToneClass(taskMutationTone),
+                        )}
+                      >
+                        {taskMutationState.message}
+                      </div>
+                    ) : null}
 
-              {selectedAnalysis ? (
+                    {!selectedTracesShareOneAxisStructure ? (
+                      <div className="mt-4">
+                        <SectionNotice
+                          title="Select One Input Axis Structure"
+                          detail={
+                            inputCollectionPayload?.groupingSummary ||
+                            "Selected traces must share one persisted axis structure before this analysis can run."
+                          }
+                        />
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleRunAnalysis();
+                      }}
+                      disabled={
+                        taskMutationState.state === "submitting" ||
+                        !selectedDesignId ||
+                        !selectedAnalysis ||
+                        selectedAnalysis.availabilityState === "unavailable" ||
+                        selectedAnalysis.prerequisiteState !== "ready" ||
+                        selectedTraceIds.length === 0 ||
+                        !selectedTracesShareOneAxisStructure
+                      }
+                      className="mt-4 inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {taskMutationState.state === "submitting" ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                      Run Analysis
+                    </button>
+                  </div>
+                ) : isAnalysisRegistryLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading analysis options…</p>
+                ) : (
+                  <SectionNotice
+                    title="No analysis selected"
+                    detail="Select a design and trace scope before running characterization."
+                    tone="default"
+                  />
+                )}
+
                 <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Selected Analysis
+                        Latest Run
                       </p>
                       <p className="mt-2 text-sm font-medium text-foreground">
-                        {selectedAnalysis.label}
+                        {activeTask ? activeTask.progress.summary : "No active analysis run"}
                       </p>
+                      {activeRunDetail ? (
+                        <p className="mt-1 text-sm text-muted-foreground">{activeRunDetail.message}</p>
+                      ) : null}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <SurfaceTag tone={availabilityTone(selectedAnalysis.availabilityState)}>
-                        {selectedAnalysis.availabilityState}
-                      </SurfaceTag>
-                      <SurfaceTag tone={pipelineStateTone(selectedAnalysis.prerequisiteState)}>
-                        {formatPipelineState(selectedAnalysis.prerequisiteState)}
-                      </SurfaceTag>
-                    </div>
-                  </div>
-
-                  {selectedAnalysis.requiredConfigFields.length > 0 ? (
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {selectedAnalysis.requiredConfigFields.map((field) => (
-                        <label
-                          key={field}
-                          className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3"
-                        >
-                          <p className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            {formatConfigLabel(field)}
-                          </p>
-                          <input
-                            value={analysisConfigValues[field] ?? ""}
-                            onChange={(event) => {
-                              updateAnalysisConfigValue(field, event.target.value);
-                            }}
-                            placeholder={configPlaceholder(field)}
-                            className="w-full rounded-[0.8rem] border border-border/85 bg-background px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary/45 focus:ring-2 focus:ring-primary/15"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {taskMutationState.message ? (
-                    <div
-                      className={cx(
-                        "mt-4 rounded-[0.95rem] border px-4 py-3 text-sm",
-                        resolveSurfaceInsetToneClass(taskMutationTone),
-                      )}
-                    >
-                      {taskMutationState.message}
-                    </div>
-                  ) : null}
-
-                  {!selectedTracesShareOneAxisStructure ? (
-                    <div className="mt-4">
-                      <SectionNotice
-                        title="Select One Input Axis Structure"
-                        detail={
-                          inputCollectionPayload?.groupingSummary ||
-                          "Selected traces must share one persisted axis structure before this analysis can run."
-                        }
-                      />
-                    </div>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleRunAnalysis();
-                    }}
-                    disabled={
-                      taskMutationState.state === "submitting" ||
-                      !selectedDesignId ||
-                      !selectedAnalysis ||
-                      selectedAnalysis.availabilityState === "unavailable" ||
-                      selectedAnalysis.prerequisiteState !== "ready" ||
-                      selectedTraceIds.length === 0 ||
-                      !selectedTracesShareOneAxisStructure
-                    }
-                    className="mt-4 inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {taskMutationState.state === "submitting" ? (
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    {activeTask ? (
+                      <SurfaceTag tone={taskStatusTone(activeTask.status)}>{activeTask.status}</SurfaceTag>
                     ) : (
-                      <Play className="h-4 w-4" />
+                      <SurfaceTag tone="default">idle</SurfaceTag>
                     )}
-                    Run Analysis
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel
-            title="Active Analysis Run"
-            description="Keep the latest page-local run state visible without turning the workbench into a task dashboard."
-          >
-            <div className="space-y-4">
-              {activeTask ? (
-                <div className="flex flex-wrap items-start justify-between gap-3 rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Current Analysis
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-foreground">
-                      {activeTask.progress.summary}
-                    </p>
-                    {activeRunDetail ? (
-                      <p className="mt-1 text-sm text-muted-foreground">{activeRunDetail.message}</p>
-                    ) : null}
-                  </div>
-                  <SurfaceTag tone={taskStatusTone(activeTask.status)}>{activeTask.status}</SurfaceTag>
-                </div>
-              ) : (
-                <SectionNotice
-                  title="No active run attached"
-                  detail="Start an analysis or reattach through the shared queue to keep the current pipeline step in view here."
-                  tone="default"
-                />
-              )}
-
-              {isTaskTransitioning ? (
-                <p className="text-sm text-muted-foreground">Refreshing active analysis run…</p>
-              ) : null}
-              {activeTaskErrorNotice ? (
-                <SectionNotice
-                  title={activeTaskErrorNotice.summary}
-                  detail={activeTaskErrorNotice.detail}
-                />
-              ) : null}
-
-              <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Run History
-                    </p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Compact history for the current design scope.
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <SurfaceActionButton
-                      type="button"
-                      onClick={goToPrevRunHistoryPage}
-                      disabled={!runHistoryMeta?.prevCursor}
-                      className="px-3 py-1.5 text-xs"
-                    >
-                      Prev
-                    </SurfaceActionButton>
-                    <SurfaceActionButton
-                      type="button"
-                      onClick={goToNextRunHistoryPage}
-                      disabled={!runHistoryMeta?.nextCursor}
-                      className="px-3 py-1.5 text-xs"
-                    >
-                      Next
-                    </SurfaceActionButton>
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-3">
-                  {runHistory.map((run) => (
-                    <button
-                      key={run.runId}
-                      type="button"
-                      onClick={() => {
-                        focusRunHistoryResult(run.resultId);
-                      }}
-                      disabled={!run.resultId}
-                      className="w-full rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-left transition hover:border-primary/25 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
+                {isTaskTransitioning ? (
+                  <p className="text-sm text-muted-foreground">Refreshing active analysis run…</p>
+                ) : null}
+                {activeTaskErrorNotice ? (
+                  <SectionNotice
+                    title={activeTaskErrorNotice.summary}
+                    detail={activeTaskErrorNotice.detail}
+                  />
+                ) : null}
+
+                <SecondaryDisclosure
+                  title="Change Analysis"
+                  meta={`${analysisRegistry.length} steps`}
+                  defaultOpen={!selectedAnalysis && analysisRegistry.length > 0}
+                >
+                  <div className="grid gap-3">
+                    {analysisRegistry.map((analysis) => (
+                      <button
+                        key={analysis.analysisId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAnalysisId(analysis.analysisId);
+                        }}
+                        className={cx(
+                          "rounded-[1rem] border px-4 py-4 text-left transition",
+                          selectedAnalysisId === analysis.analysisId
+                            ? "border-primary/35 bg-primary/10"
+                            : "border-border bg-surface hover:border-primary/25 hover:bg-primary/5",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{analysis.label}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                              {analysis.analysisId}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                              {analysis.availabilityState}
+                            </SurfaceTag>
+                            <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                              {formatPipelineState(analysis.prerequisiteState)}
+                            </SurfaceTag>
+                          </div>
+                        </div>
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          {analysis.prerequisiteState === "requires_upstream_result"
+                            ? analysis.upstreamResultRequirement?.summary ||
+                              analysis.traceCompatibility.summary
+                            : analysis.traceCompatibility.summary}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </SecondaryDisclosure>
+              </div>
+            </SurfacePanel>
+
+            <SurfacePanel
+              title="Latest Result"
+              description="Review the selected persisted result and apply identify tags."
+            >
+              <div className="space-y-4">
+                {!selectedResultId ? (
+                  <p className="rounded-[1rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                    No saved result is selected for this design scope.
+                  </p>
+                ) : null}
+
+                {resultDetail ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-foreground">{resultDetail.title}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {resultDetail.analysisId} · {resultDetail.updatedAt}
+                        </p>
+                      </div>
+                      <SurfaceTag tone={characterizationStatusTone(resultDetail.status)}>
+                        {resultDetail.status}
+                      </SurfaceTag>
+                    </div>
+
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div>
-                          <p className="text-sm font-medium text-foreground">{run.label}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {run.analysisId} · {run.updatedAt}
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Freshness
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            {resultDetail.freshnessSummary}
                           </p>
                         </div>
-                        <SurfaceTag tone={characterizationStatusTone(run.status)}>{run.status}</SurfaceTag>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Provenance
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            {resultDetail.provenanceSummary}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-3 text-sm text-muted-foreground">{run.provenanceSummary}</p>
-                      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                        <SurfaceTag tone="default">{run.traceCount} traces</SurfaceTag>
-                        <SurfaceTag tone="default">{run.scope}</SurfaceTag>
-                        {run.resultId ? <SurfaceTag tone="default">Open result</SurfaceTag> : null}
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <SurfaceTag tone="default">{resultDetail.traceCount} traces</SurfaceTag>
+                        {resultDetail.inputResultRefs.map((ref) => (
+                          <SurfaceTag key={`${ref.analysisId}-${ref.resultId}`} tone="default">
+                            Upstream {ref.analysisId}
+                          </SurfaceTag>
+                        ))}
                       </div>
-                    </button>
-                  ))}
+                    </div>
 
-                  {isRunHistoryLoading ? (
-                    <p className="text-sm text-muted-foreground">Loading run history…</p>
-                  ) : null}
-                  {!isRunHistoryLoading && runHistory.length === 0 ? (
-                    <p className="rounded-[0.95rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                      No run history is available for this design scope yet.
-                    </p>
-                  ) : null}
-                  {runHistoryErrorNotice ? (
-                    <SectionNotice title={runHistoryErrorNotice.summary} detail={runHistoryErrorNotice.detail} />
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </SurfacePanel>
+                    <CharacterizationResultExplorer
+                      resultDetail={resultDetail}
+                      explorer={resultExplorer}
+                    />
 
-          <SurfacePanel
-            title="Result Preview"
-            description="Inspect persisted results, member-aware artifacts, diagnostics, and identify-ready surfaces."
-          >
-            <div className="space-y-4">
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-                <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
-                  <div>
-                    <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Results
-                    </h4>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Persisted results for the current design.
-                    </p>
+                    {resultDetail.diagnostics.length > 0 ? (
+                      <SecondaryDisclosure
+                        title="Fit Diagnostics"
+                        meta={`${resultDetail.diagnostics.length} entries`}
+                        className="bg-surface"
+                      >
+                        <div className="space-y-3">
+                          {resultDetail.diagnostics.map((diagnostic) => (
+                            <div
+                              key={`${diagnostic.code}-${diagnostic.message}`}
+                              className={cx(
+                                "rounded-xl border px-3 py-3",
+                                diagnostic.blocking
+                                  ? "border-amber-500/25 bg-amber-500/10"
+                                  : "border-border bg-card",
+                              )}
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <SurfaceTag tone={diagnostic.blocking ? "warning" : "default"}>
+                                  {diagnostic.severity}
+                                </SurfaceTag>
+                                <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                                  {diagnostic.code}
+                                </span>
+                              </div>
+                              <p className="mt-2 text-sm text-foreground">{diagnostic.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </SecondaryDisclosure>
+                    ) : null}
+
+                    <SecondaryDisclosure title="Artifact Payload" meta="JSON" className="bg-surface">
+                      <ResultPayloadPreview payload={resultDetail.payload} />
+                    </SecondaryDisclosure>
+
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Identify & Tag
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            Map one result parameter into a designated metric.
+                          </p>
+                        </div>
+                        <SurfaceTag tone="primary">
+                          {resultDetail.identifySurface.appliedTags.length} applied
+                        </SurfaceTag>
+                      </div>
+
+                      {taggingMutationState.message ? (
+                        <div
+                          className={cx(
+                            "mt-4 rounded-xl border px-4 py-3 text-sm text-foreground",
+                            taggingStateTone,
+                          )}
+                        >
+                          {taggingMutationState.message}
+                        </div>
+                      ) : null}
+
+                      {resultDetail.identifySurface.sourceParameters.length > 0 &&
+                      resultDetail.identifySurface.designatedMetrics.length > 0 ? (
+                        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                          <AppSelectField
+                            className="bg-card"
+                            label="Source Parameter"
+                            value={selectedSourceSelection}
+                            onChange={setSelectedSourceSelection}
+                            options={resultDetail.identifySurface.sourceParameters.map((option) => ({
+                              value: buildSourceSelectionValue(
+                                option.artifactId,
+                                option.sourceParameter,
+                              ),
+                              label: `${option.artifactTitle} · ${option.label}`,
+                              description: option.currentDesignatedMetric
+                                ? `Tagged: ${option.currentDesignatedMetric}`
+                                : "Not tagged yet",
+                            }))}
+                          />
+
+                          <AppSelectField
+                            className="bg-card"
+                            label="Designated Metric"
+                            value={selectedDesignatedMetric}
+                            onChange={setSelectedDesignatedMetric}
+                            options={resultDetail.identifySurface.designatedMetrics.map((option) => ({
+                              value: option.metricKey,
+                              label: option.label,
+                              description: option.metricKey,
+                            }))}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleSubmitTagging();
+                            }}
+                            disabled={
+                              taggingMutationState.state === "submitting" ||
+                              !selectedSourceSelection ||
+                              !selectedDesignatedMetric
+                            }
+                            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {taggingMutationState.state === "submitting"
+                              ? "Tagging…"
+                              : "Tag Parameter"}
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">
+                          No identify candidates are available for this result yet.
+                        </p>
+                      )}
+
+                      <div className="mt-4 space-y-3">
+                        {resultDetail.identifySurface.appliedTags.map((tag) => (
+                          <div
+                            key={`${tag.artifactId}:${tag.sourceParameter}:${tag.designatedMetric}`}
+                            className="rounded-xl border border-border bg-card px-4 py-3"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <SurfaceTag tone="success">{tag.designatedMetric}</SurfaceTag>
+                              <SurfaceTag tone="default">{tag.sourceParameter}</SurfaceTag>
+                              <SurfaceTag tone="default">{tag.artifactId}</SurfaceTag>
+                            </div>
+                            <p className="mt-2 text-sm text-foreground">
+                              {tag.designatedMetricLabel}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Tagged at {tag.taggedAt}
+                            </p>
+                          </div>
+                        ))}
+                        {resultDetail.identifySurface.appliedTags.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No parameter tags were applied from this result yet.
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
+                ) : null}
 
+                {isResultDetailLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading result detail…</p>
+                ) : null}
+                {resultDetailErrorNotice ? (
+                  <SectionNotice
+                    title={resultDetailErrorNotice.summary}
+                    detail={resultDetailErrorNotice.detail}
+                  />
+                ) : null}
+
+                <SecondaryDisclosure
+                  title="Saved Results"
+                  meta={`${results.length} shown`}
+                  defaultOpen={!selectedResultId}
+                >
                   {showResultControls ? (
-                    <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                    <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                       <label className="relative block">
                         <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <input
@@ -1435,6 +1423,9 @@ export function CharacterizationWorkspace() {
                       </button>
                     ))}
 
+                    {isResultsLoading ? (
+                      <p className="text-sm text-muted-foreground">Loading saved results…</p>
+                    ) : null}
                     {!isResultsLoading && results.length === 0 ? (
                       <p className="rounded-[1rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
                         No saved result matches this scope and filter.
@@ -1444,324 +1435,258 @@ export function CharacterizationWorkspace() {
                       <SectionNotice title={resultsErrorNotice.summary} detail={resultsErrorNotice.detail} />
                     ) : null}
                   </div>
-                </div>
+                </SecondaryDisclosure>
+              </div>
+            </SurfacePanel>
+          </div>
 
-                <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
-                  <div>
-                    <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Result Detail
-                    </h4>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Inspect one persisted result, then tag parameters from the artifact surface that is currently in focus.
-                    </p>
-                  </div>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <SecondaryDisclosure
+              title="Run History"
+              meta={`${runHistory.length} runs`}
+            >
+              <div className="flex flex-wrap justify-end gap-2">
+                <SurfaceActionButton
+                  type="button"
+                  onClick={goToPrevRunHistoryPage}
+                  disabled={!runHistoryMeta?.prevCursor}
+                  className="px-3 py-1.5 text-xs"
+                >
+                  Prev
+                </SurfaceActionButton>
+                <SurfaceActionButton
+                  type="button"
+                  onClick={goToNextRunHistoryPage}
+                  disabled={!runHistoryMeta?.nextCursor}
+                  className="px-3 py-1.5 text-xs"
+                >
+                  Next
+                </SurfaceActionButton>
+              </div>
 
-                  {!selectedResultId ? (
-                    <p className="mt-4 rounded-[1rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-                      Select a saved result to inspect its artifacts, diagnostics, and identify surface.
-                    </p>
-                  ) : null}
+              <div className="mt-4 space-y-3">
+                {runHistory.map((run) => (
+                  <button
+                    key={run.runId}
+                    type="button"
+                    onClick={() => {
+                      focusRunHistoryResult(run.resultId);
+                    }}
+                    disabled={!run.resultId}
+                    className="w-full rounded-[0.95rem] border border-border bg-surface px-4 py-4 text-left transition hover:border-primary/25 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{run.label}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {run.analysisId} · {run.updatedAt}
+                        </p>
+                      </div>
+                      <SurfaceTag tone={characterizationStatusTone(run.status)}>{run.status}</SurfaceTag>
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">{run.provenanceSummary}</p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                      <SurfaceTag tone="default">{run.traceCount} traces</SurfaceTag>
+                      <SurfaceTag tone="default">{run.scope}</SurfaceTag>
+                      {run.resultId ? <SurfaceTag tone="default">Open result</SurfaceTag> : null}
+                    </div>
+                  </button>
+                ))}
 
-                  {resultDetail ? (
-                    <div className="mt-4 space-y-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-base font-semibold text-foreground">{resultDetail.title}</h3>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {resultDetail.analysisId} · {resultDetail.updatedAt}
+                {isRunHistoryLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading run history…</p>
+                ) : null}
+                {!isRunHistoryLoading && runHistory.length === 0 ? (
+                  <p className="rounded-[0.95rem] border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                    No run history is available for this design scope yet.
+                  </p>
+                ) : null}
+                {runHistoryErrorNotice ? (
+                  <SectionNotice title={runHistoryErrorNotice.summary} detail={runHistoryErrorNotice.detail} />
+                ) : null}
+              </div>
+            </SecondaryDisclosure>
+
+            <SecondaryDisclosure
+              title="Collection Details"
+              meta={
+                dataCollectionReview
+                  ? `${dataCollectionReview.collectionMembers.length} members`
+                  : "pending"
+              }
+            >
+              <div className="space-y-4">
+                {dataCollectionReview ? (
+                  <>
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Source Coverage
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {formatCoverageLabel(dataCollectionReview.sourceCoverage)}
+                      </p>
+
+                      {inputCollectionPayload ? (
+                        <div className="mt-4 space-y-2">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Input Collection
                           </p>
-                        </div>
-                        <SurfaceTag tone={characterizationStatusTone(resultDetail.status)}>
-                          {resultDetail.status}
-                        </SurfaceTag>
-                      </div>
-
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Freshness
-                            </p>
-                            <p className="mt-2 text-sm text-foreground">
-                              {resultDetail.freshnessSummary}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Provenance
-                            </p>
-                            <p className="mt-2 text-sm text-foreground">
-                              {resultDetail.provenanceSummary}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <SurfaceTag tone="default">{resultDetail.traceCount} traces</SurfaceTag>
-                          {resultDetail.inputResultRefs.map((ref) => (
-                            <SurfaceTag key={`${ref.analysisId}-${ref.resultId}`} tone="default">
-                              Upstream {ref.analysisId}
+                          <p className="text-sm text-foreground">
+                            {inputCollectionPayload.groupingSummary}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <SurfaceTag tone="default">
+                              {inputCollectionPayload.traceCount} traces
                             </SurfaceTag>
-                          ))}
-                        </div>
-                      </div>
-
-                      {resultDetail.diagnostics.length > 0 ? (
-                        <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Diagnostics
-                            </p>
-                            <SurfaceTag
-                              tone={
-                                resultDetail.diagnostics.some((diagnostic) => diagnostic.blocking)
-                                  ? "warning"
-                                  : "default"
-                              }
-                            >
-                              {resultDetail.diagnostics.length} entries
-                            </SurfaceTag>
-                          </div>
-                          <div className="mt-3 space-y-3">
-                            {resultDetail.diagnostics.map((diagnostic) => (
-                              <div
-                                key={`${diagnostic.code}-${diagnostic.message}`}
-                                className={cx(
-                                  "rounded-xl border px-3 py-3",
-                                  diagnostic.blocking
-                                    ? "border-amber-500/25 bg-amber-500/10"
-                                    : "border-border bg-card",
-                                )}
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <SurfaceTag tone={diagnostic.blocking ? "warning" : "default"}>
-                                    {diagnostic.severity}
-                                  </SurfaceTag>
-                                  <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                                    {diagnostic.code}
-                                  </span>
-                                </div>
-                                <p className="mt-2 text-sm text-foreground">{diagnostic.message}</p>
-                              </div>
-                            ))}
+                            {inputCollectionPayload.axisSignature ? (
+                              <SurfaceTag tone="default">{inputCollectionPayload.axisSignature}</SurfaceTag>
+                            ) : null}
                           </div>
                         </div>
                       ) : null}
+                    </div>
 
-                      <CharacterizationResultExplorer
-                        resultDetail={resultDetail}
-                        explorer={resultExplorer}
-                      />
-
-                      <details className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                          Debug Payload
-                        </summary>
-                        <div className="mt-4">
-                          <ResultPayloadPreview payload={resultDetail.payload} />
-                        </div>
-                      </details>
-
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Identify & Tag
-                            </p>
-                            <p className="mt-2 text-sm text-foreground">
-                              Map one result parameter into a designated metric.
-                            </p>
-                          </div>
-                          <SurfaceTag tone="primary">
-                            {resultDetail.identifySurface.appliedTags.length} applied
-                          </SurfaceTag>
-                        </div>
-
-                        {taggingMutationState.message ? (
+                    <div className="grid gap-3">
+                      {dataCollectionReview.runnableAnalyses.length > 0 ? (
+                        dataCollectionReview.runnableAnalyses.map((analysis) => (
                           <div
-                            className={cx(
-                              "mt-4 rounded-xl border px-4 py-3 text-sm text-foreground",
-                              taggingStateTone,
-                            )}
+                            key={analysis.analysisId}
+                            className="rounded-xl border border-border bg-surface px-3 py-3"
                           >
-                            {taggingMutationState.message}
-                          </div>
-                        ) : null}
-
-                        {resultDetail.identifySurface.sourceParameters.length > 0 &&
-                        resultDetail.identifySurface.designatedMetrics.length > 0 ? (
-                          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
-                            <AppSelectField
-                              className="bg-card"
-                              label="Source Parameter"
-                              value={selectedSourceSelection}
-                              onChange={setSelectedSourceSelection}
-                              options={resultDetail.identifySurface.sourceParameters.map((option) => ({
-                                value: buildSourceSelectionValue(
-                                  option.artifactId,
-                                  option.sourceParameter,
-                                ),
-                                label: `${option.artifactTitle} · ${option.label}`,
-                                description: option.currentDesignatedMetric
-                                  ? `Tagged: ${option.currentDesignatedMetric}`
-                                  : "Not tagged yet",
-                              }))}
-                            />
-
-                            <AppSelectField
-                              className="bg-card"
-                              label="Designated Metric"
-                              value={selectedDesignatedMetric}
-                              onChange={setSelectedDesignatedMetric}
-                              options={resultDetail.identifySurface.designatedMetrics.map((option) => ({
-                                value: option.metricKey,
-                                label: option.label,
-                                description: option.metricKey,
-                              }))}
-                            />
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void handleSubmitTagging();
-                              }}
-                              disabled={
-                                taggingMutationState.state === "submitting" ||
-                                !selectedSourceSelection ||
-                                !selectedDesignatedMetric
-                              }
-                              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {taggingMutationState.state === "submitting"
-                                ? "Tagging…"
-                                : "Tag Parameter"}
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="mt-4 text-sm text-muted-foreground">
-                            No identify candidates are available for this result yet.
-                          </p>
-                        )}
-
-                        <div className="mt-4 space-y-3">
-                          {resultDetail.identifySurface.appliedTags.map((tag) => (
-                            <div
-                              key={`${tag.artifactId}:${tag.sourceParameter}:${tag.designatedMetric}`}
-                              className="rounded-xl border border-border bg-card px-4 py-3"
-                            >
-                              <div className="flex flex-wrap items-center gap-2">
-                                <SurfaceTag tone="success">{tag.designatedMetric}</SurfaceTag>
-                                <SurfaceTag tone="default">{tag.sourceParameter}</SurfaceTag>
-                                <SurfaceTag tone="default">{tag.artifactId}</SurfaceTag>
-                              </div>
-                              <p className="mt-2 text-sm text-foreground">
-                                {tag.designatedMetricLabel}
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                Tagged at {tag.taggedAt}
-                              </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                                {formatPipelineState(analysis.prerequisiteState)}
+                              </SurfaceTag>
+                              <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                                {analysis.availabilityState}
+                              </SurfaceTag>
                             </div>
-                          ))}
-                          {resultDetail.identifySurface.appliedTags.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                              No parameter tags were applied from this result yet.
+                            <p className="mt-2 text-sm font-medium text-foreground">
+                              {analysis.label}
                             </p>
-                          ) : null}
-                        </div>
-                      </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {analysis.summary}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No analysis is runnable for the current collection yet.
+                        </p>
+                      )}
                     </div>
-                  ) : null}
 
-                  {isResultDetailLoading ? (
-                    <p className="mt-4 text-sm text-muted-foreground">Loading result detail…</p>
-                  ) : null}
-                  {resultDetailErrorNotice ? (
-                    <div className="mt-4">
-                      <SectionNotice
-                        title={resultDetailErrorNotice.summary}
-                        detail={resultDetailErrorNotice.detail}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </SurfacePanel>
-
-          <SurfacePanel
-            title="Downstream Analysis / Next Step"
-            description="Keep the next pipeline step visible without implying runtime support that the backend has not granted yet."
-          >
-            <div className="space-y-4">
-              {downstreamAnalyses.length > 0 ? (
-                <div className="grid gap-3 xl:grid-cols-2">
-                  {downstreamAnalyses.map((analysis) => (
-                    <div
-                      key={analysis.analysisId}
-                      className="rounded-[1rem] border border-border bg-background px-4 py-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{analysis.label}</p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                            {analysis.analysisId}
+                    <div className="grid gap-3">
+                      {dataCollectionReview.collectionMembers.map((member) => (
+                        <div
+                          key={member.memberKey}
+                          className="rounded-xl border border-border bg-surface px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <SurfaceTag tone="default">{member.memberKey}</SurfaceTag>
+                            <SurfaceTag tone="default">{formatSourceLabel(member.sourceKind)}</SurfaceTag>
+                            <SurfaceTag tone="default">{formatModeLabel(member.traceModeGroup)}</SurfaceTag>
+                          </div>
+                          <p className="mt-2 text-sm font-medium text-foreground">{member.label}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {member.parameter} · {formatRepresentationLabel(member.representation)} · {member.traceId}
                           </p>
+                          <p className="mt-1 text-xs text-muted-foreground">{member.provenanceSummary}</p>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
-                            {formatPipelineState(analysis.prerequisiteState)}
-                          </SurfaceTag>
-                          <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
-                            {analysis.availabilityState}
-                          </SurfaceTag>
-                        </div>
-                      </div>
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        {analysis.prerequisiteState === "requires_upstream_result"
-                          ? analysis.upstreamResultRequirement?.summary || analysis.traceCompatibility.summary
-                          : analysis.traceCompatibility.summary}
-                      </p>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <SectionNotice
-                  title="No downstream step unlocked yet"
-                  detail="Complete or select a persisted result to see which next pipeline step becomes available from this workbench state."
-                  tone="default"
-                />
-              )}
+                  </>
+                ) : isAnalysisRegistryLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading collection details…</p>
+                ) : (
+                  <SectionNotice
+                    title="No collection review available"
+                    detail={
+                      selectedTraceIds.length > 0
+                        ? "The backend did not return a derived collection review for this trace scope."
+                        : "Select traces to see the backend-derived data collection review."
+                    }
+                    tone="default"
+                  />
+                )}
+              </div>
+            </SecondaryDisclosure>
 
-              {additionalBlockedPipelineAnalyses.length > 0 ? (
-                <div className="rounded-[0.95rem] border border-border bg-background px-4 py-4">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Still Waiting On Upstream Results
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {additionalBlockedPipelineAnalyses.map((analysis) => (
+            <SecondaryDisclosure
+              title="Downstream Context"
+              meta={`${downstreamAnalyses.length} unlocked`}
+            >
+              <div className="space-y-4">
+                {downstreamAnalyses.length > 0 ? (
+                  <div className="grid gap-3">
+                    {downstreamAnalyses.map((analysis) => (
                       <div
                         key={analysis.analysisId}
-                        className="rounded-xl border border-border bg-surface px-3 py-3"
+                        className="rounded-[1rem] border border-border bg-surface px-4 py-4"
                       >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
-                            {formatPipelineState(analysis.prerequisiteState)}
-                          </SurfaceTag>
-                          <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
-                            {analysis.availabilityState}
-                          </SurfaceTag>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{analysis.label}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                              {analysis.analysisId}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                              {formatPipelineState(analysis.prerequisiteState)}
+                            </SurfaceTag>
+                            <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                              {analysis.availabilityState}
+                            </SurfaceTag>
+                          </div>
                         </div>
-                        <p className="mt-2 text-sm font-medium text-foreground">{analysis.label}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {analysis.upstreamResultRequirement?.summary || analysis.traceCompatibility.summary}
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          {analysis.prerequisiteState === "requires_upstream_result"
+                            ? analysis.upstreamResultRequirement?.summary || analysis.traceCompatibility.summary
+                            : analysis.traceCompatibility.summary}
                         </p>
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
-            </div>
-          </SurfacePanel>
+                ) : (
+                  <SectionNotice
+                    title="No downstream step unlocked yet"
+                    detail="Complete or select a persisted result to see the next available pipeline step."
+                    tone="default"
+                  />
+                )}
+
+                {additionalBlockedPipelineAnalyses.length > 0 ? (
+                  <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-4">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Waiting On Upstream Results
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {additionalBlockedPipelineAnalyses.map((analysis) => (
+                        <div
+                          key={analysis.analysisId}
+                          className="rounded-xl border border-border bg-card px-3 py-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <SurfaceTag tone={pipelineStateTone(analysis.prerequisiteState)}>
+                              {formatPipelineState(analysis.prerequisiteState)}
+                            </SurfaceTag>
+                            <SurfaceTag tone={availabilityTone(analysis.availabilityState)}>
+                              {analysis.availabilityState}
+                            </SurfaceTag>
+                          </div>
+                          <p className="mt-2 text-sm font-medium text-foreground">{analysis.label}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {analysis.upstreamResultRequirement?.summary || analysis.traceCompatibility.summary}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </SecondaryDisclosure>
+          </div>
         </div>
       )}
     </div>

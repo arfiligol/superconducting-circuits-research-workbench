@@ -4,9 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { json } from "@codemirror/lang-json";
 import { python } from "@codemirror/lang-python";
 import {
-  AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
   ChevronDown,
   Download,
   FileCode2,
@@ -19,7 +17,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CodeMirror from "@uiw/react-codemirror";
 
 import { SchemdrawDownloadDialog } from "@/features/circuit-schemdraw/components/schemdraw-download-dialog";
-import { SchemdrawGuidanceCard } from "@/features/circuit-schemdraw/components/schemdraw-guidance-card";
 import { SchemdrawSvgViewer } from "@/features/circuit-schemdraw/components/schemdraw-svg-viewer";
 import { useCircuitSchemdrawData } from "@/features/circuit-schemdraw/hooks/use-circuit-schemdraw-data";
 import { parseSchemdrawDefinitionIdParam } from "@/features/circuit-schemdraw/lib/definition-id";
@@ -174,11 +171,11 @@ function EditorHintNotice({
 
 function FailureDetailCard({
   detail,
-  showDebugDisclosure,
+  showTechnicalDisclosure,
   staleSvgVisible,
 }: Readonly<{
   detail: SchemdrawFailureDetail;
-  showDebugDisclosure: boolean;
+  showTechnicalDisclosure: boolean;
   staleSvgVisible: boolean;
 }>) {
   const metadataRows = [
@@ -186,7 +183,7 @@ function FailureDetailCard({
     detail.category ? { label: "Category", value: detail.category } : null,
     detail.statusCode ? { label: "Status", value: String(detail.statusCode) } : null,
     detail.source ? { label: "Source", value: detail.source } : null,
-    detail.debugRef ? { label: "Debug Ref", value: detail.debugRef } : null,
+    detail.debugRef ? { label: "Reference", value: detail.debugRef } : null,
     detail.line || detail.column
       ? {
           label: "Location",
@@ -252,10 +249,10 @@ function FailureDetailCard({
           : "No SVG preview is available until the render path succeeds."}
       </p>
 
-      {showDebugDisclosure ? (
+      {showTechnicalDisclosure ? (
         <details className="mt-4 rounded-[0.85rem] border border-current/15 bg-background/70 px-4 py-3">
           <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.16em] text-foreground marker:hidden">
-            Debug detail
+            Technical details
           </summary>
           {detail.technicalMessage && detail.technicalMessage === detail.userMessage ? (
             <p className="mt-3 rounded-[0.8rem] border border-border/80 bg-background px-3 py-3 font-mono text-xs leading-5 text-foreground/86 dark:text-foreground/82">
@@ -369,6 +366,24 @@ export function CircuitSchemdrawWorkspace() {
       }),
     [developerModeEnabled, relationDiagnostics, renderSurface.failureDetail],
   );
+  const hasRenderWarningsOrErrors =
+    Boolean(renderSurface.failureDetail) ||
+    renderSurface.diagnostics.some(
+      (diagnostic) => diagnostic.severity === "error" || diagnostic.severity === "warning",
+    );
+  const hasLinkedSchemaWarnings =
+    activeDefinition?.validation_status === "warning" ||
+    activeDefinition?.validation_summary.status === "warning" ||
+    (activeDefinition?.validation_summary.warning_count ?? 0) > 0 ||
+    activeDefinition?.validation_notices.some(
+      (notice) =>
+        notice.level === "warning" ||
+        notice.severity === "warning" ||
+        notice.severity === "error" ||
+        notice.blocking === true,
+    ) === true;
+  const hasLinkedSchemaIssues =
+    Boolean(activeDefinitionError) || Boolean(selectionRecovery) || hasLinkedSchemaWarnings;
 
   useEffect(() => {
     if (!downloadPreview && isDownloadDialogOpen) {
@@ -429,7 +444,7 @@ export function CircuitSchemdrawWorkspace() {
             Circuit Schemdraw
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Edit source, render again, and inspect the latest SVG preview plus diagnostics.
+            Edit source, render again, and inspect the latest SVG preview.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -718,16 +733,6 @@ export function CircuitSchemdrawWorkspace() {
             />
           </div>
 
-          {renderSurface.failureDetail ? (
-            <div className="mt-4">
-              <FailureDetailCard
-                detail={renderSurface.failureDetail}
-                showDebugDisclosure={false}
-                staleSvgVisible={renderSurface.svg !== null}
-              />
-            </div>
-          ) : null}
-
           {renderSurface.svg ? (
             <SchemdrawSvgViewer
               svg={renderSurface.svg}
@@ -741,54 +746,50 @@ export function CircuitSchemdrawWorkspace() {
             </div>
           )}
 
-          <div className="mt-4 rounded-[0.8rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2 text-foreground">
-              {renderSurface.phase === "rendered" ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-300" />
-              ) : (
-                <AlertTriangle
-                  className={cx(
-                    "h-4 w-4",
-                    renderSurface.failureDetail ? "text-rose-700 dark:text-rose-300" : "text-amber-700 dark:text-amber-300",
-                  )}
-                />
-              )}
-              <span>
-                {renderSurface.phase === "rendered"
-                  ? "Latest backend response is applied."
-                  : renderSurface.failureDetail
-                    ? "Preview is waiting for a valid backend response after the latest failure."
-                    : "Preview is waiting for a successful latest response."}
-              </span>
+          <details className="mt-4 rounded-[0.8rem] border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-foreground marker:hidden">
+              <span>Preview details</span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </summary>
+            <div className="mt-3 space-y-2">
+              <p>Current document version: {draft.documentVersion}.</p>
+              {renderSurface.appliedDocumentVersion ? (
+                <p>Last applied version: {renderSurface.appliedDocumentVersion}.</p>
+              ) : null}
+              {renderSurface.previewMetadata?.view_box ? (
+                <p className="font-mono text-xs">{renderSurface.previewMetadata.view_box}</p>
+              ) : null}
             </div>
-            <p className="mt-3">Current document version: {draft.documentVersion}.</p>
-            {renderSurface.appliedDocumentVersion ? (
-              <p className="mt-2">Last applied version: {renderSurface.appliedDocumentVersion}.</p>
-            ) : null}
-            {renderSurface.previewMetadata?.view_box ? (
-              <p className="mt-2 font-mono text-xs">{renderSurface.previewMetadata.view_box}</p>
-            ) : null}
-          </div>
+          </details>
         </section>
       </section>
 
-      <SchemdrawGuidanceCard />
-
-      <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-        <div className="border-b border-border/80 pb-4">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Render Diagnostics
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Diagnostics come from the latest render or request error.
-          </p>
-        </div>
+      <details
+        className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]"
+        {...(hasRenderWarningsOrErrors ? { open: true } : {})}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 marker:hidden">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Render Diagnostics
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Latest render request status and messages.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasRenderWarningsOrErrors ? (
+              <SurfaceTag tone={renderSurface.failureDetail ? "error" : "warning"}>Review</SurfaceTag>
+            ) : null}
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </summary>
 
         {renderSurface.failureDetail ? (
           <div className="mt-4">
             <FailureDetailCard
               detail={renderSurface.failureDetail}
-              showDebugDisclosure={developerModeEnabled}
+              showTechnicalDisclosure={developerModeEnabled}
               staleSvgVisible={renderSurface.svg !== null}
             />
           </div>
@@ -836,20 +837,29 @@ export function CircuitSchemdrawWorkspace() {
           </div>
         ) : (
           <div className="mt-4 rounded-[0.9rem] border border-border bg-surface px-4 py-4 text-sm text-muted-foreground">
-            No diagnostics yet. Edit source or trigger a render to ask the backend for validation.
+            No render diagnostics for the latest request.
           </div>
         )}
-      </section>
+      </details>
 
-      <section className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-        <div className="border-b border-border/80 pb-4">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Linked Schema Snapshot
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Read-only reference from the selected persisted schema.
-          </p>
-        </div>
+      <details
+        className="rounded-[1rem] border border-border bg-card px-5 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]"
+        {...(hasLinkedSchemaIssues ? { open: true } : {})}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 marker:hidden">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Linked Schema Snapshot
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Read-only reference from the selected persisted schema.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasLinkedSchemaIssues ? <SurfaceTag tone="warning">Review</SurfaceTag> : null}
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </summary>
 
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <SummaryCard
@@ -885,7 +895,7 @@ export function CircuitSchemdrawWorkspace() {
             className="overflow-hidden rounded-[0.9rem] border border-border/80 bg-background text-sm"
           />
         </div>
-      </section>
+      </details>
 
       <SchemdrawDownloadDialog
         open={isDownloadDialogOpen && downloadPreview !== null}

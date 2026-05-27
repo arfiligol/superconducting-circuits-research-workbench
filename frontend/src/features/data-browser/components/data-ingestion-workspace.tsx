@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import useSWR from "swr";
 import {
   AlertTriangle,
+  ChevronDown,
   CheckCircle2,
   Database,
   FileSpreadsheet,
@@ -204,6 +205,7 @@ export function DataIngestionWorkspace() {
     Readonly<Record<string, FileImportStatus>>
   >({});
   const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isDropActive, setIsDropActive] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const activeDatasetState = useActiveDataset();
   const activeDataset = activeDatasetState.activeDataset;
@@ -274,8 +276,7 @@ export function DataIngestionWorkspace() {
                 ? "Provenance label is required."
                 : null;
 
-  async function handleFileSelection(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
+  async function parseSelectedFiles(files: readonly File[]) {
     if (files.length === 0) {
       return;
     }
@@ -344,8 +345,44 @@ export function DataIngestionWorkspace() {
       });
     } finally {
       setIsParsingFile(false);
-      event.target.value = "";
     }
+  }
+
+  async function handleFileSelection(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    await parseSelectedFiles(files);
+    event.currentTarget.value = "";
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDropActive(true);
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    const nextTarget = event.relatedTarget;
+    if (!nextTarget || !event.currentTarget.contains(nextTarget as Node)) {
+      setIsDropActive(false);
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDropActive(false);
+    const csvFiles = Array.from(event.dataTransfer.files).filter(
+      (file) => file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv"),
+    );
+
+    if (csvFiles.length === 0) {
+      setSubmitState({
+        tone: "warning",
+        message: "Drop one or more CSV files to validate before importing.",
+      });
+      return;
+    }
+
+    void parseSelectedFiles(csvFiles);
   }
 
   function clearFiles() {
@@ -441,171 +478,126 @@ export function DataIngestionWorkspace() {
     setIsSubmitting(false);
   }
 
+  const hasSelectedFiles = selectedFiles.length > 0;
+  const validationSummaryTone =
+    fileSummary.invalidFiles.length > 0
+      ? "warning"
+      : fileSummary.validFiles.length > 0
+        ? "success"
+        : "default";
+  const validationSummaryLabel = isParsingFile
+    ? "Validating files..."
+    : hasSelectedFiles
+      ? `${fileSummary.validFiles.length} ready / ${selectedFiles.length} total`
+      : "Awaiting CSV upload";
+  const importTargetSummary =
+    targetDesignMode === "existing"
+      ? targetDesignDecision.designName || "Choose an existing scope"
+      : targetDesignDecision.designName || "New scope from filename";
+  const importDetailNeedsAttention = Boolean(
+    hasSelectedFiles &&
+      ((targetDesignMode === "existing" && !targetDesignDecision.designId) ||
+        (targetDesignMode === "create" && targetDesignDecision.designName.length === 0) ||
+        provenanceLabel.trim().length === 0),
+  );
+  const shouldShowSubmitBlockedReason = Boolean(
+    submitBlockedReason &&
+      (submitBlockedReason !== "Choose one or more CSV files to validate and preprocess." ||
+        hasSelectedFiles),
+  );
+  const successfulImportCount = Object.values(fileImportStatuses).filter(
+    (status) => status.state === "success",
+  ).length;
+  const importActionCount = fileSummary.validFiles.length
+    ? `${fileSummary.validFiles.length} `
+    : "";
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <SurfaceHeader
         eyebrow="Raw-Data Intake"
         title="Data Ingestion"
-        description="Upload CSV files, review parsed results, and import them into the active dataset."
+        description="Upload CSV files, validate the batch, and import ready traces into the active dataset."
         actions={<SurfaceTag tone="primary">{selectedScopeSummary.title}</SurfaceTag>}
       />
 
       <SurfacePanel
         title="Upload-first intake"
-        description="Choose the trace type, confirm the target dataset, upload one or more CSV files, and review validation before import."
+        description="Start with files. Validation and import details stay compact unless the batch needs attention."
       >
-        <div className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            {ingestionScopes.map((scope) => {
-              const isSelected = scope.id === selectedScope;
-              return (
-                <button
-                  key={scope.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedScope(scope.id);
-                    clearFiles();
-                  }}
-                  aria-pressed={isSelected}
-                  className={cx(
-                    "w-full cursor-pointer rounded-[1rem] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-                    isSelected
-                      ? "border-primary/40 bg-primary/10 shadow-[0_16px_34px_rgba(37,99,235,0.16)]"
-                      : "border-border bg-background hover:-translate-y-0.5 hover:border-primary/30 hover:bg-surface-elevated hover:shadow-[0_16px_32px_rgba(15,23,42,0.08)]",
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-foreground">{scope.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        {scope.description}
-                      </p>
-                    </div>
-                    <SurfaceTag tone={isSelected ? "primary" : "default"}>
-                      {isSelected ? "Selected" : "Choose"}
-                    </SurfaceTag>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
-            <div className="flex items-start gap-3">
-              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Database className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Target Dataset
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {activeDataset?.name ?? "No active dataset selected"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {activeDataset
-                    ? `${activeDataset.datasetId} · ${activeDataset.visibilityScope} · ${activeDataset.status}`
-                    : "Attach a dataset in the header before importing raw data."}
-                </p>
-              </div>
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Trace Type
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Choose the parser contract before selecting files.
+              </p>
             </div>
-          </div>
-
-          <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Target Design Scope
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  Choose an existing active scope or create a new one
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Existing targets submit an explicit design_id. New-scope names are create defaults only.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(["existing", "create"] as const).map((mode) => (
+            <div
+              role="group"
+              aria-label="Trace type"
+              className="inline-flex w-full rounded-full border border-border bg-background p-1 sm:w-auto"
+            >
+              {ingestionScopes.map((scope) => {
+                const isSelected = scope.id === selectedScope;
+                return (
                   <button
-                    key={mode}
+                    key={scope.id}
                     type="button"
                     onClick={() => {
-                      setTargetDesignMode(mode);
+                      setSelectedScope(scope.id);
+                      clearFiles();
                     }}
-                    aria-pressed={targetDesignMode === mode}
+                    aria-pressed={isSelected}
+                    title={scope.description}
                     className={cx(
-                      "inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 text-sm font-medium transition",
-                      targetDesignMode === mode
-                        ? "border-primary/35 bg-primary/10 text-foreground"
-                        : "border-border bg-surface text-muted-foreground hover:border-primary/30 hover:text-foreground",
+                      "min-h-9 flex-1 cursor-pointer rounded-full px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 sm:flex-none",
+                      isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-primary/10 hover:text-foreground",
                     )}
                   >
-                    {mode === "existing" ? "Use Existing" : "Create New"}
+                    {scope.title}
                   </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4">
-              {targetDesignMode === "existing" ? (
-                <>
-                  <AppSelectField
-                    label="Existing Target Design Scope"
-                    value={selectedDesignId}
-                    onChange={setSelectedDesignId}
-                    options={targetDesignOptions}
-                    placeholder={
-                      targetDesignOptions.length > 0
-                        ? "Select an active design scope"
-                        : "No active design scopes"
-                    }
-                    disabled={isSubmitting || designsQuery.isLoading}
-                  />
-                  {designsQuery.error ? (
-                    <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
-                      Unable to load target design scopes. {String(designsQuery.error.message)}
-                    </p>
-                  ) : null}
-                </>
-              ) : (
-                <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                  <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    New Target Design Scope Name
-                  </span>
-                  <input
-                    value={createDesignName}
-                    onChange={(event) => {
-                      setCreateDesignName(event.target.value);
-                    }}
-                    disabled={isSubmitting}
-                    className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                    placeholder="PF6FQ Q0"
-                  />
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Filename-derived suggestions prefill this field, but they never select an existing scope implicitly.
-                  </p>
-                </label>
-              )}
+                );
+              })}
             </div>
           </div>
 
-          <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  CSV Files
-                </p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
-                  {selectedFiles.length > 0
-                    ? `${selectedFiles.length} file(s) selected`
-                    : "Choose CSV files"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  HFSS sweeps can use three columns such as
-                  <span className="font-medium text-foreground"> L_jun [nH]</span>,
-                  <span className="font-medium text-foreground"> Freq [GHz]</span>, and
-                  <span className="font-medium text-foreground"> im(Yt(...)) []</span>.
-                </p>
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            aria-busy={isParsingFile}
+            className={cx(
+              "rounded-[1rem] border border-dashed px-5 py-6 transition",
+              isDropActive
+                ? "border-primary/60 bg-primary/10"
+                : "border-border bg-background hover:border-primary/35 hover:bg-surface",
+            )}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 gap-4">
+                <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  {isParsingFile ? (
+                    <LoaderCircle className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Upload className="h-5 w-5" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {hasSelectedFiles
+                      ? `${selectedFiles.length} file(s) selected`
+                      : "Drop CSV files here"}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    CSV Files validate immediately. HFSS sweeps can include frequency,
+                    parameter, and response columns.
+                  </p>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -613,20 +605,18 @@ export function DataIngestionWorkspace() {
                   onClick={() => {
                     fileInputRef.current?.click();
                   }}
-                  className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                  disabled={isParsingFile || isSubmitting}
+                  className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isParsingFile ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
-                  )}
+                  <Upload className="h-4 w-4" />
                   Choose CSV files
                 </button>
                 {selectedFiles.length > 0 ? (
                   <button
                     type="button"
                     onClick={clearFiles}
-                    className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+                    disabled={isSubmitting}
+                    className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <X className="h-4 w-4" />
                     Clear files
@@ -644,139 +634,176 @@ export function DataIngestionWorkspace() {
             </div>
           </div>
 
-          <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
-            <div className="flex items-start gap-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Validation
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <SurfaceTag tone={validationSummaryTone}>{validationSummaryLabel}</SurfaceTag>
+              </div>
+            </div>
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Trace Count
+              </p>
+              <p className="mt-2 text-sm font-semibold text-foreground">
+                {fileSummary.traceCount}
+              </p>
+            </div>
+            <div className="rounded-[0.95rem] border border-border bg-background px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Import Target
+              </p>
+              <p className="mt-2 truncate text-sm font-semibold text-foreground">
+                {importTargetSummary}
+              </p>
+            </div>
+          </div>
+
+          <details className="group rounded-[1rem] border border-border bg-background">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
               <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <FileSpreadsheet className="h-5 w-5" />
               </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-foreground">Validation & Preprocess</p>
-                  {fileSummary.validFiles.length > 0 ? (
-                    <SurfaceTag tone="primary">
-                      {fileSummary.validFiles.length} ready
-                    </SurfaceTag>
-                  ) : null}
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">
+                    Validation & Preprocess
+                  </span>
+                  <SurfaceTag tone={validationSummaryTone}>{validationSummaryLabel}</SurfaceTag>
                   {fileSummary.invalidFiles.length > 0 ? (
-                    <SurfaceTag tone="warning">
-                      {fileSummary.invalidFiles.length} error
-                    </SurfaceTag>
+                    <SurfaceTag tone="warning">{fileSummary.invalidFiles.length} error</SurfaceTag>
                   ) : null}
-                </div>
+                </span>
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  Open for per-file, per-trace, axes, shape, and sweep-axis details.
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition group-open:rotate-180" />
+            </summary>
 
-                {selectedFiles.length === 0 ? (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Upload CSV files to validate them against the fixed intake contract.
-                  </p>
-                ) : (
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Files
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-foreground">
-                          {fileSummary.validFiles.length} valid / {selectedFiles.length} total
-                        </p>
-                      </div>
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Trace Count
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-foreground">
-                          {fileSummary.traceCount}
-                        </p>
-                      </div>
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Shape
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-foreground">
-                          {fileSummary.shapeLabels.join(", ") || "No valid shape"}
-                        </p>
-                      </div>
-                      <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Sweep Axis
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-foreground">
-                          {fileSummary.sweepAxisLabels.join(", ") || "No valid sweep"}
-                        </p>
-                      </div>
-                    </div>
-
+            <div className="border-t border-border px-4 py-4">
+              {selectedFiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Upload CSV files to validate them against the fixed intake contract.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-4">
                     <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
                       <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Axes
+                        Files
                       </p>
                       <p className="mt-2 text-sm font-semibold text-foreground">
-                        {fileSummary.axisLabels.join(", ") || "No valid axes"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {fileSummary.ndFileCount} ND file(s),{" "}
-                        {fileSummary.validFiles.length - fileSummary.ndFileCount} scalar file(s)
+                        {fileSummary.validFiles.length} valid / {selectedFiles.length} total
                       </p>
                     </div>
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Trace Count
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-foreground">
+                        {fileSummary.traceCount}
+                      </p>
+                    </div>
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Shape
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-foreground">
+                        {fileSummary.shapeLabels.join(", ") || "No valid shape"}
+                      </p>
+                    </div>
+                    <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Sweep Axis
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-foreground">
+                        {fileSummary.sweepAxisLabels.join(", ") || "No valid sweep"}
+                      </p>
+                    </div>
+                  </div>
 
-                    <div className="space-y-3">
-                      {selectedFiles.map((file) => {
-                        const validation = file.validation;
-                        const importStatus = fileImportStatuses[file.id] ?? fileImportIdle();
-                        return (
-                          <div
-                            key={file.id}
-                            className="rounded-[0.95rem] border border-border bg-surface px-4 py-3"
-                          >
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-foreground">
-                                  {file.name}
+                  <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Axes
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">
+                      {fileSummary.axisLabels.join(", ") || "No valid axes"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {fileSummary.ndFileCount} ND file(s),{" "}
+                      {fileSummary.validFiles.length - fileSummary.ndFileCount} scalar file(s)
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {selectedFiles.map((file) => {
+                      const validation = file.validation;
+                      const importStatus = fileImportStatuses[file.id] ?? fileImportIdle();
+                      return (
+                        <div
+                          key={file.id}
+                          className="rounded-[0.95rem] border border-border bg-surface px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {file.name}
+                              </p>
+                              {validation ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {validation.traces.length} trace(s) ·{" "}
+                                  {validationShapeLabel(validation)} ·{" "}
+                                  {validationSweepAxisLabel(validation)}
                                 </p>
-                                {validation ? (
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    {validation.traces.length} trace(s) ·{" "}
-                                    {validationShapeLabel(validation)} ·{" "}
-                                    {validationSweepAxisLabel(validation)}
-                                  </p>
-                                ) : (
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    Validation failed
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <SurfaceTag tone={validation ? "success" : "warning"}>
-                                  {validation ? "Ready" : "Error"}
-                                </SurfaceTag>
-                                {importStatus.state !== "idle" ? (
-                                  <SurfaceTag
-                                    tone={
-                                      importStatus.state === "success"
-                                        ? "success"
-                                        : importStatus.state === "error"
-                                          ? "warning"
-                                          : "primary"
-                                    }
-                                  >
-                                    {importStatus.state}
-                                  </SurfaceTag>
-                                ) : null}
-                              </div>
+                              ) : (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Validation failed
+                                </p>
+                              )}
                             </div>
+                            <div className="flex flex-wrap gap-2">
+                              <SurfaceTag tone={validation ? "success" : "warning"}>
+                                {validation ? "Ready" : "Error"}
+                              </SurfaceTag>
+                              {importStatus.state !== "idle" ? (
+                                <SurfaceTag
+                                  tone={
+                                    importStatus.state === "success"
+                                      ? "success"
+                                      : importStatus.state === "error"
+                                        ? "warning"
+                                        : "primary"
+                                  }
+                                >
+                                  {importStatus.state}
+                                </SurfaceTag>
+                              ) : null}
+                            </div>
+                          </div>
 
-                            {file.error ? (
-                              <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-3 text-sm text-foreground">
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
-                                <span>{file.error}</span>
-                              </div>
-                            ) : null}
+                          {file.error ? (
+                            <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-3 text-sm text-foreground">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+                              <span>{file.error}</span>
+                            </div>
+                          ) : null}
 
-                            {validation ? (
-                              <div className="mt-3 space-y-2">
+                          {validation ? (
+                            <details className="group mt-3 rounded-xl border border-border bg-background">
+                              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                                <span className="text-sm font-medium text-foreground">
+                                  Trace details
+                                </span>
+                                <ChevronDown className="h-4 w-4 text-muted-foreground transition group-open:rotate-180" />
+                              </summary>
+                              <div className="space-y-2 border-t border-border px-3 py-3">
                                 {validation.traces.map((trace) => (
                                   <div
                                     key={`${file.id}-${trace.parameter}-${trace.representation}-${trace.headerLabel}`}
-                                    className="rounded-xl border border-border bg-background px-3 py-3"
+                                    className="rounded-xl border border-border bg-surface px-3 py-3"
                                   >
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                       <p className="text-sm font-semibold text-foreground">
@@ -790,41 +817,153 @@ export function DataIngestionWorkspace() {
                                   </div>
                                 ))}
                               </div>
-                            ) : null}
+                            </details>
+                          ) : null}
 
-                            {importStatus.message ? (
-                              <p className="mt-3 text-sm text-muted-foreground">
-                                {importStatus.message}
-                              </p>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="grid gap-3">
-                      <label className="block rounded-xl border border-border bg-surface px-4 py-3">
-                        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Provenance Label
-                        </span>
-                        <input
-                          value={provenanceLabel}
-                          onChange={(event) => {
-                            setProvenanceLabel(event.target.value);
-                          }}
-                          disabled={isSubmitting}
-                          className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                          placeholder="Layout Simulation import · PF6FQ Q0"
-                        />
-                      </label>
-                    </div>
+                          {importStatus.message ? (
+                            <p className="mt-3 text-sm text-muted-foreground">
+                              {importStatus.message}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          </div>
+          </details>
 
-          {submitBlockedReason ? (
+          <details className="group rounded-[1rem] border border-border bg-background">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Database className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">Import Details</span>
+                  <SurfaceTag tone={importDetailNeedsAttention ? "warning" : "default"}>
+                    {importDetailNeedsAttention ? "Needs input" : importTargetSummary}
+                  </SurfaceTag>
+                </span>
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  Target Dataset, Target Design Scope, and Provenance Label are ready to adjust.
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition group-open:rotate-180" />
+            </summary>
+
+            <div className="space-y-4 border-t border-border px-4 py-4">
+              <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Target Dataset
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {activeDataset?.name ?? "No active dataset selected"}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {activeDataset
+                    ? `${activeDataset.datasetId} · ${activeDataset.visibilityScope} · ${activeDataset.status}`
+                    : "Attach a dataset in the header before importing raw data."}
+                </p>
+              </div>
+
+              <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Target Design Scope
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">
+                      Choose an existing active scope or create a new one
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Existing targets submit an explicit design_id. New-scope names are create defaults only.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["existing", "create"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => {
+                          setTargetDesignMode(mode);
+                        }}
+                        aria-pressed={targetDesignMode === mode}
+                        className={cx(
+                          "inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 text-sm font-medium transition",
+                          targetDesignMode === mode
+                            ? "border-primary/35 bg-primary/10 text-foreground"
+                            : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground",
+                        )}
+                      >
+                        {mode === "existing" ? "Use Existing" : "Create New"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  {targetDesignMode === "existing" ? (
+                    <>
+                      <AppSelectField
+                        label="Existing Target Design Scope"
+                        value={selectedDesignId}
+                        onChange={setSelectedDesignId}
+                        options={targetDesignOptions}
+                        placeholder={
+                          targetDesignOptions.length > 0
+                            ? "Select an active design scope"
+                            : "No active design scopes"
+                        }
+                        disabled={isSubmitting || designsQuery.isLoading}
+                      />
+                      {designsQuery.error ? (
+                        <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+                          Unable to load target design scopes. {String(designsQuery.error.message)}
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <label className="block rounded-xl border border-border bg-background px-4 py-3">
+                      <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                        New Target Design Scope Name
+                      </span>
+                      <input
+                        value={createDesignName}
+                        onChange={(event) => {
+                          setCreateDesignName(event.target.value);
+                        }}
+                        disabled={isSubmitting}
+                        className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                        placeholder="PF6FQ Q0"
+                      />
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Filename-derived suggestions prefill this field, but they never select an existing scope implicitly.
+                      </p>
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              <label className="block rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+                <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Provenance Label
+                </span>
+                <input
+                  value={provenanceLabel}
+                  onChange={(event) => {
+                    setProvenanceLabel(event.target.value);
+                  }}
+                  disabled={isSubmitting}
+                  className="mt-2 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                  placeholder="Layout Simulation import · PF6FQ Q0"
+                />
+              </label>
+            </div>
+          </details>
+
+          {shouldShowSubmitBlockedReason ? (
             <div className="rounded-[1rem] border border-amber-500/35 bg-amber-50 px-4 py-4 text-sm text-amber-950 dark:bg-amber-950/35 dark:text-amber-200">
               {submitBlockedReason}
             </div>
@@ -843,7 +982,8 @@ export function DataIngestionWorkspace() {
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            Import {fileSummary.validFiles.length || ""} {selectedScopeSummary.title} CSV
+            Import {importActionCount}
+            {selectedScopeSummary.title} CSV
             {fileSummary.validFiles.length === 1 ? "" : "s"}
           </button>
 
@@ -860,7 +1000,7 @@ export function DataIngestionWorkspace() {
             </div>
           ) : null}
 
-          {Object.values(fileImportStatuses).some((status) => status.state === "success") ? (
+          {successfulImportCount > 0 ? (
             <div className="rounded-[1rem] border border-border bg-background px-4 py-4">
               <div className="flex items-start gap-3">
                 <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-700 dark:text-emerald-300">
@@ -868,10 +1008,10 @@ export function DataIngestionWorkspace() {
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">
-                    Imported files stay listed with their individual status.
+                    {successfulImportCount} file(s) imported.
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Review the imported design from Raw Data when you are ready.
+                    Open validation details for individual file status, then review the imported design from Raw Data when you are ready.
                   </p>
                 </div>
               </div>

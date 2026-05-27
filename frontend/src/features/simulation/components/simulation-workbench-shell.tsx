@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { RefreshCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, RefreshCcw } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useFieldArray, useForm } from "react-hook-form";
 
 import { PostProcessingResultStage } from "@/features/simulation/components/post-processing-result-stage";
 import { PostProcessingSetupStage } from "@/features/simulation/components/post-processing-setup-stage";
 import { SimulationDefinitionContextStage } from "@/features/simulation/components/simulation-definition-context-stage";
+import { SimulationRunStatusPanel } from "@/features/simulation/components/simulation-run-status-panel";
 import { SimulationResultStage } from "@/features/simulation/components/simulation-result-stage";
 import { SimulationSetupStage } from "@/features/simulation/components/simulation-setup-stage";
 import {
@@ -47,6 +48,7 @@ import {
 import {
   resolveResultStageState,
   resolveSetupStageState,
+  type WorkflowStageState,
 } from "@/features/simulation/lib/stage-state";
 import {
   hasSimulationTaskResult,
@@ -59,6 +61,7 @@ import {
 import type { AppSelectOption } from "@/features/shared/components/app-select";
 import {
   SurfaceHeader,
+  SurfaceTag,
   cx,
 } from "@/features/shared/components/surface-kit";
 import { ApiError } from "@/lib/api/client";
@@ -83,6 +86,7 @@ export function SimulationWorkbenchShell() {
   const { pushToast } = useAppToasts();
   const [isRefreshingWorkflow, setIsRefreshingWorkflow] = useState(false);
   const [isAdvancedHbsolveExpanded, setIsAdvancedHbsolveExpanded] = useState(false);
+  const [isPostProcessingExpanded, setIsPostProcessingExpanded] = useState(false);
   const [postProcessingSteps, setPostProcessingSteps] = useState<readonly PostProcessingStepDraft[]>(
     [],
   );
@@ -359,6 +363,17 @@ export function SimulationWorkbenchShell() {
         : !session?.canSubmitTasks
           ? "The current session does not allow submitting simulation tasks."
           : null;
+  const currentSetupState: WorkflowStageState = simulationSetupBlockedReason
+    ? {
+        label: "Blocked",
+        tone: "warning",
+        message: simulationSetupBlockedReason,
+      }
+    : {
+        label: "Ready",
+        tone: "success",
+        message: "Simulation setup is ready to submit.",
+      };
   const displayedSimulationStageAuthority = resolveAuthoritativeSimulationTaskSummary(
     displayedSimulationStageTask,
     displayedSimulationTaskDetail,
@@ -601,6 +616,7 @@ export function SimulationWorkbenchShell() {
     clearBuildErrors();
     resetForWorkflowContext();
     setIsAdvancedHbsolveExpanded(false);
+    setIsPostProcessingExpanded(false);
     setPostProcessingSteps([]);
     setNewPostProcessingStepType("coordinate_transform");
     setHydratedPostTaskId(null);
@@ -754,7 +770,7 @@ export function SimulationWorkbenchShell() {
       <SurfaceHeader
         eyebrow="Research Workflow"
         title="Circuit Simulation"
-        description="Set up the run, inspect the result, and carry useful outputs forward into post processing."
+        description="Set up the run, submit it, and inspect the result."
         actions={
           <button
             type="button"
@@ -846,8 +862,6 @@ export function SimulationWorkbenchShell() {
           applyOfficialExamplePreset={applyOfficialExamplePreset}
           applySavedSetup={applySavedSetup}
           deleteSavedSetup={deleteSavedSetup}
-          displayedSimulationStageAuthority={displayedSimulationStageAuthority}
-          displayedSimulationTaskDetail={displayedSimulationTaskDetail}
           form={form}
           harmonicBalanceEnabled={harmonicBalanceEnabled}
           isAdvancedHbsolveExpanded={isAdvancedHbsolveExpanded}
@@ -858,16 +872,12 @@ export function SimulationWorkbenchShell() {
           onAddSource={handleAddSource}
           onOpenManageDialog={openManageDialog}
           onOpenSaveDialog={openSaveDialog}
-          onSubmit={() => {
-            void handleSubmit("simulation");
-          }}
           openSaveAsNewFromManage={openSaveAsNewFromManage}
           parameterSweepEnabled={parameterSweepEnabled}
           parameterSweepFieldArray={parameterSweepFieldArray}
           ptcEnabled={ptcEnabled}
           ptcPortOptions={sourcePortSelectOptions}
           resolvedDefinitionId={resolvedDefinitionId}
-          resolvedTaskId={resolvedTaskId}
           restoreSimulationSetupFromCurrentSource={restoreSimulationSetupFromCurrentSource}
           saveDialogMode={saveDialogMode}
           saveDialogOverwriteTargetId={saveDialogOverwriteTargetId}
@@ -879,20 +889,30 @@ export function SimulationWorkbenchShell() {
           setIsManageDialogOpen={setIsManageDialogOpen}
           setIsSaveDialogOpen={setIsSaveDialogOpen}
           setSaveSetupNameDraft={setSaveSetupNameDraft}
-          simulationResultReady={simulationResultReady}
           simulationSetupAuthorityPresentation={simulationSetupAuthorityPresentation}
-          simulationSetupBlockedReason={simulationSetupBlockedReason}
-          simulationSetupBuildError={simulationSetupBuildError}
           sourceFieldArray={sourceFieldArray}
           sourcePortSelectOptions={sourcePortSelectOptions}
-          state={simulationSetupState}
+          state={currentSetupState}
           submitSaveDialog={submitSaveDialog}
           sweepTargetOptions={sweepTargetOptions}
           sweepTargetOptionsByValue={sweepTargetOptionsByValue}
           sweepTargetSelectOptions={sweepTargetSelectOptions}
-          taskMutationStatus={taskMutationStatus}
-          attachTask={attachTask}
           visibleSavedSetups={visibleSavedSetups}
+        />
+
+        <SimulationRunStatusPanel
+          state={simulationSetupState}
+          blockedReason={simulationSetupBlockedReason}
+          buildError={simulationSetupBuildError}
+          taskMutationStatus={taskMutationStatus}
+          displayedSimulationStageAuthority={displayedSimulationStageAuthority}
+          displayedSimulationTaskDetail={displayedSimulationTaskDetail}
+          simulationResultReady={simulationResultReady}
+          resolvedTaskId={resolvedTaskId}
+          onSubmit={() => {
+            void handleSubmit("simulation");
+          }}
+          attachTask={attachTask}
         />
 
         <SimulationResultStage
@@ -907,49 +927,89 @@ export function SimulationWorkbenchShell() {
           attachTask={attachTask}
         />
 
-        <PostProcessingSetupStage
-          state={postProcessingSetupState}
-          blockedReason={postProcessingSetupBlockedReason}
-          displayedSimulationStageAuthority={displayedSimulationStageAuthority}
-          latestPostProcessingStageAuthority={latestPostProcessingStageAuthority}
-          latestPostProcessingTaskDetail={latestPostProcessingTaskDetail}
-          postProcessingResultReady={postProcessingResultReady}
-          postProcessingSteps={postProcessingSteps}
-          postProcessingPipelineContext={postProcessingPipelineContext}
-          postProcessingStepContexts={postProcessingStepContexts}
-          initialPostProcessingStepContext={initialPostProcessingStepContext}
-          newPostProcessingStepType={newPostProcessingStepType}
-          setNewPostProcessingStepType={setNewPostProcessingStepType}
-          postProcessingStepTypeOptions={postProcessingStepTypeOptions}
-          appendPostProcessingStep={appendPostProcessingStep}
-          removePostProcessingStep={removePostProcessingStep}
-          updateCoordinateTransformStep={updateCoordinateTransformStep}
-          toggleKronReductionKeepLabel={toggleKronReductionKeepLabel}
-          updatePostProcessingStepType={updatePostProcessingStepType}
-          postProcessingBuildError={postProcessingBuildError}
-          taskMutationState={taskMutationStatus.state}
-          form={form}
-          onSubmit={() => {
-            void handleSubmit("post_processing");
-          }}
-          attachTask={attachTask}
-          resolvedTaskId={resolvedTaskId}
-        />
+        <section className="rounded-[1rem] border border-border bg-surface px-4 py-3">
+          <button
+            type="button"
+            onClick={() => {
+              setIsPostProcessingExpanded((current) => !current);
+            }}
+            className="flex w-full cursor-pointer items-center justify-between gap-3 text-left"
+          >
+            <span className="min-w-0">
+              <span className="text-sm font-semibold text-foreground">
+                Optional Post-processing
+              </span>
+              <span className="mt-1 flex flex-wrap items-center gap-2">
+                <SurfaceTag tone={postProcessingSetupState.tone}>
+                  {postProcessingSetupState.label}
+                </SurfaceTag>
+                {latestPostProcessingStageAuthority ? (
+                  <SurfaceTag tone="default">
+                    Task #{latestPostProcessingStageAuthority.taskId}
+                  </SurfaceTag>
+                ) : null}
+                {postProcessingResultReady ? (
+                  <SurfaceTag tone="success">Result ready</SurfaceTag>
+                ) : null}
+              </span>
+            </span>
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:border-primary/35 hover:bg-primary/10 hover:text-foreground">
+              {isPostProcessingExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </span>
+          </button>
 
-        <PostProcessingResultStage
-          state={postProcessingResultState}
-          errorMessage={postProcessingStageErrorMessage}
-          latestPostProcessingStageAuthority={latestPostProcessingStageAuthority}
-          latestPostProcessingTaskDetail={latestPostProcessingTaskDetail}
-          postProcessingResultReady={postProcessingResultReady}
-          activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
-          explicitUpstreamSimulationTaskId={explicitUpstreamSimulationTaskId}
-          displayedSimulationStageAuthority={displayedSimulationStageAuthority}
-          postProcessingStepCount={postProcessingStepCount}
-          postProcessingResultSummary={postProcessingResultSummary}
-          resolvedTaskId={resolvedTaskId}
-          attachTask={attachTask}
-        />
+          {isPostProcessingExpanded ? (
+            <div className="mt-4 space-y-4">
+              <PostProcessingSetupStage
+                state={postProcessingSetupState}
+                blockedReason={postProcessingSetupBlockedReason}
+                displayedSimulationStageAuthority={displayedSimulationStageAuthority}
+                latestPostProcessingStageAuthority={latestPostProcessingStageAuthority}
+                latestPostProcessingTaskDetail={latestPostProcessingTaskDetail}
+                postProcessingResultReady={postProcessingResultReady}
+                postProcessingSteps={postProcessingSteps}
+                postProcessingPipelineContext={postProcessingPipelineContext}
+                postProcessingStepContexts={postProcessingStepContexts}
+                initialPostProcessingStepContext={initialPostProcessingStepContext}
+                newPostProcessingStepType={newPostProcessingStepType}
+                setNewPostProcessingStepType={setNewPostProcessingStepType}
+                postProcessingStepTypeOptions={postProcessingStepTypeOptions}
+                appendPostProcessingStep={appendPostProcessingStep}
+                removePostProcessingStep={removePostProcessingStep}
+                updateCoordinateTransformStep={updateCoordinateTransformStep}
+                toggleKronReductionKeepLabel={toggleKronReductionKeepLabel}
+                updatePostProcessingStepType={updatePostProcessingStepType}
+                postProcessingBuildError={postProcessingBuildError}
+                taskMutationState={taskMutationStatus.state}
+                form={form}
+                onSubmit={() => {
+                  void handleSubmit("post_processing");
+                }}
+                attachTask={attachTask}
+                resolvedTaskId={resolvedTaskId}
+              />
+
+              <PostProcessingResultStage
+                state={postProcessingResultState}
+                errorMessage={postProcessingStageErrorMessage}
+                latestPostProcessingStageAuthority={latestPostProcessingStageAuthority}
+                latestPostProcessingTaskDetail={latestPostProcessingTaskDetail}
+                postProcessingResultReady={postProcessingResultReady}
+                activeDatasetId={activeDatasetState.activeDataset?.datasetId ?? null}
+                explicitUpstreamSimulationTaskId={explicitUpstreamSimulationTaskId}
+                displayedSimulationStageAuthority={displayedSimulationStageAuthority}
+                postProcessingStepCount={postProcessingStepCount}
+                postProcessingResultSummary={postProcessingResultSummary}
+                resolvedTaskId={resolvedTaskId}
+                attachTask={attachTask}
+              />
+            </div>
+          ) : null}
+        </section>
       </div>
     </div>
   );

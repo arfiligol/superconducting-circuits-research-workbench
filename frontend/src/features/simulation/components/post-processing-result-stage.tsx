@@ -45,7 +45,7 @@ export function PostProcessingResultStage({
     <WorkflowStageSection
       step={5}
       title="Post Processing Result"
-      description="Browse the processed result, switch between available result sources, and save the current trace from here too."
+      description="Inspect processed output."
       status={state}
       actions={
         latestPostProcessingStageAuthority ? (
@@ -89,13 +89,6 @@ export function PostProcessingResultStage({
                 {latestPostProcessingTaskDetail?.progress.summary ??
                   latestPostProcessingStageAuthority.summary}
               </p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {explicitUpstreamSimulationTaskId !== null
-                  ? `This processed result stays tied to simulation task #${explicitUpstreamSimulationTaskId}.`
-                  : displayedSimulationStageAuthority
-                    ? `This processed result stays tied to simulation task #${displayedSimulationStageAuthority.taskId}.`
-                    : "Upstream simulation context is not currently available in the page."}
-              </p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <SurfaceTag tone="default">
@@ -119,6 +112,15 @@ export function PostProcessingResultStage({
             <SurfaceTag tone="default">
               {postProcessingStepCount} step{postProcessingStepCount === 1 ? "" : "s"}
             </SurfaceTag>
+            {explicitUpstreamSimulationTaskId !== null ? (
+              <SurfaceTag tone="default">
+                Simulation #{explicitUpstreamSimulationTaskId}
+              </SurfaceTag>
+            ) : displayedSimulationStageAuthority ? (
+              <SurfaceTag tone="default">
+                Simulation #{displayedSimulationStageAuthority.taskId}
+              </SurfaceTag>
+            ) : null}
             {postProcessingResultSummary.analysisRunId !== null ? (
               <SurfaceTag tone="success">
                 Analysis Run {postProcessingResultSummary.analysisRunId}

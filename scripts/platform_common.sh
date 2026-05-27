@@ -70,7 +70,7 @@ platform_start_service() {
     local existing_pid
     existing_pid="$(cat "$pid_file")"
     if kill -0 "$existing_pid" 2>/dev/null; then
-      echo "[platform-start] $name already running (pid=$existing_pid)"
+      echo "[start] $name already running (pid=$existing_pid)"
       return
     fi
     rm -f "$pid_file"
@@ -101,11 +101,11 @@ print(process.pid)
 PY
   )"
   printf '%s\n' "$pid" >"$pid_file"
-  echo "[platform-start] started $name (pid=$pid, log=$log_file)"
+  echo "[start] started $name (pid=$pid, log=$log_file)"
 
   sleep 1
   if ! kill -0 "$pid" 2>/dev/null; then
-    echo "[platform-start] $name exited during startup"
+    echo "[start] $name exited during startup"
     if [[ -f "$log_file" ]]; then
       tail -n 40 "$log_file"
     fi
@@ -116,7 +116,7 @@ PY
 platform_stop_service() {
   local pid_dir="$1"
   local name="$2"
-  local prefix="${3:-platform-stop}"
+  local prefix="${3:-stop}"
   local pid_file="$pid_dir/$name.pid"
 
   if [[ ! -f "$pid_file" ]]; then
@@ -144,14 +144,14 @@ platform_wait_for_url() {
 
   for _ in $(seq 1 45); do
     if curl --fail --silent "$url" >/dev/null 2>&1; then
-      echo "[platform-start] $name ready at $url"
+      echo "[start] $name ready at $url"
       return
     fi
     if [[ -n "$pid_file" && -f "$pid_file" ]]; then
       local pid
       pid="$(cat "$pid_file")"
       if ! kill -0 "$pid" 2>/dev/null; then
-        echo "[platform-start] $name exited before becoming ready: $url"
+        echo "[start] $name exited before becoming ready: $url"
         if [[ -f "$log_file" ]]; then
           tail -n 40 "$log_file"
         fi
@@ -161,7 +161,7 @@ platform_wait_for_url() {
     sleep 1
   done
 
-  echo "[platform-start] $name did not become ready: $url"
+  echo "[start] $name did not become ready: $url"
   if [[ -f "$log_file" ]]; then
     tail -n 40 "$log_file"
   fi
@@ -178,18 +178,19 @@ platform_record_listen_pid() {
   listen_pid="$(lsof -ti tcp:"$port" -sTCP:LISTEN | head -n 1)"
   if [[ -n "$listen_pid" ]]; then
     printf '%s\n' "$listen_pid" >"$pid_file"
-    echo "[platform-start] recorded $name listener pid=$listen_pid"
+    echo "[start] recorded $name listener pid=$listen_pid"
   fi
 }
 
 platform_check_redis() {
   local root_dir="$1"
+  local prefix="${2:-start}"
   if uv run python "$root_dir/scripts/check_worker_runtime.py" --redis-only >/dev/null; then
     return
   fi
 
-  echo "[platform] Redis is not reachable via SC_RQ_REDIS_URL / SC_REDIS_URL."
-  echo "[platform] Start Redis first, then retry platform/dev bring-up."
+  echo "[$prefix] Redis is not reachable via SC_RQ_REDIS_URL / SC_REDIS_URL."
+  echo "[$prefix] Start Redis first, then retry app bring-up."
   exit 1
 }
 
@@ -199,13 +200,13 @@ platform_wait_for_runtime_health() {
 
   for _ in $(seq 1 45); do
     if uv run python "$root_dir/scripts/check_worker_runtime.py" --app-url "$app_url" >/dev/null; then
-      echo "[platform-start] runtime topology is healthy"
+      echo "[start] runtime topology is healthy"
       return
     fi
     sleep 1
   done
 
-  echo "[platform-start] runtime topology did not become healthy"
+  echo "[start] runtime topology did not become healthy"
   uv run python "$root_dir/scripts/check_worker_runtime.py" --app-url "$app_url" || true
   exit 1
 }

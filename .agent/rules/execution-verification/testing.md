@@ -1,10 +1,14 @@
 ## Testing Commands
-- **Root rewrite check**: `npm run rewrite:check`
+- **Foundation workspace check**:
+    - `cd backend && uv run pytest`
+    - `npm run test --prefix frontend`
+    - `npm run lint --prefix desktop`
 - **Backend/core tests**:
     - `cd backend && uv run pytest`
     - `uv run pytest`
 - **Frontend unit tests**: `npm run test --prefix frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix frontend`
+- For user-visible frontend changes, Planning & Reviewing Agents must use Playwright-based smoke verification and screenshot or equivalent visual evidence during merge review.
 - **Desktop foundation checks**:
     - `npm run lint --prefix desktop`
     - `npm run build --prefix desktop`

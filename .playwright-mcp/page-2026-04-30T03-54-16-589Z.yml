@@ -1,0 +1,141 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - button "Toggle navigation menu" [ref=e5] [cursor=pointer]:
+          - img [ref=e6]
+        - generic [ref=e7]:
+          - generic [ref=e8]:
+            - paragraph [ref=e9]: SUPERCONDUCTING CIRCUITS
+            - generic [ref=e10]:
+              - generic [ref=e11]: Pipeline
+              - img [ref=e12]
+              - paragraph [ref=e14]: Raw Data Browser
+          - generic [ref=e15]:
+            - button "Runtime Mode Local Mode" [ref=e16] [cursor=pointer]:
+              - generic [ref=e17]: Runtime Mode
+              - generic [ref=e18]: Local Mode
+            - button "Active Dataset No active dataset" [ref=e19] [cursor=pointer]:
+              - generic [ref=e20]: Active Dataset
+              - generic [ref=e21]: No active dataset
+            - button "Open global context panel" [ref=e22] [cursor=pointer]:
+              - img [ref=e24]
+              - generic [ref=e27]:
+                - generic [ref=e28]: Local Mode
+                - generic [ref=e29]: Local Space · No active dataset · Loading tasks...
+            - button "Open account panel" [ref=e30] [cursor=pointer]:
+              - img [ref=e32]
+              - generic [ref=e35]:
+                - generic [ref=e36]: Local Operator
+                - generic [ref=e37]: Local Space
+    - generic [ref=e38]:
+      - complementary [ref=e39]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - paragraph [ref=e44]: Workspace
+            - navigation [ref=e45]:
+              - link "Dashboard" [ref=e46] [cursor=pointer]:
+                - /url: /dashboard
+                - generic [ref=e47]:
+                  - img [ref=e49]
+                  - generic [ref=e55]: Dashboard
+              - link "Dataset" [ref=e56] [cursor=pointer]:
+                - /url: /dataset
+                - generic [ref=e57]:
+                  - img [ref=e59]
+                  - generic [ref=e64]: Dataset
+              - link "Tasks" [ref=e65] [cursor=pointer]:
+                - /url: /tasks
+                - generic [ref=e66]:
+                  - img [ref=e68]
+                  - generic [ref=e73]: Tasks
+          - generic [ref=e74]:
+            - paragraph [ref=e76]: Pipeline
+            - navigation [ref=e77]:
+              - link "Data Ingestion" [ref=e78] [cursor=pointer]:
+                - /url: /data-ingestion
+                - generic [ref=e79]:
+                  - img [ref=e81]
+                  - generic [ref=e85]: Data Ingestion
+              - link "Raw Data" [ref=e86] [cursor=pointer]:
+                - /url: /raw-data
+                - generic [ref=e87]:
+                  - img [ref=e89]
+                  - generic [ref=e94]: Raw Data
+              - link "Characterization" [ref=e95] [cursor=pointer]:
+                - /url: /characterization
+                - generic [ref=e96]:
+                  - img [ref=e98]
+                  - generic [ref=e104]: Characterization
+          - generic [ref=e105]:
+            - paragraph [ref=e107]: Circuit Simulation
+            - navigation [ref=e108]:
+              - link "Schemas" [ref=e109] [cursor=pointer]:
+                - /url: /schemas
+                - generic [ref=e110]:
+                  - img [ref=e112]
+                  - generic [ref=e116]: Schemas
+              - link "Schemdraw" [ref=e117] [cursor=pointer]:
+                - /url: /circuit-schemdraw
+                - generic [ref=e118]:
+                  - img [ref=e120]
+                  - generic [ref=e127]: Schemdraw
+              - link "Simulation" [ref=e128] [cursor=pointer]:
+                - /url: /circuit-simulation
+                - generic [ref=e129]:
+                  - img [ref=e131]
+                  - generic [ref=e135]: Simulation
+      - main [ref=e137]:
+        - generic [ref=e139]:
+          - generic [ref=e142]:
+            - paragraph [ref=e143]: Raw Data Browser
+            - heading "Raw Data" [level=2] [ref=e144]
+            - paragraph [ref=e145]: Choose a design, narrow the trace summaries, edit or delete allowed rows, and keep the preview scoped to one focused trace.
+          - generic [ref=e146]:
+            - generic [ref=e148]:
+              - heading "Design Scopes" [level=3] [ref=e149]
+              - paragraph [ref=e150]: Start with a design here, then move straight into trace summaries and the preview path.
+            - generic [ref=e152]:
+              - generic [ref=e153]: No design scopes are available for the active dataset.
+              - button "Create Design Scope" [ref=e154] [cursor=pointer]:
+                - img [ref=e155]
+                - text: Create Design Scope
+          - generic [ref=e157]:
+            - generic [ref=e159]:
+              - heading "Trace Summaries" [level=3] [ref=e160]
+              - paragraph [ref=e161]: Focused preview stays single-trace, while selected rows drive batch delete only.
+            - generic [ref=e162]:
+              - generic [ref=e164]:
+                - generic [ref=e165]:
+                  - paragraph [ref=e166]:
+                    - img [ref=e167]
+                    - text: Search
+                  - generic [ref=e170]:
+                    - img [ref=e171]
+                    - textbox "Parameter or note" [ref=e174]
+                - generic [ref=e175]:
+                  - generic [ref=e176]:
+                    - paragraph [ref=e177]: Family
+                    - generic [ref=e178]:
+                      - generic [ref=e179]: Family
+                      - button "Family" [ref=e180] [cursor=pointer]:
+                        - generic [ref=e181]: All family
+                        - img [ref=e182]
+                  - generic [ref=e184]:
+                    - paragraph [ref=e185]: View
+                    - generic [ref=e186]:
+                      - generic [ref=e187]: View
+                      - button "View" [ref=e188] [cursor=pointer]:
+                        - generic [ref=e189]: All view
+                        - img [ref=e190]
+                  - generic [ref=e192]:
+                    - paragraph [ref=e193]: Source
+                    - generic [ref=e194]:
+                      - generic [ref=e195]: Source
+                      - button "Source" [ref=e196] [cursor=pointer]:
+                        - generic [ref=e197]: All source
+                        - img [ref=e198]
+              - generic [ref=e200]: No trace summaries match the current filters.
+  - button "Open Next.js Dev Tools" [ref=e206] [cursor=pointer]:
+    - img [ref=e207]
+  - alert [ref=e210]

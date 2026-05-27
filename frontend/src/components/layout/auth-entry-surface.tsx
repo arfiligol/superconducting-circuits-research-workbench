@@ -20,7 +20,6 @@ import {
   describeShellError,
   resolveRuntimeModeLabel,
   resolveShellAuthSummary,
-  resolveShellConnectionTargetLabel,
   resolveSessionWorkspaceLabel,
   resolveShellUserInitials,
 } from "@/components/layout/workspace-shell-contract";
@@ -527,9 +526,9 @@ export function AuthEntrySurface({ mode }: AuthEntrySurfaceProps) {
                   </form>
                 ) : (
                   <div className="rounded-[1rem] border border-border bg-card px-4 py-4">
-                    <p className="text-sm font-semibold text-foreground">Online target summary</p>
+                    <p className="text-sm font-semibold text-foreground">Online target unavailable</p>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Target validation and auth are both handled through the same online-mode authority. Retry the current target, edit it, or switch back to Local Mode.
+                      Retry the target, edit it, or switch back to Local Mode.
                     </p>
                   </div>
                 )}

@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
-from typing import Annotated, cast
+from typing import Annotated, Literal, TypedDict, cast
 
 from fastapi import APIRouter, Body, Depends, Query, status
 from fastapi.responses import JSONResponse
 
-from src.app.api.presenters.storage import (
-    build_metadata_record_ref_response,
-    build_result_handle_ref_response,
-    build_trace_payload_ref_response,
+from src.app.api.presenters.tasks import (
+    build_explorer_filter_echo,
+    build_processor_detail_response,
+    build_publication_summary_response,
+    build_published_trace_response,
+    build_task_detail_response,
+    build_task_event_response,
+    build_task_queue_row_response,
+    build_worker_summary_response,
 )
 from src.app.domain.datasets import (
     CharacterizationInputResultRef,
@@ -29,14 +33,13 @@ from src.app.domain.tasks import (
     SimulationSetup,
     SimulationSolverSettings,
     SimulationSourceSpec,
-    TaskDetail,
-    TaskEvent,
+    TaskBrowseStatusFilter,
     TaskEventHistoryQuery,
     TaskEventOrder,
     TaskEventType,
+    TaskKind,
     TaskLane,
     TaskListQuery,
-    TaskQueueRow,
     TaskStatus,
     TaskSubmissionDraft,
     TaskVisibilityScope,
@@ -54,6 +57,13 @@ from src.app.services.simulation_result_explorer_service import (
 from src.app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+class _ResultTracePublicationPayload(TypedDict):
+    design_id: str
+    trace_keys: tuple[str, ...]
+    metric: str
+    parameter_name: str | None
 
 
 @router.get("")
@@ -89,9 +99,9 @@ def list_tasks(
         return _service_error_response(exc)
     return _success_response(
         data={
-            "rows": [_serialize_queue_row(row) for row in queue.rows],
+            "rows": [build_task_queue_row_response(row) for row in queue.rows],
             "worker_summary": [
-                _serialize_worker_summary(summary) for summary in queue.worker_summary
+                build_worker_summary_response(summary) for summary in queue.worker_summary
             ],
             "aggregate_summary": {
                 "total": queue.aggregate_summary.total,
@@ -141,11 +151,10 @@ def list_runtime_processors(
     return _success_response(
         data={
             "processors": [
-                _serialize_processor_detail(processor)
-                for processor in runtime_view.processors
+                build_processor_detail_response(processor) for processor in runtime_view.processors
             ],
             "worker_summary": [
-                _serialize_worker_summary(summary) for summary in runtime_view.worker_summary
+                build_worker_summary_response(summary) for summary in runtime_view.worker_summary
             ],
         },
         meta={
@@ -168,7 +177,7 @@ def get_task(
     except ServiceError as exc:
         return _service_error_response(exc)
     return _success_response(
-        data=_serialize_task_detail(task, task_service),
+        data=build_task_detail_response(task, task_service),
         meta={"generated_at": _generated_at()},
     )
 
@@ -225,7 +234,7 @@ def get_simulation_result_view(
         data=payload,
         meta={
             "generated_at": _generated_at(),
-            "filter_echo": _serialize_explorer_filter_echo(selection_request),
+            "filter_echo": build_explorer_filter_echo(selection_request),
         },
     )
 
@@ -264,7 +273,7 @@ def get_simulation_result_explorer(
         data=payload,
         meta={
             "generated_at": _generated_at(),
-            "filter_echo": _serialize_explorer_filter_echo(selection_request),
+            "filter_echo": build_explorer_filter_echo(selection_request),
         },
     )
 
@@ -291,10 +300,10 @@ def publish_simulation_result(
     return _success_response(
         data={
             "operation": result.state,
-            "publication_summary": _serialize_publication_summary(
+            "publication_summary": build_publication_summary_response(
                 task_service.get_task_publication_summary(task_id)
             ),
-            "task": _serialize_task_detail(task, task_service),
+            "task": build_task_detail_response(task, task_service),
             "dataset": {
                 "dataset_id": result.dataset.dataset_id,
                 "name": result.dataset.name,
@@ -318,7 +327,7 @@ def publish_simulation_result(
                 "trace_count": result.design.trace_count,
                 "updated_at": result.design.updated_at,
             },
-            "traces": [_serialize_published_trace(trace) for trace in result.traces],
+            "traces": [build_published_trace_response(trace) for trace in result.traces],
         },
         meta={"generated_at": _generated_at()},
     )
@@ -347,10 +356,10 @@ def publish_result_trace(
     return _success_response(
         data={
             "operation": result.state,
-            "publication_summary": _serialize_publication_summary(
+            "publication_summary": build_publication_summary_response(
                 task_service.get_task_publication_summary(task_id)
             ),
-            "task": _serialize_task_detail(task, task_service),
+            "task": build_task_detail_response(task, task_service),
             "dataset": {
                 "dataset_id": result.dataset.dataset_id,
                 "name": result.dataset.name,
@@ -376,11 +385,9 @@ def publish_result_trace(
             },
             "trace_key": result.trace_keys[0] if len(result.trace_keys) > 0 else None,
             "trace": (
-                _serialize_published_trace(result.traces[0])
-                if len(result.traces) > 0
-                else None
+                build_published_trace_response(result.traces[0]) if len(result.traces) > 0 else None
             ),
-            "traces": [_serialize_published_trace(trace) for trace in result.traces],
+            "traces": [build_published_trace_response(trace) for trace in result.traces],
             "raw_data": {
                 "dataset_id": result.design.dataset_id,
                 "design_id": result.design.design_id,
@@ -413,7 +420,7 @@ def list_task_events(
     return _success_response(
         data={
             "task_id": history.task.task_id,
-            "events": [_serialize_task_event(event) for event in history.task.events],
+            "events": [build_task_event_response(event) for event in history.task.events],
         },
         meta={
             "generated_at": _generated_at(),
@@ -437,7 +444,7 @@ def submit_task(
     return _success_response(
         data={
             "operation": "submitted",
-            "task": _serialize_task_detail(detail, task_service),
+            "task": build_task_detail_response(detail, task_service),
         },
         status_code=status.HTTP_201_CREATED,
         meta={"generated_at": _generated_at()},
@@ -456,7 +463,7 @@ def cancel_task(
     return _success_response(
         data={
             "operation": "cancel_requested",
-            "task": _serialize_task_detail(detail, task_service),
+            "task": build_task_detail_response(detail, task_service),
         },
         meta={"generated_at": _generated_at()},
     )
@@ -474,7 +481,7 @@ def terminate_task(
     return _success_response(
         data={
             "operation": "terminate_requested",
-            "task": _serialize_task_detail(detail, task_service),
+            "task": build_task_detail_response(detail, task_service),
         },
         meta={"generated_at": _generated_at()},
     )
@@ -490,7 +497,7 @@ def retry_task(
     except ServiceError as exc:
         return _service_error_response(exc)
     return _success_response(
-        data={"operation": "retried", "task": _serialize_task_detail(detail, task_service)},
+        data={"operation": "retried", "task": build_task_detail_response(detail, task_service)},
         status_code=status.HTTP_201_CREATED,
         meta={"generated_at": _generated_at()},
     )
@@ -533,229 +540,15 @@ def _parse_submission_payload(payload: object) -> TaskSubmissionDraft:
             message="upstream_task_id must be an integer or null.",
         )
     return TaskSubmissionDraft(
-        kind=kind,
+        kind=cast(TaskKind, kind),
         dataset_id=dataset_id,
         definition_id=definition_id,
         summary=summary,
         simulation_setup=_parse_simulation_setup(body.get("simulation_setup")),
         post_processing_setup=_parse_post_processing_setup(body.get("post_processing_setup")),
-        characterization_setup=_parse_characterization_setup(
-            body.get("characterization_setup")
-        ),
+        characterization_setup=_parse_characterization_setup(body.get("characterization_setup")),
         upstream_task_id=upstream_task_id,
     )
-
-
-def _serialize_queue_row(queue_row: TaskQueueRow) -> dict[str, object]:
-    return {
-        "task_id": queue_row.task_id,
-        "summary": queue_row.summary,
-        "status": queue_row.status,
-        "lane": queue_row.lane,
-        "task_kind": queue_row.task_kind,
-        "owner_display_name": queue_row.owner_display_name,
-        "visibility_scope": queue_row.visibility_scope,
-        "dataset_id": queue_row.dataset_id,
-        "definition_id": queue_row.definition_id,
-        "updated_at": queue_row.updated_at,
-        "result_availability": queue_row.result_availability,
-        "allowed_actions": {
-            "attach": queue_row.allowed_actions.attach,
-            "cancel": queue_row.allowed_actions.cancel,
-            "terminate": queue_row.allowed_actions.terminate,
-            "retry": queue_row.allowed_actions.retry,
-            "rejection_reason": queue_row.allowed_actions.rejection_reason,
-        },
-        "control_state": queue_row.control_state,
-        "reconcile": {
-            "required": queue_row.reconcile.required,
-            "reason": queue_row.reconcile.reason,
-        },
-    }
-
-
-def _serialize_task_detail(task: TaskDetail, task_service: TaskService) -> dict[str, object]:
-    result_handoff = task_service.get_task_result_handoff(task.task_id)
-    allowed_actions = task_service.get_task_allowed_actions(task.task_id)
-    return {
-        "task_id": task.task_id,
-        "task_kind": task.kind,
-        "lane": task.lane,
-        "execution_mode": task.execution_mode,
-        "status": task.status,
-        "submitted_at": task.submitted_at,
-        "owner_user_id": task.owner_user_id,
-        "owner_display_name": task.owner_display_name,
-        "workspace_id": task.workspace_id,
-        "workspace_slug": task.workspace_slug,
-        "visibility_scope": task.visibility_scope,
-        "dataset_id": task.dataset_id,
-        "definition_id": task.definition_id,
-        "summary": task.summary,
-        "worker_task_name": task.worker_task_name,
-        "request_ready": task.request_ready,
-        "submitted_from_active_dataset": task.submitted_from_active_dataset,
-        "simulation_setup": (
-            _serialize_simulation_setup(task.simulation_setup)
-            if task.simulation_setup is not None
-            else None
-        ),
-        "publication_summary": _serialize_publication_summary(
-            task_service.get_task_publication_summary(task.task_id)
-        ),
-        "downstream_source_capabilities": _serialize_downstream_source_capabilities(task),
-        "post_processing_setup": (
-            _serialize_post_processing_setup(task.post_processing_setup)
-            if task.post_processing_setup is not None
-            else None
-        ),
-        "characterization_setup": (
-            _serialize_characterization_setup(task.characterization_setup)
-            if task.characterization_setup is not None
-            else None
-        ),
-        "upstream_task_id": task.upstream_task_id,
-        "downstream_task_ids": list(task.downstream_task_ids),
-        "control_state": task.control_state,
-        "retry_of_task_id": task.retry_of_task_id,
-        "allowed_actions": {
-            "attach": allowed_actions.attach,
-            "cancel": allowed_actions.cancel,
-            "terminate": allowed_actions.terminate,
-            "retry": allowed_actions.retry,
-            "rejection_reason": allowed_actions.rejection_reason,
-        },
-        "dispatch": (
-            {
-                "dispatch_key": task.dispatch.dispatch_key,
-                "status": task.dispatch.status,
-                "submission_source": task.dispatch.submission_source,
-                "accepted_at": task.dispatch.accepted_at,
-                "last_updated_at": task.dispatch.last_updated_at,
-                "queue_name": task.dispatch.queue_name,
-                "enqueued_at": task.dispatch.enqueued_at,
-                "runtime_job_id": task.dispatch.runtime_job_id,
-                "dispatch_attempt_count": task.dispatch.dispatch_attempt_count,
-                "last_dispatch_outcome": task.dispatch.last_dispatch_outcome,
-                "last_dispatch_error_code": task.dispatch.last_dispatch_error_code,
-            }
-            if task.dispatch is not None
-            else None
-        ),
-        "reconcile": {
-            "required": task.reconcile.required,
-            "reason": task.reconcile.reason,
-        },
-        "progress": {
-            "phase": task.progress.phase,
-            "percent_complete": task.progress.percent_complete,
-            "summary": task.progress.summary,
-            "updated_at": task.progress.updated_at,
-        },
-        "result_handoff": {
-            "availability": result_handoff.availability,
-            "primary_result_handle_id": result_handoff.primary_result_handle_id,
-            "result_handle_count": result_handoff.result_handle_count,
-            "trace_payload_available": result_handoff.trace_payload_available,
-        },
-        "result_refs": {
-            "trace_batch_id": task.result_refs.trace_batch_id,
-            "analysis_run_id": task.result_refs.analysis_run_id,
-            "metadata_records": [
-                build_metadata_record_ref_response(record).model_dump()
-                for record in task.result_refs.metadata_records
-            ],
-            "trace_payload": (
-                build_trace_payload_ref_response(task.result_refs.trace_payload).model_dump()
-                if task.result_refs.trace_payload is not None
-                else None
-            ),
-            "result_handles": [
-                build_result_handle_ref_response(handle).model_dump()
-                for handle in task.result_refs.result_handles
-            ],
-        },
-        "events": [_serialize_task_event(event) for event in task.events],
-    }
-
-
-def _serialize_worker_summary(summary) -> dict[str, object]:
-    return {
-        "lane": summary.lane,
-        "idle_processors": summary.idle_processors,
-        "running_processors": summary.running_processors,
-        "degraded_processors": summary.degraded_processors,
-        "draining_processors": summary.draining_processors,
-        "offline_processors": summary.offline_processors,
-    }
-
-
-def _serialize_processor_detail(processor) -> dict[str, object]:
-    return {
-        "processor_id": processor.processor_id,
-        "lane": processor.lane,
-        "state": processor.state,
-        "current_task_id": processor.current_task_id,
-        "last_heartbeat_at": processor.last_heartbeat_at,
-        "runtime_metadata": processor.runtime_metadata,
-    }
-
-
-def _serialize_task_event(event: TaskEvent) -> dict[str, object]:
-    return {
-        "event_key": event.event_key,
-        "event_type": event.event_type,
-        "level": event.level,
-        "occurred_at": event.occurred_at,
-        "message": event.message,
-        "metadata": {
-            key: _deserialize_task_event_metadata_value(key, value)
-            for key, value in dict(event.metadata).items()
-        },
-    }
-
-
-def _serialize_publication_summary(summary) -> dict[str, object]:
-    return {
-        "state": summary.state,
-        "publish_allowed": summary.publish_allowed,
-        "publication_key": summary.publication_key,
-        "target_dataset_id": summary.target_dataset_id,
-        "target_design_id": summary.target_design_id,
-        "target_design_name": summary.target_design_name,
-        "published_trace_ids": list(summary.published_trace_ids),
-        "published_at": summary.published_at,
-        "source_task_id": summary.source_task_id,
-        "source_result_handle_ids": list(summary.source_result_handle_ids),
-    }
-
-
-def _serialize_published_trace(trace) -> dict[str, object]:
-    return {
-        "trace_id": trace.trace_id,
-        "dataset_id": trace.dataset_id,
-        "design_id": trace.design_id,
-        "family": trace.family,
-        "parameter": trace.parameter,
-        "representation": trace.representation,
-        "trace_mode_group": trace.trace_mode_group,
-        "source_kind": trace.source_kind,
-        "stage_kind": trace.stage_kind,
-        "provenance_summary": trace.provenance_summary,
-        "analysis_capabilities": [
-            {
-                "capability_id": capability.capability_id,
-                "analysis_id": capability.analysis_id,
-                "analysis_label": capability.analysis_label,
-                "input_role": capability.input_role,
-                "input_role_label": capability.input_role_label,
-                "status": capability.status,
-                "summary": capability.summary,
-                "reasons": [dict(reason.__dict__) for reason in capability.reasons],
-            }
-            for capability in trace.analysis_capabilities
-        ],
-    }
 
 
 def _success_response(
@@ -814,21 +607,6 @@ def _build_explorer_selection_request(
         output_port=output_port,
         input_port=input_port,
     )
-
-
-def _serialize_explorer_filter_echo(
-    selection_request: ExplorerSelectionRequest,
-) -> dict[str, object]:
-    return {
-        "family": selection_request.family,
-        "source": selection_request.source,
-        "metric": selection_request.metric,
-        "sweep_index": selection_request.sweep_index,
-        "compare_axis_index": selection_request.compare_axis_index,
-        "z0": selection_request.z0_ohm,
-        "output_port": selection_request.output_port,
-        "input_port": selection_request.input_port,
-    }
 
 
 def _as_mapping(payload: object) -> dict[str, object]:
@@ -902,11 +680,14 @@ def _parse_simulation_setup(payload: object) -> SimulationSetup | None:
                 field_name="simulation_setup.frequency_sweep.point_count",
                 minimum=1,
             ),
-            spacing=_required_literal(
-                frequency_sweep.get("spacing"),
-                field_name="simulation_setup.frequency_sweep.spacing",
-                allowed={"linear", "log"},
-                default="linear",
+            spacing=cast(
+                Literal["linear", "log"],
+                _required_literal(
+                    frequency_sweep.get("spacing"),
+                    field_name="simulation_setup.frequency_sweep.spacing",
+                    allowed={"linear", "log"},
+                    default="linear",
+                ),
             ),
         ),
         parameter_sweeps=_parse_parameter_sweeps(body.get("parameter_sweeps")),
@@ -982,10 +763,7 @@ def _parse_characterization_setup(payload: object) -> CharacterizationSetup | No
         selected_trace_ids=tuple(
             _required_string(
                 trace_id,
-                field_name=(
-                    "characterization_setup.selected_trace_ids"
-                    f"[{index}]"
-                ),
+                field_name=(f"characterization_setup.selected_trace_ids[{index}]"),
             )
             for index, trace_id in enumerate(raw_selected_trace_ids)
         ),
@@ -1009,17 +787,11 @@ def _parse_characterization_input_result_ref(
     return CharacterizationInputResultRef(
         analysis_id=_required_string(
             body.get("analysis_id"),
-            field_name=(
-                "characterization_setup.input_result_refs"
-                f"[{index}].analysis_id"
-            ),
+            field_name=(f"characterization_setup.input_result_refs[{index}].analysis_id"),
         ),
         result_id=_required_string(
             body.get("result_id"),
-            field_name=(
-                "characterization_setup.input_result_refs"
-                f"[{index}].result_id"
-            ),
+            field_name=(f"characterization_setup.input_result_refs[{index}].result_id"),
         ),
         run_id=_optional_string(
             body.get("run_id"),
@@ -1027,17 +799,11 @@ def _parse_characterization_input_result_ref(
         ),
         artifact_id=_optional_string(
             body.get("artifact_id"),
-            field_name=(
-                "characterization_setup.input_result_refs"
-                f"[{index}].artifact_id"
-            ),
+            field_name=(f"characterization_setup.input_result_refs[{index}].artifact_id"),
         ),
         contract_version=_optional_string(
             body.get("contract_version"),
-            field_name=(
-                "characterization_setup.input_result_refs"
-                f"[{index}].contract_version"
-            ),
+            field_name=(f"characterization_setup.input_result_refs[{index}].contract_version"),
         ),
         title=_optional_string(
             body.get("title"),
@@ -1069,8 +835,7 @@ def _parse_parameter_sweeps(payload: object) -> tuple[SimulationParameterSweep, 
                 code="request_validation_failed",
                 category="validation_error",
                 message=(
-                    f"simulation_setup.parameter_sweeps[{index}].values must be "
-                    "a non-empty array."
+                    f"simulation_setup.parameter_sweeps[{index}].values must be a non-empty array."
                 ),
             )
         sweeps.append(
@@ -1200,7 +965,7 @@ def _parse_ptc_setup(payload: object) -> SimulationPtcSetup | None:
             field_name="simulation_setup.ptc.enabled",
         ),
         mode=cast(
-            str,
+            Literal["auto", "manual"],
             _required_literal(
                 body.get("mode"),
                 field_name="simulation_setup.ptc.mode",
@@ -1285,7 +1050,9 @@ def _parse_simulation_result_publication_payload(payload: object) -> dict[str, s
     }
 
 
-def _parse_result_trace_publication_payload(payload: object) -> dict[str, object]:
+def _parse_result_trace_publication_payload(
+    payload: object,
+) -> _ResultTracePublicationPayload:
     body = _require_mapping(payload, field_name="result_trace_publication")
     trace_keys = _optional_string_sequence(
         body.get("trace_keys"),
@@ -1320,33 +1087,6 @@ def _parse_result_trace_publication_payload(payload: object) -> dict[str, object
             field_name="result_trace_publication.parameter_name",
         ),
     }
-
-
-def _serialize_simulation_setup(setup: SimulationSetup) -> dict[str, object]:
-    return setup.to_mapping()
-
-
-def _serialize_downstream_source_capabilities(task: TaskDetail) -> dict[str, object]:
-    ptc = task.simulation_setup.ptc if task.simulation_setup is not None else None
-    return {
-        "raw": {
-            "available": task.kind == "simulation",
-        },
-        "ptc": {
-            "available": ptc.enabled if ptc is not None else False,
-            "enabled": ptc.enabled if ptc is not None else False,
-            "mode": ptc.mode if ptc is not None else None,
-            "compensate_ports": list(ptc.compensate_ports) if ptc is not None else [],
-        },
-    }
-
-
-def _serialize_post_processing_setup(setup: PostProcessingSetup) -> dict[str, object]:
-    return setup.to_mapping()
-
-
-def _serialize_characterization_setup(setup: CharacterizationSetup) -> dict[str, object]:
-    return setup.to_mapping()
 
 
 def _require_mapping(payload: object, *, field_name: str) -> dict[str, object]:
@@ -1450,30 +1190,6 @@ def _required_literal(
     return value
 
 
-def _deserialize_task_event_metadata_value(key: str, value: object) -> object:
-    if key not in {
-        "simulation_setup",
-        "post_processing_setup",
-        "characterization_setup",
-        "downstream_task_ids",
-        "publication_summary",
-        "characterization_result_summary",
-        "characterization_result_detail",
-        "characterization_run_history_row",
-        "simulation_raw_bundle",
-        "simulation_ptc_bundle",
-        "post_processing_raw_bundle",
-        "post_processing_ptc_bundle",
-    }:
-        return value
-    if not isinstance(value, str):
-        return value
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        return value
-
-
 def _parse_exact_status_filter(value: str | None) -> TaskStatus | None:
     if value is None:
         return None
@@ -1499,10 +1215,10 @@ def _parse_exact_status_filter(value: str | None) -> TaskStatus | None:
                 "termination_requested, terminated, completed, failed."
             ),
         )
-    return value
+    return cast(TaskStatus, value)
 
 
-def _parse_status_filter(value: str | None) -> str:
+def _parse_status_filter(value: str | None) -> TaskBrowseStatusFilter:
     if value is None:
         return "all"
     if value not in {"active", "recent", "all"}:
@@ -1512,7 +1228,7 @@ def _parse_status_filter(value: str | None) -> str:
             category="validation_error",
             message="status_filter must be active, recent or all.",
         )
-    return value
+    return cast(TaskBrowseStatusFilter, value)
 
 
 def _parse_lane_filter(value: str | None) -> TaskLane | None:
@@ -1525,7 +1241,7 @@ def _parse_lane_filter(value: str | None) -> TaskLane | None:
             category="validation_error",
             message="lane must be simulation or characterization.",
         )
-    return value
+    return cast(TaskLane, value)
 
 
 def _parse_scope_filter(value: str) -> TaskVisibilityScope:

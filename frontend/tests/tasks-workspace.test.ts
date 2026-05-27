@@ -280,7 +280,7 @@ describe("tasks workspace source contracts", () => {
   });
 
   it("adds open-tasks-page entry points from shell queue and persisted task detail support", () => {
-    expect(statusStripSource).toContain("Open Tasks Page");
+    expect(statusStripSource).toContain("Tasks");
     expect(statusStripSource).toContain("onOpenChange(false)");
     expect(statusStripSource).toContain("router.push(tasksPageHref)");
     expect(taskPanelsSource).toContain("showTasksPageLink");

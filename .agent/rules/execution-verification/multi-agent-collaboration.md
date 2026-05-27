@@ -1,32 +1,37 @@
 ## Multiple Agent Collaboration
-- **Single Integrator (Mandatory)**:
-    - One delivery line/PR MUST have exactly one Integrator Agent at a time.
-    - Only Integrator may perform final integration (cherry-pick/conflict resolution/merge prep).
-    - Integrator MUST carry accepted contributor changes back to the delivery branch used by the user.
-    - The default delivery branch is `main`; if the user is actively working on another explicit branch, integrate back to that branch instead.
-    - Integrator MUST define the task split, prompt structure, `Allowed Files`, and acceptance criteria for each round.
-    - Integrator MUST treat prompt design as part of the integration job, not as an optional extra.
-- **Fixed Agent Pool**:
-    - The contributor pool is restricted to exactly four contributor identities:
-        - Frontend Contributor Agent
-        - Backend Contributor Agent
-        - Core Contributor Agent
-        - CLI Contributor Agent
-    - Integration Agent is the only integrator identity.
-    - Do not invent temporary contributor role names without updating this source-of-truth first.
-    - Exact file boundaries are still defined per task by the Integrator.
-- **Contributor Boundaries**:
-    - Contributors MUST edit only assigned files (`Allowed Files`).
-    - If required changes exceed scope, stop and hand off to Integrator.
-- **Preflight**:
-    - Before editing, run `git status --porcelain`.
-    - If unrelated dirty changes exist, do not proceed blindly; report and wait.
-- **Isolation**:
-    - MUST use one `git worktree` + one branch per agent/task.
-    - Do not let multiple agents co-edit the same dirty worktree.
-- **Handoff Required**:
-    - Provide commit hashes, changed files, test results, and known risks.
-    - Dirty worktree changes without a committed handoff are not a complete contributor deliverable.
-- **Never**:
-    - Never revert/overwrite others' unintegrated work.
-    - Never use destructive git cleanup on shared work.
+- Use four agent families:
+    - Documentation Agents
+    - Planning & Reviewing Agents
+    - Implementation Agents
+    - Test Agents
+- Documentation Agents:
+    - discuss with humans
+    - update SoT and architecture/contracts before coding when needed
+- Planning & Reviewing Agents:
+    - compare docs and code
+    - produce a written plan artifact
+    - split implementation slices
+    - enumerate missing integration/E2E coverage for Test Agents
+    - own final verification and accepted-slice integration for the delivery line
+    - may edit `Plans/` artifacts only; if SoT must change, hand off to Documentation Agents
+    - own the full `Plans/` lifecycle: create, mark active/blocked/superseded, retire, archive, or delete
+    - remove or retire stale `Plans/` artifacts during merge/cleanup so old prompts are not reused as current instructions
+    - define `Allowed Area` + `Do Not Touch` for implementation prompts by default
+    - review implementation against SoT and product need, not prompt literalism alone
+    - use Playwright-based smoke verification plus screenshot or equivalent visual evidence when reviewing user-visible frontend changes
+- Implementation Agents:
+    - use four implementation lanes:
+        - Frontend
+        - Backend
+        - Core
+        - CLI
+    - receive assigned slices via prompt (`Allowed Area` + `Do Not Touch` + worktree + verification)
+    - own code + unit tests only
+    - do not own integration/E2E or final branch integration
+- Test Agents:
+    - own integration tests and E2E tests
+    - execute against the plan artifact and SoT
+- Branch roles, worktree policy, merge authority, and bounded autonomous write roots are defined in `Branch & Worktree Flow`.
+- Every agent must use an isolated worktree + branch and run `git status --porcelain` before editing.
+- Do not skip the order:
+    - docs -> planning/reviewing -> implementation -> test -> planning/reviewing

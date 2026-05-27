@@ -7,3 +7,9 @@
 - Data-dense pages should prefer a master-detail structure with mobile-safe stacking.
 - Keep spacing consistent and compact enough for dense data workflows.
 - Do not collapse the entire product into one flat page tree without layout boundaries.
+- Prefer guidance through layout hierarchy before adding explanatory copy.
+- Keep shell and dashboard surfaces low-noise; helper text should be concise and only where ambiguity or risk remains.
+- Each page body should serve one primary task; do not dilute it with duplicated shell context or cross-page CTA walls.
+- Keep runtime mode, active workspace, active dataset, task queue, and worker summary in shared shell surfaces unless the page cannot function without rendering a task-local subset.
+- Use follow-up navigation only when it is the single primary next action, not as a substitute for clear IA.
+- Remove or demote authority summaries, handoff cards, and helper panels that are not required to complete the page's primary job.

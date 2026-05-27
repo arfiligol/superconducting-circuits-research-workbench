@@ -29,6 +29,7 @@ dependencies = [
     "httpx>=0.28.1",
     "bs4>=0.0.2",
     "lxml>=6.0.2",
+    "nbformat>=4.2.0",
 ]
 
 [project.scripts]

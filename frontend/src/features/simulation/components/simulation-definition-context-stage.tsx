@@ -1,6 +1,7 @@
 "use client";
 
-import { LoaderCircle } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronUp, FileCode2, LoaderCircle } from "lucide-react";
 
 import type {
   CircuitDefinitionDetail,
@@ -83,12 +84,13 @@ export function SimulationDefinitionContextStage({
   onDefinitionChange: (value: string) => void;
 }>) {
   const formattedExpandedNetlist = formatExpandedNetlist(activeDefinition);
+  const [isNetlistOpen, setIsNetlistOpen] = useState(false);
 
   return (
     <WorkflowStageSection
       step={1}
-      title="Definition / Netlist Context"
-      description="Select the definition and inspect the expanded netlist before launching a run."
+      title="Current Definition"
+      description="Select the definition for this run."
       status={{
         label: activeDefinition ? "Ready" : isDefinitionsLoading ? "Loading" : "Blocked",
         tone: activeDefinition ? "success" : isDefinitionsLoading ? "primary" : "warning",
@@ -113,7 +115,7 @@ export function SimulationDefinitionContextStage({
         />
       ) : null}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         <AppSelectField
           label="Selected Definition"
           value={resolvedDefinitionId !== null ? String(resolvedDefinitionId) : ""}
@@ -131,11 +133,37 @@ export function SimulationDefinitionContextStage({
           disabled={definitionOptions.length === 0}
         />
 
-        <ReadOnlyCodeSurface
-          label="Expanded Netlist"
-          value={formattedExpandedNetlist}
-          height="320px"
-        />
+        <div className="rounded-[0.95rem] border border-border bg-surface px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <FileCode2 className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">Expanded Netlist</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsNetlistOpen((current) => !current);
+              }}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition hover:border-primary/35 hover:bg-primary/10"
+            >
+              {isNetlistOpen ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+              {isNetlistOpen ? "Hide Netlist" : "Show Netlist"}
+            </button>
+          </div>
+          {isNetlistOpen ? (
+            <div className="mt-3">
+              <ReadOnlyCodeSurface
+                label="Expanded Netlist"
+                value={formattedExpandedNetlist}
+                height="240px"
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {isDefinitionTransitioning ? (

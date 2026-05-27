@@ -5,7 +5,8 @@
     - canonical contract registry
     - source-of-truth ordering
     - identity/workspace minimal model
-    - task semantics contract
+    - task runtime / processor contract
     - error model
+    - planning artifact format
 - If a public contract changes during any phase, update the parity matrix, contract registry, and relevant tests in the same delivery line.
 - Treat recovery/reattach tests as mandatory for workflow-parity phases, not optional polish.

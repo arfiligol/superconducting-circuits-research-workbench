@@ -1,5 +1,5 @@
 ## Prompt Grading
-- Integrator MUST assign a Prompt Level before issuing any Contributor Prompt.
+- Planning & Reviewing Agents MUST assign a Prompt Level before issuing any Implementation/Test prompt.
 - Prompt Levels:
     - `L1 Fixup`: one bug / one contract mismatch / one runtime issue.
     - `L2 Slice`: one coherent workflow or command/persistence slice.
@@ -11,14 +11,25 @@
     - if repeated small prompts are slowing down a stable workstream, escalate from `L1`/`L2` to `L2`/`L3`.
 - Safety rule:
     - if shared boundaries are unstable or recent integration revealed major issues, downgrade prompt size.
-- Integrator sequencing rule:
+- Planning & Reviewing sequencing rule:
     - do not issue the next prompt for a workstream until the previous report has been reviewed, integrated, and verified.
+- Worktree rule:
+    - every Implementation/Test prompt must assign a dedicated worktree + branch.
+    - Implementation/Test Agents must not start work without that assignment.
+- Area rule:
+    - default to `Allowed Area` + `Do Not Touch` for implementation prompts.
+    - use `Allowed Files` only for narrow fixups or high-risk surgical edits.
+- Review rule:
+    - re-read SoT, delivery reports, and implementation context during review.
+    - evaluate outcome against product need and authority docs, not prompt literalism alone.
+    - for user-visible frontend changes, include Playwright-based browser verification with screenshot or equivalent visual evidence.
 - Required prompt fields:
     - Task ID / Topic
     - Prompt Level
     - Current State
     - Goal
-    - Allowed Files
+    - Allowed Area
+    - Do Not Touch
     - Non-Goals
     - Implementation Requirements
     - Verification

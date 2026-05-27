@@ -1,11 +1,13 @@
 ## Source of Truth Order
-- Resolve conflicts in this order:
-    1. `docs/reference/data-formats/*`, `docs/reference/ui/*`, `docs/reference/cli/*`
-    2. `docs/reference/architecture/*` and migration contract/parity specs
-    3. `src/core/sc_core/*`
-    4. `backend/`, `frontend/`, `cli/`, `desktop/` adapters
-    5. legacy `src/app/` and old script behavior
-- Treat legacy behavior as parity evidence, not automatic canonical truth.
-- If docs and adapters conflict, prefer docs unless the user explicitly changes the spec.
+- Resolve conflicts by concern owner first:
+    - app collaboration/session/auth/workspace/runtime/audit/error -> `docs/reference/app/shared/*` + `docs/reference/app/backend/*`
+    - persisted payload/schema fields -> `docs/reference/data-formats/*`
+    - core runtime invariants -> `docs/reference/core/*`
+    - page behavior/layout -> `docs/reference/app/frontend/**/*`
+    - standalone CLI local runtime/command surface -> `docs/reference/cli/*`
+- Use `docs/reference/architecture/*` only as registry/parity guidance, not as the primary owner when owner docs already exist.
+- Treat implementation and old behavior as evidence, not automatic canonical truth.
+- If owner docs and consumer docs conflict, prefer the owner docs unless the user explicitly changes the spec.
 - If `sc_core` and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
-- Record any intentional legacy-only exception in the parity matrix or contract registry.
+- Treat root-level `src/` residues as migration evidence only; do not infer future architecture boundaries from them.
+- Record any intentional compatibility exception in the parity matrix or contract registry.
