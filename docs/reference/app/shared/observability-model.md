@@ -35,7 +35,7 @@ updated_by: codex
 | Layer | This page defines |
 |---|---|
 | Audit logging | governance-facing action taxonomy boundary |
-| Workflow observability | request / task / queue / worker / result timeline boundary |
+| Workflow observability | request / task / runner / publication / result timeline boundary |
 | Product telemetry | aggregate usage / performance measurement boundary |
 | Shared vocabulary | correlation / debug / actor / session linkage fields |
 
@@ -53,7 +53,7 @@ updated_by: codex
 |---|---|
 | `correlation_id` | 將同一串 request / task / result / audit action 關聯起來 |
 | `debug_ref` | support-safe debug lookup reference |
-| `task_id` | task / queue / worker / result handoff 的 public execution identity |
+| `task_id` | task / runner / result handoff 的 public execution identity |
 | `session_id` | mode-aware session linkage |
 | `workspace_id` | workspace-scoped governance / visibility boundary |
 | `actor_user_id` | remote governance 與 actor-centric lookup |
@@ -94,10 +94,10 @@ updated_by: codex
 
 | Concern | Contract |
 |---|---|
-| Local-managed sidecars | desktop shell 可聚合 `redis`、`sc-app`、workers 的 runtime health 與 logs |
+| Local-managed processes | desktop shell 可聚合 frontend、Python Backend 與 Julia Runner 的 runtime health 與 logs |
 | Remote-server profile | desktop shell 不得為了 observability 順手啟動本地 heavy runtime |
 | Authority boundary | desktop shell 可做 log aggregation / health display，但不得取代 backend persisted task truth |
-| Correlation propagation | local-managed profile 下，desktop shell 應協助把 user action / runtime context 傳給 app/backend 與 sidecars |
+| Correlation propagation | local-managed profile 下，desktop shell 應協助把 user action / runtime context 傳給 frontend、backend 與 runner |
 
 ## Storage And Access Separation
 

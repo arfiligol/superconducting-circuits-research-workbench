@@ -1,14 +1,14 @@
 ## Source of Truth Order
 - Resolve conflicts by concern owner first:
-    - app collaboration/session/auth/workspace/runtime/audit/error -> `docs/reference/app/shared/*` + `docs/reference/app/backend/*`
+    - app collaboration/session/auth/workspace/task runtime/audit/error -> `docs/reference/app/shared/*` + `docs/reference/app/backend/*`
     - persisted payload/schema fields -> `docs/reference/data-formats/*`
-    - core runtime invariants -> `docs/reference/core/*`
+    - Julia Core / Runner runtime invariants -> `docs/reference/core/*`
     - page behavior/layout -> `docs/reference/app/frontend/**/*`
-    - standalone CLI local runtime/command surface -> `docs/reference/cli/*`
+    - notebook workflow behavior -> `docs/reference/notebooks/*`
 - Use `docs/reference/architecture/*` only as registry/parity guidance, not as the primary owner when owner docs already exist.
 - Treat implementation and old behavior as evidence, not automatic canonical truth.
 - If owner docs and consumer docs conflict, prefer the owner docs unless the user explicitly changes the spec.
-- If `sc_core` and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
-- Treat root-level `src/` residues as migration evidence only; do not infer future architecture boundaries from them.
+- If Julia Core / Runner and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
+- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as migration evidence only; do not infer future architecture boundaries from them.
 - Record any intentional compatibility exception in the parity matrix or contract registry.
 - Compatibility fallback is opt-in during Heavy Development / No Compatible Fallback; do not add or preserve legacy fallback paths unless an owner SoT explicitly requires them.

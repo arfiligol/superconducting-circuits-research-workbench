@@ -10,19 +10,19 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "定義 API、CLI、worker 與 recovery flow 的統一錯誤分類與處理規範"
-version: v1.2.0
-last_updated: 2026-03-14
+scope: "定義 API、frontend、Julia Runner、Notebook 與 recovery flow 的統一錯誤分類與處理規範"
+version: v2.0.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Error Handling
 
-本專案的錯誤處理必須可被 frontend、backend、CLI、worker 共用理解，而不是每一層各自發明一套訊息。
+本專案的錯誤處理必須可被 frontend、backend、Julia Runner、Notebook 共用理解，而不是每一層各自發明一套訊息。
 
 !!! warning "Code, not message text"
     對外 surface 必須依穩定 `error_code` / `category` 工作。
-    frontend、CLI 與 recovery flow 不得依賴 message text matching。
+    frontend、Notebook 與 recovery flow 不得依賴 message text matching。
 
 ## Required Error Categories
 
@@ -57,8 +57,8 @@ updated_by: codex
 | Surface | Rule |
 | --- | --- |
 | backend API | 回傳穩定 HTTP status + error envelope |
-| CLI | stderr message 應保留 `error_code` 或等價 machine-readable signal |
-| worker | structured log / result error payload 必須可對應到 public category |
+| Julia Runner | complete/fail/progress payload and logs must map to public categories |
+| Notebook | inspection/task submission helpers must preserve `error_code` or equivalent machine-readable signal |
 | frontend | 以 `error_code` 與 `retryable` 驅動 UI，而不是靠 message text |
 
 ## Retryability Rules
@@ -95,7 +95,7 @@ updated_by: codex
 - Use stable error categories/codes, not only free-form messages.
 - Separate user-safe messages from debug/internal details.
 - Mark execution/storage/task errors as retryable or non-retryable.
-- Do not leak raw adapter internals (paths, SQL fragments, raw exceptions) into public UI/API/CLI contracts.
+- Do not leak raw adapter internals (paths, SQL fragments, raw exceptions) into public UI/API/Notebook contracts.
 - Frontend logic must key off stable error codes, not message text matching.
 - Task submission, execution, result attach, and recovery attach failures must have explicit error categories.
 ```

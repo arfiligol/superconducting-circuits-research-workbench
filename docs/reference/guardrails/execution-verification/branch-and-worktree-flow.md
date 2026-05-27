@@ -62,7 +62,7 @@ updated_by: codex
 正常 implementation work 的正式流程如下：
 
 1. 從 `develop` 建立專屬 task branch + isolated worktree。
-2. `Frontend / Backend / Core / CLI Agent` 在該 worktree 內完成被指派的 slice。
+2. `Frontend / Backend / Core / Runner / Docs Agent` 在該 worktree 內完成被指派的 slice。
 3. agent 只 commit 自己在該 isolated worktree 內完成的工作。
 4. implementation agents 不直接把自己的 slice merge 回 `develop`。
 5. `Planning & Reviewing Agent` 是這類 implementation slices 的預設 integration authority。
@@ -74,7 +74,7 @@ updated_by: codex
 | --- | --- | --- |
 | Documentation Agent | 依同一 delivery line 的 integration authority 決定；通常不直接整合別人的 implementation slices | 文件本身可在專屬 worktree 內提交，但不取代整體 integration authority |
 | Planning & Reviewing Agent | normal implementation slices 的預設 integration authority | 回收 accepted work，整合回 `develop` |
-| Frontend / Backend / Core / CLI Agent | no direct merge to `develop` by default | 完成 slice + unit tests + delivery report 後交回 review |
+| Frontend / Backend / Core / Runner / Docs Agent | no direct merge to `develop` by default | 完成 slice + unit tests + delivery report 後交回 review |
 | Test Agent | no direct merge to `develop` by default | 完成 integration / E2E / verification evidence 後交回 review |
 | autonomous sandbox/example agent | 可在符合 bounded write root 規則時自行 merge 回 `develop` | 僅限明確授權的 research / sandbox / examples surfaces |
 
@@ -161,7 +161,7 @@ updated_by: codex
 - `develop` is the primary development branch and default base for new AI-agent task branches/worktrees.
 - Every agent/task must use a dedicated branch + isolated worktree.
 - Do not let multiple agents co-edit the same dirty worktree.
-- Normal implementation slices (`Frontend` / `Backend` / `Core` / `CLI`) do not merge directly to `develop`; `Planning & Reviewing Agent` is the default integration authority.
+- Normal implementation slices (`Frontend` / `Backend` / `Core` / `Runner` / `Docs`) do not merge directly to `develop`; `Planning & Reviewing Agent` is the default integration authority.
 - Autonomous sandbox/example agents may merge to `develop` only when they stay fully inside explicitly assigned bounded write roots.
 - Read access may be repo-wide for context, but write access is limited to the assigned bounded write root.
 - Source files inside `sandbox/**` or `examples/**` remain normal tracked repo content unless another owner contract says otherwise.

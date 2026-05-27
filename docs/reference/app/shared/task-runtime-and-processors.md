@@ -1,270 +1,78 @@
 ---
 aliases:
   - Task Runtime and Processors
-  - Worker Runtime
+  - Runner Runtime
   - 任務執行時與處理器
 tags:
   - diataxis/reference
   - audience/team
   - sot/true
   - topic/app-reference
-status: draft
+status: stable
 owner: docs-team
 audience: team
-scope: worker / processor health、task state machine、cancel / terminate / retry runtime contract
-version: v0.6.0
-last_updated: 2026-03-27
+scope: shared task runtime semantics for Python Backend and Julia Runner
+version: v1.0.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Task Runtime & Processors
 
-本頁定義 app shared task runtime、worker / processor status summary，以及 cancel / terminate / retry 的 shared contract。
+The active local runtime is three processes:
 
-!!! info "Header Pairing"
-    Header 中的 task queue 必須能直接看到 worker / processor 狀態摘要。
+```text
+Next.js frontend
+Python Backend
+Julia Runner
+```
 
-!!! warning "Graceful Cancel 與 Force Terminate 必須分開"
-    `Cancel` 與 `Terminate` 不是同一個動作。
+There is no Redis/RQ local runtime. The runner claims tasks through the backend runner API.
 
-!!! important "Local Runtime Topology Is Part Of The Contract"
-    local runtime topology =
-    - app process: `uv run sc-app`
-    - simulation lane worker: `uv run sc-worker-simulation`
-    - characterization lane worker: `uv run sc-worker-characterization`
+## Runtime Roles
 
-    queue backend =
-    - `RQ`
-    - Redis via `SC_RQ_REDIS_URL` / `SC_REDIS_URL`
-
-    lane mapping =
-    - `simulation` + `post_processing` -> simulation lane
-    - `characterization` -> characterization lane
-
-!!! info "Runtime contract is not folder placement"
-    本頁定義的是 runtime ownership 與 process topology，不是 current file placement。
-    若 current implementation 仍有 `src/worker/` residue，那也不代表 `src/worker/` 是 canonical runtime home。
-
-## Local Runtime Topology
-
-| Process | Runtime role |
+| Process | Role |
 |---|---|
-| `uv run sc-app` | app / API / queue read model / task detail / result surface；不是 heavy solver host |
-| `uv run sc-worker-simulation` | consume simulation-lane queued tasks；負責 `simulation` 與 `post_processing` |
-| `uv run sc-worker-characterization` | consume characterization-lane queued tasks；負責 `characterization` |
+| Frontend | submit tasks, monitor status, browse results |
+| Python Backend | task lifecycle, metadata, staging preparation, TraceStore publication |
+| Julia Runner | claim task, compute, write staging Zarr, report manifest |
 
-### Queue Backend Contract
-
-| Concern | Contract |
-|---|---|
-| Queue implementation | `RQ` |
-| Redis URL | `SC_RQ_REDIS_URL`（preferred） / `SC_REDIS_URL`（fallback alias） |
-| Simulation lane queue | `SC_SIMULATION_QUEUE_NAME` |
-| Characterization lane queue | `SC_CHARACTERIZATION_QUEUE_NAME` |
-
-!!! warning "Not allowed as canonical local runtime"
-    - app process 不得作為 active local runtime path 的 heavy solver host
-    - submit path 不得以 in-process `Thread(...)` 直接執行 solver work 取代 lane queue
-    - in-process background execution 若暫時存在，只能明確標記為 temporary fallback / test-only wiring，不能被視為正式 local runtime
-
-## Processor Summary Contract
-
-| Field | Meaning |
-|---|---|
-| `lane` | worker lane identity；`simulation` lane 承接 `simulation` + `post_processing`，`characterization` lane 承接 `characterization` |
-| `idle_processors` | worker alive 且可接新 task，但目前沒有在執行 task 的 processors 數量 |
-| `running_processors` | worker alive 且目前正在執行 task 的 processors 數量 |
-| `degraded_processors` | worker alive，但 liveness / health / runtime 狀態已有明確異常的 processors 數量 |
-| `draining_processors` | 不再接新任務、等待現有任務結束的 processors 數量 |
-| `offline_processors` | absent、unreachable、shut down，或經 backend liveness evaluation 判定為 effectively unavailable 的 processors 數量 |
-
-## Processor Heartbeat Contract
-
-| Field | Meaning |
-|---|---|
-| `processor_id` | 單一 processor / worker identity |
-| `lane` | 該 processor 服務的 worker lane；不是 page stage 名稱 |
-| `state` | `idle`, `running`, `draining`, `degraded`, `offline` |
-| `current_task_id` | 若正在執行 task，指出目前 task |
-| `last_heartbeat_at` | 最近一次 heartbeat 時間 |
-| `runtime_metadata` | redaction-safe 的 capacity / version / host summary |
-
-## Heartbeat Threshold And Offline Rules
-
-| Rule | Contract |
-|---|---|
-| Shared liveness evaluation | backend queue summary、detail processor view、frontend worker summary 都必須使用同一套 backend-owned worker liveness evaluation |
-| `idle` is a live state | worker alive 且可接新 task、但目前未執行 task 時，必須顯示為 `idle`，不是 `offline` |
-| Stale heartbeat is not identical to `offline` | `last_heartbeat_at` 只是 liveness evaluation 的一部分；不得因 heartbeat 舊了就把一個 merely idle 的 worker 直接寫成 `offline` |
-| `degraded` means alive but impaired | `degraded` 用於 worker 仍活著，但 health、runtime 狀態或 liveness evidence 已出現有意義異常時 |
-| `offline` means unavailable | `offline` 只用於 worker absent、unreachable、shut down，或經 backend 明確判定為 effectively unavailable 的情況 |
-| macOS `SimpleWorker` note | 若 idle worker 在 macOS `SimpleWorker` 下產生較稀疏 heartbeat，backend liveness evaluation 必須吸收這個差異；frontend 不得把這種 idle worker 誤讀為 `offline` |
-
-!!! tip "Two time windows, two meanings"
-    worker liveness evaluation 與 stale task reconcile 是兩個不同概念。
-    前者回答 worker 現在是 `idle / running / draining / degraded / offline`；
-    後者回答 persisted task 是否需要 recovery / failure convergence，兩者不可混成同一個概念。
-
-## Task / Worker / Queue State Distinction
-
-| Concern | Authority question |
-|---|---|
-| task lifecycle | 這筆 task 現在在 `queued / dispatching / running / completed / failed ...` 的哪個 execution state？ |
-| worker state | 這個 worker 現在是 `idle / running / draining / degraded / offline` 中的哪個 liveness / availability state？ |
-| queue read model | 目前全域可見的是哪些 task rows，對應哪些 lanes 與可用 actions？ |
-
-!!! warning "Do not project worker state onto task truth"
-    worker `running` 不等於任何特定 attached task 一定是 `running`。
-    worker `idle` 也不等於 runtime unavailable。
-    task lifecycle、worker liveness 與 queue browse 是三個不同問題。
-
-## Task Runtime State Machine
+## Task State Machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> queued
-    queued --> dispatching
-    dispatching --> running
+    queued --> claimed
+    claimed --> running
+    running --> staging_result
+    staging_result --> publishing
+    publishing --> completed
     queued --> cancelled
-    running --> completed
+    claimed --> cancelled
     running --> failed
-    running --> cancellation_requested
-    cancellation_requested --> cancelling
-    cancelling --> cancelled
-    running --> termination_requested
-    cancelling --> termination_requested
-    termination_requested --> terminated
+    staging_result --> failed
+    publishing --> failed
 ```
 
-## Control Escalation Rules
+## Runner Liveness
 
-| Action | Expected behavior |
+| Signal | Owner |
 |---|---|
-| `cancel` | processor 應進入 graceful stop path，先嘗試結束目前 work unit |
-| `terminate` | processor 應立即中止 work unit，不再保證 partial output 可用 |
-| cancel-to-terminate escalation | 若 task 長時間停在 `cancellation_requested` / `cancelling`，`owner` 或 `admin` 可升級到 `terminate` |
-| retry | 只建立新 task；不得覆寫舊 task 的 terminal record |
+| `runner_id` | Julia Runner |
+| `heartbeat_at` | Backend task row updated by runner heartbeat |
+| progress payload | Runner reports small JSON only |
+| cancellation polling | Runner reads backend cancellation state between work units |
 
-## Control Request Delivery
+## Control Rules
 
 | Rule | Meaning |
 |---|---|
-| Control request is persisted first | `cancel` / `terminate` 先寫入 persisted control state，再由 processor 消費 |
-| Processor must ack via task state | worker 不回傳 UI-only signal，而是以 persisted task transition 表示已接收 |
-| Queue row reflects request immediately | Header queue 應先看到 control-request state，再等待 terminal state |
-| Runtime may reject stale control | 若 task 已 terminal，runtime 應回傳穩定 rejection reason |
-
-## Processor Lifecycle
-
-| Processor state | Meaning |
-|---|---|
-| `idle` | worker alive，可接新 task，但目前沒有在執行 task |
-| `running` | worker alive，正在執行 task |
-| `degraded` | worker alive，但 runtime 狀態異常或 liveness evidence 不穩定 |
-| `draining` | 不再接新 task，等待現有 task 結束 |
-| `offline` | worker unavailable；已下線、不可達、或被 backend 判定為 effectively unavailable |
-
-## Processor State Transitions
-
-```mermaid
-stateDiagram-v2
-    [*] --> idle
-    idle --> running
-    running --> idle
-    idle --> degraded
-    running --> degraded
-    idle --> draining
-    running --> draining
-    draining --> idle
-    degraded --> idle
-    draining --> offline
-    degraded --> offline
-    offline --> idle
-```
-
-## Runtime Delivery Rules
-
-| Rule | Meaning |
-|---|---|
-| Queue summary follows persisted task state | Header 與 task detail 必須能從 persisted state 重建 |
-| Processor summary is lane-scoped | summary 需按 lane 聚合，而不是只給全域總數 |
-| Processor summary reflects real worker processes | local mode 下的 summary 必須對應獨立 worker processes，而不是 app-local thread 假象 |
-| Worker summary follows worker liveness truth | `idle / running / draining / degraded / offline` 回答的是 worker availability，不是 task lifecycle echo |
-| Cancel and terminate are auditable | 兩者都必須進 audit trail |
-| Terminal states stay immutable | `completed` / `failed` / `cancelled` / `terminated` 不可被覆寫成其他 terminal state |
-
-## Startup Reconcile Contract
-
-| Concern | Contract |
-|---|---|
-| Shared stale-task timeout | `SC_WORKER_STALE_TIMEOUT_SECONDS`；預設 300 秒 |
-| App startup | `sc-app` 啟動時必須先重建 persisted queue read model、processor summary 與 attached-task recoverability；不得因 app restart 自行終止 task |
-| Worker startup | 每條 worker lane 啟動時必須先做 startup reconcile，再開始 consume 新 queue jobs |
-| Reconcile source of truth | reconcile 只可用 persisted task + persisted dispatch + persisted heartbeat 做判定；queue backend 只能提供輔助訊號 |
-
-### App Startup Responsibilities
-
-| Situation | Required behavior |
-|---|---|
-| persisted `queued` task without dispatch failure | 保持 `queued`；重新進入 queue read model |
-| persisted `queued` task with last dispatch outcome = enqueue failed | detail 應標示 `reconcile.required = true`，等待 dispatch recovery |
-| persisted `dispatching` task，且超過 stale timeout 仍無 claim/start ack | 標示 `reconcile.required = true`；不得自動腦補成 `running` 或 `completed` |
-| persisted `running` task，heartbeat 超過 stale timeout | 啟動 reconcile path；不得繼續當成 live-running task |
-| persisted terminal task | 直接採信 terminal state；queue backend residual job 不得推翻 persisted result |
-
-### Worker Startup Responsibilities
-
-| Situation | Required behavior |
-|---|---|
-| lane worker boot | 先跑 startup reconcile，再開始 consume 該 lane queue |
-| stale `running` task | 若 heartbeat 超過 stale timeout，worker/runtime 應將其收斂為 `failed`，並附帶 `stale_task_timeout` 類型的 stable error metadata |
-| stale `dispatching` task | worker/runtime 不得直接宣告成功；必須先把它標成 reconcile-needed 或重新 claim 後再產生新的 running ack |
-| requeue under same task | 只能增加 dispatch attempt metadata，不得更換 public `task_id` |
-
-## Persisted Truth Wins Over Queue Backend
-
-| Conflict | Winner | Required resolution |
-|---|---|---|
-| Redis/RQ 顯示 job 仍存在，但 persisted task 已 terminal | persisted task | queue backend 視為 stale runtime residue；backend 應清理或忽略 queue metadata |
-| queue backend 顯示 job running，但 persisted task 仍是 `queued` / `dispatching` | persisted task | 先進 reconcile；不得直接用 queue backend 狀態覆寫 detail |
-| queue backend job 消失，但 persisted task 仍是 `running` | persisted task + reconcile timeout | 先依 heartbeat/stale timeout 判定；超時後才進 reconcile failure |
-| worker summary 與 persisted task active set 不一致 | persisted task + persisted heartbeats | worker summary 必須重算，不得反向改 task truth |
-
-## Stale Runtime Resolution
-
-| Persisted state at inspection time | Runtime condition | Required resolution |
-|---|---|---|
-| `queued` | 尚未有 dispatch failure metadata | 保持 `queued` |
-| `queued` | 最近一次 enqueue 失敗 | 保持 `queued`，並標示 `reconcile.required = true` |
-| `dispatching` | claim/start ack 未出現，且已超過 stale timeout | 標示 `reconcile.required = true` |
-| `running` | heartbeat 超過 stale timeout | 收斂為 `failed`，error code family 應落在 stale/reconcile timeout |
-| terminal | queue backend 仍殘留 job | persisted terminal state 繼續有效；queue residue 走清理流程 |
-
-## Reconcile-required Vocabulary
-
-| Field | Meaning |
-|---|---|
-| `reconcile.required` | 這筆 task 目前需要 runtime/dispatch reconcile |
-| `reconcile.reason` | stable reason code，例如 `dispatch_stale`、`enqueue_failed`、`runtime_conflict` |
-| `reconcile.recorded_at` | 最近一次標記 reconcile-required 的時間 |
-
-!!! warning "Reconcile-required is not a second status authority"
-    `reconcile.required` 只能描述 runtime conflict / recovery requirement。
-    它不能取代 `task detail.status`，也不能讓 queue row 自行主導 page workflow。
-
-## Runtime Continuity By Mode
-
-| Situation | Required behavior |
-|---|---|
-| switch from online to local | remote tasks 繼續在 server runtime 執行；app 只解除 online queue / attached-task context |
-| switch from local to online | local tasks 不搬移到 server；online queue 重新從 server authority 載入 |
-| closing `sc-app` only in local mode | 若 local workers 仍在，task 應繼續執行；重開 app 後可透過 queue recovery / reattach 重新觀察 |
-| stopping the whole local runtime stack | 若 `sc-app` 與 local workers 一起停止，local tasks 才可能終止或進入 reconcile-required state |
-| app close in online mode | remote tasks 由 server runtime 繼續管理；重開 app 後再透過 queue recovery 重新觀察 |
+| cancel is persisted first | backend records cancellation state before runner observes it |
+| runner polls between sweep points | no synchronous interrupt contract is required initially |
+| terminal state is immutable | completed/failed/cancelled must not be rewritten into another terminal state |
+| retry creates a new task | retries preserve lineage instead of replacing the old task |
 
 ## Related
 
-* [Authentication & Authorization](authentication-and-authorization.md)
-* [Audit Logging](audit-logging.md)
 * [Backend / Tasks & Execution](../backend/tasks-execution.md)
-* [Frontend / Task Management](../frontend/shared-workflow/task-management.md)
+* [Julia Runner Compute Plane](../../architecture/julia-runner-compute-plane.md)

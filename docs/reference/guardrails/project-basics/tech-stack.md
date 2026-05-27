@@ -10,16 +10,16 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: current platform 的技術選型、desktop 包裝方向與共享工具規範。
-version: v2.5.0
-last_updated: 2026-03-25
+scope: current platform 的 Notebook/Application/Julia Runner 技術選型與工具規範。
+version: v3.0.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Tech Stack
 
-本 branch 的目標技術棧是 **Next.js + FastAPI + CLI + Electron + RQ/Redis worker runtime + Julia simulation core**。
-原則上，UI、API、CLI 必須共用同一套核心定義與驗證規則，不再把舊版 UI 作為主要實作方向。
+本 branch 的目標技術棧是 **Next.js + FastAPI + Electron + Julia Core + Julia Runner + local filesystem Zarr**。
+Python Backend 是 control/data plane；Julia Runner 是 compute plane；Notebook 是 explicit research execution environment。
 
 !!! info "How to use this page"
     這頁用來確認正式 baseline stack，不用來討論可選替代方案。若某個技術還沒被列進來，就不應被當成預設依賴。
@@ -28,12 +28,15 @@ updated_by: codex
 
 | Surface | Required interpretation |
 | --- | --- |
-| `backend/` | canonical app/backend service surface |
-| `frontend/` | canonical web app surface |
-| `core/` | canonical shared scientific/core surface |
-| `cli/` | canonical standalone CLI surface |
-| `desktop/` | canonical desktop shell surface |
-| `legacy/` | archived / migration residue container；不是新功能預設落點 |
+| `app/backend/` | canonical Python Backend control/data plane |
+| `app/frontend/` | canonical Next.js application surface |
+| `app/desktop/` | canonical Electron shell surface |
+| `core/julia/SuperconductingCircuitsCore/` | reusable Julia circuit construction / simulation / analysis library |
+| `core/julia/SuperconductingCircuitsRunner/` | async Julia compute runner |
+| `core/python/sc_data_contracts/` | optional shared Python schemas/contracts |
+| `notebooks/pluto/` | Julia research cockpit |
+| `notebooks/python/` | backend/data API inspection, migration, emergency analysis |
+| `scripts/` | dev/build/test/maintenance helpers only |
 
 !!! warning "Root `src/` is not the future umbrella"
     package-internal `src/` 可以存在於各 top-level surface 內部，
@@ -45,11 +48,10 @@ updated_by: codex
 | layer | baseline |
 | --- | --- |
 | Frontend | Next.js App Router + React 19 + TypeScript |
-| Backend | FastAPI + Pydantic + SQLModel/SQLAlchemy + Casbin |
-| CLI | Typer |
-| Local runtime queue | `rq` + `redis` |
-| Local worker lanes | `sc-worker-simulation`, `sc-worker-characterization` |
-| Scientific core | JosephsonCircuits.jl via juliacall |
+| Backend | FastAPI + Pydantic + SQLAlchemy/Alembic + NumPy + Zarr |
+| Compute runner | Julia + HTTP.jl + JSON3.jl + StructTypes.jl + Zarr.jl |
+| Local runtime | frontend + Python Backend + Julia Runner |
+| Scientific core | Julia package under `core/julia/SuperconductingCircuitsCore/` |
 | Desktop shell | Electron |
 
 ## Shared Languages
@@ -61,16 +63,14 @@ updated_by: codex
 | `uv` | 依賴與虛擬環境管理 |
 | `fastapi` | API framework |
 | `pydantic` | schema / validation |
-| `sqlmodel`, `sqlalchemy` | metadata persistence |
-| `casbin` | app backend authorization baseline |
-| `typer` | CLI framework |
-| `rq`, `redis` | local queue-backed worker runtime |
-| `numpy`, `pandas`, `scipy`, `lmfit`, `scikit-rf` | 數值、分析、擬合 |
-| `plotly`, `schemdraw` | 視覺化與電路圖生成 |
-| `juliacall` | Python ↔ Julia bridge |
-| `rich` | logging 與 CLI 輸出 |
+| `sqlalchemy`, `alembic` | metadata persistence and migration |
+| `pydantic-settings` | backend settings |
+| `numpy`, `zarr`, `fsspec` | TraceStore validation/publication |
+| `rich` | developer-facing logging output when useful |
 | `ruff`, `basedpyright`, `pytest` | lint / type / test |
-| `zarr` | numeric trace storage |
+
+Application backend dependencies must not include `juliacall`, `nicegui`, `rq`, `redis`, `sc-cli`, `typer`, `lmfit`, `scikit-rf`, `matplotlib`, `plotly`, or `pandas` unless a new SoT explicitly reintroduces them for the backend.
+Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml` or a notebook dependency group, not in the application backend.
 
 ### TypeScript / JavaScript
 
@@ -93,7 +93,11 @@ updated_by: codex
 | 工具 | 用途 |
 | --- | --- |
 | `juliaup` | Julia version management |
-| `JosephsonCircuits.jl` | 核心電路模擬引擎 |
+| `JosephsonCircuits.jl` | 核心電路模擬引擎 inside Julia Core/Runner |
+| `HTTP.jl` | Runner client for backend task protocol |
+| `JSON3.jl`, `StructTypes.jl` | Runner task / manifest contracts |
+| `Zarr.jl` | local filesystem Zarr v2 staging writer |
+| `DataFrames.jl` | tabular summaries when needed |
 
 ## Module Direction
 
@@ -103,16 +107,17 @@ updated_by: codex
 - TypeScript strict mode
 - component system based on shadcn/ui + Radix
 - 不在 component 內直接實作業務流程或硬編碼 API contract
+- primary surfaces are Dashboard, Dataset, Data Ingestion, Raw Data / Trace Browser, and Tasks / Result Browser
+- simulation/analysis workbench pages must not remain exposed as primary product navigation
 
 ### Desktop
 
 - Electron 可作為 desktop shell
 - Electron main/preload 層只處理桌面能力、視窗生命週期、安全 IPC 與 runtime supervisor
 - 不可把業務流程塞進 Electron main process
-- desktop 包裝不改變 canonical frontend/backend/CLI 邊界
-- desktop runtime profile 採：
-  - `local_managed`：監管本地 `redis`、`sc-app`、workers sidecars
-  - `remote_server`：只連 remote backend target，不啟動本地 heavy runtime
+- desktop 包裝不改變 canonical frontend/backend/runner 邊界
+- desktop local mode starts frontend, Python Backend, and Julia Runner
+- desktop local mode must not start Redis/RQ
 
 ### Backend
 
@@ -124,41 +129,37 @@ updated_by: codex
 
 ### Local Runtime Backbone
 
-- app process: `uv run sc-app`
-- simulation lane worker: `uv run sc-worker-simulation`
-- characterization lane worker: `uv run sc-worker-characterization`
-- queue backend: `rq` + `redis`
-- desktop-managed local runtime 需把 `redis` 視為 app-supervised private sidecar，而不是使用者自行維護的外部必要前提
-- Redis URL: `SC_RQ_REDIS_URL`（preferred） / `SC_REDIS_URL`（fallback alias）
-- queue names: `SC_SIMULATION_QUEUE_NAME`、`SC_CHARACTERIZATION_QUEUE_NAME`
-- lane mapping:
-  - `simulation` + `post_processing` -> simulation lane
-  - `characterization` -> characterization lane
+- frontend process: `npm run dev --prefix app/frontend`
+- backend process: `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000`
+- runner process: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; SuperconductingCircuitsRunner.main()'`
+- task claiming is DB-backed through the Python Backend runner API
+- local staging uses filesystem Zarr under `data/staging/tasks/<task_id>/`
+- official numeric authority is Python Backend-managed TraceStore under `data/trace_store/`
 
-!!! warning "Independent workers are the active local runtime baseline"
-    local heavy execution 不得由 app process 直接 in-process 執行。
-    app submit path 的正式角色是建立 persisted task 並 enqueue 到 lane queue，不是用 background thread 直接跑 solver。
+!!! warning "Runner is the active local compute baseline"
+    local heavy execution must not run in the Python Backend process.
+    The app submit path creates persisted tasks and the Julia Runner claims them asynchronously through the backend protocol.
 
 !!! warning "Do not bypass the backend authorization path"
-    frontend、desktop、CLI 都不應自行重建 app authorization matrix。多使用者 app 權限的 baseline 在 backend，並由 backend materialize `capabilities` 與 `allowed_actions`。
+    frontend、desktop、notebooks 都不應自行重建 app authorization matrix。多使用者 app 權限的 baseline 在 backend，並由 backend materialize `capabilities` 與 `allowed_actions`。
 
-### CLI
+### Scripts
 
-- Typer 作為主要命令列框架
-- CLI 直接呼叫 CLI-local abstractions、app-facing shared services 或 top-level `core/` concern owner，而非複製 API 或 UI 邏輯
-- 所有關鍵工作流都需要可由 CLI 觸發
+- No active CLI product surface.
+- `scripts/` may contain dev/build/test/maintenance helpers only.
+- Scripts are not user-facing workflow contracts and must not own business logic.
 
 ### Scientific Core
 
-- `JosephsonCircuits.jl` 仍是 simulation source of truth
-- circuit definition 應能同時餵給 simulation、schemdraw、analysis
-- characterization / analysis 對 trace source 保持 source-agnostic
-- canonical folder 是 top-level `core/`
+- `SuperconductingCircuitsCore` owns reusable circuit construction, delayed lowering, JosephsonCircuits wrappers, sweep helpers, and analysis helpers
+- `SuperconductingCircuitsRunner` owns task polling/claiming, execution dispatch, local Zarr staging, manifest writing, progress/heartbeat/complete/fail reporting
+- Julia Runner does not write formal metadata DB records
+- Python Backend validates Runner manifests and publishes result Zarr into official TraceStore
 
 ### Migration Residue Notes
 
-- `src/app/` 應視為 archived legacy UI residue，最終目標是 `legacy/legacy_nicegui_archived/`
-- `src/worker/` 應視為 transition residue / pending backend worker-runtime redesign area
+- root `backend/`, `frontend/`, and `desktop/` are migration residues once code is moved to `app/`
+- `cli/`, NiceGUI code, and root `src/worker/` are removed from active package discovery
 - 上述 root `src/` 內容都不應被重新合法化成 canonical target topology
 
 ## Storage Direction
@@ -168,9 +169,11 @@ updated_by: codex
   - service target: `PostgreSQL`
   - schema versioning baseline: `Alembic`
   - detailed migration/version authority: [App / Backend / Circuit Definitions](../../app/backend/circuit-definitions.md)
-- numeric traces：
-  - baseline: `Zarr`
-  - backend abstraction required for future extension
+- numeric traces:
+  - Runner staging baseline: local filesystem `Zarr v2`
+  - official TraceStore baseline: backend-managed local filesystem `Zarr`
+  - complex arrays use real/imag arrays, never cross-language complex dtype assumptions
+  - S3-compatible storage remains a future Python Backend storage backend concern
 
 ??? note "Why alternatives are not listed"
     這頁只記錄正式 baseline，不列出所有曾考慮過的框架。若之後真的更換 stack，應先更新這頁，再讓實作跟上。
@@ -178,15 +181,16 @@ updated_by: codex
 ## Dependency Management
 
 - Python: `pyproject.toml` + `uv.lock`
-- Frontend: `frontend/package.json` + lockfile
-- Julia: `Project.toml` / `Manifest.toml`
+- Frontend: `app/frontend/package.json` + lockfile
+- Desktop: `app/desktop/package.json` + lockfile
+- Julia Core: `core/julia/SuperconductingCircuitsCore/Project.toml`
+- Julia Runner: `core/julia/SuperconductingCircuitsRunner/Project.toml`
 
 ### Python Workspace Ownership
 
-- canonical core package root 是 top-level `core/`
-- `core/pyproject.toml` 提供 shared-core dependency
-- `backend/` 的獨立 `uv sync` 必須能靠 `backend/pyproject.toml` 加上目前 core implementation 的 transitive dependencies 完整啟動
-- shared-core 使用到的 persistence / analysis / visualization 依賴，不可只宣告在 repo root；否則 `cd backend && uv sync` 會缺 package
+- Python Backend package root is `app/backend/`
+- Python notebook dependencies belong to `notebooks/python/`
+- root `pyproject.toml` is a lightweight workspace/dev project or can cease being an installable application package
 
 ## Agent Rule { #agent-rule }
 
@@ -205,34 +209,46 @@ updated_by: codex
 - **Backend**:
     - FastAPI
     - Pydantic
-    - SQLModel / SQLAlchemy
-    - Casbin as the backend authorization baseline for the multi-user app
-    - Rich-compatible logging
+    - Pydantic Settings
+    - SQLAlchemy
+    - Alembic
+    - NumPy
+    - Zarr
+    - fsspec
+- **Julia Core**:
+    - `core/julia/SuperconductingCircuitsCore/`
+    - reusable circuit construction, simulation, sweep, and analysis library
+- **Julia Runner**:
+    - `core/julia/SuperconductingCircuitsRunner/`
+    - HTTP.jl
+    - JSON3.jl
+    - StructTypes.jl
+    - Zarr.jl
+    - DataFrames.jl
 - **Local runtime backbone**:
-    - `rq`
-    - `redis`
-    - `uv run sc-app`
-    - `uv run sc-worker-simulation`
-    - `uv run sc-worker-characterization`
-    - desktop local-managed profile supervises Redis + app + worker sidecars; remote-server profile does not start local heavy runtime
-- **CLI**:
-    - Typer
-    - must remain first-class, not a second-tier wrapper
-- **Scientific core**:
-    - JosephsonCircuits.jl via juliacall
-    - plotly + schemdraw for visualization output
+    - frontend
+    - Python Backend
+    - Julia Runner
+    - no Redis/RQ
+- **Scripts**:
+    - `scripts/dev/`
+    - `scripts/build/`
+    - `scripts/test/`
+    - `scripts/maintenance/`
+    - no active CLI product surface
 - **Topology**:
-    - canonical architecture boundaries are top-level `backend/`, `frontend/`, `core/`, `cli/`, `desktop/`, `legacy/`
-    - root-level `src/` is not the future umbrella
+    - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
+    - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces
 - **Quality tools**:
     - Ruff
     - BasedPyright
     - pytest
     - Vitest / Playwright when frontend exists
 - **Storage direction**:
-    - metadata DB: SQLite now, PostgreSQL target
-    - metadata DB schema versioning: Alembic; detailed rules live in App / Backend / Circuit Definitions
-    - numeric trace store: Zarr
+    - metadata DB: SQLite local, PostgreSQL target
+    - metadata DB schema versioning: Alembic
+    - Runner staging: local filesystem Zarr v2
+    - official TraceStore: Python Backend-managed Zarr
 - New UI work should target Next.js, not the legacy UI layer.
-- Desktop packaging should use Electron around the frontend instead of reviving legacy-UI-native desktop assumptions.
+- Desktop packaging should use Electron around frontend + Python Backend + Julia Runner.
 ```

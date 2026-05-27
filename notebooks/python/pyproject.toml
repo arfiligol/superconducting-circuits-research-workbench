@@ -1,0 +1,16 @@
+[project]
+name = "superconducting-circuits-python-notebooks"
+version = "0.1.0"
+description = "Notebook-only Python dependencies for inspection, migration, and emergency analysis."
+requires-python = ">=3.12"
+dependencies = [
+    "juliacall>=0.9.31",
+    "lmfit>=1.3.1",
+    "matplotlib>=3.10.0",
+    "numpy>=2.3.5",
+    "pandas>=2.3.3",
+    "plotly>=5.22.0",
+    "scikit-rf>=1.10.0",
+    "scipy>=1.16.3",
+    "zarr>=3.1.3",
+]

@@ -7,7 +7,7 @@
     - functions use clear verb phrases
     - scientific names may include units when that removes ambiguity
 - **Boundaries**:
-    - do not put business workflow logic inside route handlers, React components, or CLI commands
-    - shared logic belongs in services or `src/core/`
+    - do not put business workflow logic inside route handlers, React components, notebooks, or scripts
+    - shared logic belongs in app backend services, Julia Core, Julia Runner, or explicit contract packages
 - **Refactoring**: prefer small, atomic changes
 - **Complexity**: keep functions focused; split code when one function starts handling multiple responsibilities

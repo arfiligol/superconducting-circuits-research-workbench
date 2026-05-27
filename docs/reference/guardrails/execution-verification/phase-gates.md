@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: "定義 migration phases 最低驗收條件、對應測試類型與深度並行前置條件"
-version: v1.2.0
-last_updated: 2026-03-14
+version: v2.0.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -31,7 +31,7 @@ updated_by: codex
 - canonical contract registry
 - source-of-truth ordering
 - identity/workspace minimal model
-- task runtime / processor contract
+- task runtime / Runner protocol / publication contract
 - error model
 - planning artifact format
 
@@ -50,21 +50,22 @@ updated_by: codex
 | --- | --- |
 | Phase 3 | backend API contract tests、frontend build/type/test、schema/dataset parity entries 更新 |
 | Phase 4 | auth/session contract tests、workspace-context tests、frontend app-state integration tests |
-| Phase 4.5 | CLI command tests for session/dataset/definition/task basics |
+| Phase 4.5 | Notebook/Application task submission and Runner smoke tests |
 | Phase 5A | repository/persistence tests、TraceStore contract tests、provenance linkage tests |
-| Phase 5B | task lifecycle tests、worker/execution tests、retry/failure classification tests |
+| Phase 5B | task lifecycle tests、Runner claim/complete/publish tests、retry/failure classification tests |
 | Phase 6 | workflow integration tests、recovery/reattach tests、parity matrix workflow sign-off |
-| Phase 7 | full CLI parity checks、desktop smoke tests、migration sign-off against parity matrix |
+| Phase 7 | notebook/application parity checks、desktop smoke tests、migration sign-off against parity matrix |
 
 ## Phase-to-Test Mapping
 
 | 範圍 | 最低測試類型 |
 | --- | --- |
-| `sc_core` | invariant / contract tests、pure helper tests |
+| Julia Core | invariant / contract tests、pure helper tests |
+| Julia Runner | task parsing、manifest、Zarr staging、fake smoke dispatch tests |
 | backend | API contract tests、service tests、repository/persistence tests |
 | frontend | build/type/lint、shared hook/provider tests、必要時 integration tests |
-| CLI | command behavior tests、machine-readable output tests |
-| worker / execution | task lifecycle tests、retry/failure tests、recovery attach tests |
+| Notebook | workflow smoke / inspection tests when executable |
+| Runner / publication | task lifecycle tests、retry/failure tests、recovery attach tests |
 | docs | nav source check、site build、built route check |
 
 ## Entry Criteria for Deep Implementation
@@ -94,7 +95,7 @@ updated_by: codex
     - canonical contract registry
     - source-of-truth ordering
     - identity/workspace minimal model
-    - task runtime / processor contract
+    - task runtime / Runner protocol / publication contract
     - error model
     - planning artifact format
 - If a public contract changes during any phase, update the parity matrix, contract registry, and relevant tests in the same delivery line.

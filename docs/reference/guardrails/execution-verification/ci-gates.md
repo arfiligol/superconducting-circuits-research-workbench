@@ -10,8 +10,8 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: develop 日常整合與 main release promotion 的 PR 品質門檻，含 desktop shell 與 docs route validation。
-version: v2.5.0
+scope: develop 日常整合與 main release promotion 的 PR 品質門檻，含 app layout、Julia Runner、desktop shell 與 docs route validation。
+version: v3.0.0
 last_updated: 2026-05-27
 updated_by: codex
 ---
@@ -28,7 +28,7 @@ updated_by: codex
 
 | touched area | 至少要過的 gate |
 | --- | --- |
-| foundation workspaces | backend pytest + frontend test/build + desktop lint/build |
+| foundation workspaces | backend pytest + frontend test/build + desktop lint/build + Julia Runner test |
 | backend | startup smoke + backend pytest |
 | frontend | lint + typecheck + test + build |
 | desktop | lint + build |
@@ -38,15 +38,16 @@ updated_by: codex
 
 === "Foundation Workspaces"
 
-    - install：`cd backend && uv sync`、`npm install --prefix frontend`、`npm install --prefix desktop`
-    - check：`cd backend && uv run pytest`、`npm run test --prefix frontend`、`npm run lint --prefix desktop`
-    - build：`npm run build --prefix frontend`、`npm run build --prefix desktop`
+    - install：`cd app/backend && uv sync`、`npm install --prefix app/frontend`、`npm install --prefix app/desktop`
+    - check：`cd app/backend && uv run pytest`、`npm run test --prefix app/frontend`、`npm run lint --prefix app/desktop`、`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - build：`npm run build --prefix app/frontend`、`npm run build --prefix app/desktop`
 
 === "Backend / Frontend / Desktop"
 
-    - backend foundation：startup smoke 與 `cd backend && uv run pytest`
-    - frontend：`npm run lint --prefix frontend`、`npm run typecheck --prefix frontend`、`npm run test --prefix frontend`、`npm run build --prefix frontend`
-    - desktop：`npm run lint --prefix desktop`、`npm run build --prefix desktop`
+    - backend foundation：startup smoke 與 `cd app/backend && uv run pytest`
+    - frontend：`npm run lint --prefix app/frontend`、`npm run typecheck --prefix app/frontend`、`npm run test --prefix app/frontend`、`npm run build --prefix app/frontend`
+    - desktop：`npm run lint --prefix app/desktop`、`npm run build --prefix app/desktop`
+    - Julia Runner：`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 
 === "Docs / Review"
 
@@ -74,13 +75,14 @@ updated_by: codex
 ```markdown
 ## CI Gates
 - Mandatory checks include:
-    - backend startup smoke and `cd backend && uv run pytest`
-    - `npm run lint --prefix frontend`
-    - `npm run typecheck --prefix frontend`
-    - `npm run test --prefix frontend`
-    - `npm run build --prefix frontend`
-    - `npm run lint --prefix desktop`
-    - `npm run build --prefix desktop`
+    - backend startup smoke and `cd app/backend && uv run pytest`
+    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - `npm run lint --prefix app/frontend`
+    - `npm run typecheck --prefix app/frontend`
+    - `npm run test --prefix app/frontend`
+    - `npm run build --prefix app/frontend`
+    - `npm run lint --prefix app/desktop`
+    - `npm run build --prefix app/desktop`
     - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched
     - `./scripts/build_docs_sites.sh` when docs are touched
     - `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched

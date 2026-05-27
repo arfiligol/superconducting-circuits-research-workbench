@@ -10,10 +10,10 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "文件設計規範索引：Standards / Macro Style / Micro Style / Maintenance / Domain Extensions"
-version: v1.3.0
-last_updated: 2026-03-14
-updated_by: team
+scope: "文件設計規範索引：Standards / Zensical Native Style / Macro Style / Micro Style / Maintenance / Domain Extensions"
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Documentation Design
@@ -29,6 +29,7 @@ updated_by: team
 | --- | --- |
 | Standards | 定義文件分類、frontmatter、核心邊界 |
 | Macro Style / Information Layout | 決定頁面編排、資訊分層、overview/index 節奏 |
+| Zensical Native Style | 決定 repo-local Zensical 原生文件節奏與呈現方式 |
 | Micro Style / Writing & Visual Elements | 決定語氣、段落、admonitions、tabs 等元件使用 |
 | Maintenance | 定義來源樹、更新流程、build/check |
 | Domain Extensions | 對特定類型文件補更多專用寫法 |
@@ -38,6 +39,7 @@ updated_by: team
 | 規範 | 說明 | Agent Rule |
 |------|------|------------|
 | [Standards](standards.md) | Diataxis + Frontmatter + 核心規則 | [#agent-rule](standards.md#agent-rule) |
+| [Zensical Native Style](zensical-native-style.md) | 專案內 Zensical-native 寫作節奏與呈現方式 | [#agent-rule](zensical-native-style.md#agent-rule) |
 | [Macro Style / Information Layout](information-layout.md) | 頁面資訊分層、視覺節奏、overview/index 編排 | [#agent-rule](information-layout.md#agent-rule) |
 | [Micro Style / Writing & Visual Elements](style.md) | 語氣、段落寫法與 Admonitions/Tabs/Mermaid 等元件使用 | [#agent-rule](style.md#agent-rule) |
 | [Maintenance](maintenance.md) | 單語來源樹 + Frontmatter 更新 + Zensical 檢查 | [#agent-rule](maintenance.md#agent-rule) |
@@ -49,13 +51,14 @@ updated_by: team
 | 規範 | 負責什麼 | 不負責什麼 |
 |------|----------|------------|
 | Standards | 文件分類、metadata、核心約束 | 頁面編排、語氣細節 |
+| Zensical Native Style | 目前契約優先、happy path、examples、Zensical-native 呈現節奏 | Diataxis 邊界、build 維護流程 |
 | Macro Style / Information Layout | 宏觀頁面編排、overview/index 規則、閱讀節奏 | 用字選擇、元件語法細節 |
 | Micro Style / Writing & Visual Elements | 語氣、段落寫法、Admonitions/Tabs/Mermaid 等元件使用 | Diataxis 邊界、build 維護流程 |
 | Maintenance | 單語來源樹、frontmatter 更新、build/check 流程 | 文件內容本身的結構設計 |
 | Page Reference Specs | App frontend page 規格的固定骨架與驗收方式 | 其他類型文件的通用編排 |
 
 !!! tip "Read order"
-    若你只想快速把一頁寫對，通常的順序是 `Standards -> Macro Style -> Micro Style -> 該領域的 extension page`。
+    若你只想快速把一頁寫對，通常的順序是 `Standards -> Zensical Native Style -> Macro Style -> Micro Style -> 該領域的 extension page`。
 
 ## Domain Extensions
 
@@ -66,7 +69,6 @@ updated_by: team
 | [Page Reference Specs](page-reference-specs.md) | App frontend pages 的固定骨架、命名與驗收方式 |
 | [Explanation Physics](explanation-physics.md) | Physics explanation 的敘事骨架、引用與邊界 |
 | [Circuit Diagrams](../../../how-to/contributing/circuit-diagrams.md) | Schemdraw → SVG 的圖表寫作與輸出流程 |
-| [CLI Docs Automation](../../../how-to/contributing/cli-docs-automation.md) | CLI 文件頁的自動化與同步流程 |
 
 ## 正式術語
 
@@ -85,8 +87,6 @@ updated_by: team
 
 - 視覺圖表：
   - [Circuit Diagram Guide](../../../how-to/contributing/circuit-diagrams.md)（Schemdraw → SVG）
-- CLI 文件：
-  - [CLI Docs Automation](../../../how-to/contributing/cli-docs-automation.md)
 - App page specs：
   - [Page Reference Specs](./page-reference-specs.md)
 
@@ -97,6 +97,7 @@ updated_by: team
 ```markdown
 ## Documentation Design
 - **Standards**: Diataxis + Frontmatter/Tags + 核心規則（見 `standards.md`）
+- **Zensical Native Style**: 目前契約優先、happy path、examples、Zensical-native 呈現節奏（見 `zensical-native-style.md`）
 - **Macro Style / Information Layout**: 宏觀頁面編排、視覺節奏、overview/index 規則（見 `information-layout.md`）
 - **Micro Style / Writing & Visual Elements**: 語氣、段落寫法與視覺元素使用（見 `style.md`）
 - **Maintenance**: 單語來源樹 + Frontmatter 更新 + Zensical 檢查（見 `maintenance.md`）

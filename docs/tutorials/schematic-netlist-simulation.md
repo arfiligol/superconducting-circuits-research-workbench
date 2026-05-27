@@ -15,19 +15,21 @@ last_updated: 2026-03-05
 updated_by: codex
 ---
 
-# From Netlist to Simulation
+# From Netlist to Runner Task
 
-本頁串接 Schema 與 Simulation 的最短操作路徑。
+本頁串接 Schema 與非同步 Julia Runner simulation task 的最短操作路徑。
 
 ## 流程
 
 1. 在 Schema Editor 撰寫 Source Form，儲存 schema。
-2. 於 Simulation 頁確認 Expanded Netlist Configuration。
-3. 設定 sources、solver options、必要時設定 post-processing。
-4. 執行 simulation，檢視 Raw / Post-Processed Result View。
+2. 在 Application task surface 建立 simulation task。
+3. Python Backend 驗證 dataset/design/schema，準備 staging directory。
+4. Julia Runner claim task、執行 Julia Core、寫入 `result.zarr` 與 `manifest.json`。
+5. Backend publisher 驗證並 publish 到 TraceStore。
+6. 使用 `Tasks` 與 `Raw Data` 檢視正式結果。
 
 ## Related
 
 - [Schema Editor UI](../reference/app/frontend/definition/schema-editor.md)
-- [Circuit Simulation UI](../reference/app/frontend/research-workflow/circuit-simulation.md)
+- [Julia Runner Compute Plane](../reference/architecture/julia-runner-compute-plane.md)
 - [Analysis Result Data Contract](../reference/data-formats/analysis-result.md)

@@ -1,5 +1,6 @@
 ## Documentation Design
 - **Standards**: Diataxis + Frontmatter/Tags + 核心規則（見 `standards.md`）
+- **Zensical Native Style**: 目前契約優先、happy path、examples、Zensical-native 呈現節奏（見 `zensical-native-style.md`）
 - **Macro Style / Information Layout**: 宏觀頁面編排、視覺節奏、overview/index 規則（見 `information-layout.md`）
 - **Micro Style / Writing & Visual Elements**: 語氣、段落寫法與視覺元素使用（見 `style.md`）
 - **Maintenance**: 單語來源樹 + Frontmatter 更新 + Zensical 檢查（見 `maintenance.md`）

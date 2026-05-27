@@ -49,7 +49,7 @@ updated_by: codex
 
 | Desktop runtime profile | Paired app mode | Required meaning |
 |---|---|---|
-| `local_managed` | `local` | desktop shell 管理本地 Redis、`sc-app` 與 worker sidecars；shell 自身不是 solver host |
+| `local_managed` | `local` | desktop shell 管理本地 frontend、Python Backend 與 Julia Runner；shell 自身不是 solver host |
 | `remote_server` | `online` | desktop shell 只連遠端 server target；不得啟動本地 heavy runtime 作為隱性依賴 |
 
 !!! info "Profile and mode are different terms"
@@ -151,7 +151,7 @@ updated_by: codex
 | `startup_behavior` | `restore_last_mode`、`always_local`、`always_online`、`ask_on_launch` |
 | `last_runtime_mode` | 最近一次成功建立的 `local` / `online` mode |
 | `last_online_target` | 最近一次成功使用的 online target summary |
-| `auto_start_local_runtime` | 進入 local desktop profile 時是否自動啟動本地 sidecars |
+| `auto_start_local_runtime` | 進入 local desktop profile 時是否自動啟動 frontend、backend、runner |
 
 | Rule | Required behavior |
 |---|---|
@@ -243,15 +243,14 @@ updated_by: codex
 |---|---|
 | switch from online to local | remote tasks 繼續在 server 端執行；app 只解除目前 online queue / attached-task context |
 | switch from local to online | local tasks 不被搬移到 server；online mode 重新建立自己的 queue context |
-| return to online mode | 重新抓取 remote queue 與 worker summary；必要時讓使用者重新 attach |
-| closing `sc-app` only in local mode | 若 local workers 仍在，task 應繼續執行；重開 app 後可透過 queue recovery / reattach 重新觀察 |
-| stopping the whole local runtime stack | 若 `sc-app` 與 local workers 一起停止，local tasks 才可能終止或進入 reconcile-required state |
+| return to online mode | 重新抓取 remote task summary；必要時讓使用者重新 attach |
+| closing Electron shell only in local mode | 若 Python Backend 與 Julia Runner 仍在，task 可繼續由 runner lifecycle 收斂；重開 shell 後可重新觀察 |
+| stopping the whole local runtime stack | 若 frontend、Python Backend 與 Julia Runner 一起停止，local tasks 才可能終止或進入 reconcile-required state |
 | app close in online mode | remote tasks 繼續由 server runtime 管理；重新打開 app 後再透過 queue recovery 取得狀態 |
 
 !!! info "Worker summary uses liveness vocabulary"
-    local / online task surfaces 若顯示 worker summary，應使用 `idle / running / draining / degraded / offline`。
-    這組詞回答的是 worker liveness，不是 task lifecycle。
-    `idle` 代表 worker alive and available；不得被 mode-aware shell 語意誤讀成 `offline`。
+    local / online task surfaces 若顯示 runner summary，應把 runner liveness 與 task lifecycle 分開。
+    `idle` 代表 runner alive and available；不得被 mode-aware shell 語意誤讀成 `offline`。
 
 ## Data Transition Rules
 

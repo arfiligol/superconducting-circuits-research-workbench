@@ -10,19 +10,19 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 current platform 的 top-level canonical development surfaces 與 migration residue 邊界。
-version: v3.1.0
-last_updated: 2026-04-29
+scope: 定義 current platform 的 app/core/notebooks/scripts/docs canonical surfaces 與 migration residue 邊界。
+version: v4.0.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Folder Structure
 
-本 branch 的 canonical target layout 以 top-level folders 作為正式架構邊界。
-`backend/`、`frontend/`、`core/`、`cli/`、`desktop/`、`legacy/` 是目前應被人類與 AI Agent 直接辨識的主要開發對象。
+本 branch 的 canonical target layout 以 `app/`、`core/`、`notebooks/`、`scripts/`、`docs/` 作為正式架構邊界。
+`app/backend/`、`app/frontend/`、`app/desktop/`、`core/julia/`、`core/python/` 是目前應被人類與 AI Agent 直接辨識的主要開發對象。
 
-root-level `src/` 不再應被描述為 future canonical umbrella。
-任何仍留在 root `src/` 底下的內容，都應視為 migration residue，除非另有文件明寫。
+root-level `backend/`、`frontend/`、`desktop/`、`cli/` 與 `src/` 不再應被描述為 future canonical surfaces。
+任何仍留在這些舊位置的內容，都應視為 migration residue，除非另有文件明寫。
 
 !!! info "How to use this page"
     當你不確定新檔案該放哪裡時，先看 placement rules，而不是先照習慣找最近的資料夾塞進去。這頁的重點是 owner boundary，不是完整檔案樹教學。
@@ -31,50 +31,67 @@ root-level `src/` 不再應被描述為 future canonical umbrella。
 
 ```text
 superconducting-circuits-tutorial/
-├── backend/                   # canonical app/backend service surface
-├── frontend/                  # canonical web app surface
-├── core/                      # canonical shared scientific/core surface
-├── cli/                       # canonical standalone CLI surface
-├── desktop/                   # canonical desktop shell surface
-├── legacy/
-│   └── legacy_nicegui_archived/ # archived UI payload; not a new-work target
+├── app/
+│   ├── backend/               # Python Backend control/data plane
+│   ├── frontend/              # Next.js data workbench
+│   └── desktop/               # Electron shell
+├── core/
+│   ├── julia/
+│   │   ├── SuperconductingCircuitsCore/
+│   │   └── SuperconductingCircuitsRunner/
+│   └── python/
+│       └── sc_data_contracts/
+├── notebooks/
+│   ├── pluto/
+│   └── python/
 ├── docs/                      # zh-TW docs, guardrails, and docs staging tree
 ├── Plans/                     # active multi-agent planning artifacts; not long-term SoT
 ├── data/                      # raw / processed / trace-store / local DB
 ├── openapi.json               # committed OpenAPI snapshot for contract sync
-└── scripts/                   # repo helpers only
+└── scripts/
+    ├── dev/
+    ├── build/
+    ├── test/
+    └── maintenance/
 ```
 
 !!! important "Top-level folders are the architecture boundaries"
-    這份 target layout 故意不把 root `src/` 畫成 umbrella。
-    package-internal `src/` 可以存在於 `backend/`、`frontend/`、`desktop/`、`cli/` 之內，
-    但 root-level `src/` 不再是未來架構的正式收納模型。
+    這份 target layout 故意不把 root `backend/`、`frontend/`、`desktop/`、`cli/` 或 `src/` 畫成 canonical surfaces。
+    package-internal `src/` 可以存在於 `app/backend/`、`app/frontend/`、`app/desktop/` 之內，
+    但 root-level package surfaces 不再是未來架構的正式收納模型。
 
 ## Placement Rules
 
 | 如果要改 | 應放位置 |
 | --- | --- |
-| Next.js page, layout, component | `frontend/` |
-| Electron main / preload / packaging | `desktop/` |
-| API router, service, persistence | `backend/` |
-| CLI command or batch workflow | `cli/` |
-| 可被 API / CLI / simulation 共用的科學邏輯 | `core/` |
-| repo automation, docs helper, migration helper | `scripts/` |
+| Next.js page, layout, component | `app/frontend/` |
+| Electron main / preload / packaging | `app/desktop/` |
+| API router, service, persistence | `app/backend/` |
+| Julia circuit construction / simulation / analysis library | `core/julia/SuperconductingCircuitsCore/` |
+| Julia async compute runner | `core/julia/SuperconductingCircuitsRunner/` |
+| Python data contract schemas if needed | `core/python/sc_data_contracts/` |
+| Pluto notebook | `notebooks/pluto/` |
+| Python backend/data notebook | `notebooks/python/` |
+| dev/build/test/maintenance helper | `scripts/dev/`, `scripts/build/`, `scripts/test/`, `scripts/maintenance/` |
 | multi-agent planning, prompt handoff, test backlog | `Plans/`，由 Planning & Reviewing Agent 建立/退休/刪除 |
-| archived NiceGUI residue | `legacy/legacy_nicegui_archived/`（current archived residue 仍可能在 `src/app/`） |
-| worker runtime residue / redesign staging | 不屬於 target layout；若仍需碰 `src/worker/`，只能以 migration/redesign context 理解 |
+| archived NiceGUI/CLI/runtime residue | `docs/archive/` as inert text only, or delete if not needed |
+| old worker runtime residue | 不屬於 target layout；若仍需碰 `src/worker/`，只能以 migration evidence 理解 |
 | committed OpenAPI contract snapshot | root `openapi.json` |
 
-!!! warning "Do not reintroduce root `src/` as umbrella"
-    這次決策不是把 `backend/`、`frontend/`、`core/`、`cli/` 再包回 root `src/`。
-    若現有 top-level 邊界已能表達責任，就不要再讓 root `src/` 重新變成大雜燴入口。
+!!! warning "Do not reintroduce old root package surfaces"
+    這次決策不是把 `app/backend/`、`app/frontend/`、`app/desktop/` 再拆回 root `backend/`、`frontend/`、`desktop/`。
+    也不要讓 root `cli/` 或 `src/` 重新變成 active entrypoint。
 
 ## Current Implementation Residue
 
 | Current location | How to interpret it now |
 | --- | --- |
-| `src/app/` | archived legacy UI residue，pending relocation to `legacy/legacy_nicegui_archived/` |
-| `src/worker/` | transition residue / pending backend worker-runtime redesign；不是 canonical current runtime folder，也不是新實作 owner |
+| `backend/` | migration source for `app/backend/`; not canonical after relocation |
+| `frontend/` | migration source for `app/frontend/`; not canonical after relocation |
+| `desktop/` | migration source for `app/desktop/`; not canonical after relocation |
+| `cli/` | removed active product surface |
+| `src/app/` | archived legacy UI residue |
+| `src/worker/` | old worker/runtime residue; not a new implementation owner |
 
 ## Planning Artifacts
 
@@ -98,12 +115,13 @@ superconducting-circuits-tutorial/
 
 ## Dependency Direction
 
-1. frontend 依賴 API contract，不直接依賴 backend internals
-2. desktop 依賴 frontend build 與受控 IPC，不承載業務規則
-3. backend API 層依賴 services/domain，不反向耦合到 web framework 以外的層
-4. CLI command 不得複製複雜 workflow logic；standalone CLI 的 shared logic 應優先收斂在 CLI-local runtime abstractions 或 top-level `core/`
-5. top-level `core/` 不得依賴 Next.js、FastAPI、Electron 或 CLI framework
-6. root `src/` residues 不得被重新解讀成正式 architecture boundary
+1. `app/frontend/` 依賴 API contract，不直接依賴 backend internals
+2. `app/desktop/` 依賴 frontend build、backend/runner process supervision 與受控 IPC，不承載業務規則
+3. `app/backend/` API 層依賴 services/domain/infrastructure，不執行 heavy compute
+4. `core/julia/SuperconductingCircuitsRunner/` 依賴 backend runner protocol，不擁有正式 metadata DB
+5. `core/julia/SuperconductingCircuitsCore/` 不依賴 FastAPI、Next.js、Electron 或 Python Backend internals
+6. `scripts/` 不得成為 user-facing CLI product surface
+7. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
 
 ??? note "Why the full tree is still shown"
     這頁保留完整 target layout，是因為 folder boundary 本身就是 reference contract。其餘 guardrails 不需要都像這樣展開。
@@ -112,21 +130,25 @@ superconducting-circuits-tutorial/
 
 ```markdown
 ## Folder Structure
-- **Frontend** work goes to `frontend/`.
-- **Desktop shell** work goes to `desktop/`.
-- **Backend** work goes to `backend/`.
-- **Shared scientific logic** goes to top-level `core/`.
-- **CLI** work goes to `cli/`.
-- **Archived NiceGUI residue** targets `legacy/legacy_nicegui_archived/`; current `src/app/` should be read as archived payload pending relocation.
-- **`src/worker/`** is transition residue under redesign, not a canonical development surface.
+- **Frontend** work goes to `app/frontend/`.
+- **Desktop shell** work goes to `app/desktop/`.
+- **Backend** work goes to `app/backend/`.
+- **Julia Core** work goes to `core/julia/SuperconductingCircuitsCore/`.
+- **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
+- **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
+- **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
+- **No CLI product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
+- **Archived NiceGUI / CLI / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
+- **`src/worker/`** is old runtime residue, not a canonical development surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
 - **Plans** go to `Plans/` only as active multi-agent coordination artifacts; Planning & Reviewing Agents own creation and cleanup, and long-term decisions must move to `docs/reference/**`.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
-- Root-level `src/` is not the future canonical umbrella.
+- Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces.
 - Dependency direction:
     - frontend depends on API contracts, not backend internals
-    - desktop depends on frontend outputs and secure IPC, not business logic ownership
-    - backend API layer depends inward on services/domain
-    - standalone CLI shared logic belongs in CLI-local runtime abstractions or top-level `core/`; do not assume backend services are the default owner
-    - top-level `core/` must stay framework-agnostic
+    - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
+    - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
+    - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
+    - Julia Core must stay framework-agnostic
+    - scripts are helpers, not user-facing workflow contracts
 ```

@@ -11,14 +11,14 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Python 與 TypeScript 的型別檢查規範。
-version: v2.1.0
-last_updated: 2026-03-14
-updated_by: docs-team
+version: v3.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Type Checking
 
-型別規範的目的不是追求表面上的零警告，而是讓 UI、API、CLI 與科學核心的資料契約保持穩定。
+型別規範的目的不是追求表面上的零警告，而是讓 UI、API、Notebook、Runner 與科學核心的資料契約保持穩定。
 
 !!! info "How to read this page"
     先看語言對應規則，再看例外與修復策略。若你想用 ignore 或放寬型別，先確認是否真的只剩第三方套件缺型別這一種理由。

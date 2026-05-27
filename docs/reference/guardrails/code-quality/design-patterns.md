@@ -11,9 +11,9 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: rewrite branch 的服務邊界、依賴方向與共享邏輯規範。
-version: v1.1.0
-last_updated: 2026-03-14
-updated_by: docs-team
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Design Patterns
@@ -29,7 +29,7 @@ updated_by: docs-team
 | --- | --- |
 | Dependency Direction | 哪一層可以擁有 workflow |
 | Dependency Injection | service / repository / adapter 應怎麼被組裝 |
-| Canonical Definition | 哪裡才是定義格式的真正 owner |
+| Compute Boundary | Python Backend 與 Julia Runner 如何分工 |
 | API Layer Responsibility | API handler 可以做什麼、不可以做什麼 |
 
 ## Core Rules
@@ -38,8 +38,10 @@ updated_by: docs-team
 
 - React component 不能承擔業務流程編排
 - FastAPI router 不能直接承擔完整 workflow
-- CLI command 不能複製 backend service 邏輯
-- 共享規則應集中在 backend service 或 `src/core/`
+- scripts 不能複製 backend service 或 Runner 邏輯
+- Python Backend 不能執行 heavy simulation / analysis compute
+- Julia Runner 不能寫正式 metadata DB
+- 共享規則應集中在 app backend service、Julia Core、Julia Runner 或明確 contract package
 
 ### Dependency Injection
 
@@ -47,10 +49,12 @@ updated_by: docs-team
 - 禁止在函式內隨手 new repository / client / adapter
 - framework-specific 組裝放在 composition root
 
-### Canonical Definition
+### Compute Boundary
 
-- circuit definition 應有單一 canonical representation
-- schemdraw、simulation、analysis、API response 不應各自維護互相漂移的定義格式
+- Python Backend owns task lifecycle, metadata, publication, provenance, TraceStore registration, and data APIs
+- Julia Runner owns simulation, sweep, post-processing, analysis, fitting, derived parameter extraction, and staging package generation
+- Application-triggered simulation and analysis must be asynchronous
+- Notebook direct execution is allowed only because the notebook kernel is an explicit research execution environment
 
 ### API Layer Responsibility
 
@@ -66,15 +70,17 @@ updated_by: docs-team
 - 跨多模組重複的轉換邏輯
 
 !!! warning "Do not let entry layers fork the workflow"
-    若 component、router、CLI command 各自偷偷長出一份相似但不完全相同的流程，最後一定會漂移。這頁的重點就是避免這種局部合理、全域失控的設計。
+    若 component、router、notebook helper、Runner 或 script 各自偷偷長出一份相似但不完全相同的流程，最後一定會漂移。這頁的重點就是避免這種局部合理、全域失控的設計。
 
 ## Agent Rule { #agent-rule }
 
 ```markdown
 ## Design Patterns
-- Keep shared workflow logic in backend services or `src/core/`, not in React components, FastAPI routers, or CLI commands.
+- Keep shared workflow logic in app backend services, Julia Core, Julia Runner, or explicit contract packages, not in React components, FastAPI routers, notebooks, or scripts.
 - Use dependency injection or explicit factories for services, repositories, and adapters.
-- Keep one canonical circuit definition that feeds schemdraw, simulation, analysis, API, and CLI.
+- Python Backend is the control/data plane and must not execute heavy simulation or analysis compute in process.
+- Julia Runner is the compute plane and must not write formal metadata DB records.
+- Application-triggered simulation and analysis must be asynchronous.
 - API handlers should do I/O, auth, validation, service invocation, and response mapping only.
-- CLI commands should orchestrate user input/output, then delegate to shared services/core.
+- Scripts are dev/build/test/maintenance helpers only and must not become user-facing workflow contracts.
 ```

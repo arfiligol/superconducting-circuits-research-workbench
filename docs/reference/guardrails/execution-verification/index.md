@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: build、lint、test、CI、branch/worktree flow、multi-agent workflow 與 migration phase 驗收規範索引。
-version: v1.3.0
-last_updated: 2026-03-27
+version: v2.0.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -51,6 +51,6 @@ updated_by: codex
 - 定義 build、lint、type-check、test、CI 的 workspace 基線。
 - branch roles、isolated worktree policy 與 merge authority 由 `Branch & Worktree Flow` 定義。
 - 變更程式碼時，優先執行與 touched area 直接相關的檢查。
-- workspace delivery baseline 包含 frontend、backend、CLI、desktop、docs 五條驗證線。
+- workspace delivery baseline 包含 app/frontend、app/backend、Julia Runner、desktop、docs 五條驗證線。
 - migration phases 需搭配 Phase Gates、Prompt Grading 與 multi-agent collaboration rules 驗收。
 ```

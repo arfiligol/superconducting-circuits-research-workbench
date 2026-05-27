@@ -11,273 +11,108 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: "貢獻者指南：擴充 Julia 模擬函數"
-version: v0.1.0
-last_updated: 2026-01-28
-updated_by: docs-team
+scope: "貢獻者指南：擴充 Julia Core 與 Julia Runner compute tasks"
+version: v0.2.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # 擴充 Julia 函數
 
-本指南說明如何為專案新增 Julia 模擬函數，並透過 Python 封裝供使用者使用。
+新增模擬或分析能力時，先把 reusable compute logic 放進 Julia Core，再用 Julia Runner task 包裝成非同步工作。
+Python Backend 只負責 task lifecycle、metadata、publication 與 TraceStore registration。
 
-## 架構概覽
+## Architecture
 
-```
-Python                    JuliaCall                Julia
-┌─────────────────┐       ┌─────────────┐         ┌─────────────────────┐
-│ CLI Script      │       │             │         │ hbsolve.jl          │
-│ (run_lc.py)     │──────▶│  juliacall  │────────▶│ run_lc_simulation() │
-├─────────────────┤       │             │         └─────────────────────┘
-│ JuliaSimulator  │       │             │                   │
-│ (julia_adapter) │◀──────│  Main       │◀──────────────────┘
-├─────────────────┤       └─────────────┘         ┌─────────────────────┐
-│ Domain Models   │                               │ JosephsonCircuits.jl│
-│ (circuit.py)    │                               └─────────────────────┘
-└─────────────────┘
+```text
+Pluto Notebook                 Python Backend                  Julia Runner
+      |                               |                              |
+      | direct research execution      | POST /tasks                  |
+      v                               v                              |
+Julia Core <------------------- task metadata --------------> task dispatcher
+      |                                                              |
+      | reusable circuit/sweep/analysis logic                         v
+      +------------------------------------------------------ result.zarr + manifest
 ```
 
-## 步驟 1：新增 Julia 函數
+## Step 1: Add Julia Core logic
 
-編輯 `core/simulation/infrastructure/hbsolve.jl`：
+Add reusable circuit construction, sweep, or analysis code under:
 
-```julia
-"""
-    run_my_simulation(param1, param2, ...)
-
-新函數的說明。
-
-# Arguments
-- `param1`: 參數 1 說明
-- `param2`: 參數 2 說明
-
-# Returns
-Dict with keys: :frequencies_ghz, :s11_real, :s11_imag
-"""
-function run_my_simulation(param1::Float64, param2::Float64)
-    # 單位轉換（如需要）
-    nH = 1e-9
-    pF = 1e-12
-    GHz = 1e9
-
-    # 定義電路
-    @variables L C R50
-    circuit = [
-        ("P1", "1", "0", 1),
-        # ... 電路定義
-    ]
-
-    circuitdefs = Dict(
-        L => param1 * nH,
-        C => param2 * pF,
-        R50 => 50.0,
-    )
-
-    # 頻率設定
-    frequencies = range(0.1, 10, length=100) .* GHz
-    ws = 2π .* frequencies
-
-    # Pump 設定
-    wp = (2π * 5GHz,)
-    sources = [(mode=(1,), port=1, current=0.0)]
-
-    # 執行模擬
-    sol = hbsolve(ws, wp, sources, (10,), (20,), circuit, circuitdefs)
-
-    # 提取 S11
-    S11 = sol.linearized.S(
-        outputmode=(0,), outputport=1,
-        inputmode=(0,), inputport=1,
-        freqindex=:
-    )
-
-    # 返回 Dict（會被轉換為 Python dict）
-    return Dict(
-        :frequencies_ghz => collect(frequencies ./ GHz),
-        :s11_real => real.(S11),
-        :s11_imag => imag.(S11)
-    )
-end
+```text
+core/julia/SuperconductingCircuitsCore/
 ```
 
-!!! important
-    - 函數必須返回 `Dict`，使用 Symbol 作為 key
-    - 陣列使用 `collect()` 轉換為 Julia Array
-    - 不要在函數內使用 `const`（Julia 不允許在函數內宣告 const）
+Keep this layer independent from HTTP, task polling, metadata DB, and frontend concerns.
+It should be callable from Pluto and from Runner task dispatch.
 
-## 步驟 2：新增 Pydantic Domain Model（如需要）
+## Step 2: Add a Runner task dispatcher
 
-若新函數需要新的輸入/輸出結構，編輯 `core/simulation/domain/circuit.py`：
+Add the task handler under:
 
-```python
-from pydantic import BaseModel
-
-class MySimulationConfig(BaseModel):
-    """新模擬配置。"""
-
-    param1: float
-    param2: float
-    # ... 其他參數
-
-class MySimulationResult(BaseModel):
-    """新模擬結果。"""
-
-    frequencies_ghz: list[float]
-    s11_real: list[float]
-    s11_imag: list[float]
-    # ... 其他輸出
+```text
+core/julia/SuperconductingCircuitsRunner/
 ```
 
-## 步驟 3：更新 Python Adapter
+The handler receives the claimed task payload and writes a local result package.
+For a complex trace, write real and imaginary arrays separately:
 
-編輯 `core/simulation/infrastructure/julia_adapter.py`：
-
-```python
-from core.simulation.domain.circuit import (
-    FrequencyRange,
-    SimulationResult,
-    MySimulationConfig,  # 新增
-)
-
-class JuliaSimulator:
-    # ... 現有方法 ...
-
-    def run_my_simulation(
-        self,
-        config: MySimulationConfig,
-        freq_range: FrequencyRange,
-    ) -> SimulationResult:
-        """
-        執行自定義模擬。
-
-        Args:
-            config: 模擬配置。
-            freq_range: 頻率範圍。
-
-        Returns:
-            SimulationResult with S11 data.
-        """
-        self._ensure_initialized()
-        assert self._jl is not None
-
-        # 呼叫 Julia 函數
-        result = self._jl.run_my_simulation(
-            float(config.param1),
-            float(config.param2),
-        )
-
-        # 轉換結果
-        return SimulationResult(
-            frequencies_ghz=list(result["frequencies_ghz"]),
-            s11_real=list(result["s11_real"]),
-            s11_imag=list(result["s11_imag"]),
-        )
+```text
+result.zarr/
+├── axes/
+│   └── frequency
+└── traces/
+    └── S11/
+        ├── real
+        └── imag
 ```
 
-!!! tip
-    - 使用 `assert self._jl is not None` 滿足型別檢查
-    - Julia 返回的 Dict key 是 Symbol，但 JuliaCall 會自動轉換為 Python str
+Use Zarr v2 for the first implementation.
+Do not send large arrays back through HTTP JSON.
 
-## 步驟 4：新增 CLI Entry Point
+## Step 3: Write the manifest
 
-建立 `src/scripts/simulation/run_my_simulation.py`：
+Write `manifest.json.tmp`, close it, then rename it to `manifest.json`.
+The backend only accepts a completed manifest.
 
-```python
-"""CLI for my custom simulation."""
+The manifest must declare:
 
-import argparse
-import sys
+- `schema_version`
+- `task_id`
+- producer versions
+- Zarr format and relative URI
+- sweep success/failure summary
+- trace paths, shapes, chunk shapes, dtype, and axes
+- log artifacts
 
-from core.simulation.infrastructure.julia_adapter import JuliaSimulator
-from core.simulation.domain.circuit import FrequencyRange
+See [Runner Result Manifest](../../reference/architecture/runner-result-manifest.md).
 
+## Step 4: Add backend validation if needed
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Run my custom simulation",
-    )
-    parser.add_argument("--param1", type=float, required=True)
-    parser.add_argument("--param2", type=float, required=True)
-    parser.add_argument("--start", type=float, default=0.1)
-    parser.add_argument("--stop", type=float, default=10.0)
-    parser.add_argument("--points", type=int, default=100)
+If the new task produces a new trace family or summary table, extend the Python Backend publisher validation.
+The backend must verify every declared Zarr array before publishing it into TraceStore.
 
-    args = parser.parse_args()
+## Step 5: Add tests
 
-    print(f"Running simulation: param1={args.param1}, param2={args.param2}")
-
-    simulator = JuliaSimulator()
-    freq_range = FrequencyRange(
-        start_ghz=args.start,
-        stop_ghz=args.stop,
-        points=args.points,
-    )
-
-    # 使用新函數
-    result = simulator.run_my_simulation(
-        config=MySimulationConfig(
-            param1=args.param1,
-            param2=args.param2,
-        ),
-        freq_range=freq_range,
-    )
-
-    print(f"Simulation complete: {len(result.frequencies_ghz)} points")
-
-
-if __name__ == "__main__":
-    main()
-```
-
-## 步驟 5：註冊 CLI Entry Point
-
-更新 `pyproject.toml`：
-
-```toml
-[project.scripts]
-# ... 現有 scripts ...
-sc-my-simulation = "scripts.simulation.run_my_simulation:main"
-```
-
-## 步驟 6：測試
+Use a small fake task before adding heavy JosephsonCircuits coverage.
 
 ```bash
-# 型別檢查
-uv run basedpyright core/simulation/
-
-# 執行測試
-uv run sc-my-simulation --param1 10.0 --param2 1.0
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+cd app/backend && uv run pytest tests/test_runner_api.py
 ```
 
-## 步驟 7：更新文件
+## Notes
 
-1. 在 `docs/reference/cli/` 新增 CLI 參考頁面
-2. 更新 `docs/how-to/simulation/` 相關教學
-3. 更新 README.md（如需要）
+!!! warning "No Python JuliaCall runtime"
+    Do not add new Python Backend execution paths that call Julia through JuliaCall.
+    Notebook kernels may call Julia directly because they are explicit research execution environments.
 
-## 常見問題
+!!! warning "No CLI entrypoint"
+    Do not register new `sc-*` product commands.
+    Developer-only helpers belong under `scripts/dev/`, `scripts/test/`, `scripts/build/`, or `scripts/maintenance/`.
 
-### Julia 語法錯誤
+## Related
 
-**問題**：`syntax: unsupported 'const' declaration on local variable`
-
-**解決**：Julia 不允許在函數內使用 `const`，改為普通變數賦值。
-
-### 型別轉換
-
-| Python 類型 | Julia 類型 |
-|-------------|------------|
-| `float` | `Float64` |
-| `int` | `Int` |
-| `list` | `Vector` |
-| `dict` | `Dict` |
-
-### 效能考量
-
-對於需要大量迴圈的計算（如參數掃描），建議在 Julia 端實作完整邏輯，而非從 Python 反覆呼叫。
-
-## 相關資源
-
-- [Script Authoring](../../reference/guardrails/code-quality/script-authoring.md) - CLI 規範
-- [Folder Structure](../../reference/guardrails/project-basics/folder-structure.md) - 目錄結構
-- [Python API 詳解](../simulation/python-api.md) - API 使用
+- [Julia Runner Compute Plane](../../reference/architecture/julia-runner-compute-plane.md)
+- [Runner Result Manifest](../../reference/architecture/runner-result-manifest.md)
+- [TraceStore Zarr](../../reference/architecture/trace-store-zarr.md)

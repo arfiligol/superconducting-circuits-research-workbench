@@ -1,17 +1,19 @@
 ## Testing Commands
 - **Foundation workspace check**:
-    - `cd backend && uv run pytest`
-    - `npm run test --prefix frontend`
-    - `npm run lint --prefix desktop`
+    - `cd app/backend && uv run pytest`
+    - `npm run test --prefix app/frontend`
+    - `npm run lint --prefix app/desktop`
+    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Backend/core tests**:
-    - `cd backend && uv run pytest`
-    - `uv run pytest`
-- **Frontend unit tests**: `npm run test --prefix frontend`
-- **Frontend E2E tests**: `npm run test:e2e --prefix frontend`
+    - `cd app/backend && uv run pytest`
+    - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
+    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+- **Frontend unit tests**: `npm run test --prefix app/frontend`
+- **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, Planning & Reviewing Agents must use Playwright-based smoke verification and screenshot or equivalent visual evidence during merge review.
 - **Desktop foundation checks**:
-    - `npm run lint --prefix desktop`
-    - `npm run build --prefix desktop`
+    - `npm run lint --prefix app/desktop`
+    - `npm run build --prefix app/desktop`
 - **Docs checks**:
     - `uv run python scripts/check_docs_nav_routes.py --check-source`
     - `./scripts/prepare_docs_locales.sh`

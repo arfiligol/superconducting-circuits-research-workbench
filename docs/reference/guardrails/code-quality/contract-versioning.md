@@ -18,7 +18,7 @@ updated_by: codex
 
 # Contract Versioning
 
-本文件定義 migration 期間 contract 演進的最低要求，避免 `sc_core`、backend、CLI、frontend 之間各自演化。
+本文件定義 migration 期間 contract 演進的最低要求，避免 Julia Core、Julia Runner、Python Backend、Notebook、frontend 之間各自演化。
 
 !!! info "How to read this page"
     先判斷變更碰到哪一種 contract，再判斷變更類型是 additive、soft-breaking 還是 breaking。最後依照 required update set 補齊文件與測試。
@@ -43,7 +43,8 @@ updated_by: codex
 - dataset / trace / result / provenance contracts
 - task submission / task detail / task result contracts
 - session / workspace context payloads
-- machine-consumable CLI output contracts
+- Runner task claim/complete/fail payloads and manifest contracts
+- Notebook inspection/task-submission payloads
 
 ## Version Fields
 
@@ -51,7 +52,7 @@ updated_by: codex
 | --- | --- |
 | persisted data contract | 明確 `schema_version` 或等價欄位 |
 | API payload contract | route-level version note 或明確 lockstep branch policy |
-| CLI machine output | command docs 中記錄版本或穩定輸出保證 |
+| Runner manifest | explicit `schema_version` and validation contract |
 | task/result handle | 必須可追到 result/provenance contract 版本 |
 
 ## Compatibility Classes
@@ -71,7 +72,7 @@ updated_by: codex
   - explicit unsupported cutover note
   - read-compat fallback（只有 owner SoT 明確要求時才需要）
   - one-time rebuild strategy，且在 parity matrix 記錄影響範圍
-- `sc_core` 與 backend 不得各自維護不同版本解讀規則
+- Julia Core / Runner 與 backend 不得各自維護不同版本解讀規則
 - 既有底層 migration / rebuild / reset tooling 可以保留；除非 owner SoT 要求，不需要為了表面相容性把它們擴成 dual-runtime product path
 
 ## Compatibility Rules
@@ -83,7 +84,7 @@ updated_by: codex
 | --- | --- |
 | Compatibility is opt-in | 沒有 owner SoT 明確要求時，不新增 backward-compatible fallback 或 legacy shim |
 | Breaking changes require an explicit note | reference docs、parity matrix、contract registry 與 cutover/migration/rebuild/unsupported notes 必須同步更新 |
-| Heavy-development branch is lockstep by default | 目前不承諾 frontend/backend/cli 與 `sc_core` 的跨 minor 版本相容 |
+| Heavy-development branch is lockstep by default | 目前不承諾 frontend/backend/runner/core/notebook 的跨 minor 版本相容 |
 | Persisted data needs an explicit cutover story | DB、TraceStore、export artifact 若失去舊資料可讀性，必須寫明 migrate、rebuild 或 unsupported，不可靜默失效 |
 
 ## Required Update Set for Breaking Changes
@@ -103,7 +104,7 @@ updated_by: codex
 
 ```markdown
 ## Contract Versioning
-- Treat circuit definitions, dataset/trace/result contracts, task contracts, session/workspace payloads, and machine-readable CLI outputs as version-aware surfaces.
+- Treat circuit definitions, dataset/trace/result contracts, task contracts, Runner manifests, session/workspace payloads, and notebook/API payloads as version-aware surfaces.
 - Current mode is **Heavy Development / No Compatible Fallback** until an owner SoT explicitly changes the release phase.
 - Backward compatibility is opt-in, not default; do not add dual-path adapters, legacy fallback UI, read-compat shims, or compatibility patches unless an owner SoT requires them.
 - Any breaking contract change MUST update:
@@ -112,7 +113,7 @@ updated_by: codex
     - contract registry
     - cutover/migration/rebuild/unsupported notes
     - relevant tests
-- During heavy development, assume frontend/backend/cli/`sc_core` evolve in lockstep on the same branch unless an explicit compatibility promise is documented.
+- During heavy development, assume frontend/backend/runner/core/notebook contracts evolve in lockstep on the same branch unless an explicit compatibility promise is documented.
 - Persisted DB/TraceStore/exported data MUST have an explicit migration, rebuild, or unsupported-cutover story before breaking a contract; read-compat fallback is not required by default.
 - Existing low-level migration/runtime/rebuild mechanisms may remain; do not delete them solely because compatibility guarantees are paused.
 - Do not hide compatibility patches only inside adapters; document them.

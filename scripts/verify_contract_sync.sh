@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "==> Checking backend OpenAPI drift..."
-(cd "$REPO_ROOT/backend" && uv run python ../scripts/check_openapi_drift.py)
+(cd "$REPO_ROOT/app/backend" && uv run python ../../scripts/check_openapi_drift.py)
 
 echo "==> Checking for uncommitted OpenAPI snapshot changes..."
 cd "$REPO_ROOT"

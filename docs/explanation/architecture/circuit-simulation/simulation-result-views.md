@@ -90,6 +90,7 @@ Sweep 是 run-level 結果，不是額外類型的 trace hack。
 ## Related
 
 - [Circuit Simulation](index.md)
-- [Circuit Simulation UI Reference](../../../reference/app/frontend/research-workflow/circuit-simulation.md)
+- [Application Interface](../../../reference/app/application-interface.md)
+- [Julia Runner Compute Plane](../../../reference/architecture/julia-runner-compute-plane.md)
 - [Dataset Record Schema](../../../reference/data-formats/dataset-record.md)
 - [Analysis Result Schema](../../../reference/data-formats/analysis-result.md)

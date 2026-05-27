@@ -30,9 +30,9 @@ updated_by: docs-team
 
 | Step | Analysis Capability | Implementations (Code) | Documentation |
 |------|---------------------|------------------------|---------------|
-| **0** | **Full Workflow** | (Manual HFSS + CLI) | [Tutorial: Simulation Workflow](simulation-workflow.md) |
+| **0** | **Full Workflow** | (Manual HFSS + App/Notebook) | [Tutorial: Simulation Workflow](simulation-workflow.md) |
 | **1** | **Standardize Data** | `src/scripts/preprocessing/convert_hfss_admittance.py` | [HFSS Admittance Import](../how-to/ingest-data/hfss-admittance.md) |
-| **2** | **Visualize Raw** | `src/scripts/plot/admittance.py` | [CLI Reference](../reference/cli/index.md) |
+| **2** | **Visualize Raw** | Application Raw Data Browser / Python notebook | [Application Interface](../reference/app/application-interface.md) |
 | **3** | **Extract Resonance** | `core/analysis/application/analysis/extraction/admittance.py` | [Physics（重建中）](../explanation/physics/index.md) |
 | **4** | **Fit LC Model** | `src/scripts/analysis/squid_fit.py` | [Tutorial: Resonance Fitting](resonance-fitting.md)<br/>[How-to: SQUID Fitting](../how-to/fit-model/squid.md) |
 
@@ -42,8 +42,8 @@ updated_by: docs-team
 
 | Feature | Description | Implementations (Code) | Documentation |
 |---------|-------------|------------------------|---------------|
-| **Visualization** | 繪製 Amplitude/Phase 熱圖 | `src/scripts/plot/flux_dependence.py` | [CLI Reference](../reference/cli/index.md) |
-| **Phase Tuning** | 相位解包裹與單位轉換 | `src/scripts/plot/flux_dependence.py` | [CLI Reference](../reference/cli/index.md) |
+| **Visualization** | 繪製 Amplitude/Phase 熱圖 | Application Raw Data Browser / Python notebook | [Notebook Interface](../reference/notebooks/index.md) |
+| **Phase Tuning** | 相位解包裹與單位轉換 | Julia Runner analysis task / notebook | [Julia Runner Compute Plane](../reference/architecture/julia-runner-compute-plane.md) |
 
 ## 3. Advanced / Experimental
 

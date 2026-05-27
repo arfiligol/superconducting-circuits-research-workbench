@@ -40,13 +40,9 @@ nav = [
       { "Manage Tags" = "how-to/manage-db/tags.md" },
       { "Reorder IDs" = "how-to/manage-db/reorder-record-ids.md" },
     ] },
-    { "CLI" = [
-      { "Overview" = "how-to/cli/index.md" },
-    ] },
     { "Contributing" = [
       { "Workflow" = "how-to/contributing.md" },
       { "Circuit Diagrams" = "how-to/contributing/circuit-diagrams.md" },
-      { "CLI Docs Automation" = "how-to/contributing/cli-docs-automation.md" },
       { "Extending" = [
         { "Overview" = "how-to/extend/index.md" },
         { "Add Data Source" = "how-to/extend/add-data-source.md" },
@@ -109,10 +105,14 @@ nav = [
   { "Reference" = [
     { "Architecture" = [
       { "Overview" = "reference/architecture/index.md" },
+      { "Julia Runner Compute Plane" = "reference/architecture/julia-runner-compute-plane.md" },
+      { "Runner Result Manifest" = "reference/architecture/runner-result-manifest.md" },
+      { "TraceStore Zarr" = "reference/architecture/trace-store-zarr.md" },
       { "Canonical Contract Registry" = "reference/architecture/canonical-contract-registry.md" },
       { "Parity Matrix" = "reference/architecture/parity-matrix.md" },
     ] },
     { "App" = [
+      { "Application Interface" = "reference/app/application-interface.md" },
       { "Shared" = [
         { "Overview" = "reference/app/shared/index.md" },
         { "Runtime Modes" = "reference/app/shared/runtime-modes.md" },
@@ -146,11 +146,6 @@ nav = [
           { "Schemas" = "reference/app/frontend/definition/schemas.md" },
           { "Schema Editor" = "reference/app/frontend/definition/schema-editor.md" },
         ] },
-        { "Research Workflow" = [
-          { "Schemdraw" = "reference/app/frontend/research-workflow/schemdraw.md" },
-          { "Circuit Simulation" = "reference/app/frontend/research-workflow/circuit-simulation.md" },
-          { "Characterization" = "reference/app/frontend/research-workflow/characterization.md" },
-        ] },
       ] },
       { "Backend" = [
         { "Overview" = "reference/app/backend/index.md" },
@@ -158,28 +153,13 @@ nav = [
         { "Circuit Definitions" = "reference/app/backend/circuit-definitions.md" },
         { "Tasks & Execution" = "reference/app/backend/tasks-execution.md" },
         { "Audit Logs" = "reference/app/backend/audit-logs.md" },
-        { "Schemdraw Render" = "reference/app/backend/schemdraw-render.md" },
-        { "Characterization Results" = "reference/app/backend/characterization-results.md" },
         { "Datasets & Results" = "reference/app/backend/datasets-results.md" },
       ] },
-    ] },
-    { "CLI Options" = [
-      { "Overview" = "reference/cli/index.md" },
-      { "Standalone Runtime" = "reference/cli/standalone-runtime.md" },
-      { "Local / App Interchange" = "reference/cli/local-app-interchange.md" },
-      { "sc core" = "reference/cli/sc-core.md" },
-      { "sc session" = "reference/cli/sc-session.md" },
-      { "sc datasets" = "reference/cli/sc-datasets.md" },
-      { "sc tasks" = "reference/cli/sc-tasks.md" },
-      { "sc events" = "reference/cli/sc-events.md" },
-      { "sc results" = "reference/cli/sc-results.md" },
-      { "sc characterization" = "reference/cli/sc-characterization.md" },
-      { "sc ops" = "reference/cli/sc-ops.md" },
     ] },
     { "Core" = [
       { "Overview" = "reference/core/index.md" },
       { "Python Core" = "reference/core/python-core.md" },
-      { "Julia Wrapper" = "reference/core/julia-wrapper.md" },
+      { "Julia Compute Boundary" = "reference/core/julia-wrapper.md" },
       { "Julia Scientific Core" = "reference/core/julia-scientific-core.md" },
       { "Julia Core" = "reference/core/julia-core.md" },
       { "Julia Plotting" = "reference/core/julia-plotting.md" },
@@ -225,6 +205,7 @@ nav = [
       { "Documentation Design" = [
         { "Overview" = "reference/guardrails/documentation-design/documentation.md" },
         { "Standards" = "reference/guardrails/documentation-design/standards.md" },
+        { "Zensical Native Style" = "reference/guardrails/documentation-design/zensical-native-style.md" },
         { "Style" = [
           { "Macro Style / Information Layout" = "reference/guardrails/documentation-design/information-layout.md" },
           { "Micro Style / Writing & Visual Elements" = "reference/guardrails/documentation-design/style.md" },
@@ -234,7 +215,6 @@ nav = [
           { "Page Reference Specs" = "reference/guardrails/documentation-design/page-reference-specs.md" },
           { "Explanation Physics" = "reference/guardrails/documentation-design/explanation-physics.md" },
           { "Circuit Diagrams" = "how-to/contributing/circuit-diagrams.md" },
-          { "CLI Docs Automation" = "how-to/contributing/cli-docs-automation.md" },
         ] },
       ] },
       { "UI/UX Quality" = [
@@ -247,6 +227,7 @@ nav = [
     { "Contributors" = "reference/contributors.md" },
   ] },
   { "Notebooks" = [
+    { "Overview" = "reference/notebooks/index.md" },
     { "Floating Qubit Study" = "notebooks/floating-qubit-study.md" },
     { "Floating Qubit Real-Part Admittance Extraction" = "notebooks/floating-qubit-real-part-admittance-extraction.md" },
     { "S-Parameter Resonance Fit Theory" = "notebooks/s-parameter-resonance-fit-theory.md" },

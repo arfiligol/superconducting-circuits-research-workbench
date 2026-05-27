@@ -55,4 +55,4 @@ Schema Editor 採 source-form 作為唯一 SoT，使用者會頻繁編修 netlis
 
 - [Schema Editor UI Reference](../../../reference/app/frontend/definition/schema-editor.md)
 - [Circuit Netlist Schema](../../../reference/data-formats/circuit-netlist.md)
-- [Circuit Simulation UI Reference](../../../reference/app/frontend/research-workflow/circuit-simulation.md)
+- [Julia Runner Compute Plane](../../../reference/architecture/julia-runner-compute-plane.md)

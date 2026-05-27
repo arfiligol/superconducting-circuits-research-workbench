@@ -1,7 +1,7 @@
 ## Script Authoring
-- CLI is a first-class interface, not a leftover utility layer.
-- New CLI work should go to `cli/`; avoid growing new workflows inside legacy `src/scripts/`.
-- Use Typer for commands.
-- Commands handle argument parsing, user I/O, and error presentation only.
-- Real workflow logic must live in shared services or `src/core/`.
-- Command names use `kebab-case`, and every command must have usable `--help`.
+- CLI is no longer an active product surface.
+- Do not add new Typer commands, CLI package entrypoints, or user-facing CLI docs.
+- Keep only `scripts/` helpers for dev/build/test/maintenance.
+- Put helpers under `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
+- Scripts may orchestrate commands but must not own business workflow logic.
+- Real workflow logic must live in app backend services, Julia Core, Julia Runner, or explicit contract packages.

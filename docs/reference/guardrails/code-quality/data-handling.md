@@ -8,8 +8,8 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "數據處理規範：原始數據唯讀、metadata DB / TraceStore 分工、ND trace、NaN/mask、summary-first query、Unit of Work、Zarr backend 邊界"
-version: v2.3.1
+scope: "數據處理規範：原始數據唯讀、metadata DB / TraceStore 分工、Runner staging、ND trace、NaN/mask、summary-first query、Unit of Work、Zarr backend 邊界"
+version: v3.0.0
 last_updated: 2026-03-30
 updated_by: codex
 ---
@@ -27,7 +27,8 @@ updated_by: codex
 | --- | --- | --- |
 | `data/raw/` | 原始輸入資料，唯讀保存 | import、simulation、post-processing 的輸出 |
 | metadata DB | 索引、lineage、查詢、setup metadata | 大型 numeric payload |
-| TraceStore | trace values、axes arrays、sweep arrays | UI/CLI 自己解析出的 backend 細節 |
+| Runner staging | temporary local filesystem Zarr result packages | official metadata / provenance authority |
+| TraceStore | trace values、axes arrays、sweep arrays | UI/scripts 自己解析出的 backend 細節 |
 
 ## Directory Structure
 
@@ -37,8 +38,13 @@ data/
 │   ├── measurement/
 │   ├── circuit_simulation/
 │   └── layout_simulation/
-├── trace_store/               # Zarr TraceStore（local backend）
-└── database.db                # metadata DB（可為 SQLite；若改用 PostgreSQL，仍須維持相同 contract）
+├── metadata.db                # metadata DB（可為 SQLite；若改用 PostgreSQL，仍須維持相同 contract）
+├── trace_store/               # official Zarr TraceStore（local backend）
+│   └── datasets/
+├── artifacts/
+│   └── tasks/
+└── staging/
+    └── tasks/
 ```
 
 ## Rules
@@ -72,6 +78,10 @@ data/
 !!! important "No large numeric payload in metadata DB"
     大型 trace values 不應作為主要 payload 存入 SQLite/PostgreSQL JSON/BLOB。
     metadata DB 負責索引、lineage、setup、查詢；numeric payload 應進入 `Zarr` TraceStore。
+
+!!! important "No large ND arrays over HTTP/JSON"
+    HTTP/JSON 只可承載 task control、status、progress、manifest locator、error summary、metadata summary 與明確 slice/detail payload。
+    S/Y/Z matrices、frequency sweeps、ND traces 與 Runner result arrays 必須寫入 local filesystem Zarr。
 
 ### 2.1 Materialized Summary Is Expected
 
@@ -129,7 +139,7 @@ query / filter / readiness surfaces 應依賴 metadata DB / read model 的 mater
 
 ### 5. TraceStore Access
 
-Trace numeric payload 的讀寫必須經由 TraceStore abstraction，而不是 UI/CLI 直接碰 backend 細節。
+Trace numeric payload 的讀寫必須經由 TraceStore abstraction，而不是 UI/scripts 直接碰 backend 細節。
 
 允許的 backend 方向：
 
@@ -142,6 +152,44 @@ Trace numeric payload 的讀寫必須經由 TraceStore abstraction，而不是 U
 - `store_key`：backend-neutral store object key
 - `store_uri`：可保留為相容/debug locator，但視為 opaque，不可由 UI/app layer 解析 local layout
 - `group_path` / `array_path`：TraceStore 內部群組與 array 定位
+
+### 5.1 Runner Staging and Publication
+
+Julia Runner writes local staging packages only:
+
+```text
+data/staging/tasks/<task_id>/
+├── manifest.json
+├── result.zarr/
+└── logs/
+```
+
+Python Backend owns official publication:
+
+```text
+data/trace_store/datasets/<dataset_id>/designs/<design_id>/batches/<batch_id>.zarr/
+```
+
+Rules:
+
+- staging is temporary and not authoritative
+- TraceStore is the official numeric authority
+- Backend must validate manifest paths, Zarr layout, dtype, shape, chunk shape, and axis lengths before publication
+- Backend must reject absolute paths and path traversal such as `../`
+- Runner must not write DatasetRecord, TraceRecord, TraceBatchRecord, workspace, auth, or provenance tables
+- first implementation uses Zarr v2 local filesystem staging
+- S3-compatible direct write from Julia Runner is not allowed
+
+### 5.2 Complex Arrays
+
+Complex arrays must be stored as real/imag arrays:
+
+```text
+/traces/S11/real
+/traces/S11/imag
+```
+
+Do not rely on cross-language `ComplexF64` dtype compatibility.
 
 ### 6. Canonical Trace Contract
 
@@ -220,12 +268,15 @@ Trace numeric payload 的讀寫必須經由 TraceStore abstraction，而不是 U
 - **Paths**: NEVER hardcode metadata DB or TraceStore paths/backends.
 - **Database**:
     - MUST use Unit of Work for metadata DB operations.
-    - NEVER access Session directly in CLI/UI code.
+    - NEVER access Session directly in UI/notebook/script code.
     - MUST call `uow.commit()` explicitly.
 - **TraceStore**:
     - MUST go through a TraceStore abstraction.
-    - MUST support local `Zarr` as the baseline direction.
-    - MUST keep S3-compatible `Zarr` as an extension-safe target.
+    - MUST support local filesystem `Zarr v2` as the baseline direction.
+    - MUST keep S3-compatible `Zarr` as a future Python Backend storage backend target.
+    - Runner staging is temporary and never authoritative.
+    - Backend owns official TraceStore publication.
+    - Complex arrays MUST be stored as explicit real/imag arrays.
 - **Canonical trace contract**:
     - `TraceRecord` is one logical observable over axes.
     - ND traces are allowed and preferred over point-fragmented canonical storage.
@@ -242,6 +293,7 @@ Trace numeric payload 的讀寫必須經由 TraceStore abstraction，而不是 U
 - **Retrieval**:
     - load full coordinate arrays / dense payloads only on detail, explorer, or result paths that need them.
     - slice/preset queries should be preferred for large tensors/matrices.
+    - no large ND arrays over HTTP/JSON.
     - whole dense tensor transport is not the default large-result contract.
     - phase-1 sweep filtering is limited to summary-safe axis-name / collection-level filters.
 - **Edit invalidation**:

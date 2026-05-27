@@ -9,139 +9,54 @@ tags:
   - audience/team
   - sot/true
   - topic/ui
-status: draft
+status: stable
 owner: docs-team
 audience: team
-scope: Frontend shared sidebar 的導航、route grouping 與 responsive shell contract
-version: v0.8.0
-last_updated: 2026-03-18
+scope: frontend shared sidebar navigation for retained application surfaces
+version: v1.0.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Sidebar
 
-本頁定義 frontend shared sidebar 的正式契約。它是 app shell 的 navigation-only surface。
+Sidebar is navigation only. It does not own task state, dataset state, worker status, or help copy.
 
-!!! info "Surface Boundary"
-    Sidebar 負責全域導航、route grouping 與 responsive shell entry。
-    active dataset、tasks queue 與 user settings 不屬於 Sidebar。
+## Group Contract
 
-!!! warning "Navigation Is Not Page Logic"
-    Sidebar 只決定「如何在 app surfaces 之間移動」。
-    它不得承擔 page body 內的 workflow 邏輯，也不得重複 page-local controls。
-
-!!! warning "Navigation-Only Sidebar"
-    本產品的 Sidebar 應收斂成 navigation-only surface。
-    它只允許 group labels、nav item title、icon 與 active state；
-    shell identity、brand helper text、explanatory copy、item summary、group description、onboarding CTA 與 intro card 都不屬於 Sidebar。
-
-## Sidebar Composition
-
-| Area | Responsibility |
-|---|---|
-| Navigation Groups | 以穩定資訊架構列出 app pages |
-| Collapse Control | 在窄螢幕下提供展開 / 收合行為 |
-
-## Density Contract
-
-| Sidebar element | Allowed | Notes |
+| Group | Contains | Must not contain |
 |---|---|---|
-| Shell identity / app title | no | 只允許 Header 顯示 shell identity |
-| Brand helper text / monogram | no | 不得顯示 `SC`、`Navigation`、`Workspace routes` 等 shell copy |
-| Group label | yes | 只作 IA grouping |
-| Nav item icon | yes | 幫助快速掃讀 |
-| Nav item title | yes | 作為主要 navigation label |
-| Active highlight | yes | 必須清楚顯示目前 route |
-| Group description | no | 移到 page body、overview 頁或 onboarding surface |
-| Item summary / subtitle | no | 不應佔用持久導航密度 |
-| Intro paragraph / explanatory copy | no | 不應放在 shared sidebar |
-| CTA card / onboarding card | no | 應移到 dashboard、empty state 或 dedicated onboarding surface |
-| Global status / queue summary | no | 屬於 [Header](header.md) / shell context controls |
-
-## Taxonomy Stability Rule
-
-| Concern | Current SoT |
-|---|---|
-| `Dashboard` page | 目前仍是 `Dashboard` group 的 canonical landing page，但它不再是 dataset metadata 的唯一入口 |
-| `Dashboard` group | 目前的可見 label 仍是 `Dashboard`；語意上它承擔 workspace-level overview / operations surfaces |
-| `PIPELINE` overview | 若未新增正式 page spec，不得自行在 sidebar 補一個 pipeline overview route |
-| Route / label changes | route naming、sidebar labels 與 group hierarchy 需要先更新 SoT，再進行 frontend implementation |
-
-## Section Semantics
-
-| Section | What it means | What it should contain | What it should not become |
-|---|---|---|---|
-| `Dashboard` | workspace-level overview、operational entry 與跨 workflow context | `Dashboard`、`Dataset`、`Tasks` 與未來可能的 workspace-level overview / task entry surfaces | dataset-analysis sequence、definition authoring flow |
-| `PIPELINE` | data analysis flow；item order 具有 UX 引導意義 | raw data、analysis、結果前後關係明確的 workflow pages | queue / worker / infra management pages |
-| `CIRCUIT SIMULATION` | definition-driven modeling / simulation flow | schema / definition-related pages、schemdraw、simulation workbench | workspace overview 或全域 operations surface |
-
-!!! tip "Section order is product language"
-    Sidebar 的三個 top-level sections 不只是分類。
-    它們同時在傳達產品心智模型：
-    `Dashboard` 回答「我目前在哪個操作脈絡與工作總覽」；
-    `PIPELINE` 回答「資料分析流程走到哪一步」；
-    `CIRCUIT SIMULATION` 回答「定義、建模與模擬在哪裡進行」。
-
-## Group Label Contract
-
-| Allowed label | Meaning |
-|---|---|
-| `Dashboard` | workspace-level overview / operations 群組 |
-| `Pipeline` | data-analysis workflow 群組；item order 具有 UX 引導意義 |
-| `Circuit Simulation` | definition-driven modeling / simulation 群組 |
-
-!!! tip "No helper copy in the sidebar"
-    若使用者需要理解群組用途，應透過 page body、overview page、empty state 或 onboarding surface 引導。
-    不要把持久導航變成一個需要閱讀段落說明的資訊牆。
+| Workspace | Dashboard, Dataset, Tasks | simulation stages, data pipeline steps |
+| Data | Data Ingestion, Raw Data | task runtime controls |
+| Design Assets | Schemas | full simulation or diagram workflows |
 
 ## Navigation Contract
 
-=== "Top-level Groups"
-
-    | Group | Purpose |
-    |---|---|
-    | `Dashboard` | workspace landing / overview / operations：目前包含 `Dashboard`、`Dataset`、`Tasks` |
-    | `Pipeline` | data-analysis flow：目前包含 `Data Ingestion`、`Raw Data`、`Characterization`；順序應保持有引導意味 |
-    | `Circuit Simulation` | definition-driven modeling flow：目前包含 `Schemas`、`Schemdraw`、`Simulation` |
-
-=== "Required Behaviors"
-
-| Behavior | Meaning |
+| Label | Route |
 |---|---|
-| Active route highlight | 目前 route 必須在 Sidebar 中有清楚的 active 狀態 |
-| Stable entry points | 主要頁面不得只靠 page-internal links 才能抵達 |
-| Responsive collapse | 窄螢幕可收合，但不可丟失 active route 與導覽分組 |
-| Dense-but-quiet presentation | 側欄是持久導航，不應承擔教育文案或管理面板 |
+| Dashboard | `/dashboard` |
+| Dataset | `/dataset` |
+| Tasks | `/tasks` |
+| Data Ingestion | `/data-ingestion` |
+| Raw Data | `/raw-data` |
+| Schemas | `/schemas` |
 
-## Collapse Toggle Contract
+The sidebar must not expose Circuit Simulation, Characterization, or Schemdraw as primary pages.
 
-| Concern | Required behavior |
+## Density Contract
+
+| Element | Allowed |
 |---|---|
-| Pointer affordance | toggle button 必須顯示 pointer cursor |
-| Hover state | 必須有清楚但克制的 hover feedback |
-| Focus-visible state | keyboard navigation 時必須有可見 focus ring / outline |
-| Meaning | toggle 只負責展開 / 收合 sidebar，不承擔 global context 或 account management |
-
-!!! tip "Sidebar vs Header"
-    Sidebar 負責持久導航。
-    [Header](header.md) 負責 `Active Workspace`、`Active Dataset`、`Tasks Queue`、worker status 與 user menu 的 compact entry points。
-
-## Primary Consumers
-
-| Consumer | Why it depends on Sidebar |
-|---|---|
-| [Dashboard](../workspace/dashboard.md) | 共享 pipeline 導覽入口 |
-| [Dataset](../workspace/dataset.md) | 共享 dataset management 導覽入口 |
-| [Tasks](../workspace/tasks.md) | 共享 standalone queue / worker management 導覽入口 |
-| [Data Ingestion](../workspace/data-ingestion.md) | 共享 pipeline intake 導覽入口 |
-| [Raw Data Browser](../workspace/raw-data-browser.md) | 共享 design browse 導覽入口 |
-| [Schemas](../definition/schemas.md) | 共享 definition workflow entry |
-| [Schema Editor](../definition/schema-editor.md) | 共享 catalog-to-editor navigation |
-| [Schemdraw](../research-workflow/schemdraw.md) | 共享 research workflow shell |
-| [Circuit Simulation](../research-workflow/circuit-simulation.md) | 共享 task-driven workflow shell |
-| [Characterization](../research-workflow/characterization.md) | 共享 task-driven workflow shell |
+| group label | yes |
+| nav item title | yes |
+| nav item icon | yes |
+| active state | yes |
+| group description | no |
+| item summary | no |
+| shell identity | no |
+| onboarding card | no |
 
 ## Related
 
-- [Header](header.md)
-- [Frontend Reference](../index.md)
+* [Frontend Reference](../index.md)
+* [Header](header.md)

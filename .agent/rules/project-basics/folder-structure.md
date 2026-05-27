@@ -1,18 +1,22 @@
 ## Folder Structure
-- **Frontend** work goes to `frontend/`.
-- **Desktop shell** work goes to `desktop/`.
-- **Backend** work goes to `backend/`.
-- **Shared scientific logic** goes to top-level `core/`.
-- **CLI** work goes to `cli/`.
-- **Archived NiceGUI residue** targets `legacy/legacy_nicegui_archived/`; current `src/app/` should be read as archived payload pending relocation.
-- **`src/worker/`** is transition residue under redesign, not a canonical development surface.
+- **Frontend** work goes to `app/frontend/`.
+- **Desktop shell** work goes to `app/desktop/`.
+- **Backend** work goes to `app/backend/`.
+- **Julia Core** work goes to `core/julia/SuperconductingCircuitsCore/`.
+- **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
+- **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
+- **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
+- **No CLI product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
+- **Archived NiceGUI / CLI / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
+- **`src/worker/`** is old runtime residue, not a canonical development surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
 - **Plans** go to `Plans/` only as active multi-agent coordination artifacts; Planning & Reviewing Agents own creation and cleanup, and long-term decisions must move to `docs/reference/**`.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
-- Root-level `src/` is not the future canonical umbrella.
+- Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces.
 - Dependency direction:
     - frontend depends on API contracts, not backend internals
-    - desktop depends on frontend outputs and secure IPC, not business logic ownership
-    - backend API layer depends inward on services/domain
-    - standalone CLI shared logic belongs in CLI-local runtime abstractions or top-level `core/`; do not assume backend services are the default owner
-    - top-level `core/` must stay framework-agnostic
+    - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
+    - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
+    - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
+    - Julia Core must stay framework-agnostic
+    - scripts are helpers, not user-facing workflow contracts

@@ -3,7 +3,7 @@
 - `develop` is the primary development branch and default base for new AI-agent task branches/worktrees.
 - Every agent/task must use a dedicated branch + isolated worktree.
 - Do not let multiple agents co-edit the same dirty worktree.
-- Normal implementation slices (`Frontend` / `Backend` / `Core` / `CLI`) do not merge directly to `develop`; `Planning & Reviewing Agent` is the default integration authority.
+- Normal implementation slices (`Frontend` / `Backend` / `Core` / `Runner` / `Docs`) do not merge directly to `develop`; `Planning & Reviewing Agent` is the default integration authority.
 - Autonomous sandbox/example agents may merge to `develop` only when they stay fully inside explicitly assigned bounded write roots.
 - Read access may be repo-wide for context, but write access is limited to the assigned bounded write root.
 - Source files inside `sandbox/**` or `examples/**` remain normal tracked repo content unless another owner contract says otherwise.

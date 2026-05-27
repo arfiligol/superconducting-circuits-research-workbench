@@ -17,34 +17,36 @@ updated_by: docs-team
 
 # 電路模擬 (Simulation)
 
-本專案使用 [JosephsonCircuits.jl](https://github.com/QICKLab/JosephsonCircuits.jl) 進行超導電路模擬。
+本專案使用 Julia Core 與 Julia Runner 執行超導電路模擬。
+Application-triggered simulation 一律走 Python Backend task lifecycle，再由 Julia Runner 非同步產生 local filesystem Zarr result package。
 
 ## 教學方法選擇
 
-我們提供**兩種主要方法**進行模擬，以 Python 為主：
+使用下列兩種入口：
 
-| 方法 | 適合對象 | 學習曲線 |
+| 方法 | 適合對象 | Contract |
 |------|----------|----------|
-| **Python CLI/API** | 大多數使用者 | ⭐ 簡單 |
-| **原生 Julia** | 進階使用者、擴充開發 | ⭐⭐⭐ 進階 |
+| **Pluto Notebook** | 研究、快速實驗、直接呼叫 Julia Core | notebook kernel 是 explicit research execution environment |
+| **Application Task** | 產品化提交、監控、結果瀏覽 | Python Backend 建立 task，Julia Runner 寫 staging Zarr，Backend publish TraceStore |
 
 ## 教學列表
 
-### Python API
+### Julia Runner task
 
 | 教學 | 說明 |
 |------|------|
-| [Python API 詳解](python-api.md) | 在 Python 腳本中定義電路、設定參數、執行模擬 |
+| [Julia Runner Compute Plane](../../reference/architecture/julia-runner-compute-plane.md) | Runner task claim、heartbeat、complete/fail contract |
+| [Runner Result Manifest](../../reference/architecture/runner-result-manifest.md) | staging manifest 與 Zarr layout |
 
-### 原生 Julia
+### Notebook direct execution
 
 | 教學 | 說明 |
 |------|------|
-| [原生 Julia 模擬](native-julia.md) | 直接使用 JosephsonCircuits.jl 進行模擬 |
+| [Notebook Interface](../../reference/notebooks/index.md) | Pluto 與 Python notebook 的使用邊界 |
+| [原生 Julia 模擬](native-julia.md) | 直接使用 Julia Core / JosephsonCircuits.jl 進行研究模擬 |
 
 ## 相關資源
 
-- [CLI Reference](../../reference/cli/index.md) - 目前 CLI 指令總覽
 - [Tutorial: LC 共振器](../../tutorials/lc-resonator.md) - 完整入門案例
 - [Physics（重建中）](../../explanation/physics/index.md) - Physics 章節重建狀態
 - [擴充 Julia 函數](../extend/extend-julia-functions.md) - 貢獻者指南

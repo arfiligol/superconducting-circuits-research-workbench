@@ -2,7 +2,11 @@
   "name": "superconducting-circuits-tutorial-root",
   "private": true,
   "scripts": {
-    "start": "./scripts/start.sh",
-    "stop": "./scripts/stop.sh"
+    "app:dev": "./scripts/dev/start_app.sh",
+    "app:stop": "./scripts/dev/stop_app.sh",
+    "julia:test": "julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'",
+    "runner:test": "julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'",
+    "frontend:typecheck": "npm run typecheck --prefix app/frontend",
+    "backend:test": "cd app/backend && uv run pytest"
   }
 }

@@ -172,4 +172,4 @@ uv run --group dev zensical serve
 | | [Style](../reference/guardrails/documentation-design/style.md) | [#agent-rule](../reference/guardrails/documentation-design/style.md#agent-rule) |
 | | [Maintenance](../reference/guardrails/documentation-design/maintenance.md) | [#agent-rule](../reference/guardrails/documentation-design/maintenance.md#agent-rule) |
 | | [電路繪圖](./contributing/circuit-diagrams.md) | [#agent-rule](./contributing/circuit-diagrams.md#agent-rule) |
-| | [CLI 文件自動生成](./contributing/cli-docs-automation.md) | [#agent-rule](./contributing/cli-docs-automation.md#agent-rule) |
+| | [Zensical Native Style](../reference/guardrails/documentation-design/zensical-native-style.md) | [#agent-rule](../reference/guardrails/documentation-design/zensical-native-style.md#agent-rule) |

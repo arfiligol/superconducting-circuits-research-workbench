@@ -12,33 +12,45 @@
 - **Backend**:
     - FastAPI
     - Pydantic
-    - SQLModel / SQLAlchemy
-    - Casbin as the backend authorization baseline for the multi-user app
-    - Rich-compatible logging
+    - Pydantic Settings
+    - SQLAlchemy
+    - Alembic
+    - NumPy
+    - Zarr
+    - fsspec
+- **Julia Core**:
+    - `core/julia/SuperconductingCircuitsCore/`
+    - reusable circuit construction, simulation, sweep, and analysis library
+- **Julia Runner**:
+    - `core/julia/SuperconductingCircuitsRunner/`
+    - HTTP.jl
+    - JSON3.jl
+    - StructTypes.jl
+    - Zarr.jl
+    - DataFrames.jl
 - **Local runtime backbone**:
-    - `rq`
-    - `redis`
-    - `uv run sc-app`
-    - `uv run sc-worker-simulation`
-    - `uv run sc-worker-characterization`
-    - desktop local-managed profile supervises Redis + app + worker sidecars; remote-server profile does not start local heavy runtime
-- **CLI**:
-    - Typer
-    - must remain first-class, not a second-tier wrapper
-- **Scientific core**:
-    - JosephsonCircuits.jl via juliacall
-    - plotly + schemdraw for visualization output
+    - frontend
+    - Python Backend
+    - Julia Runner
+    - no Redis/RQ
+- **Scripts**:
+    - `scripts/dev/`
+    - `scripts/build/`
+    - `scripts/test/`
+    - `scripts/maintenance/`
+    - no active CLI product surface
 - **Topology**:
-    - canonical architecture boundaries are top-level `backend/`, `frontend/`, `core/`, `cli/`, `desktop/`, `legacy/`
-    - root-level `src/` is not the future umbrella
+    - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
+    - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces
 - **Quality tools**:
     - Ruff
     - BasedPyright
     - pytest
     - Vitest / Playwright when frontend exists
 - **Storage direction**:
-    - metadata DB: SQLite now, PostgreSQL target
-    - metadata DB schema versioning: Alembic; detailed rules live in App / Backend / Circuit Definitions
-    - numeric trace store: Zarr
+    - metadata DB: SQLite local, PostgreSQL target
+    - metadata DB schema versioning: Alembic
+    - Runner staging: local filesystem Zarr v2
+    - official TraceStore: Python Backend-managed Zarr
 - New UI work should target Next.js, not the legacy UI layer.
-- Desktop packaging should use Electron around the frontend instead of reviving legacy-UI-native desktop assumptions.
+- Desktop packaging should use Electron around frontend + Python Backend + Julia Runner.

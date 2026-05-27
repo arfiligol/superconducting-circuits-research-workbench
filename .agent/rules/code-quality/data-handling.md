@@ -13,12 +13,15 @@
 - **Paths**: NEVER hardcode metadata DB or TraceStore paths/backends.
 - **Database**:
     - MUST use Unit of Work for metadata DB operations.
-    - NEVER access Session directly in CLI/UI code.
+    - NEVER access Session directly in UI/notebook/script code.
     - MUST call `uow.commit()` explicitly.
 - **TraceStore**:
     - MUST go through a TraceStore abstraction.
-    - MUST support local `Zarr` as the baseline direction.
-    - MUST keep S3-compatible `Zarr` as an extension-safe target.
+    - MUST support local filesystem `Zarr v2` as the baseline direction.
+    - MUST keep S3-compatible `Zarr` as a future Python Backend storage backend target.
+    - Runner staging is temporary and never authoritative.
+    - Backend owns official TraceStore publication.
+    - Complex arrays MUST be stored as explicit real/imag arrays.
 - **Canonical trace contract**:
     - `TraceRecord` is one logical observable over axes.
     - ND traces are allowed and preferred over point-fragmented canonical storage.
@@ -35,6 +38,7 @@
 - **Retrieval**:
     - load full coordinate arrays / dense payloads only on detail, explorer, or result paths that need them.
     - slice/preset queries should be preferred for large tensors/matrices.
+    - no large ND arrays over HTTP/JSON.
     - whole dense tensor transport is not the default large-result contract.
     - phase-1 sweep filtering is limited to summary-safe axis-name / collection-level filters.
 - **Edit invalidation**:

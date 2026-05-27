@@ -11,15 +11,15 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Code quality、型別、架構邊界、契約版本與錯誤模型索引。
-version: v1.2.0
-last_updated: 2026-03-14
+version: v2.0.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Code Quality
 
 本區定義 rewrite branch 的程式品質規範。
-重點不是追求框架技巧，而是讓 UI、API、CLI 與科學核心可以穩定共演化。
+重點不是追求框架技巧，而是讓 UI、API、Notebook、Julia Runner 與科學核心可以穩定共演化。
 
 !!! info "How to use this section"
     先用 `Design Patterns` 與 `Contract Versioning` 判斷邊界，再回到 `Code Style`、`Type Checking`、`Error Handling` 等較細的規則。
@@ -32,14 +32,14 @@ updated_by: codex
 | [Code Style](./code-style.md) | 你在寫或重構一般程式碼 | naming、small functions、clarity |
 | [Type Checking](./type-checking.md) | 你在改 Python / TypeScript 型別 | static guarantees |
 | [Design Patterns](./design-patterns.md) | 你在改 service、repository、DI、layer boundary | architectural consistency |
-| [Script Authoring](./script-authoring.md) | 你在新增或重整 CLI 指令 | CLI structure and responsibility |
+| [Script Authoring](./script-authoring.md) | 你在新增或重整 dev/build/test/maintenance helper | scripts structure and responsibility |
 | [Data Handling](./data-handling.md) | 你在動 metadata、trace store、result storage | data boundaries |
 | [Logging](./logging.md) | 你在加 runtime logging | log discipline |
 | [Contract Versioning](./contract-versioning.md) | 你在改 public contract / canonical schema | compatibility strategy |
 | [Error Handling](./error-handling.md) | 你在改 API / worker / CLI error paths | shared error model |
 
 !!! warning "Common failure mode"
-    最常見的錯誤不是「code style 不一致」，而是 UI、API、CLI 各自重做同一段 workflow。
+    最常見的錯誤不是「code style 不一致」，而是 UI、API、Notebook、Runner 或 scripts 各自重做同一段 workflow。
     只要任務開始碰到 shared workflow，就必須先檢查 `Design Patterns`、`Contract Versioning` 與 `Error Handling`。
 
 ## Agent Rule { #agent-rule }
@@ -47,7 +47,7 @@ updated_by: codex
 ```markdown
 ## Code Quality
 - 遵循 Clean Code：命名清晰、函式短小、責任單一。
-- UI、API、CLI 不得各自複製業務流程；共享規則應集中在 backend services 或 `src/core/`。
+- UI、API、Notebook、Runner、scripts 不得各自複製業務流程；共享規則應集中在 app backend services、Julia Core、Julia Runner 或明確 contract packages。
 - 優先修正程式碼而不是增加例外或忽略規則。
 - 需要時查閱子文件：Code Style / Type Checking / Design Patterns / Script Authoring / Data Handling / Logging / Contract Versioning / Error Handling。
 ```

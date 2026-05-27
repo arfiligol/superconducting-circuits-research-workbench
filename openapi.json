@@ -1775,6 +1775,267 @@
         }
       }
     },
+    "/runner/v1/tasks/claim": {
+      "post": {
+        "tags": [
+          "runner"
+        ],
+        "summary": "Claim Task",
+        "operationId": "claim_task_runner_v1_tasks_claim_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runner/v1/tasks/{task_id}/heartbeat": {
+      "post": {
+        "tags": [
+          "runner"
+        ],
+        "summary": "Heartbeat Task",
+        "operationId": "heartbeat_task_runner_v1_tasks__task_id__heartbeat_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runner/v1/tasks/{task_id}/progress": {
+      "post": {
+        "tags": [
+          "runner"
+        ],
+        "summary": "Report Progress",
+        "operationId": "report_progress_runner_v1_tasks__task_id__progress_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runner/v1/tasks/{task_id}/cancellation": {
+      "get": {
+        "tags": [
+          "runner"
+        ],
+        "summary": "Get Cancellation",
+        "operationId": "get_cancellation_runner_v1_tasks__task_id__cancellation_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runner/v1/tasks/{task_id}/complete": {
+      "post": {
+        "tags": [
+          "runner"
+        ],
+        "summary": "Complete Task",
+        "operationId": "complete_task_runner_v1_tasks__task_id__complete_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runner/v1/tasks/{task_id}/fail": {
+      "post": {
+        "tags": [
+          "runner"
+        ],
+        "summary": "Fail Task",
+        "operationId": "fail_task_runner_v1_tasks__task_id__fail_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/audit-logs": {
       "get": {
         "tags": [
@@ -4202,46 +4463,6 @@
           }
         }
       }
-    },
-    "/schemdraw/render": {
-      "post": {
-        "tags": [
-          "definition-authoring",
-          "schemdraw"
-        ],
-        "summary": "Render Schemdraw Preview",
-        "operationId": "render_schemdraw_preview_schemdraw_render_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "title": "Payload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -4322,6 +4543,1922 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ActiveDatasetResponse": {
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "Ready",
+              "Queued",
+              "Review"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "access_scope": {
+            "enum": [
+              "workspace",
+              "shared"
+            ],
+            "title": "Access Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "name",
+          "family",
+          "status",
+          "owner",
+          "access_scope"
+        ],
+        "title": "ActiveDatasetResponse",
+        "type": "object"
+      },
+      "ActiveDatasetUpdateRequest": {
+        "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dataset Id"
+          }
+        },
+        "title": "ActiveDatasetUpdateRequest",
+        "type": "object"
+      },
+      "ApiErrorBodyResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "not_found",
+              "validation",
+              "forbidden",
+              "conflict"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "field_errors": {
+            "items": {
+              "$ref": "#/components/schemas/ApiFieldErrorResponse"
+            },
+            "title": "Field Errors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "category",
+          "message",
+          "status"
+        ],
+        "title": "ApiErrorBodyResponse",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiErrorBodyResponse"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "ApiFieldErrorResponse": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "ApiFieldErrorResponse",
+        "type": "object"
+      },
+      "CircuitDefinitionCreateRequest": {
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source_text": {
+            "minLength": 1,
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_text"
+        ],
+        "title": "CircuitDefinitionCreateRequest",
+        "type": "object"
+      },
+      "CircuitDefinitionDetailResponse": {
+        "properties": {
+          "definition_id": {
+            "title": "Definition Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "element_count": {
+            "title": "Element Count",
+            "type": "integer"
+          },
+          "validation_status": {
+            "enum": [
+              "ok",
+              "warning"
+            ],
+            "title": "Validation Status",
+            "type": "string"
+          },
+          "preview_artifact_count": {
+            "title": "Preview Artifact Count",
+            "type": "integer"
+          },
+          "source_text": {
+            "title": "Source Text",
+            "type": "string"
+          },
+          "normalized_output": {
+            "title": "Normalized Output",
+            "type": "string"
+          },
+          "validation_notices": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationNoticeResponse"
+            },
+            "title": "Validation Notices",
+            "type": "array"
+          },
+          "validation_summary": {
+            "$ref": "#/components/schemas/CircuitDefinitionValidationSummaryResponse"
+          },
+          "preview_artifacts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Preview Artifacts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "definition_id",
+          "name",
+          "created_at",
+          "element_count",
+          "validation_status",
+          "preview_artifact_count",
+          "source_text",
+          "normalized_output",
+          "validation_notices",
+          "validation_summary",
+          "preview_artifacts"
+        ],
+        "title": "CircuitDefinitionDetailResponse",
+        "type": "object"
+      },
+      "CircuitDefinitionMutationResponse": {
+        "properties": {
+          "operation": {
+            "enum": [
+              "created",
+              "updated"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/CircuitDefinitionDetailResponse"
+          }
+        },
+        "required": [
+          "operation",
+          "definition"
+        ],
+        "title": "CircuitDefinitionMutationResponse",
+        "type": "object"
+      },
+      "CircuitDefinitionSummaryResponse": {
+        "properties": {
+          "definition_id": {
+            "title": "Definition Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "element_count": {
+            "title": "Element Count",
+            "type": "integer"
+          },
+          "validation_status": {
+            "enum": [
+              "ok",
+              "warning"
+            ],
+            "title": "Validation Status",
+            "type": "string"
+          },
+          "preview_artifact_count": {
+            "title": "Preview Artifact Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definition_id",
+          "name",
+          "created_at",
+          "element_count",
+          "validation_status",
+          "preview_artifact_count"
+        ],
+        "title": "CircuitDefinitionSummaryResponse",
+        "type": "object"
+      },
+      "CircuitDefinitionUpdateRequest": {
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source_text": {
+            "minLength": 1,
+            "title": "Source Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_text"
+        ],
+        "title": "CircuitDefinitionUpdateRequest",
+        "type": "object"
+      },
+      "CircuitDefinitionValidationSummaryResponse": {
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "warning"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "notice_count": {
+            "title": "Notice Count",
+            "type": "integer"
+          },
+          "warning_count": {
+            "title": "Warning Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "notice_count",
+          "warning_count"
+        ],
+        "title": "CircuitDefinitionValidationSummaryResponse",
+        "type": "object"
+      },
+      "DatasetDetailResponse": {
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "device_type": {
+            "title": "Device Type",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "samples": {
+            "title": "Samples",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "Ready",
+              "Queued",
+              "Review"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "capability_count": {
+            "title": "Capability Count",
+            "type": "integer"
+          },
+          "tag_count": {
+            "title": "Tag Count",
+            "type": "integer"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "preview_columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Preview Columns",
+            "type": "array"
+          },
+          "preview_rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Preview Rows",
+            "type": "array"
+          },
+          "artifacts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          },
+          "lineage": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lineage",
+            "type": "array"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/DatasetMetricsResponse"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/DatasetStorageResponse"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "name",
+          "family",
+          "owner",
+          "updated_at",
+          "device_type",
+          "source",
+          "samples",
+          "status",
+          "capability_count",
+          "tag_count",
+          "capabilities",
+          "tags",
+          "preview_columns",
+          "preview_rows",
+          "artifacts",
+          "lineage",
+          "metrics",
+          "storage"
+        ],
+        "title": "DatasetDetailResponse",
+        "type": "object"
+      },
+      "DatasetMetadataUpdateRequest": {
+        "properties": {
+          "device_type": {
+            "minLength": 1,
+            "title": "Device Type",
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "source": {
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_type",
+          "source"
+        ],
+        "title": "DatasetMetadataUpdateRequest",
+        "type": "object"
+      },
+      "DatasetMetadataUpdateResponse": {
+        "properties": {
+          "dataset": {
+            "$ref": "#/components/schemas/DatasetDetailResponse"
+          },
+          "updated_fields": {
+            "items": {
+              "enum": [
+                "device_type",
+                "capabilities",
+                "source"
+              ],
+              "type": "string"
+            },
+            "title": "Updated Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset",
+          "updated_fields"
+        ],
+        "title": "DatasetMetadataUpdateResponse",
+        "type": "object"
+      },
+      "DatasetMetricsResponse": {
+        "properties": {
+          "capability_count": {
+            "title": "Capability Count",
+            "type": "integer"
+          },
+          "tag_count": {
+            "title": "Tag Count",
+            "type": "integer"
+          },
+          "preview_row_count": {
+            "title": "Preview Row Count",
+            "type": "integer"
+          },
+          "artifact_count": {
+            "title": "Artifact Count",
+            "type": "integer"
+          },
+          "lineage_depth": {
+            "title": "Lineage Depth",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capability_count",
+          "tag_count",
+          "preview_row_count",
+          "artifact_count",
+          "lineage_depth"
+        ],
+        "title": "DatasetMetricsResponse",
+        "type": "object"
+      },
+      "DatasetStorageResponse": {
+        "properties": {
+          "metadata_record": {
+            "$ref": "#/components/schemas/MetadataRecordRefResponse"
+          },
+          "primary_trace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TracePayloadRefResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_handles": {
+            "items": {
+              "$ref": "#/components/schemas/ResultHandleRefResponse"
+            },
+            "title": "Result Handles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "metadata_record",
+          "primary_trace",
+          "result_handles"
+        ],
+        "title": "DatasetStorageResponse",
+        "type": "object"
+      },
+      "DatasetSummaryResponse": {
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "device_type": {
+            "title": "Device Type",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "samples": {
+            "title": "Samples",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "Ready",
+              "Queued",
+              "Review"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "capability_count": {
+            "title": "Capability Count",
+            "type": "integer"
+          },
+          "tag_count": {
+            "title": "Tag Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "name",
+          "family",
+          "owner",
+          "updated_at",
+          "device_type",
+          "source",
+          "samples",
+          "status",
+          "capability_count",
+          "tag_count"
+        ],
+        "title": "DatasetSummaryResponse",
+        "type": "object"
+      },
+      "MetadataRecordRefResponse": {
+        "properties": {
+          "backend": {
+            "const": "sqlite_metadata",
+            "title": "Backend",
+            "type": "string"
+          },
+          "record_type": {
+            "enum": [
+              "dataset",
+              "trace_batch",
+              "analysis_run",
+              "result_handle"
+            ],
+            "title": "Record Type",
+            "type": "string"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "backend",
+          "record_type",
+          "record_id",
+          "version",
+          "schema_version"
+        ],
+        "title": "MetadataRecordRefResponse",
+        "type": "object"
+      },
+      "ResultHandleRefResponse": {
+        "properties": {
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "handle_id": {
+            "title": "Handle Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "simulation_trace",
+              "fit_summary",
+              "characterization_report",
+              "plot_bundle"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "materialized"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "metadata_record": {
+            "$ref": "#/components/schemas/MetadataRecordRefResponse"
+          },
+          "payload_backend": {
+            "anyOf": [
+              {
+                "enum": [
+                  "local_zarr",
+                  "json_artifact",
+                  "markdown_artifact",
+                  "bundle_archive"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload Backend"
+          },
+          "payload_format": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zarr",
+                  "json",
+                  "markdown",
+                  "zip"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload Format"
+          },
+          "payload_role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "trace_payload",
+                  "report_artifact",
+                  "bundle_artifact"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload Role"
+          },
+          "payload_locator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload Locator"
+          },
+          "provenance_task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance Task Id"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/ResultProvenanceRefResponse"
+          }
+        },
+        "required": [
+          "contract_version",
+          "handle_id",
+          "kind",
+          "status",
+          "label",
+          "metadata_record",
+          "payload_backend",
+          "payload_format",
+          "payload_role",
+          "payload_locator",
+          "provenance_task_id",
+          "provenance"
+        ],
+        "title": "ResultHandleRefResponse",
+        "type": "object"
+      },
+      "ResultProvenanceRefResponse": {
+        "properties": {
+          "source_dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Dataset Id"
+          },
+          "source_task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Task Id"
+          },
+          "trace_batch_record": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetadataRecordRefResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "analysis_run_record": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetadataRecordRefResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "source_dataset_id",
+          "source_task_id",
+          "trace_batch_record",
+          "analysis_run_record"
+        ],
+        "title": "ResultProvenanceRefResponse",
+        "type": "object"
+      },
+      "SessionAuthResponse": {
+        "properties": {
+          "state": {
+            "enum": [
+              "authenticated",
+              "anonymous"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "mode": {
+            "const": "development_stub",
+            "title": "Mode",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "can_submit_tasks": {
+            "title": "Can Submit Tasks",
+            "type": "boolean"
+          },
+          "can_manage_datasets": {
+            "title": "Can Manage Datasets",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state",
+          "mode",
+          "scopes",
+          "can_submit_tasks",
+          "can_manage_datasets"
+        ],
+        "title": "SessionAuthResponse",
+        "type": "object"
+      },
+      "SessionResponse": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "auth": {
+            "$ref": "#/components/schemas/SessionAuthResponse"
+          },
+          "identity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionUserResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceContextResponse"
+          }
+        },
+        "required": [
+          "session_id",
+          "auth",
+          "identity",
+          "workspace"
+        ],
+        "title": "SessionResponse",
+        "type": "object"
+      },
+      "SessionUserResponse": {
+        "properties": {
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "email"
+        ],
+        "title": "SessionUserResponse",
+        "type": "object"
+      },
+      "TaskAllowedActionsResponse": {
+        "properties": {
+          "attach": {
+            "title": "Attach",
+            "type": "boolean"
+          },
+          "cancel": {
+            "title": "Cancel",
+            "type": "boolean"
+          },
+          "terminate": {
+            "title": "Terminate",
+            "type": "boolean"
+          },
+          "retry": {
+            "title": "Retry",
+            "type": "boolean"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Rejection Reason"
+          }
+        },
+        "required": [
+          "attach",
+          "cancel",
+          "terminate",
+          "retry"
+        ],
+        "title": "TaskAllowedActionsResponse",
+        "type": "object"
+      },
+      "TaskDetailResponse": {
+        "properties": {
+          "task_id": {
+            "title": "Task Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "simulation",
+              "post_processing",
+              "characterization"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "lane": {
+            "enum": [
+              "simulation",
+              "characterization"
+            ],
+            "title": "Lane",
+            "type": "string"
+          },
+          "execution_mode": {
+            "enum": [
+              "run",
+              "probe"
+            ],
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "claimed",
+              "dispatching",
+              "running",
+              "staging_result",
+              "publishing",
+              "cancellation_requested",
+              "cancelling",
+              "cancelled",
+              "termination_requested",
+              "terminated",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submitted_at": {
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "title": "Owner User Id",
+            "type": "string"
+          },
+          "owner_display_name": {
+            "title": "Owner Display Name",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_slug": {
+            "title": "Workspace Slug",
+            "type": "string"
+          },
+          "visibility_scope": {
+            "enum": [
+              "local",
+              "workspace",
+              "owned"
+            ],
+            "title": "Visibility Scope",
+            "type": "string"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Id"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "worker_task_name": {
+            "enum": [
+              "simulation_run_task",
+              "simulation_probe_task",
+              "simulation_failure_task",
+              "simulation_crash_task",
+              "post_processing_run_task",
+              "post_processing_probe_task",
+              "characterization_run_task",
+              "characterization_probe_task",
+              "characterization_failure_task",
+              "characterization_crash_task"
+            ],
+            "title": "Worker Task Name",
+            "type": "string"
+          },
+          "request_ready": {
+            "title": "Request Ready",
+            "type": "boolean"
+          },
+          "submitted_from_active_dataset": {
+            "title": "Submitted From Active Dataset",
+            "type": "boolean"
+          },
+          "dispatch": {
+            "$ref": "#/components/schemas/TaskDispatchResponse"
+          },
+          "reconcile": {
+            "$ref": "#/components/schemas/TaskReconcileResponse"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/TaskProgressResponse"
+          },
+          "result_handoff": {
+            "$ref": "#/components/schemas/TaskResultHandoffResponse"
+          },
+          "result_refs": {
+            "$ref": "#/components/schemas/TaskResultRefsResponse"
+          },
+          "allowed_actions": {
+            "$ref": "#/components/schemas/TaskAllowedActionsResponse"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/TaskEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "task_id",
+          "kind",
+          "lane",
+          "execution_mode",
+          "status",
+          "submitted_at",
+          "owner_user_id",
+          "owner_display_name",
+          "workspace_id",
+          "workspace_slug",
+          "visibility_scope",
+          "dataset_id",
+          "definition_id",
+          "summary",
+          "worker_task_name",
+          "request_ready",
+          "submitted_from_active_dataset",
+          "dispatch",
+          "reconcile",
+          "progress",
+          "result_handoff",
+          "result_refs",
+          "allowed_actions",
+          "events"
+        ],
+        "title": "TaskDetailResponse",
+        "type": "object"
+      },
+      "TaskDispatchResponse": {
+        "properties": {
+          "dispatch_key": {
+            "title": "Dispatch Key",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "claimed",
+              "dispatching",
+              "running",
+              "cancellation_requested",
+              "cancelling",
+              "cancelled",
+              "termination_requested",
+              "terminated",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submission_source": {
+            "enum": [
+              "active_dataset",
+              "explicit_dataset",
+              "definition_only"
+            ],
+            "title": "Submission Source",
+            "type": "string"
+          },
+          "accepted_at": {
+            "title": "Accepted At",
+            "type": "string"
+          },
+          "last_updated_at": {
+            "title": "Last Updated At",
+            "type": "string"
+          },
+          "queue_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Name"
+          },
+          "enqueued_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enqueued At"
+          },
+          "runtime_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Job Id"
+          },
+          "dispatch_attempt_count": {
+            "minimum": 0,
+            "title": "Dispatch Attempt Count",
+            "type": "integer"
+          },
+          "last_dispatch_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Dispatch Outcome"
+          },
+          "last_dispatch_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Dispatch Error Code"
+          }
+        },
+        "required": [
+          "dispatch_key",
+          "status",
+          "submission_source",
+          "accepted_at",
+          "last_updated_at",
+          "queue_name",
+          "enqueued_at",
+          "runtime_job_id",
+          "dispatch_attempt_count",
+          "last_dispatch_outcome",
+          "last_dispatch_error_code"
+        ],
+        "title": "TaskDispatchResponse",
+        "type": "object"
+      },
+      "TaskEventResponse": {
+        "properties": {
+          "event_key": {
+            "title": "Event Key",
+            "type": "string"
+          },
+          "event_type": {
+            "enum": [
+              "task_submitted",
+              "task_dispatch_claimed",
+              "task_running",
+              "task_completed",
+              "task_failed",
+              "task_cancel_requested",
+              "task_cancel_acknowledged",
+              "task_terminate_requested",
+              "task_terminate_acknowledged",
+              "task_requeued",
+              "task_retried"
+            ],
+            "title": "Event Type",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "occurred_at": {
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Metadata",
+            "type": "object"
+          }
+        },
+        "required": [
+          "event_key",
+          "event_type",
+          "level",
+          "occurred_at",
+          "message",
+          "metadata"
+        ],
+        "title": "TaskEventResponse",
+        "type": "object"
+      },
+      "TaskMutationResponse": {
+        "properties": {
+          "operation": {
+            "const": "submitted",
+            "title": "Operation",
+            "type": "string"
+          },
+          "task": {
+            "$ref": "#/components/schemas/TaskDetailResponse"
+          }
+        },
+        "required": [
+          "operation",
+          "task"
+        ],
+        "title": "TaskMutationResponse",
+        "type": "object"
+      },
+      "TaskProgressResponse": {
+        "properties": {
+          "phase": {
+            "enum": [
+              "queued",
+              "claimed",
+              "dispatching",
+              "running",
+              "staging_result",
+              "publishing",
+              "cancellation_requested",
+              "cancelling",
+              "cancelled",
+              "termination_requested",
+              "terminated",
+              "completed",
+              "failed"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "percent_complete": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Percent Complete",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase",
+          "percent_complete",
+          "summary",
+          "updated_at"
+        ],
+        "title": "TaskProgressResponse",
+        "type": "object"
+      },
+      "TaskReconcileResponse": {
+        "properties": {
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "required"
+        ],
+        "title": "TaskReconcileResponse",
+        "type": "object"
+      },
+      "TaskResultHandoffResponse": {
+        "properties": {
+          "availability": {
+            "enum": [
+              "pending",
+              "ready",
+              "none"
+            ],
+            "title": "Availability",
+            "type": "string"
+          },
+          "primary_result_handle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Result Handle Id"
+          },
+          "result_handle_count": {
+            "title": "Result Handle Count",
+            "type": "integer"
+          },
+          "trace_payload_available": {
+            "title": "Trace Payload Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "availability",
+          "primary_result_handle_id",
+          "result_handle_count",
+          "trace_payload_available"
+        ],
+        "title": "TaskResultHandoffResponse",
+        "type": "object"
+      },
+      "TaskResultRefsResponse": {
+        "properties": {
+          "trace_batch_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Batch Id"
+          },
+          "analysis_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Run Id"
+          },
+          "metadata_records": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataRecordRefResponse"
+            },
+            "title": "Metadata Records",
+            "type": "array"
+          },
+          "trace_payload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TracePayloadRefResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_handles": {
+            "items": {
+              "$ref": "#/components/schemas/ResultHandleRefResponse"
+            },
+            "title": "Result Handles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "trace_batch_id",
+          "analysis_run_id",
+          "metadata_records",
+          "trace_payload",
+          "result_handles"
+        ],
+        "title": "TaskResultRefsResponse",
+        "type": "object"
+      },
+      "TaskSubmissionRequest": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "simulation",
+              "post_processing",
+              "characterization"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Dataset Id"
+          },
+          "definition_id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Definition Id"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TaskSubmissionRequest",
+        "type": "object"
+      },
+      "TaskSummaryResponse": {
+        "properties": {
+          "task_id": {
+            "title": "Task Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "simulation",
+              "post_processing",
+              "characterization"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "lane": {
+            "enum": [
+              "simulation",
+              "characterization"
+            ],
+            "title": "Lane",
+            "type": "string"
+          },
+          "execution_mode": {
+            "enum": [
+              "run",
+              "probe"
+            ],
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "claimed",
+              "dispatching",
+              "running",
+              "staging_result",
+              "publishing",
+              "cancellation_requested",
+              "cancelling",
+              "cancelled",
+              "termination_requested",
+              "terminated",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submitted_at": {
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "title": "Owner User Id",
+            "type": "string"
+          },
+          "owner_display_name": {
+            "title": "Owner Display Name",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_slug": {
+            "title": "Workspace Slug",
+            "type": "string"
+          },
+          "visibility_scope": {
+            "enum": [
+              "local",
+              "workspace",
+              "owned"
+            ],
+            "title": "Visibility Scope",
+            "type": "string"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition Id"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "kind",
+          "lane",
+          "execution_mode",
+          "status",
+          "submitted_at",
+          "owner_user_id",
+          "owner_display_name",
+          "workspace_id",
+          "workspace_slug",
+          "visibility_scope",
+          "dataset_id",
+          "definition_id",
+          "summary"
+        ],
+        "title": "TaskSummaryResponse",
+        "type": "object"
+      },
+      "TracePayloadRefResponse": {
+        "properties": {
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "backend": {
+            "enum": [
+              "local_zarr",
+              "s3_zarr"
+            ],
+            "title": "Backend",
+            "type": "string"
+          },
+          "payload_role": {
+            "enum": [
+              "dataset_primary",
+              "task_output",
+              "analysis_projection"
+            ],
+            "title": "Payload Role",
+            "type": "string"
+          },
+          "store_key": {
+            "title": "Store Key",
+            "type": "string"
+          },
+          "store_uri": {
+            "title": "Store Uri",
+            "type": "string"
+          },
+          "group_path": {
+            "title": "Group Path",
+            "type": "string"
+          },
+          "array_path": {
+            "title": "Array Path",
+            "type": "string"
+          },
+          "dtype": {
+            "title": "Dtype",
+            "type": "string"
+          },
+          "shape": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Shape",
+            "type": "array"
+          },
+          "chunk_shape": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Chunk Shape",
+            "type": "array"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "contract_version",
+          "backend",
+          "payload_role",
+          "store_key",
+          "store_uri",
+          "group_path",
+          "array_path",
+          "dtype",
+          "shape",
+          "chunk_shape",
+          "schema_version"
+        ],
+        "title": "TracePayloadRefResponse",
+        "type": "object"
+      },
+      "ValidationNoticeResponse": {
+        "properties": {
+          "level": {
+            "enum": [
+              "ok",
+              "warning"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "message"
+        ],
+        "title": "ValidationNoticeResponse",
+        "type": "object"
+      },
+      "WorkspaceContextResponse": {
+        "properties": {
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "member",
+              "viewer"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "default_task_scope": {
+            "enum": [
+              "workspace",
+              "owned"
+            ],
+            "title": "Default Task Scope",
+            "type": "string"
+          },
+          "active_dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveDatasetResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "workspace_id",
+          "slug",
+          "display_name",
+          "role",
+          "default_task_scope",
+          "active_dataset"
+        ],
+        "title": "WorkspaceContextResponse",
+        "type": "object"
       }
     }
   }

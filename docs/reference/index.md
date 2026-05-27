@@ -10,7 +10,7 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: 技術規格索引，涵蓋 architecture、app、CLI、core、data formats 與開發規範
+scope: 技術規格索引，涵蓋 architecture、app、notebooks、core、data formats 與開發規範
 version: v0.6.0
 last_updated: 2026-03-14
 updated_by: team
@@ -20,17 +20,18 @@ updated_by: team
 
 本區是平台的規格表。
 
-凡是寫在 `Reference` 的定義，都是程式碼、CLI、UI、backend 與核心能力需要對齊的 SoT。
+凡是寫在 `Reference` 的定義，都是 notebooks、application、backend、Julia Runner 與核心能力需要對齊的 SoT。
 
 !!! info "How to read Reference"
-    先看 `App`、`CLI`、`Core`、`Data Formats` 這些 owner layer，再用 `Architecture` 看 cross-layer registry 與 parity。`Guardrails` 則回答開發流程與寫作規範，不直接定產品 surface。
+    先看 `Architecture`、`App`、`Notebooks`、`Core`、`Data Formats` 這些 owner layer，再用 `Guardrails` 確認開發流程與寫作規範。
 
 ## Reading Map
 
 | 如果你想確認 | 先看哪裡 |
 | --- | --- |
-| App 的 shell、page、backend authority | `App / Shared / Frontend / Backend` |
-| CLI 的正式能力與 local/app bridge | `CLI Options` |
+| App 的 shell、page、backend authority | `Application Interface`、`App / Shared / Frontend / Backend` |
+| Notebook workflow 與直接研究執行 | `Notebook Interface` |
+| Julia Runner compute plane | `Julia Runner Compute Plane` |
 | 核心科學模組與 Julia/Python 邊界 | `Core` |
 | persisted payload 與 canonical record schema | `Data Formats` |
 | 哪個 contract 由誰擁有 | `Architecture Reference` |
@@ -41,10 +42,14 @@ updated_by: team
 | 類別 | 核心聚焦 |
 |---|---|
 | [Architecture Reference](architecture/index.md) | cross-layer registry、owner boundary 與 parity 對齊 |
+| [Julia Runner Compute Plane](architecture/julia-runner-compute-plane.md) | async compute plane、Runner API 與 smoke task |
+| [Runner Result Manifest](architecture/runner-result-manifest.md) | staged result manifest schema 與 Backend validation |
+| [TraceStore Zarr](architecture/trace-store-zarr.md) | canonical local Zarr publication contract |
+| [Application Interface](app/application-interface.md) | Electron data workbench surface |
+| [Notebook Interface](notebooks/index.md) | Pluto / Python notebook roles |
 | [App / Shared](app/shared/index.md) | workspace collaboration、auth、task runtime、audit logging 等 app-shared semantics |
 | [App / Frontend](app/frontend/index.md) | shared shell、definition pages、research workflows |
 | [App / Backend](app/backend/index.md) | frontend 與 shared app model 依賴的 backend authority surfaces |
-| [CLI Options](cli/index.md) | standalone-first CLI、local runtime 與 command surface |
 | [Core](core/index.md) | Python core、Julia wrapper、Julia core 與 Julia plotting |
 | [Data Formats](data-formats/index.md) | 數據格式、record schema 與 canonical payload rules |
 | [Guardrails](guardrails/index.md) | workspace 開發規範、文件規範與執行驗證規則 |

@@ -42,7 +42,7 @@ updated_by: codex
 | --- | --- | --- |
 | Documentation | Documentation Agent | updated SoT / decision notes |
 | Planning & Reviewing (plan pass) | Planning & Reviewing Agent | plan artifact + test backlog |
-| Implementation | Frontend / Backend / Core / CLI Agent | code + unit tests + delivery report |
+| Implementation | Frontend / Backend / Core / Runner / Docs Agent | code + unit tests + delivery report |
 | Test | Test Agent | integration / E2E tests + evidence |
 | Planning & Reviewing (merge pass) | Planning & Reviewing Agent | integrated delivery + final verification |
 
@@ -52,7 +52,7 @@ updated_by: codex
 |---|---|---|
 | Documentation Agents | 與人類開發者討論需求、整理決策、把 SoT 寫進 docs、先定義 architecture / contracts / page specs | 大量 feature code、integration / E2E |
 | Planning & Reviewing Agents | 讀 SoT 與現有程式碼、撰寫 plan artifact、拆 implementation slices、列出缺的 integration / E2E coverage、回收 deliverables、做 final verification | 正式文件編輯、大量產品實作 |
-| Implementation Agents | 依計劃撰寫 `Frontend / Backend / Core / CLI` 實作與 unit tests | integration tests、E2E tests、最終主線整合、正式文件編輯 |
+| Implementation Agents | 依計劃撰寫 `Frontend / Backend / Core / Runner / Docs` 實作與 unit tests | integration tests、E2E tests、最終主線整合 |
 | Test Agents | 依計劃撰寫 integration / E2E tests、補 test fixtures 與 cross-surface verification | feature unit work、最終 merge authority |
 
 ## Role Boundaries
@@ -70,7 +70,7 @@ updated_by: codex
 - 若發現 SoT 缺頁、需要改規格或 owner boundary 有衝突，必須回交 `Documentation Agent`。
 - plan artifact 至少要回答：
   - 哪些文件已定義、哪些尚未落地
-  - 哪些 implementation slices 需要交給前端 / 後端 / core / CLI Agents
+  - 哪些 implementation slices 需要交給 frontend / backend / core / runner / docs Agents
   - 哪些功能尚未具備 integration tests / E2E tests
   - 每個 slice 的 verification 與 non-goals
 - prompt 預設應使用 `Allowed Area` 與 `Do Not Touch`，只在必要時補充 `Allowed Files`
@@ -85,11 +85,12 @@ updated_by: codex
 
 ### Implementation Agents
 
-- 固定分成四條 implementation lanes：
+- 固定分成五條 implementation lanes：
   - `Frontend Agent`
   - `Backend Agent`
   - `Core Agent`
-  - `CLI Agent`
+  - `Runner Agent`
+  - `Docs Agent`
 - 每位 agent 只負責自己被指派 lane 內的 slice 與 unit tests。
 - 若任務超出 prompt 的 `Allowed Area`、`Do Not Touch`、lane 邊界或 slice 範圍，必須回交 Planning & Reviewing Agent 重新切分。
 - 不負責 integration / E2E test。
@@ -111,7 +112,7 @@ updated_by: codex
    - 產出 plan artifact 與 test backlog。
 
 3. **Implementation**
-   - Frontend / Backend / Core / CLI Agents 依 slice 開發。
+   - Frontend / Backend / Core / Runner / Docs Agents 依 slice 開發。
    - 每位 agent 只做自己被指派 lane 內的 code + unit tests。
 
 4. **Test**
@@ -280,11 +281,12 @@ Planning & Reviewing Agent 產出的 plan artifact 至少必須包含：
     - review implementation against SoT and product need, not prompt literalism alone
     - use Playwright-based smoke verification plus screenshot or equivalent visual evidence when reviewing user-visible frontend changes
 - Implementation Agents:
-    - use four implementation lanes:
+    - use five implementation lanes:
         - Frontend
         - Backend
         - Core
-        - CLI
+        - Runner
+        - Docs
     - receive assigned slices via prompt (`Allowed Area` + `Do Not Touch` + worktree + verification)
     - own code + unit tests only
     - do not own integration/E2E or final branch integration

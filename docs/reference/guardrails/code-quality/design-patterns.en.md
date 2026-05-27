@@ -11,9 +11,9 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Service boundaries, dependency direction, and shared-logic rules for the rewrite branch.
-version: v1.0.0
-last_updated: 2026-03-11
-updated_by: docs-team
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Design Patterns
@@ -26,8 +26,10 @@ The design goal in this project is to keep shared rules in stable places instead
 
 - React components must not own business workflow orchestration
 - FastAPI routers must not own full workflow logic
-- CLI commands must not duplicate backend service logic
-- shared rules belong in backend services or `src/core/`
+- scripts must not duplicate backend service or Runner logic
+- Python Backend must not execute heavy simulation / analysis compute
+- Julia Runner must not write formal metadata DB records
+- shared rules belong in app backend services, Julia Core, Julia Runner, or explicit contract packages
 
 ### Dependency Injection
 
@@ -35,10 +37,11 @@ The design goal in this project is to keep shared rules in stable places instead
 - do not instantiate repositories, clients, or adapters ad hoc inside workflow functions
 - framework-specific wiring belongs in the composition root
 
-### Canonical Definition
+### Compute Boundary
 
-- circuit definitions should have one canonical representation
-- schemdraw, simulation, analysis, and API responses must not each maintain drifting definitions
+- Python Backend owns task lifecycle, metadata, publication, provenance, TraceStore registration, and data APIs
+- Julia Runner owns simulation, sweep, post-processing, analysis, fitting, derived parameter extraction, and staging package generation
+- application-triggered simulation and analysis must be asynchronous
 
 ### API Layer Responsibility
 
@@ -57,9 +60,11 @@ It should not contain:
 
 ```markdown
 ## Design Patterns
-- Keep shared workflow logic in backend services or `src/core/`, not in React components, FastAPI routers, or CLI commands.
+- Keep shared workflow logic in app backend services, Julia Core, Julia Runner, or explicit contract packages, not in React components, FastAPI routers, notebooks, or scripts.
 - Use dependency injection or explicit factories for services, repositories, and adapters.
-- Keep one canonical circuit definition that feeds schemdraw, simulation, analysis, API, and CLI.
+- Python Backend is the control/data plane and must not execute heavy simulation or analysis compute in process.
+- Julia Runner is the compute plane and must not write formal metadata DB records.
+- Application-triggered simulation and analysis must be asynchronous.
 - API handlers should do I/O, auth, validation, service invocation, and response mapping only.
-- CLI commands should orchestrate user input/output, then delegate to shared services/core.
+- Scripts are dev/build/test/maintenance helpers only and must not become user-facing workflow contracts.
 ```

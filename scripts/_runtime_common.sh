@@ -181,32 +181,3 @@ runtime_record_listen_pid() {
     echo "[start] recorded $name listener pid=$listen_pid"
   fi
 }
-
-runtime_check_redis() {
-  local root_dir="$1"
-  local prefix="${2:-start}"
-  if uv run python "$root_dir/scripts/check_worker_runtime.py" --redis-only >/dev/null; then
-    return
-  fi
-
-  echo "[$prefix] Redis is not reachable via SC_RQ_REDIS_URL / SC_REDIS_URL."
-  echo "[$prefix] Start Redis first, then retry app bring-up."
-  exit 1
-}
-
-runtime_wait_for_runtime_health() {
-  local root_dir="$1"
-  local app_url="${2:-http://127.0.0.1:8000}"
-
-  for _ in $(seq 1 45); do
-    if uv run python "$root_dir/scripts/check_worker_runtime.py" --app-url "$app_url" >/dev/null; then
-      echo "[start] runtime topology is healthy"
-      return
-    fi
-    sleep 1
-  done
-
-  echo "[start] runtime topology did not become healthy"
-  uv run python "$root_dir/scripts/check_worker_runtime.py" --app-url "$app_url" || true
-  exit 1
-}

@@ -1,13 +1,13 @@
 ## Project Goal
-- **Mission**: Build a superconducting-circuit workbench with a separated frontend/backend architecture and first-class CLI support.
+- **Mission**: Build a superconducting-circuit workbench centered on Notebook Interface, Electron Application Interface, and Julia Runner Compute Plane.
 - **Current development mode**: Heavy Development / No Compatible Fallback; prioritize stabilizing the current product for the next real deployment over preserving legacy compatibility paths.
 - **Core product surfaces**:
     - Data Browser
-    - Circuit Definition Editor
-    - Circuit Schemdraw
-    - Circuit Simulation
-    - Characterization & Analysis
-    - CLI Available
+    - Dataset
+    - Data Ingestion
+    - Raw Data / Trace Browser
+    - Tasks / Result Browser
+    - Notebook Interface
 - **Data sources**:
     - circuit simulation
     - layout simulation
@@ -16,16 +16,18 @@
 - **Architecture direction**:
     - UI uses Next.js App Router
     - API uses FastAPI
-    - CLI stays supported and must share business rules with the core/backend
-    - Electron is an allowed desktop wrapper for local-first desktop runtime
-    - existing NiceGUI code is legacy, not the default place for new work
+    - Python Backend is the control plane + data plane
+    - Julia Runner is the async compute plane
+    - Electron is the local desktop shell around frontend, backend, and runner
+    - Pluto is the direct Julia research cockpit
+    - CLI, NiceGUI, Redis/RQ, and Python JuliaCall execution are no longer active product/runtime surfaces
 - **Core values**:
     - scientific accuracy
     - reproducible workflows
-    - one canonical definition feeding UI, API, CLI, simulation, and schemdraw
+    - explicit staging/publication boundary between Runner outputs and official TraceStore records
 - **Product goals**:
-    - support circuit definition, simulation, characterization, data management, task tracking, and result recovery in one platform
-    - keep metadata, trace payloads, and provenance contracts explicit and reconstructible
+    - support notebook research, application data browsing, async simulation/analysis, task tracking, and result recovery in one platform
+    - keep metadata, trace payloads, Runner manifests, and provenance contracts explicit and reconstructible
     - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
-    - keep existing low-level migration/runtime/rebuild mechanisms when useful, but do not treat them as product compatibility guarantees unless an owner SoT says so
+    - remove active CLI/NiceGUI/Redis/RQ/Python-JuliaCall entrypoints instead of preserving compatibility fallbacks
 - **Audience**: researchers, students, and developers working on superconducting-circuit simulation and analysis workflows.

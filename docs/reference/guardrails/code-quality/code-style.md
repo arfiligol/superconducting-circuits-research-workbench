@@ -11,15 +11,15 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Python 與 TypeScript 的共同程式風格與實作原則。
-version: v2.1.0
-last_updated: 2026-03-14
-updated_by: docs-team
+version: v3.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Code Style
 
 本專案的風格規則以「可讀、可改、可測」為優先。
-若某個實作讓 UI、API、CLI 其中一層看起來方便，卻讓共享規則變得分散或難以驗證，則視為不合格。
+若某個實作讓 UI、API、Notebook、Runner 或 scripts 其中一層看起來方便，卻讓共享規則變得分散或難以驗證，則視為不合格。
 
 !!! info "How to use this page"
     先看跨語言原則，再看對應語言規則。若某個變更同時碰到 Python 與 TypeScript，優先遵守共通邊界，再處理語言特有風格。
@@ -37,11 +37,11 @@ updated_by: docs-team
 - 優先小 diff，避免無關重構
 - 一個函式只做一件事
 - 明確命名，不用模糊縮寫
-- 避免把業務邏輯塞進 route handler、React component 或 CLI command
+- 避免把業務邏輯塞進 route handler、React component、notebook helper 或 script
 - 重複邏輯先抽到共享層，再擴增呼叫點
 
 !!! warning "Boundary rule"
-    看起來方便的 inline workflow，若讓 route handler、component 或 command 擁有真正的業務決策，就屬於不合格實作。
+    看起來方便的 inline workflow，若讓 route handler、component、notebook helper 或 script 擁有真正的業務決策，就屬於不合格實作。
 
 ## Language Rules
 
@@ -80,8 +80,8 @@ updated_by: docs-team
     - functions use clear verb phrases
     - scientific names may include units when that removes ambiguity
 - **Boundaries**:
-    - do not put business workflow logic inside route handlers, React components, or CLI commands
-    - shared logic belongs in services or `src/core/`
+    - do not put business workflow logic inside route handlers, React components, notebooks, or scripts
+    - shared logic belongs in app backend services, Julia Core, Julia Runner, or explicit contract packages
 - **Refactoring**: prefer small, atomic changes
 - **Complexity**: keep functions focused; split code when one function starts handling multiple responsibilities
 ```

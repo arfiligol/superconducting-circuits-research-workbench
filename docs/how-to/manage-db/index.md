@@ -31,6 +31,10 @@ updated_by: team
 
 ---
 
-## 相關工具
+## Current access path
 
-- [CLI Reference: sc-db](../../reference/cli/index.md)
+Use the Electron Application Interface for routine dataset inspection and trace browsing.
+Use the Python Backend metadata APIs for scripted maintenance.
+
+!!! warning "No active CLI"
+    The old command-based database surface is no longer an active product contract. Do not add new maintenance workflows through CLI entrypoints.

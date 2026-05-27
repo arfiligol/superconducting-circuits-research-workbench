@@ -37,11 +37,8 @@ updated_by: docs-team
 - [Manage Tags](manage-db/tags.md)
 - [Reorder IDs](manage-db/reorder-record-ids.md)
 
-### [CLI Usage](cli/index.md)
-CLI 指令總覽與常見任務索引。
-
 ### [Simulation](simulation/index.md)
-執行電路模擬 (Python/Julia)。
+透過 Pluto 或 Julia Runner task 執行電路模擬。
 
 ### [Contributing](contributing.md)
 專案貢獻流程與規範。

@@ -1,0 +1,46 @@
+{
+  "name": "superconducting-circuits-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "dev:turbo": "next dev --turbo",
+    "build": "next build",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "echo 'No retained local E2E smoke is configured yet.'",
+    "sync:types": "../../scripts/sync_api_types.sh"
+  },
+  "dependencies": {
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/lang-yaml": "^6.1.2",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.40.0",
+    "@hookform/resolvers": "^5.2.2",
+    "@uiw/react-codemirror": "^4.25.8",
+    "lucide-react": "^0.554.0",
+    "next": "^16.1.6",
+    "next-themes": "^0.4.6",
+    "plotly.js-dist-min": "^3.1.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-hook-form": "^7.66.0",
+    "react-plotly.js": "^2.6.0",
+    "swr": "^2.4.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "^16.1.6",
+    "openapi-typescript": "^7.13.0",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

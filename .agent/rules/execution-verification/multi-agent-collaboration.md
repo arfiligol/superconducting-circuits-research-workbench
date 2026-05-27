@@ -20,11 +20,12 @@
     - review implementation against SoT and product need, not prompt literalism alone
     - use Playwright-based smoke verification plus screenshot or equivalent visual evidence when reviewing user-visible frontend changes
 - Implementation Agents:
-    - use four implementation lanes:
+    - use five implementation lanes:
         - Frontend
         - Backend
         - Core
-        - CLI
+        - Runner
+        - Docs
     - receive assigned slices via prompt (`Allowed Area` + `Do Not Touch` + worktree + verification)
     - own code + unit tests only
     - do not own integration/E2E or final branch integration

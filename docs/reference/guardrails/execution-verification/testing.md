@@ -10,8 +10,8 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: current platform 的 backend、frontend、desktop、CLI 與 docs 測試規範。
-version: v2.4.0
+scope: current platform 的 app/backend、app/frontend、Julia Runner、desktop 與 docs 測試規範。
+version: v3.0.0
 last_updated: 2026-05-27
 updated_by: codex
 ---
@@ -21,15 +21,16 @@ updated_by: codex
 本頁定義 current platform 的測試入口與最低測試期待。
 
 !!! info "How to read this page"
-    先判斷你碰的是 `root orchestration`、`backend/core`、`frontend`、`desktop` 還是 `docs`。
+    先判斷你碰的是 `root orchestration`、`app/backend`、`app/frontend`、`Julia Runner`、`desktop` 還是 `docs`。
     這頁回答的是「最低該跑什麼」，不是完整測試設計本身。
 
 ## Test Map
 
 | Area | Minimum baseline |
 | --- | --- |
-| Foundation workspace | backend pytest + frontend unit + desktop lint |
-| Backend / Core | `pytest` |
+| Foundation workspace | backend pytest + frontend unit + desktop lint + runner tests |
+| Backend | `cd app/backend && uv run pytest` |
+| Julia Core / Runner | `Pkg.test()` per Julia package |
 | Frontend | unit tests，必要時 E2E |
 | Desktop foundation | lint + build |
 | Docs | source check + build + built-route check |
@@ -37,30 +38,41 @@ updated_by: codex
 ## Foundation Workspace Check
 
 ```bash
-cd backend && uv run pytest
-npm run test --prefix frontend
-npm run lint --prefix desktop
+cd app/backend && uv run pytest
+npm run test --prefix app/frontend
+npm run lint --prefix app/desktop
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
 ```
 
-## Backend / Core
+## Backend
 
 ```bash
-cd backend && uv run pytest
-uv run pytest
+cd app/backend && uv run pytest
 ```
+
+Backend tests for Runner publication must cover create task, claim task, heartbeat/progress, complete with small staging Zarr manifest, canonical TraceStore publication, TraceRecord creation, trace slice read, invalid manifest rejection, and path traversal rejection.
+
+## Julia Core / Runner
+
+```bash
+julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+```
+
+Runner tests must cover JSON task contract parsing, manifest generation, local Zarr write with small real/imag trace, manifest path/shape validation helpers, and fake `julia_runner_smoke` dispatch.
 
 ## Frontend
 
 === "Unit"
 
     ```bash
-    npm run test --prefix frontend
+    npm run test --prefix app/frontend
     ```
 
 === "E2E"
 
     ```bash
-    npm run test:e2e --prefix frontend
+    npm run test:e2e --prefix app/frontend
     ```
 
 foundation workflow 目前只要求 deterministic unit tests。
@@ -74,8 +86,8 @@ foundation workflow 目前只要求 deterministic unit tests。
 ## Desktop Foundation
 
 ```bash
-npm run lint --prefix desktop
-npm run build --prefix desktop
+npm run lint --prefix app/desktop
+npm run build --prefix app/desktop
 ```
 
 ## Docs
@@ -97,7 +109,7 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 | Rule | Meaning |
 | --- | --- |
 | 關鍵 workflow 至少要有一條可重現測試路徑 | 不接受只靠手動驗證的核心交付 |
-| backend service 與 CLI workflow 優先寫 pytest | 先確保 deterministic automation |
+| backend service 與 Runner publication workflow 優先寫 deterministic tests | 先確保 task lifecycle 與 TraceStore publication |
 | frontend component 與互動流程分別用 unit / E2E 覆蓋 | 不要用單一測試型態硬扛全部責任 |
 | Frontend merge review 需要真實 UI 證據 | shell / layout / overlay / auth entry 之類的 user-visible 交付，至少要用 Playwright smoke + screenshot 檢查一次 |
 | docs route 驗證必須用 canonical directory routes | 不依賴來源 `.md` 路徑推測 build 結果 |
@@ -111,18 +123,20 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 ```markdown
 ## Testing Commands
 - **Foundation workspace check**:
-    - `cd backend && uv run pytest`
-    - `npm run test --prefix frontend`
-    - `npm run lint --prefix desktop`
+    - `cd app/backend && uv run pytest`
+    - `npm run test --prefix app/frontend`
+    - `npm run lint --prefix app/desktop`
+    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Backend/core tests**:
-    - `cd backend && uv run pytest`
-    - `uv run pytest`
-- **Frontend unit tests**: `npm run test --prefix frontend`
-- **Frontend E2E tests**: `npm run test:e2e --prefix frontend`
+    - `cd app/backend && uv run pytest`
+    - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
+    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+- **Frontend unit tests**: `npm run test --prefix app/frontend`
+- **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, Planning & Reviewing Agents must use Playwright-based smoke verification and screenshot or equivalent visual evidence during merge review.
 - **Desktop foundation checks**:
-    - `npm run lint --prefix desktop`
-    - `npm run build --prefix desktop`
+    - `npm run lint --prefix app/desktop`
+    - `npm run build --prefix app/desktop`
 - **Docs checks**:
     - `uv run python scripts/check_docs_nav_routes.py --check-source`
     - `./scripts/prepare_docs_locales.sh`

@@ -5,7 +5,7 @@
     - canonical contract registry
     - source-of-truth ordering
     - identity/workspace minimal model
-    - task runtime / processor contract
+    - task runtime / Runner protocol / publication contract
     - error model
     - planning artifact format
 - If a public contract changes during any phase, update the parity matrix, contract registry, and relevant tests in the same delivery line.

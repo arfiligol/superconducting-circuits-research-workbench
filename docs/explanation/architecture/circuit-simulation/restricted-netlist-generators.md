@@ -47,4 +47,4 @@ updated_by: codex
 
 - [Circuit Netlist Format](../../../reference/data-formats/circuit-netlist.md)
 - [Schema Editor UI Reference](../../../reference/app/frontend/definition/schema-editor.md)
-- [Circuit Simulation UI](../../../reference/app/frontend/research-workflow/circuit-simulation.md)
+- [Julia Runner Compute Plane](../../../reference/architecture/julia-runner-compute-plane.md)
