@@ -180,6 +180,7 @@ nav = [
       { "Overview" = "reference/core/index.md" },
       { "Python Core" = "reference/core/python-core.md" },
       { "Julia Wrapper" = "reference/core/julia-wrapper.md" },
+      { "Julia Scientific Core" = "reference/core/julia-scientific-core.md" },
       { "Julia Core" = "reference/core/julia-core.md" },
       { "Julia Plotting" = "reference/core/julia-plotting.md" },
     ] },

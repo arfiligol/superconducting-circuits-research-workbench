@@ -3,28 +3,28 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/platform_common.sh"
+source "$SCRIPT_DIR/_runtime_common.sh"
 
-ROOT_DIR="$(platform_root_dir)"
-platform_load_env "$ROOT_DIR"
+ROOT_DIR="$(runtime_root_dir)"
+runtime_load_env "$ROOT_DIR"
 
 PID_DIR="$ROOT_DIR/tmp/runtime_verify_pids"
 LOG_DIR="$ROOT_DIR/tmp/runtime_verify_logs"
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
 REDIS_CONTAINER=""
-REDIS_PORT="${SC_PLATFORM_REDIS_PORT:-6391}"
+REDIS_PORT="${SC_RUNTIME_REDIS_PORT:-${SC_PLATFORM_REDIS_PORT:-6391}}"
 export SC_APP_HOST="${SC_APP_HOST:-127.0.0.1}"
 export SC_APP_PORT="${SC_APP_PORT:-8010}"
 export SC_APP_BASE_URL="${SC_APP_BASE_URL:-http://${SC_APP_HOST}:${SC_APP_PORT}}"
-APP_URL="$(platform_app_url)"
-APP_PORT="$(platform_app_port)"
+APP_URL="$(runtime_app_url)"
+APP_PORT="$(runtime_app_port)"
 LOCAL_SIMULATION_DEFINITION_ID="c8f08463-bf18-4f8e-a5d5-735f3d7b0d6e"
 
 cleanup() {
-  platform_stop_service "$PID_DIR" app "runtime-verify-stop"
-  platform_stop_service "$PID_DIR" worker-simulation "runtime-verify-stop"
-  platform_stop_service "$PID_DIR" worker-characterization "runtime-verify-stop"
+  runtime_stop_service "$PID_DIR" app "runtime-verify-stop"
+  runtime_stop_service "$PID_DIR" worker-simulation "runtime-verify-stop"
+  runtime_stop_service "$PID_DIR" worker-characterization "runtime-verify-stop"
   if [[ -n "$REDIS_CONTAINER" ]]; then
     docker rm -f "$REDIS_CONTAINER" >/dev/null 2>&1 || true
   fi
@@ -35,8 +35,8 @@ maybe_start_redis() {
   if uv run python "$ROOT_DIR/scripts/check_worker_runtime.py" --redis-only >/dev/null 2>&1; then
     return
   fi
-  if [[ "${SC_PLATFORM_MANAGE_REDIS:-0}" != "1" ]]; then
-    echo "[runtime-verify] Redis is not reachable and SC_PLATFORM_MANAGE_REDIS=1 was not set"
+  if [[ "${SC_RUNTIME_MANAGE_REDIS:-${SC_PLATFORM_MANAGE_REDIS:-0}}" != "1" ]]; then
+    echo "[runtime-verify] Redis is not reachable and SC_RUNTIME_MANAGE_REDIS=1 was not set"
     exit 1
   fi
   REDIS_CONTAINER="codex-worker-runtime-hardening-redis-$RANDOM"
@@ -113,14 +113,14 @@ wait_for_task() {
 }
 
 maybe_start_redis
-platform_require_path "$ROOT_DIR/.venv" "uv sync" "runtime-verify"
-platform_require_free_port "$APP_PORT" app "runtime-verify"
-platform_start_service "$PID_DIR" "$LOG_DIR" app bash -lc "cd '$ROOT_DIR' && exec uv run sc-app"
-platform_start_service "$PID_DIR" "$LOG_DIR" worker-simulation bash -lc "cd '$ROOT_DIR' && exec uv run sc-worker-simulation"
-platform_start_service "$PID_DIR" "$LOG_DIR" worker-characterization bash -lc "cd '$ROOT_DIR' && exec uv run sc-worker-characterization"
+runtime_require_path "$ROOT_DIR/.venv" "uv sync" "runtime-verify"
+runtime_require_free_port "$APP_PORT" app "runtime-verify"
+runtime_start_service "$PID_DIR" "$LOG_DIR" app bash -lc "cd '$ROOT_DIR' && exec uv run sc-app"
+runtime_start_service "$PID_DIR" "$LOG_DIR" worker-simulation bash -lc "cd '$ROOT_DIR' && exec uv run sc-worker-simulation"
+runtime_start_service "$PID_DIR" "$LOG_DIR" worker-characterization bash -lc "cd '$ROOT_DIR' && exec uv run sc-worker-characterization"
 
-platform_wait_for_url "app" "$APP_URL/health" "$LOG_DIR/app.log" "$PID_DIR/app.pid"
-platform_wait_for_runtime_health "$ROOT_DIR" "$APP_URL"
+runtime_wait_for_url "app" "$APP_URL/health" "$LOG_DIR/app.log" "$PID_DIR/app.pid"
+runtime_wait_for_runtime_health "$ROOT_DIR" "$APP_URL"
 
 APP_PID="$(cat "$PID_DIR/app.pid")"
 SIM_PID="$(cat "$PID_DIR/worker-simulation.pid")"

@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 目前 workspace 的 guardrails 總索引，供人類與 AI Agent 載入任務相關規則。
-version: v2.3.1
-last_updated: 2026-03-15
+version: v2.4.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -24,6 +24,10 @@ updated_by: codex
 !!! info "How to read this section"
     先看 `Project Basics`，再依工作性質進入 `Code Quality`、`UI/UX Quality`、`Execution & Verification` 或 `Documentation Design`。
     不要把整個 guardrails tree 當成一次性必讀清單；先找 owner section，再讀子頁。
+
+!!! important "Current development mode"
+    現階段是 Heavy Development / No Compatible Fallback。
+    backward-compatible fallback 不是預設要求；若某個相容層真的必須保留，必須由 owner SoT 明確寫出。
 
 === "Human Developers"
 
@@ -45,7 +49,7 @@ updated_by: codex
 
 | Section | Use this when | Primary focus |
 | --- | --- | --- |
-| [Project Basics](./project-basics/index.md) | 任務會改變產品方向、技術選型、資料權威或 repo 結構 | mission、stack、folder layout、SoT ordering |
+| [Project Basics](./project-basics/index.md) | 任務會改變產品方向、技術選型、資料權威或 repo 結構 | mission、development phase、stack、folder layout、SoT ordering |
 | [Code Quality](./code-quality/index.md) | 任務會改變實作邊界、service pattern、contract handling 或 error/logging behavior | implementation discipline |
 | [UI/UX Quality](./ui-ux-quality/index.md) | 任務會改變 frontend shell、layout、state、routing、component interaction | app frontend quality baseline |
 | [Execution & Verification](./execution-verification/index.md) | 任務需要 build、test、CI、handoff、multi-agent planning 或 phase acceptance | delivery and verification rules |

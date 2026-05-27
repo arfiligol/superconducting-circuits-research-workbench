@@ -9,18 +9,20 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Core reference 索引，條列平台核心能力與 Python/Julia 邊界。
-version: v0.5.0
-last_updated: 2026-03-21
+scope: Core reference 索引，條列平台核心能力、Julia scientific core 與 Python/Julia 邊界。
+version: v0.6.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Core Reference
 
-本區收錄平台核心能力的 reference surface，涵蓋 Python-owned canonical contracts、Python↔Julia bridge，以及 Julia-native simulation / plotting boundary。
+本區收錄平台核心能力的 reference surface，涵蓋 Phase-1 Julia scientific core、Python-owned canonical contracts、Python↔Julia bridge，以及 Julia-native simulation / plotting boundary。
 
 !!! info "How To Read Core Docs"
-    先讀 [Python Core](python-core.md) 了解 `sc_core` 與 Python adopter 的 canonical contracts，再讀 [Julia Wrapper](julia-wrapper.md) 看 Python↔Julia bridge，最後讀 [Julia Core](julia-core.md) 與 [Julia Plotting](julia-plotting.md) 查看 Julia-native execution 與 visualization surface。
+    Phase 1 研究工作流先讀 [Julia Scientific Core](julia-scientific-core.md)。
+    Application / Backend 相關邊界再讀 [Python Core](python-core.md) 與 [Julia Wrapper](julia-wrapper.md)。
+    舊有 Julia runtime surface 可補讀 [Julia Core](julia-core.md) 與 [Julia Plotting](julia-plotting.md)。
 
 !!! warning "Boundary"
     `Core` 不等於整個 app。
@@ -56,6 +58,7 @@ updated_by: codex
 
     | 頁面 | 核心聚焦 | Primary Code Surface |
     |---|---|---|
+    | [Julia Scientific Core](julia-scientific-core.md) | Phase-1 reusable superconducting-circuit construction、delayed lowering、Pluto research cockpit、basic simulation/sweep API | `core/julia/SuperconductingCircuitsCore/`, `notebooks/pluto/` |
     | [Julia Core](julia-core.md) | JosephsonCircuits-driven simulation runtime 與 direct Julia workflow boundary | canonical `core/` + Julia runtime surfaces；implementation evidence: `core/simulation/infrastructure/hbsolve.jl`, `src/julia/` |
     | [Julia Plotting](julia-plotting.md) | Julia-owned plotting / visualization helpers | `src/julia/plotting.jl`, `src/julia/utils.jl` |
 
@@ -64,6 +67,7 @@ updated_by: codex
 | 想回答的問題 | 應優先查看 |
 |---|---|
 | canonical circuit-definition / task / storage contract 由誰定義？ | [Python Core](python-core.md) |
+| Phase 1 reusable circuit component 與 Pluto workflow 由誰定義？ | [Julia Scientific Core](julia-scientific-core.md) |
 | Python application service 如何把 simulation config 送進 Julia？ | [Julia Wrapper](julia-wrapper.md) |
 | Julia runtime 目前真正負責哪些模擬能力？ | [Julia Core](julia-core.md) |
 | Julia plotting helper 與 figure contract 在哪裡？ | [Julia Plotting](julia-plotting.md) |

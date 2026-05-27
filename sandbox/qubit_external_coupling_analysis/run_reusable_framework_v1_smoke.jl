@@ -197,6 +197,30 @@ end
         bad_df = run_design_sweep(draft, sweep_plan(bad_axis); on_error=:record)
         @test size(bad_df, 1) == 1
         @test bad_df.success[1] == false
+
+        window_draft = CircuitDraft("window_sweep")
+        line_a = cpw_line!(window_draft, "line_a"; line=smoke_line(1.0e-3))
+        line_b = cpw_line!(window_draft, "line_b"; line=smoke_line(1.0e-3))
+        coupled_window!(
+            window_draft,
+            section_m(line_a, 100.0 * um_smoke, 200.0 * um_smoke),
+            section_m(line_b, 300.0 * um_smoke, 400.0 * um_smoke);
+            spec=smoke_window(100.0 * um_smoke),
+            id="window",
+        )
+        window_axis = sweep_parameters(
+            [
+                relation_parameter("window", :length_m) => (value -> value),
+                relation_parameter("window", :endpoint_a_stop_m) => (value -> 100.0 * um_smoke + value),
+                relation_parameter("window", :endpoint_b_stop_m) => (value -> 300.0 * um_smoke + value),
+            ];
+            values=[100.0, 120.0] .* um_smoke,
+            label="window length",
+            unit="m",
+        )
+        window_df = run_design_sweep(window_draft, sweep_plan(window_axis))
+        @test size(window_df, 1) == 2
+        @test all(window_df.success)
     end
 
     @testset "rejection cases" begin

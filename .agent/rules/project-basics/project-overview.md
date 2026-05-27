@@ -1,5 +1,6 @@
 ## Project Goal
 - **Mission**: Build a superconducting-circuit workbench with a separated frontend/backend architecture and first-class CLI support.
+- **Current development mode**: Heavy Development / No Compatible Fallback; prioritize stabilizing the current product for the next real deployment over preserving legacy compatibility paths.
 - **Core product surfaces**:
     - Data Browser
     - Circuit Definition Editor
@@ -26,4 +27,5 @@
     - support circuit definition, simulation, characterization, data management, task tracking, and result recovery in one platform
     - keep metadata, trace payloads, and provenance contracts explicit and reconstructible
     - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
+    - keep existing low-level migration/runtime/rebuild mechanisms when useful, but do not treat them as product compatibility guarantees unless an owner SoT says so
 - **Audience**: researchers, students, and developers working on superconducting-circuit simulation and analysis workflows.

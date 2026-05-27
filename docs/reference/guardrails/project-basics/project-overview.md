@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 rewrite branch 的產品使命、功能範疇、desktop 支援與 migration 方向。
-version: v2.4.0
-last_updated: 2026-03-25
+scope: 定義 current platform 的產品使命、功能範疇、desktop 支援與 heavy-development 方向。
+version: v2.5.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -23,6 +23,12 @@ updated_by: codex
 
 !!! info "How to read this page"
     先用這頁確認產品使命與核心 surface，再去看 `Tech Stack`、`Folder Structure`、`Backend Architecture` 等執行層 guardrails。這頁定的是產品邊界，不是實作細節。
+
+!!! important "Current development mode"
+    現階段是 **Heavy Development / No Compatible Fallback**。
+    專案已撤出「需要維持相容 fallback」的發佈準備階段；現在首要目標是把 current product 打穩，確保下一次真正部署上線時功能足夠充分且穩定。
+    後續 agent 應優先收斂 canonical product path，不要主動補 legacy compatibility path。
+    既有底層 migration、runtime 或 rebuild 機制可以先保留；只有在它們阻礙產品穩定或 owner SoT 要求時，才需要刪除或重寫。
 
 ## Overview Map
 
@@ -128,6 +134,7 @@ updated_by: codex
 ```markdown
 ## Project Goal
 - **Mission**: Build a superconducting-circuit workbench with a separated frontend/backend architecture and first-class CLI support.
+- **Current development mode**: Heavy Development / No Compatible Fallback; prioritize stabilizing the current product for the next real deployment over preserving legacy compatibility paths.
 - **Core product surfaces**:
     - Data Browser
     - Circuit Definition Editor
@@ -154,5 +161,6 @@ updated_by: codex
     - support circuit definition, simulation, characterization, data management, task tracking, and result recovery in one platform
     - keep metadata, trace payloads, and provenance contracts explicit and reconstructible
     - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
+    - keep existing low-level migration/runtime/rebuild mechanisms when useful, but do not treat them as product compatibility guarantees unless an owner SoT says so
 - **Audience**: researchers, students, and developers working on superconducting-circuit simulation and analysis workflows.
 ```

@@ -11,3 +11,4 @@
 - If `sc_core` and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
 - Treat root-level `src/` residues as migration evidence only; do not infer future architecture boundaries from them.
 - Record any intentional compatibility exception in the parity matrix or contract registry.
+- Compatibility fallback is opt-in during Heavy Development / No Compatible Fallback; do not add or preserve legacy fallback paths unless an owner SoT explicitly requires them.

@@ -1,11 +1,14 @@
 ## Contract Versioning
 - Treat circuit definitions, dataset/trace/result contracts, task contracts, session/workspace payloads, and machine-readable CLI outputs as version-aware surfaces.
-- Prefer additive evolution over breaking changes.
+- Current mode is **Heavy Development / No Compatible Fallback** until an owner SoT explicitly changes the release phase.
+- Backward compatibility is opt-in, not default; do not add dual-path adapters, legacy fallback UI, read-compat shims, or compatibility patches unless an owner SoT requires them.
 - Any breaking contract change MUST update:
     - reference docs
     - parity matrix
     - contract registry
-    - fallback/migration notes
-- During migration, assume frontend/backend/cli/`sc_core` evolve in lockstep on the same branch unless an explicit compatibility promise is documented.
-- Persisted DB/TraceStore/exported data MUST have fallback, migration, or read-compat semantics before breaking a contract.
+    - cutover/migration/rebuild/unsupported notes
+    - relevant tests
+- During heavy development, assume frontend/backend/cli/`sc_core` evolve in lockstep on the same branch unless an explicit compatibility promise is documented.
+- Persisted DB/TraceStore/exported data MUST have an explicit migration, rebuild, or unsupported-cutover story before breaking a contract; read-compat fallback is not required by default.
+- Existing low-level migration/runtime/rebuild mechanisms may remain; do not delete them solely because compatibility guarantees are paused.
 - Do not hide compatibility patches only inside adapters; document them.

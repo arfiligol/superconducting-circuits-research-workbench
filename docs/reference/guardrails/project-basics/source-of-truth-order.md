@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "定義 migration 過程中 reference docs、shared core、adapter、legacy behavior 的裁決順序"
-version: v1.4.0
-last_updated: 2026-03-21
+scope: "定義 heavy-development 過程中 reference docs、shared core、adapter、legacy behavior 的裁決順序"
+version: v1.5.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -69,6 +69,7 @@ updated_by: codex
 | `sc_core` 與 backend/frontend/cli adapter 不同 | 先修 adapter；若 `sc_core` 缺規格，再同步補 docs 與 `sc_core` |
 | registry / parity 與 owner docs 不同 | 以 owner docs 為準，先修 registry / parity |
 | intentional compatibility exception | 必須在 parity matrix 或 contract registry 顯式標記，不可只留在程式碼內 |
+| compatibility fallback 與 current owner SoT 衝突 | 以 current owner SoT 為準；fallback 是 opt-in，不是預設裁決 |
 
 ## Interpretation Rules
 
@@ -87,6 +88,8 @@ updated_by: codex
   發現 implementation 與 reference 不一致時，不可直接改文件湊合程式碼，除非使用者明確確認規格要變。
 - **Parity exceptions must be explicit**：
   若確定要保留相容特例，必須在 parity matrix 或 contract registry 顯式記錄，不能只留在程式碼內。
+- **Compatibility fallback is opt-in**：
+  現階段是 Heavy Development / No Compatible Fallback；除非 owner SoT 明確要求，不得用舊行為、舊資料或 legacy adapter 反向要求 current product path 保留相容層。
 
 ## Required Follow-up Documents
 
@@ -115,4 +118,5 @@ updated_by: codex
 - If `sc_core` and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
 - Treat root-level `src/` residues as migration evidence only; do not infer future architecture boundaries from them.
 - Record any intentional compatibility exception in the parity matrix or contract registry.
+- Compatibility fallback is opt-in during Heavy Development / No Compatible Fallback; do not add or preserve legacy fallback paths unless an owner SoT explicitly requires them.
 ```

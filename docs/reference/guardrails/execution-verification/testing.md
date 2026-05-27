@@ -10,7 +10,7 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: rewrite branch 的 backend、frontend、desktop、CLI 與 docs 測試規範。
+scope: current platform 的 backend、frontend、desktop、CLI 與 docs 測試規範。
 version: v2.4.0
 last_updated: 2026-05-27
 updated_by: codex
@@ -18,7 +18,7 @@ updated_by: codex
 
 # Testing
 
-本頁定義 rewrite branch 的測試入口與最低測試期待。
+本頁定義 current platform 的測試入口與最低測試期待。
 
 !!! info "How to read this page"
     先判斷你碰的是 `root orchestration`、`backend/core`、`frontend`、`desktop` 還是 `docs`。
@@ -63,7 +63,7 @@ uv run pytest
     npm run test:e2e --prefix frontend
     ```
 
-rewrite foundation 目前只要求 deterministic unit tests。
+foundation workflow 目前只要求 deterministic unit tests。
 不要用 placeholder E2E 假裝覆蓋尚未遷移的真實 workflow。
 
 !!! warning "Frontend review needs real browser evidence"

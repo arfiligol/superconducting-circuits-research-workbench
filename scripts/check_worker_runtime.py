@@ -126,43 +126,43 @@ def _print_human_summary(payload: dict[str, object]) -> None:
     processors = payload["runtime_processors"]
 
     if redis_status["reachable"]:
-        print(f"[platform-check] redis: ok ({redis_status['redis_url']})")
+        print(f"[runtime-check] redis: ok ({redis_status['redis_url']})")
     else:
         print(
-            "[platform-check] redis: unavailable "
+            "[runtime-check] redis: unavailable "
             f"({redis_status['error_code']}: {redis_status['detail']})"
         )
 
     if app_status.get("reachable") is True:
-        print(f"[platform-check] app: ok ({app_status.get('service')})")
+        print(f"[runtime-check] app: ok ({app_status.get('service')})")
     elif app_status.get("reachable") is False:
-        print(f"[platform-check] app: unavailable ({app_status.get('error')})")
+        print(f"[runtime-check] app: unavailable ({app_status.get('error')})")
 
     for lane in ("simulation", "characterization"):
         lane_status = workers[lane]
         print(
-            f"[platform-check] {lane} workers: "
+            f"[runtime-check] {lane} workers: "
             f"{lane_status['worker_count']} ({', '.join(lane_status['worker_names']) or 'none'})"
         )
 
     unexpected_workers = payload["unexpected_workers"]
     if unexpected_workers:
         print(
-            "[platform-check] unexpected workers: "
+            "[runtime-check] unexpected workers: "
             + ", ".join(unexpected_workers)
         )
 
     if processors.get("reachable") is True:
         print(
-            "[platform-check] runtime processor lanes: "
+            "[runtime-check] runtime processor lanes: "
             + ", ".join(processors["worker_summary_lanes"])
         )
     elif processors.get("reachable") is False:
         print(
-            f"[platform-check] runtime processors: unavailable ({processors.get('error')})"
+            f"[runtime-check] runtime processors: unavailable ({processors.get('error')})"
         )
 
-    print(f"[platform-check] state: {payload['state']}")
+    print(f"[runtime-check] state: {payload['state']}")
 
 
 if __name__ == "__main__":

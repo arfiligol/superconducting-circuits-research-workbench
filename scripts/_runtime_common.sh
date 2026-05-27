@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-platform_root_dir() {
+runtime_root_dir() {
   cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
 }
 
-platform_app_host() {
+runtime_app_host() {
   printf '%s\n' "${SC_APP_HOST:-127.0.0.1}"
 }
 
-platform_app_port() {
+runtime_app_port() {
   printf '%s\n' "${SC_APP_PORT:-8000}"
 }
 
-platform_app_url() {
-  printf 'http://%s:%s\n' "$(platform_app_host)" "$(platform_app_port)"
+runtime_app_url() {
+  printf 'http://%s:%s\n' "$(runtime_app_host)" "$(runtime_app_port)"
 }
 
-platform_load_env() {
+runtime_load_env() {
   local root_dir="$1"
   if [[ -f "$root_dir/.env" ]]; then
     set -a
@@ -27,10 +27,10 @@ platform_load_env() {
   fi
 }
 
-platform_require_path() {
+runtime_require_path() {
   local path="$1"
   local hint="$2"
-  local prefix="${3:-platform}"
+  local prefix="${3:-runtime}"
 
   if [[ -e "$path" ]]; then
     return
@@ -41,10 +41,10 @@ platform_require_path() {
   exit 1
 }
 
-platform_require_free_port() {
+runtime_require_free_port() {
   local port="$1"
   local name="$2"
-  local prefix="${3:-platform}"
+  local prefix="${3:-runtime}"
   local listeners
 
   listeners="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
@@ -57,7 +57,7 @@ platform_require_free_port() {
   exit 1
 }
 
-platform_start_service() {
+runtime_start_service() {
   local pid_dir="$1"
   local log_dir="$2"
   local name="$3"
@@ -113,7 +113,7 @@ PY
   fi
 }
 
-platform_stop_service() {
+runtime_stop_service() {
   local pid_dir="$1"
   local name="$2"
   local prefix="${3:-stop}"
@@ -136,7 +136,7 @@ platform_stop_service() {
   rm -f "$pid_file"
 }
 
-platform_wait_for_url() {
+runtime_wait_for_url() {
   local name="$1"
   local url="$2"
   local log_file="$3"
@@ -168,7 +168,7 @@ platform_wait_for_url() {
   exit 1
 }
 
-platform_record_listen_pid() {
+runtime_record_listen_pid() {
   local pid_dir="$1"
   local name="$2"
   local port="$3"
@@ -182,7 +182,7 @@ platform_record_listen_pid() {
   fi
 }
 
-platform_check_redis() {
+runtime_check_redis() {
   local root_dir="$1"
   local prefix="${2:-start}"
   if uv run python "$root_dir/scripts/check_worker_runtime.py" --redis-only >/dev/null; then
@@ -194,7 +194,7 @@ platform_check_redis() {
   exit 1
 }
 
-platform_wait_for_runtime_health() {
+runtime_wait_for_runtime_health() {
   local root_dir="$1"
   local app_url="${2:-http://127.0.0.1:8000}"
 

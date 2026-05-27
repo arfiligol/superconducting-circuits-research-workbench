@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 rewrite branch 的專案目標、技術方向、結構與單一真理順序索引。
-version: v1.3.0
-last_updated: 2026-03-14
+scope: 定義 current platform 的專案目標、heavy-development 階段、技術方向、結構與單一真理順序索引。
+version: v1.4.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -24,6 +24,10 @@ updated_by: codex
 !!! info "What this section owns"
     `Project Basics` 定義整個 workspace 的共同前提。
     如果問題在問「我們到底在做什麼、用什麼做、檔案應該放哪、衝突時誰說了算」，答案都應該先從這裡找。
+
+!!! important "Development phase"
+    現階段是 Heavy Development / No Compatible Fallback。
+    後續工作以打穩 current product、準備下一次真正部署上線為優先；不要把 backward-compatible fallback 當成預設要求。
 
 ## Page Map
 
@@ -43,7 +47,8 @@ updated_by: codex
 
 ```markdown
 ## Project Basics
-- Project Basics 定義 rewrite branch 的使命、範疇、技術棧與結構。
+- Project Basics 定義 current platform 的使命、範疇、heavy-development 階段、技術棧與結構。
+- Current development mode is Heavy Development / No Compatible Fallback; prioritize stabilizing the current product over preserving backward-compatible fallback paths.
 - 任何影響整體協作與架構一致性的變更，必須先更新本區。
 - 目前 UI 方向為 Next.js，API 方向為 FastAPI，CLI 必須保留且與核心能力一致。
 - backend 的責任邊界與內部藍圖由 `backend-architecture.md` 定義。

@@ -3,7 +3,7 @@ name: Foundation
 on:
   pull_request:
     paths:
-      - ".github/workflows/rewrite-foundation.yml"
+      - ".github/workflows/foundation.yml"
       - "package.json"
       - "README.md"
       - ".gitignore"
@@ -13,7 +13,7 @@ on:
       - "desktop/**"
   push:
     paths:
-      - ".github/workflows/rewrite-foundation.yml"
+      - ".github/workflows/foundation.yml"
       - "package.json"
       - "README.md"
       - ".gitignore"
