@@ -1,4 +1,4 @@
-"""Startup reconcile helpers shared by app and worker entrypoints."""
+"""Startup reconcile helpers shared by task runtime entrypoints."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def default_stale_timeout_seconds() -> int:
     """Return the safe startup reconcile timeout from environment."""
-    raw_value = os.getenv("SC_WORKER_STALE_TIMEOUT_SECONDS", "300").strip()
+    raw_value = os.getenv("SC_TASK_STALE_TIMEOUT_SECONDS", "300").strip()
     return max(1, int(raw_value or "300"))
 
 

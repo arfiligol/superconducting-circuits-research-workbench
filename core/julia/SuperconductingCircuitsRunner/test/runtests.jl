@@ -29,9 +29,19 @@ using Test
     @test claim.design_id == "design_runner_smoke"
 end
 
-@testset "smoke result package" begin
+@testset "runner dispatch" begin
     mktempdir() do dir
-        manifest_path = write_smoke_result_package(dir; task_id="task_smoke")
+        smoke_claim = SuperconductingCircuitsRunner.RunnerClaim(
+            "task_smoke",
+            "julia_runner_smoke",
+            Dict{String,Any}(),
+            nothing,
+            nothing,
+            dir,
+            joinpath(dir, "result.zarr"),
+            joinpath(dir, "manifest.json"),
+        )
+        manifest_path = execute_task(smoke_claim)
         @test isfile(manifest_path)
         @test isdir(joinpath(dir, "result.zarr"))
         @test isfile(joinpath(dir, "result.zarr", ".zgroup"))
@@ -48,6 +58,87 @@ end
         @test manifest.traces[1].real_path == "/traces/S11/real"
         @test manifest.traces[1].imag_path == "/traces/S11/imag"
         @test manifest.traces[1].shape == [5]
+        @test manifest_sha256(manifest_path) isa String
+
+        frequency_claim = SuperconductingCircuitsRunner.RunnerClaim(
+            "task_frequency",
+            "julia_simulation_frequency_sweep",
+            Dict{String,Any}(),
+            nothing,
+            nothing,
+            dir,
+            joinpath(dir, "result.zarr"),
+            joinpath(dir, "manifest.json"),
+        )
+        @test_throws ErrorException execute_task(frequency_claim)
+
+        unknown_claim = SuperconductingCircuitsRunner.RunnerClaim(
+            "task_unknown",
+            "unknown_kind",
+            Dict{String,Any}(),
+            nothing,
+            nothing,
+            dir,
+            joinpath(dir, "result.zarr"),
+            joinpath(dir, "manifest.json"),
+        )
+        @test_throws ErrorException execute_task(unknown_claim)
+    end
+end
+
+@testset "trace zarr package writer" begin
+    mktempdir() do dir
+        frequency = collect(range(4.0e9, 6.0e9; length=5))
+        sweep1 = Float64[1.0, 2.0]
+        sweep2 = Float64[10.0, 20.0]
+        real = reshape(collect(Float64, 1:20), 5, 2, 2)
+        imag = zeros(Float64, 5, 2, 2)
+
+        manifest_path = write_trace_zarr_package(
+            dir;
+            task_id="task_3d",
+            axes=[
+                Dict{String,Any}(
+                    "name" => "frequency",
+                    "unit" => "Hz",
+                    "path" => "/axes/frequency",
+                    "values" => frequency,
+                ),
+                Dict{String,Any}(
+                    "name" => "window_length",
+                    "unit" => "m",
+                    "path" => "/axes/window_length",
+                    "values" => sweep1,
+                ),
+                Dict{String,Any}(
+                    "name" => "coupling_cap",
+                    "unit" => "F",
+                    "path" => "/axes/coupling_cap",
+                    "values" => sweep2,
+                ),
+            ],
+            traces=[
+                Dict{String,Any}(
+                    "trace_key" => "S21",
+                    "family" => "s_matrix",
+                    "parameter" => "S21",
+                    "representation" => "complex",
+                    "real" => real,
+                    "imag" => imag,
+                    "axes" => ["frequency", "window_length", "coupling_cap"],
+                    "chunk_shape" => [5, 1, 1],
+                ),
+            ],
+        )
+
+        manifest = JSON3.read(read(manifest_path, String))
+        @test manifest.task_id == "task_3d"
+        @test manifest.traces[1].trace_key == "S21"
+        @test manifest.traces[1].shape == [5, 2, 2]
+        @test manifest.traces[1].chunk_shape == [5, 1, 1]
+        @test manifest.traces[1].axes[2].path == "/axes/window_length"
+        @test isfile(joinpath(dir, "result.zarr", "traces", "S21", "real", "0.0.0"))
+        @test isfile(joinpath(dir, "result.zarr", "traces", "S21", "real", "0.1.1"))
         @test manifest_sha256(manifest_path) isa String
     end
 end

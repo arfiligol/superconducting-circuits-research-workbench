@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的 Notebook/Application/Julia Runner 技術選型與工具規範。
-version: v3.0.0
+version: v3.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -41,7 +41,7 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；Noteboo
 !!! warning "Root `src/` is not the future umbrella"
     package-internal `src/` 可以存在於各 top-level surface 內部，
     但 root-level `src/` 不再是未來 canonical topology 的主要容器。
-    `src/app/`、`src/worker/` 若仍存在，都應按 migration residue 理解。
+    root-level runtime or app code must not be recreated there.
 
 ## Stack Map
 
@@ -69,7 +69,8 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；Noteboo
 | `rich` | developer-facing logging output when useful |
 | `ruff`, `basedpyright`, `pytest` | lint / type / test |
 
-Application backend dependencies must not include `juliacall`, `nicegui`, `rq`, `redis`, `sc-cli`, `typer`, `lmfit`, `scikit-rf`, `matplotlib`, `plotly`, or `pandas` unless a new SoT explicitly reintroduces them for the backend.
+Application backend dependencies must stay focused on the control/data plane.
+Do not add legacy UI runtimes, queue-service clients, command-line product packages, in-process Julia bridges, or notebook-only analysis/plotting libraries unless a new SoT explicitly reintroduces them for the backend.
 Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml` or a notebook dependency group, not in the application backend.
 
 ### TypeScript / JavaScript
@@ -117,7 +118,7 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 - 不可把業務流程塞進 Electron main process
 - desktop 包裝不改變 canonical frontend/backend/runner 邊界
 - desktop local mode starts frontend, Python Backend, and Julia Runner
-- desktop local mode must not start Redis/RQ
+- desktop local mode must not start a separate queue worker service
 
 ### Backend
 
@@ -145,7 +146,7 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 
 ### Scripts
 
-- No active CLI product surface.
+- No active command-line product surface.
 - `scripts/` may contain dev/build/test/maintenance helpers only.
 - Scripts are not user-facing workflow contracts and must not own business logic.
 
@@ -156,11 +157,11 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 - Julia Runner does not write formal metadata DB records
 - Python Backend validates Runner manifests and publishes result Zarr into official TraceStore
 
-### Migration Residue Notes
+### Removed Surface Notes
 
-- root `backend/`, `frontend/`, and `desktop/` are migration residues once code is moved to `app/`
-- `cli/`, NiceGUI code, and root `src/worker/` are removed from active package discovery
-- 上述 root `src/` 內容都不應被重新合法化成 canonical target topology
+- root `backend/`, `frontend/`, and `desktop/` must not exist as active surfaces after relocation to `app/`
+- root command workflow, legacy UI code, and root runtime-worker code are removed from active package discovery
+- root `src/` must not be re-legitimized as canonical target topology
 
 ## Storage Direction
 
@@ -229,13 +230,13 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
     - frontend
     - Python Backend
     - Julia Runner
-    - no Redis/RQ
+    - no separate queue service
 - **Scripts**:
     - `scripts/dev/`
     - `scripts/build/`
     - `scripts/test/`
     - `scripts/maintenance/`
-    - no active CLI product surface
+    - no active command-line product surface
 - **Topology**:
     - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
     - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces

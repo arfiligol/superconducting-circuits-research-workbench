@@ -32,13 +32,13 @@
     - frontend
     - Python Backend
     - Julia Runner
-    - no Redis/RQ
+    - no separate queue service
 - **Scripts**:
     - `scripts/dev/`
     - `scripts/build/`
     - `scripts/test/`
     - `scripts/maintenance/`
-    - no active CLI product surface
+    - no active command-line product surface
 - **Topology**:
     - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
     - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces

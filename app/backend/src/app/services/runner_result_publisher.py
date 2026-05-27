@@ -6,9 +6,11 @@ import shutil
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import product
 from pathlib import Path
 from typing import Any, cast
 
+import zarr
 from sc_core.execution import TaskResultHandle
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -82,7 +84,6 @@ class RunnerResultPublisher:
         runner_id: str,
         manifest_path: str,
         manifest_sha256: str | None = None,
-        output_target: Mapping[str, object] | None = None,
     ) -> RunnerPublicationResult:
         task = self._task_service.get_task(task_id)
         self._update_task(
@@ -118,7 +119,7 @@ class RunnerResultPublisher:
         self._validate_manifest_identity(manifest, task_id=task_id)
         zarr_root = self._resolve_zarr_root(manifest_file, manifest)
         traces = self._validate_zarr_layout(zarr_root, manifest)
-        dataset_id, design_id = self._resolve_output_target(task, output_target)
+        dataset_id, design_id = self._resolve_output_target(task)
 
         self._update_task(
             task,
@@ -138,28 +139,43 @@ class RunnerResultPublisher:
                 details={"store_key": store_key},
             )
         target_zarr.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(zarr_root, target_zarr)
+        target_tmp = target_zarr.with_name(f"{target_zarr.name}.tmp")
+        if target_tmp.exists():
+            shutil.rmtree(target_tmp)
 
-        artifact_dir = self._artifacts_root() / "tasks" / str(task_id)
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        manifest_artifact = artifact_dir / "manifest.json"
-        shutil.copy2(manifest_file, manifest_artifact)
-        logs_dir = manifest_file.parent / "logs"
-        if logs_dir.exists():
-            target_logs_dir = artifact_dir / "logs"
-            if target_logs_dir.exists():
-                shutil.rmtree(target_logs_dir)
-            shutil.copytree(logs_dir, target_logs_dir)
+        target_created = False
+        try:
+            shutil.copytree(zarr_root, target_tmp)
+            self._validate_zarr_readability(target_tmp, traces)
+            target_tmp.rename(target_zarr)
+            target_created = True
 
-        result_handles, trace_payload = self._persist_publication_metadata(
-            task=task,
-            traces=traces,
-            dataset_id=dataset_id,
-            design_id=design_id,
-            batch_id=batch_id,
-            store_key=store_key,
-            store_uri=str(target_zarr),
-        )
+            artifact_dir = self._artifacts_root() / "tasks" / str(task_id)
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            manifest_artifact = artifact_dir / "manifest.json"
+            shutil.copy2(manifest_file, manifest_artifact)
+            logs_dir = manifest_file.parent / "logs"
+            if logs_dir.exists():
+                target_logs_dir = artifact_dir / "logs"
+                if target_logs_dir.exists():
+                    shutil.rmtree(target_logs_dir)
+                shutil.copytree(logs_dir, target_logs_dir)
+
+            result_handles, trace_payload = self._persist_publication_metadata(
+                task=task,
+                traces=traces,
+                dataset_id=dataset_id,
+                design_id=design_id,
+                batch_id=batch_id,
+                store_key=store_key,
+                store_uri=str(target_zarr),
+            )
+        except Exception:
+            if target_tmp.exists():
+                shutil.rmtree(target_tmp)
+            if target_created and target_zarr.exists():
+                shutil.rmtree(target_zarr)
+            raise
         trace_batch_record = build_metadata_record_ref(
             "trace_batch",
             f"trace_batch:runner:{task_id}:{batch_id}",
@@ -188,7 +204,9 @@ class RunnerResultPublisher:
             store_key=store_key,
             store_uri=str(target_zarr),
             manifest_artifact_path=str(manifest_artifact),
-            trace_ids=tuple(trace.trace_key for trace in traces),
+            trace_ids=tuple(
+                _published_trace_id(batch_id, trace.trace_key) for trace in traces
+            ),
         )
 
     def _persist_publication_metadata(
@@ -208,6 +226,8 @@ class RunnerResultPublisher:
             version=1,
         )
         first_trace = traces[0]
+        # This is a preview/primary payload for task summaries. The full trace set
+        # authority is the published trace rows plus result_handles below.
         trace_payload = build_trace_payload_ref(
             payload_role="dataset_primary",
             store_key=store_key,
@@ -250,13 +270,14 @@ class RunnerResultPublisher:
                 session.flush()
 
             for trace in traces:
+                trace_id = _published_trace_id(batch_id, trace.trace_key)
                 result_record = build_metadata_record_ref(
                     "result_handle",
-                    f"result_handle:runner:{task.task_id}:{trace.trace_key}",
+                    f"result_handle:runner:{task.task_id}:{trace_id}",
                     version=1,
                 )
                 result_handle = build_result_handle_ref(
-                    handle_id=f"runner-result:{task.task_id}:{trace.trace_key}",
+                    handle_id=f"runner-result:{task.task_id}:{trace_id}",
                     kind="simulation_trace",
                     status="materialized",
                     label=f"Runner trace {trace.trace_key}",
@@ -277,14 +298,14 @@ class RunnerResultPublisher:
                     session,
                     dataset_id=dataset_id,
                     design_id=design_id,
-                    trace_id=trace.trace_key,
+                    trace_id=trace_id,
                 ):
                     session.add(
                         RewritePublishedSimulationTraceRecord(
                             publication_id=publication.id,
                             dataset_id=dataset_id,
                             design_id=design_id,
-                            trace_id=trace.trace_key,
+                            trace_id=trace_id,
                             family=trace.family,
                             parameter=trace.parameter,
                             representation=trace.representation,
@@ -371,12 +392,9 @@ class RunnerResultPublisher:
     def _resolve_output_target(
         self,
         task: TaskDetail,
-        output_target: Mapping[str, object] | None,
     ) -> tuple[str, str]:
-        dataset_id = _optional_string(output_target, "dataset_id") if output_target else None
-        design_id = _optional_string(output_target, "design_id") if output_target else None
-        dataset_id = dataset_id or task.dataset_id
-        design_id = design_id or task.definition_id or f"design_task_{task.task_id}"
+        dataset_id = task.dataset_id
+        design_id = task.definition_id or f"design_task_{task.task_id}"
         if dataset_id is None:
             raise service_error(
                 422,
@@ -489,6 +507,7 @@ class RunnerResultPublisher:
             trace = self._coerce_trace_manifest(raw_trace)
             self._validate_trace_arrays(zarr_root, trace)
             traces.append(trace)
+        self._validate_zarr_readability(zarr_root, traces)
         return tuple(traces)
 
     def _coerce_trace_manifest(self, raw_trace: object) -> _TraceManifest:
@@ -538,6 +557,12 @@ class RunnerResultPublisher:
                     message="Runner axis length does not match declared trace shape.",
                     details={"axis": axis.get("name"), "path": path},
                 )
+            self._validate_chunk_files_exist(
+                zarr_root / _zarr_relative_path(path),
+                shape=expected_shape,
+                chunk_shape=tuple(int(value) for value in metadata["chunks"]),
+                zarr_path=path,
+            )
 
     def _validate_array_path(
         self,
@@ -572,20 +597,84 @@ class RunnerResultPublisher:
                 message="Runner trace dtype does not match manifest.",
                 details={"path": zarr_path},
             )
+        self._validate_chunk_files_exist(
+            zarr_root / _zarr_relative_path(zarr_path),
+            shape=trace.shape,
+            chunk_shape=trace.chunk_shape,
+            zarr_path=zarr_path,
+        )
+
+    def _validate_chunk_files_exist(
+        self,
+        array_root: Path,
+        *,
+        shape: tuple[int, ...],
+        chunk_shape: tuple[int, ...],
+        zarr_path: str,
+    ) -> None:
+        for chunk_key in _expected_zarr_chunk_keys(shape, chunk_shape):
+            if not (array_root / chunk_key).is_file():
+                raise service_error(
+                    422,
+                    code="runner_zarr_unreadable",
+                    category="validation",
+                    message="Runner Zarr output could not be read as declared.",
+                    details={"path": zarr_path, "missing_chunk": chunk_key},
+                )
+
+    def _validate_zarr_readability(
+        self,
+        zarr_root: Path,
+        traces: Sequence[_TraceManifest],
+    ) -> None:
+        try:
+            root = zarr.open_group(str(zarr_root), mode="r")
+            for trace in traces:
+                real = root[_zarr_relative_path(trace.real_path)]
+                imag = root[_zarr_relative_path(trace.imag_path)]
+                if tuple(real.shape) != trace.shape or tuple(imag.shape) != trace.shape:
+                    raise ValueError("trace array shape mismatch")
+                if (
+                    tuple(real.chunks) != trace.chunk_shape
+                    or tuple(imag.chunks) != trace.chunk_shape
+                ):
+                    raise ValueError("trace array chunk shape mismatch")
+                sample_index = tuple(0 for _ in trace.shape)
+                _ = real[sample_index]
+                _ = imag[sample_index]
+                for axis_index, axis in enumerate(trace.axes):
+                    axis_path = str(axis.get("path") or "")
+                    axis_array = root[_zarr_relative_path(axis_path)]
+                    if tuple(axis_array.shape) != (trace.shape[axis_index],):
+                        raise ValueError("axis array shape mismatch")
+                    _ = axis_array[0]
+        except Exception as exc:
+            raise service_error(
+                422,
+                code="runner_zarr_unreadable",
+                category="validation",
+                message="Runner Zarr output could not be read as declared.",
+            ) from exc
 
     def _resolve_relative_path_under(self, value: str, *, root: Path, field: str) -> Path:
         self._reject_unsafe_relative_path(value, field=field)
-        path = (_repo_root() / value).resolve()
-        try:
-            path.relative_to(root)
-        except ValueError as exc:
-            raise service_error(
-                422,
-                code="runner_path_outside_allowed_root",
-                category="validation",
-                message=f"{field} must stay under {root}.",
-            ) from exc
-        return path
+        candidates = (
+            (_repo_root() / value).resolve(),
+            (root.parent / value).resolve(),
+            (root / value).resolve(),
+        )
+        for path in candidates:
+            try:
+                path.relative_to(root)
+            except ValueError:
+                continue
+            return path
+        raise service_error(
+            422,
+            code="runner_path_outside_allowed_root",
+            category="validation",
+            message=f"{field} must stay under {root}.",
+        )
 
     def _reject_unsafe_relative_path(self, value: str, *, field: str) -> None:
         path = Path(value)
@@ -647,9 +736,8 @@ def _axis_rows(trace: _TraceManifest) -> list[dict[str, object]]:
     return rows
 
 
-def _optional_string(payload: Mapping[str, object], key: str) -> str | None:
-    value = payload.get(key)
-    return value if isinstance(value, str) and len(value) > 0 else None
+def _published_trace_id(batch_id: str, trace_key: str) -> str:
+    return f"{batch_id}:{trace_key}"
 
 
 def _read_array_metadata(array_root: Path) -> Mapping[str, object]:
@@ -682,12 +770,36 @@ def _int_tuple(value: object, *, field: str) -> tuple[int, ...]:
             code="runner_manifest_shape_invalid",
             category="validation",
             message=f"{field} must be a non-empty integer array.",
-        )
+    )
     return tuple(int(item) for item in value)
 
 
-def _zarr_relative_path(value: str) -> Path:
-    return Path(value.lstrip("/"))
+def _expected_zarr_chunk_keys(
+    shape: tuple[int, ...],
+    chunk_shape: tuple[int, ...],
+) -> tuple[str, ...]:
+    if len(shape) != len(chunk_shape):
+        raise service_error(
+            422,
+            code="runner_trace_chunk_shape_mismatch",
+            category="validation",
+            message="Runner trace chunk rank does not match manifest shape rank.",
+        )
+    chunk_ranges: list[range] = []
+    for dimension, chunk_dimension in zip(shape, chunk_shape, strict=True):
+        if dimension < 0 or chunk_dimension <= 0:
+            raise service_error(
+                422,
+                code="runner_manifest_shape_invalid",
+                category="validation",
+                message="Runner manifest shapes and chunks must be positive.",
+            )
+        chunk_ranges.append(range((dimension + chunk_dimension - 1) // chunk_dimension))
+    return tuple(".".join(str(value) for value in index) for index in product(*chunk_ranges))
+
+
+def _zarr_relative_path(value: str) -> str:
+    return value.lstrip("/")
 
 
 def _normalize_dtype(value: str) -> str:

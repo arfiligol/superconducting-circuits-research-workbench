@@ -20,7 +20,7 @@
     - Julia Runner is the async compute plane
     - Electron is the local desktop shell around frontend, backend, and runner
     - Pluto is the direct Julia research cockpit
-    - CLI, NiceGUI, Redis/RQ, and Python JuliaCall execution are no longer active product/runtime surfaces
+    - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are no longer active product/runtime surfaces
 - **Core values**:
     - scientific accuracy
     - reproducible workflows
@@ -29,5 +29,5 @@
     - support notebook research, application data browsing, async simulation/analysis, task tracking, and result recovery in one platform
     - keep metadata, trace payloads, Runner manifests, and provenance contracts explicit and reconstructible
     - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
-    - remove active CLI/NiceGUI/Redis/RQ/Python-JuliaCall entrypoints instead of preserving compatibility fallbacks
+    - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving compatibility fallbacks
 - **Audience**: researchers, students, and developers working on superconducting-circuit simulation and analysis workflows.

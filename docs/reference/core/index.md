@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Core reference 索引，條列 Julia Core、Julia Runner 與 Python contracts。
-version: v0.7.0
+version: v0.8.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -25,7 +25,7 @@ Application session state, HTTP transport, UI state, and desktop lifecycle live 
 1. [Julia Scientific Core](julia-scientific-core.md) for reusable Julia circuit and analysis logic.
 2. [Julia Compute Boundary](julia-wrapper.md) for the Core/Runner split.
 3. [Python Core](python-core.md) for Python-owned canonical contracts.
-4. [Julia Core](julia-core.md) and [Julia Plotting](julia-plotting.md) for remaining Julia-native references.
+4. [Julia Core](julia-core.md) for the concrete Julia package surfaces.
 
 ## Ownership Rules
 
@@ -44,7 +44,6 @@ Application session state, HTTP transport, UI state, and desktop lifecycle live 
 | [Julia Compute Boundary](julia-wrapper.md) | Julia Core and Julia Runner responsibility split | `core/julia/SuperconductingCircuitsCore/`, `core/julia/SuperconductingCircuitsRunner/` |
 | [Julia Scientific Core](julia-scientific-core.md) | reusable superconducting-circuit construction, delayed lowering, Pluto research cockpit | `core/julia/SuperconductingCircuitsCore/`, `notebooks/pluto/` |
 | [Julia Core](julia-core.md) | Julia-native simulation boundary | `core/julia/` |
-| [Julia Plotting](julia-plotting.md) | Julia-owned plotting helpers | Julia plotting modules and notebooks |
 
 ## Related
 

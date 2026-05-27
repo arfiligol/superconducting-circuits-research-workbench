@@ -80,7 +80,7 @@ The local stack starts:
 - Python Backend on `http://127.0.0.1:8000`
 - Julia Runner polling the backend runner API
 
-Redis/RQ is not part of the local runtime.
+No separate queue service is part of the local runtime.
 
 ## Validation
 
@@ -136,9 +136,9 @@ Build the static docs with:
 
 ## Current Boundaries
 
-- No active CLI product surface.
-- No active NiceGUI runtime.
-- No Redis/RQ local worker runtime.
+- No user-facing command-line workflow surface.
+- No retired Python UI runtime.
+- No separate local queue worker runtime.
 - No large ND arrays over HTTP/JSON.
 - No cross-language complex dtype reliance; complex traces are real/imag Zarr arrays.
 

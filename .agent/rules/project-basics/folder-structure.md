@@ -6,9 +6,9 @@
 - **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
 - **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
 - **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
-- **No CLI product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
-- **Archived NiceGUI / CLI / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
-- **`src/worker/`** is old runtime residue, not a canonical development surface.
+- **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
+- **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
+- **Root worker runtime folder** must not be recreated as a runtime surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
 - **Plans** go to `Plans/` only as active multi-agent coordination artifacts; Planning & Reviewing Agents own creation and cleanup, and long-term decisions must move to `docs/reference/**`.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.

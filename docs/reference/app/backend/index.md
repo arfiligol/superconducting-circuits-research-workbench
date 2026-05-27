@@ -41,7 +41,7 @@ The Python Backend owns the control plane and data plane. It does not own heavy 
 
 ## Not Backend Runtime
 
-The backend must not run JosephsonCircuits through JuliaCall as an app execution path, start Redis/RQ workers, or own active CLI/NiceGUI surfaces.
+The backend must not run JosephsonCircuits through an in-process Julia bridge as an app execution path, start a separate queue worker service, or own user-facing command/UI surfaces outside the current app.
 
 ## Related
 

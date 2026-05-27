@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Notebook Interface、Application Interface、Python Backend、Julia Runner 與 TraceStore 的 owner boundary
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -51,7 +51,7 @@ Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electro
 
 ## Removed Product Surfaces
 
-CLI, NiceGUI, Redis/RQ workers, Python-in-process JuliaCall simulation, Simulation Workbench, Characterization Workbench, and Schemdraw standalone workflow are not active product/runtime surfaces.
+User-facing command workflows, retired Python UI runtimes, separate local queue workers, Python-in-process Julia simulation, Simulation Workbench, Characterization Workbench, and Schemdraw standalone workflow are not active product/runtime surfaces.
 
 If a historical document mentions one of those surfaces, the current architecture pages override it.
 

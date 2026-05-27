@@ -129,7 +129,7 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceSt
 - Use `_agent_catalog.yml` to load only task-relevant guardrails instead of loading the full tree.
 - Current architecture is Notebook Interface + Electron Application Interface + Julia Runner Compute Plane.
 - Python Backend is the control/data plane; Julia Runner is the compute plane; Backend-managed TraceStore is the official numeric authority.
-- CLI, NiceGUI, Redis/RQ workers, and Python JuliaCall execution are legacy/migration evidence, not active product/runtime surfaces.
+- Legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are migration evidence, not active product/runtime surfaces.
 - `.agent/rules/` must be synchronized one-to-one from each guardrail file's `## Agent Rule` block whenever guardrail source changes.
 ```
     安裝與載入是兩件不同的事；任務中通常只需要載入少數必要規則。

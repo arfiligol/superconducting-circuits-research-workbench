@@ -52,6 +52,13 @@ class TaskRepository(Protocol):
 
     def get_task(self, task_id: int) -> TaskDetail | None: ...
 
+    def claim_next_queued_task(
+        self,
+        runner_id: str,
+        claimed_at: str,
+        workspace_id: str,
+    ) -> TaskDetail | None: ...
+
     def get_task_history_view(self, task_id: int) -> TaskHistoryView | None: ...
 
     def list_task_events(self, task_id: int) -> Sequence[TaskEvent]: ...
@@ -115,6 +122,17 @@ class TaskService:
             if self._matches_query(task, query)
         ]
         return _sort_tasks(tasks)[: query.limit]
+
+    def claim_next_queued_task(self, *, runner_id: str, claimed_at: str) -> TaskDetail | None:
+        session = self._session_repository.get_session_state()
+        task = self._repository.claim_next_queued_task(
+            runner_id,
+            claimed_at,
+            session.workspace_id,
+        )
+        if task is None:
+            return None
+        return self.get_task(task.task_id)
 
     def get_queue_view(self, query: TaskListQuery) -> TaskQueueView:
         session = self._session_repository.get_session_state()

@@ -19,7 +19,7 @@ def test_runner_claim_complete_publishes_staged_zarr() -> None:
     assert claim_response.status_code == 200
     claim_payload = claim_response.json()["data"]
     assert claim_payload["task"]["task_id"] == str(created["task_id"])
-    assert claim_payload["task"]["task_kind"] == "julia_runner_smoke"
+    assert claim_payload["task"]["task_kind"] == "julia_simulation_frequency_sweep"
 
     heartbeat_response = client.post(f"/runner/v1/tasks/{created['task_id']}/heartbeat")
     assert heartbeat_response.status_code == 200
@@ -44,32 +44,89 @@ def test_runner_claim_complete_publishes_staged_zarr() -> None:
         f"/runner/v1/tasks/{created['task_id']}/complete",
         json={
             "runner_id": "runner_test_001",
-            "manifest_path": claim_payload["staging"]["manifest"],
+            "manifest_path": f"tasks/{created['task_id']}/manifest.json",
             "manifest_sha256": manifest_sha256,
-            "output_target": {
-                "dataset_id": "local-dataset-001",
-                "design_id": "design_runner_smoke",
-            },
         },
     )
     assert complete_response.status_code == 200
     publication = complete_response.json()["data"]["publication"]
     assert publication["store_key"] == (
-        "datasets/local-dataset-001/designs/design_runner_smoke/"
+        f"datasets/local-dataset-001/designs/{LOCAL_SPACE_RESONATOR_DEFINITION_ID}/"
         f"batches/batch_{created['task_id']}.zarr"
     )
-    assert publication["trace_ids"] == ["S11"]
+    assert publication["trace_ids"] == [f"batch_{created['task_id']}:S11"]
 
     detail = client.get(f"/tasks/{created['task_id']}").json()["data"]
     assert detail["status"] == "completed"
 
     traces_response = client.get(
-        "/datasets/local-dataset-001/designs/design_runner_smoke/traces"
+        f"/datasets/local-dataset-001/designs/{LOCAL_SPACE_RESONATOR_DEFINITION_ID}/traces"
     )
     assert traces_response.status_code == 200
     traces = traces_response.json()["data"]["rows"]
-    assert [trace["trace_id"] for trace in traces] == ["S11"]
-    assert traces[0]["shape"] == [5]
+    published_trace = next(
+        trace for trace in traces if trace["trace_id"] == f"batch_{created['task_id']}:S11"
+    )
+    assert published_trace["shape"] == [5]
+
+
+def test_runner_complete_rejects_output_target_override() -> None:
+    created = _submit_simulation_task(summary="Runner output target guard.")
+    claim_payload = client.post("/runner/v1/tasks/claim").json()["data"]
+    task_dir = _repo_root() / Path(claim_payload["staging"]["task_dir"])
+    manifest_path = _write_small_result_package(task_dir, task_id=str(created["task_id"]))
+
+    response = client.post(
+        f"/runner/v1/tasks/{created['task_id']}/complete",
+        json={
+            "runner_id": "runner_test_001",
+            "manifest_path": claim_payload["staging"]["manifest"],
+            "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+            "output_target": {
+                "dataset_id": "other-dataset",
+                "design_id": "other-design",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "runner_complete_output_target_forbidden"
+
+
+def test_runner_complete_rejects_unreadable_zarr_chunk() -> None:
+    created = _submit_simulation_task(summary="Runner unreadable Zarr guard.")
+    claim_payload = client.post("/runner/v1/tasks/claim").json()["data"]
+    task_dir = _repo_root() / Path(claim_payload["staging"]["task_dir"])
+    manifest_path = _write_small_result_package(task_dir, task_id=str(created["task_id"]))
+    (task_dir / "result.zarr" / "traces" / "S11" / "real" / "0").unlink()
+
+    response = client.post(
+        f"/runner/v1/tasks/{created['task_id']}/complete",
+        json={
+            "runner_id": "runner_test_001",
+            "manifest_path": claim_payload["staging"]["manifest"],
+            "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "runner_zarr_unreadable"
+
+
+def test_runner_publication_trace_ids_are_batch_scoped() -> None:
+    first = _publish_small_runner_result("First repeated S11 publish.")
+    second = _publish_small_runner_result("Second repeated S11 publish.")
+
+    assert first["publication"]["trace_ids"] == [f"batch_{first['task_id']}:S11"]
+    assert second["publication"]["trace_ids"] == [f"batch_{second['task_id']}:S11"]
+
+    traces_response = client.get(
+        f"/datasets/local-dataset-001/designs/{LOCAL_SPACE_RESONATOR_DEFINITION_ID}/traces"
+    )
+    assert traces_response.status_code == 200
+    trace_ids = {trace["trace_id"] for trace in traces_response.json()["data"]["rows"]}
+    assert f"batch_{first['task_id']}:S11" in trace_ids
+    assert f"batch_{second['task_id']}:S11" in trace_ids
 
 
 def test_runner_complete_rejects_path_traversal() -> None:
@@ -83,6 +140,26 @@ def test_runner_complete_rejects_path_traversal() -> None:
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "runner_path_invalid"
+
+
+def _publish_small_runner_result(summary: str) -> dict[str, object]:
+    created = _submit_simulation_task(summary=summary)
+    claim_payload = client.post("/runner/v1/tasks/claim").json()["data"]
+    task_dir = _repo_root() / Path(claim_payload["staging"]["task_dir"])
+    manifest_path = _write_small_result_package(task_dir, task_id=str(created["task_id"]))
+    response = client.post(
+        f"/runner/v1/tasks/{created['task_id']}/complete",
+        json={
+            "runner_id": "runner_test_001",
+            "manifest_path": claim_payload["staging"]["manifest"],
+            "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        },
+    )
+    assert response.status_code == 200
+    return {
+        "task_id": created["task_id"],
+        "publication": response.json()["data"]["publication"],
+    }
 
 
 def _submit_simulation_task(*, summary: str = "Runner smoke publication.") -> dict[str, object]:

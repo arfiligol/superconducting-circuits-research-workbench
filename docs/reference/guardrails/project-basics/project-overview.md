@@ -11,14 +11,14 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 定義 current platform 的 Notebook、Application、Julia Runner 與 TraceStore 產品邊界。
-version: v3.0.0
+version: v3.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Project Overview
 
-本專案不再把 NiceGUI、CLI、Redis/RQ worker 或 Python-in-process Julia execution 視為主要產品落點。
+本專案不再把 legacy command workflow、retired Python UI runtime、separate queue worker runtime 或 Python-in-process Julia execution 視為主要產品落點。
 當前 branch 的目標是把既有需求重構為 **Notebook Interface + Electron Application Interface + Julia Runner Compute Plane**。
 
 !!! info "How to read this page"
@@ -58,7 +58,7 @@ updated_by: codex
 - Julia Runner 是 compute plane，負責 simulation、parameter sweep、post-processing、analysis、fitting、derived parameter extraction 與 result package generation
 - Electron Application 是 productized data workbench，聚焦 dataset、ingestion、trace browsing、task/result browsing
 - Pluto Notebook 是 research cockpit，可直接執行 Julia Core，也可選擇提交 async task
-- CLI 不再是產品 surface；repo 僅保留 `scripts/` 作為 dev/build/test/maintenance helpers
+- user-facing command workflow 不再是產品 surface；repo 僅保留 `scripts/` 作為 dev/build/test/maintenance helpers
 
 ## Research Workflow Goals
 
@@ -85,12 +85,12 @@ updated_by: codex
 
 整體重構完成時，至少要同時成立：
 
-- legacy NiceGUI、CLI、Redis/RQ worker 與 Python JuliaCall runtime 不再是 active product/runtime surfaces
+- legacy command workflow、retired Python UI runtime、separate queue worker runtime 與 Python in-process Julia runtime 不再是 active product/runtime surfaces
 - backend 可獨立提供 auth/session/workspace、dataset/design/trace metadata、task、TraceStore publication 與 frontend/notebook data API contracts
 - Julia Core 成為 reusable circuit construction / simulation / analysis library
-- Julia Runner 可執行 fake smoke task、寫 Zarr v2 staging result、寫 manifest 並回報 backend
+- Julia Runner 僅能針對 explicit smoke/debug task 寫 smoke Zarr；real task kind 在未實作前必須 fail loudly
 - frontend 只保留 draft state / interaction state / view state，不保存 canonical computation state
-- Electron 只作為 desktop shell，local mode 啟動 frontend、Python Backend 與 Julia Runner，不啟動 Redis
+- Electron 只作為 desktop shell，local mode 啟動 frontend、Python Backend 與 Julia Runner，不啟動 separate queue service
 - task / dataset / result 可在 refresh、reconnect、重開後重新 attach 與重建
 
 !!! success "Success bar"
@@ -124,10 +124,10 @@ updated_by: codex
 - Core：以 `core/julia/SuperconductingCircuitsCore/` 作為 reusable Julia library
 - Desktop：以 `app/desktop/` 的 **Electron** 包裝 frontend、backend、runner local mode
 - Notebook：以 `notebooks/pluto/` 和 `notebooks/python/` 作為研究與 inspection cockpit
-- Legacy：既有 NiceGUI、CLI、Redis/RQ、Python JuliaCall execution 只作 migration evidence，不再保留 active entrypoint
+- Legacy：既有 command workflow、retired Python UI runtime、separate queue worker runtime、Python in-process Julia execution 只作 migration evidence，不再保留 active entrypoint
 
-??? note "CLI position"
-    CLI 已從 product surface 移除。需要 automation 的動作應放在 `scripts/dev/`、`scripts/build/`、`scripts/test/` 或 `scripts/maintenance/`，且不得被包裝成使用者工作流 contract。
+??? note "Command workflow position"
+    User-facing command workflow 已從 product surface 移除。需要 automation 的動作應放在 `scripts/dev/`、`scripts/build/`、`scripts/test/` 或 `scripts/maintenance/`，且不得被包裝成使用者工作流 contract。
 
 ## Target Audience
 
@@ -160,7 +160,7 @@ updated_by: codex
     - Julia Runner is the async compute plane
     - Electron is the local desktop shell around frontend, backend, and runner
     - Pluto is the direct Julia research cockpit
-    - CLI, NiceGUI, Redis/RQ, and Python JuliaCall execution are no longer active product/runtime surfaces
+    - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are no longer active product/runtime surfaces
 - **Core values**:
     - scientific accuracy
     - reproducible workflows
@@ -169,6 +169,6 @@ updated_by: codex
     - support notebook research, application data browsing, async simulation/analysis, task tracking, and result recovery in one platform
     - keep metadata, trace payloads, Runner manifests, and provenance contracts explicit and reconstructible
     - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
-    - remove active CLI/NiceGUI/Redis/RQ/Python-JuliaCall entrypoints instead of preserving compatibility fallbacks
+    - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving compatibility fallbacks
 - **Audience**: researchers, students, and developers working on superconducting-circuit simulation and analysis workflows.
 ```

@@ -236,5 +236,5 @@ release 前至少確認：
 
 ## Related
 
-- [Simulation Python API](../../how-to/simulation/python-api.md)
+- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
 - [Data Formats Overview](index.md)

@@ -39,12 +39,10 @@ describe("workspace shell contract helpers", () => {
     expect(resolveShellUserInitials(null)).toBe("AN");
   });
 
-  it("routes shell task links to the correct workflow family", () => {
-    expect(resolveShellTaskHref({ lane: "simulation", taskId: 18 })).toBe(
-      "/circuit-simulation?taskId=18",
-    );
+  it("routes shell task links to the retained task browser", () => {
+    expect(resolveShellTaskHref({ lane: "simulation", taskId: 18 })).toBe("/tasks?taskId=18");
     expect(resolveShellTaskHref({ lane: "characterization", taskId: 31 })).toBe(
-      "/characterization?taskId=31",
+      "/tasks?taskId=31",
     );
   });
 

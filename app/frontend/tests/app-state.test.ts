@@ -112,7 +112,7 @@ describe("url state snapshot helpers", () => {
 
   it("reuses the previous snapshot object when pathname and search are unchanged", () => {
     const snapshot = {
-      pathname: "/circuit-simulation",
+      pathname: "/tasks",
       search: `?definitionId=${SIMULATION_SCHEMA_ID}&taskId=31`,
     } as const;
 
@@ -121,18 +121,18 @@ describe("url state snapshot helpers", () => {
 
   it("returns a new snapshot when pathname or search changes", () => {
     const snapshot = {
-      pathname: "/circuit-simulation",
+      pathname: "/tasks",
       search: `?definitionId=${SIMULATION_SCHEMA_ID}`,
     } as const;
 
     expect(
       resolveUrlSnapshot(
         snapshot,
-        "/circuit-simulation",
+        "/tasks",
         `?definitionId=${SECONDARY_SIMULATION_SCHEMA_ID}`,
       ),
     ).toEqual({
-      pathname: "/circuit-simulation",
+      pathname: "/tasks",
       search: `?definitionId=${SECONDARY_SIMULATION_SCHEMA_ID}`,
     });
     expect(resolveUrlSnapshot(snapshot, "/raw-data", "?datasetId=fluxonium-2025-031")).toEqual({

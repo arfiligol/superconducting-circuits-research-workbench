@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 定義 current platform 的 app/core/notebooks/scripts/docs canonical surfaces 與 migration residue 邊界。
-version: v4.0.0
+version: v4.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -21,8 +21,8 @@ updated_by: codex
 本 branch 的 canonical target layout 以 `app/`、`core/`、`notebooks/`、`scripts/`、`docs/` 作為正式架構邊界。
 `app/backend/`、`app/frontend/`、`app/desktop/`、`core/julia/`、`core/python/` 是目前應被人類與 AI Agent 直接辨識的主要開發對象。
 
-root-level `backend/`、`frontend/`、`desktop/`、`cli/` 與 `src/` 不再應被描述為 future canonical surfaces。
-任何仍留在這些舊位置的內容，都應視為 migration residue，除非另有文件明寫。
+root-level `backend/`、`frontend/`、`desktop/`、`cli/` 與 `src/` 不再是 active surfaces。
+若未來又看到這些 root-level 位置出現可執行 code，應先視為 architecture regression。
 
 !!! info "How to use this page"
     當你不確定新檔案該放哪裡時，先看 placement rules，而不是先照習慣找最近的資料夾塞進去。這頁的重點是 owner boundary，不是完整檔案樹教學。
@@ -74,24 +74,24 @@ superconducting-circuits-tutorial/
 | Python backend/data notebook | `notebooks/python/` |
 | dev/build/test/maintenance helper | `scripts/dev/`, `scripts/build/`, `scripts/test/`, `scripts/maintenance/` |
 | multi-agent planning, prompt handoff, test backlog | `Plans/`，由 Planning & Reviewing Agent 建立/退休/刪除 |
-| archived NiceGUI/CLI/runtime residue | `docs/archive/` as inert text only, or delete if not needed |
-| old worker runtime residue | 不屬於 target layout；若仍需碰 `src/worker/`，只能以 migration evidence 理解 |
+| archived legacy UI / command workflow / runtime residue | `docs/archive/` as inert text only, or delete if not needed |
+| retired root worker runtime residue | 不屬於 target layout；不得新增或恢復 |
 | committed OpenAPI contract snapshot | root `openapi.json` |
 
 !!! warning "Do not reintroduce old root package surfaces"
     這次決策不是把 `app/backend/`、`app/frontend/`、`app/desktop/` 再拆回 root `backend/`、`frontend/`、`desktop/`。
     也不要讓 root `cli/` 或 `src/` 重新變成 active entrypoint。
 
-## Current Implementation Residue
+## Removed Root Surfaces
 
-| Current location | How to interpret it now |
+| Removed location | Current rule |
 | --- | --- |
-| `backend/` | migration source for `app/backend/`; not canonical after relocation |
-| `frontend/` | migration source for `app/frontend/`; not canonical after relocation |
-| `desktop/` | migration source for `app/desktop/`; not canonical after relocation |
-| `cli/` | removed active product surface |
-| `src/app/` | archived legacy UI residue |
-| `src/worker/` | old worker/runtime residue; not a new implementation owner |
+| `backend/` | must not exist as an active root surface |
+| `frontend/` | must not exist as an active root surface |
+| `desktop/` | must not exist as an active root surface |
+| `cli/` | must not exist as an active product surface |
+| `src/app/` | must not exist as active UI/runtime code |
+| root worker runtime folder | must not exist as active runtime code |
 
 ## Planning Artifacts
 
@@ -120,7 +120,7 @@ superconducting-circuits-tutorial/
 3. `app/backend/` API 層依賴 services/domain/infrastructure，不執行 heavy compute
 4. `core/julia/SuperconductingCircuitsRunner/` 依賴 backend runner protocol，不擁有正式 metadata DB
 5. `core/julia/SuperconductingCircuitsCore/` 不依賴 FastAPI、Next.js、Electron 或 Python Backend internals
-6. `scripts/` 不得成為 user-facing CLI product surface
+6. `scripts/` 不得成為 user-facing command-line product surface
 7. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
 
 ??? note "Why the full tree is still shown"
@@ -137,9 +137,9 @@ superconducting-circuits-tutorial/
 - **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
 - **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
 - **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
-- **No CLI product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
-- **Archived NiceGUI / CLI / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
-- **`src/worker/`** is old runtime residue, not a canonical development surface.
+- **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
+- **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
+- **Root worker runtime folder** must not be recreated as a runtime surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
 - **Plans** go to `Plans/` only as active multi-agent coordination artifacts; Planning & Reviewing Agents own creation and cleanup, and long-term decisions must move to `docs/reference/**`.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.

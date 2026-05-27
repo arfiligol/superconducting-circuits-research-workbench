@@ -51,7 +51,6 @@ nav = [
     ] },
     { "Simulation" = [
       { "Overview" = "how-to/simulation/index.md" },
-      { "Python API" = "how-to/simulation/python-api.md" },
       { "Native Julia" = "how-to/simulation/native-julia.md" },
     ] },
   ] },
@@ -162,7 +161,6 @@ nav = [
       { "Julia Compute Boundary" = "reference/core/julia-wrapper.md" },
       { "Julia Scientific Core" = "reference/core/julia-scientific-core.md" },
       { "Julia Core" = "reference/core/julia-core.md" },
-      { "Julia Plotting" = "reference/core/julia-plotting.md" },
     ] },
     { "Data Formats" = [
       { "Overview" = "reference/data-formats/index.md" },

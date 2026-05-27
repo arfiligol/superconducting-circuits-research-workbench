@@ -50,6 +50,13 @@ class TaskSnapshotRepository(Protocol):
 
     def get_task(self, task_id: int) -> TaskDetail | None: ...
 
+    def claim_next_queued_task(
+        self,
+        runner_id: str,
+        claimed_at: str,
+        workspace_id: str,
+    ) -> TaskDetail | None: ...
+
     def list_task_events(self, task_id: int) -> tuple[TaskEvent, ...]: ...
 
     def create_task(self, draft: TaskCreateDraft) -> TaskDetail: ...
@@ -86,6 +93,21 @@ class PersistedRewriteTaskRepository:
 
     def get_task(self, task_id: int) -> TaskDetail | None:
         task = self._task_snapshot_repository.get_task(task_id)
+        if task is None:
+            return None
+        return self._hydrate_task(task)
+
+    def claim_next_queued_task(
+        self,
+        runner_id: str,
+        claimed_at: str,
+        workspace_id: str,
+    ) -> TaskDetail | None:
+        task = self._task_snapshot_repository.claim_next_queued_task(
+            runner_id,
+            claimed_at,
+            workspace_id,
+        )
         if task is None:
             return None
         return self._hydrate_task(task)

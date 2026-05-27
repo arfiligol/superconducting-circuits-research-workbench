@@ -31,10 +31,10 @@ updated_by: docs-team
 | Step | Analysis Capability | Implementations (Code) | Documentation |
 |------|---------------------|------------------------|---------------|
 | **0** | **Full Workflow** | (Manual HFSS + App/Notebook) | [Tutorial: Simulation Workflow](simulation-workflow.md) |
-| **1** | **Standardize Data** | `src/scripts/preprocessing/convert_hfss_admittance.py` | [HFSS Admittance Import](../how-to/ingest-data/hfss-admittance.md) |
+| **1** | **Standardize Data** | Application Data Ingestion / notebook helper | [HFSS Admittance Import](../how-to/ingest-data/hfss-admittance.md) |
 | **2** | **Visualize Raw** | Application Raw Data Browser / Python notebook | [Application Interface](../reference/app/application-interface.md) |
 | **3** | **Extract Resonance** | `core/analysis/application/analysis/extraction/admittance.py` | [Physics（重建中）](../explanation/physics/index.md) |
-| **4** | **Fit LC Model** | `src/scripts/analysis/squid_fit.py` | [Tutorial: Resonance Fitting](resonance-fitting.md)<br/>[How-to: SQUID Fitting](../how-to/fit-model/squid.md) |
+| **4** | **Fit LC Model** | Julia Runner analysis task / notebook | [Tutorial: Resonance Fitting](resonance-fitting.md)<br/>[How-to: SQUID Fitting](../how-to/fit-model/squid.md) |
 
 ## 2. Flux Dependence Analysis
 
@@ -51,9 +51,9 @@ updated_by: docs-team
 
 | Feature | Description | Implementations (Code) | Documentation |
 |---------|-------------|------------------------|---------------|
-| **Effective C Fit** | 假設 $L_s=0$，快速估算電容 | `src/scripts/effective_capacitance_fit.py` | (尚無詳細文件) |
-| **Q-Factor** | 從相位群延遲估算 Q 值 | `src/scripts/q_factor_tool.py` | (尚無詳細文件) |
-| **Compare Fits** | 比較多次擬合結果 | `src/scripts/plot_comparison.py` | (尚無詳細文件) |
+| **Effective C Fit** | 假設 $L_s=0$，快速估算電容 | Julia Runner analysis task / notebook | (future work) |
+| **Q-Factor** | 從相位群延遲估算 Q 值 | Julia Runner analysis task / notebook | (future work) |
+| **Compare Fits** | 比較多次擬合結果 | Python notebook inspection | (future work) |
 
 ## Learning Path
 

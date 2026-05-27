@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的 app、backend、Julia Runner、desktop、docs 與 repo-root orchestration 常用指令。
-version: v3.0.0
+version: v3.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -19,7 +19,7 @@ updated_by: codex
 # Build Commands
 
 本文件列出 current platform 目前可用的 repo-root orchestration 與 workspace 指令。
-platform foundation 必須使用 `app/` layout、Python Backend、Julia Runner 與 local filesystem TraceStore，不再啟動 Redis/RQ 或 CLI product surface。
+platform foundation 必須使用 `app/` layout、Python Backend、Julia Runner 與 local filesystem TraceStore，不再啟動 separate queue service 或 user-facing command workflow。
 
 !!! info "How to use this page"
     先決定你是在跑 `repo baseline`、單一 workspace、還是 docs build。
@@ -106,7 +106,7 @@ npm run app:stop
 
 !!! important "Runner-backed local runtime is the verification baseline"
     compute isolation 驗證的正式 baseline 不是 app-local thread execution。
-    你必須同時驗證 frontend、Python Backend、Julia Runner 是分離進程，且不需要 Redis/RQ。
+    你必須同時驗證 frontend、Python Backend、Julia Runner 是分離進程，且不需要 separate queue service。
 
 ### Bring-up
 
@@ -142,11 +142,11 @@ npm run app:stop
 | --- | --- |
 | repo helper processes | `npm run app:stop` 或 `./scripts/dev/stop_app.sh` |
 | runner process | 在 runner shell 中停止，或以 PID-aware tooling 關閉 |
-| Redis/RQ | 不屬於 current local runtime |
+| separate queue service | 不屬於 current local runtime |
 
 !!! tip "Helper scripts manage app processes only"
     `scripts/dev/start_app.sh` 與 `scripts/dev/stop_app.sh` 管理 frontend、backend 與 runner。
-    Redis/RQ 不再是本地 runtime prerequisite。
+    Separate queue service 不再是本地 runtime prerequisite。
 
 ## Docs
 

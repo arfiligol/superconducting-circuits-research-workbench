@@ -12,9 +12,9 @@ status: stable
 owner: docs-team
 audience: user
 scope: "原生 Julia 模擬進階教學"
-version: v0.1.0
-last_updated: 2026-01-28
-updated_by: docs-team
+version: v0.2.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # 原生 Julia 模擬
@@ -25,7 +25,7 @@ updated_by: docs-team
 
 | 情況 | 建議方法 |
 |------|----------|
-| 快速模擬、標準分析 | Python CLI/API |
+| 產品化提交、監控、結果瀏覽 | Application task，交由 Julia Runner 非同步執行 |
 | 複雜電路、自定義元件 | **原生 Julia** |
 | 開發新模擬功能 | **原生 Julia** |
 | 效能關鍵應用 | **原生 Julia** |
@@ -36,7 +36,7 @@ updated_by: docs-team
 
 ```bash
 cd superconducting-circuits-tutorial
-julia --project=.
+julia --project=core/julia/SuperconductingCircuitsCore
 ```
 
 ### 載入套件

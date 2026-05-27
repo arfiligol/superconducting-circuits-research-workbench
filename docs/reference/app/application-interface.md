@@ -31,14 +31,14 @@ Python Backend
 Julia Runner
 ```
 
-Do not start Redis/RQ workers.
+Do not start a separate local queue worker service.
 
 ## Removed Product Surfaces
 
 These are not active application surfaces:
 
-- CLI workflow
-- NiceGUI runtime
+- user-facing command workflow
+- retired Python UI runtime
 - standalone Schemdraw workflow
 - full Simulation Workbench
 - Characterization Workbench

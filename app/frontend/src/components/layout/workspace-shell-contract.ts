@@ -255,8 +255,7 @@ export function subscribeToGlobalContextRequests(
 }
 
 export function resolveShellTaskHref(task: Pick<TaskSummary, "lane" | "taskId">) {
-  const basePath = task.lane === "characterization" ? "/characterization" : "/circuit-simulation";
-  return `${basePath}?taskId=${task.taskId}`;
+  return `/tasks?taskId=${task.taskId}`;
 }
 
 export function resolveShellTaskLabel(task: Pick<TaskSummary, "kind" | "executionMode">) {

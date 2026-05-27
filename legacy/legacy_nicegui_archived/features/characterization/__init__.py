@@ -1,1 +1,0 @@
-"""Characterization feature package."""

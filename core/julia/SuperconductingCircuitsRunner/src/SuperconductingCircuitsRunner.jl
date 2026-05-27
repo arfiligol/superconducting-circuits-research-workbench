@@ -7,10 +7,14 @@ using SHA
 using UUIDs
 
 export RunnerClaim
+export execute_task
 export manifest_sha256
 export parse_task_claim
 export run_polling_runner
+export write_trace_zarr_package
 export write_smoke_result_package
+
+include("staging/zarr_writer.jl")
 
 struct RunnerClaim
     task_id::String
@@ -63,7 +67,7 @@ function run_polling_runner(;
         end
         try
             report_progress(normalized_url, claim.task_id; percent_complete=10, summary="Runner started.")
-            manifest_path = write_smoke_result_package(claim.task_dir; task_id=claim.task_id)
+            manifest_path = execute_task(claim)
             report_progress(normalized_url, claim.task_id; percent_complete=90, summary="Runner result staged.")
             report_complete(normalized_url, claim, runner_id, manifest_path)
         catch err
@@ -109,12 +113,8 @@ function report_complete(
 )
     body = Dict{String,Any}(
         "runner_id" => string(runner_id),
-        "manifest_path" => relpath(manifest_path, pwd()),
+        "manifest_path" => _staging_relative_manifest_path(claim, manifest_path),
         "manifest_sha256" => manifest_sha256(manifest_path),
-        "output_target" => Dict{String,Any}(
-            "dataset_id" => claim.dataset_id,
-            "design_id" => claim.design_id,
-        ),
     )
     response = HTTP.post(
         "$(backend_url)/runner/v1/tasks/$(claim.task_id)/complete";
@@ -146,121 +146,86 @@ function report_fail(
     return nothing
 end
 
+function execute_task(claim::RunnerClaim)::String
+    if claim.task_kind == "julia_runner_smoke"
+        return write_smoke_result_package(claim.task_dir; task_id=claim.task_id)
+    elseif claim.task_kind == "julia_simulation_parameter_sweep"
+        return execute_simulation_parameter_sweep(claim)
+    elseif claim.task_kind == "julia_simulation_frequency_sweep"
+        return execute_simulation_frequency_sweep(claim)
+    elseif startswith(claim.task_kind, "julia_analysis_")
+        return execute_analysis_task(claim)
+    elseif startswith(claim.task_kind, "julia_postprocess_")
+        return execute_postprocess_task(claim)
+    end
+    error("Unsupported Julia Runner task kind: $(claim.task_kind)")
+end
+
+function execute_simulation_parameter_sweep(claim::RunnerClaim)::String
+    error("julia_simulation_parameter_sweep is not implemented yet. Refusing to write smoke output.")
+end
+
+function execute_simulation_frequency_sweep(claim::RunnerClaim)::String
+    error("julia_simulation_frequency_sweep is not implemented yet. Refusing to write smoke output.")
+end
+
+function execute_analysis_task(claim::RunnerClaim)::String
+    error("$(claim.task_kind) is not implemented yet. Refusing to write smoke output.")
+end
+
+function execute_postprocess_task(claim::RunnerClaim)::String
+    error("$(claim.task_kind) is not implemented yet. Refusing to write smoke output.")
+end
+
 function write_smoke_result_package(task_dir::AbstractString; task_id::AbstractString)
-    task_root = abspath(task_dir)
-    result_root = joinpath(task_root, "result.zarr")
-    mkpath(joinpath(result_root, "axes"))
-    mkpath(joinpath(result_root, "traces", "S11"))
-    mkpath(joinpath(task_root, "logs"))
-
-    _write_group(result_root)
-    _write_group(joinpath(result_root, "axes"))
-    _write_group(joinpath(result_root, "traces"))
-    _write_group(joinpath(result_root, "traces", "S11"))
-
     frequency = Float64[4.0e9, 4.5e9, 5.0e9, 5.5e9, 6.0e9]
     real = Float64[1.0, 0.5, 0.0, -0.5, -1.0]
     imag = Float64[0.0, 0.1, 0.2, 0.1, 0.0]
-    _write_zarr_array(joinpath(result_root, "axes", "frequency"), frequency, [5])
-    _write_zarr_array(joinpath(result_root, "traces", "S11", "real"), real, [5])
-    _write_zarr_array(joinpath(result_root, "traces", "S11", "imag"), imag, [5])
-
-    log_path = joinpath(task_root, "logs", "runner.log")
-    write(log_path, "SuperconductingCircuitsRunner smoke task completed at $(_timestamp_now()).\n")
-
-    manifest = Dict{String,Any}(
-        "schema_version" => "sc.runner.result.v1",
-        "task_id" => string(task_id),
-        "producer" => Dict{String,Any}(
-            "runner" => "SuperconductingCircuitsRunner",
-            "runner_version" => "0.1.0",
-            "core_version" => "0.1.0",
-            "julia_version" => string(VERSION),
-        ),
-        "array_store" => Dict{String,Any}(
-            "format" => "zarr",
-            "zarr_format" => 2,
-            "uri" => "result.zarr",
-        ),
-        "sweep" => Dict{String,Any}(
-            "total_points" => 1,
-            "success_points" => 1,
-            "failed_points" => 0,
-            "failed" => Any[],
-        ),
-        "traces" => Any[
+    return write_trace_zarr_package(
+        task_dir;
+        task_id=task_id,
+        axes=[
+            Dict{String,Any}(
+                "name" => "frequency",
+                "unit" => "Hz",
+                "path" => "/axes/frequency",
+                "values" => frequency,
+            ),
+        ],
+        traces=[
             Dict{String,Any}(
                 "trace_key" => "S11",
                 "family" => "s_matrix",
                 "parameter" => "S11",
                 "representation" => "complex",
-                "real_path" => "/traces/S11/real",
-                "imag_path" => "/traces/S11/imag",
-                "shape" => Any[5],
-                "chunk_shape" => Any[5],
-                "dtype" => "float64",
-                "axes" => Any[
-                    Dict{String,Any}(
-                        "name" => "frequency",
-                        "unit" => "Hz",
-                        "path" => "/axes/frequency",
-                    ),
-                ],
+                "real" => real,
+                "imag" => imag,
+                "axes" => ["frequency"],
+                "chunk_shape" => [5],
             ),
         ],
-        "summary_tables" => Any[],
-        "logs" => Any[
-            Dict{String,Any}(
-                "kind" => "runner_log",
-                "path" => "logs/runner.log",
+        manifest_metadata=Dict{String,Any}(
+            "sweep" => Dict{String,Any}(
+                "total_points" => 1,
+                "success_points" => 1,
+                "failed_points" => 0,
+                "failed" => Any[],
             ),
-        ],
+            "log_message" => "SuperconductingCircuitsRunner smoke task completed at $(_timestamp_now()).\n",
+        ),
     )
-    manifest_path = joinpath(task_root, "manifest.json")
-    _write_manifest_atomic(manifest_path, manifest)
-    return manifest_path
 end
 
 function manifest_sha256(path::AbstractString)::String
     return bytes2hex(sha256(read(path)))
 end
 
-function _write_group(path::AbstractString)
-    mkpath(path)
-    write(joinpath(path, ".zgroup"), JSON3.write(Dict("zarr_format" => 2)))
-    return nothing
-end
-
-function _write_zarr_array(path::AbstractString, values::Vector{Float64}, shape::Vector{Int})
-    mkpath(path)
-    metadata = Dict{String,Any}(
-        "zarr_format" => 2,
-        "shape" => shape,
-        "chunks" => shape,
-        "dtype" => "<f8",
-        "compressor" => nothing,
-        "fill_value" => nothing,
-        "order" => "C",
-        "filters" => nothing,
-    )
-    write(joinpath(path, ".zarray"), JSON3.write(metadata))
-    chunk_key = join(fill("0", length(shape)), ".")
-    open(joinpath(path, chunk_key), "w") do io
-        write(io, values)
-        flush(io)
-    end
-    return nothing
-end
-
-function _write_manifest_atomic(path::AbstractString, manifest::Dict{String,Any})
-    mkpath(dirname(path))
-    tmp = path * ".tmp"
-    open(tmp, "w") do io
-        write(io, JSON3.write(manifest))
-        flush(io)
-    end
-    mv(tmp, path; force=true)
-    return path
+function _staging_relative_manifest_path(
+    claim::RunnerClaim,
+    manifest_path::AbstractString,
+)::String
+    staging_root = dirname(dirname(abspath(claim.task_dir)))
+    return relpath(abspath(manifest_path), staging_root)
 end
 
 function _optional_string(payload::AbstractDict, key::AbstractString)::Union{String,Nothing}

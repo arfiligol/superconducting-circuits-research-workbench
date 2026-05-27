@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: current published contracts for the Notebook + Application + Julia Runner architecture
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -46,10 +46,10 @@ These are no longer active contracts:
 
 | Removed surface | Replacement |
 |---|---|
-| CLI product surface | `scripts/` for dev/build/test/maintenance only |
-| Redis/RQ worker runtime | DB-backed task claim by Julia Runner |
-| NiceGUI runtime | Electron App + Next.js frontend |
-| Python Backend JuliaCall simulation | Julia Runner compute plane |
+| User-facing command workflow | `scripts/` for dev/build/test/maintenance only |
+| Retired local queue worker runtime | DB-backed task claim by Julia Runner |
+| Retired Python UI runtime | Electron App + Next.js frontend |
+| Python Backend in-process Julia simulation | Julia Runner compute plane |
 | Simulation Workbench / Characterization Workbench / Schemdraw standalone workflow | Task monitor, result browser, design assets, notebooks |
 
 ## Related

@@ -68,10 +68,10 @@ flowchart LR
 The refactor is complete when:
 
 - the top-level active layout is `core/`, `notebooks/`, `app/`, `scripts/`, and `docs/`
-- active CLI and NiceGUI product surfaces are removed
+- user-facing command workflow and retired Python UI product surfaces are removed
 - Electron local mode starts frontend, Python Backend, and Julia Runner
 - Python Backend exposes runner claim/heartbeat/progress/cancellation/complete/fail APIs
-- Julia Runner writes a fake local Zarr v2 result package
+- Julia Runner writes a local Zarr v2 result package only for explicit smoke/debug tasks until real task executors are implemented
 - Python Backend validates a runner manifest and publishes canonical TraceStore data
 - frontend navigation is reduced to dataset, ingestion, raw trace, task, and result browsing surfaces
 - retained tests pass

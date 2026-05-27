@@ -138,13 +138,8 @@ data/**/*.zarr/
 data/huey/
 
 # Generated package metadata can appear inside workspace packages too
-backend/**/*.egg-info/
-cli/**/*.egg-info/
-src/core/**/*.egg-info/
-
-# NiceGUI local user storage generated during local UI/E2E sessions
-.nicegui/
-.nicegui/storage-user-*.json
+app/backend/**/*.egg-info/
+core/python/**/*.egg-info/
 
 # Local Playwright runtime outputs/logs
 output/

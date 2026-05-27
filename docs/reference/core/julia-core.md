@@ -9,62 +9,63 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Julia-native simulation / analysis core reference surface。
-version: v0.4.0
-last_updated: 2026-03-21
+scope: Julia-native core and runner package reference surface。
+version: v0.5.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Julia Core
 
-本頁記錄 Julia-native simulation / analysis runtime 的目前邊界，以及 repo 內實際存在的 Julia surface。
+本頁記錄 Julia-native simulation / analysis runtime 的目前邊界，以及 repo 內正式存在的 Julia package surfaces。
 
 !!! info "Current Julia Surface"
-    canonical core surface 已收斂到 top-level `core/`。
-    目前 repository 內的 Julia surface 主要分成兩類：
-    1. `core/simulation/infrastructure/hbsolve.jl` 的 simulation bridge
-    2. `src/julia/` 下的 project-level helper 與 plotting utilities
+    canonical Julia surface 已收斂到 `core/julia/`。
+    目前 repository 內的 Julia packages 是：
+    1. `core/julia/SuperconductingCircuitsCore/`
+    2. `core/julia/SuperconductingCircuitsRunner/`
 
 !!! warning "Ownership Boundary"
-    Julia runtime 負責數值求解與 Julia-side helper。
-    canonical circuit-definition、task lifecycle、trace / provenance contract 仍由 Python-owned core surface 決定。
+    Julia Core owns reusable compute logic.
+    Julia Runner owns asynchronous compute execution and staged result packages.
+    Python Backend still owns task lifecycle, canonical TraceStore publication, and provenance records.
 
 ## Surface Map
 
-=== "Simulation Bridge"
+=== "Julia Core"
 
     | Surface | Role |
     |---|---|
-    | `core/simulation/infrastructure/hbsolve.jl` | 將 normalized topology、component values、pump / source config 送入 JosephsonCircuits `hbsolve` |
-    | JosephsonCircuits.jl runtime | 執行 harmonic balance 求解與矩陣家族導出 |
-    | Python-facing bridge payload | 回傳 frequency axis、S / Z / Y family traces、mode metadata、derived scalar traces |
+    | `core/julia/SuperconductingCircuitsCore/` | reusable circuit construction, delayed lowering, sweep helpers, and analysis helpers |
+    | JosephsonCircuits.jl runtime | numerical circuit solve engine called from Julia-owned code |
+    | Pluto notebooks | direct research cockpit for explicit Julia execution |
 
-=== "Direct Julia Workflows"
+=== "Julia Runner"
 
     | Surface | Role |
     |---|---|
-    | `docs/how-to/simulation/native-julia.md` | 直接以 repo Julia environment 執行 advanced simulation workflow 的操作路徑 |
-    | `src/julia/plotting.jl` | Julia-owned plotting helpers |
-    | `src/julia/utils.jl` | Julia helper re-export boundary |
+    | `core/julia/SuperconductingCircuitsRunner/` | backend polling, task dispatch, local Zarr staging writer, manifest generation, complete/fail reporting |
+    | `data/staging/tasks/<task_id>/result.zarr/` | temporary local Zarr package written by the runner |
+    | `data/staging/tasks/<task_id>/manifest.json` | runner result manifest validated by the backend publisher |
 
 ## Current Repository Files
 
 | File | What it means in the current design |
 |---|---|
-| `core/simulation/infrastructure/hbsolve.jl` | Julia-native simulation bridge owned by core simulation runtime |
-| `src/julia/plotting.jl` | Julia-owned plotting / result visualization helpers |
-| `src/julia/utils.jl` | helper alias boundary for Julia-side call sites |
+| `core/julia/SuperconductingCircuitsCore/Project.toml` | Julia Core package environment |
+| `core/julia/SuperconductingCircuitsRunner/Project.toml` | Julia Runner package environment |
+| `core/julia/SuperconductingCircuitsRunner/src/staging/zarr_writer.jl` | local filesystem Zarr v2 staging writer |
 
 ## Consumer Pairing
 
 | Consumer | Reads Julia Core through |
 |---|---|
-| Python simulation application service | [Julia Wrapper](julia-wrapper.md) |
-| Advanced Julia users / contributors | [How-to / Native Julia Simulation](../../how-to/simulation/native-julia.md) |
-| Julia plotting consumers | [Julia Plotting](julia-plotting.md) |
+| Python Backend | [Julia Compute Boundary](julia-wrapper.md) and runner API docs |
+| Advanced Julia users / contributors | [Notebook Interface](../notebooks/index.md) and Pluto notebooks |
+| Julia Runner contributors | [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md) |
 
 ## Related
 
-- [Julia Wrapper](julia-wrapper.md)
-- [Julia Plotting](julia-plotting.md)
-- [How-to / Native Julia Simulation](../../how-to/simulation/native-julia.md)
+- [Julia Compute Boundary](julia-wrapper.md)
+- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
+- [Notebook Interface](../notebooks/index.md)

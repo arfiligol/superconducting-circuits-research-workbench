@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import cast
 
 from sc_core.tasking import TaskExecutionMode, WorkerTaskName
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.app.domain.tasks import (
@@ -85,6 +85,70 @@ class SqliteRewriteTaskSnapshotRepository:
             )
             if dispatch_changed or event_changed:
                 session.commit()
+            return _to_task_detail(row, dispatch_row, event_rows)
+
+    def claim_next_queued_task(
+        self,
+        runner_id: str,
+        claimed_at: str,
+        workspace_id: str,
+    ) -> TaskDetail | None:
+        with self._session_factory() as session:
+            task_id = session.scalar(
+                select(RewriteTaskRecord.task_id)
+                .where(RewriteTaskRecord.status == "queued")
+                .where(RewriteTaskRecord.workspace_id == workspace_id)
+                .where(RewriteTaskRecord.visibility_scope.in_(("local", "workspace")))
+                .order_by(RewriteTaskRecord.created_at.asc(), RewriteTaskRecord.task_id.asc())
+                .limit(1)
+            )
+            if task_id is None:
+                return None
+
+            result = session.execute(
+                update(RewriteTaskRecord)
+                .where(
+                    RewriteTaskRecord.task_id == task_id,
+                    RewriteTaskRecord.status == "queued",
+                )
+                .values(
+                    status="claimed",
+                    progress_phase="claimed",
+                    progress_percent_complete=1,
+                    progress_summary=f"Task claimed by Julia Runner {runner_id}.",
+                    progress_updated_at=claimed_at,
+                )
+            )
+            if result.rowcount != 1:
+                session.rollback()
+                return None
+
+            row = session.scalar(
+                select(RewriteTaskRecord).where(RewriteTaskRecord.task_id == task_id)
+            )
+            if row is None:
+                session.rollback()
+                return None
+            dispatch_row, _ = _upsert_dispatch_row(
+                session,
+                row,
+                build_task_dispatch(
+                    task_id=row.task_id,
+                    worker_task_name=row.worker_task_name,
+                    task_status=cast(TaskStatus, row.status),
+                    submitted_from_active_dataset=row.submitted_from_active_dataset,
+                    dataset_id=row.dataset_id,
+                    accepted_at=row.submitted_at,
+                    last_updated_at=row.progress_updated_at,
+                    dispatch_attempt_count=1,
+                    last_dispatch_outcome="claimed",
+                    runtime_job_id=f"runner:{runner_id}:{row.task_id}",
+                ),
+            )
+            event_rows, _ = _upsert_task_events(session, row, dispatch_row)
+            session.commit()
+            session.refresh(row)
+            session.refresh(dispatch_row)
             return _to_task_detail(row, dispatch_row, event_rows)
 
     def list_task_events(self, task_id: int) -> tuple[TaskEvent, ...]:

@@ -91,9 +91,9 @@ rules:
     tier: standard
     load: when_touched
     activation_mode: model_decision
-    description: Apply when adding or changing dev/build/test/maintenance scripts or removing legacy CLI surfaces.
-    triggers: ["script", "scripts", "cli", "typer", "maintenance"]
-    touched_paths: ["scripts/**", "cli/**", "src/scripts/**"]
+    description: Apply when adding or changing dev/build/test/maintenance scripts or removing legacy command surfaces.
+    triggers: ["script", "scripts", "command workflow", "maintenance"]
+    touched_paths: ["scripts/**"]
 
   - id: execution-index
     file: execution-verification/index.md
@@ -101,7 +101,7 @@ rules:
     load: always
     activation_mode: always_on
     triggers: ["build", "run", "test", "ci", "lint", "format"]
-    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "docs/**", ".github/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "scripts/**", "core/**", "legacy/**", "src/**", "docs/**", ".github/**"]
 
   - id: build-commands
     file: execution-verification/build-commands.md

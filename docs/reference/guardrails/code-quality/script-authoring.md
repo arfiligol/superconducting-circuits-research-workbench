@@ -11,18 +11,18 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: dev/build/test/maintenance scripts 的放置位置、責任邊界與文件規範。
-version: v2.0.0
+version: v2.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Script Authoring
 
-CLI 已從本專案的 active product surface 移除。
+User-facing command-line workflow 已從本專案的 active product surface 移除。
 `scripts/` 只保留 dev/build/test/maintenance helpers，不再承載使用者工作流 contract。
 
 !!! info "Use this page for helper boundary decisions"
-    這頁回答 helper script 應放哪裡、script 本身該負責什麼，以及 legacy CLI/script 只應保留到什麼程度。
+    這頁回答 helper script 應放哪裡、script 本身該負責什麼，以及 legacy command/script 只應保留到什麼程度。
 
 ## Placement Map
 
@@ -37,8 +37,8 @@ CLI 已從本專案的 active product surface 移除。
 
 ## Placement
 
-- 不新增 active CLI package、Typer command 或 user-facing command docs
-- 不新增 legacy `src/scripts/` workflow
+- 不新增 active command package、Typer command 或 user-facing command docs
+- 不新增 legacy root script workflow
 - helper script 必須放進 `scripts/dev/`、`scripts/build/`、`scripts/test/` 或 `scripts/maintenance/`
 - migration 期間若仍需保留舊入口，只能作為 inert archive 或短期 removal bridge
 
@@ -54,7 +54,7 @@ CLI 已從本專案的 active product surface 移除。
 
 ## Rules
 
-- 不可新增 user-facing CLI product surface
+- 不可新增 user-facing command-line product surface
 - 不可把 scripts 寫成正式 workflow contract
 - 不可把 API handler 的內部邏輯整段複製到 scripts
 - scripts 必須有明確 exit behavior
@@ -64,8 +64,8 @@ CLI 已從本專案的 active product surface 移除。
 
 ```markdown
 ## Script Authoring
-- CLI is no longer an active product surface.
-- Do not add new Typer commands, CLI package entrypoints, or user-facing CLI docs.
+- User-facing command-line workflow is no longer an active product surface.
+- Do not add new Typer commands, command package entrypoints, or user-facing command docs.
 - Keep only `scripts/` helpers for dev/build/test/maintenance.
 - Put helpers under `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
 - Scripts may orchestrate commands but must not own business workflow logic.

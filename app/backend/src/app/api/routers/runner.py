@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
-from src.app.domain.tasks import TaskDetail, TaskLifecycleUpdate, TaskListQuery
+from src.app.domain.tasks import TaskDetail, TaskLifecycleUpdate
 from src.app.infrastructure.request_debug import current_debug_ref
 from src.app.infrastructure.runtime import (
     get_runner_result_publisher,
@@ -18,7 +18,7 @@ from src.app.services.runner_result_publisher import (
     RunnerPublicationResult,
     RunnerResultPublisher,
 )
-from src.app.services.service_errors import ServiceError
+from src.app.services.service_errors import ServiceError, service_error
 from src.app.services.task_service import TaskService
 from src.app.settings import get_settings
 
@@ -28,20 +28,16 @@ router = APIRouter(prefix="/runner/v1/tasks", tags=["runner"])
 @router.post("/claim")
 def claim_task(
     task_service: Annotated[TaskService, Depends(get_task_service)],
+    body: Annotated[Mapping[str, object] | None, Body()] = None,
 ) -> JSONResponse:
     try:
-        task = _next_claimable_task(task_service)
-        if task is None:
-            return _success_response(data={"task": None, "staging": None})
-        claimed = task_service.update_task_lifecycle(
-            TaskLifecycleUpdate(
-                task_id=task.task_id,
-                status="claimed",
-                progress_percent_complete=max(0, min(task.progress.percent_complete, 89)),
-                progress_summary="Task claimed by Julia Runner.",
-                progress_updated_at=_generated_at(),
-            )
+        runner_id = str((body or {}).get("runner_id") or "runner_local")
+        claimed = task_service.claim_next_queued_task(
+            runner_id=runner_id,
+            claimed_at=_generated_at(),
         )
+        if claimed is None:
+            return _success_response(data={"task": None, "staging": None})
         task_dir = _staging_task_dir(claimed.task_id)
         result_zarr = task_dir / "result.zarr"
         manifest = task_dir / "manifest.json"
@@ -138,6 +134,13 @@ def complete_task(
     body: Annotated[Mapping[str, object], Body()],
 ) -> JSONResponse:
     try:
+        if "output_target" in body:
+            raise service_error(
+                422,
+                code="runner_complete_output_target_forbidden",
+                category="validation",
+                message="Runner completion cannot override the backend-owned output target.",
+            )
         result = publisher.publish_complete_result(
             task_id=task_id,
             runner_id=str(body.get("runner_id") or "runner_local"),
@@ -145,11 +148,6 @@ def complete_task(
             manifest_sha256=(
                 str(body["manifest_sha256"])
                 if isinstance(body.get("manifest_sha256"), str)
-                else None
-            ),
-            output_target=(
-                body.get("output_target")
-                if isinstance(body.get("output_target"), Mapping)
                 else None
             ),
         )
@@ -181,20 +179,6 @@ def fail_task(
     return _success_response(data={"task_id": updated.task_id, "status": updated.status})
 
 
-def _next_claimable_task(task_service: TaskService) -> TaskDetail | None:
-    tasks = task_service.list_tasks(
-        TaskListQuery(
-            status="queued",
-            status_filter="all",
-            scope="workspace",
-            limit=50,
-        )
-    )
-    if len(tasks) == 0:
-        return None
-    return tasks[0]
-
-
 def _build_runner_task_payload(task: TaskDetail) -> dict[str, object]:
     return {
         "task_id": str(task.task_id),
@@ -209,9 +193,16 @@ def _build_runner_task_payload(task: TaskDetail) -> dict[str, object]:
 
 def _runner_task_kind(task: TaskDetail) -> str:
     if task.kind == "simulation":
-        if task.simulation_setup is not None and len(task.simulation_setup.parameter_sweeps) > 0:
+        if task.simulation_setup is None:
+            raise service_error(
+                422,
+                code="runner_simulation_setup_required",
+                category="validation",
+                message="Simulation tasks require a simulation_setup before Julia Runner dispatch.",
+            )
+        if len(task.simulation_setup.parameter_sweeps) > 0:
             return "julia_simulation_parameter_sweep"
-        return "julia_runner_smoke"
+        return "julia_simulation_frequency_sweep"
     if task.kind == "post_processing":
         return "julia_postprocess_coordinate_transform"
     if task.kind == "characterization":

@@ -16,7 +16,7 @@ updated_by: codex
 
 # Logging Standards
 
-本專案的 Python runtime 使用標準 `logging` 模組。Rich 可用於開發端彩色輸出，但不得被升格成 CLI product surface。
+本專案的 Python runtime 使用標準 `logging` 模組。Rich 可用於開發端彩色輸出，但不得被升格成 user-facing command product surface。
 
 !!! info "Use this page for runtime logging"
     這頁管的是開發與執行期 logging，不是 app-level audit logging。需要 actor/action/resource 的治理記錄時，應看 `App > Shared / Audit Logging`。

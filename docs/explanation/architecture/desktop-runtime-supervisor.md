@@ -45,7 +45,7 @@ It must not:
 - run solver logic inside Electron main
 - publish TraceStore records
 - mutate metadata tables directly
-- start a Redis/RQ worker runtime
+- start a separate queue worker runtime
 
 ## Startup Flow
 

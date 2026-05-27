@@ -79,55 +79,6 @@ const dashboardSource = readFileSync(
   ),
   "utf8",
 );
-const characterizationSource = readFileSync(
-  fileURLToPath(
-    new URL("../src/features/characterization/components/characterization-workspace.tsx", import.meta.url),
-  ),
-  "utf8",
-);
-const schemdrawSource = readFileSync(
-  fileURLToPath(
-    new URL("../src/features/circuit-schemdraw/components/circuit-schemdraw-workspace.tsx", import.meta.url),
-  ),
-  "utf8",
-);
-const simulationSource =
-  readFileSync(
-    fileURLToPath(
-      new URL("../src/features/simulation/components/simulation-workbench-shell.tsx", import.meta.url),
-    ),
-    "utf8",
-  ) +
-  readFileSync(
-    fileURLToPath(
-      new URL("../src/features/simulation/components/simulation-setup-stage.tsx", import.meta.url),
-    ),
-    "utf8",
-  ) +
-  readFileSync(
-    fileURLToPath(
-      new URL(
-        "../src/features/simulation/components/simulation-frequency-sweep-section.tsx",
-        import.meta.url,
-      ),
-    ),
-    "utf8",
-  ) +
-  readFileSync(
-    fileURLToPath(
-      new URL(
-        "../src/features/simulation/components/simulation-parameter-sweep-section.tsx",
-        import.meta.url,
-      ),
-    ),
-    "utf8",
-  ) +
-  readFileSync(
-    fileURLToPath(
-      new URL("../src/features/simulation/components/simulation-sources-section.tsx", import.meta.url),
-    ),
-    "utf8",
-  );
 const researchPanelsSource = readFileSync(
   fileURLToPath(
     new URL("../src/features/shared/components/research-workflow-panels.tsx", import.meta.url),
@@ -381,9 +332,6 @@ describe("workspace shell source contracts", () => {
     for (const source of [
       schemaCatalogSource,
       rawDataSource,
-      characterizationSource,
-      schemdrawSource,
-      simulationSource,
       researchPanelsSource,
     ]) {
       expect(source.includes("AppSelectField") || source.includes("AppInlineSelect")).toBe(true);
@@ -396,8 +344,6 @@ describe("workspace shell source contracts", () => {
   it("keeps touched workflow surfaces off pale-on-pale rose warnings", () => {
     for (const source of [
       schemaCatalogSource,
-      schemdrawSource,
-      characterizationSource,
       statusStripSource,
       accountPanelSource,
     ]) {

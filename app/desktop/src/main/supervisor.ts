@@ -584,9 +584,9 @@ function buildBackendEnvironment(
     SC_DATABASE_PATH: join(paths.runtimeDataDir, "database.db"),
     SC_ENVIRONMENT: "desktop",
     SC_SESSION_SECRET: secrets.sessionSecret,
-    SC_TRACE_STORE_ROOT: "data/trace_store",
-    SC_STAGING_ROOT: "data/staging",
-    SC_ARTIFACTS_ROOT: "data/artifacts",
+    SC_TRACE_STORE_ROOT: join(paths.runtimeDataDir, "trace_store"),
+    SC_STAGING_ROOT: join(paths.runtimeDataDir, "staging"),
+    SC_ARTIFACTS_ROOT: join(paths.runtimeDataDir, "artifacts"),
     UV_CACHE_DIR: join(paths.runtimeDataDir, "uv-cache"),
     UV_PROJECT_ENVIRONMENT: join(paths.runtimeDataDir, "backend-venv"),
   };

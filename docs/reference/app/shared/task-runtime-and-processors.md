@@ -27,7 +27,7 @@ Python Backend
 Julia Runner
 ```
 
-There is no Redis/RQ local runtime. The runner claims tasks through the backend runner API.
+There is no separate local queue service. The runner claims tasks through the backend runner API.
 
 ## Runtime Roles
 
