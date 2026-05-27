@@ -30,6 +30,9 @@ function run_hbsolve(
     n_modulation_harmonics=1,
     n_pump_harmonics=1,
     port_indices=nothing,
+    dc::Bool=false,
+    threewavemixing::Bool=false,
+    fourwavemixing::Bool=true,
     returnS::Bool=true,
     returnZ::Bool=true,
     returnQE::Bool=false,
@@ -61,6 +64,9 @@ function run_hbsolve(
         returnZ=returnZ,
         returnQE=returnQE,
         returnCM=returnCM,
+        dc=dc,
+        threewavemixing=threewavemixing,
+        fourwavemixing=fourwavemixing,
         sorting=sorting,
         keyedarrays=keyedarrays,
         kwargs...,
@@ -73,4 +79,10 @@ function run_hbsolve(
     )
 end
 
+"""
+    run_frequency_sweep(args...; kwargs...)
+
+Semantic alias for frequency-domain JosephsonCircuits sweeps through
+`run_hbsolve`. This is a first-class public API name for notebook use.
+"""
 run_frequency_sweep(args...; kwargs...) = run_hbsolve(args...; kwargs...)

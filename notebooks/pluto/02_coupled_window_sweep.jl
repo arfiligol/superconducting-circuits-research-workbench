@@ -56,6 +56,9 @@ sweep = SweepSpec([
 result = run_design_sweep(build_coupled_design, sweep; threaded=false)
 
 # ╔═╡ 6ca5cbe6-cc71-11ee-0006-4b4f65636f72
+summary = sweep_result_dataframe(result)
+
+# ╔═╡ 6ca5cbe6-cc71-11ee-0007-4b4f65636f72
 [(point.parameters, point.success, isnothing(point.result) ? 0 : length(point.result)) for point in result.points]
 
 # ╔═╡ Cell order:
@@ -65,3 +68,4 @@ result = run_design_sweep(build_coupled_design, sweep; threaded=false)
 # ╠═6ca5cbe6-cc71-11ee-0004-4b4f65636f72
 # ╠═6ca5cbe6-cc71-11ee-0005-4b4f65636f72
 # ╠═6ca5cbe6-cc71-11ee-0006-4b4f65636f72
+# ╠═6ca5cbe6-cc71-11ee-0007-4b4f65636f72

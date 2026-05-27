@@ -1,10 +1,14 @@
 ### A Pluto.jl notebook ###
-# v0.20.x
+# v1.0.1
+
+using Markdown
+using InteractiveUtils
 
 # ╔═╡ 4ab8b5e8-cc71-11ee-0001-4b4f65636f72
 begin
     import Pkg
     Pkg.activate(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
+    using DataFrames
     using SuperconductingCircuitsCore
 end
 
@@ -31,7 +35,18 @@ begin
 end
 
 # ╔═╡ 4ab8b5e8-cc71-11ee-0005-4b4f65636f72
-netlist[1:min(12, length(netlist))]
+length(netlist)
+
+# ╔═╡ 4ab8b5e8-cc71-11ee-0006-4b4f65636f72
+first(netlist, min(12, length(netlist)))
+
+# ╔═╡ 4ab8b5e8-cc71-11ee-0007-4b4f65636f72
+DataFrame(
+    name=[row[1] for row in netlist],
+    node1=[row[2] for row in netlist],
+    node2=[row[3] for row in netlist],
+    value=[row[4] for row in netlist],
+)
 
 # ╔═╡ Cell order:
 # ╠═4ab8b5e8-cc71-11ee-0001-4b4f65636f72
@@ -39,3 +54,5 @@ netlist[1:min(12, length(netlist))]
 # ╠═4ab8b5e8-cc71-11ee-0003-4b4f65636f72
 # ╠═4ab8b5e8-cc71-11ee-0004-4b4f65636f72
 # ╠═4ab8b5e8-cc71-11ee-0005-4b4f65636f72
+# ╠═4ab8b5e8-cc71-11ee-0006-4b4f65636f72
+# ╠═4ab8b5e8-cc71-11ee-0007-4b4f65636f72

@@ -10,7 +10,7 @@ status: draft
 owner: docs-team
 audience: team
 scope: Phase 1 Julia scientific core 與 Pluto Notebook research workflow。
-version: v0.1.0
+version: v0.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -60,6 +60,14 @@ Run a plain example:
 julia --project=core/julia/SuperconductingCircuitsCore core/julia/SuperconductingCircuitsCore/examples/sweep_demo.jl
 ```
 
+## Notebook Roles
+
+| Notebook | Role |
+|---|---|
+| `notebooks/pluto/01_julia_core_quickstart.jl` | Component authoring and JosephsonCircuits netlist finalization. |
+| `notebooks/pluto/02_coupled_window_sweep.jl` | Construction / lowering parameter sweep for coupled-window designs. |
+| `notebooks/pluto/03_manual_hbsolve_frequency_sweep.jl` | Manual JosephsonCircuits.jl execution check through `run_hbsolve`. |
+
 ## Research Workflow
 
 ```text
@@ -82,6 +90,12 @@ Pluto notebooks must stay thin. They may define parameters, build designs throug
 | Delayed lowering stays required | Author high-level drafts first; call `finalize_to_josephson_netlist` only at the end. Do not patch already-flat JosephsonCircuits netlists in place. |
 | Python/backend does not own lowering | Later productized workflows should call Julia Core instead of reimplementing construction or sweep logic in Python. |
 | Application is deferred | Backend/frontend integration is not a Phase-1 implementation target. |
+
+## Manual hbsolve Validation
+
+Phase 1 does not require automated JosephsonCircuits.jl integration tests. The intended workflow is to validate `run_hbsolve` manually from Pluto while the Julia Core API is still changing quickly.
+
+The wrapper keywords must follow the currently installed JosephsonCircuits.jl API. When changing wrapper keywords, check the official docs, docstrings, or source first. Do not add compatibility fallback branches for older keyword sets.
 
 ## Future Storage Direction
 

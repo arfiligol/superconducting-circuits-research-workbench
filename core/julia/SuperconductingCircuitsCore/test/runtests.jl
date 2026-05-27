@@ -171,3 +171,15 @@ end
     failed = only(filter(point -> !point.success, result.points))
     @test contains(failed.error_message, "intentional failure")
 end
+
+@testset "sweep_result_dataframe flattens sweep axes" begin
+    sweep = SweepSpec([
+        SweepAxis("a", [1.0, 2.0]),
+        SweepAxis("b", [10.0]),
+    ])
+    result = run_design_sweep(params -> params["a"] + params["b"], sweep; threaded=false)
+    df = sweep_result_dataframe(result)
+    @test :a in propertynames(df)
+    @test :b in propertynames(df)
+    @test :parameters ∉ propertynames(df)
+end

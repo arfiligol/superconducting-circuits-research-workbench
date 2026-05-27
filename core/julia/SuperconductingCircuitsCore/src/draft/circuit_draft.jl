@@ -15,7 +15,8 @@
 # - "Later, couple this span on line A to that span on line B"
 # - "Only at the very end, lower everything into a flat JosephsonCircuits netlist"
 #
-# This file adds a thin Julia-side draft layer for sandbox use.
+# This file adds a thin Julia-side draft layer for reusable circuit authoring in
+# the Julia Scientific Core.
 # The layer is deliberately small:
 #
 # - `CircuitDraft`
@@ -227,7 +228,7 @@ end
 """
     mutable struct CircuitDraft
 
-Editable circuit container used in the sandbox before flattening to the
+Editable circuit container used in the Julia Scientific Core before flattening to the
 JosephsonCircuits tuple netlist.
 
 This draft stores three kinds of information:
