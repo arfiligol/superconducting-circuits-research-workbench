@@ -1,18 +1,8 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  Database,
-  FilePenLine,
-  LayoutDashboard,
-  Workflow,
-  Upload,
-} from "lucide-react";
-
 export type WorkspaceNavigationItem = Readonly<{
   href: string;
   label: string;
   group: "workspace" | "data" | "design-assets";
   pageTitle?: string;
-  icon: LucideIcon;
   aliases?: readonly string[];
 }>;
 
@@ -22,7 +12,6 @@ export const workspaceNavigation: readonly WorkspaceNavigationItem[] = [
     label: "Dashboard",
     pageTitle: "Dashboard",
     group: "workspace",
-    icon: LayoutDashboard,
     aliases: ["/"],
   },
   {
@@ -30,28 +19,24 @@ export const workspaceNavigation: readonly WorkspaceNavigationItem[] = [
     label: "Dataset",
     pageTitle: "Dataset",
     group: "workspace",
-    icon: Database,
   },
   {
     href: "/tasks",
     label: "Tasks",
     pageTitle: "Tasks",
     group: "workspace",
-    icon: Workflow,
   },
   {
     href: "/data-ingestion",
     label: "Data Ingestion",
     pageTitle: "Data Ingestion",
     group: "data",
-    icon: Upload,
   },
   {
     href: "/raw-data",
     label: "Raw Data",
     pageTitle: "Raw Data Browser",
     group: "data",
-    icon: Database,
     aliases: ["/data-browser"],
   },
   {
@@ -59,7 +44,6 @@ export const workspaceNavigation: readonly WorkspaceNavigationItem[] = [
     label: "Design Assets",
     pageTitle: "Design Assets",
     group: "design-assets",
-    icon: FilePenLine,
   },
 ] as const;
 export type WorkspaceNavigationGroup = Readonly<{

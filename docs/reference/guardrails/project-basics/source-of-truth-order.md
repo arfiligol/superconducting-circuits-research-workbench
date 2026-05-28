@@ -10,8 +10,8 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "定義 reference docs、Julia Core/Runner、Backend、adapter 與 retired surfaces 的裁決順序"
-version: v3.0.0
+scope: "定義 reference docs、Julia Core authoring、Julia Runner、Backend、adapter 與 retired surfaces 的裁決順序"
+version: v3.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -33,7 +33,9 @@ updated_by: codex
      `docs/reference/app/shared/*` + `docs/reference/app/backend/*`
    - Persisted payload / storage schema / field semantics：
      `docs/reference/data-formats/*`
-   - Public Julia Core / Runner runtime and computation invariants：
+   - Public Julia Core authoring invariants：
+     `docs/reference/julia-core/*`
+   - Julia Core / Runner runtime boundary and package invariants：
      `docs/reference/core/*`
    - User-visible page behavior / page layout / interaction flow：
      `docs/reference/app/frontend/**/*`
@@ -53,7 +55,8 @@ updated_by: codex
 | `docs/reference/app/shared/*` | app-level shared semantics、workspace/resource/auth/task runtime/audit/error families |
 | `docs/reference/app/backend/*` | app-facing authority surfaces、request/response contract、mutation/read model |
 | `docs/reference/data-formats/*` | persisted record shape、field semantics、storage payload contract |
-| `docs/reference/core/*` | Julia Core / Runner runtime boundary、installable contract、core-owned invariants |
+| `docs/reference/julia-core/*` | Julia Core authoring model、Circuit Plan、components、endpoints、compiler、compiled output、worker-safe API |
+| `docs/reference/core/*` | Julia Core / Runner runtime boundary、installable contract、package-level invariants |
 | `docs/reference/app/frontend/**/*` | page purpose、layout、interaction、acceptance |
 | `docs/reference/notebooks/*` | Notebook research cockpit and inspection workflows |
 | `docs/reference/architecture/*` | owner discovery、contract registry、cross-layer boundary map；不能覆寫 owner contract |
@@ -110,7 +113,8 @@ updated_by: codex
 - Resolve conflicts by concern owner first:
     - app collaboration/session/auth/workspace/task runtime/audit/error -> `docs/reference/app/shared/*` + `docs/reference/app/backend/*`
     - persisted payload/schema fields -> `docs/reference/data-formats/*`
-    - Julia Core / Runner runtime invariants -> `docs/reference/core/*`
+    - Julia Core authoring invariants -> `docs/reference/julia-core/*`
+    - Julia Core / Runner runtime boundary and package invariants -> `docs/reference/core/*`
     - page behavior/layout -> `docs/reference/app/frontend/**/*`
     - notebook workflow behavior -> `docs/reference/notebooks/*`
 - Use `docs/reference/architecture/*` only as owner-boundary and canonical contract registry guidance, not as the primary owner when owner docs already exist.

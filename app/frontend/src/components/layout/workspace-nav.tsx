@@ -33,7 +33,6 @@ export function WorkspaceNav({ onNavigate }: WorkspaceNavProps) {
             <nav className="mt-3 space-y-1.5">
               {group.items.map((item) => {
                 const active = isWorkspaceNavigationItemActive(item, pathname);
-                const Icon = item.icon;
 
                 return (
                   <Link
@@ -47,18 +46,8 @@ export function WorkspaceNav({ onNavigate }: WorkspaceNavProps) {
                         : "border-transparent text-foreground hover:border-primary/20 hover:bg-surface hover:text-primary",
                     )}
                   >
-                    <span className="flex items-center gap-3">
-                      <span
-                        className={cx(
-                          "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                          active ? "bg-primary/12 text-primary" : "bg-surface text-primary/80",
-                        )}
-                      >
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-medium">{item.label}</span>
-                      </span>
+                    <span className="block min-w-0">
+                      <span className="block truncate text-[15px] font-medium">{item.label}</span>
                     </span>
                   </Link>
                 );

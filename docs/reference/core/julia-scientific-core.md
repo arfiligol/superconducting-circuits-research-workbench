@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Julia Core scientific API ownership for Pluto direct research and Julia Runner product execution.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -35,7 +35,7 @@ Python notebooks may analyze local Zarr, exported data, CSV/raw files, and canon
 | Julia package | `core/julia/SuperconductingCircuitsCore/` |
 | Package entrypoint | `core/julia/SuperconductingCircuitsCore/src/SuperconductingCircuitsCore.jl` |
 | Reusable components | `src/components/` |
-| Circuit draft / lowering | `src/draft/` |
+| Circuit Plan implementation / lowering | `src/draft/` |
 | Simulation and sweeps | `src/simulation/` |
 | Plain Julia examples | `core/julia/SuperconductingCircuitsCore/examples/` |
 | Pluto notebooks | `notebooks/pluto/` |
@@ -75,8 +75,10 @@ julia --project=core/julia/SuperconductingCircuitsCore core/julia/Superconductin
 Pluto Notebook
     -> direct Julia call
 Julia Core
-    -> reusable components / circuit draft
-JosephsonCircuits.jl netlist
+    -> reusable components / Circuit Plan
+Compiler
+    -> JosephsonCompiledCircuit
+JosephsonCircuits.jl target
     -> simulation / sweep
 Result object / table / plot-ready data
 ```
@@ -107,8 +109,8 @@ Python notebooks may submit Backend tasks through this product async path when t
 
 | Rule | Meaning |
 |---|---|
-| Julia owns scientific construction | Components, symbolic pins, draft graph, coupled-window placement, distributed TL discretization, lowering, simulation wrappers, sweeps, and analysis helpers live in Julia Core. |
-| Delayed lowering stays required | Author high-level drafts first; call `finalize_to_josephson_netlist` only at the end. Do not patch already-flat JosephsonCircuits netlists in place. |
+| Julia owns scientific construction | Components, endpoints, Circuit Plan state, coupled-window placement, distributed TL discretization, compiler lowering, simulation wrappers, sweeps, and analysis helpers live in Julia Core. |
+| Delayed lowering stays required | Author a high-level Circuit Plan first; call the compiler only at the end. Do not patch already-flat JosephsonCircuits rows in place. |
 | Pluto is direct research execution | Pluto may call Julia Core directly and inspect intermediate local data. Pluto is not a Backend task submitter. |
 | Runner is product execution | Julia Runner calls Julia Core from Backend task envelopes and writes staging packages for Backend publication. |
 | Python/backend does not own lowering | Python Backend validates requests and publishes results; it does not reimplement construction, lowering, sweep, fitting, or analysis logic. |
@@ -134,6 +136,7 @@ Julia Core returns scientific results to its caller. Storage authority belongs o
 ## Related
 
 - [Core Reference](index.md)
+- [Julia Core Authoring](../julia-core/index.md)
 - [Julia Core](julia-core.md)
 - [Julia Wrapper](julia-wrapper.md)
 - [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)

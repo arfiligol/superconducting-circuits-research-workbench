@@ -13,7 +13,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: frontend shared sidebar navigation for retained application surfaces
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -50,7 +50,7 @@ The sidebar may expose Simulation Workbench as a primary product surface. It mus
 |---|---|
 | group label | yes |
 | nav item title | yes |
-| nav item icon | yes |
+| nav item icon | no |
 | active state | yes |
 | group description | no |
 | item summary | no |

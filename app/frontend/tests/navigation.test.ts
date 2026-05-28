@@ -36,9 +36,9 @@ describe("workspaceNavigation", () => {
     expect(workspaceNavigationGroups.map((group) => group.items.length)).toEqual([3, 2, 1]);
   });
 
-  it("keeps the shell navigation title-only while preserving icons", () => {
+  it("keeps the shell navigation title-only without item icons", () => {
     expect(workspaceNavigation.every((item) => "summary" in item)).toBe(false);
-    expect(workspaceNavigation.every((item) => Boolean(item.icon))).toBe(true);
+    expect(workspaceNavigation.every((item) => "icon" in item)).toBe(false);
   });
 
   it("realigns route family and page identity for header consumers", () => {

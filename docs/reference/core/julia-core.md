@@ -9,8 +9,8 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Julia-native core and runner package reference surface。
-version: v0.5.0
+scope: Julia-native core and runner package reference surface.
+version: v0.6.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -18,6 +18,8 @@ updated_by: codex
 # Julia Core
 
 本頁記錄 Julia-native simulation / analysis runtime 的目前邊界，以及 repo 內正式存在的 Julia package surfaces。
+
+For the reusable Circuit Plan authoring architecture, use [Julia Core Authoring](../julia-core/index.md). This page only records package placement and package-level ownership.
 
 !!! info "Current Julia Surface"
     canonical Julia surface 已收斂到 `core/julia/`。
@@ -66,6 +68,7 @@ updated_by: codex
 
 ## Related
 
+- [Julia Core Authoring](../julia-core/index.md)
 - [Julia Compute Boundary](julia-wrapper.md)
 - [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
 - [Notebook Interface](../notebooks/index.md)
