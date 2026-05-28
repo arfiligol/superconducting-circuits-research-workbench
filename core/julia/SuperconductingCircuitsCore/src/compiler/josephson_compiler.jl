@@ -150,6 +150,10 @@ function _prepare_node_resolution!(ctx::_JosephsonCompileContext)
             _validate_endpoint_for_lumped_lowering(ctx.plan, relation.at)
             _ensure_endpoint!(ctx, relation.at)
             _ensure_endpoint!(ctx, ground())
+        elseif relation isa ShuntInductor
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.at)
+            _ensure_endpoint!(ctx, relation.at)
+            _ensure_endpoint!(ctx, ground())
         elseif relation isa InductiveCoupling
             _validation_error("InductiveCoupling '$(relation.id)' is not supported by the lumped Josephson compiler MVP yet.")
         elseif relation isa CoupledWindowRelation
@@ -157,6 +161,11 @@ function _prepare_node_resolution!(ctx::_JosephsonCompileContext)
         else
             _validation_error("Unsupported relation for Josephson lowering: $(typeof(relation)).")
         end
+    end
+
+    for port in _external_port_declarations(ctx.plan)
+        _validate_endpoint_for_lumped_lowering(ctx.plan, port.endpoint)
+        _ensure_endpoint!(ctx, port.endpoint)
     end
 
     endpoints_by_key = Dict{Any,AbstractCircuitEndpoint}(_endpoint_key(endpoint) => endpoint for endpoint in ctx.endpoints)
@@ -243,6 +252,25 @@ function _emit_capacitor_relation!(
     return row_index
 end
 
+function _emit_inductor_relation!(
+    ctx::_JosephsonCompileContext;
+    relation::AbstractCircuitRelation,
+    row_name::AbstractString,
+    node_a::AbstractString,
+    node_b::AbstractString,
+    inductance,
+)
+    value = inductance
+    _require(value isa Number || value isa ParameterBinding || value isa Symbol || value isa AbstractString,
+        "Inductor relation '$(row_name)' must use a numeric value or parameter binding.")
+
+    value_ref = _component_value_ref!(ctx, row_name, value)
+    _push_component!(ctx.netlist, row_name, node_a, node_b, value_ref)
+    row_index = length(ctx.netlist)
+    _record_row_provenance!(ctx, relation, row_index)
+    return row_index
+end
+
 function _lower_relation!(ctx::_JosephsonCompileContext, relation::NodeConnection)
     return nothing
 end
@@ -269,6 +297,17 @@ function _lower_relation!(ctx::_JosephsonCompileContext, relation::ShuntCapacito
     )
 end
 
+function _lower_relation!(ctx::_JosephsonCompileContext, relation::ShuntInductor)
+    return _emit_inductor_relation!(
+        ctx;
+        relation=relation,
+        row_name="L_$(_sanitize_node_part(relation.id))",
+        node_a=_resolved_node(ctx, relation.at),
+        node_b="0",
+        inductance=relation.inductance,
+    )
+end
+
 function _lower_relation!(::_JosephsonCompileContext, relation::InductiveCoupling)
     _validation_error("InductiveCoupling '$(relation.id)' is not supported by the lumped Josephson compiler MVP yet.")
 end
@@ -281,51 +320,60 @@ function _lower_relation!(::_JosephsonCompileContext, relation::AbstractCircuitR
     _validation_error("Unsupported relation for Josephson lowering: $(typeof(relation)).")
 end
 
-function _external_port_specs(plan::CircuitPlan)
-    raw_ports = get(plan.metadata, :external_ports, Any[])
+function _collect_external_port_declarations(raw_ports)
+    declarations = ExternalPort[]
     if raw_ports isa AbstractDict
-        raw_ports = collect(values(raw_ports))
-    end
-    raw_ports isa AbstractVector || _validation_error("CircuitPlan metadata[:external_ports] must be a vector or dictionary when present.")
-    specs = NamedTuple[]
-    for item in raw_ports
-        if item isa AbstractString || item isa Symbol
-            name = string(item)
-            match_result = match(r"^port_(\d+)$", name)
-            isnothing(match_result) && _validation_error("External port name '$(name)' must use the form port_N.")
-            push!(specs, (name=name, index=parse(Int, match_result.captures[1]), resistance_ohm=50.0))
-        elseif item isa NamedTuple
-            name = string(get(item, :name, ""))
-            index = Int(get(item, :index, 0))
-            resistance = Float64(get(item, :resistance_ohm, 50.0))
-            !isempty(name) || _validation_error("External port metadata entry is missing name.")
-            index > 0 || _validation_error("External port metadata entry for '$(name)' must have a positive index.")
-            resistance > 0 || _validation_error("External port metadata entry for '$(name)' must have positive resistance_ohm.")
-            push!(specs, (name=name, index=index, resistance_ohm=resistance))
-        elseif item isa ExternalPort
-            item.index > 0 || _validation_error("External port metadata entry for '$(item.id)' must have a positive index.")
-            item.resistance > 0 || _validation_error("External port metadata entry for '$(item.id)' must have positive resistance.")
-            push!(specs, (name=string(item.id), index=item.index, resistance_ohm=item.resistance))
-        else
-            _validation_error("External port metadata entries must be names or named tuples.")
+        for (key, value) in pairs(raw_ports)
+            value isa ExternalPort ||
+                _validation_error("CircuitPlan metadata[:external_ports] accepts ExternalPort declarations only.")
+            Symbol(key) == value.id ||
+                _validation_error("ExternalPort dictionary key '$(key)' does not match declaration id '$(value.id)'.")
+            push!(declarations, value)
         end
+    elseif raw_ports isa AbstractVector
+        for value in raw_ports
+            value isa ExternalPort ||
+                _validation_error("CircuitPlan metadata[:external_ports] accepts ExternalPort declarations only.")
+            push!(declarations, value)
+        end
+    else
+        _validation_error("CircuitPlan metadata[:external_ports] must be a dictionary or vector of ExternalPort declarations when present.")
     end
-    return sort(specs; by=spec -> spec.index)
+    return declarations
+end
+
+function _external_port_declarations(plan::CircuitPlan)
+    raw_ports = get(plan.metadata, :external_ports, ExternalPort[])
+    declarations = _collect_external_port_declarations(raw_ports)
+
+    seen_ids = Set{Symbol}()
+    seen_indices = Set{Int}()
+    for port in declarations
+        port.id in seen_ids && _validation_error("Duplicate external port id '$(port.id)'.")
+        port.index in seen_indices && _validation_error("Duplicate external port index '$(port.index)'.")
+        port.index > 0 || _validation_error("ExternalPort '$(port.id)' must have a positive index.")
+        port.resistance > 0 || _validation_error("ExternalPort '$(port.id)' must have positive resistance.")
+        port.endpoint isa AbstractNodeEndpoint ||
+            _validation_error("ExternalPort '$(port.id)' endpoint must resolve to one circuit node.")
+        push!(seen_ids, port.id)
+        push!(seen_indices, port.index)
+    end
+
+    return sort(declarations; by=port -> port.index)
 end
 
 function _emit_external_ports!(ctx::_JosephsonCompileContext)
-    specs = _external_port_specs(ctx.plan)
-    isempty(specs) && return Dict{String,Int}()
+    ports = _external_port_declarations(ctx.plan)
+    isempty(ports) && return Dict{String,Int}()
 
     external_port_map = Dict{String,Int}()
-    for spec in specs
-        endpoint = external_node(spec.name)
-        node_name = _resolved_node(ctx, endpoint)
-        push!(ctx.netlist, ("P$(spec.index)", node_name, "0", spec.index))
-        resistor_name = "R_port_$(spec.index)"
-        value_ref = _component_value_ref!(ctx, resistor_name, spec.resistance_ohm)
+    for port in ports
+        node_name = _resolved_node(ctx, port.endpoint)
+        push!(ctx.netlist, ("P$(port.index)", node_name, "0", port.index))
+        resistor_name = "R_port_$(port.index)"
+        value_ref = _component_value_ref!(ctx, resistor_name, port.resistance)
         _push_component!(ctx.netlist, resistor_name, node_name, "0", value_ref)
-        external_port_map[spec.name] = spec.index
+        external_port_map[string(port.id)] = port.index
     end
 
     return external_port_map

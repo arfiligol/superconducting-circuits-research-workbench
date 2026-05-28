@@ -17,7 +17,6 @@ include("simulation/hb_intent.jl")
 include("simulation/hb_problem.jl")
 include("compiler/topology_key.jl")
 include("compiler/josephson_compiler.jl")
-include("components/demo_components.jl")
 include("authoring/macro_dsl.jl")
 include("sweeps/executors.jl")
 include("sweeps/sweep_spec.jl")
@@ -78,7 +77,6 @@ export to_dot
 export to_schemdraw_spec
 export component
 export @circuit
-export LumpedResonator
 
 export AbstractParameterRole
 export StructuralParameter
@@ -99,11 +97,13 @@ export AbstractCircuitRelation
 export NodeConnection
 export CapacitiveCoupling
 export ShuntCapacitor
+export ShuntInductor
 export InductiveCoupling
 export CoupledWindowRelation
 export connect!
 export couple_capacitive!
 export shunt_capacitor!
+export shunt_inductor!
 export couple_inductive!
 export couple_window!
 

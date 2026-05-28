@@ -2,7 +2,6 @@ Base.@kwdef struct HBRunSpec
     frequency_sweep
     pump_frequencies::Dict{Symbol,Float64} = Dict{Symbol,Float64}()
     source_currents::Dict{Symbol,Float64} = Dict{Symbol,Float64}()
-    dc_currents::Dict{Symbol,Float64} = Dict{Symbol,Float64}()
     optional_hb_kwargs::Dict{Symbol,Any} = Dict{Symbol,Any}()
 end
 
@@ -68,6 +67,14 @@ function build_hb_problem(compiled::JosephsonCompiledCircuit, run_spec::HBRunSpe
 
     sources = Any[]
     for slot in intent.source_slots
+        if slot.role == :dc_bias
+            _is_dc_mode(slot.mode) || _validation_error(
+                "DC bias source slot '$(slot.id)' must use mode (0,).",
+            )
+            controls.dc || _validation_error(
+                "DC bias source slot '$(slot.id)' requires HBSolverControls(dc=true).",
+            )
+        end
         haskey(run_spec.source_currents, slot.id) || _validation_error(
             "HBRunSpec is missing source current binding for source slot '$(slot.id)'.",
         )

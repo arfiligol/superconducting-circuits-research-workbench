@@ -70,6 +70,7 @@ function _relation_endpoints(relation::AbstractCircuitRelation)
     relation isa NodeConnection && return AbstractCircuitEndpoint[relation.a, relation.b]
     relation isa CapacitiveCoupling && return AbstractCircuitEndpoint[relation.from, relation.to]
     relation isa ShuntCapacitor && return AbstractCircuitEndpoint[relation.at, ground()]
+    relation isa ShuntInductor && return AbstractCircuitEndpoint[relation.at, ground()]
     relation isa InductiveCoupling && return AbstractCircuitEndpoint[relation.from, relation.to]
     relation isa CoupledWindowRelation && return AbstractCircuitEndpoint[relation.line_a, relation.line_b]
     return AbstractCircuitEndpoint[]

@@ -1,3 +1,14 @@
+function _framework_validation_message(f)
+    try
+        f()
+    catch err
+        @test err isa FrameworkValidationError
+        return sprint(showerror, err)
+    end
+    @test false
+    return ""
+end
+
 @testset "HBIntent pure linear no-pump problem spec" begin
     plan = CircuitPlan("pure-linear")
     component = register_component!(
@@ -164,4 +175,175 @@ end
 
     @test problem.Npumpharmonics == (8, 10)
     @test problem.Nmodulationharmonics == (6,)
+end
+
+@testset "HBProblemSpec DC bias source uses source_currents binding" begin
+    plan = CircuitPlan("dc-bias-source")
+    component = register_component!(
+        plan,
+        MinimalComponentLibrary.TestGroundedComponent("res");
+        display_name=:res,
+        role=:resonator,
+    )
+    external_port!(
+        plan;
+        id=:pump_port,
+        index=1,
+        endpoint=pin(component, :signal),
+        resistance=50.0,
+        role=:mixed,
+    )
+    hb_intent!(
+        plan;
+        pump_axes=[
+            PumpAxis(id=:pump, frequency_parameter=:pump_frequency),
+        ],
+        source_slots=[
+            HBSourceSlot(
+                id=:dc_bias,
+                role=:dc_bias,
+                port=:pump_port,
+                mode=(0,),
+                current_parameter=:dc_current,
+            ),
+            HBSourceSlot(
+                id=:pump_in,
+                role=:pump,
+                port=:pump_port,
+                mode=(1,),
+                current_parameter=:pump_current,
+            ),
+        ],
+        observables=[
+            SParameterRequest(
+                id=:s11_signal,
+                outputmode=(0,),
+                outputport=:pump_port,
+                inputmode=(0,),
+                inputport=:pump_port,
+            ),
+        ],
+        default_solver_controls=HBSolverControls(
+            n_pump_harmonics=16,
+            n_modulation_harmonics=(8,),
+            dc=true,
+            threewavemixing=true,
+            fourwavemixing=true,
+        ),
+    )
+
+    compiled = compile_to_josephson(plan)
+    problem = build_hb_problem(
+        compiled,
+        HBRunSpec(
+            frequency_sweep=[4.0e9, 5.0e9],
+            pump_frequencies=Dict(:pump => 8.0e9),
+            source_currents=Dict(:dc_bias => 0.0, :pump_in => 1.0e-6),
+        ),
+    )
+
+    @test problem.sources == [
+        (mode=(0,), port=1, current=0.0),
+        (mode=(1,), port=1, current=1.0e-6),
+    ]
+    @test problem.controls.dc
+    @test problem.Nmodulationharmonics == (8,)
+
+    message = _framework_validation_message() do
+        build_hb_problem(
+            compiled,
+            HBRunSpec(
+                frequency_sweep=[4.0e9],
+                pump_frequencies=Dict(:pump => 8.0e9),
+                source_currents=Dict(:pump_in => 1.0e-6),
+            ),
+        )
+    end
+    @test occursin("missing source current binding", message)
+    @test occursin("dc_bias", message)
+end
+
+@testset "HBIntent validates DC bias source declarations" begin
+    plan_wrong_mode = CircuitPlan("dc-wrong-mode")
+    component_wrong_mode = register_component!(
+        plan_wrong_mode,
+        MinimalComponentLibrary.TestGroundedComponent("res");
+        display_name=:res,
+        role=:resonator,
+    )
+    external_port!(
+        plan_wrong_mode;
+        id=:pump_port,
+        index=1,
+        endpoint=pin(component_wrong_mode, :signal),
+        resistance=50.0,
+        role=:mixed,
+    )
+    hb_intent!(
+        plan_wrong_mode;
+        pump_axes=[
+            PumpAxis(id=:pump, frequency_parameter=:pump_frequency),
+        ],
+        source_slots=[
+            HBSourceSlot(
+                id=:dc_bias,
+                role=:dc_bias,
+                port=:pump_port,
+                mode=(1,),
+                current_parameter=:dc_current,
+            ),
+        ],
+        default_solver_controls=HBSolverControls(dc=true),
+    )
+
+    wrong_mode_message = _framework_validation_message() do
+        compile_to_josephson(plan_wrong_mode)
+    end
+    @test occursin("DC bias source slot 'dc_bias' must use mode (0,).", wrong_mode_message)
+
+    plan_dc_disabled = CircuitPlan("dc-disabled")
+    component_dc_disabled = register_component!(
+        plan_dc_disabled,
+        MinimalComponentLibrary.TestGroundedComponent("res");
+        display_name=:res,
+        role=:resonator,
+    )
+    external_port!(
+        plan_dc_disabled;
+        id=:pump_port,
+        index=1,
+        endpoint=pin(component_dc_disabled, :signal),
+        resistance=50.0,
+        role=:mixed,
+    )
+    hb_intent!(
+        plan_dc_disabled;
+        pump_axes=[
+            PumpAxis(id=:pump, frequency_parameter=:pump_frequency),
+        ],
+        source_slots=[
+            HBSourceSlot(
+                id=:dc_bias,
+                role=:dc_bias,
+                port=:pump_port,
+                mode=(0,),
+                current_parameter=:dc_current,
+            ),
+        ],
+        default_solver_controls=HBSolverControls(dc=false),
+    )
+
+    dc_disabled_message = _framework_validation_message() do
+        compile_to_josephson(plan_dc_disabled)
+    end
+    @test occursin("DC bias source slot 'dc_bias' requires HBSolverControls(dc=true).", dc_disabled_message)
+end
+
+@testset "HBSolverControls product output family defaults" begin
+    controls = HBSolverControls()
+
+    @test controls.returnS
+    @test controls.returnZ
+    @test controls.returnQE
+    @test controls.returnCM
 end

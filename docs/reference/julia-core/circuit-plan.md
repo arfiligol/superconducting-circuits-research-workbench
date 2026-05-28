@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Circuit Plan semantics and stored authoring data before JosephsonCircuits.jl compilation.
-version: v1.4.0
+version: v1.4.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -108,11 +108,26 @@ Pluto can inspect the plan before compilation:
 
 This keeps Pluto interactive without giving Pluto a separate construction path.
 
+Pluto tutorial notebooks may define a minimal local component to make an acceptance harness readable. That local component is allowed only as a tutorial or test fixture; it must not become evidence that Julia Core ships lab-specific component catalogs.
+
 ## Why It Helps Runner Execution
 
 The Julia Runner can receive deterministic task input, rebuild the same plan, validate it, compile it, simulate it, and stage output with provenance.
 
 Runner execution should call the same plan builders and compiler used by Pluto. The caller changes; the Core pipeline does not.
+
+For HB execution, the product-aligned handoff is:
+
+```text
+CircuitPlan
+  -> HBIntent
+  -> compile_to_josephson
+  -> build_hb_problem
+  -> HBProblemSpec
+  -> run_hb_problem
+```
+
+Low-level `run_hbsolve` may remain as a JosephsonCircuits-facing adapter, but it must not replace `HBProblemSpec` and `run_hb_problem` as the documented Core/Runner path.
 
 ## Plan-Level Transforms
 

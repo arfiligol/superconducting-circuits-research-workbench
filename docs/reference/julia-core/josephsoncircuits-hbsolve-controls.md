@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines first-class, whitelisted, and unsupported JosephsonCircuits.jl hbsolve controls for Julia Core and Runner use.
-version: v1.3.0
+version: v1.3.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -21,6 +21,8 @@ updated_by: codex
 This page defines the Julia Core contract for JosephsonCircuits.jl `hbsolve` controls. Product Runner execution should use typed first-class controls and a small whitelist of optional kwargs instead of passing arbitrary solver internals through task payloads.
 
 The initial inventory is derived from the official [JosephsonCircuits.jl reference](https://josephsoncircuits.org/stable/reference/) and official [JosephsonCircuits.jl examples](https://github.com/kpobrien/JosephsonCircuits.jl).
+
+The product-aligned Core path is `HBProblemSpec` plus `run_hb_problem`. This page documents the lower-level JosephsonCircuits-facing controls and call shapes that `HBProblemSpec` normalizes into.
 
 ## Official Example Inventory
 
@@ -134,6 +136,8 @@ Exact default numeric values may be adjusted per circuit family, but the default
 ## Example Call Shapes
 
 The target Julia Core API normalizes user-facing values into JosephsonCircuits-facing shapes like these official examples.
+
+These snippets are reference call shapes, not the preferred product or Runner entry point. Product-aligned code should build an `HBProblemSpec` and call `run_hb_problem`; low-level `run_hbsolve` must stay consistent with that normalized problem shape.
 
 Single-pump JPA:
 
@@ -283,6 +287,9 @@ Source mode rules:
 
 - source mode tuple length must match the pump-axis count;
 - DC-only mode must be represented explicitly and allowed by `HBIntent`;
+- DC bias is represented as `HBSourceSlot(mode = (0,))`;
+- DC bias current is bound through `source_currents`, not a separate DC binding map;
+- `controls.dc = true` is required when a DC bias source slot is declared;
 - `current_a = 0.0` is valid;
 - missing source slot binding is invalid unless the source slot declares an explicit default;
 - unknown source slot ID is invalid.
@@ -307,7 +314,8 @@ Product requests bind source currents by source slot ID:
 ```json
 {
   "runtime_bindings": {
-    "source_currents_a": {
+    "source_currents": {
+      "dc_bias": 0.000001,
       "pump_in": 0.0
     }
   }
@@ -319,6 +327,8 @@ Rules:
 - `current_a = 0.0` is legal;
 - source role, source mode, and source port are declared in CircuitPlan source slots;
 - runtime only binds current values by source slot ID;
+- DC bias uses the same binding map with an `HBSourceSlot(mode = (0,))`;
+- DC handling is enabled by `controls.dc = true`;
 - Julia Core maps validated source slots to JosephsonCircuits `(mode, port, current)` entries.
 
 ## Unsupported Ambiguous Source Fields

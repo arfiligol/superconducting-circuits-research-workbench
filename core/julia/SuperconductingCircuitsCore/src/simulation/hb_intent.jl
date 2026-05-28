@@ -40,6 +40,8 @@ Base.@kwdef struct HBIntent
     default_solver_controls::HBSolverControls = HBSolverControls()
 end
 
+_is_dc_mode(mode::Tuple) = mode == (0,)
+
 function hb_intent!(
     plan::CircuitPlan;
     pump_axes=PumpAxis[],
@@ -124,6 +126,30 @@ function _validate_hb_intent_issues(intent, port_ids)
             expected=pump_axis_count,
             actual=length(slot.mode),
         )
+        if slot.role == :dc_bias
+            _is_dc_mode(slot.mode) || _issue!(
+                issues,
+                :error,
+                :dc_bias_mode_mismatch,
+                "DC bias source slot '$(slot.id)' must use mode (0,).",
+                [:hb_intent, :source_slots];
+                stage=:compile_validation,
+                object_id=string(slot.id),
+                expected=(0,),
+                actual=slot.mode,
+            )
+            intent.default_solver_controls.dc || _issue!(
+                issues,
+                :error,
+                :dc_bias_requires_dc_control,
+                "DC bias source slot '$(slot.id)' requires HBSolverControls(dc=true).",
+                [:hb_intent, :default_solver_controls, :dc];
+                stage=:compile_validation,
+                object_id=string(slot.id),
+                expected=true,
+                actual=intent.default_solver_controls.dc,
+            )
+        end
     end
 
     observable_ids = Set{Symbol}()

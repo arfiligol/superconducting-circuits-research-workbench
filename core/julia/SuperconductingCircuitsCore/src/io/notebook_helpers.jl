@@ -1,5 +1,5 @@
 function sweep_result_dataframe(result::SweepResult)
-    rows = NamedTuple[]
+    rows = Any[]
     points = get(result.provenance, :points, Dict{Symbol,Any}[])
     axis_names = _axis_names(result.execution_plan.sweep_spec)
 

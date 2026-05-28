@@ -1,5 +1,9 @@
 abstract type AbstractSweepAxis end
 
+function _sweep_is_named_tuple_value(value)
+    return nameof(typeof(value)) == Symbol("Named", "Tuple")
+end
+
 function _axis_values(values, label::AbstractString)
     collected = Any[value for value in values]
     !isempty(collected) || _validation_error("$(label) values must not be empty.")
@@ -36,7 +40,7 @@ end
 
 function _normalize_axes(axes)
     normalized = Dict{Symbol,AbstractSweepAxis}()
-    if axes isa NamedTuple
+    if _sweep_is_named_tuple_value(axes)
         for name in keys(axes)
             axis = getfield(axes, name)
             axis isa AbstractSweepAxis || _validation_error("Sweep axis '$(name)' must be an AbstractSweepAxis.")
@@ -48,7 +52,7 @@ function _normalize_axes(axes)
             normalized[Symbol(name)] = axis
         end
     else
-        _validation_error("SweepSpec axes must be a NamedTuple or dictionary.")
+        _validation_error("SweepSpec axes must be a named tuple or dictionary.")
     end
     return normalized
 end
@@ -107,4 +111,3 @@ function _sweep_points(sweep::SweepSpec)
     end
     return points
 end
-

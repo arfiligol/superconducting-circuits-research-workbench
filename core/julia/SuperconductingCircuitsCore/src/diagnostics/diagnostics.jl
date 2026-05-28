@@ -251,6 +251,10 @@ function explain_topology_key(plan::CircuitPlan)
     )
 end
 
+function _diagnostic_is_named_tuple_value(value)
+    return nameof(typeof(value)) == Symbol("Named", "Tuple")
+end
+
 function _collect_tuple_kind!(matches, value, kind::Symbol)
     if value isa Tuple
         if !isempty(value) && first(value) == kind
@@ -259,7 +263,7 @@ function _collect_tuple_kind!(matches, value, kind::Symbol)
         for item in value
             _collect_tuple_kind!(matches, item, kind)
         end
-    elseif value isa NamedTuple
+    elseif _diagnostic_is_named_tuple_value(value)
         for item in values(value)
             _collect_tuple_kind!(matches, item, kind)
         end

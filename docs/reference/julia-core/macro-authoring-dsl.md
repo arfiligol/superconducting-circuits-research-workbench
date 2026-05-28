@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Target macro authoring DSL contract for CircuitPlan, HBIntent, and EngineeringGraph capture.
-version: v1.0.0
+version: v1.0.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -34,6 +34,12 @@ Macro DSL
 ```
 
 The macro output must remain inspectable. A user should be able to look at the expanded calls and see `register_component!`, `external_port!`, `hb_intent!`, and EngineeringGraph recording calls rather than hidden simulator rows.
+
+## Notebook Role
+
+Pluto notebooks that exercise the Macro DSL should stay simple enough to serve as both tutorials and acceptance harnesses. Prefer Markdown, compact tables, and callouts that show the contract the user is testing. Avoid adding complex visualization dependencies unless the cell is explicitly validating a renderer boundary.
+
+Tutorial notebooks may define small local reusable components when the goal is to demonstrate macro expansion, EngineeringGraph capture, or HB problem construction. Those local examples are notebook fixtures, not Julia Core Kernel component families.
 
 ## Macro DSL Captures Engineering Semantics
 
@@ -96,6 +102,8 @@ end
 
 The DSL should record the component variable names `feedline`, `resonator`, and `qubit`, the reusable component types, relation verbs, coupling component, endpoint expressions, and source location.
 
+The concrete component names in this example are component-library examples. Julia Core owns the authoring kernel and expansion contract; it does not ship lab-specific resonator, qubit, feedline, JPA, SNAIL, or filter catalogs.
+
 ## HB Intent Example
 
 HB simulation intent can use the same authoring style:
@@ -121,6 +129,19 @@ end
 ```
 
 The macro should expand into the same `hb_intent!`, `PumpAxis`, `HBSourceSlot`, and observable request objects used by the functional API.
+
+DC bias uses the same source-slot mechanism:
+
+```julia
+source_slot(:dc_bias) do
+    role = :dc_bias
+    port = :readout_port
+    mode = (0,)
+    current_parameter = :dc_current
+end
+```
+
+The runtime binding for this slot is `source_currents[:dc_bias]`. The corresponding controls must enable DC handling with `dc = true`.
 
 ## Expansion Contract
 

@@ -3,11 +3,6 @@ using Test
 
 const SCC = SuperconductingCircuitsCore
 
-if !isdefined(Main, :MinimalComponentLibrary)
-    include("fixtures/minimal_component_library.jl")
-    using .MinimalComponentLibrary
-end
-
 @testset "EngineeringGraph records plan-level semantics" begin
     plan = CircuitPlan("engineering-graph")
     component = register_component!(
@@ -29,9 +24,9 @@ end
     @test recorded_component.component_type == :TestGroundedComponent
     @test recorded_component.role == :resonator
     @test recorded_component.pins == [:signal]
-    @test haskey(recorded_component.parameters, :capacitance_f)
+    @test haskey(recorded_component.parameters, :capacitance)
 
-    port = SCC.record_engineering_port!(
+    port = external_port!(
         plan;
         id=:signal_port,
         endpoint=pin(component, :signal),
@@ -79,7 +74,7 @@ end
         display_name=:res,
         role=:resonator,
     )
-    SCC.record_engineering_port!(
+    external_port!(
         plan;
         id=:signal_port,
         endpoint=pin(component, :signal),

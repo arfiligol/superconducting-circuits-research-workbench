@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines how CircuitPlan declares HB ports, source slots, pump axes, observables, and solver-facing intent.
-version: v1.3.0
+version: v1.3.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -37,13 +37,27 @@ CircuitPlan
   -> compile_to_josephson
   -> JosephsonCompiledCircuit
   -> HBProblemSpec
-  -> run_hbsolve / run_frequency_sweep
+  -> run_hb_problem / run_frequency_sweep
 ```
 
 CircuitPlan declares what is allowed. The compiler validates and maps that intent into the compiled circuit. The Runner binds task runtime values to the validated slots. JosephsonCircuits.jl receives normalized netlist rows, component values, sources, frequencies, harmonic counts, and whitelisted solver controls.
 
 !!! warning "Runner does not own HB semantics"
     Runner task payloads may choose runtime values, but they must not invent ports, source slots, pump axes, mode tuples, or observable meanings after compilation.
+
+## Product-Aligned HB Path
+
+`HBProblemSpec` is the normalized execution shape for product-aligned Core and Runner execution.
+
+| Stage | Responsibility |
+| --- | --- |
+| `HBIntent` | declares ports, pump axes, source slots, observables, and default controls on the `CircuitPlan` |
+| `HBRunSpec` | carries runtime values such as frequency sweep, pump frequencies, `source_currents`, and optional whitelisted kwargs |
+| `build_hb_problem` | validates compiled intent against runtime values and creates `HBProblemSpec` |
+| `HBProblemSpec` | stores normalized JosephsonCircuits-facing `ws`, `wp`, `sources`, harmonics, controls, observables, and kwargs |
+| `run_hb_problem` | executes the validated problem or fails clearly when the solver path is not implemented |
+
+Low-level `run_hbsolve` is a JosephsonCircuits-facing adapter name. It must not contradict the product path or become the tutorial/Runner handoff when `HBProblemSpec` is available.
 
 ## ExternalPort
 
@@ -86,15 +100,15 @@ Single pump:
 ```julia
 PumpAxis(
     id = :pump,
-    frequency_parameter = :pump_frequency_hz,
+    frequency_parameter = :pump_frequency,
 )
 ```
 
 Double pump:
 
 ```julia
-PumpAxis(id = :pump_1, frequency_parameter = :pump_1_frequency_hz)
-PumpAxis(id = :pump_2, frequency_parameter = :pump_2_frequency_hz)
+PumpAxis(id = :pump_1, frequency_parameter = :pump_1_frequency)
+PumpAxis(id = :pump_2, frequency_parameter = :pump_2_frequency)
 ```
 
 Rules:
@@ -116,7 +130,7 @@ HBSourceSlot(
     role = :signal,
     port = :signal_port,
     mode = (1,),
-    current_parameter = :large_signal_current_a,
+    current_parameter = :large_signal_current,
 )
 ```
 
@@ -128,7 +142,7 @@ HBSourceSlot(
     role = :pump,
     port = :pump_port,
     mode = (1,),
-    current_parameter = :pump_current_a,
+    current_parameter = :pump_current,
 )
 ```
 
@@ -140,7 +154,7 @@ HBSourceSlot(
     role = :pump,
     port = :pump_port,
     mode = (1, 0),
-    current_parameter = :pump_1_current_a,
+    current_parameter = :pump_1_current,
 )
 
 HBSourceSlot(
@@ -148,7 +162,7 @@ HBSourceSlot(
     role = :pump,
     port = :pump_port,
     mode = (0, 1),
-    current_parameter = :pump_2_current_a,
+    current_parameter = :pump_2_current,
 )
 ```
 
@@ -160,15 +174,33 @@ HBSourceSlot(
     role = :dc_bias,
     port = :pump_port,
     mode = (0,),
-    current_parameter = :dc_current_a,
+    current_parameter = :dc_current,
 )
 ```
+
+Runtime binding:
+
+```julia
+HBRunSpec(
+    frequency_sweep = frequency_sweep,
+    pump_frequencies = Dict(:pump => pump_frequency),
+    source_currents = Dict(
+        :dc_bias => dc_current,
+        :pump_in => pump_current,
+    ),
+)
+```
+
+DC bias is not a separate binding family. It is an `HBSourceSlot` with `mode = (0,)`, bound through `source_currents`, and it requires `HBSolverControls(dc = true)`.
 
 Rules:
 
 - source slot IDs must be unique;
 - source slot ports must reference existing `ExternalPort` declarations;
 - source modes must be compatible with the declared pump axes;
+- DC bias source slots must use `mode = (0,)`;
+- DC bias current is bound through `source_currents[:dc_bias]`;
+- `controls.dc = true` enables DC handling for DC source slots;
 - `current = 0.0` is valid and means the source is intentionally off;
 - source slot existence is not fake compute even if its current value is zero;
 - source slot current value is a runtime binding.
@@ -189,7 +221,7 @@ HBSourceSlot(
     role = :pump,
     port = :pump_port,
     mode = (1,),
-    current_parameter = :pump_current_a,
+    current_parameter = :pump_current,
 )
 ```
 
@@ -412,6 +444,8 @@ HB validation is split across compile time and run time.
 - pump harmonic tuple lengths match pump axis count;
 - modulation harmonic tuple lengths match the declared modulation basis;
 - source current values are present or have explicit defaults;
+- DC current values are present in `source_currents` for declared DC source slots;
+- `controls.dc = true` is set when an intent declares a DC bias source slot;
 - `current = 0.0` is accepted;
 - optional solver kwargs are whitelisted;
 - requested observables can be extracted from solver output.
@@ -441,12 +475,14 @@ This page is stable as the target source of truth. It is not claiming that every
 
 | Concept | Target contract | Current implementation | Status |
 | --- | --- | --- | --- |
-| `ExternalPort` | first-class CircuitPlan declaration | currently approximated by `metadata[:external_ports]` in MVP | target |
-| `HBIntent` | first-class plan-level intent | not implemented as a struct yet | target |
-| `HBSourceSlot` | first-class source slot declaration | not implemented yet | target |
+| `ExternalPort` | first-class CircuitPlan declaration | MVP struct and `external_port!` path exist | design-stable |
+| `HBIntent` | first-class plan-level intent | MVP struct and `hb_intent!` path exist | design-stable |
+| `HBSourceSlot` | first-class source slot declaration | MVP struct exists; DC mode validation is part of compile validation | design-stable |
 | `HBObservableRequest` | first-class observable declaration | current Runner extraction still MVP / trace-specific | target |
 | `HBSolverControls` | typed first-class controls | current Runner only partially maps controls | target |
 | `optional_hb_kwargs` | whitelist only | not fully implemented | target |
+| `HBProblemSpec` | normalized HB execution shape | MVP struct and `build_hb_problem` path exist | design-stable |
+| `run_hb_problem` | product-aligned HB execution entry | exported but intentionally fails until solver execution is implemented | target |
 | `current = 0.0` | valid source-off runtime binding | should be accepted | design-stable |
 
 ## Related

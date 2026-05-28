@@ -374,15 +374,15 @@ Effective role
 
 | Parameter | Declaration source | Default declared role | Effective-role check |
 | --- | --- | --- | --- |
-| `capacitance_f` | Component Library | `NumericParameter` | topology key must not change |
-| `inductance_h` | Component Library | `NumericParameter` | topology key must not change |
+| `capacitance` | Component Library | `NumericParameter` | topology key must not change |
+| `inductance` | Component Library | `NumericParameter` | topology key must not change |
 | `junction_ic` | Component Library | `NumericParameter` if junction topology is unchanged | emitted junction structure must not change |
 | `external_flux` | Component Library or Plan Builder | `NumericParameter` or `DriveParameter` | topology key must not change |
 | `line_length_m` | Component Library or Plan Builder | usually `StructuralParameter` | line segmentation, node map, or emitted rows may change |
 | `n_sections` | Component Library | `StructuralParameter` | target netlist size changes |
 | `boundary` | Component Library | `StructuralParameter` | node connections and emitted rows may change |
-| `coupling_capacitance_f` | Relation / Coupling | `NumericParameter` if endpoints are unchanged | coupling relation must already exist |
-| `mutual_inductance_h` | Relation / Coupling | `NumericParameter` if coupling topology is unchanged | coupling relation must already exist |
+| `coupling_capacitance` | Relation / Coupling | `NumericParameter` if endpoints are unchanged | coupling relation must already exist |
+| `mutual_inductance` | Relation / Coupling | `NumericParameter` if coupling topology is unchanged | coupling relation must already exist |
 | `line_tap_at_m` | Endpoint / Relation | `StructuralParameter` | breakpoint insertion and node map change |
 | `line_span_start_stop` | Endpoint / Relation | `StructuralParameter` | distributed coupling region changes |
 | `window_length_m` | Plan Builder or Relation | `StructuralParameter` | span length and coupled-window lowering change |
@@ -443,7 +443,7 @@ Possible mappings:
 
 | Plan Builder knob | Maps to | Declared role |
 | --- | --- | --- |
-| `gap_um` | a capacitance model, e.g. `coupling_capacitance_f = f(gap_um)` | `NumericParameter` if geometry / endpoints are unchanged |
+| `gap_um` | a capacitance model, e.g. `coupling_capacitance = f(gap_um)` | `NumericParameter` if geometry / endpoints are unchanged |
 | `window_length_um` | `line_span(... from_m, to_m ...)` and `CoupledWindowSpec.length_m` | `StructuralParameter` |
 | `qwr_length_mm` | distributed line length / segmentation | `StructuralParameter` if node map or emitted rows change |
 | `coupling_fF` | existing `couple_capacitive!` value | `NumericParameter` |
@@ -468,7 +468,7 @@ Examples:
 
 ```text
 gap_um
-    maps only to coupling_capacitance_f
+    maps only to coupling_capacitance
     -> NumericParameter
 
 window_length_um
@@ -493,7 +493,7 @@ Some parameters are numeric only under explicit structural assumptions.
 Examples:
 
 ```text
-coupling_capacitance_f
+coupling_capacitance
     NumericParameter if the capacitive coupling relation already exists
     StructuralParameter if the sweep toggles whether the coupling relation exists
 

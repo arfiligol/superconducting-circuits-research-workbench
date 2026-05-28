@@ -116,14 +116,6 @@ function _port_expansion(plan_var, expr, source)
             endpoint=$(esc(endpoint)),
             resistance=$(esc(resistance)),
             role=$(esc(role)),
-        )
-        $(_macro_core_ref(:record_engineering_port!))(
-            $(plan_var);
-            id=$(esc(port_id)),
-            port_index=$(esc(index)),
-            endpoint=$(esc(endpoint)),
-            resistance=$(esc(resistance)),
-            role=$(esc(role)),
             source_location=$(source_location),
         )
     end

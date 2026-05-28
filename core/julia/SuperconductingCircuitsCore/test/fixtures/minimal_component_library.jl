@@ -41,14 +41,13 @@ component_lines(::TestGroundedComponent) = Symbol[]
 default_line(::TestGroundedComponent) = nothing
 component_parameters(component::TestGroundedComponent) = [
     ParameterMetadata(
-        name=:capacitance_f,
+        name=:capacitance,
         role=NumericParameter(),
         owner=component.id,
         targets=[:capacitance],
-        sweep_name=:capacitance_f,
+        sweep_name=:capacitance,
         units="F",
     ),
 ]
 
 end
-

@@ -12,7 +12,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Human-facing engineering semantic graph, visualization, and schematic export contract for Julia Core authoring.
-version: v1.0.0
+version: v1.0.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -55,6 +55,8 @@ EngineeringGraph
     -> SchematicExportSpec
     -> optional Schemdraw renderer
 ```
+
+Notebook views should keep this layer easy to inspect. Use Markdown, compact tables, callouts, DOT text, and renderer-neutral export previews before adding renderer-specific dependencies. A notebook that validates EngineeringGraph capture is still an acceptance harness even when it does not render a polished schematic.
 
 ## EngineeringGraph Data Model
 
@@ -264,12 +266,15 @@ Fast interactive visualization in Pluto Notebook.
 Initial implementation:
 
 ```text
-- HTML / HypertextLiteral cards
-- simple SVG / HTML graph
+- Markdown summaries and tables
+- direct `engineering_graph(plan)` inspection
 - DOT text preview
 ```
 
 This view shows component-level structure and HB overlays before compilation.
+
+!!! tip "Notebook validation"
+    A tutorial notebook should prove that the graph records components, ports, source slots, observables, and provenance. It should not require Graphviz, Schemdraw, or another renderer to pass the core acceptance path.
 
 ### Graph Export
 
@@ -298,6 +303,8 @@ Generate Python Schemdraw-compatible schematic data.
 The exported data should include enough hints for Python to decide drawing order and element types.
 
 Julia Core should not depend on Python Schemdraw. It should produce renderer-neutral data that a separate Python renderer can consume.
+
+Schemdraw export is an optional downstream rendering path. Julia Core and Pluto acceptance cells should remain valid when they only display `SchematicExportSpec` data or DOT text.
 
 ## SchematicExportSpec
 

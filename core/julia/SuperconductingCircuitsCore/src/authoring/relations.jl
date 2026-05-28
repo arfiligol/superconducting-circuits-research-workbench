@@ -18,6 +18,13 @@ struct ShuntCapacitor <: AbstractCircuitRelation
     parameters::Vector{ParameterMetadata}
 end
 
+struct ShuntInductor <: AbstractCircuitRelation
+    id::String
+    at::AbstractNodeEndpoint
+    inductance::Any
+    parameters::Vector{ParameterMetadata}
+end
+
 struct InductiveCoupling <: AbstractCircuitRelation
     id::String
     from::AbstractCircuitEndpoint
@@ -86,6 +93,21 @@ function shunt_capacitor!(
     return relation
 end
 
+function shunt_inductor!(
+    plan::CircuitPlan;
+    id,
+    at,
+    inductance,
+    parameters=ParameterMetadata[],
+)
+    at isa AbstractNodeEndpoint || _validation_error("shunt_inductor! requires a NodeEndpoint.")
+    params = _parameter_vector(parameters)
+    relation = ShuntInductor(String(id), at, inductance, params)
+    push!(plan.relations, relation)
+    _register_relation_parameters!(plan, params)
+    return relation
+end
+
 function couple_inductive!(
     plan::CircuitPlan;
     id,
@@ -134,4 +156,12 @@ end
 
 function relation_parameters(relation::AbstractCircuitRelation)
     return hasproperty(relation, :parameters) ? getproperty(relation, :parameters) : ParameterMetadata[]
+end
+
+function _relation_endpoints(relation::ShuntInductor)
+    return AbstractCircuitEndpoint[relation.at, ground()]
+end
+
+function _relation_summary(relation::ShuntInductor)
+    return (:shunt_inductor, relation.id, _endpoint_summary(relation.at))
 end

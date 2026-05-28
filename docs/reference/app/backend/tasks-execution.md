@@ -152,7 +152,7 @@ This page defines the target product contract. Current implementation may still 
         "pump_frequencies_hz": {
           "pump": 8000000000
         },
-        "source_currents_a": {
+        "source_currents": {
           "pump_in": 0.0
         }
       },

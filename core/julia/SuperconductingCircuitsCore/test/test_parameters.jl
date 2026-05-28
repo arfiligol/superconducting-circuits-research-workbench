@@ -1,6 +1,6 @@
 @testset "parameter roles and metadata" begin
     numeric = ParameterMetadata(
-        name=:capacitance_f,
+        name=:capacitance,
         role=NumericParameter(),
         owner="component",
         targets=[:capacitance],
@@ -13,6 +13,5 @@
     @test parameter_role(numeric) isa NumericParameter
     @test parameter_owner(numeric) == "component"
     @test strongest_parameter_role([NumericParameter(), StructuralParameter()]) isa StructuralParameter
-    @test ParameterBinding(:capacitance_f, 1.0e-15).value == 1.0e-15
+    @test ParameterBinding(:capacitance, 1.0e-15).value == 1.0e-15
 end
-

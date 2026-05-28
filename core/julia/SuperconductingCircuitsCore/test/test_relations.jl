@@ -13,7 +13,7 @@
         capacitance=3.0e-15,
         parameters=[
             ParameterMetadata(
-                name=:coupling_capacitance_f,
+                name=:coupling_capacitance,
                 role=NumericParameter(),
                 owner="lc_to_qwr",
                 targets=[:capacitance],
@@ -22,6 +22,21 @@
         ],
     )
     shunt_capacitor!(plan; id="shunt", at=line_tap(readout; at_m=0.1mm), capacitance=20.0e-15)
+    shunt_inductor!(
+        plan;
+        id="readout_shunt_l",
+        at=line_tap(readout; at_m=0.1mm),
+        inductance=8.0e-9,
+        parameters=[
+            ParameterMetadata(
+                name=:readout_shunt_inductance,
+                role=NumericParameter(),
+                owner="readout_shunt_l",
+                targets=[:inductance],
+                units="H",
+            ),
+        ],
+    )
     couple_window!(
         plan;
         id="window",
@@ -37,9 +52,11 @@
         mutual_inductance=3.0e-12,
     )
 
-    @test length(plan.relations) == 5
-    @test haskey(plan.parameters, :coupling_capacitance_f)
+    @test length(plan.relations) == 6
+    @test haskey(plan.parameters, :coupling_capacitance)
+    @test haskey(plan.parameters, :readout_shunt_inductance)
     @test any(relation -> relation isa ShuntCapacitor, plan.relations)
+    @test any(relation -> relation isa ShuntInductor, plan.relations)
     @test validate_authoring(plan).issues == ValidationIssue[]
 
     @test_throws FrameworkValidationError connect!(plan, line_span(qwr; from_m=0.1mm, to_m=0.2mm), ground())
@@ -49,5 +66,11 @@
         from=line_span(qwr; from_m=0.1mm, to_m=0.2mm),
         to=ground(),
         capacitance=1.0e-15,
+    )
+    @test_throws FrameworkValidationError shunt_inductor!(
+        plan;
+        id="bad_inductor",
+        at=line_span(qwr; from_m=0.1mm, to_m=0.2mm),
+        inductance=1.0e-9,
     )
 end

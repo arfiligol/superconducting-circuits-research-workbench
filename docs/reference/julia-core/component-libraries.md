@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the boundary between Julia Core Kernel and user/lab/project component libraries.
-version: v1.3.0
+version: v1.3.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -30,6 +30,8 @@ Julia Core provides the authoring kernel. Component Libraries provide concrete c
 | Component Library | concrete components, component-specific parameters, engineering roles, schematic export hints, component-specific validation, reusable plan builders |
 | Pluto Notebook | interactive use of Julia Core and selected component libraries |
 | Julia Runner | deterministic execution of Julia Core and selected component libraries |
+
+Julia Core does not ship lab-specific components. It defines the kernel contracts that let user, lab, and project libraries provide those components.
 
 ## Dependency Direction
 
@@ -60,6 +62,20 @@ PurcellFilterComponent
 ```
 
 These are not mandatory Julia Core members.
+
+They also should not be added to Julia Core as convenience examples. Put concrete component families in a component library, a test fixture module, or a tutorial notebook cell with an explicit local-fixture label.
+
+## Tutorial Notebook Fixtures
+
+Tutorial notebooks may define small local reusable components when they need an executable acceptance harness for the Core API.
+
+| Fixture scope | Allowed | Not allowed |
+| --- | --- | --- |
+| Notebook tutorial | minimal local component that exercises pins, ports, EngineeringGraph, or HB intent | lab catalog, production device library, or hidden alternate construction model |
+| Julia Core tests | tiny deterministic fixture component | project-specific resonator or qubit family as a Core export |
+| Component library | reusable lab/project components and plan builders | dependence from Julia Core back into the library |
+
+The fixture should keep the notebook readable: Markdown, tables, and small callouts should carry the tutorial explanation; renderer or plotting dependencies should be optional unless the notebook is explicitly testing that renderer.
 
 ## Plan Builders
 
