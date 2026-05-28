@@ -1,7 +1,7 @@
 ---
-title: "Retired Characterization Route"
+title: "Retired Analysis Route Alias"
 aliases:
-  - "Characterization UI"
+  - "Retired analysis route alias"
 tags:
   - diataxis/reference
   - audience/team
@@ -10,12 +10,12 @@ status: archived
 owner: docs-team
 audience: team
 scope: tombstone for the old characterization route; analysis work now belongs to Analysis Workbench
-version: v1.1.0
+version: v1.1.1
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
-# Retired Characterization Route
+# Retired Analysis Route Alias
 
 The old characterization route is not an active application route.
 

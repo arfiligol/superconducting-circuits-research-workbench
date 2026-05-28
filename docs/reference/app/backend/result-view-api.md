@@ -12,7 +12,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Backend-owned result rendering read model for Application and Python Notebook consumers after publication.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -89,6 +89,61 @@ Endpoint names are contract families. Exact route names may evolve only through 
 
 The Backend validates every requested trace, axis, slice, and view against published metadata before reading numeric data.
 
+## Projection Request Shape
+
+For `GET /tasks/{task_id}/results/view` and `GET /traces/{trace_id}/slice`, clients request bounded projections using a structured selection object.
+
+Canonical JSON shape:
+
+```json
+{
+  "view": "magnitude_db",
+  "trace_id": "batch_001:S11",
+  "result_id": "result_001",
+  "axes": {
+    "frequency": {
+      "mode": "all"
+    },
+    "bias": {
+      "mode": "index",
+      "value": 2
+    }
+  },
+  "max_points": 2000
+}
+```
+
+### Axis selection modes
+
+| Mode | Meaning |
+| --- | --- |
+| `all` | include the full axis if payload limits allow |
+| `index` | select a single index |
+| `index_range` | select a bounded index range |
+| `coordinate` | select nearest or exact coordinate, according to Backend axis metadata |
+| `coordinate_range` | select bounded coordinate range if coordinate-domain summary exists |
+
+### Query encoding
+
+If using GET query parameters, encode the structured projection request as:
+
+```text
+projection=<url-encoded-json>
+```
+
+Backend-defined named parameters are allowed only when they are documented in the OpenAPI contract.
+
+### Supported projection constraints
+
+The baseline supported views are:
+
+- 1D `magnitude_db`
+- 1D `phase`
+- 1D `real_imag`
+- 2D `sweep_heatmap`
+
+If a requested arbitrary ND slice, view, or axis selector is not supported, the Backend returns `view_not_supported` or `slice_out_of_bounds` rather than silently returning an incorrect projection.
+
 ## Baseline Views
 
 | View | Meaning |
@@ -103,10 +158,12 @@ The Backend validates every requested trace, axis, slice, and view against publi
 
 - ResultView returns bounded preview/projection payloads.
 - ResultView never returns full ND arrays by default.
-- Large dense export requires a separate export contract.
 - Frontend does not read canonical Zarr directly.
 - Python Notebook may read Zarr directly for read-only ad hoc analysis, but product rendering should use ResultView when platform semantics matter.
 - ResultView payloads must carry enough axis and unit metadata for plot-ready rendering.
+- Backend may lower `max_points`.
+- Backend must reject projections exceeding payload limits with `payload_too_large`.
+- Full dense array export is not part of ResultView. It requires a separate export contract.
 
 ## Error Semantics
 

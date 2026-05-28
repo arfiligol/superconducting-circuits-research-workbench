@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: productized Application Simulation Workbench contract
-version: v1.2.0
+version: v1.3.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -34,7 +34,7 @@ Application Simulation Workbench
 
 The workbench builds product-grade simulation requests, submits them to the Backend, monitors task state, and renders published results through the shared task/result surfaces.
 
-See [Product Async Contracts](../../../architecture/product-async-contracts.md) for the product request, Runner envelope, manifest, and result-view contract.
+See [Product Async Contracts](../../../architecture/product-async-contracts.md) for the product request, `SimulationRequestV1` minimum shape, Runner envelope, manifest, and result-view contract.
 
 ## Boundary
 
@@ -101,6 +101,7 @@ It must not own:
 ## Request Behavior
 
 - Workbench sends `SimulationRequestV1`, not `RunnerTaskEnvelopeV1`.
+- The canonical minimum request shape is defined in [SimulationRequestV1 Minimum Shape](../../../architecture/product-async-contracts.md#simulationrequestv1-minimum-shape).
 - Workbench receives `task_id` from the Backend and uses the Task / Execution Center or a stage-local panel for status.
 - Workbench opens ResultView only after Backend publication.
 - Workbench may reuse shared task/result components.

@@ -12,8 +12,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: persisted audit trail、separate audit store、query/redaction/retention contract
-version: v0.5.0
-last_updated: 2026-03-25
+version: v0.5.1
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -32,7 +32,7 @@ updated_by: codex
 | Layer | What it answers | What it must not replace |
 |---|---|---|
 | Audit logging | 誰對哪種資源做了什麼治理意義的動作 | workflow task timeline、product telemetry |
-| Workflow observability | request / task / queue / worker / result 經過哪些 runtime stage | actor-centric governance trail |
+| Workflow observability | request / task / execution runtime / result 經過哪些 runtime stage | actor-centric governance trail |
 | Product telemetry | 哪種 flow 常用、哪裡慢、哪裡值得優化 | audit trail、single-task debug record |
 
 !!! info "Shared identifiers are allowed"

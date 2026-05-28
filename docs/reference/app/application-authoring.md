@@ -12,7 +12,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Required reading order, build order, and ownership map for Application implementation work.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -34,7 +34,8 @@ Use this map before implementing Application or Python Notebook product surfaces
 9. [Tasks & Execution](backend/tasks-execution.md)
 10. [Datasets & Results](backend/datasets-results.md)
 11. [ResultView API](backend/result-view-api.md)
-12. Surface-specific frontend docs:
+12. [Python Notebook Authoring](../notebooks/python-authoring.md)
+13. Surface-specific frontend docs:
     - [Circuit Simulation Workbench](frontend/simulation-workbench/circuit-simulation.md)
     - [Analysis Workbench](frontend/analysis-workbench/analysis-workbench.md)
     - [Tasks](frontend/workspace/tasks.md)

@@ -12,7 +12,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: productized Application Analysis Workbench contract
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -37,7 +37,7 @@ Application Analysis Workbench
 
 The workbench builds product-grade analysis requests, submits them to the Backend, monitors task state, and renders published results through the shared task/result surfaces.
 
-See [Product Async Contracts](../../../architecture/product-async-contracts.md) for the product request, Runner envelope, manifest, and ResultView contract.
+See [Product Async Contracts](../../../architecture/product-async-contracts.md) for the product request, `Analysis Family Registry`, Runner envelope, manifest, and ResultView contract.
 
 ## Responsibilities
 
@@ -91,6 +91,7 @@ It must not own:
 ```
 
 `AnalysisRequestV1` is a product request. The workbench must not build `RunnerTaskEnvelopeV1`, manifest locators, or staging paths.
+The canonical `analysis_family` values are defined in [Analysis Family Registry](../../../architecture/product-async-contracts.md#analysis-family-registry).
 
 ## UI States
 

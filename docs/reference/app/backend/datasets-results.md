@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Backend dataset catalog、DesignScope lifecycle / target selection、sweep-aware trace browse / preview / mutation、analysis-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -20,7 +20,7 @@ updated_by: codex
 本頁定義 Dashboard、Header dataset switcher、Raw Data Browser、Analysis Workbench 與 ResultView 依賴的 dataset / design / trace / result surface。
 
 !!! important "Authoring authority"
-    This page is the current Backend data-surface authority for Dataset Catalog, Dataset Profile, DesignScope, Trace Surface, Result Handles, sweep-aware trace browse, and summary-first query rules.
+    This page is the current Backend data-surface authority for Dataset Catalog, Dataset Profile, DesignScope, Trace Surface, Result Handles, sweep-aware trace browse, analysis-facing trace projection, and summary-first query rules.
     Future implementation agents should treat these contracts as active unless a newer source-of-truth explicitly replaces them.
 
 !!! info "Surface Boundary"
@@ -62,6 +62,7 @@ dataset catalog 至少必須支援：
 1. local mode 的 catalog 只列出 `Local Space` datasets；online mode 的 catalog 只能列出對 active workspace 可見的 datasets。
 2. `active_dataset` 切換必須使用此 catalog 的 stable identity。
 3. catalog row 只提供 summary-safe 欄位，不得內含 trace payload。
+4. Dataset Catalog is the browse and selection surface for dataset identity, lifecycle state, visibility, and allowed actions.
 
 ## Dataset Profile Contract
 
@@ -147,6 +148,8 @@ Data Ingestion and Simulation publication must bind output to an explicit target
 | Target refresh | target row must reflect refreshed or invalidated `source_coverage`、`trace_count`、`compare_readiness`、`collection_projection`、analysis readiness and tagged metrics summaries |
 | TraceStore | physical payload paths may remain unchanged; `store_ref` is opaque backend-owned locator |
 | Conflict handling | backend must reject trace identity collisions and return explicit conflict details for non-coalescible design assets |
+
+TraceStore physical paths are opaque Backend-owned locators. Application code and Python Notebook helpers may display handles or use read-only file paths for analysis when explicitly provided, but they must not infer publication authority from physical path structure.
 
 ### Merge response minimum
 

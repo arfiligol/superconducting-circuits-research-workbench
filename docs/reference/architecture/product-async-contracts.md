@@ -16,7 +16,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Application Simulation/Analysis Workbench requests, Backend task compilation, Runner envelope, Runner manifest, and ResultView API boundaries.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -41,9 +41,61 @@ The Application and Python Notebook may submit product tasks through Backend con
 
 `SimulationRequestV1` is the product-facing request shape. It carries the simulation intent, dataset/design target, solver settings, sweep definitions, and small control metadata.
 
-It must not carry:
+## SimulationRequestV1 Minimum Shape
+
+```json
+{
+  "schema_version": "app.simulation_request.v1",
+  "dataset_id": "ds_001",
+  "design_id": "design_001",
+  "source": {
+    "kind": "design_asset",
+    "asset_id": "design_asset_001"
+  },
+  "simulation_family": "frequency_sweep",
+  "frequency_sweep": {
+    "start_hz": 4000000000,
+    "stop_hz": 6000000000,
+    "point_count": 401,
+    "spacing": "linear"
+  },
+  "parameter_sweeps": [],
+  "outputs": [
+    {
+      "family": "s_matrix",
+      "parameters": ["S11"],
+      "representation": "complex"
+    }
+  ],
+  "solver": {
+    "engine": "josephson_circuits"
+  },
+  "output_target": {
+    "mode": "existing_design",
+    "design_id": "design_001"
+  }
+}
+```
+
+### Simulation request field rules
+
+| Field | Rule |
+| --- | --- |
+| `schema_version` | must be explicit |
+| `dataset_id` | active dataset identity |
+| `design_id` | active target `DesignScope` unless `output_target.mode = create_new_design` |
+| `source` | product-level source reference, not a Julia internal object |
+| `simulation_family` | Backend-recognized simulation family |
+| `frequency_sweep` | required for `frequency_sweep` family |
+| `parameter_sweeps` | optional; empty array means no parameter sweep |
+| `outputs` | requested observable families and parameters |
+| `solver` | small control metadata only |
+| `output_target` | explicit publication target decision |
+
+### Simulation request must not carry
 
 - Runner staging directories
+- `RunnerTaskEnvelopeV1`
 - manifest paths
 - TraceStore write paths
 - dense S/Y/Z matrices or ND trace arrays
@@ -68,6 +120,26 @@ It must not carry:
 - manifest paths
 - TraceStore write paths
 - separate simulation request schemas
+
+## Analysis Family Registry
+
+The initial `analysis_family` registry is:
+
+| `analysis_family` | Purpose | Inputs | Output expectation |
+| --- | --- | --- | --- |
+| `trace_summary` | compute summary statistics / metadata summaries from selected traces | trace IDs or result handles | summary table / result handle |
+| `resonance_fit` | fit resonator-like response curves | one or more complex traces with frequency axis | fitted parameters, fit curve, residual summary |
+| `sy_z_compare` | compare S/Y/Z representations | compatible S/Y/Z trace families | comparison metrics and aligned projections |
+| `postprocess_coordinate_transform` | convert published trace coordinates or representations | trace/result selection and transform parameters | transformed trace/result artifact |
+| `derived_parameter_extraction` | extract scalar/vector derived parameters | selected traces or prior results | derived parameter table / metadata artifact |
+
+Registry rules:
+
+1. Frontend code must not invent new `analysis_family` values.
+2. Python Notebook helpers must use the same registry when submitting `AnalysisRequestV1`.
+3. Backend validates `analysis_family` before creating task rows.
+4. Julia Runner dispatch maps Backend-validated families to task kinds.
+5. Unsupported `analysis_family` values must fail validation before Runner execution.
 
 ## RunnerTaskEnvelopeV1
 

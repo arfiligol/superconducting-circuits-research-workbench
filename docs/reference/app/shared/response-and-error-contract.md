@@ -12,9 +12,9 @@ status: draft
 owner: docs-team
 audience: team
 scope: app backend surfaces 共用的 success envelope、error envelope、error code family 與 frontend display contract
-version: v0.1.0
-last_updated: 2026-03-14
-updated_by: team
+version: v0.1.1
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Response & Error Contract
@@ -54,7 +54,7 @@ updated_by: team
 
 ## Collection Meta Baseline
 
-對 list / catalog / history / queue 類回應，`meta` 應優先採用 cursor-based collection meta。
+對 list / catalog / history / task execution 類回應，`meta` 應優先採用 cursor-based collection meta。
 
 | Field | Meaning |
 |---|---|
@@ -67,7 +67,7 @@ updated_by: team
 
 !!! tip "Cursor-based by default"
     App backend 的動態列表應優先採 cursor-based pagination，而不是 `page/page_size`。
-    這特別適用於 queue、run history、audit logs，以及會持續變動的 catalog / browse surfaces。
+    這特別適用於 task execution history、run history、audit logs，以及會持續變動的 catalog / browse surfaces。
 
 ## Error Envelope
 

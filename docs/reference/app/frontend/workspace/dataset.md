@@ -14,8 +14,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/dataset 的 visible dataset catalog、active dataset switch、profile edit 與 lifecycle actions 契約"
-version: v0.1.0
-last_updated: 2026-03-18
+version: v0.1.1
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -34,7 +34,7 @@ updated_by: codex
 
 本頁不負責：
 
-- 重複 shell-owned runtime / dataset / queue context
+- 重複 shell-owned runtime / dataset / execution context
 - raw-data ingestion authoring
 - raw trace browse
 - cross-page handoff button wall

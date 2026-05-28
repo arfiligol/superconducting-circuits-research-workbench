@@ -11,8 +11,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Schemdraw render service 的 three-step flow、request/response、diagnostics、authoritative syntax/live preview、preview export ownership 與 advanced mapping envelope 契約
-version: v0.8.0
-last_updated: 2026-03-30
+version: v0.8.1
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
@@ -22,7 +22,7 @@ updated_by: codex
 
 !!! info "Surface Boundary"
     本契約負責接收 frontend source snapshot、linked schema context 與 optional advanced mapping、進行 authoritative syntax check、執行 controlled render，並回傳 diagnostics 與 SVG preview。
-    canonical definition persistence、task queue 建立與 streaming transport 不屬於本頁責任。
+    canonical definition persistence、task creation 與 streaming transport 不屬於本頁責任。
 
 !!! warning "Backend Is The Syntax And Preview Authority"
     frontend 可以有本地 editor cues，但正式 syntax check、runtime validation 與 live preview 結果必須以 backend response 為準。

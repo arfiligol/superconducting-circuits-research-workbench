@@ -11,11 +11,11 @@ tags:
   - topic/ui
 page_id: app.page.tasks
 route: /tasks
-status: draft
+status: stable
 owner: docs-team
 audience: team
 scope: "/tasks 的 Task / Execution Center、execution history、task detail、Runner runtime summary、result handoff 與 control-action 契約"
-version: v0.3.0
+version: v1.0.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -166,10 +166,10 @@ Runner completion does not equal product result availability. The Application ma
 - Runner status detail 可以比 Header 詳細，但不應壓過 task list 與 task detail 主體
 - page body 不得重複 `Runtime Mode`、`Active Workspace`、`Active Dataset` 等 shell-owned context cards
 
-!!! warning "Execution center is not an operations console"
+!!! warning "Runner diagnostics are secondary"
     Task list, task detail, result handoff, and execution history are the primary page content.
     Runner runtime status is secondary diagnostic context.
-    Runner status must not dominate the page or become a standalone runtime wall.
+    Runner status must not dominate the page or become a standalone operations console.
 
 ## Acceptance Checklist
 
