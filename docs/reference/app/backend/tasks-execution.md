@@ -23,6 +23,31 @@ Application-triggered simulation and analysis are asynchronous. The app never se
 
 Product request, Runner envelope, manifest, and result-view boundaries are defined in [Product Async Contracts](../../architecture/product-async-contracts.md). Frontend code and Python notebooks submit product requests; only the Backend compiles Runner task envelopes.
 
+## Task Execution Pipeline
+
+```text
+Simulation / Analysis Workbench
+    -> SimulationRequestV1 or AnalysisRequestV1
+Python Backend
+    -> validates request
+    -> creates persisted Task
+    -> prepares staging directory
+Julia Runner
+    -> claims task
+    -> executes Julia Core / analysis logic
+    -> writes result.zarr + manifest.json
+    -> reports complete/fail/progress
+Python Backend Publisher
+    -> validates manifest and Zarr
+    -> publishes canonical TraceStore
+    -> records TraceBatch / TraceRecord / Result handles
+Application
+    -> polls or subscribes to task state
+    -> opens ResultView after Backend publication
+```
+
+The product metaphor is Task Execution Pipeline, Runner Runtime, Task / Execution Center, and ResultView. It is not a separate queue-service UI or standalone runtime wall.
+
 ## Task Statuses
 
 ```text
@@ -35,6 +60,21 @@ completed
 failed
 cancelled
 ```
+
+## Product Status Labels
+
+| Backend State | Product UI Label |
+| --- | --- |
+| `queued` | Waiting |
+| `claimed` | Preparing |
+| `running` | Running |
+| `staging_result` | Saving result |
+| `publishing` | Publishing |
+| `completed` | Completed |
+| `failed` | Failed |
+| `cancelled` | Cancelled |
+
+Backend state remains the lifecycle authority. Product labels are UI vocabulary.
 
 ## Minimum Task Fields
 
@@ -138,6 +178,12 @@ When the runner completes:
 7. Backend creates TraceBatch/TraceRecord metadata.
 8. Backend copies manifest/log artifacts into `data/artifacts/tasks/<task_id>/`.
 9. Backend marks the task `completed`.
+
+Runner completion does not equal product result availability. The Application may open result views only after Backend publication has completed. A Runner manifest is not a published result.
+
+## Application Status Sync
+
+Polling is the baseline status sync mechanism. SSE or WebSocket may be added as a transport optimization, but they must not replace Backend task lifecycle authority.
 
 ## Security Rules
 

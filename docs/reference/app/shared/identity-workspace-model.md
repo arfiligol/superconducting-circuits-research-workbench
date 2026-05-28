@@ -105,7 +105,7 @@ flowchart LR
     Session --> Capabilities["Capability Flags"]
     Workspace --> TaskVisibility["Task Visibility"]
     Workspace --> ResourceScope["Resource Ownership"]
-    Capabilities --> Shell["Header / User Menu / Queue Controls"]
+    Capabilities --> Shell["Header / User Menu / Task Controls"]
 ```
 
 ## Mode Switch Sequence
@@ -114,9 +114,9 @@ flowchart LR
 |---|---|
 | 1. User picks mode | 從 app-level mode switcher 選 `local` 或 `online` |
 | 2. Frontend checks unsafe local state | dirty draft、attached task 或 destructive context 先要求確認 |
-| 3. Old session is invalidated | 舊 mode 的 user summary、workspace、dataset、queue cache 失效 |
+| 3. Old session is invalidated | 舊 mode 的 user summary、workspace、dataset、task cache 失效 |
 | 4. Backend establishes new mode session | local mode 建立 `Local Space` session；online mode 建立或要求新的 auth session，不保留先前 remote login |
-| 5. Shell context is rebuilt | Header、queue、page context 改用新 mode 的 session envelope |
+| 5. Shell context is rebuilt | Header、task execution、page context 改用新 mode 的 session envelope |
 
 ## Workspace Switch Sequence
 
@@ -126,9 +126,9 @@ flowchart LR
 | 2. Frontend checks unsafe local state | 若目前頁存在 dirty draft 或 destructive context change，先顯示確認 |
 | 3. Backend mutates session | active workspace 變更為新值 |
 | 4. Session rebinds active dataset | 依 dataset activation 規則決定 `preserved`、`rebound` 或 `cleared` |
-| 5. Queue visibility refreshes | Header queue 改為新 workspace 中可見的 tasks |
+| 5. Task visibility refreshes | Header task execution summary 改為新 workspace 中可見的 tasks |
 | 6. Attached task is revalidated | 若 task 不再可見，必須解除附著並提示 |
-| 7. Pages consume new shell context | Dashboard / Raw Data / Simulation / Characterization 看到同一組新 context |
+| 7. Pages consume new shell context | Dashboard / Raw Data / Simulation Workbench / Analysis Workbench 看到同一組新 context |
 
 ## Active Dataset Activation
 

@@ -20,7 +20,7 @@ updated_by: codex
 
 # Frontend Reference
 
-The frontend is the Electron application workbench. It is for datasets, traces, simulation requests, tasks, and result browsing.
+The frontend is the Electron application workbench. It is for datasets, traces, simulation requests, analysis requests, task execution, and result browsing.
 
 It must not own heavy compute. Application simulation goes through persisted Backend tasks and Julia Runner execution; direct exploratory compute belongs in Pluto notebooks.
 
@@ -31,7 +31,8 @@ It must not own heavy compute. Application simulation goes through persisted Bac
 | Workspace | Dashboard | `/dashboard` | current workspace and dataset overview |
 | Workspace | Dataset | `/dataset` | choose and manage datasets |
 | Workspace | Simulation Workbench | `/tasks?lane=simulation` | build or attach simulation requests and inspect simulation results |
-| Workspace | Tasks | `/tasks` | monitor tasks and inspect results |
+| Workspace | Analysis Workbench | `/tasks?lane=analysis` | build or attach analysis, fitting, and post-processing requests |
+| Workspace | Task / Execution Center | `/tasks` | monitor task execution, inspect progress, and open results |
 | Data | Data Ingestion | `/data-ingestion` | import raw data |
 | Data | Raw Data | `/raw-data` | browse traces and preview slices |
 | Design Assets | Schemas | `/schemas` | browse source/design documents |
@@ -43,10 +44,13 @@ It must not own heavy compute. Application simulation goes through persisted Bac
 | Surface | Current rule |
 |---|---|
 | Simulation Workbench | first-class product surface; submits async Backend tasks and renders published results |
-| Characterization | Julia Runner analysis tasks + result browser |
+| Analysis Workbench | first-class product surface; submits fitting, comparison, post-processing, and derived-parameter tasks |
+| Task / Execution Center | cross-workbench task visibility, actions, Runner runtime status summary, and result handoff |
 | Schemdraw standalone workflow | Design Assets / Source Documents |
 
 The canonical Simulation Workbench route is `/tasks?lane=simulation` unless a future source-of-truth explicitly changes the application information architecture. The route may share task/result UI components, but the product surface is Application Simulation Workbench.
+
+The canonical Analysis Workbench route is `/tasks?lane=analysis` unless a future source-of-truth explicitly changes the application information architecture. The route may share task/result UI components, but the product surface is Application Analysis Workbench.
 
 ## Page Map
 
@@ -56,10 +60,10 @@ The canonical Simulation Workbench route is `/tasks?lane=simulation` unless a fu
 | [Sidebar](shared-shell/sidebar.md) | navigation-only app IA | [Application Interface](../application-interface.md) |
 | [Auth Entry](shared-shell/auth-entry.md) | online-mode auth entry | [Authentication & Authorization](../shared/authentication-and-authorization.md) |
 | [Circuit Simulation Workbench](simulation-workbench/circuit-simulation.md) | productized simulation request/result workflow | [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) |
-| [Task Management](shared-workflow/task-management.md) | shared task monitoring and attach/recover behavior | [Tasks & Execution](../backend/tasks-execution.md) |
+| [Task Management](shared-workflow/task-management.md) | shared task execution monitoring and attach/recover behavior | [Tasks & Execution](../backend/tasks-execution.md) |
 | [Dashboard](workspace/dashboard.md) | workspace overview | [Datasets & Results](../backend/datasets-results.md) |
 | [Dataset](workspace/dataset.md) | dataset selection and lifecycle | [Datasets & Results](../backend/datasets-results.md) |
-| [Tasks](workspace/tasks.md) | task/result browser | [Tasks & Execution](../backend/tasks-execution.md) |
+| [Tasks](workspace/tasks.md) | Task / Execution Center | [Tasks & Execution](../backend/tasks-execution.md) |
 | [Data Ingestion](workspace/data-ingestion.md) | raw data intake | [Datasets & Results](../backend/datasets-results.md) |
 | [Raw Data Browser](workspace/raw-data-browser.md) | trace browse and preview | [Datasets & Results](../backend/datasets-results.md), [TraceStore Zarr](../../architecture/trace-store-zarr.md) |
 | [Schemas](definition/schemas.md) | design/source asset catalog | [Circuit Definitions](../backend/circuit-definitions.md) |
@@ -67,7 +71,7 @@ The canonical Simulation Workbench route is `/tasks?lane=simulation` unless a fu
 
 ## UI Rule
 
-The app should show product work surfaces, not architecture explanations. If a user needs to inspect compute details, expose task status, manifest summaries, and trace previews. Simulation Workbench must remain an async task/result workflow, not an in-frontend compute surface.
+The app should show product work surfaces, not architecture explanations. If a user needs to inspect compute details, expose task status, manifest summaries, Runner runtime status summaries, and trace previews. Simulation Workbench and Analysis Workbench must remain async task/result workflows, not in-frontend compute surfaces.
 
 ## Related
 

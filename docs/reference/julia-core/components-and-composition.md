@@ -10,8 +10,8 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Plan-level reusable circuit components, primitive elements, composition, public pins, private nodes, and namespace rules.
-version: v1.1.0
+scope: Component authoring contract, composition rules, and Component Library examples built on Julia Core.
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -22,7 +22,12 @@ A reusable circuit component is a Plan-level object. It can expose public pins, 
 
 Component composition is Plan-level hierarchy. It is not compiled-netlist-level concatenation.
 
-## Component Families
+## Example Component Library Families
+
+!!! warning "Examples, not Core-owned catalog"
+    The families below are examples of what a user-space, lab-space, or project-space component library may define. They are not a closed list owned by Julia Core.
+
+A component library may define families such as:
 
 | Family | Examples |
 | --- | --- |
@@ -31,7 +36,25 @@ Component composition is Plan-level hierarchy. It is not compiled-netlist-level 
 | Lumped Resonator Components | `GroundedLCResonatorComponent`, `FloatingLCResonatorComponent` |
 | Distributed Components | `ReadoutLineComponent`, `CPWFluxLineComponent`, `QuarterWaveResonatorComponent`, `HalfWavePurcellFilterComponent` |
 
-Primitive elements may be used directly or inside composite components. Composite components may contain smaller components and primitive elements.
+These library-space examples may be used directly or inside composite components. Composite components may contain smaller components and primitive elements.
+
+## Library Ownership Rule
+
+Julia Core owns the component authoring contract.
+
+Component libraries own concrete reusable components.
+
+A component library may provide:
+
+- primitive physical elements;
+- composite resonator components;
+- distributed line components;
+- nonlinear elements;
+- lab-specific chip blocks;
+- reusable plan builders;
+- validation helpers specific to that component family.
+
+Julia Core should only require that these components satisfy the authoring, endpoint, validation, and compiler contracts.
 
 ## Composition Rules
 
@@ -50,6 +73,8 @@ Primitive elements may be used directly or inside composite components. Composit
 
 ## Composite Examples
 
+The following examples describe component-library composition patterns built on the Julia Core Kernel:
+
 ```text
 SQUID
     = JosephsonJunction + JosephsonJunction + optional loop inductance + flux parameter
@@ -64,6 +89,8 @@ FloatingLCResonator
 The same high-level resonator component can accept replaceable inductive elements.
 
 ## Grounded LC With Replaceable Inductive Elements
+
+The following example assumes a component library provides a grounded LC resonator builder and replaceable inductive element definitions.
 
 ```julia
 lc1 = add_grounded_lc_resonator_component!(
@@ -85,6 +112,8 @@ The user changes the inductive element without changing the resonator's public a
 
 ## Grounded LC With SQUID
 
+The following example assumes a component library provides a CPW flux line builder, grounded LC resonator builder, and SQUID element definition.
+
 ```julia
 flux_line = add_cpw_flux_line_component!(plan; id = "flux", line_spec = flux_line_spec)
 
@@ -102,7 +131,7 @@ lc = add_grounded_lc_resonator_component!(
 
 The SQUID remains a component hierarchy in the plan. Its loop endpoint can be targeted by an inductive relation in the same Circuit Plan.
 
-Distributed components may also expose line references for taps and spans:
+Distributed components from a component library may also expose line references for taps and spans:
 
 ```julia
 main_line = line_ref(flux_line, :main)
@@ -112,6 +141,8 @@ tap = line_tap(main_line; at_m = 2.0mm)
 The component-level shorthand `line_tap(flux_line; at_m = 2.0mm)` is valid only when the component has one unambiguous default line. Multi-line components must use `line_ref` or pass `line = :main`.
 
 ## Floating LC With Replaceable Inductive Element
+
+The following example assumes a component library provides a floating LC resonator builder.
 
 ```julia
 flc = add_floating_lc_resonator_component!(

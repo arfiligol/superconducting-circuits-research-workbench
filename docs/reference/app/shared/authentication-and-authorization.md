@@ -22,10 +22,10 @@ updated_by: codex
 本頁定義 App 在 `Online Mode` 下的 auth / authz 契約，以及 `Local Mode` 下的 auth bypass baseline。
 
 !!! info "App-shared surface"
-    Header 的 user menu、active workspace switch、active dataset switch、task queue actions，以及 backend session surface 都依賴本契約。
+    Header 的 user menu、active workspace switch、active dataset switch、task execution actions，以及 backend session surface 都依賴本契約。
 
-!!! warning "Online Shared Queue Needs Auth First"
-    只要 task queue 在 `Online Mode` 是多人共用 surface，就必須先定義 visibility 與 action permission。
+!!! warning "Online Task Execution Needs Auth First"
+    只要 task execution 在 `Online Mode` 是多人共用 surface，就必須先定義 visibility 與 action permission。
 
 !!! warning "Auth Is Online-Mode Only"
     `Authentication / Authorization` 是 `Online Mode` 的正式 requirement。
@@ -36,7 +36,7 @@ updated_by: codex
 | Mode | Auth / authz behavior |
 |---|---|
 | `local` | 不要求 sign in；不啟用 multi-user membership / invitation / role gate；backend 回傳 local session、`Local Space` 與 local capability summary |
-| `online` | 啟用 JWT auth、workspace membership、capability flags、queue permission 與 collaboration controls |
+| `online` | 啟用 JWT auth、workspace membership、capability flags、task execution permission 與 collaboration controls |
 
 !!! tip "Same session shape, different mode semantics"
     frontend 應盡量消費同一種 session envelope。
@@ -92,7 +92,7 @@ updated_by: codex
 | Source of truth | shared app docs 定義權限語意；Casbin policy 負責實作，不取代文件本身 |
 
 !!! warning "Do not hardcode role logic in clients"
-    Header、Task Queue、page CTA 與 destructive actions 必須依 backend echo 的 `capabilities` / `allowed_actions` 呈現。
+    Header、Task Execution Center、page CTA 與 destructive actions 必須依 backend echo 的 `capabilities` / `allowed_actions` 呈現。
     frontend 不可自行用 `owner/member/viewer` 推導完整 permission matrix。
 
 ### Casbin Modeling Baseline
@@ -109,7 +109,7 @@ updated_by: codex
 | Workspace membership drives domain role | 使用者在不同 workspace 可有不同 role |
 | Admin override remains backend-owned | `admin` 為 backend service 的 global override，不由 frontend 推導 |
 | Resource visibility is evaluated before policy allow | backend 先解析 resource envelope，再交給 Casbin 做 action decision |
-| Backend emits materialized permissions | session surface、queue rows、resource detail 應回傳已算好的 `allowed_actions` |
+| Backend emits materialized permissions | session surface、task rows、resource detail 應回傳已算好的 `allowed_actions` |
 
 ??? info "Why not pure Casbin-only logic"
     `local` / `private` / `workspace` visibility、resource owner 與 active workspace rebinding 仍需要 backend service 先整理成穩定的 authorization context。
@@ -121,7 +121,7 @@ updated_by: codex
 |---|---|
 | Session establishment | backend 直接提供 implicit local user / `Local Space` session |
 | Capability summary | 仍由 backend materialize，不由 frontend 自行假設 |
-| Queue permission | local task controls 依 local capability summary 決定，但不走 multi-user role matrix |
+| Task execution permission | local task controls 依 local capability summary 決定，但不走 multi-user role matrix |
 | Resource scope | local mode persisted resources 使用 `local` scope，不分 `private` / `workspace` |
 | Invitation / membership | 不適用 |
 | Auth entry | 不應成為 local mode 的 primary entry surface |
@@ -250,7 +250,7 @@ updated_by: codex
 | Remove other member | ❌ | ❌ | ✅ | ✅ |
 | Transfer workspace ownership | ❌ | ❌ | ✅ | ✅ |
 
-## Task Queue Permission Matrix
+## Task Execution Permission Matrix
 
 | Action | `viewer` | `member` | `owner` | `admin` |
 |---|---|---|---|---|

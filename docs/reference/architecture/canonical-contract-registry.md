@@ -51,9 +51,9 @@ These are no longer active contracts:
 | Retired local queue worker runtime | DB-backed task claim by Julia Runner |
 | Retired Python UI runtime | Electron App + Next.js frontend |
 | Python Backend in-process Julia simulation | Julia Runner compute plane |
-| Characterization Workbench / Schemdraw standalone workflow | Task monitor, result browser, design assets, notebooks |
+| Schemdraw standalone workflow | Design assets, source documents, and notebooks |
 
-Application Simulation Workbench remains an active contract. It is part of the Product Async Track and submits simulation requests to the Backend.
+Application Simulation Workbench and Analysis Workbench remain active contracts. They are part of the Product Async Track and submit product requests to the Backend.
 
 ## Related
 

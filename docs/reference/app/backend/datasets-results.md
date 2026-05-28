@@ -9,22 +9,22 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Backend dataset catalog、DesignScope lifecycle / target selection、sweep-aware trace browse / preview / mutation、characterization-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
-version: v0.14.0
-last_updated: 2026-04-30
+scope: Backend dataset catalog、DesignScope lifecycle / target selection、sweep-aware trace browse / preview / mutation、analysis-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
+version: v0.15.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Datasets & Results
 
-本頁定義 Dashboard、Header dataset switcher、Raw Data Browser、Characterization 與部分 Result View 依賴的 dataset / design / trace / result surface。
+本頁定義 Dashboard、Header dataset switcher、Raw Data Browser、Analysis Workbench 與 ResultView 依賴的 dataset / design / trace / result surface。
 
 !!! info "Surface Boundary"
-    本頁負責 dataset catalog、dataset profile、dataset-local DesignScope browse / lifecycle / target selection、sweep-aware trace browse / preview / edit payload、trace mutation gating、characterization-facing trace filtering projection、tagged core metrics summary 與 provenance-bearing result handles。
+    本頁負責 dataset catalog、dataset profile、dataset-local DesignScope browse / lifecycle / target selection、sweep-aware trace browse / preview / edit payload、trace mutation gating、analysis-facing trace filtering projection、tagged core metrics summary 與 provenance-bearing result handles。
     task lifecycle、analysis-specific artifact manifest 與 audit query 不屬於本頁責任。
 
 !!! tip "Primary Consumers"
-    主要消費者是 [Dashboard](../frontend/workspace/dashboard.md)、[Raw Data Browser](../frontend/workspace/raw-data-browser.md)、[Characterization](../frontend/removed-workflows/characterization.md) 與 [Header](../frontend/shared-shell/header.md)。
+    主要消費者是 [Dashboard](../frontend/workspace/dashboard.md)、[Raw Data Browser](../frontend/workspace/raw-data-browser.md)、Analysis Workbench、ResultView API 與 [Header](../frontend/shared-shell/header.md)。
 
 ## Coverage
 
@@ -73,11 +73,11 @@ backend 必須支援 Dashboard 對應的 profile 讀寫：
 
 !!! warning "Single write entry"
     dataset profile 的正式可寫入口只服務 Dashboard 類型 surface。
-    Raw Data Browser、Simulation 與 Characterization 不應提供等價 metadata write。
+    Raw Data Browser、Simulation Workbench 與 Analysis Workbench 不應提供等價 metadata write。
 
 ## Design Browse Contract
 
-`Raw Data Browser` 與 `Characterization` 選擇的是 active dataset 內的 `design_id`。
+`Raw Data Browser` 與 Analysis Workbench 選擇的是 active dataset 內的 `design_id`。
 Data Ingestion 與 Simulation publication 使用 `Target Design Scope` selector，但 backend/domain canonical resource name 仍是 `DesignScope`。
 
 | Field | Meaning |
@@ -195,8 +195,8 @@ trace surface 必須嚴格拆成以下 path families：
 | `shape` | persisted ND grid shape summary |
 | `axes_summary` | UI-safe axis summary；至少指出 trace 是否為 1D / ND 與可見 axis names |
 | `axis_signature` | deterministic coordinate/hash summary；供 caching / collection derivation / deep-link safety 使用 |
-| `available_sweep_axes[]` | characterization / compare 可用的 structured sweep axis names |
-| `collection_projection` | optional scientific grouping / collection summary；供 Characterization 等 consumer 作為 filter / grouping 提示 |
+| `available_sweep_axes[]` | analysis / compare 可用的 structured sweep axis names |
+| `collection_projection` | optional scientific grouping / collection summary；供 Analysis Workbench 等 consumer 作為 filter / grouping 提示 |
 | `provenance_summary` | UI-safe provenance label |
 | `allowed_actions` | row-level mutation gating，至少包含 `edit`、`delete` |
 | `mutation_policy_summary` | UI-safe restriction summary；說明為何 row 為 mutable / delete-only / read-only |
@@ -221,11 +221,11 @@ trace surface 必須嚴格拆成以下 path families：
 | --- | --- |
 | Canonical storage | parameter-swept trace 的 authority 仍是 ND `TraceRecord`；trace list 只做 summary / browse projection |
 | Point-level browse | implementation 可提供 point / slice read model，但必須能回指 canonical `trace_id`，不得把 projection 當唯一 persisted authority |
-| Axis discoverability | trace browse 與 trace detail 至少必須讓 consumer 知道 axis names、是否存在 sweep axes，以及哪些 axes 可供 Characterization / explorer 使用 |
+| Axis discoverability | trace browse 與 trace detail 至少必須讓 consumer 知道 axis names、是否存在 sweep axes，以及哪些 axes 可供 Analysis Workbench / explorer 使用 |
 | Structured filtering | backend 應支援以 family、representation、source、stage、axis name、available sweep axes 等 structured characteristics 篩選 traces |
 | Summary-safe sweep filtering | 支援 axis-name / collection-level / summary-safe filters；coordinate-value / range filtering 需要明確的 coordinate-domain summary contract，不得預設打開 dense coordinates |
 | Collection projection | backend 可回傳 UI-safe `collection_projection`，表示由 shared axes / lineage 派生的 scientific grouping；但它是 read model，不取代 trace identity |
-| Characterization selection | Characterization 可以從 selected traces 派生 collection；raw checkbox list 不是最終 scientific model |
+| Analysis selection | Analysis Workbench 可以從 selected traces 派生 collection；raw checkbox list 不是最終 scientific model |
 
 ## Materialized Metadata Summary Rules
 
@@ -292,9 +292,9 @@ minimum direction：
 | Audit semantics | edit / delete 是 in-place mutation + audited operation；trace version lineage 若需要獨立保存，必須由專門 contract 定義 |
 | Batch scope | 目前只支援 batch delete；batch edit 不屬於本頁 SoT |
 
-## Characterization-facing Trace Projection
+## Analysis-facing Trace Projection
 
-`Characterization` 需要的不只是 generic trace metadata list，還需要可由 persisted trace structure 派生的 selection / filtering projection。
+Analysis Workbench 需要的不只是 generic trace metadata list，還需要可由 persisted trace structure 派生的 selection / filtering projection。
 
 minimum projection direction：
 
@@ -309,7 +309,7 @@ minimum projection direction：
 
 !!! tip "Selection remains user-driven"
     使用者仍可明確勾選 traces。
-    但 backend 在 Characterization submit / result query 時，應以 persisted trace structure 解讀那些 selection，而不是只看 checkbox list 本身。
+    但 backend 在 Analysis Workbench submit / result query 時，應以 persisted trace structure 解讀那些 selection，而不是只看 checkbox list 本身。
 
 ## Collection Projection Contract
 
@@ -374,7 +374,20 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
 
 !!! tip "Read / Write split"
     `Tagged Core Metrics` 的讀取摘要屬於本頁。
-    identify / tagging mutation 仍由 [Characterization Results](characterization-results.md) 定義。
+    identify / tagging mutation 仍由 [Analysis Results](characterization-results.md) 定義。
+
+## Result Handles
+
+Result handles connect tasks, artifacts, traces, published result views, and provenance-bearing result browsing.
+
+They are consumed by ResultView API and Application workbenches after Backend publication. They are not Runner manifests and not raw Zarr payloads.
+
+| Concern | Rule |
+| --- | --- |
+| Authority | Backend publication creates and registers result handles |
+| Consumers | Simulation Workbench, Analysis Workbench, Raw Data Browser, Python Notebook, and ResultView API |
+| Payload boundary | handles point to published records, previews, projections, or locators; they do not carry full ND arrays |
+| Provenance | handles preserve task/artifact/trace lineage needed for result browsing and analysis recovery |
 
 ## Dataset Activation Pairing
 
@@ -804,8 +817,9 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
 
 - [Dashboard](../frontend/workspace/dashboard.md)
 - [Raw Data Browser](../frontend/workspace/raw-data-browser.md)
-- [Characterization](../frontend/removed-workflows/characterization.md)
-- [Characterization Results](characterization-results.md)
+- [Frontend Reference](../frontend/index.md)
+- [Analysis Results](characterization-results.md)
+- [Product Async Contracts](../../architecture/product-async-contracts.md)
 - [Dataset / Design / Trace Schema](../../data-formats/dataset-record.md)
 - [Analysis Result](../../data-formats/analysis-result.md)
 - [Data Handling](../../guardrails/code-quality/data-handling.md)

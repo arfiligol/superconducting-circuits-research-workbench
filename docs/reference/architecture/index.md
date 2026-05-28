@@ -32,8 +32,8 @@ Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electro
 
 | Page | Core focus |
 |---|---|
-| [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto direct research, Python Notebook data inspection, and Application Simulation Workbench boundary |
-| [Product Async Contracts](product-async-contracts.md) | SimulationRequest、RunnerTaskEnvelope、Runner manifest、ResultView API boundary |
+| [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto direct research, Python Notebook data inspection, and Application Simulation/Analysis Workbench boundary |
+| [Product Async Contracts](product-async-contracts.md) | SimulationRequest、AnalysisRequest、RunnerTaskEnvelope、Runner manifest、ResultView API boundary |
 | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | Runner process boundary、claim/execute/complete protocol |
 | [Runner Result Manifest](runner-result-manifest.md) | manifest schema、safe path rules、Zarr declaration |
 | [TraceStore Zarr](trace-store-zarr.md) | canonical local Zarr authority owned by Python Backend |
@@ -49,13 +49,14 @@ Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electro
 | local staging package | Julia Runner writes, Backend validates |
 | app navigation and result browsing | Electron + Next.js App |
 | productized simulation request workflow | Application Simulation Workbench |
+| productized analysis/fitting workflow | Application Analysis Workbench |
 | direct exploratory execution | Pluto Notebook |
 
 ## Removed Product Surfaces
 
-User-facing command workflows, retired Python UI runtimes, separate local queue workers, Python-in-process Julia simulation, Characterization Workbench, and Schemdraw standalone workflow are not active product/runtime surfaces.
+User-facing command workflows, retired Python UI runtimes, separate local queue workers, Python-in-process Julia simulation, and Schemdraw standalone workflow are not active product/runtime surfaces.
 
-Application Simulation Workbench is active architecture. It submits persisted tasks through the Backend and never owns heavy compute.
+Application Simulation Workbench and Analysis Workbench are active architecture. They submit persisted tasks through the Backend and never own heavy compute.
 
 If a historical document mentions one of those surfaces, the current architecture pages override it.
 

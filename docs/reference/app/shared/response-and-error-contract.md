@@ -22,7 +22,7 @@ updated_by: team
 本頁定義 App backend surfaces 共用的回應 envelope 與 error code contract。frontend 應以本頁作為顯示與分流錯誤的共同基線。
 
 !!! info "Shared backend contract"
-    `Session & Workspace`、`Tasks & Execution`、`Circuit Definitions`、`Schemdraw Render`、`Characterization Results` 都應回到這份 shared envelope。
+    `Session & Workspace`、`Tasks & Execution`、`Circuit Definitions`、`Schemdraw Render`、`Analysis Results` 都應回到這份 shared envelope。
 
 !!! warning "Frontend keys off codes, not messages"
     前端 UI 不應靠訊息文字比對來決定顯示行為。
@@ -123,7 +123,7 @@ updated_by: team
 | Tasks | `task_not_found`, `task_not_visible`, `task_submit_denied`, `task_not_cancellable`, `task_not_terminable`, `task_already_terminal`, `task_retry_denied` |
 | Definitions | `definition_not_found`, `definition_not_visible`, `definition_source_invalid`, `definition_conflict`, `definition_delete_blocked` |
 | Schemdraw | `schemdraw_relation_invalid`, `schemdraw_linked_schema_not_visible`, `schemdraw_syntax_error`, `schemdraw_runtime_error` |
-| Characterization | `analysis_not_available`, `trace_selection_invalid`, `artifact_not_found`, `tagging_conflict` |
+| Analysis Workbench | `analysis_not_available`, `trace_selection_invalid`, `artifact_not_found`, `tagging_conflict` |
 
 ## HTTP Status Mapping Baseline
 

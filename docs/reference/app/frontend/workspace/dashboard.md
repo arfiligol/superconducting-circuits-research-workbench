@@ -36,7 +36,7 @@ updated_by: codex
 - dataset profile 編輯
 - raw-data ingestion authoring
 - raw trace browse
-- simulation / characterization configuration
+- simulation / analysis configuration
 
 !!! warning "Dashboard is not the dataset-management page"
     dataset profile edit、lifecycle actions 與 active dataset browse 應回到 [Dataset](dataset.md)。
@@ -91,7 +91,7 @@ flowchart TD
 | active dataset summary | session surface | ✅ | 顯示目前 context |
 | visible dataset count | datasets surface | ✅ | overview stats |
 | dataset profile summary | datasets surface | ⚠️ | 只做 concise summary，不做 editing |
-| tagged core metrics summary | characterization results surface | ⚠️ | read-only summary |
+| tagged core metrics summary | analysis results surface | ⚠️ | read-only summary |
 
 ### UI states
 
@@ -116,13 +116,13 @@ flowchart TD
 3. **Metrics empty state**
    - 若 active dataset 尚無 tagged metrics
    - 顯示 concise empty guidance
-   - 不把 characterization workflow 直接塞回 dashboard
+   - 不把 analysis workflow 直接塞回 dashboard
 
 ## Visual Rules
 
 - overview-first，不可退化成 dataset management wall
 - dedicated page entry 可以存在，但必須維持為小型 next-step cluster，而不是大型 CTA 牆
-- page body 不得重複 `Runtime Mode`、`Active Dataset`、`Tasks Queue`、submit authority 等 shell-owned context
+- page body 不得重複 `Runtime Mode`、`Active Dataset`、`Task Execution`、submit authority 等 shell-owned context
 - tagged metrics 區塊保持 read-only summary，不承擔 identify / analysis 操作
 
 ## Acceptance Checklist

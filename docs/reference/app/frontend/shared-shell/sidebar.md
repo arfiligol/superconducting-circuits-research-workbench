@@ -37,12 +37,13 @@ Sidebar is navigation only. It does not own task state, dataset state, worker st
 | Dashboard | `/dashboard` |
 | Dataset | `/dataset` |
 | Simulation Workbench | `/tasks?lane=simulation` |
-| Tasks | `/tasks` |
+| Analysis Workbench | `/tasks?lane=analysis` |
+| Task / Execution Center | `/tasks` |
 | Data Ingestion | `/data-ingestion` |
 | Raw Data | `/raw-data` |
 | Schemas | `/schemas` |
 
-The sidebar may expose Simulation Workbench as a primary product surface. It must not expose Characterization or Schemdraw as standalone primary pages.
+The sidebar may expose Simulation Workbench, Analysis Workbench, and Task / Execution Center as primary product surfaces. It must not expose old characterization or Schemdraw routes as standalone primary pages.
 
 ## Density Contract
 

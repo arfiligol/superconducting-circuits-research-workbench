@@ -1,7 +1,8 @@
 ---
-title: "Characterization Workbench Removed"
+title: "Retired Characterization Route"
 aliases:
   - "Characterization UI"
+  - "Characterization Workbench Removed"
 tags:
   - diataxis/reference
   - audience/team
@@ -9,17 +10,17 @@ tags:
 status: archived
 owner: docs-team
 audience: team
-scope: tombstone for the removed app characterization workbench
-version: v1.0.0
+scope: tombstone for the old characterization route; analysis work now belongs to Analysis Workbench
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
-# Characterization Workbench Removed
+# Retired Characterization Route
 
-The application no longer exposes a full Characterization Workbench.
+The old characterization route is not an active application route.
 
-Heavy analysis, fitting, and derived parameter extraction belong to Julia Runner tasks or explicit notebook execution. The app remains a task monitor and result browser.
+The underlying product need remains active as Analysis Workbench: fitting, post-processing, comparison, trace summary, and derived-parameter extraction are product workflows submitted as Julia Runner analysis tasks and rendered through ResultView / Raw Data Browser integration.
 
 ## Related
 

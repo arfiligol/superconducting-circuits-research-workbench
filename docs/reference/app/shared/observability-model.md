@@ -59,28 +59,28 @@ updated_by: codex
 | `actor_user_id` | remote governance 與 actor-centric lookup |
 | `runtime_mode` | `local` 或 `online`；不可被 desktop profile 術語取代 |
 
-## Worker Liveness Vocabulary
+## Runner Runtime Liveness Vocabulary
 
 | State | Meaning |
 |---|---|
-| `idle` | worker alive and available，但目前未執行 task |
-| `running` | worker alive and currently executing a task |
-| `draining` | worker alive，但正在清空或收尾，不再接受新 work |
-| `degraded` | worker alive，但 health / liveness evidence / runtime 狀態已有明確異常 |
-| `offline` | worker absent、unreachable、shut down，或經 backend 判定為 effectively unavailable |
+| `idle` | Runner alive and available，但目前未執行 task |
+| `running` | Runner alive and currently executing a task |
+| `draining` | Runner alive，但正在清空或收尾，不再接受新 work |
+| `degraded` | Runner alive，但 health / liveness evidence / runtime 狀態已有明確異常 |
+| `offline` | Runner absent、unreachable、shut down，或經 backend 判定為 effectively unavailable |
 
-!!! warning "Do not collapse worker liveness into task status"
+!!! warning "Do not collapse Runner liveness into task status"
     task `running` 是 execution lifecycle。
-    worker `running` 是 worker availability / execution occupancy。
-    worker `idle` 代表 live-and-available，不得被 shell、queue summary 或 support tooling 簡化成 `offline`。
+    Runner `running` 是 Runner availability / execution occupancy。
+    Runner `idle` 代表 live-and-available，不得被 shell、task summary 或 support tooling 簡化成 `offline`。
 
-## Task / Worker / Queue Semantics
+## Task / Runner / Execution Semantics
 
 | Surface | Canonical question |
 |---|---|
 | task lifecycle | 這筆 task 的 execution 現在在哪個狀態？ |
-| worker liveness | 這個 worker 現在可不可用、是否正在執行 work？ |
-| queue read model | 目前全域可見的是哪些 task，以及它們的 quick summary / actions 是什麼？ |
+| Runner liveness | 這個 Runner 現在可不可用、是否正在執行 work？ |
+| task execution read model | 目前全域可見的是哪些 task，以及它們的 quick summary / actions 是什麼？ |
 
 ## Mode Applicability
 

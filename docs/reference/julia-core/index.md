@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core authoring architecture overview for Pluto direct research and Julia Runner execution.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 icon: lucide/cpu
@@ -60,6 +60,16 @@ If existing Julia names, exports, or helpers conflict with this reference, chang
 
 Do not preserve outdated APIs as fallback or compatibility layers unless a new source-of-truth decision explicitly requires that exception.
 
+## Julia Core Kernel vs Component Libraries
+
+Julia Core is the authoring and simulation kernel. It defines the contracts for components, endpoints, Circuit Plans, relations, validation, compiler lowering, compiled circuits, and simulation / sweep execution.
+
+Julia Core does not own a closed catalog of physical component families.
+
+Concrete components such as grounded LC resonators, floating LC resonators, quarter-wave resonators, readout lines, flux lines, SQUID-based elements, JPAs, SNAILs, and Purcell filters should live in user-space, lab-space, or project-space component libraries.
+
+Component libraries depend on Julia Core. Julia Core must not depend on component libraries.
+
 ## Authoring Contract
 
 ```mermaid
@@ -95,6 +105,12 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
     ---
 
     Define reusable primitive and composite components, public pins, private nodes, and namespace rules.
+
+- __[Component Libraries](component-libraries.md)__
+
+    ---
+
+    Separate the Julia Core Kernel from user-space, lab-space, and project-space component libraries.
 
 - __[Endpoints](endpoints.md)__
 
@@ -138,7 +154,8 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 
 | Surface | Owns |
 | --- | --- |
-| Julia Core | circuit authoring, Circuit Plan concepts, compiler concepts, simulation helpers, analysis helpers |
+| Julia Core Kernel | component authoring contract, Circuit Plan concepts, endpoint model, compiler concepts, simulation helpers, analysis helpers |
+| Component Libraries | concrete reusable components, component-specific parameters, reusable plan builders, component-specific validation helpers |
 | Pluto Notebook | direct research use of Julia Core, interactive inspection, local research plots |
 | Julia Runner | deterministic execution of Julia Core work and staged numeric output |
 | Python Backend | task lifecycle, metadata, publication, TraceStore, platform result APIs |

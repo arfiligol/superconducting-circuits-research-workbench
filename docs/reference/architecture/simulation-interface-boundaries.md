@@ -10,15 +10,15 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Defines the boundary between Pluto research simulation, Python Notebook data inspection, Application Simulation Workbench, Backend, and Julia Runner.
-version: v1.1.0
+scope: Defines the boundary between Pluto research simulation, Python Notebook data inspection, Application Simulation/Analysis Workbenches, Backend, and Julia Runner.
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Simulation Interface Boundaries
 
-This page defines which interface owns each simulation-facing workflow, data-inspection path, and platform state change. Use it when you need to decide whether work belongs in Pluto, a Python notebook, the Electron application, the Python Backend, or Julia Runner.
+This page defines which interface owns each simulation-facing workflow, analysis-facing workflow, data-inspection path, and platform state change. Use it when you need to decide whether work belongs in Pluto, a Python notebook, the Electron application, the Python Backend, or Julia Runner.
 
 The project has two simulation-facing execution tracks and one data-inspection track.
 
@@ -50,6 +50,8 @@ Electron Application / Python Notebook when submitting platform tasks
 ```
 
 Application Simulation Workbench is the productized simulation surface. It submits persisted simulation requests and renders published results.
+
+Application Analysis Workbench is the productized analysis, fitting, post-processing, comparison, and derived-parameter surface. It submits persisted analysis requests and renders published results.
 
 Application Simulation Workbench is expected to submit real simulation requests. It must not rely on Runner fixture tasks as a substitute for compute implementation.
 
@@ -94,6 +96,7 @@ Python Notebook is useful for file inspection, debugging, migration checks, emer
 | Pluto Notebook | Direct research computation through Julia Core |
 | Python Notebook | Programmable data analysis, file inspection, Backend metadata/task/result API usage |
 | Application Simulation Workbench | Productized simulation request builder, task monitor, result viewer |
+| Application Analysis Workbench | Productized analysis/fitting/post-processing request builder, task monitor, result viewer |
 | Python Backend | Task lifecycle, request validation, publication, TraceStore, result view APIs |
 | Julia Runner | Async compute execution and local Zarr staging |
 | Julia Core | Circuit construction, delayed lowering, simulation and analysis primitives |
@@ -103,6 +106,7 @@ Python Notebook is useful for file inspection, debugging, migration checks, emer
 - Pluto Notebook must not become an Application workflow client.
 - Python Notebook must not become a Julia compute cockpit or direct platform publication path.
 - Application frontend must not run heavy simulation.
+- Application workbenches must not recreate task lifecycle, Runner runtime, Backend publication, or TraceStore authority.
 - Python Backend must not run heavy simulation in request threads.
 - Julia Runner must not own formal metadata DB records.
 - Fixture outputs must not be treated as product simulation results.

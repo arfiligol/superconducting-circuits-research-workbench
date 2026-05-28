@@ -140,8 +140,9 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 - TypeScript strict mode
 - component system based on shadcn/ui + Radix
 - 不在 component 內直接實作業務流程或硬編碼 API contract
-- primary surfaces include Dashboard, Dataset, Simulation Workbench, Data Ingestion, Raw Data / Trace Browser, and Tasks / Result Browser
+- primary surfaces include Dashboard, Dataset, Simulation Workbench, Analysis Workbench, Task / Execution Center, Data Ingestion, Raw Data / Trace Browser, and Design Assets
 - Application Simulation Workbench is a first-class product surface, but it must submit async tasks rather than owning compute logic
+- Application Analysis Workbench is a first-class product surface, but it must submit async tasks rather than owning compute logic
 
 ### Desktop
 
@@ -206,7 +207,9 @@ The following changes require a new SoT decision before implementation:
 - Reintroducing Backend task submission into the Pluto Notebook role.
 - Reintroducing Python Notebook as a Julia Core / JuliaCall compute surface.
 - Removing Application Simulation Workbench as a first-class product surface.
+- Removing Application Analysis Workbench as a first-class product surface.
 - Running heavy simulation in Python Backend request threads.
+- Reintroducing queue-service or worker-dashboard product metaphors for task execution.
 - Treating fixture output as a product Runner task.
 - Reintroducing a user-facing CLI product surface.
 - Reintroducing NiceGUI or any retired Python UI runtime.
@@ -289,7 +292,7 @@ The following changes require a new SoT decision before implementation:
     - Backend task submission is outside the Pluto Notebook role.
     - Python Notebook is a programmable data-analysis and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts.
     - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
-    - Application Simulation Workbench is first-class and submits persisted async tasks through Python Backend and Julia Runner.
+    - Application Simulation Workbench and Analysis Workbench are first-class and submit persisted async tasks through Python Backend and Julia Runner.
     - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
     - Julia Runner owns async compute execution and local Zarr staging.
 - **Scripts**:

@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Source-of-truth authoring model for reusable Julia Core circuit components, plans, and compiler lowering.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -60,7 +60,9 @@ flowchart LR
     Compiler --> Netlist["JosephsonCircuits.jl Netlist"]
 ```
 
-Users build a `CircuitPlan`, add components, connect endpoints, add couplings, validate the plan, and then call the compiler.
+Users build a `CircuitPlan`, add components from a selected Component Library, connect endpoints, add couplings, validate the plan, and then call the compiler.
+
+The following example assumes a component library provides `GroundedLCResonatorComponent` and `QuarterWaveResonatorComponent` builders:
 
 ```julia
 plan = CircuitPlan(id = "example")
@@ -105,6 +107,24 @@ GroundedLCResonator
 SQUID
     = JosephsonJunction + JosephsonJunction + optional loop inductance + flux parameter
 ```
+
+These examples describe component-library definitions that use the Julia Core authoring contract.
+
+## Component Libraries
+
+The authoring model is designed so users, labs, and projects can define their own reusable components.
+
+Julia Core defines the framework:
+
+- how components expose endpoints;
+- how components are inserted into a Circuit Plan;
+- how relations and couplings target endpoints;
+- how validation and compiler lowering are organized;
+- how compiled circuits preserve maps and provenance.
+
+Julia Core does not need to own every concrete component family.
+
+Concrete families such as `GroundedLCResonatorComponent`, `FloatingLCResonatorComponent`, `QuarterWaveResonatorComponent`, and `CPWFluxLineComponent` should be treated as examples of component-library definitions, not as a closed Julia Core catalog.
 
 ## Transitional Names
 

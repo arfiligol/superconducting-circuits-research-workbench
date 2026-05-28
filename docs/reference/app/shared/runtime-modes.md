@@ -67,7 +67,7 @@ updated_by: codex
 | Same shell vocabulary | Header、Sidebar、workflow pages 盡量維持同一套 UI shell，而不是做兩套產品外觀 |
 | Same backend surface family | local 與 online 優先共用同一組 backend authority surfaces；差異主要在 auth、collaboration 與 connection target |
 | Mode-aware session | frontend 不自行拼湊 local / online state；session envelope 仍由 backend authority 擁有 |
-| No mixed context | 任何 mode switch 都必須清掉不再有效的 session / task / queue / dataset caches |
+| No mixed context | 任何 mode switch 都必須清掉不再有效的 session / task / dataset caches |
 
 ## Local Mode Baseline
 
@@ -79,7 +79,7 @@ updated_by: codex
 | Workspace model | 使用單一 implicit workspace `Local Space`，維持與 app shell 相容的 context shape |
 | Visibility model | persisted resource 使用 `local` scope，不分 `private` / `workspace` |
 | Data | 以本地 datasets、results、tasks、artifacts 為主 |
-| Queue | 顯示 local runtime tasks，不承擔 shared workspace visibility semantics |
+| Task Execution | 顯示 local runtime tasks，不承擔 shared workspace visibility semantics |
 | Runtime stack | desktop supervisor starts or reconnects to local frontend, Python Backend, and Julia Runner |
 | Collaboration | invitation、membership、shared task governance 不適用 |
 
@@ -92,7 +92,7 @@ updated_by: codex
 | User identity | 使用 authenticated user summary |
 | Workspace model | multi-workspace membership + single active workspace |
 | Data | 以 remote server authority 為準 |
-| Queue | 顯示 active workspace 中可見的 shared tasks |
+| Task Execution | 顯示 active workspace 中可見的 shared tasks |
 | Collaboration | invite、join、leave、membership management 生效 |
 
 ## Session Shape Across Modes
@@ -239,21 +239,21 @@ When restoring Local Mode, the desktop supervisor starts or reconnects to the lo
 | Session cache | local / online 不得共用同一份 session cache |
 | Active dataset | 切 mode 後不得沿用舊 mode 的 dataset identity |
 | Attached task | 切 mode 後必須解除附著，除非新 mode 中仍能重新解析相同 persisted task |
-| Queue rows | local queue 與 online queue 不得混合顯示 |
+| Task rows | local task rows 與 online task rows 不得混合顯示 |
 | Error messaging | debug / auth / capability errors 必須對應目前 active mode，不得顯示另一個 mode 的殘留訊息 |
 
 ## Task Continuity Rules
 
 | Situation | Required behavior |
 |---|---|
-| switch from online to local | remote tasks 繼續在 server 端執行；app 只解除目前 online queue / attached-task context |
-| switch from local to online | local tasks 不被搬移到 server；online mode 重新建立自己的 queue context |
+| switch from online to local | remote tasks 繼續在 server 端執行；app 只解除目前 online task / attached-task context |
+| switch from local to online | local tasks 不被搬移到 server；online mode 重新建立自己的 task context |
 | return to online mode | 重新抓取 remote task summary；必要時讓使用者重新 attach |
 | closing Electron shell only in local mode | 若 Python Backend 與 Julia Runner 仍在，task 可繼續由 runner lifecycle 收斂；重開 shell 後可重新觀察 |
 | stopping the whole local runtime stack | 若 frontend、Python Backend 與 Julia Runner 一起停止，local tasks 才可能終止或進入 reconcile-required state |
-| app close in online mode | remote tasks 繼續由 server runtime 管理；重新打開 app 後再透過 queue recovery 取得狀態 |
+| app close in online mode | remote tasks 繼續由 server runtime 管理；重新打開 app 後再透過 task recovery 取得狀態 |
 
-!!! info "Worker summary uses liveness vocabulary"
+!!! info "Runner runtime summary uses liveness vocabulary"
     local / online task surfaces 若顯示 runner summary，應把 runner liveness 與 task lifecycle 分開。
     `idle` 代表 runner alive and available；不得被 mode-aware shell 語意誤讀成 `offline`。
 

@@ -15,12 +15,21 @@ Keep the main application navigation focused on:
 - Dashboard
 - Dataset
 - Simulation Workbench
-- Tasks / Result Browser
+- Analysis Workbench
+- Task / Execution Center
 - Data Ingestion
 - Raw Data / Trace Browser
 - Design Assets / Source Documents
 
-Simulation and heavy analysis run as Julia Runner tasks. Application Simulation Workbench builds product requests, submits persisted tasks through the Backend, and renders published results. Direct interactive research execution belongs in Pluto notebooks.
+Simulation and heavy analysis run as Julia Runner tasks. Application Simulation Workbench builds simulation requests, submits persisted tasks through the Backend, and renders published results. Analysis Workbench builds fitting, post-processing, comparison, and derived-parameter requests through the same async path.
+
+Direct interactive research execution belongs in Pluto notebooks.
+
+## Task Execution Model
+
+The application product metaphor is Task Execution Pipeline, Runner Runtime, Task / Execution Center, and ResultView.
+
+It must not present the local runtime as a separate queue-service product or standalone runtime wall. Persisted Backend tasks and Julia Runner claim / heartbeat / progress / complete / fail lifecycle remain the execution authority.
 
 ## Local Mode
 
@@ -41,6 +50,5 @@ These are not active application surfaces:
 - user-facing command workflow
 - retired Python UI runtime
 - standalone Schemdraw workflow
-- Characterization Workbench
 
-Retired surfaces must stay inactive unless a new source-of-truth explicitly reintroduces them through the task/result workbench, Simulation Workbench, or a notebook workflow.
+The former characterization route is represented by Analysis Workbench, Julia Runner analysis tasks, ResultView, and Raw Data Browser integration. Retired surfaces must stay inactive unless a new source-of-truth explicitly reintroduces them through first-class workbench or notebook workflow boundaries.

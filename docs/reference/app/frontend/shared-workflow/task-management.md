@@ -2,7 +2,7 @@
 title: "Task Management"
 aliases:
   - "Frontend Task Management"
-  - "Task Queue"
+  - "Task Execution Management"
   - "Task Attachment"
 tags:
   - diataxis/reference
@@ -20,15 +20,22 @@ updated_by: codex
 
 # Task Management
 
+Task Management means task execution visibility, task attachment, recovery, and result handoff. It does not mean a separate queue-service UI or standalone runtime wall.
+
 The frontend monitors persisted tasks. It does not execute simulation or analysis.
 
 ## Surface Boundary
 
 | Surface | Owns |
 |---|---|
-| Header task trigger | compact task visibility |
-| `/tasks` | extended task browse, detail, progress, errors, result handoff |
-| workflow pages | none; simulation/analysis workbenches are not active app surfaces |
+| Header task trigger | compact task visibility and quick task status |
+| Task / Execution Center | extended task browse, detail, progress, errors, result handoff |
+| Simulation Workbench | product simulation request-building, task submission, stage-local simulation result context |
+| Analysis Workbench | product analysis/fitting/post-processing request-building, task submission, stage-local analysis result context |
+
+Simulation Workbench and Analysis Workbench are active first-class Application surfaces.
+
+They may reuse shared task/result components, but they must not reimplement task lifecycle, Runner runtime, Backend publication, or TraceStore authority.
 
 ## Task Row Contract
 
@@ -46,14 +53,16 @@ The frontend monitors persisted tasks. It does not execute simulation or analysi
 
 The app may open result views only after backend publication has completed. A runner manifest by itself is not a published result.
 
+Runner completion does not equal product result availability. Result handoff belongs to the Backend-owned ResultView API after publication.
+
 ## UI Rules
 
 | Rule | Meaning |
 |---|---|
 | task detail wins over row summary | page detail must refetch by `task_id` |
 | no large arrays in task payloads | trace previews must use backend trace APIs |
-| no worker dashboard wall | show runner/task status compactly |
-| no workbench reintroduction | task monitoring must not recreate removed simulation/analysis workbenches |
+| no duplicate execution runtime inside workbenches | workbenches may submit tasks and render results, but they must not recreate a separate task lifecycle, Runner dashboard, or compute runtime |
+| no standalone runtime wall | show Runner runtime status compactly as execution context, not as the product metaphor |
 
 ## Related
 

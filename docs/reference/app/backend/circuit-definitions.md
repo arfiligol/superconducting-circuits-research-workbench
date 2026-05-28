@@ -22,7 +22,7 @@ updated_by: codex
 
 !!! info "Surface Boundary"
     本頁只定義 definition catalog、detail、mutation 與 persisted inspection read model。
-    simulation、schemdraw render 與 characterization run 不屬於本頁責任。
+    simulation、schemdraw render 與 analysis run 不屬於本頁責任。
 
 !!! tip "Primary Consumers"
     主要消費者是 [Schemas](../frontend/definition/schemas.md)、[Schema Editor](../frontend/definition/schema-editor.md)、[Schemdraw](../frontend/removed-workflows/schemdraw.md) 與 [Circuit Simulation](../frontend/simulation-workbench/circuit-simulation.md)。

@@ -1,7 +1,8 @@
 ---
 aliases:
+  - Backend Analysis Results
+  - Analysis Result Service
   - Backend Characterization Results
-  - Characterization Result Service
 tags:
   - diataxis/reference
   - audience/team
@@ -10,22 +11,22 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Characterization analysis registry、active DesignScope gating、Data Collection Review、analysis pipeline gating、run history、axis-aware artifact manifest、artifact payload 與 identify/tagging 的 backend reference surface。
-version: v0.12.0
-last_updated: 2026-04-30
+scope: Analysis Workbench registry、active DesignScope gating、Data Collection Review、analysis pipeline gating、run history、axis-aware artifact manifest、artifact payload 與 identify/tagging 的 backend reference surface。
+version: v0.13.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
-# Characterization Results
+# Analysis Results
 
-本頁定義 frontend `Characterization` 頁依賴的 analysis result surface。
+本頁定義 Analysis Workbench 依賴的 analysis result surface。
 
 !!! info "Surface Boundary"
     本頁負責 analysis-specific read / mutation contract。
     task lifecycle 本身由 [Tasks & Execution](tasks-execution.md) 定義。
 
 !!! tip "Primary Consumers"
-    主要消費者是 [Characterization](../frontend/removed-workflows/characterization.md) 與 [Dashboard](../frontend/workspace/dashboard.md)。
+    主要消費者是 Analysis Workbench、[Dashboard](../frontend/workspace/dashboard.md)、ResultView API 與 Raw Data Browser。
 
 ---
 
@@ -35,7 +36,7 @@ updated_by: codex
 | :--- | :--- |
 | **Analysis Registry Summary** | 分析項註冊摘要與 prerequisite / downstream hints |
 | **Data Collection Review** | 由 selected traces 與 persisted trace structure 派生的 pre-run scientific collection review |
-| **Characterization Input Collection** | 由 selected traces 與 persisted trace structure 派生的 scientific input collection |
+| **Analysis Input Collection** | 由 selected traces 與 persisted trace structure 派生的 scientific input collection |
 | **Run History List** | 執行歷史列表 |
 | **Result Artifact Manifest** | analysis-aware、axis-aware 結果產出清單 |
 | **Artifact Payload Query** | table / plot / preset 產出內容查詢 |
@@ -102,9 +103,9 @@ updated_by: codex
     | `axis_signature` | shared axis structure summary |
     | `member_label` | UI-safe compare label |
 
-=== "Characterization Input Collection"
+=== "Analysis Input Collection"
 
-    backend 可依 selected traces 派生 characterization input collection。
+    backend 可依 selected traces 派生 analysis input collection。
 
     minimum collection contract：
 
@@ -190,7 +191,7 @@ updated_by: codex
 
 | Concern | Contract |
 |---|---|
-| Pipeline-first model | Characterization 應被視為 analysis pipeline，而不是單次 one-off run surface |
+| Pipeline-first model | Analysis Workbench 應被視為 analysis pipeline，而不是單次 one-off run surface |
 | Active scope gate | registry、Data Collection Review、submit path 與 run history normal query 必須先解析 `dataset_id + design_id` 為 active DesignScope |
 | Separate run identity | extraction、fitting、comparison 等每個 analysis 都保有自己的 `run_id` |
 | Upstream result dependency | 某 analysis 若依賴上游 analysis 結果，contract 必須顯式指出 `required_upstream_analysis_ids[]` 與可接受的 upstream result surface |
@@ -207,7 +208,7 @@ updated_by: codex
 
 ### Analysis-specific Result Axis Contract
 
-Characterization results 必須同時區分 source input axes 與 analysis-derived result axes。
+Analysis results 必須同時區分 source input axes 與 analysis-derived result axes。
 
 | Axis family | Meaning |
 |---|---|
@@ -341,11 +342,11 @@ Characterization results 必須同時區分 source input axes 與 analysis-deriv
 
 | 讀回消費者 | 預期結果 |
 | :--- | :--- |
-| [Characterization](../frontend/removed-workflows/characterization.md) | 重新讀取後看到最新 tagging 狀態 |
+| Analysis Workbench | 重新讀取後看到最新 tagging 狀態 |
 | [Dashboard](../frontend/workspace/dashboard.md) | `Tagged Core Metrics` 摘要可讀回最新標記 |
 
 !!! warning "Cross-page Consistency"
-    identify / tagging 不是只影響 Characterization 局部畫面。
+    identify / tagging 不是只影響 Analysis Workbench 局部畫面。
     mutation 成功後，相關 dataset summary 必須能跨頁一致讀回。
 
 ## Tagged Core Metrics Resolution Contract
@@ -499,7 +500,7 @@ Dashboard 讀取 `Tagged Core Metrics` 時，必須用同一套 canonical resolu
 
 ## Related
 
-- [Characterization](../frontend/removed-workflows/characterization.md)
+- [Frontend Reference](../frontend/index.md)
 - [Tasks & Execution](tasks-execution.md)
 - [Dataset / Design / Trace Schema](../../data-formats/dataset-record.md)
 - [Analysis Result Schema](../../data-formats/analysis-result.md)

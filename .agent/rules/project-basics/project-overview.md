@@ -4,9 +4,10 @@
     - Data Browser
     - Dataset
     - Simulation Workbench
+    - Analysis Workbench
     - Data Ingestion
     - Raw Data / Trace Browser
-    - Tasks / Result Browser
+    - Task / Execution Center
     - Notebook Interface
 - **Data sources**:
     - circuit simulation
@@ -22,6 +23,7 @@
     - Pluto is the direct Julia research cockpit
     - Python Notebook is a programmable data-analysis and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts
     - Application Simulation Workbench submits persisted simulation tasks through Backend and Runner
+    - Application Analysis Workbench submits persisted analysis, fitting, and post-processing tasks through Backend and Runner
     - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are not active product/runtime surfaces
 - **Core values**:
     - scientific accuracy

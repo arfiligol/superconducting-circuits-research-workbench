@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.2.0
+version: v1.3.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -58,6 +58,35 @@ Julia Core must not depend on FastAPI, Next.js, Electron, or Backend task state.
 The Runner owns execution orchestration and staged output, not authoring semantics. Circuit construction, endpoint resolution, compiler semantics, and simulation result extraction belong to Julia Core.
 
 Large numeric arrays should not move through HTTP JSON. Runner outputs should use staged local filesystem packages, with Backend publication handling canonical TraceStore records.
+
+## Runner Component Library Dependencies
+
+The Runner may execute tasks that depend on one or more component libraries.
+
+Those component libraries are task/runtime dependencies, not Julia Core Kernel members.
+
+The Runner must call Julia Core through the documented authoring path:
+
+```text
+Component Library plan builder
+        |
+        v
+CircuitPlan
+        |
+        v
+Validation
+        |
+        v
+Compiler
+        |
+        v
+JosephsonCompiledCircuit
+        |
+        v
+Simulation / Analysis
+```
+
+The Runner must not copy component-library logic into a separate Runner-only construction path.
 
 ## API Shape
 

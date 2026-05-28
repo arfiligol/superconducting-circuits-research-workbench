@@ -39,7 +39,9 @@ Legacy command workflow、retired Python UI runtime、separate queue worker runt
 
 - Data Browser
 - Dataset / Trace / Result Browser
-- Async Task Monitor
+- Task / Execution Center
+- Simulation Workbench
+- Analysis Workbench
 - Notebook research cockpit
 - Julia simulation and analysis runner
 - TraceStore-backed numeric result management
@@ -50,7 +52,7 @@ Legacy command workflow、retired Python UI runtime、separate queue worker runt
 
 - Python Backend 是 control plane + data plane，負責 task lifecycle、metadata、publication、provenance、TraceStore registration 與資料 API
 - Julia Runner 是 compute plane，負責 simulation、parameter sweep、post-processing、analysis、fitting、derived parameter extraction 與 result package generation
-- Electron Application 是 productized data and simulation workbench，聚焦 Simulation Workbench、dataset、ingestion、trace browsing、task/result browsing
+- Electron Application 是 productized data, simulation, and analysis workbench，聚焦 Simulation Workbench、Analysis Workbench、dataset、ingestion、trace browsing、Task / Execution Center 與 ResultView
 - Pluto Notebook 是 direct Julia research cockpit，可直接執行 Julia Core
 - Python Notebook 是 programmable data-analysis and inspection surface，可直接讀資料做臨時分析；若要改平台狀態，必須走 Backend contract
 - user-facing command workflow 不再是產品 surface；repo 僅保留 `scripts/` 作為 dev/build/test/maintenance helpers
@@ -61,6 +63,7 @@ Legacy command workflow、retired Python UI runtime、separate queue worker runt
 
 - 在 Pluto 中直接使用 Julia Core 進行研究式模擬與分析
 - 從 Application Simulation Workbench 提交 persisted simulation task
+- 從 Application Analysis Workbench 提交 persisted analysis / fitting / post-processing task
 - 從 Python Notebook 直接檢查 local/exported/canonical data files，並在需要平台語意或狀態修改時呼叫 Backend data/task/result APIs
 - 管理 dataset / design / trace / task / result / provenance
 - 讓 Runner staging result 經 Python Backend 驗證後 publish 成正式 TraceStore batch
@@ -103,7 +106,8 @@ Legacy command workflow、retired Python UI runtime、separate queue worker runt
 | Simulation Workbench | 提交 productized simulation request、監控 task、檢視 published result |
 | Data Ingestion | 匯入 measurement/layout/simulation artifacts |
 | Raw Data / Trace Browser | 瀏覽 TraceStore metadata、summary、slice 與 result lineage |
-| Tasks / Result Browser | 提交、監控、檢視 async Runner task 與 publication result |
+| Task / Execution Center | 監控 async Runner task、execution history、Runner runtime summary 與 publication result handoff |
+| Analysis Workbench | 建立 analysis / fitting / post-processing request，提交 persisted task，並透過 ResultView 呈現結果 |
 | Notebook Interface | Pluto direct research cockpit；Python notebooks for data analysis、file inspection、Backend API inspection、migration、emergency analysis |
 
 ### Accepted Data Sources
@@ -143,7 +147,8 @@ Legacy command workflow、retired Python UI runtime、separate queue worker runt
     - Simulation Workbench
     - Data Ingestion
     - Raw Data / Trace Browser
-    - Tasks / Result Browser
+    - Task / Execution Center
+    - Analysis Workbench
     - Notebook Interface
 - **Data sources**:
     - circuit simulation

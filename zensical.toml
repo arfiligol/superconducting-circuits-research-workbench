@@ -171,6 +171,7 @@ nav = [
         { "Authoring Model" = "reference/julia-core/authoring-model.md" },
         { "Circuit Plan" = "reference/julia-core/circuit-plan.md" },
         { "Components and Composition" = "reference/julia-core/components-and-composition.md" },
+        { "Component Libraries" = "reference/julia-core/component-libraries.md" },
         { "Endpoints" = "reference/julia-core/endpoints.md" },
         { "Relations and Couplings" = "reference/julia-core/relations-and-couplings.md" },
         { "Compiler" = "reference/julia-core/compiler.md" },

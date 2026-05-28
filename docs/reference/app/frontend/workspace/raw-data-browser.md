@@ -54,7 +54,7 @@ updated_by: codex
 | 類型 | 內容 |
 | --- | --- |
 | Primary goals | 選擇 design、管理 DesignScope lifecycle request、篩選 trace summaries、聚焦單筆 preview、對允許的 trace 執行 edit / delete、對多筆允許刪除的 trace 執行 batch delete |
-| Non-goals | dataset profile 編輯、raw data ingest、simulation / characterization execution、system-generated trace 的來源重建或 republish |
+| Non-goals | dataset profile 編輯、raw data ingest、simulation / analysis execution、system-generated trace 的來源重建或 republish |
 
 !!! tip "Preview 與 Selection 分離"
     `focused_trace_id` 只決定右側 single-trace preview。
@@ -279,4 +279,4 @@ graph TD
 * [Sidebar](../shared-shell/sidebar.md)
 * [Backend: Datasets & Results](../../backend/datasets-results.md)
 * [Record Schema](../../../data-formats/dataset-record.md)
-* [Characterization](../removed-workflows/characterization.md)
+* [Frontend Reference](../index.md)
