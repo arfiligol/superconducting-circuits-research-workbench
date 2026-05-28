@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the Julia Core parameter sweep execution architecture.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -336,15 +336,23 @@ Effective role
     validated or inferred by Compiler / Sweep Engine
 ```
 
+### Parameter Role Examples
+
 | Parameter | Declaration source | Default declared role | Effective-role check |
 | --- | --- | --- | --- |
 | `capacitance_f` | Component Library | `NumericParameter` | topology key must not change |
+| `inductance_h` | Component Library | `NumericParameter` | topology key must not change |
+| `junction_ic` | Component Library | `NumericParameter` if junction topology is unchanged | emitted junction structure must not change |
+| `external_flux` | Component Library or Plan Builder | `NumericParameter` or `DriveParameter` | topology key must not change |
 | `line_length_m` | Component Library or Plan Builder | usually `StructuralParameter` | line segmentation, node map, or emitted rows may change |
 | `n_sections` | Component Library | `StructuralParameter` | target netlist size changes |
+| `boundary` | Component Library | `StructuralParameter` | node connections and emitted rows may change |
 | `coupling_capacitance_f` | Relation / Coupling | `NumericParameter` if endpoints are unchanged | coupling relation must already exist |
+| `mutual_inductance_h` | Relation / Coupling | `NumericParameter` if coupling topology is unchanged | coupling relation must already exist |
 | `line_tap_at_m` | Endpoint / Relation | `StructuralParameter` | breakpoint insertion and node map change |
 | `line_span_start_stop` | Endpoint / Relation | `StructuralParameter` | distributed coupling region changes |
-| `external_flux` | Component Library or Plan Builder | `NumericParameter` or `DriveParameter` | topology key must not change |
+| `window_length_m` | Plan Builder or Relation | `StructuralParameter` | span length and coupled-window lowering change |
+| `gap_um` | Plan Builder | numeric or structural depending on mapping | effective role follows mapped internal parameters |
 | `pump_frequency` | SweepSpec or solver setup | `DriveParameter` | solver input changes, not circuit topology |
 | `fit_window` | SweepSpec or analysis setup | `AnalysisParameter` | post-processing changes only |
 
@@ -381,6 +389,151 @@ StrictSweepClassification
 ```
 
 Strict classification is the default for reproducible research and Runner execution.
+
+## Plan Builder Parameter Mapping
+
+Plan Builders may expose high-level user-facing knobs that map to one or more component or relation parameters.
+
+Example:
+
+```julia
+build_qwr_readout_plan(;
+    gap_um,
+    window_length_um,
+    qwr_length_mm,
+    coupling_fF,
+)
+```
+
+Possible mappings:
+
+| Plan Builder knob | Maps to | Declared role |
+| --- | --- | --- |
+| `gap_um` | a capacitance model, e.g. `coupling_capacitance_f = f(gap_um)` | `NumericParameter` if geometry / endpoints are unchanged |
+| `window_length_um` | `line_span(... from_m, to_m ...)` and `CoupledWindowSpec.length_m` | `StructuralParameter` |
+| `qwr_length_mm` | distributed line length / segmentation | `StructuralParameter` if node map or emitted rows change |
+| `coupling_fF` | existing `couple_capacitive!` value | `NumericParameter` |
+
+A Plan Builder must preserve the mapping from high-level knobs to internal component / relation parameters so the sweep engine can classify axes and build topology keys.
+
+The role of a high-level knob is the strongest role among the internal parameters it affects.
+
+## Role Propagation Rules
+
+When a high-level parameter maps to multiple internal parameters, the effective role is the strongest required role.
+
+Recommended role order:
+
+```text
+StructuralParameter
+    stronger than
+NumericParameter / DriveParameter / AnalysisParameter
+```
+
+Examples:
+
+```text
+gap_um
+    maps only to coupling_capacitance_f
+    -> NumericParameter
+
+window_length_um
+    maps to line_span start / stop and coupled-window length
+    -> StructuralParameter
+
+resonator_design_scale
+    maps to line length and capacitance value
+    -> StructuralParameter because line length affects topology
+
+flux_bias
+    maps only to SQUID external_flux binding
+    -> NumericParameter or DriveParameter
+```
+
+If any mapped target changes topology key, the high-level knob must be treated as structural.
+
+## Conditional Parameter Roles
+
+Some parameters are numeric only under explicit structural assumptions.
+
+Examples:
+
+```text
+coupling_capacitance_f
+    NumericParameter if the capacitive coupling relation already exists
+    StructuralParameter if the sweep toggles whether the coupling relation exists
+
+gap_um
+    NumericParameter if it is only converted to an existing capacitance value
+    StructuralParameter if it changes layout geometry, endpoint positions, line spans, or coupling-window geometry
+
+external_flux
+    NumericParameter / DriveParameter if SQUID topology is fixed
+    StructuralParameter if it selects a different component model or junction topology
+```
+
+Conditional roles must declare their assumptions.
+
+The sweep engine must validate that those assumptions hold for the sweep domain.
+
+## Sweep Preflight
+
+Before running a batch sweep, Julia Core should support a preflight step.
+
+A preflight does not run the full simulation. It prepares and reports the execution plan.
+
+Conceptual API:
+
+```julia
+preflight = preflight_sweep(build_plan, sweep)
+```
+
+The preflight should report:
+
+```text
+- sweep axes;
+- declared role per axis;
+- declaration source per axis;
+- inferred / effective role per axis;
+- topology keys;
+- compile groups;
+- number of points per group;
+- compile policy;
+- executor;
+- estimated number of compiles;
+- estimated number of numeric simulations;
+- acceleration backend selection;
+- warnings or classification errors.
+```
+
+Pluto should display this preflight summary before launching expensive explicit batch sweeps.
+
+Runner tasks should record the preflight summary as provenance.
+
+## SweepExecutionPlan
+
+`SweepExecutionPlan` is the execution plan produced by preflight.
+
+Conceptual shape:
+
+```julia
+struct SweepExecutionPlan
+    sweep_spec
+    compile_policy
+    executor
+    acceleration_policy
+    axes
+    role_report
+    topology_groups
+    estimated_compiles
+    estimated_simulations
+    warnings
+end
+```
+
+This object lets Pluto show what will happen before the sweep runs.
+
+It also lets Runner persist the exact sweep plan used for reproducibility.
 
 ## Execution Backends
 
@@ -420,6 +573,25 @@ At minimum, local threaded execution should be part of the sweep architecture.
 The sweep engine should avoid unnecessary serialization of independent sweep points.
 
 The implementation should expose executor selection rather than hiding all execution behind a serial `for` loop.
+
+## Hardware Utilization Requirement
+
+Parameter sweep execution should not hide all work behind a serial `for` loop.
+
+If sweep points are independent, the implementation should expose parallel execution through executor selection.
+
+For local research, `ThreadedExecutor` is the default performance-oriented executor when the user requests hardware utilization.
+
+Serial execution is for:
+
+```text
+- debugging;
+- deterministic traceability;
+- small sweeps;
+- reproducing one failing point.
+```
+
+The sweep result should preserve the logical sweep point order even if execution is parallel.
 
 ## Numeric Acceleration Backends
 
@@ -526,6 +698,7 @@ It should preserve:
 
 ```text
 - sweep axes and roles;
+- SweepExecutionPlan / preflight provenance;
 - topology keys;
 - compile policy used;
 - executor used;
@@ -561,6 +734,48 @@ Explicit batch sweep
 ```
 
 Pluto should not accidentally trigger large batch sweeps through reactive slider updates.
+
+## Pluto UX Requirements
+
+Pluto should make parameter sweep behavior visible.
+
+A Pluto-friendly sweep workflow should separate:
+
+```text
+Reactive single-point exploration
+    safe to recompute reactively
+
+Explicit batch sweep
+    user intentionally launches the sweep
+```
+
+Recommended Pluto cell layout:
+
+```text
+Cell 1: import Julia Core and selected Component Libraries
+Cell 2: define parameter values / widgets
+Cell 3: build one CircuitPlan
+Cell 4: inspect plan, endpoints, and parameter metadata
+Cell 5: compile one plan
+Cell 6: run one frequency sweep
+Cell 7: define SweepSpec
+Cell 8: preflight_sweep(build_plan, sweep)
+Cell 9: explicitly run batch sweep
+Cell 10: inspect SweepResult
+```
+
+Pluto should provide or support helper functions such as:
+
+```julia
+inspect_plan(plan)
+inspect_parameters(plan)
+inspect_endpoints(plan)
+inspect_topology_key(compiled)
+inspect_sweep_preflight(preflight)
+summarize_sweep_result(result)
+```
+
+Large batch sweeps should not run only because a slider changed.
 
 Recommended reactive single-point pattern:
 

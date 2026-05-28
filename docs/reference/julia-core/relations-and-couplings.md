@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Plan-level relations, endpoint constraints, capacitive couplings, inductive couplings, shunts, and distributed windows.
-version: v1.2.0
+version: v1.3.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -93,6 +93,22 @@ Examples:
 | coupled-window length | `StructuralParameter` |
 
 The declared role is a sweep input. The compiler and sweep engine still verify whether each relation parameter changes the topology key before compiled output is reused.
+
+## Relation-Owned Parameter Metadata
+
+Relations should expose parameter metadata for the parameters they introduce.
+
+Examples:
+
+| Relation | Parameter | Default role |
+| --- | --- | --- |
+| `couple_capacitive!` | capacitance | `NumericParameter` if endpoints are unchanged |
+| `couple_inductive!` | mutual inductance | `NumericParameter` if coupling topology is unchanged |
+| `line_tap(...)` | tap position | `StructuralParameter` |
+| `line_span(...)` | start / stop | `StructuralParameter` |
+| `couple_window!` | window length | `StructuralParameter` |
+
+Relation-owned metadata should be stored in the CircuitPlan so `preflight_sweep` can classify sweep axes before execution.
 
 ## LC To Quarter-Wave Resonator
 

@@ -53,6 +53,10 @@ nav = [
       { "Overview" = "how-to/simulation/index.md" },
       { "Native Julia" = "how-to/simulation/native-julia.md" },
     ] },
+    { "Pluto" = [
+      { "Authoring Workflow" = "how-to/pluto/authoring-workflow.md" },
+      { "Parameter Sweep Workflow" = "how-to/pluto/parameter-sweep-workflow.md" },
+    ] },
   ] },
   { "Tutorials" = [
     { "Overview" = "tutorials/index.md" },

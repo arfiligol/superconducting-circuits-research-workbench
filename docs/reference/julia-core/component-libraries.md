@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the boundary between Julia Core Kernel and user/lab/project component libraries.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -75,9 +75,37 @@ build_qwr_readout_with_shunt_plan(params)
 
 These builders should return `CircuitPlan` objects and should use Julia Core endpoints, relations, validation, compiler, and simulation interfaces.
 
+## Plan Builder Parameter Metadata
+
+Component Libraries may expose reusable Plan Builders.
+
+Plan Builders should declare high-level user-facing knobs and preserve how those knobs map to component or relation parameters.
+
+Example:
+
+```julia
+build_qwr_readout_plan(params)
+```
+
+A Plan Builder should declare metadata such as:
+
+```text
+- parameter name;
+- default role;
+- owner;
+- mapped component / relation targets;
+- sweep-facing name;
+- valid domain;
+- units;
+- role assumptions;
+- whether the parameter may change topology key.
+```
+
+This metadata is stored in the CircuitPlan and used by the sweep engine.
+
 ## Parameter Role Declarations
 
-Component Libraries should declare default parameter roles for the parameters they introduce.
+Component Libraries should declare default parameter roles for component-owned parameters and for high-level Plan Builder knobs.
 
 Examples:
 
