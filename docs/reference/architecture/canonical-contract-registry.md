@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: current published contracts for the Notebook + Application + Julia Runner architecture
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -27,10 +27,10 @@ This registry names the owner for each active cross-layer contract.
 
 | Contract | Owner | Source of truth | Primary consumers |
 |---|---|---|---|
-| Application Interface | Electron App + Frontend | [Application Interface](../app/application-interface.md), [Frontend Reference](../app/frontend/index.md) | users browsing datasets, tasks, traces, and results |
-| Notebook Interface | Pluto + Python notebooks | [Notebook Reference](../notebooks/index.md) | research cockpit, backend/API inspection, migration analysis |
+| Application Interface | Electron App + Frontend | [Application Interface](../app/application-interface.md), [Frontend Reference](../app/frontend/index.md), [Simulation Interface Boundaries](simulation-interface-boundaries.md) | users submitting simulations, browsing datasets, tasks, traces, and results |
+| Notebook Interface | Pluto + Python notebooks | [Notebook Reference](../notebooks/index.md), [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto research cockpit, Python Backend/API inspection, migration analysis |
 | Backend control/data plane | Python Backend | [Backend Reference](../app/backend/index.md), [Tasks & Execution](../app/backend/tasks-execution.md) | frontend, notebooks, Julia Runner |
-| Julia compute plane | Julia Runner | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | backend runner API, Pluto task submission |
+| Julia compute plane | Julia Runner | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | backend runner API and claimed persisted tasks |
 | Runner result manifest | Julia Runner writes; Python Backend validates | [Runner Result Manifest](runner-result-manifest.md) | publisher, tests, future runner tasks |
 | Canonical TraceStore | Python Backend | [TraceStore Zarr](trace-store-zarr.md), [Datasets & Results](../app/backend/datasets-results.md) | raw data browser, result browser, notebooks |
 | Task lifecycle | Python Backend | [Tasks & Execution](../app/backend/tasks-execution.md) | frontend task monitor, runner claim/complete loop |
@@ -50,7 +50,9 @@ These are no longer active contracts:
 | Retired local queue worker runtime | DB-backed task claim by Julia Runner |
 | Retired Python UI runtime | Electron App + Next.js frontend |
 | Python Backend in-process Julia simulation | Julia Runner compute plane |
-| Simulation Workbench / Characterization Workbench / Schemdraw standalone workflow | Task monitor, result browser, design assets, notebooks |
+| Characterization Workbench / Schemdraw standalone workflow | Task monitor, result browser, design assets, notebooks |
+
+Application Simulation Workbench remains an active contract. It is part of the Product Async Track and submits simulation requests to the Backend.
 
 ## Related
 

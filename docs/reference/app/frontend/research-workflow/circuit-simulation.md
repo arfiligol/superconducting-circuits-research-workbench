@@ -1,34 +1,49 @@
 ---
-title: "Circuit Simulation Workbench Removed"
+title: "Circuit Simulation Workbench"
 aliases:
   - "Circuit Simulation UI"
 tags:
   - diataxis/reference
   - audience/team
-  - topic/removed-surface
-status: archived
+  - sot/true
+  - topic/app-reference
+status: stable
 owner: docs-team
 audience: team
-scope: tombstone for the removed app simulation workbench
-version: v1.0.0
+scope: productized Application Simulation Workbench contract
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
-# Circuit Simulation Workbench Removed
+# Circuit Simulation Workbench
 
-The application no longer exposes a full Circuit Simulation Workbench.
+Circuit Simulation Workbench is the productized application surface for simulation requests. It does not run heavy compute in the frontend or Backend request thread.
 
-Current path:
+## Execution Contract
 
 ```text
-App / Notebook -> Python Backend task -> Julia Runner -> staging Zarr -> Backend publish -> TraceStore
+Application Simulation Workbench
+    -> Python Backend SimulationRequest
+    -> persisted Task
+    -> Julia Runner
+    -> local Zarr staging
+    -> Backend publication
+    -> TraceStore / Result View
 ```
 
-Use the Tasks / Result Browser for submitted work, Pluto for direct Julia research execution, and Design Assets for source/design documents.
+The workbench builds product-grade simulation requests, submits them to the Backend, monitors task state, and renders published results through the shared task/result surfaces.
+
+## Boundary
+
+- Direct Julia experimentation belongs in Pluto notebooks.
+- Python notebooks may act as programmable Backend clients.
+- Application code must submit async tasks and render published data.
+- Large numeric arrays must stay in local filesystem Zarr stores.
 
 ## Related
 
 * [Application Interface](../../application-interface.md)
+* [Simulation Interface Boundaries](../../../architecture/simulation-interface-boundaries.md)
 * [Julia Runner Compute Plane](../../../architecture/julia-runner-compute-plane.md)
 * [TraceStore Zarr](../../../architecture/trace-store-zarr.md)

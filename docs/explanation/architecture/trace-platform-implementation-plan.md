@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Notebook Interface, Application Interface, Julia Runner, and TraceStore refactor execution plan
-version: v2.0.0
+version: v2.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -43,9 +43,19 @@ Notebook direct execution is allowed because the notebook kernel is an explicit 
 
 ## Data Flow
 
+Research direct execution stays separate from the persisted task path:
+
 ```mermaid
 flowchart LR
-    Surface["Electron App / Pluto / Python Notebook"] --> Backend["Python Backend"]
+    Pluto["Pluto Notebook"] --> Core["Julia Core"]
+    Core --> Scratch["Local research outputs"]
+```
+
+Product simulation and analysis use the async publication path:
+
+```mermaid
+flowchart LR
+    Surface["Electron App / Python Notebook"] --> Backend["Python Backend"]
     Backend --> Task["Task Row + Staging Directory"]
     Task --> Runner["Julia Runner"]
     Runner --> Staging["result.zarr + manifest.json"]
@@ -73,7 +83,7 @@ The refactor is complete when:
 - Python Backend exposes runner claim/heartbeat/progress/cancellation/complete/fail APIs
 - Julia Runner writes a local Zarr v2 result package only for explicit smoke/debug tasks until real task executors are implemented
 - Python Backend validates a runner manifest and publishes canonical TraceStore data
-- frontend navigation is reduced to dataset, ingestion, raw trace, task, and result browsing surfaces
+- frontend navigation includes Simulation Workbench, dataset, ingestion, raw trace, task, and result browsing surfaces
 - retained tests pass
 
 ## Related

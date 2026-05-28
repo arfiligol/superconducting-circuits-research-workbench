@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 定義 current platform 的 Notebook、Application、Julia Runner 與 TraceStore 產品邊界。
-version: v3.1.0
+version: v3.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -56,8 +56,9 @@ updated_by: codex
 
 - Python Backend 是 control plane + data plane，負責 task lifecycle、metadata、publication、provenance、TraceStore registration 與資料 API
 - Julia Runner 是 compute plane，負責 simulation、parameter sweep、post-processing、analysis、fitting、derived parameter extraction 與 result package generation
-- Electron Application 是 productized data workbench，聚焦 dataset、ingestion、trace browsing、task/result browsing
-- Pluto Notebook 是 research cockpit，可直接執行 Julia Core，也可選擇提交 async task
+- Electron Application 是 productized data and simulation workbench，聚焦 Simulation Workbench、dataset、ingestion、trace browsing、task/result browsing
+- Pluto Notebook 是 direct Julia research cockpit，可直接執行 Julia Core
+- Python Notebook 是 programmable Application client，可呼叫 Backend data/task/result APIs
 - user-facing command workflow 不再是產品 surface；repo 僅保留 `scripts/` 作為 dev/build/test/maintenance helpers
 
 ## Research Workflow Goals
@@ -65,7 +66,8 @@ updated_by: codex
 本專案必須支援下列研究工作流，而不是只提供零散工具：
 
 - 在 Pluto 中直接使用 Julia Core 進行研究式模擬與分析
-- 從 Application 或 Notebook 提交 async Julia Runner task
+- 從 Application Simulation Workbench 提交 persisted simulation task
+- 從 Python Notebook 呼叫 Backend data/task/result APIs
 - 管理 dataset / design / trace / task / result / provenance
 - 讓 Runner staging result 經 Python Backend 驗證後 publish 成正式 TraceStore batch
 - 讓結果可被保存、追溯、重新 attach、重新分析與比較
@@ -104,10 +106,11 @@ updated_by: codex
 | --- | --- |
 | Data Browser | 瀏覽 metadata、trace summary、analysis result 與 lineage |
 | Dataset | 管理 dataset、design、metadata 與 provenance |
+| Simulation Workbench | 提交 productized simulation request、監控 task、檢視 published result |
 | Data Ingestion | 匯入 measurement/layout/simulation artifacts |
 | Raw Data / Trace Browser | 瀏覽 TraceStore metadata、summary、slice 與 result lineage |
 | Tasks / Result Browser | 提交、監控、檢視 async Runner task 與 publication result |
-| Notebook Interface | Pluto / Python notebooks for research cockpit、inspection、migration、emergency analysis |
+| Notebook Interface | Pluto direct research cockpit；Python notebooks for Backend API inspection、migration、emergency analysis |
 
 ### Accepted Data Sources
 
@@ -144,6 +147,7 @@ updated_by: codex
 - **Core product surfaces**:
     - Data Browser
     - Dataset
+    - Simulation Workbench
     - Data Ingestion
     - Raw Data / Trace Browser
     - Tasks / Result Browser
@@ -160,13 +164,15 @@ updated_by: codex
     - Julia Runner is the async compute plane
     - Electron is the local desktop shell around frontend, backend, and runner
     - Pluto is the direct Julia research cockpit
+    - Python Notebook is a programmable Backend API client
+    - Application Simulation Workbench submits persisted simulation tasks through Backend and Runner
     - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are no longer active product/runtime surfaces
 - **Core values**:
     - scientific accuracy
     - reproducible workflows
     - explicit staging/publication boundary between Runner outputs and official TraceStore records
 - **Product goals**:
-    - support notebook research, application data browsing, async simulation/analysis, task tracking, and result recovery in one platform
+    - support notebook research, application simulation, data browsing, async analysis, task tracking, and result recovery in one platform
     - keep metadata, trace payloads, Runner manifests, and provenance contracts explicit and reconstructible
     - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
     - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving compatibility fallbacks

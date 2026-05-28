@@ -13,7 +13,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: frontend shared sidebar navigation for retained application surfaces
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -26,7 +26,7 @@ Sidebar is navigation only. It does not own task state, dataset state, worker st
 
 | Group | Contains | Must not contain |
 |---|---|---|
-| Workspace | Dashboard, Dataset, Tasks | simulation stages, data pipeline steps |
+| Workspace | Dashboard, Dataset, Simulation Workbench, Tasks | data pipeline steps |
 | Data | Data Ingestion, Raw Data | task runtime controls |
 | Design Assets | Schemas | full simulation or diagram workflows |
 
@@ -36,12 +36,13 @@ Sidebar is navigation only. It does not own task state, dataset state, worker st
 |---|---|
 | Dashboard | `/dashboard` |
 | Dataset | `/dataset` |
+| Simulation Workbench | `/tasks?lane=simulation` |
 | Tasks | `/tasks` |
 | Data Ingestion | `/data-ingestion` |
 | Raw Data | `/raw-data` |
 | Schemas | `/schemas` |
 
-The sidebar must not expose Circuit Simulation, Characterization, or Schemdraw as primary pages.
+The sidebar may expose Simulation Workbench as a primary product surface. It must not expose Characterization or Schemdraw as standalone primary pages.
 
 ## Density Contract
 

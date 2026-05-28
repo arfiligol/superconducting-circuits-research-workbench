@@ -6,7 +6,7 @@ icon: lucide/notebook-tabs
 
 # Notebook Interface
 
-Use notebooks as research cockpits. They can inspect Backend data APIs, submit async tasks, or execute Julia Core directly when the notebook kernel is the explicit research execution environment.
+Use notebooks through two distinct roles. Pluto is the direct Julia research cockpit. Python notebooks are programmable clients for Backend data, task, trace, and result APIs.
 
 ## Pluto
 
@@ -20,16 +20,19 @@ Pluto notebooks own direct Julia exploration:
 
 Direct notebook execution is allowed. Application-triggered execution must still go through the async Runner path.
 
+Pluto notebooks are outside the normal product task workflow. If their outputs should become official platform data, use an explicit import/publication path.
+
 ## Python
 
 Python notebooks are for:
 
 - Backend/data API inspection
+- task and result API inspection
 - migration checks
 - emergency analysis
 - local TraceStore investigation
 
-Heavy simulation should not move into the Python Backend. If a Python notebook needs heavier analysis dependencies, use `notebooks/python/pyproject.toml` rather than adding them to `app/backend`.
+Python notebooks should not become a second scientific compute surface. If a Python notebook needs heavier analysis dependencies for inspection or emergency work, use `notebooks/python/pyproject.toml` rather than adding them to `app/backend`.
 
 ## Handoff
 

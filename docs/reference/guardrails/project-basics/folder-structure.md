@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 定義 current platform 的 app/core/notebooks/scripts/docs canonical surfaces 與 migration residue 邊界。
-version: v4.1.0
+version: v4.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -65,13 +65,18 @@ superconducting-circuits-tutorial/
 | 如果要改 | 應放位置 |
 | --- | --- |
 | Next.js page, layout, component | `app/frontend/` |
+| Application Simulation Workbench UI | `app/frontend/` |
 | Electron main / preload / packaging | `app/desktop/` |
 | API router, service, persistence | `app/backend/` |
+| Simulation request / result view API | `app/backend/` |
 | Julia circuit construction / simulation / analysis library | `core/julia/SuperconductingCircuitsCore/` |
 | Julia async compute runner | `core/julia/SuperconductingCircuitsRunner/` |
+| Julia Runner task execution | `core/julia/SuperconductingCircuitsRunner/` |
 | Python data contract schemas if needed | `core/python/sc_data_contracts/` |
 | Pluto notebook | `notebooks/pluto/` |
+| Direct research notebook | `notebooks/pluto/` |
 | Python backend/data notebook | `notebooks/python/` |
+| Backend/API notebook client | `notebooks/python/` |
 | dev/build/test/maintenance helper | `scripts/dev/`, `scripts/build/`, `scripts/test/`, `scripts/maintenance/` |
 | multi-agent planning, prompt handoff, test backlog | `Plans/`，由 Planning & Reviewing Agent 建立/退休/刪除 |
 | archived legacy UI / command workflow / runtime residue | `docs/archive/` as inert text only, or delete if not needed |
@@ -81,6 +86,11 @@ superconducting-circuits-tutorial/
 !!! warning "Do not reintroduce old root package surfaces"
     這次決策不是把 `app/backend/`、`app/frontend/`、`app/desktop/` 再拆回 root `backend/`、`frontend/`、`desktop/`。
     也不要讓 root `cli/` 或 `src/` 重新變成 active entrypoint。
+
+!!! important "Notebook boundary"
+    Pluto notebooks are allowed to directly use Julia Core. Python notebooks are not.
+
+    Python notebooks should be treated as programmable clients of the Application Backend, not as a second scientific compute surface.
 
 ## Removed Root Surfaces
 
@@ -118,10 +128,13 @@ superconducting-circuits-tutorial/
 1. `app/frontend/` 依賴 API contract，不直接依賴 backend internals
 2. `app/desktop/` 依賴 frontend build、backend/runner process supervision 與受控 IPC，不承載業務規則
 3. `app/backend/` API 層依賴 services/domain/infrastructure，不執行 heavy compute
-4. `core/julia/SuperconductingCircuitsRunner/` 依賴 backend runner protocol，不擁有正式 metadata DB
-5. `core/julia/SuperconductingCircuitsCore/` 不依賴 FastAPI、Next.js、Electron 或 Python Backend internals
-6. `scripts/` 不得成為 user-facing command-line product surface
-7. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
+4. Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
+5. `notebooks/python/` depends on Backend API contracts, not the Julia scientific core
+6. Application Simulation Workbench depends on Backend task/result APIs, not Julia Core
+7. `core/julia/SuperconductingCircuitsRunner/` depends on Julia Core and Backend Runner protocol, and does not own formal metadata DB
+8. `core/julia/SuperconductingCircuitsCore/` does not depend on FastAPI, Next.js, Electron, or Python Backend internals
+9. `scripts/` 不得成為 user-facing command-line product surface
+10. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
 
 ??? note "Why the full tree is still shown"
     這頁保留完整 target layout，是因為 folder boundary 本身就是 reference contract。其餘 guardrails 不需要都像這樣展開。
@@ -137,6 +150,9 @@ superconducting-circuits-tutorial/
 - **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
 - **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
 - **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
+- **Pluto notebooks** may directly use `SuperconductingCircuitsCore`.
+- **Python notebooks** are programmable Backend API clients and are not a second scientific compute surface.
+- **Application Simulation Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
 - **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
 - **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
 - **Root worker runtime folder** must not be recreated as a runtime surface.
@@ -148,6 +164,9 @@ superconducting-circuits-tutorial/
     - frontend depends on API contracts, not backend internals
     - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
     - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
+    - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
+    - Python notebook clients depend on Backend API contracts, not the Julia scientific core
+    - Application Simulation Workbench depends on Backend task/result APIs, not Julia Core
     - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
     - Julia Core must stay framework-agnostic
     - scripts are helpers, not user-facing workflow contracts

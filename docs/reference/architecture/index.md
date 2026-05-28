@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Notebook Interface、Application Interface、Python Backend、Julia Runner 與 TraceStore 的 owner boundary
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -32,6 +32,7 @@ Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electro
 
 | Page | Core focus |
 |---|---|
+| [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto direct research, Python notebook client, and Application Simulation Workbench boundary |
 | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | Runner process boundary、claim/execute/complete protocol |
 | [Runner Result Manifest](runner-result-manifest.md) | manifest schema、safe path rules、Zarr declaration |
 | [TraceStore Zarr](trace-store-zarr.md) | canonical local Zarr authority owned by Python Backend |
@@ -47,11 +48,14 @@ Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electro
 | canonical numeric authority | Python Backend-managed TraceStore |
 | local staging package | Julia Runner writes, Backend validates |
 | app navigation and result browsing | Electron + Next.js App |
+| productized simulation request workflow | Application Simulation Workbench |
 | direct exploratory execution | Pluto Notebook |
 
 ## Removed Product Surfaces
 
-User-facing command workflows, retired Python UI runtimes, separate local queue workers, Python-in-process Julia simulation, Simulation Workbench, Characterization Workbench, and Schemdraw standalone workflow are not active product/runtime surfaces.
+User-facing command workflows, retired Python UI runtimes, separate local queue workers, Python-in-process Julia simulation, Characterization Workbench, and Schemdraw standalone workflow are not active product/runtime surfaces.
+
+Application Simulation Workbench is active architecture. It submits persisted tasks through the Backend and never owns heavy compute.
 
 If a historical document mentions one of those surfaces, the current architecture pages override it.
 
@@ -59,6 +63,7 @@ If a historical document mentions one of those surfaces, the current architectur
 
 * [Application Interface](../app/application-interface.md)
 * [Frontend Reference](../app/frontend/index.md)
+* [Simulation Interface Boundaries](simulation-interface-boundaries.md)
 * [Backend Reference](../app/backend/index.md)
 * [Notebook Reference](../notebooks/index.md)
 * [Core Reference](../core/index.md)

@@ -6,14 +6,34 @@ Python owns task lifecycle, metadata, publication, provenance, and TraceStore AP
 
 ## Architecture
 
+This repository has two execution tracks.
+
+### Research Direct Track
+
 ```text
-[Electron App / Pluto / Python Notebook]
+[Pluto Notebook]
     |
-    | POST /tasks
+    | using SuperconductingCircuitsCore
+    v
+[Julia Core]
+    - reusable circuit construction
+    - direct JosephsonCircuits.jl simulation
+    - direct sweep / analysis prototyping
+    - local research plots and scratch outputs
+```
+
+Pluto Notebook is the direct Julia Core research interface. Normal product task submission belongs to the Product Async Track.
+
+### Product Async Track
+
+```text
+[Electron Application / Python Notebook]
+    |
+    | POST /tasks or domain-specific Backend API
     v
 [Python Backend]
-    - validate dataset/design/session
-    - create task row
+    - validate dataset/design/session/request
+    - create persisted task row
     - prepare local staging directory
     |
     | POST /runner/v1/tasks/claim
@@ -29,7 +49,12 @@ Python owns task lifecycle, metadata, publication, provenance, and TraceStore AP
     - validate manifest and Zarr layout
     - publish into canonical TraceStore
     - create trace metadata
+    |
+    v
+[Application Result Viewer / Raw Data Browser / Python Notebook]
 ```
+
+Electron Application owns the productized workflow. Python Notebook is a programmable Application client. Pluto Notebook is not a task submitter.
 
 ## Repository Layout
 
@@ -136,6 +161,9 @@ Build the static docs with:
 
 ## Current Boundaries
 
+- Pluto Notebook is research direct execution; product task submission belongs to the Application and Python client path.
+- Python Notebook is a programmable Application client, not a compute cockpit.
+- Application Simulation Workbench remains a first-class product surface.
 - No user-facing command-line workflow surface.
 - No retired Python UI runtime.
 - No separate local queue worker runtime.

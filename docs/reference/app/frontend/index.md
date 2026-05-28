@@ -12,17 +12,17 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: retained Electron/Next.js application surfaces for the data and task workbench
-version: v1.0.0
+scope: retained Electron/Next.js application surfaces for the data, simulation, and task workbench
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Frontend Reference
 
-The frontend is the Electron application workbench. It is for dataset, trace, task, and result browsing.
+The frontend is the Electron application workbench. It is for datasets, traces, simulation requests, tasks, and result browsing.
 
-It is not the primary simulation or heavy-analysis cockpit. Compute goes through Julia Runner tasks or explicit notebook execution.
+It must not own heavy compute. Application simulation goes through persisted Backend tasks and Julia Runner execution; direct exploratory compute belongs in Pluto notebooks.
 
 ## Visible Navigation
 
@@ -30,6 +30,7 @@ It is not the primary simulation or heavy-analysis cockpit. Compute goes through
 |---|---|---|---|
 | Workspace | Dashboard | `/dashboard` | current workspace and dataset overview |
 | Workspace | Dataset | `/dataset` | choose and manage datasets |
+| Workspace | Simulation Workbench | `/tasks?lane=simulation` | build or attach simulation requests and inspect simulation results |
 | Workspace | Tasks | `/tasks` | monitor tasks and inspect results |
 | Data | Data Ingestion | `/data-ingestion` | import raw data |
 | Data | Raw Data | `/raw-data` | browse traces and preview slices |
@@ -37,11 +38,11 @@ It is not the primary simulation or heavy-analysis cockpit. Compute goes through
 
 `/circuit-definition-editor` remains a focused editor reached from Design Assets. It is not a primary navigation item.
 
-## Removed From Primary Nav
+## Product Boundary
 
-| Removed surface | Current replacement |
+| Surface | Current rule |
 |---|---|
-| Circuit Simulation | task submission/result browsing + Pluto direct Julia cockpit |
+| Simulation Workbench | first-class product surface; submits async Backend tasks and renders published results |
 | Characterization | Julia Runner analysis tasks + result browser |
 | Schemdraw standalone workflow | Design Assets / Source Documents |
 
@@ -52,6 +53,7 @@ It is not the primary simulation or heavy-analysis cockpit. Compute goes through
 | [Header](shared-shell/header.md) | compact shell context | [Session & Workspace](../backend/session-workspace.md) |
 | [Sidebar](shared-shell/sidebar.md) | navigation-only app IA | [Application Interface](../application-interface.md) |
 | [Auth Entry](shared-shell/auth-entry.md) | online-mode auth entry | [Authentication & Authorization](../shared/authentication-and-authorization.md) |
+| [Circuit Simulation Workbench](research-workflow/circuit-simulation.md) | productized simulation request/result workflow | [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) |
 | [Task Management](shared-workflow/task-management.md) | shared task monitoring and attach/recover behavior | [Tasks & Execution](../backend/tasks-execution.md) |
 | [Dashboard](workspace/dashboard.md) | workspace overview | [Datasets & Results](../backend/datasets-results.md) |
 | [Dataset](workspace/dataset.md) | dataset selection and lifecycle | [Datasets & Results](../backend/datasets-results.md) |
@@ -63,7 +65,7 @@ It is not the primary simulation or heavy-analysis cockpit. Compute goes through
 
 ## UI Rule
 
-The app should show product work surfaces, not architecture explanations. If a user needs to inspect compute details, expose task status, manifest summaries, and trace previews. Do not reintroduce simulation or characterization workbenches as hidden page bodies.
+The app should show product work surfaces, not architecture explanations. If a user needs to inspect compute details, expose task status, manifest summaries, and trace previews. Simulation Workbench must remain an async task/result workflow, not an in-frontend compute surface.
 
 ## Related
 

@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的 Notebook/Application/Julia Runner 技術選型與工具規範。
-version: v3.1.0
+version: v3.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -53,6 +53,34 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；Noteboo
 | Local runtime | frontend + Python Backend + Julia Runner |
 | Scientific core | Julia package under `core/julia/SuperconductingCircuitsCore/` |
 | Desktop shell | Electron |
+
+## Interface Boundary Rules
+
+| Surface | Role | May use the Julia scientific core directly? | May submit Backend tasks? |
+| --- | --- | ---: | ---: |
+| Pluto Notebook | Research-grade simulation cockpit | Yes | No |
+| Python Notebook | Programmable Application client | No | Yes |
+| Electron Application / Simulation Workbench | Productized workflow UI | No | Yes |
+| Python Backend | Control/data plane | No | Owns task lifecycle |
+| Julia Runner | Compute plane | Uses Julia Core through task execution | Claims tasks |
+
+### Pluto Notebook
+
+Pluto Notebook is the direct Julia Core research interface. It may directly use `SuperconductingCircuitsCore`, JosephsonCircuits.jl wrappers, sweep helpers, and Julia analysis helpers.
+
+It must not participate in the normal Backend task workflow. If a Pluto result should become official platform data, it must go through an explicit import/publication path defined separately.
+
+### Python Notebook
+
+Python Notebook is a programmable Application client. It may call Python Backend APIs for datasets, tasks, traces, result views, migration, debugging, and emergency analysis.
+
+It must not directly call `SuperconductingCircuitsCore` or use JuliaCall as a normal compute path. Scientific compute belongs to Pluto direct execution or Julia Runner async execution.
+
+### Application Simulation Workbench
+
+Application Simulation Workbench is a first-class product surface. It is not replaced by Pluto.
+
+All Application-triggered simulation must be submitted as persisted Backend tasks and executed asynchronously by Julia Runner.
 
 ## Shared Languages
 
@@ -108,8 +136,8 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 - TypeScript strict mode
 - component system based on shadcn/ui + Radix
 - 不在 component 內直接實作業務流程或硬編碼 API contract
-- primary surfaces are Dashboard, Dataset, Data Ingestion, Raw Data / Trace Browser, and Tasks / Result Browser
-- simulation/analysis workbench pages must not remain exposed as primary product navigation
+- primary surfaces include Dashboard, Dataset, Simulation Workbench, Data Ingestion, Raw Data / Trace Browser, and Tasks / Result Browser
+- Application Simulation Workbench is a first-class product surface, but it must submit async tasks rather than owning compute logic
 
 ### Desktop
 
@@ -231,6 +259,12 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
     - Python Backend
     - Julia Runner
     - no separate queue service
+- **Interface boundaries**:
+    - Pluto Notebook is the direct Julia research cockpit.
+    - Product task submission belongs to the Application and Python client path.
+    - Python Notebook is a programmable Backend API client.
+    - Python notebook clients must not use `SuperconductingCircuitsCore` or JuliaCall as their normal compute path.
+    - Application Simulation Workbench is first-class and submits persisted async tasks through Python Backend and Julia Runner.
 - **Scripts**:
     - `scripts/dev/`
     - `scripts/build/`

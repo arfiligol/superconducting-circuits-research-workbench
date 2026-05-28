@@ -104,6 +104,7 @@ nav = [
   { "Reference" = [
     { "Architecture" = [
       { "Overview" = "reference/architecture/index.md" },
+      { "Simulation Interface Boundaries" = "reference/architecture/simulation-interface-boundaries.md" },
       { "Julia Runner Compute Plane" = "reference/architecture/julia-runner-compute-plane.md" },
       { "Runner Result Manifest" = "reference/architecture/runner-result-manifest.md" },
       { "TraceStore Zarr" = "reference/architecture/trace-store-zarr.md" },
