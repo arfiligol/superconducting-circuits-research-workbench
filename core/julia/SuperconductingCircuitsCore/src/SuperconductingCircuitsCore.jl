@@ -13,8 +13,12 @@ include("authoring/circuit_plan.jl")
 include("authoring/relations.jl")
 include("authoring/validation.jl")
 include("compiler/compiled_circuit.jl")
+include("simulation/hb_intent.jl")
+include("simulation/hb_problem.jl")
 include("compiler/topology_key.jl")
 include("compiler/josephson_compiler.jl")
+include("components/demo_components.jl")
+include("authoring/macro_dsl.jl")
 include("sweeps/executors.jl")
 include("sweeps/sweep_spec.jl")
 include("sweeps/execution_plan.jl")
@@ -57,6 +61,24 @@ export default_line
 export component_parameters
 export register_component!
 export register_parameter!
+export external_port!
+export EngineeringComponent
+export EngineeringRelation
+export EngineeringPort
+export EngineeringGroup
+export ExternalPort
+export EngineeringGraph
+export SchematicExportSpec
+export engineering_graph
+export record_engineering_component!
+export record_engineering_relation!
+export record_engineering_port!
+export record_engineering_group!
+export to_dot
+export to_schemdraw_spec
+export component
+export @circuit
+export LumpedResonator
 
 export AbstractParameterRole
 export StructuralParameter
@@ -97,6 +119,20 @@ export compile_to_josephson
 export JosephsonCompiledCircuit
 export TopologyKey
 export topology_key
+
+export PumpAxis
+export HBSourceSlot
+export SParameterRequest
+export HBSolverControls
+export HBIntent
+export HBRunSpec
+export HBProblemSpec
+export OutputCapabilityReport
+export hb_intent!
+export validate_hb_intent
+export build_hb_problem
+export validate_output_capabilities
+export run_hb_problem
 
 export AbstractSweepAxis
 export SweepSpec

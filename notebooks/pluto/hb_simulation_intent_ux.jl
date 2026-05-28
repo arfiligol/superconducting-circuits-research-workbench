@@ -28,9 +28,8 @@ begin
     Pkg.develop(path = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore")))
 
     using PlutoUI
-    using HypertextLiteral
+    using HypertextLiteral: @htl
     using Plots
-    using SuperconductingCircuitsCore
 end
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37002
@@ -336,6 +335,11 @@ plot(
     label = "frequency grid only",
     title = "Frequency sweep grid preview",
 )
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37069
+begin
+    using SuperconductingCircuitsCore
+end
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3702e
 md"""
@@ -853,6 +857,20 @@ hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitd
 ```
 """
 
+# ╔═╡ 00000000-0000-0000-0000-000000000001
+PLUTO_PROJECT_TOML_CONTENTS = """
+[deps]
+HypertextLiteral = "ac1192a8-f4b3-4d9f-9b3f-fdef8e5ef241"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+SuperconductingCircuitsCore = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
+"""
+
+# ╔═╡ 00000000-0000-0000-0000-000000000002
+PLUTO_MANIFEST_TOML_CONTENTS = """
+# This notebook intentionally omits a pinned manifest while the target API is still catching up.
+"""
+
 # ╔═╡ Cell order:
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37001
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37002
@@ -902,6 +920,7 @@ hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitd
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702b
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3702c
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702d
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37069
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3702e
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702f
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37066
@@ -958,3 +977,7 @@ hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitd
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37052
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37053
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37055
+# ╟─00000000-0000-0000-0000-000000000001
+# ╟─00000000-0000-0000-0000-000000000002
+# ╟─00000000-0000-0000-0000-000000000001
+# ╟─00000000-0000-0000-0000-000000000002

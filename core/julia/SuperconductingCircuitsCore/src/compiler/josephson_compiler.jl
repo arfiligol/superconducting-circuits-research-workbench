@@ -283,7 +283,10 @@ end
 
 function _external_port_specs(plan::CircuitPlan)
     raw_ports = get(plan.metadata, :external_ports, Any[])
-    raw_ports isa AbstractVector || _validation_error("CircuitPlan metadata[:external_ports] must be a vector when present.")
+    if raw_ports isa AbstractDict
+        raw_ports = collect(values(raw_ports))
+    end
+    raw_ports isa AbstractVector || _validation_error("CircuitPlan metadata[:external_ports] must be a vector or dictionary when present.")
     specs = NamedTuple[]
     for item in raw_ports
         if item isa AbstractString || item isa Symbol
@@ -299,6 +302,10 @@ function _external_port_specs(plan::CircuitPlan)
             index > 0 || _validation_error("External port metadata entry for '$(name)' must have a positive index.")
             resistance > 0 || _validation_error("External port metadata entry for '$(name)' must have positive resistance_ohm.")
             push!(specs, (name=name, index=index, resistance_ohm=resistance))
+        elseif item isa ExternalPort
+            item.index > 0 || _validation_error("External port metadata entry for '$(item.id)' must have a positive index.")
+            item.resistance > 0 || _validation_error("External port metadata entry for '$(item.id)' must have positive resistance.")
+            push!(specs, (name=string(item.id), index=item.index, resistance_ohm=item.resistance))
         else
             _validation_error("External port metadata entries must be names or named tuples.")
         end
@@ -329,6 +336,10 @@ function compile_to_josephson(plan::CircuitPlan)::JosephsonCompiledCircuit
     if has_errors(report)
         _validation_error("CircuitPlan '$(plan.id)' is not compile-ready: $(_validation_message(report))")
     end
+    hb_report = validate_hb_intent(plan)
+    if has_errors(hb_report)
+        _validation_error("CircuitPlan '$(plan.id)' has invalid HB intent: $(_validation_message(hb_report))")
+    end
 
     key = topology_key(plan)
     ctx = _compile_context(plan)
@@ -345,6 +356,12 @@ function compile_to_josephson(plan::CircuitPlan)::JosephsonCompiledCircuit
             push!(ctx.warnings, "CircuitPlan '$(plan.id)' lowered no target rows; add supported lumped element relations before simulation.")
         end
     end
+    hb_intent = get(plan.metadata, :hb_intent, nothing)
+    port_map = Dict(Symbol(name) => (index=index,) for (name, index) in external_port_map)
+    source_slot_map = isnothing(hb_intent) ? Dict{Symbol,Any}() :
+        Dict(slot.id => (port=slot.port, mode=slot.mode, role=slot.role) for slot in hb_intent.source_slots)
+    observable_request_map = isnothing(hb_intent) ? Dict{Symbol,Any}() :
+        Dict(getproperty(obs, :id) => obs for obs in hb_intent.observables if hasproperty(obs, :id))
 
     return JosephsonCompiledCircuit(
         netlist=ctx.netlist,
@@ -352,6 +369,14 @@ function compile_to_josephson(plan::CircuitPlan)::JosephsonCompiledCircuit
         node_map=ctx.node_map,
         component_map=ctx.component_map,
         line_tap_map=ctx.line_tap_map,
+        port_map=port_map,
+        hb_intent_summary=hb_intent,
+        source_slot_map=source_slot_map,
+        observable_request_map=observable_request_map,
+        hb_validation_summary=(
+            issue_count=length(hb_report.issues),
+            has_errors=has_errors(hb_report),
+        ),
         warnings=ctx.warnings,
         provenance=Dict{Symbol,Any}(
             :plan_id => plan.id,
@@ -359,6 +384,7 @@ function compile_to_josephson(plan::CircuitPlan)::JosephsonCompiledCircuit
             :topology_key => key.digest,
             :relation_map => ctx.relation_map,
             :external_ports => external_port_map,
+            :engineering_graph_component_ids => sort(collect(keys(plan.engineering_graph.components)); by=string),
         ),
         metadata=Dict{Symbol,Any}(
             :topology_key => key,
@@ -366,6 +392,8 @@ function compile_to_josephson(plan::CircuitPlan)::JosephsonCompiledCircuit
             :compiler_stage => :lumped_mvp,
             :netlist_row_count => length(ctx.netlist),
             :external_ports => external_port_map,
+            :hb_intent => hb_intent,
+            :hb_validation_report => hb_report,
         ),
     )
 end
