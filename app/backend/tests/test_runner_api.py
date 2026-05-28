@@ -70,6 +70,25 @@ def test_runner_claim_complete_publishes_staged_zarr() -> None:
     assert published_trace["shape"] == [5]
 
 
+def test_runner_claim_routes_parameter_sweep_task_kind() -> None:
+    created = _submit_simulation_task(
+        summary="Runner parameter sweep dispatch fixture.",
+        parameter_sweeps=[
+            {
+                "parameter": "coupling_capacitance_f",
+                "values": [1.0, 2.0],
+                "unit": "fF",
+            }
+        ],
+    )
+
+    claim_response = client.post("/runner/v1/tasks/claim")
+    assert claim_response.status_code == 200
+    claim_payload = claim_response.json()["data"]
+    assert claim_payload["task"]["task_id"] == str(created["task_id"])
+    assert claim_payload["task"]["task_kind"] == "julia_simulation_parameter_sweep"
+
+
 def test_runner_complete_rejects_output_target_override() -> None:
     created = _submit_simulation_task(summary="Runner output target guard.")
     claim_payload = client.post("/runner/v1/tasks/claim").json()["data"]
@@ -163,7 +182,9 @@ def _publish_small_runner_result(summary: str) -> dict[str, object]:
 
 
 def _submit_simulation_task(
-    *, summary: str = "Runner staged-result publication fixture."
+    *,
+    summary: str = "Runner staged-result publication fixture.",
+    parameter_sweeps: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     response = client.post(
         "/tasks",
@@ -178,7 +199,7 @@ def _submit_simulation_task(
                     "point_count": 5,
                     "spacing": "linear",
                 },
-                "parameter_sweeps": [],
+                "parameter_sweeps": [] if parameter_sweeps is None else parameter_sweeps,
                 "solver": {
                     "solver_family": "josephson_circuits",
                     "max_iterations": 1,

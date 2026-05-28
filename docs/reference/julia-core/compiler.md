@@ -88,3 +88,20 @@ The compiler should return maps alongside the netlist so callers can inspect wha
 | `line_tap_map` | explain inserted breakpoints and tap locations |
 | warnings | show validation or lowering issues that did not abort compilation |
 | provenance | preserve builder and transform history |
+
+## Current MVP Lowering
+
+The first implemented compiler path is a lumped JosephsonCircuits MVP.
+
+It supports:
+
+- registered component IDs and component pins;
+- `GroundEndpoint` and `ExternalNodeEndpoint`;
+- `NodeConnection` endpoint aliasing;
+- `CapacitiveCoupling` and `ShuntCapacitor` lowering to target capacitor rows;
+- explicit external port rows when the plan declares `metadata[:external_ports]`;
+- `node_map`, `component_map`, `line_tap_map`, relation provenance, and topology metadata.
+
+Unsupported relation families, including inductive coupling and coupled-window distributed lowering, fail clearly instead of emitting placeholder rows.
+
+This MVP is enough for simple real JosephsonCircuits frequency-sweep execution, but it is not the full distributed compiler described by the target architecture.

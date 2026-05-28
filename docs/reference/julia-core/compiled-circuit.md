@@ -78,6 +78,8 @@ run_frequency_sweep(compiled, frequency_range_hz; kwargs...)
 
 The Runner should stage numeric arrays through filesystem packages such as Zarr when results are large. HTTP JSON should carry control payloads, status, manifest locators, summaries, and small metadata, not large numeric arrays.
 
+The current MVP compiler emits real JosephsonCircuits-compatible rows for supported lumped plans. Component rows use target value references and `component_values`; port rows use integer port indices. Unsupported compiler paths fail clearly before Runner writes output.
+
 ## Why Raw Rows Are Not Enough
 
 Raw netlist rows cannot explain:

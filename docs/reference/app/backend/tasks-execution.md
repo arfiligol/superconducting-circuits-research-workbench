@@ -95,12 +95,14 @@ Backend state remains the lifecycle authority. Product labels are UI vocabulary.
 
 | Kind | Purpose |
 |---|---|
-| `julia_simulation_frequency_sweep` | frequency-sweep simulation through Julia Runner |
-| `julia_simulation_parameter_sweep` | parameterized simulation/sweep task family |
+| `julia_simulation_frequency_sweep` | frequency-sweep simulation through Julia Runner; currently implemented for the MVP supported design adapter |
+| `julia_simulation_parameter_sweep` | parameterized simulation/sweep task family; fails clearly until real sweep execution is implemented |
 | `julia_analysis_trace_summary` | analysis task family for published trace summaries |
 | `julia_postprocess_coordinate_transform` | post-processing task family for explicit transform jobs |
 
 Unknown or unsupported task kinds fail clearly. Runner execution must not fall back to fixture output.
+
+The first code-backed Runner compute path is `julia_simulation_frequency_sweep` for the MVP supported design path, including the Local Space resonator seed definition. It calls Julia Core to build and compile a `CircuitPlan`, runs JosephsonCircuits through Julia Core simulation helpers, and stages real S-parameter traces.
 
 ## Runner API
 

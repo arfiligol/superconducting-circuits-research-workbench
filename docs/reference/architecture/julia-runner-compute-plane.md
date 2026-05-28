@@ -56,8 +56,8 @@ The Runner task families are:
 
 | Task family | Responsibility |
 |---|---|
-| `julia_simulation_frequency_sweep` | execute a Backend-provided frequency sweep through Julia Core / JosephsonCircuits |
-| `julia_simulation_parameter_sweep` | execute a parameterized sweep and write trace arrays with explicit axis order |
+| `julia_simulation_frequency_sweep` | execute a Backend-provided frequency sweep through Julia Core / JosephsonCircuits; the first implemented path is the MVP supported design adapter |
+| `julia_simulation_parameter_sweep` | parameterized sweep family; fails clearly until the real sweep executor is wired to Runner |
 | `julia_analysis_trace_summary` | compute summary tables or derived trace metadata from published traces |
 | `julia_analysis_resonance_fit` | fit resonator/SQUID model parameters and write result artifacts |
 | `julia_analysis_sy_z_compare` | compare S/Y/Z representations through explicit transform and validation logic |
@@ -73,6 +73,8 @@ Each task family follows the same execution contract:
 5. report completion through the Runner API.
 
 Analysis and post-processing tasks may write summary tables or artifacts instead of S-parameter traces, but they still use the same staging and manifest authority boundary.
+
+The MVP frequency-sweep adapter loads a selected component-library style plan builder, builds a `CircuitPlan`, compiles through Julia Core, runs JosephsonCircuits through `run_frequency_sweep`, and writes Zarr traces. The initial supported design path covers the Local Space resonator seed definition and the internal `runner_mvp_minimal_core_plan` alias. It must not become a separate Runner-owned circuit construction model.
 
 ## Validation
 
