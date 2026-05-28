@@ -16,8 +16,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: Application Simulation/Analysis Workbench requests, Backend task compilation, Runner envelope, Runner manifest, and ResultView API boundaries.
-version: v1.2.0
-last_updated: 2026-05-28
+version: v1.3.0
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -39,7 +39,9 @@ The Application and Python Notebook may submit product tasks through Backend con
 
 ## SimulationRequestV1
 
-`SimulationRequestV1` is the product-facing request shape. It carries the simulation intent, dataset/design target, solver settings, sweep definitions, and small control metadata.
+`SimulationRequestV1` is the product-facing run request shape. It carries a runtime run request and references a design / circuit definition whose CircuitPlan owns the canonical simulation intent.
+
+The request binds runtime values to compiled HB intent. It does not declare ports, source slots, pump axes, mode tuples, observable semantics, or JosephsonCircuits internals.
 
 ## SimulationRequestV1 Minimum Shape
 
@@ -59,16 +61,40 @@ The Application and Python Notebook may submit product tasks through Backend con
     "point_count": 401,
     "spacing": "linear"
   },
-  "parameter_sweeps": [],
-  "outputs": [
+  "runtime_bindings": {
+    "pump_frequencies_hz": {
+      "pump": 8000000000
+    },
+    "source_currents_a": {
+      "pump_in": 0.0
+    }
+  },
+  "observables": [
     {
-      "family": "s_matrix",
-      "parameters": ["S11"],
+      "observable_id": "s11_signal",
       "representation": "complex"
     }
   ],
   "solver": {
-    "engine": "josephson_circuits"
+    "engine": "josephson_circuits",
+    "hb_controls": {
+      "n_modulation_harmonics": {
+        "pump": 8
+      },
+      "n_pump_harmonics": {
+        "pump": 16
+      },
+      "dc": false,
+      "threewavemixing": false,
+      "fourwavemixing": true,
+      "returnS": true,
+      "returnZ": true,
+      "returnQE": false,
+      "returnCM": false,
+      "sorting": "name",
+      "keyedarrays": false
+    },
+    "optional_hb_kwargs": {}
   },
   "output_target": {
     "mode": "existing_design",
@@ -84,12 +110,12 @@ The Application and Python Notebook may submit product tasks through Backend con
 | `schema_version` | must be explicit |
 | `dataset_id` | active dataset identity |
 | `design_id` | active target `DesignScope` unless `output_target.mode = create_new_design` |
-| `source` | product-level source reference, not a Julia internal object |
+| `source` | product-level design / circuit definition reference, not a Julia internal object |
 | `simulation_family` | Backend-recognized simulation family |
 | `frequency_sweep` | required for `frequency_sweep` family |
-| `parameter_sweeps` | optional; empty array means no parameter sweep |
-| `outputs` | requested observable families and parameters |
-| `solver` | small control metadata only |
+| `runtime_bindings` | runtime pump-frequency and source-current bindings by compiled HB intent ID |
+| `observables` | selected observable IDs allowed by compiled HB intent |
+| `solver` | first-class solver controls and whitelisted optional HB kwargs |
 | `output_target` | explicit publication target decision |
 
 ### Simulation request must not carry
@@ -100,6 +126,11 @@ The Application and Python Notebook may submit product tasks through Backend con
 - TraceStore write paths
 - dense S/Y/Z matrices or ND trace arrays
 - Julia-internal execution objects
+- new port declarations
+- new source slot declarations
+- new pump-axis declarations
+- new observable semantics
+- raw JosephsonCircuits internals not represented by the Core HB contract
 
 ## AnalysisRequestV1
 

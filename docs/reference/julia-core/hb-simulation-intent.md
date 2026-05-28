@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines how CircuitPlan declares HB ports, source slots, pump axes, observables, and solver-facing intent.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -108,15 +108,15 @@ Rules:
 
 `HBSourceSlot` declares a source slot that can be bound at runtime. The slot is part of the plan intent; the current value is a runtime binding.
 
-Signal source:
+Modeled large-signal source:
 
 ```julia
 HBSourceSlot(
-    id = :signal_in,
+    id = :large_signal_in,
     role = :signal,
     port = :signal_port,
-    mode = (0,),
-    current_parameter = :signal_current_a,
+    mode = (1,),
+    current_parameter = :large_signal_current_a,
 )
 ```
 
@@ -172,6 +172,41 @@ Rules:
 - `current = 0.0` is valid and means the source is intentionally off;
 - source slot existence is not fake compute even if its current value is zero;
 - source slot current value is a runtime binding.
+
+## HBSourceSlot vs Linearized Probe
+
+`HBSourceSlot` describes sources passed to JosephsonCircuits `sources`, such as pump drives, DC bias, or intentionally modeled large-signal drives.
+
+Small-signal S-parameter probing is not automatically a source slot. It is normally declared through `HBObservableRequest` as an output/input mode-port extraction from the linearized solution.
+
+A signal can be represented as an `HBSourceSlot` only when the circuit model intentionally treats it as a source in `sources`.
+
+Source slot example:
+
+```julia
+HBSourceSlot(
+    id = :pump_in,
+    role = :pump,
+    port = :pump_port,
+    mode = (1,),
+    current_parameter = :pump_current_a,
+)
+```
+
+Linearized probe example:
+
+```julia
+SParameterRequest(
+    id = :s11_signal,
+    outputmode = (0,),
+    outputport = :signal_port,
+    inputmode = (0,),
+    inputport = :signal_port,
+)
+```
+
+!!! warning "Do not create probe sources"
+    Do not create a source slot only because an S-parameter input port exists.
 
 ## HBObservableRequest
 
@@ -240,12 +275,13 @@ Rules:
 
 ## Key Separation
 
-Julia Core uses separate keys for topology, HB intent, and concrete execution.
+Julia Core uses separate keys for topology, HB intent, HB problem shape, and concrete runtime values.
 
 ```text
 topology_key
 hb_intent_key
-run_key
+hb_problem_shape_key
+run_value_key
 ```
 
 ### topology_key
@@ -253,42 +289,57 @@ run_key
 `topology_key` includes:
 
 - component hierarchy;
+- component types;
 - relations;
-- ports that emit netlist rows;
 - endpoint topology;
-- structural parameters affecting emitted target rows.
+- external ports that emit netlist rows;
+- structural parameters affecting emitted rows;
+- line taps / spans / distributed segmentation.
 
 ### hb_intent_key
 
 `hb_intent_key` includes:
 
-- pump-axis dimension;
-- source slot definitions;
+- pump-axis declarations;
+- source slot declarations;
 - source roles;
-- mode tuples;
-- observable requests;
-- solver control structure that changes HB problem shape.
+- mode tuple declarations;
+- observable request declarations;
+- solver-control families allowed by the intent.
 
-### run_key
+### hb_problem_shape_key
 
-`run_key` includes:
+`hb_problem_shape_key` includes:
+
+- harmonic counts;
+- `returnS` / `returnZ` / `returnQE` / `returnCM`;
+- `keyedarrays`;
+- `sorting` if it changes output shape or indexing assumptions;
+- mode truncation controls;
+- optional kwargs that change solver problem structure.
+
+### run_value_key
+
+`run_value_key` includes:
 
 - concrete frequency arrays;
-- pump frequency values;
-- source current values;
-- harmonic counts;
-- solver kwargs;
-- output slicing options.
+- concrete pump-frequency values;
+- concrete source current values;
+- `current = 0.0` source-off bindings;
+- numeric solver tolerances that do not alter problem shape;
+- output slicing / display preferences.
 
-| Change | topology_key | hb_intent_key | run_key |
-| --- | ---: | ---: | ---: |
-| pump current from nonzero to `0.0` | unchanged | unchanged | changed |
-| add second pump axis | unchanged or changed depending on circuit | changed | changed |
-| add new physical port | changed | changed | changed |
-| change frequency sweep range | unchanged | unchanged | changed |
-| add idler observable | unchanged | changed | changed |
-| change capacitance value | usually unchanged | unchanged | changed |
-| change line-tap position | changed | may change | changed |
+| Change | topology_key | hb_intent_key | hb_problem_shape_key | run_value_key |
+| --- | ---: | ---: | ---: | ---: |
+| pump current nonzero to `0.0` | unchanged | unchanged | unchanged | changed |
+| pump frequency value changes | unchanged | unchanged | unchanged | changed |
+| add second pump axis | unchanged unless circuit changes | changed | changed | changed |
+| change harmonic count | unchanged | unchanged | changed | changed |
+| toggle `returnQE` | unchanged | unchanged | changed | changed |
+| add idler observable | unchanged | changed | may change | changed |
+| add new physical port | changed | changed | changed | changed |
+| change line-tap position | changed | may change | may change | changed |
+| change frequency sweep range | unchanged | unchanged | unchanged | changed |
 
 ## Validation Boundary
 
@@ -318,6 +369,20 @@ HB validation is split across compile time and run time.
 - `current = 0.0` is accepted;
 - optional solver kwargs are whitelisted;
 - requested observables can be extracted from solver output.
+
+## Implementation Status
+
+This page is stable as the target source of truth. It is not claiming that every concept is already implemented.
+
+| Concept | Target contract | Current implementation | Status |
+| --- | --- | --- | --- |
+| `ExternalPort` | first-class CircuitPlan declaration | currently approximated by `metadata[:external_ports]` in MVP | target |
+| `HBIntent` | first-class plan-level intent | not implemented as a struct yet | target |
+| `HBSourceSlot` | first-class source slot declaration | not implemented yet | target |
+| `HBObservableRequest` | first-class observable declaration | current Runner extraction still MVP / trace-specific | target |
+| `HBSolverControls` | typed first-class controls | current Runner only partially maps controls | target |
+| `optional_hb_kwargs` | whitelist only | not fully implemented | target |
+| `current = 0.0` | valid source-off runtime binding | should be accepted | design-stable |
 
 ## Related
 

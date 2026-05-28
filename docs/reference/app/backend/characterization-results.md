@@ -11,8 +11,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: Analysis Workbench registry、active DesignScope gating、Data Collection Review、analysis pipeline gating、run history、axis-aware artifact manifest、artifact payload 與 identify/tagging 的 backend reference surface。
-version: v0.13.0
-last_updated: 2026-05-28
+version: v0.13.1
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -357,10 +357,10 @@ Dashboard 讀取 `Tagged Core Metrics` 時，必須用同一套 canonical resolu
 | :--- | :--- |
 | **Authority** | 由 persistence repository contract 負責 designation 與 derived parameter 查詢；UI/CLI 不得直接操作 ORM Session。 |
 | **Exact Match** | 先嘗試 `dataset_id + source_analysis_type + source_parameter_name` 的精確匹配。 |
-| **Compatibility Fallback** | 若 exact miss，允許 `source_parameter_name + "_b0"` fallback。 |
-| **Prefix Fallback** | 若仍 miss，最後允許同 `dataset_id + method` 下的 name prefix 首筆匹配。 |
+| **Exact-miss Alias Match** | 若 exact miss，允許查詢 `source_parameter_name + "_b0"` alias。 |
+| **Prefix Alias Match** | 若仍 miss，最後允許同 `dataset_id + method` 下的 name prefix 首筆匹配。 |
 | **Tagging Uniqueness** | 同一 dataset 下，`designated_name + source_analysis_type + source_parameter_name` 不得重複。 |
-| **Rename Migration Safety** | 對 legacy 參數名做正規化改名時，若新 key 已存在，必須去重且保持 idempotent。 |
+| **Rename Safety** | 對歷史參數名做正規化改名時，若新 key 已存在，必須去重且保持 idempotent。 |
 
 !!! warning "Boundary Rule"
     上述匹配與去重邏輯屬於 backend/persistence contract，不能散落在 page handler 或 CLI command 的 Session query 中。

@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Backend task lifecycle, runner API, staging result validation, and TraceStore publication
-version: v1.2.0
+version: v1.2.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -136,20 +136,50 @@ They are not arbitrary JosephsonCircuits solver internals with no CircuitPlan va
     "task_id": "task_001",
     "task_kind": "julia_simulation_frequency_sweep",
     "input": {
-      "simulation_setup": {
-        "frequency_sweep": {
-          "start_ghz": 4.0,
-          "stop_ghz": 6.0,
-          "point_count": 401,
-          "spacing": "linear"
+      "design_ref": {
+        "kind": "circuit_definition",
+        "definition_id": "design_001"
+      },
+      "frequency_sweep": {
+        "start_hz": 4000000000,
+        "stop_hz": 6000000000,
+        "point_count": 401,
+        "spacing": "linear"
+      },
+      "runtime_bindings": {
+        "pump_frequencies_hz": {
+          "pump": 8000000000
         },
-        "parameter_sweeps": [],
-        "solver": {
-          "solver_family": "josephson_circuits",
-          "max_iterations": 100,
-          "convergence_tolerance": 1e-6
+        "source_currents_a": {
+          "pump_in": 0.0
+        }
+      },
+      "observables": [
+        {
+          "observable_id": "s11_signal",
+          "representation": "complex"
+        }
+      ],
+      "solver": {
+        "engine": "josephson_circuits",
+        "hb_controls": {
+          "n_modulation_harmonics": {
+            "pump": 8
+          },
+          "n_pump_harmonics": {
+            "pump": 16
+          },
+          "dc": false,
+          "threewavemixing": false,
+          "fourwavemixing": true,
+          "returnS": true,
+          "returnZ": true,
+          "returnQE": false,
+          "returnCM": false,
+          "sorting": "name",
+          "keyedarrays": false
         },
-        "sources": []
+        "optional_hb_kwargs": {}
       }
     },
     "output_target": {
@@ -165,6 +195,8 @@ They are not arbitrary JosephsonCircuits solver internals with no CircuitPlan va
   }
 }
 ```
+
+The Runner task input binds runtime values to compiled HBIntent slots. It does not define ports, source slots, pump axes, mode tuples, or observable semantics.
 
 ## Completion Contract
 

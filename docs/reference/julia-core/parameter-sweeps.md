@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the Julia Core parameter sweep execution architecture.
-version: v1.4.0
+version: v1.4.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -103,22 +103,24 @@ AnalysisParameter
 | `junction_Ic` | numeric if junction topology unchanged | Changes nonlinear element parameter only |
 | `external_flux` | numeric or drive-like | Changes parameter binding, not topology |
 | `pump_frequency` | drive | Changes solver input / source setting |
-| `pump_amplitude` | drive | Changes solver input / source setting |
+| `source_current` | drive | Binds current for an existing source slot |
 | `fit_window` | analysis | Changes post-processing only |
 
-HB simulations add one more distinction: some changes do not alter circuit topology, but do alter the HB problem shape declared by `HBIntent`.
+HB simulations add more key boundaries. Some changes do not alter circuit topology, but do alter `HBIntent` or HB problem shape.
 
 | Parameter | Role | Reason |
 | --- | --- | --- |
-| pump current value | `DriveParameter` | Binds current for an existing source slot |
-| signal current value | `DriveParameter` | Binds current for an existing source slot |
+| source current value | `DriveParameter` | Binds current for an existing source slot |
 | source current from nonzero to zero | `DriveParameter` | `current = 0.0` turns the source off without changing topology |
 | pump frequency value | `DriveParameter` | Binds a runtime value for an existing pump axis |
-| harmonic count | target `HBProblemParameter` concept | Does not usually change circuit topology, but may change HB problem shape |
-| pump-axis count | HB-intent structural | Changes mode tuple dimension and HB intent key |
-| source slot mode | HB-intent structural | Changes source slot definition and HB intent key |
+| pump-axis count | `HBIntentStructuralParameter` target concept | Changes mode tuple dimension and `hb_intent_key` |
+| source slot mode | `HBIntentStructuralParameter` target concept | Changes source slot definition and `hb_intent_key` |
+| observable request | `HBIntentStructuralParameter` target concept | Changes requested solver-output semantics |
+| harmonic count | `HBProblemShapeParameter` target concept | Changes HB problem shape without changing circuit topology |
+| `returnS` / `returnZ` / `returnQE` / `returnCM` | `HBProblemShapeParameter` target concept | Changes output families and result shape |
+| solver tolerance | `HBRunValueParameter` target concept | Changes numeric convergence behavior without changing problem shape |
 
-`HBProblemParameter` is a target concept, not an exported role in the current MVP. Until it exists, document these axes explicitly and keep them out of `topology_key` unless they change emitted circuit rows.
+`HBIntentStructuralParameter`, `HBProblemShapeParameter`, and `HBRunValueParameter` are target concepts, not exported roles in the current MVP. Until they exist, document these axes explicitly and classify them against `topology_key`, `hb_intent_key`, `hb_problem_shape_key`, and `run_value_key`.
 
 Use this table as a quick reference. For implementation and sweep-engine behavior, follow the declared-role / effective-role model in [Parameter Classification](#parameter-classification).
 
@@ -315,7 +317,7 @@ A topology key should exclude:
 
 ```text
 - numeric values that only bind into existing target rows;
-- drive amplitudes and frequencies if they do not alter compiled topology;
+- source currents and pump frequencies if they do not alter compiled topology;
 - post-processing settings.
 ```
 
@@ -324,6 +326,15 @@ If two sweep points have the same topology key, they can share the same `Josephs
 If two sweep points have different topology keys, they must not share compiled output.
 
 Compile equivalence is therefore stronger than matching user-facing parameter names. It means the compiler would emit the same target structure, maps, and endpoint lowering result for both points.
+
+HB sweeps use the four-key model defined by [HB Simulation Intent](hb-simulation-intent.md):
+
+| Key | Sweep use |
+| --- | --- |
+| `topology_key` | decides whether emitted circuit rows and compiler maps can be reused |
+| `hb_intent_key` | decides whether pump axes, source slots, modes, and observables are the same |
+| `hb_problem_shape_key` | decides whether harmonic counts and requested output families share one solver problem shape |
+| `run_value_key` | records concrete runtime values such as source currents, pump frequencies, sweep points, and tolerances |
 
 ## Parameter Classification
 
@@ -687,8 +698,8 @@ Acceleration selection should support policies:
 RequireAcceleration(:jax)
     error if unavailable
 
-PreferAcceleration(:jax, fallback = JuliaThreadedBackend())
-    use acceleration if valid, otherwise fallback
+PreferAcceleration(:jax, baseline = JuliaThreadedBackend())
+    use acceleration if valid, otherwise use the baseline Julia executor
 
 NoAcceleration()
     use baseline Julia execution

@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines first-class, whitelisted, and unsupported JosephsonCircuits.jl hbsolve controls for Julia Core and Runner use.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -24,14 +24,16 @@ The initial inventory is derived from the official [JosephsonCircuits.jl referen
 
 ## Official Example Inventory
 
-| Example | `hbsolve` inputs used | Source mode shape | Solver flags | Outputs inspected |
-| --- | --- | --- | --- | --- |
-| Single-pump JPA | `ws`, `wp`, `sources`, `Nmodulationharmonics`, `Npumpharmonics`, `circuit`, `circuitdefs` | `(1,)` | default HB settings, four-wave mixing default | `S` |
-| Double-pump JPA | same family with two pump frequencies | `(1, 0)`, `(0, 1)` | pump harmonic tuples for two independent pumps | `S` |
-| Flux-pumped / DC JPA | same family with DC and pump sources | `(0,)`, `(1,)` | `dc=true`, `threewavemixing=true`, `fourwavemixing=true` | `S` |
-| SNAIL PA | same family with DC and pump sources | `(0,)`, `(1,)` | `dc=true`, `threewavemixing=true`, `fourwavemixing=true` | `S` |
-| JTWPA | same family with signal, pump, and idler modes | `(1,)` plus idler output modes | larger harmonic counts | `S`, `QE`, `QEideal`, `CM` |
-| Advanced examples | same family with solver tuning | varies | `switchofflinesearchtol`, `alphamin`, `iterations` | `S`, `QE`, `QEideal`, `CM` |
+This inventory is not allowed to be hand-wavy. If a control is promoted to first-class or optional-whitelisted, the official example or reference source that motivated it must be listed here.
+
+| Example | Source / URL | Observed call shape | `hbsolve` inputs used | Source mode shape | Solver flags | Outputs inspected |
+| --- | --- | --- | --- | --- | --- | --- |
+| Single-pump JPA | [official examples](https://josephsoncircuits.org/stable/#Josephson-parametric-amplifier-(JPA)) | `hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)` | `ws`, `wp`, `sources`, `Nmodulationharmonics`, `Npumpharmonics`, `circuit`, `circuitdefs` | `(1,)` | four-wave mixing default | `S` |
+| Double-pump JPA | [official examples](https://josephsoncircuits.org/stable/#Double-pumped-Josephson-parametric-amplifier-(JPA)) | `hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)` | same family with two pump frequencies | `(1, 0)`, `(0, 1)` | pump harmonic tuples for two independent pumps | `S` |
+| Flux-pumped JPA | [official examples](https://josephsoncircuits.org/stable/#Flux-pumped-Josephson-parametric-amplifier-(JPA)) | `hbsolve(...; dc=true, threewavemixing=true, fourwavemixing=true)` | same family with DC and pump sources | `(0,)`, `(1,)` | `dc`, `threewavemixing`, `fourwavemixing` | `S` |
+| SNAIL PA | [official repository README](https://github.com/kpobrien/JosephsonCircuits.jl#snail-parametric-amplifier) | `hbsolve(...; dc=true, threewavemixing=true, fourwavemixing=true)` | same family with DC and pump sources | `(0,)`, `(1,)` | `dc`, `threewavemixing`, `fourwavemixing` | `S` |
+| JTWPA | [official examples](https://josephsoncircuits.org/stable/#Josephson-traveling-wave-parametric-amplifier-(JTWPA)) | `hbsolve(...)` with larger harmonic counts | same family with signal, pump, and idler modes | `(1,)` plus idler output modes | larger harmonic counts | `S`, `QE`, `QEideal`, `CM` |
+| Advanced solver tuning | [official examples](https://josephsoncircuits.org/stable/#Example-with-switchofflinesearchtol) and [reference](https://josephsoncircuits.org/stable/reference/) | `hbsolve(...; switchofflinesearchtol=..., alphamin=..., iterations=...)` | same family with solver tuning | varies | `switchofflinesearchtol`, `alphamin`, `iterations` | varies |
 
 !!! note "Pump-off is still a real source slot"
     Official examples include pump-off cases where the pump source remains present and the current value is `0.0`. Julia Core treats that as intentional source-off behavior, not fake compute or a missing pump.
@@ -74,6 +76,34 @@ Julia Core should normalize product-facing frequency values from Hz to the angul
 | `sorting` | controls target node ordering behavior |
 | `keyedarrays` | controls keyed-array output shape |
 
+## Control Status Registry
+
+Every listed control has an explicit status.
+
+| Control | Status | Source |
+| --- | --- | --- |
+| `pump_frequencies_hz` | first-class | official examples use `wp` |
+| `n_modulation_harmonics` | first-class | official examples use `Nmodulationharmonics` |
+| `n_pump_harmonics` | first-class | official examples use `Npumpharmonics` |
+| `dc` | first-class | flux-pumped and SNAIL examples |
+| `threewavemixing` | first-class | flux-pumped and SNAIL examples |
+| `fourwavemixing` | first-class | flux-pumped and SNAIL examples |
+| `returnS` | first-class | reference and examples inspect `S` |
+| `returnZ` | first-class | reference output control |
+| `returnQE` | first-class | JTWPA / reference output control |
+| `returnCM` | first-class | JTWPA / reference output control |
+| `sorting` | first-class | reference output / indexing control |
+| `keyedarrays` | first-class | reference output / indexing control |
+| `switchofflinesearchtol` | optional-whitelisted | advanced solver tuning example |
+| `alphamin` | optional-whitelisted | advanced solver tuning example |
+| `iterations` | optional-whitelisted | advanced solver tuning example |
+| `returnSnoise` | unsupported | reference-only output family |
+| `returnnodeflux` / `returnvoltage` | unsupported | reference-only node output families |
+| adjoint output flags | unsupported | reference-only output families |
+| sensitivity flags | unsupported | reference marks sensitivity APIs as in progress |
+| custom `factorization` | research-only | reference accepts a runtime object |
+| `maxintermodorder` | unsupported | reference mode-truncation control |
+
 ## Optional Whitelisted Kwargs
 
 Some solver controls are useful for research and troubleshooting, but should remain explicitly whitelisted in product Runner payloads.
@@ -93,10 +123,10 @@ Initial whitelist:
 Rules:
 
 - product Runner path must reject unknown kwargs;
-- Pluto research path may later support wider pass-through, but that requires a separate source-of-truth decision;
+- Pluto research APIs require a separate source-of-truth decision before accepting any wider pass-through;
 - optional kwargs must be recorded in provenance.
 
-## Unsupported in Product Runner MVP
+## Unsupported Product Runner Controls
 
 Unsupported controls must fail clearly in product Runner execution until Julia Core documents and implements them.
 
@@ -109,53 +139,88 @@ Unsupported controls must fail clearly in product Runner execution until Julia C
 | custom `factorization` | JosephsonCircuits reference | runtime object injection is not a product task payload contract | reject in Runner payload | expose only through trusted local Julia configuration if needed |
 | `maxintermodorder` | JosephsonCircuits reference | affects mode truncation and result interpretation; not part of MVP schema | reject in Runner payload | promote to first-class control when product workflows need it |
 
+## Shape Validation Rules
+
+For ordered pump-axis controls:
+
+```text
+length(pump_frequencies_hz) == length(n_modulation_harmonics)
+length(pump_frequencies_hz) == length(n_pump_harmonics)
+```
+
+For named-axis schemas:
+
+```text
+keys(pump_frequencies_hz) == keys(n_modulation_harmonics)
+keys(pump_frequencies_hz) == keys(n_pump_harmonics)
+```
+
+Source mode rules:
+
+- source mode tuple length must match the pump-axis count;
+- DC-only mode must be represented explicitly and allowed by `HBIntent`;
+- `current_a = 0.0` is valid;
+- missing source slot binding is invalid unless the source slot declares an explicit default;
+- unknown source slot ID is invalid.
+
+Optional kwargs rules:
+
+- product Runner rejects unknown `optional_hb_kwargs`;
+- optional kwargs must be recorded in provenance;
+- optional kwargs that change solver problem shape contribute to `hb_problem_shape_key`;
+- optional kwargs that only change numeric convergence contribute to `run_value_key`.
+
 ## Source Semantics
 
-The canonical JosephsonCircuits source entry is:
+The canonical JosephsonCircuits source entry produced by Julia Core is:
 
 ```julia
 (mode = (...), port = N, current = I)
 ```
 
-Product schema equivalent:
+Product requests bind source currents by source slot ID:
 
 ```json
 {
-  "kind": "port_current",
-  "mode": [1],
-  "port": 1,
-  "current_a": 0.0
+  "runtime_bindings": {
+    "source_currents_a": {
+      "pump_in": 0.0
+    }
+  }
 }
 ```
 
 Rules:
 
 - `current_a = 0.0` is legal;
-- `mode` is an integer array;
-- `port` references a compiled external port;
-- source role is declared in CircuitPlan source slots;
-- runtime only binds current values.
+- source role, source mode, and source port are declared in CircuitPlan source slots;
+- runtime only binds current values by source slot ID;
+- Julia Core maps validated source slots to JosephsonCircuits `(mode, port, current)` entries.
 
-## Legacy `amplitude` Handling
+## Unsupported Ambiguous Source Fields
 
-Legacy payloads such as:
-
-```json
-{
-  "kind": "port_drive",
-  "target": "port_1",
-  "amplitude": -35.0
-}
-```
-
-are ambiguous.
+Fields named `amplitude`, `target`, or UI-level drive labels are not HB source semantics.
 
 Rules:
 
-- do not silently interpret `amplitude` as JosephsonCircuits current;
-- either reject it in strict mode;
-- or treat it as UI-level metadata while mapping `current_a = 0.0` with an explicit warning;
+- product Runner rejects ambiguous drive fields;
+- Runner must not convert `amplitude` into physical current;
+- Runner must not create source slots from payload fields;
 - future conversion from dBm, voltage, or current requires a separate calibrated source model.
+
+## Implementation Status
+
+This page is stable as the target source of truth. It is not claiming that every concept is already implemented.
+
+| Concept | Target contract | Current implementation | Status |
+| --- | --- | --- | --- |
+| `ExternalPort` | first-class CircuitPlan declaration | currently approximated by `metadata[:external_ports]` in MVP | target |
+| `HBIntent` | first-class plan-level intent | not implemented as a struct yet | target |
+| `HBSourceSlot` | first-class source slot declaration | not implemented yet | target |
+| `HBObservableRequest` | first-class observable declaration | current Runner extraction still MVP / trace-specific | target |
+| `HBSolverControls` | typed first-class controls | current Runner only partially maps controls | target |
+| `optional_hb_kwargs` | whitelist only | not fully implemented | target |
+| `current = 0.0` | valid source-off runtime binding | should be accepted | design-stable |
 
 ## Related
 

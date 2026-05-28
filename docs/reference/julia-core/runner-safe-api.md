@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.7.0
+version: v1.7.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -86,6 +86,16 @@ Runner binds runtime values and executes
 `current = 0.0` is a valid runtime binding for an existing source slot. It means the source is intentionally off. It is not fake compute, a missing source, or dummy behavior.
 
 The Runner may reject malformed runtime bindings, unknown solver controls, or unsupported observables. It must not repair them by creating new ports or source slots outside the compiled intent.
+
+Runner must reject:
+
+- unknown source slot ID;
+- unknown pump axis ID;
+- unknown observable ID;
+- unknown `optional_hb_kwargs`;
+- runtime values that do not satisfy compiled HB validation metadata.
+
+Runner must not create a default S11 observable, create default ports, create source slots from task payloads, or convert ambiguous `amplitude` fields into physical current.
 
 ## Runner Component Library Dependencies
 
@@ -175,7 +185,7 @@ Do not add a second circuit builder inside the Runner adapter.
 
 Do not add Runner-only component construction.
 
-Do not preserve old Core APIs as Runner fallback paths.
+Do not preserve old Core APIs as Runner alternate paths.
 
 Do not bypass the Circuit Plan, Endpoint, Relation, Compiler, or `JosephsonCompiledCircuit` model in Runner code.
 

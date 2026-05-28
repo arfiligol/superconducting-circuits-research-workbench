@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the boundary between Pluto research simulation, Python Notebook data inspection, Application Simulation/Analysis Workbenches, Backend, and Julia Runner.
-version: v1.2.0
-last_updated: 2026-05-28
+version: v1.2.1
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -87,7 +87,7 @@ It must not:
 - define a separate simulation request schema;
 - use JuliaCall or Julia Core as the normal simulation compute path.
 
-Python Notebook is useful for file inspection, debugging, migration checks, emergency analysis, and platform-aware API inspection. It is not the research-grade scientific compute cockpit; that role belongs to Pluto.
+Python Notebook is useful for file inspection, debugging, data repair checks, emergency analysis, and platform-aware API inspection. It is not the research-grade scientific compute cockpit; that role belongs to Pluto.
 
 ## Surface Responsibilities
 

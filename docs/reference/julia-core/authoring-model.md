@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Source-of-truth authoring model for reusable Julia Core circuit components, plans, and compiler lowering.
-version: v1.2.0
-last_updated: 2026-05-28
+version: v1.2.1
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -26,7 +26,7 @@ The compiler lowers one complete Circuit Plan into the JosephsonCircuits.jl targ
 
 The Julia Core Authoring reference is the source of truth for the next implementation. If implementation names, exports, or builder helpers conflict with these pages, update the implementation to match this authoring model.
 
-Do not preserve outdated APIs as fallback or compatibility layers when they obscure the Circuit Plan, endpoint, compiler, or compiled-circuit contracts.
+Do not preserve outdated APIs as alternate support layers when they obscure the Circuit Plan, endpoint, compiler, or compiled-circuit contracts.
 
 ## Contract
 

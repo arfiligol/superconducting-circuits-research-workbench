@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core authoring architecture overview for Pluto direct research and Julia Runner execution.
-version: v1.4.0
+version: v1.4.1
 last_updated: 2026-05-29
 updated_by: codex
 icon: lucide/cpu
@@ -58,7 +58,7 @@ This Julia Core Authoring reference is the source of truth for the next implemen
 
 If existing Julia names, exports, or helpers conflict with this reference, change the implementation to match these docs. Existing names such as `CircuitDraft` and `finalize_to_josephson_netlist` are transitional implementation details. They may be renamed, removed, or replaced by `CircuitPlan` and `compile_to_josephson`.
 
-Do not preserve outdated APIs as fallback or compatibility layers unless a new source-of-truth decision explicitly requires that exception.
+Do not preserve outdated APIs as alternate support layers unless a new source-of-truth decision explicitly requires that exception.
 
 ## Julia Core Kernel vs Component Libraries
 

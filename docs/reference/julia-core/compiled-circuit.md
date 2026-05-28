@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler output contract for JosephsonCompiledCircuit, maps, warnings, provenance, and caller inspection.
-version: v1.2.0
+version: v1.2.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -22,7 +22,7 @@ The compiler output should be richer than raw netlist rows. Pluto needs inspecti
 
 The target concept is `JosephsonCompiledCircuit`.
 
-## Conceptual Shape
+## Target Contract
 
 ```julia
 struct JosephsonCompiledCircuit
@@ -31,13 +31,18 @@ struct JosephsonCompiledCircuit
     node_map
     component_map
     line_tap_map
+    port_map
+    hb_intent_summary
+    source_slot_map
+    observable_request_map
+    hb_validation_summary
     warnings
     provenance
     metadata
 end
 ```
 
-This is the target contract for implementation review.
+The current MVP struct does not yet contain every target field. Implementation should move toward this target rather than adding long-term HB metadata through ad hoc dictionaries.
 
 ## Fields
 
@@ -48,25 +53,18 @@ This is the target contract for implementation review.
 | `node_map` | mapping from plan endpoints and internal nodes to target node names |
 | `component_map` | mapping from plan components and subcomponents to emitted target rows |
 | `line_tap_map` | records line tap endpoints, inserted breakpoints, and target nodes |
+| `port_map` | maps `ExternalPort` IDs to target port indices and node names |
+| `hb_intent_summary` | records pump axes, source slots, observables, and solver-control shape |
+| `source_slot_map` | maps source slot IDs to compiled ports and mode tuples |
+| `observable_request_map` | maps observable IDs to output/input mode and port extraction paths |
+| `hb_validation_summary` | records compile-time HB compatibility checks |
 | `warnings` | compile warnings, physics sanity warnings, and recoverable lowering notes |
 | `provenance` | builder, transform, source, and reproducibility metadata |
 | `metadata` | target version, compiler settings, discretization settings, and auxiliary data |
 
 ## HB Simulation Metadata
 
-The target compiled-circuit contract also includes HB-facing metadata.
-
-Conceptual fields:
-
-| Field | Purpose |
-| --- | --- |
-| `port_map` | maps `ExternalPort` IDs to target port indices and node names |
-| `hb_intent_summary` | records pump axes, source slots, observables, and solver-control shape |
-| `source_slot_map` | maps source slot IDs to compiled ports and mode tuples |
-| `observable_request_map` | maps observable IDs to output/input mode and port extraction paths |
-| `hb_validation_summary` | records compile-time HB compatibility checks |
-
-Current MVP support is smaller: the compiler can emit JosephsonCircuits-compatible port rows for supported lumped plans, but the full `HBIntent` metadata contract is still a target contract for the next implementation step.
+HB metadata is part of the target compiled-circuit contract. Current MVP support is smaller: the compiler can emit JosephsonCircuits-compatible port rows for supported lumped plans, but the full `HBIntent` metadata contract is still a target contract for the next implementation step.
 
 ## Pluto Inspection
 
