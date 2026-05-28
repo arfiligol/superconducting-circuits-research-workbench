@@ -21,6 +21,8 @@ Python Backend owns task lifecycle. Julia Runner owns compute.
 
 Application-triggered simulation and analysis are asynchronous. The app never sends large numeric arrays over HTTP/JSON.
 
+Product request, Runner envelope, manifest, and result-view boundaries are defined in [Product Async Contracts](../../architecture/product-async-contracts.md). Frontend code and Python notebooks submit product requests; only the Backend compiles Runner task envelopes.
+
 ## Task Statuses
 
 ```text
@@ -156,6 +158,7 @@ When the runner completes:
 ## Related
 
 * [Julia Runner Compute Plane](../../architecture/julia-runner-compute-plane.md)
+* [Product Async Contracts](../../architecture/product-async-contracts.md)
 * [Runner Result Manifest](../../architecture/runner-result-manifest.md)
 * [TraceStore Zarr](../../architecture/trace-store-zarr.md)
 * [Task Management](../frontend/shared-workflow/task-management.md)

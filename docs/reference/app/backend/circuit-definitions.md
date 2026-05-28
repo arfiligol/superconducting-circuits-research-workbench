@@ -25,7 +25,7 @@ updated_by: codex
     simulation、schemdraw render 與 characterization run 不屬於本頁責任。
 
 !!! tip "Primary Consumers"
-    主要消費者是 [Schemas](../frontend/definition/schemas.md)、[Schema Editor](../frontend/definition/schema-editor.md)、[Schemdraw](../frontend/research-workflow/schemdraw.md) 與 [Circuit Simulation](../frontend/research-workflow/circuit-simulation.md)。
+    主要消費者是 [Schemas](../frontend/definition/schemas.md)、[Schema Editor](../frontend/definition/schema-editor.md)、[Schemdraw](../frontend/removed-workflows/schemdraw.md) 與 [Circuit Simulation](../frontend/simulation-workbench/circuit-simulation.md)。
 
 !!! important "UUIDv4-only Schema Identity"
     - `definition_id` 是 persisted schema identity，必須是 full UUIDv4
@@ -255,6 +255,6 @@ updated_by: codex
 
 - [Schemas](../frontend/definition/schemas.md)
 - [Schema Editor](../frontend/definition/schema-editor.md)
-- [Schemdraw](../frontend/research-workflow/schemdraw.md)
-- [Circuit Simulation](../frontend/research-workflow/circuit-simulation.md)
+- [Schemdraw](../frontend/removed-workflows/schemdraw.md)
+- [Circuit Simulation](../frontend/simulation-workbench/circuit-simulation.md)
 - [Circuit Netlist](../../data-formats/circuit-netlist.md)

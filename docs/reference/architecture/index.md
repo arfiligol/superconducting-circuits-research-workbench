@@ -32,7 +32,8 @@ Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electro
 
 | Page | Core focus |
 |---|---|
-| [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto direct research, Python notebook client, and Application Simulation Workbench boundary |
+| [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto direct research, Python Notebook data inspection, and Application Simulation Workbench boundary |
+| [Product Async Contracts](product-async-contracts.md) | SimulationRequest、RunnerTaskEnvelope、Runner manifest、ResultView API boundary |
 | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | Runner process boundary、claim/execute/complete protocol |
 | [Runner Result Manifest](runner-result-manifest.md) | manifest schema、safe path rules、Zarr declaration |
 | [TraceStore Zarr](trace-store-zarr.md) | canonical local Zarr authority owned by Python Backend |
@@ -63,6 +64,7 @@ If a historical document mentions one of those surfaces, the current architectur
 * [Application Interface](../app/application-interface.md)
 * [Frontend Reference](../app/frontend/index.md)
 * [Simulation Interface Boundaries](simulation-interface-boundaries.md)
+* [Product Async Contracts](product-async-contracts.md)
 * [Backend Reference](../app/backend/index.md)
 * [Notebook Reference](../notebooks/index.md)
 * [Core Reference](../core/index.md)

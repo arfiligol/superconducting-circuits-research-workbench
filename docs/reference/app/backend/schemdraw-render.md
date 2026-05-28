@@ -206,6 +206,6 @@ linked schema object baseline：
 
 ## Related
 
-* [Frontend / Schemdraw](../frontend/research-workflow/schemdraw.md)
+* [Frontend / Schemdraw](../frontend/removed-workflows/schemdraw.md)
 * [Backend / Circuit Definitions](circuit-definitions.md)
 * [Circuit Netlist](../../data-formats/circuit-netlist.md)

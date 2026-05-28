@@ -1,7 +1,7 @@
 ---
 aliases:
-- Preprocessing Rationale
-- 前處理設計理由
+  - Preprocessing Rationale
+  - 前處理設計理由
 tags:
   - diataxis/explanation
   - status/stable
@@ -11,57 +11,45 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: 為什麼使用 SQLite Dataset 作為中間層
-version: v0.2.0
-last_updated: 2026-02-27
-updated_by: docs-team
+scope: 為什麼 ingestion、normalization、Runner staging 與 Backend publication 必須分層
+version: v1.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Preprocessing Rationale
 
-即使我們把 Analysis 與 Visualization 合併成單一流程，前處理中間層仍然必要。
+Preprocessing exists to separate file-format normalization from platform authority. Raw files, Runner outputs, and official TraceStore records have different responsibilities.
 
-## 問題不是「能不能直接算」，而是「能不能穩定重現」
+## Why Normalize Before Publication
 
-原始資料來源天然異質：
+Input sources are naturally heterogeneous:
 
-1. HFSS 匯出（Admittance / S-parameters）
-2. VNA 實驗量測
-3. 其他模擬工具格式
+- HFSS or Q3D exports
+- VNA measurements
+- generated Runner result packages
+- exported or manually collected research data
 
-如果分析直接吃 raw 檔，會遇到：
+If each consumer parses raw files independently, unit handling, axis naming, shape checks, and provenance drift across the platform. The Backend keeps platform state coherent by owning metadata, publication, and result registration.
 
-- 欄位命名/單位/shape 不一致
-- 同一分析方法在不同資料源需分支邏輯
-- UI 與 CLI 可能各自實作自己的解析流程
+## Responsibility Split
 
-## 解法：先標準化，再分析與可視化
+| Stage | Owner | Responsibility |
+| --- | --- | --- |
+| Raw or exported files | data source / user workflow | provide source data without claiming platform authority |
+| Ingestion and normalization | Python Backend | validate units, shape, metadata, workspace context, and provenance |
+| Runner staging | Julia Runner | write local Zarr result packages and manifest files |
+| Publication | Python Backend | validate staging output, publish TraceStore batches, create metadata records |
+| Notebook analysis | Python Notebook | read files directly for ad hoc analysis without mutating platform state |
 
-我們保留 SQLite Dataset 當中間層，讓「資料清理/轉換」與「分析語意」分離。
+## Why This Is Not One Step
 
-### 為什麼這樣更好
+Direct file reads are useful for inspection, debugging, and emergency analysis. They do not create official dataset, trace, task, provenance, or result records.
 
-1. **分析語意固定**
-
-- 分析方法只處理統一 schema，不處理來源格式差異。
-
-2. **可視化輸出可預測**
-
-- 因為分析輸入穩定，UI/CLI 的圖表與摘要格式可以一致對應。
-
-3. **驗證責任前移**
-
-- schema/unit 檢查在 ingestion 時完成，避免分析過程才爆錯。
-
-4. **重現性與追溯性**
-
-- Dataset 作為 SoT，可重跑分析並比對結果差異。
-
-!!! info "一體化不等於無分層"
-    「分析直接對應可視化」是執行語意的一體化；
-    「Raw -> Dataset -> Analysis」仍是資料責任的分層。
+Official platform state requires Backend publication because the Backend is the only surface that can connect numeric payloads to dataset/design/trace metadata and provenance.
 
 ## Related
 
-- [Dataset Record Schema](../../../reference/data-formats/dataset-record.md) - Schema 定義
-- [Data Flow](data-flow.md) - 整體流程
+- [Data Flow](data-flow.md)
+- [Datasets & Results](../../../reference/app/backend/datasets-results.md)
+- [TraceStore Zarr](../../../reference/architecture/trace-store-zarr.md)

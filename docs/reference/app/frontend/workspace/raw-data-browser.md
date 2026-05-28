@@ -279,4 +279,4 @@ graph TD
 * [Sidebar](../shared-shell/sidebar.md)
 * [Backend: Datasets & Results](../../backend/datasets-results.md)
 * [Record Schema](../../../data-formats/dataset-record.md)
-* [Characterization](../research-workflow/characterization.md)
+* [Characterization](../removed-workflows/characterization.md)

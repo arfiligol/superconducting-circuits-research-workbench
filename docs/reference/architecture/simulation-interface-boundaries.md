@@ -18,9 +18,9 @@ updated_by: codex
 
 # Simulation Interface Boundaries
 
-This page defines which interface owns each simulation-facing workflow and platform state change. Use it when you need to decide whether work belongs in Pluto, a Python notebook, the Electron application, the Python Backend, or Julia Runner.
+This page defines which interface owns each simulation-facing workflow, data-inspection path, and platform state change. Use it when you need to decide whether work belongs in Pluto, a Python notebook, the Electron application, the Python Backend, or Julia Runner.
 
-The project has two simulation-facing tracks.
+The project has two simulation-facing execution tracks and one data-inspection track.
 
 ## Research Direct Track
 
@@ -40,7 +40,7 @@ Pluto outputs are research-local by default. They are not canonical TraceStore r
 ## Product Async Track
 
 ```text
-Electron Application / Python Notebook
+Electron Application / Python Notebook when submitting platform tasks
     -> Python Backend
     -> persisted Task
     -> Julia Runner
@@ -52,6 +52,16 @@ Electron Application / Python Notebook
 Application Simulation Workbench is the productized simulation surface. It submits persisted simulation requests and renders published results.
 
 Application Simulation Workbench is expected to submit real simulation requests. It must not rely on Runner fixture tasks as a substitute for compute implementation.
+
+See [Product Async Contracts](product-async-contracts.md) for the product request, Backend-compiled Runner envelope, Runner manifest, and result-view boundary.
+
+## Data / Platform Notebook Track
+
+```text
+Python Notebook
+    -> direct local/exported/canonical data reads
+    -> Backend APIs for platform state, task submission, metadata, publication, provenance
+```
 
 Python Notebook is a programmable data-analysis and inspection surface.
 

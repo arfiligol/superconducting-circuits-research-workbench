@@ -10,10 +10,10 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: 技術規格索引，涵蓋 architecture、app、notebooks、core、data formats 與開發規範
-version: v0.6.0
-last_updated: 2026-03-14
-updated_by: team
+scope: 技術規格索引，涵蓋 architecture、agent skills、app、notebooks、core、data formats 與開發規範
+version: v0.7.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Reference
@@ -35,6 +35,7 @@ updated_by: team
 | 核心科學模組與 Julia/Python 邊界 | `Core` |
 | persisted payload 與 canonical record schema | `Data Formats` |
 | 哪個 contract 由誰擁有 | `Architecture Reference` |
+| 跨工具 agent skill 同步 | `Agent Skills` |
 | 開發與文件規範 | `Guardrails` |
 
 ## Categories
@@ -45,6 +46,7 @@ updated_by: team
 | [Julia Runner Compute Plane](architecture/julia-runner-compute-plane.md) | async compute plane、Runner API 與 task execution boundary |
 | [Runner Result Manifest](architecture/runner-result-manifest.md) | staged result manifest schema 與 Backend validation |
 | [TraceStore Zarr](architecture/trace-store-zarr.md) | canonical local Zarr publication contract |
+| [Agent Skills](agent-skills/index.md) | coding agents 參與專案前建議同步的 reusable skill templates |
 | [Application Interface](app/application-interface.md) | Electron data workbench surface |
 | [Notebook Interface](notebooks/index.md) | Pluto / Python notebook roles |
 | [App / Shared](app/shared/index.md) | workspace collaboration、auth、task runtime、audit logging 等 app-shared semantics |

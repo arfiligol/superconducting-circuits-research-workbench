@@ -30,7 +30,7 @@ Legacy command workflow、retired Python UI runtime、separate queue worker runt
 | --- | --- |
 | Mission | 這個產品在解什麼問題 |
 | Product Goals | 這次 rewrite 真正要交付什麼 |
-| Research Workflow Goals | 研究流程如何在 Notebook 與 Application 之間分工 |
+| Interface Workflow Goals | 研究、產品與 notebook inspection 流程如何分工 |
 | System Success Criteria | 什麼狀態才算 rewrite 成功 |
 
 ## Mission
@@ -55,7 +55,7 @@ Legacy command workflow、retired Python UI runtime、separate queue worker runt
 - Python Notebook 是 programmable data-analysis and inspection surface，可直接讀資料做臨時分析；若要改平台狀態，必須走 Backend contract
 - user-facing command workflow 不再是產品 surface；repo 僅保留 `scripts/` 作為 dev/build/test/maintenance helpers
 
-## Research Workflow Goals
+## Interface Workflow Goals
 
 本專案必須支援下列研究工作流，而不是只提供零散工具：
 

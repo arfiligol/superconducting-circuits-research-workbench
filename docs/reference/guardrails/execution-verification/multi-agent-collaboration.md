@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Codex-managed subagent work lanes, main-thread ownership, integrated delivery, and verification expectations.
-version: v4.0.0
+version: v4.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -95,6 +95,7 @@ Long-term decisions belong in `docs/reference/**`, not in temporary planning art
 - [Task Scope Sizing](./prompt-grading.md)
 - [Work Summary Formats](./contributor-reporting.md)
 - [Testing](./testing.md)
+- [Agent Skill Library](../../agent-skills/index.md)
 
 ## Agent Rule { #agent-rule }
 

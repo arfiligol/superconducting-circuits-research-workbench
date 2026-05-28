@@ -24,7 +24,7 @@ updated_by: codex
     task lifecycle、analysis-specific artifact manifest 與 audit query 不屬於本頁責任。
 
 !!! tip "Primary Consumers"
-    主要消費者是 [Dashboard](../frontend/workspace/dashboard.md)、[Raw Data Browser](../frontend/workspace/raw-data-browser.md)、[Characterization](../frontend/research-workflow/characterization.md) 與 [Header](../frontend/shared-shell/header.md)。
+    主要消費者是 [Dashboard](../frontend/workspace/dashboard.md)、[Raw Data Browser](../frontend/workspace/raw-data-browser.md)、[Characterization](../frontend/removed-workflows/characterization.md) 與 [Header](../frontend/shared-shell/header.md)。
 
 ## Coverage
 
@@ -804,7 +804,7 @@ Dashboard 顯示的 `Tagged Core Metrics` 屬於唯讀摘要 surface。
 
 - [Dashboard](../frontend/workspace/dashboard.md)
 - [Raw Data Browser](../frontend/workspace/raw-data-browser.md)
-- [Characterization](../frontend/research-workflow/characterization.md)
+- [Characterization](../frontend/removed-workflows/characterization.md)
 - [Characterization Results](characterization-results.md)
 - [Dataset / Design / Trace Schema](../../data-formats/dataset-record.md)
 - [Analysis Result](../../data-formats/analysis-result.md)

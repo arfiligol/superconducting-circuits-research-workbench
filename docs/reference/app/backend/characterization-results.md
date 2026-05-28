@@ -25,7 +25,7 @@ updated_by: codex
     task lifecycle 本身由 [Tasks & Execution](tasks-execution.md) 定義。
 
 !!! tip "Primary Consumers"
-    主要消費者是 [Characterization](../frontend/research-workflow/characterization.md) 與 [Dashboard](../frontend/workspace/dashboard.md)。
+    主要消費者是 [Characterization](../frontend/removed-workflows/characterization.md) 與 [Dashboard](../frontend/workspace/dashboard.md)。
 
 ---
 
@@ -341,7 +341,7 @@ Characterization results 必須同時區分 source input axes 與 analysis-deriv
 
 | 讀回消費者 | 預期結果 |
 | :--- | :--- |
-| [Characterization](../frontend/research-workflow/characterization.md) | 重新讀取後看到最新 tagging 狀態 |
+| [Characterization](../frontend/removed-workflows/characterization.md) | 重新讀取後看到最新 tagging 狀態 |
 | [Dashboard](../frontend/workspace/dashboard.md) | `Tagged Core Metrics` 摘要可讀回最新標記 |
 
 !!! warning "Cross-page Consistency"
@@ -499,7 +499,7 @@ Dashboard 讀取 `Tagged Core Metrics` 時，必須用同一套 canonical resolu
 
 ## Related
 
-- [Characterization](../frontend/research-workflow/characterization.md)
+- [Characterization](../frontend/removed-workflows/characterization.md)
 - [Tasks & Execution](tasks-execution.md)
 - [Dataset / Design / Trace Schema](../../data-formats/dataset-record.md)
 - [Analysis Result Schema](../../data-formats/analysis-result.md)

@@ -104,10 +104,15 @@ nav = [
     { "Architecture" = [
       { "Overview" = "reference/architecture/index.md" },
       { "Simulation Interface Boundaries" = "reference/architecture/simulation-interface-boundaries.md" },
+      { "Product Async Contracts" = "reference/architecture/product-async-contracts.md" },
       { "Julia Runner Compute Plane" = "reference/architecture/julia-runner-compute-plane.md" },
       { "Runner Result Manifest" = "reference/architecture/runner-result-manifest.md" },
       { "TraceStore Zarr" = "reference/architecture/trace-store-zarr.md" },
       { "Canonical Contract Registry" = "reference/architecture/canonical-contract-registry.md" },
+    ] },
+    { "Agent Skills" = [
+      { "Overview" = "reference/agent-skills/index.md" },
+      { "Work Lane Orchestration" = "reference/agent-skills/work-lane-orchestration.md" },
     ] },
     { "App" = [
       { "Application Interface" = "reference/app/application-interface.md" },
@@ -133,8 +138,8 @@ nav = [
         { "Shared Workflow" = [
           { "Task Management" = "reference/app/frontend/shared-workflow/task-management.md" },
         ] },
-        { "Research Workflow" = [
-          { "Circuit Simulation Workbench" = "reference/app/frontend/research-workflow/circuit-simulation.md" },
+        { "Simulation Workbench" = [
+          { "Circuit Simulation Workbench" = "reference/app/frontend/simulation-workbench/circuit-simulation.md" },
         ] },
         { "Workspace" = [
           { "Dashboard" = "reference/app/frontend/workspace/dashboard.md" },

@@ -55,7 +55,7 @@ The Simulation Workbench route may initially reuse the Tasks / Result Browser su
 | [Header](shared-shell/header.md) | compact shell context | [Session & Workspace](../backend/session-workspace.md) |
 | [Sidebar](shared-shell/sidebar.md) | navigation-only app IA | [Application Interface](../application-interface.md) |
 | [Auth Entry](shared-shell/auth-entry.md) | online-mode auth entry | [Authentication & Authorization](../shared/authentication-and-authorization.md) |
-| [Circuit Simulation Workbench](research-workflow/circuit-simulation.md) | productized simulation request/result workflow | [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) |
+| [Circuit Simulation Workbench](simulation-workbench/circuit-simulation.md) | productized simulation request/result workflow | [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) |
 | [Task Management](shared-workflow/task-management.md) | shared task monitoring and attach/recover behavior | [Tasks & Execution](../backend/tasks-execution.md) |
 | [Dashboard](workspace/dashboard.md) | workspace overview | [Datasets & Results](../backend/datasets-results.md) |
 | [Dataset](workspace/dataset.md) | dataset selection and lifecycle | [Datasets & Results](../backend/datasets-results.md) |

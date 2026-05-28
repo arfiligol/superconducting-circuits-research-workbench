@@ -30,7 +30,7 @@ updated_by: codex
 - [Observability Taxonomy](observability-taxonomy.md)
   為什麼 audit logging、workflow observability 與 product telemetry 必須分層。
 - [Pipeline](pipeline/index.md)
-  分析與可視化一體化的資料與執行流程。
+  Research Direct、Product Async 與 Data / Platform Notebook tracks 的資料與執行流程。
 - [Circuit Simulation](circuit-simulation/index.md)
   Schema 編輯、Live Preview、領域語意與互動策略。
 - [Visualization Backend](design-decisions/visualization-backend.md)

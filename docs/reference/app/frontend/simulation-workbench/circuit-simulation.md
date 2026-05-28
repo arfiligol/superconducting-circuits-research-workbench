@@ -24,7 +24,7 @@ Circuit Simulation Workbench is the productized application surface for simulati
 
 ```text
 Application Simulation Workbench
-    -> Python Backend SimulationRequest
+    -> Python Backend SimulationRequestV1
     -> persisted Task
     -> Julia Runner
     -> local Zarr staging
@@ -33,6 +33,8 @@ Application Simulation Workbench
 ```
 
 The workbench builds product-grade simulation requests, submits them to the Backend, monitors task state, and renders published results through the shared task/result surfaces.
+
+See [Product Async Contracts](../../../architecture/product-async-contracts.md) for the product request, Runner envelope, manifest, and result-view contract.
 
 ## Boundary
 
@@ -45,5 +47,6 @@ The workbench builds product-grade simulation requests, submits them to the Back
 
 * [Application Interface](../../application-interface.md)
 * [Simulation Interface Boundaries](../../../architecture/simulation-interface-boundaries.md)
+* [Product Async Contracts](../../../architecture/product-async-contracts.md)
 * [Julia Runner Compute Plane](../../../architecture/julia-runner-compute-plane.md)
 * [TraceStore Zarr](../../../architecture/trace-store-zarr.md)

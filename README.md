@@ -6,7 +6,7 @@ Python owns task lifecycle, metadata, publication, provenance, and TraceStore AP
 
 ## Architecture
 
-This repository has two execution tracks.
+This repository has two execution tracks and one data-inspection track.
 
 ### Research Direct Track
 
@@ -28,7 +28,7 @@ Pluto Notebook is not a Backend task submitter in the platform architecture.
 ### Product Async Track
 
 ```text
-[Electron Application / Simulation Workbench / Python Notebook]
+[Electron Application / Simulation Workbench / Python Notebook when submitting platform tasks]
     |
     | POST /tasks or domain-specific Backend API
     v
@@ -56,6 +56,24 @@ Pluto Notebook is not a Backend task submitter in the platform architecture.
 ```
 
 Application Simulation Workbench is the productized simulation surface in this track. Electron Application owns the productized workflow. Python Notebook can submit tasks through the same Backend contracts when it needs platform state. Pluto Notebook is not a task submitter.
+
+See [Product Async Contracts](docs/reference/architecture/product-async-contracts.md) for the `SimulationRequestV1`, `RunnerTaskEnvelopeV1`, `RunnerResultManifestV1`, and `ResultView API` boundary.
+
+### Data / Platform Notebook Track
+
+```text
+[Python Notebook]
+    |
+    | direct read local Zarr / exported data / raw files / canonical TraceStore
+    v
+[Ad hoc analysis and inspection]
+
+[Python Notebook]
+    |
+    | Backend API for platform state, task submission, metadata, publication, provenance
+    v
+[Python Backend]
+```
 
 Python Notebook is a programmable data-analysis and inspection surface. It may directly read local Zarr, exported data, raw files, and canonical TraceStore files for ad hoc analysis; any platform mutation, task creation, publication, metadata update, or result registration must go through the Python Backend.
 

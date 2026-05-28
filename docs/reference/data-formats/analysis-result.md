@@ -179,5 +179,5 @@ title: Analysis Result
 ## Related
 
 - [Dataset / Design / Trace Schema](dataset-record.md)
-- [Characterization](../app/frontend/research-workflow/characterization.md)
+- [Characterization](../app/frontend/removed-workflows/characterization.md)
 - [Characterization Results](../app/backend/characterization-results.md)
