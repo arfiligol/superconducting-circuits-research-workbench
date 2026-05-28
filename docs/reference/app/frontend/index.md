@@ -46,7 +46,7 @@ It must not own heavy compute. Application simulation goes through persisted Bac
 | Characterization | Julia Runner analysis tasks + result browser |
 | Schemdraw standalone workflow | Design Assets / Source Documents |
 
-The Simulation Workbench route may initially reuse the Tasks / Result Browser surface, but the product surface remains Application Simulation Workbench.
+The canonical Simulation Workbench route is `/tasks?lane=simulation` unless a future source-of-truth explicitly changes the application information architecture. The route may share task/result UI components, but the product surface is Application Simulation Workbench.
 
 ## Page Map
 

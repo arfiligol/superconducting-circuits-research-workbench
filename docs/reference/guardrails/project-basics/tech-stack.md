@@ -168,6 +168,7 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 - task claiming is DB-backed through the Python Backend runner API
 - local staging uses filesystem Zarr under `data/staging/tasks/<task_id>/`
 - official numeric authority is Python Backend-managed TraceStore under `data/trace_store/`
+- Local Mode is not a shell-only product mode. A usable Local Mode means the frontend can reach the Python Backend and the Python Backend can coordinate Julia Runner execution. UI-only shell previews are developer tools, not product runtime modes.
 
 !!! warning "Runner is the active local compute baseline"
     local heavy execution must not run in the Python Backend process.
@@ -277,6 +278,7 @@ The following changes require a new SoT decision before implementation:
     - Python Backend
     - Julia Runner
     - no separate queue service
+    - Local Mode is not a shell-only product mode; UI-only shell previews are developer tools, not product runtime modes.
 - **Interface boundaries**:
     - Pluto Notebook is the direct Julia Core research interface.
     - Backend task submission is outside the Pluto Notebook role.

@@ -65,6 +65,13 @@ Python Notebook
 
 Python Notebook is a programmable data-analysis and inspection surface.
 
+Python Notebook has two valid modes:
+
+1. read-only data inspection: direct local/exported/canonical data-file reads;
+2. platform interaction: Backend APIs for task submission, metadata, publication, provenance, and result registration.
+
+Only the second mode is part of Product Async Track. The first mode belongs to Data / Platform Notebook Track.
+
 It may:
 
 - call Backend APIs for dataset, task, trace, result metadata, and platform-aware queries;

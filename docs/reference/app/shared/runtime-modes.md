@@ -8,11 +8,11 @@ tags:
   - audience/team
   - sot/true
   - topic/app-reference
-status: draft
+status: stable
 owner: docs-team
 audience: team
 scope: 同一個 App 的 Local Mode / Online Mode、frontend/backend mode pairing 與 mode-switch isolation contract
-version: v0.5.0
+version: v1.0.0
 last_updated: 2026-03-27
 updated_by: codex
 ---
@@ -42,7 +42,7 @@ updated_by: codex
 
 | Mode | Required meaning |
 |---|---|
-| `local` | frontend 連到本機 backend；資料與 task runtime 都在本地；不需要 Authentication / Authorization；shell context 固定落在 `Local Space` |
+| `local` | managed local app runtime；frontend 連到本機 Python Backend，Backend 協調 Julia Runner；資料與 task runtime 都在本地；不需要 Authentication / Authorization；shell context 固定落在 `Local Space` |
 | `online` | frontend 連到遠端 server；需要 Authentication / Authorization；支援 workspace collaboration |
 
 ## Desktop Runtime Profile Overlay
@@ -55,6 +55,10 @@ updated_by: codex
 !!! info "Profile and mode are different terms"
     `local_managed` / `remote_server` 只用於 desktop packaging 與 runtime orchestration。
     正式 app mode vocabulary 仍是 `local` / `online`。
+
+!!! warning "No product local preview mode"
+    Local Mode 的產品 baseline 是 frontend + Python Backend + Julia Runner。
+    UI-only shell preview may exist for developer debugging, but it is not a product runtime mode and must not be documented as Local Mode behavior.
 
 ## Shared Product Rules
 
@@ -76,6 +80,7 @@ updated_by: codex
 | Visibility model | persisted resource 使用 `local` scope，不分 `private` / `workspace` |
 | Data | 以本地 datasets、results、tasks、artifacts 為主 |
 | Queue | 顯示 local runtime tasks，不承擔 shared workspace visibility semantics |
+| Runtime stack | desktop supervisor starts or reconnects to local frontend, Python Backend, and Julia Runner |
 | Collaboration | invitation、membership、shared task governance 不適用 |
 
 ## Online Mode Baseline
@@ -110,7 +115,7 @@ updated_by: codex
 | Step | Required behavior |
 |---|---|
 | 1. User selects mode | 可從 app-level mode switcher 選 `Local Mode` 或 `Online Mode` |
-| 2. App freezes unsafe context | 若目前存在 dirty draft、attached task 或 destructive context，先要求確認 |
+| 2. App freezes unsafe context | 若目前存在 unsaved page changes、attached task 或 destructive context，先要求確認 |
 | 3. Session is invalidated | 舊 mode 的 session envelope、capability cache、queue cache、attached task refs 與 remote auth continuity 全部失效 |
 | 4. New connection target is bound | local mode 指向本機 backend；online mode 指向 validated active server target |
 | 5. New session is established | local mode 直接回 local session；切到 online mode 時一律重建 online session，並重新進入 auth entry |
@@ -151,7 +156,6 @@ updated_by: codex
 | `startup_behavior` | `restore_last_mode`、`always_local`、`always_online`、`ask_on_launch` |
 | `last_runtime_mode` | 最近一次成功建立的 `local` / `online` mode |
 | `last_online_target` | 最近一次成功使用的 online target summary |
-| `auto_start_local_runtime` | 進入 local desktop profile 時是否自動啟動 frontend、backend、runner |
 
 | Rule | Required behavior |
 |---|---|
@@ -159,7 +163,7 @@ updated_by: codex
 | Restoring mode is allowed | desktop shell 可在啟動時依 `startup_behavior` 自動進入上次 mode |
 | Restore does not imply auth reuse | 回到 `online` mode 不等於無條件恢復先前 authenticated session |
 | Remote validation first | 若要 restore `online` mode，必須先驗證 target reachability / compatibility，再建立新的 online session shell |
-| Local shell first | restore `local` mode 時，desktop shell 應可先顯示，再由 supervisor 背景啟動本地 runtime |
+| Managed local restore | restore `local` mode 時，desktop supervisor starts or reconnects to local frontend, Python Backend, and Julia Runner |
 
 ## Server Target Summary Shape
 
@@ -189,7 +193,8 @@ updated_by: codex
 | `startup_behavior = restore_last_mode` and last mode = `online` | shell 先還原 target summary，再做 target validation；驗證成功後才建立 online session shell |
 | remembered online target invalid | 保持 shell 可互動，允許 Retry、改 target，或切回 `Local Mode` |
 | `startup_behavior = ask_on_launch` | shell 啟動後要求使用者選擇 `Local Mode` 或 `Online Mode` |
-| `auto_start_local_runtime = false` | shell 可先進入 local shell context，但本地 runtime 啟動需由使用者明確觸發 |
+
+When restoring Local Mode, the desktop supervisor starts or reconnects to the local frontend, Python Backend, and Julia Runner. If a component fails, the shell must show recoverable runtime status rather than silently entering a partial Local Mode.
 
 !!! tip "Connection target is parallel to Local Space"
     `Local Space` 解決的是 local mode 的 workspace shape。

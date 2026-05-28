@@ -1,6 +1,6 @@
 ---
 title: "Application Interface"
-description: "Defines the Electron application surface after the runner refactor."
+description: "Defines the Electron application surface for the current Product Async architecture."
 icon: lucide/layout-dashboard
 ---
 
@@ -43,4 +43,4 @@ These are not active application surfaces:
 - standalone Schemdraw workflow
 - Characterization Workbench
 
-If a legacy feature is needed later, reintroduce it through the task/result workbench, the Simulation Workbench, or a notebook workflow rather than exposing a half-working runtime entrypoint.
+Retired surfaces must stay inactive unless a new source-of-truth explicitly reintroduces them through the task/result workbench, Simulation Workbench, or a notebook workflow.

@@ -36,6 +36,8 @@ Python notebooks are for:
 
 Python notebooks may read data files directly for ad hoc analysis. They must use Backend import, publication, task, and result contracts for any write that should become platform state.
 
+Python notebooks are not required to use Backend APIs for read-only ad hoc file analysis. Backend APIs are required when the notebook changes platform state or needs platform-authoritative metadata/provenance.
+
 Python notebooks should not become a second scientific compute authority. They must not directly mutate the metadata DB, directly publish or overwrite canonical TraceStore records, define a separate simulation request schema, or use JuliaCall / Julia Core as the normal simulation compute path.
 
 If a Python notebook needs heavier analysis dependencies for inspection or emergency work, use `notebooks/python/pyproject.toml` rather than adding them to `app/backend`.

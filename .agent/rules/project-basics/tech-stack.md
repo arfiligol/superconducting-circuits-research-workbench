@@ -33,6 +33,7 @@
     - Python Backend
     - Julia Runner
     - no separate queue service
+    - Local Mode is not a shell-only product mode; UI-only shell previews are developer tools, not product runtime modes.
 - **Interface boundaries**:
     - Pluto Notebook is the direct Julia Core research interface.
     - Backend task submission is outside the Pluto Notebook role.

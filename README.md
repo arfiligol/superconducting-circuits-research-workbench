@@ -179,7 +179,7 @@ data/
     tasks/<task_id>/result.zarr/
 ```
 
-`data/staging/` is temporary. `data/trace_store/` is the numeric authority after the Backend validates and publishes a Runner result.
+`data/staging/` is non-authoritative Runner workspace. `data/trace_store/` is the numeric authority after the Backend validates and publishes a Runner result.
 
 ## Documentation
 
@@ -201,7 +201,9 @@ Build the static docs with:
 - Pluto Notebook is research direct execution.
 - Backend task submission is outside the Pluto role.
 - Python Notebook may directly read data files for analysis, but platform state changes must go through Backend contracts.
+- Python Notebook read-only file analysis is allowed without Backend APIs; platform state changes must use Backend contracts.
 - Application Simulation Workbench remains a first-class product surface.
+- Local Mode is the managed local app runtime: frontend + Python Backend + Julia Runner. UI-only shell preview is a developer tool, not a product runtime mode.
 - No user-facing command-line workflow surface.
 - No retired Python UI runtime.
 - No separate local queue worker runtime.
