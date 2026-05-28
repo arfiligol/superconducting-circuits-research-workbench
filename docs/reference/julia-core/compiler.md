@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler pipeline from Circuit Plan to JosephsonCompiledCircuit and JosephsonCircuits.jl target rows.
-version: v1.1.0
-last_updated: 2026-05-28
+version: v1.2.0
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -88,6 +88,23 @@ The compiler should return maps alongside the netlist so callers can inspect wha
 | `line_tap_map` | explain inserted breakpoints and tap locations |
 | warnings | show validation or lowering issues that did not abort compilation |
 | provenance | preserve builder and transform history |
+
+## Compiler Responsibilities for HB Simulation
+
+For harmonic-balance simulation, compilation is not only `CircuitPlan -> JosephsonCircuits netlist`.
+
+The compiler should validate:
+
+- netlist lowerability;
+- external port declarations and port-index uniqueness;
+- endpoint resolution for every external port;
+- `HBIntent` compatibility with the compiled port map;
+- source slots, pump axes, mode tuples, and observable requests;
+- the maps needed to build an HB problem without Runner inventing source semantics.
+
+The compiled output should contain enough metadata to build an `HBProblemSpec` from runtime values. Unsupported HB intent paths must fail clearly during compile or HB problem construction, not during result extraction after a partial run.
+
+See [HB Simulation Intent](hb-simulation-intent.md) for the source-of-truth simulation-intent contract.
 
 ## Current MVP Lowering
 

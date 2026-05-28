@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler output contract for JosephsonCompiledCircuit, maps, warnings, provenance, and caller inspection.
-version: v1.1.0
-last_updated: 2026-05-28
+version: v1.2.0
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -52,6 +52,22 @@ This is the target contract for implementation review.
 | `provenance` | builder, transform, source, and reproducibility metadata |
 | `metadata` | target version, compiler settings, discretization settings, and auxiliary data |
 
+## HB Simulation Metadata
+
+The target compiled-circuit contract also includes HB-facing metadata.
+
+Conceptual fields:
+
+| Field | Purpose |
+| --- | --- |
+| `port_map` | maps `ExternalPort` IDs to target port indices and node names |
+| `hb_intent_summary` | records pump axes, source slots, observables, and solver-control shape |
+| `source_slot_map` | maps source slot IDs to compiled ports and mode tuples |
+| `observable_request_map` | maps observable IDs to output/input mode and port extraction paths |
+| `hb_validation_summary` | records compile-time HB compatibility checks |
+
+Current MVP support is smaller: the compiler can emit JosephsonCircuits-compatible port rows for supported lumped plans, but the full `HBIntent` metadata contract is still a target contract for the next implementation step.
+
 ## Pluto Inspection
 
 Pluto can inspect compiled output without guessing how the compiler lowered the plan:
@@ -79,6 +95,8 @@ run_frequency_sweep(compiled, frequency_range_hz; kwargs...)
 The Runner should stage numeric arrays through filesystem packages such as Zarr when results are large. HTTP JSON should carry control payloads, status, manifest locators, summaries, and small metadata, not large numeric arrays.
 
 The current MVP compiler emits real JosephsonCircuits-compatible rows for supported lumped plans. Component rows use target value references and `component_values`; port rows use integer port indices. Unsupported compiler paths fail clearly before Runner writes output.
+
+Runner execution must bind runtime values to compiled HB intent. It must not invent source slots, port roles, pump axes, or observable semantics from task payloads alone.
 
 ## Why Raw Rows Are Not Enough
 

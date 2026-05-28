@@ -42,6 +42,8 @@ Application-triggered work must use this async path. Pluto notebooks may still e
 
 For circuit construction tasks, the Runner must call the docs-defined Julia Core Authoring path: components, endpoints, Circuit Plan, compiler, and compiled circuit output. It must not maintain a separate Runner-only construction model.
 
+For HB simulation tasks, the Runner maps Backend payloads into runtime bindings for a compiled HB intent. Julia Core owns the CircuitPlan declarations for ports, pump axes, source slots, observables, and HB compatibility checks. The Runner must not invent HB source or port semantics from task input after compilation.
+
 ## Test Fixtures Are Not Task Kinds
 
 Small staged Zarr fixtures may be used in tests to validate the Backend publisher and manifest validation path.
@@ -75,6 +77,8 @@ Each task family follows the same execution contract:
 Analysis and post-processing tasks may write summary tables or artifacts instead of S-parameter traces, but they still use the same staging and manifest authority boundary.
 
 The MVP frequency-sweep adapter loads a selected component-library style plan builder, builds a `CircuitPlan`, compiles through Julia Core, runs JosephsonCircuits through `run_frequency_sweep`, and writes Zarr traces. The initial supported design path covers the Local Space resonator seed definition and the internal `runner_mvp_minimal_core_plan` alias. It must not become a separate Runner-owned circuit construction model.
+
+The same boundary applies to solver controls: Runner may bind frequency arrays, source currents, pump frequencies, harmonic counts, and whitelisted solver kwargs, but those values must be checked against the compiled HB intent before execution. `current = 0.0` is valid source-off behavior for an existing source slot.
 
 ## Validation
 

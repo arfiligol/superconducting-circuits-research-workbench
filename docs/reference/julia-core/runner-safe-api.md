@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.6.0
-last_updated: 2026-05-28
+version: v1.7.0
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -57,7 +57,35 @@ Julia Core must not depend on FastAPI, Next.js, Electron, or Backend task state.
 
 The Runner owns execution orchestration and staged output, not authoring semantics. Circuit construction, endpoint resolution, compiler semantics, and simulation result extraction belong to Julia Core.
 
+Runner receives a RunSpec and binds it to a compiled HB intent. Runner must not invent ports, source slots, pump axes, mode tuples, observable requests, or solver-output semantics.
+
 Large numeric arrays should not move through HTTP JSON. Runner outputs should use staged local filesystem packages, with Backend publication handling canonical TraceStore records.
+
+## HB Simulation Boundary
+
+HB solver inputs are not owned by the Runner.
+
+The shared contract is:
+
+```text
+CircuitPlan
+        |
+        v
+HBIntent: ports, pump axes, source slots, observables
+        |
+        v
+compile_to_josephson
+        |
+        v
+JosephsonCompiledCircuit with validated HB metadata
+        |
+        v
+Runner binds runtime values and executes
+```
+
+`current = 0.0` is a valid runtime binding for an existing source slot. It means the source is intentionally off. It is not fake compute, a missing source, or dummy behavior.
+
+The Runner may reject malformed runtime bindings, unknown solver controls, or unsupported observables. It must not repair them by creating new ports or source slots outside the compiled intent.
 
 ## Runner Component Library Dependencies
 

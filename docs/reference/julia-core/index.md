@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core authoring architecture overview for Pluto direct research and Julia Runner execution.
-version: v1.3.0
-last_updated: 2026-05-28
+version: v1.4.0
+last_updated: 2026-05-29
 updated_by: codex
 icon: lucide/cpu
 ---
@@ -135,6 +135,18 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
     ---
 
     Treat compiler output as netlist plus maps, warnings, provenance, and metadata.
+
+- __[HB Simulation Intent](hb-simulation-intent.md)__
+
+    ---
+
+    Declare external ports, pump axes, source slots, observables, and HB intent before Runner execution binds runtime values.
+
+- __[JosephsonCircuits hbsolve Controls](josephsoncircuits-hbsolve-controls.md)__
+
+    ---
+
+    Classify first-class HB controls, whitelisted optional kwargs, unsupported product Runner controls, and source current semantics.
 
 - __[Parameter Sweeps](parameter-sweeps.md)__
 

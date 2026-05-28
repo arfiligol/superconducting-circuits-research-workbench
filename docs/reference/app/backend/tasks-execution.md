@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: Backend task lifecycle, runner API, staging result validation, and TraceStore publication
-version: v1.1.0
-last_updated: 2026-05-28
+version: v1.2.0
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -103,6 +103,19 @@ Backend state remains the lifecycle authority. Product labels are UI vocabulary.
 Unknown or unsupported task kinds fail clearly. Runner execution must not fall back to fixture output.
 
 The first code-backed Runner compute path is `julia_simulation_frequency_sweep` for the MVP supported design path, including the Local Space resonator seed definition. It calls Julia Core to build and compile a `CircuitPlan`, runs JosephsonCircuits through Julia Core simulation helpers, and stages real S-parameter traces.
+
+Product task payloads separate design intent from runtime values:
+
+```text
+SimulationRequestV1
+    -> design / circuit definition reference
+    -> runtime values
+    -> requested run profile
+```
+
+They are not arbitrary JosephsonCircuits solver internals with no CircuitPlan validation. CircuitPlan declares ports, source slots, pump axes, and observables. Julia Core validates that HB intent during compile and HB problem construction. The Runner binds runtime values such as frequency arrays, source currents, pump frequencies, harmonic counts, and whitelisted solver kwargs.
+
+`current_a = 0.0` is valid source-off behavior when bound to a declared source slot. Backend and Runner validation must not treat zero current as fake compute or a missing source.
 
 ## Runner API
 
