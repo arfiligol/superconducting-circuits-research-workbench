@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Plan-level reusable circuit components, primitive elements, composition, public pins, private nodes, and namespace rules.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -41,6 +41,7 @@ Primitive elements may be used directly or inside composite components. Composit
 | Private internal nodes | Components may own internal implementation nodes; users should not need those names. |
 | Subcomponents | Composite components may include smaller components and primitive elements. |
 | Local parameters | Components may carry local values, sweep knobs, and provenance. |
+| Line references | Distributed components with multiple internal lines must expose named line references such as `line_ref(component, :main)`. |
 | Namespacing | The compiler namespaces private nodes and subcomponent internals when it expands hierarchy. |
 | Flattening | Composite components are flattened by the global compiler after endpoint resolution and validation. |
 
@@ -100,6 +101,15 @@ lc = add_grounded_lc_resonator_component!(
 ```
 
 The SQUID remains a component hierarchy in the plan. Its loop endpoint can be targeted by an inductive relation in the same Circuit Plan.
+
+Distributed components may also expose line references for taps and spans:
+
+```julia
+main_line = line_ref(flux_line, :main)
+tap = line_tap(main_line; at_m = 2.0mm)
+```
+
+The component-level shorthand `line_tap(flux_line; at_m = 2.0mm)` is valid only when the component has one unambiguous default line. Multi-line components must use `line_ref` or pass `line = :main`.
 
 ## Floating LC With Replaceable Inductive Element
 

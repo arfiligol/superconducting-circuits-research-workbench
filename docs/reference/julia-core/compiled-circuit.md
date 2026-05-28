@@ -11,14 +11,14 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler output contract for JosephsonCompiledCircuit, maps, warnings, provenance, and caller inspection.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Compiled Circuit
 
-The compiler output should be richer than raw netlist rows. Pluto needs inspection and debugging metadata; Worker execution needs deterministic simulation input and provenance.
+The compiler output should be richer than raw netlist rows. Pluto needs inspection and debugging metadata; Runner execution needs deterministic simulation input and provenance.
 
 The target concept is `JosephsonCompiledCircuit`.
 
@@ -37,7 +37,7 @@ struct JosephsonCompiledCircuit
 end
 ```
 
-This is a documentation target, not a required implementation in this docs-only task.
+This is the target contract for implementation review.
 
 ## Fields
 
@@ -66,9 +66,9 @@ compiled.line_tap_map
 
 This lets notebook cells show the target netlist, trace line taps back to user expressions, and display warnings near the design that caused them.
 
-## Worker Execution
+## Runner Execution
 
-Worker execution can run deterministic simulations from compiled output:
+Runner execution can run deterministic simulations from compiled output:
 
 ```julia
 compiled = compile_to_josephson(plan)
@@ -76,7 +76,7 @@ compiled = compile_to_josephson(plan)
 run_frequency_sweep(compiled, frequency_range_hz; kwargs...)
 ```
 
-The Worker should stage numeric arrays through filesystem packages such as Zarr when results are large. HTTP JSON should carry control payloads, status, manifest locators, summaries, and small metadata, not large numeric arrays.
+The Runner should stage numeric arrays through filesystem packages such as Zarr when results are large. HTTP JSON should carry control payloads, status, manifest locators, summaries, and small metadata, not large numeric arrays.
 
 ## Why Raw Rows Are Not Enough
 
@@ -87,6 +87,6 @@ Raw netlist rows cannot explain:
 - where a line tap inserted a breakpoint;
 - which warnings were recoverable;
 - which compiler settings produced the discretization;
-- how Pluto or Worker should trace simulation output back to authoring intent.
+- how Pluto or Runner should trace simulation output back to authoring intent.
 
 `JosephsonCompiledCircuit` keeps those inspection and reproducibility surfaces together.

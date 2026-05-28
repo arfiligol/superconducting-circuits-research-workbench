@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: "定義 reference docs、Julia Core authoring、Julia Runner、Backend、adapter 與 retired surfaces 的裁決順序"
-version: v3.1.0
+version: v3.1.1
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -55,7 +55,7 @@ updated_by: codex
 | `docs/reference/app/shared/*` | app-level shared semantics、workspace/resource/auth/task runtime/audit/error families |
 | `docs/reference/app/backend/*` | app-facing authority surfaces、request/response contract、mutation/read model |
 | `docs/reference/data-formats/*` | persisted record shape、field semantics、storage payload contract |
-| `docs/reference/julia-core/*` | Julia Core authoring model、Circuit Plan、components、endpoints、compiler、compiled output、worker-safe API |
+| `docs/reference/julia-core/*` | Julia Core authoring model、Circuit Plan、components、endpoints、compiler、compiled output、Runner-safe API |
 | `docs/reference/core/*` | Julia Core / Runner runtime boundary、installable contract、package-level invariants |
 | `docs/reference/app/frontend/**/*` | page purpose、layout、interaction、acceptance |
 | `docs/reference/notebooks/*` | Notebook research cockpit and inspection workflows |

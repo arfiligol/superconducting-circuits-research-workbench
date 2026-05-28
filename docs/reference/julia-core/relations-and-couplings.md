@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Plan-level relations, endpoint constraints, capacitive couplings, inductive couplings, shunts, and distributed windows.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -27,8 +27,8 @@ They are not immediate JosephsonCircuits.jl rows.
 | Relation | Meaning |
 | --- | --- |
 | `connect!` | endpoint aliasing or node connection intent |
-| `couple_capacitive!` | capacitor placement between point endpoints |
-| `shunt_capacitor!` | convenience capacitor placement from a point endpoint to ground |
+| `couple_capacitive!` | capacitor placement between node-resolving endpoints |
+| `shunt_capacitor!` | convenience capacitor placement from a node-resolving endpoint to implicit ground |
 | `couple_window!` | distributed span-to-span coupling intent |
 | `couple_inductive!` | inductive, mutual, or flux-related coupling intent |
 
@@ -36,13 +36,47 @@ They are not immediate JosephsonCircuits.jl rows.
 
 | Relation | Constraint |
 | --- | --- |
-| `connect!` | Point <-> Point |
-| `couple_capacitive!` | Point <-> Point |
-| `shunt_capacitor!` | Point <-> Ground |
-| `couple_window!` | Span <-> Span |
-| `couple_inductive!` | Point/Span <-> Loop/inductive target |
+| `connect!` | `NodeEndpoint` <-> `NodeEndpoint` |
+| `couple_capacitive!` | `NodeEndpoint` <-> `NodeEndpoint` |
+| `shunt_capacitor!` | `NodeEndpoint` -> implicit `GroundEndpoint` |
+| `couple_window!` | `LineSpanEndpoint` <-> `LineSpanEndpoint` |
+| `couple_inductive!` | `LineTapEndpoint` or `LineSpanEndpoint` <-> `LoopEndpoint` or `InductiveTargetEndpoint` |
 
 The compiler should fail early when a relation receives the wrong endpoint category.
+
+`shunt_capacitor!(plan; id, at, capacitance)` is equivalent to a capacitive coupling from `at` to `ground()`:
+
+```julia
+couple_capacitive!(
+    plan;
+    id = id,
+    from = at,
+    to = ground(),
+    capacitance = capacitance,
+)
+```
+
+`InductiveTargetEndpoint` is the relation-side category for non-loop inductive targets. It is not a node-resolving endpoint.
+
+## Line Selection
+
+`line_tap(component; at_m = ...)` and `line_span(component; from_m, to_m)` are shorthand forms. They are valid only when the component exposes exactly one unambiguous default line.
+
+Multi-line components must select a line explicitly:
+
+```julia
+line_tap(component; line = :main, at_m = 1.2mm)
+line_span(component; line = :main, from_m = 2.0mm, to_m = 2.5mm)
+```
+
+Or use a resolved line reference:
+
+```julia
+line_tap(line_ref(component, :main); at_m = 1.2mm)
+line_span(line_ref(component, :main); from_m = 2.0mm, to_m = 2.5mm)
+```
+
+The compiler must reject an ambiguous line tap or ambiguous line span before target lowering.
 
 ## LC To Quarter-Wave Resonator
 
@@ -51,12 +85,12 @@ couple_capacitive!(
     plan;
     id = "lc_to_qwr",
     from = pin(lc, :signal),
-    to = line_tap(qwr; at_m = 1.2mm),
+    to = line_tap(qwr; line = :main, at_m = 1.2mm),
     capacitance = 3.0fF,
 )
 ```
 
-The tap is a point endpoint on a distributed component. The compiler decides how to insert the breakpoint and split the line.
+The tap is a node endpoint on a distributed component. The compiler decides how to insert the breakpoint and split the line.
 
 ## SQUID Coupled To CPW Flux Line
 
@@ -64,7 +98,7 @@ The tap is a point endpoint on a distributed component. The compiler decides how
 couple_inductive!(
     plan;
     id = "flux_to_squid",
-    from = line_tap(flux_line; at_m = 2.0mm),
+    from = line_tap(flux_line; line = :main, at_m = 2.0mm),
     to = squid_loop(lc),
     mutual_inductance = 3.0pH,
 )
@@ -87,8 +121,8 @@ The plan records endpoint aliasing. During compilation, the compiler resolves no
 couple_window!(
     plan;
     id = "qwr_a_qwr_b_window",
-    line_a = line_span(qwr_a; from_m = 2.0mm, to_m = 2.5mm),
-    line_b = line_span(qwr_b; from_m = 2.0mm, to_m = 2.5mm),
+    line_a = line_span(qwr_a; line = :main, from_m = 2.0mm, to_m = 2.5mm),
+    line_b = line_span(qwr_b; line = :main, from_m = 2.0mm, to_m = 2.5mm),
     spec = CoupledWindowSpec(...),
 )
 ```
@@ -98,7 +132,7 @@ This is span-to-span distributed coupling. The compiler owns the discretization 
 ## QWR To Readout Line With Shunt
 
 ```julia
-tap = line_tap(readout; at_m = 2.0mm)
+tap = line_tap(readout; line = :main, at_m = 2.0mm)
 
 couple_capacitive!(
     plan;
@@ -116,4 +150,4 @@ shunt_capacitor!(
 )
 ```
 
-Both relations target the same point endpoint. The compiler must preserve that shared tap location when it inserts breakpoints and emits netlist rows.
+Both relations target the same node endpoint. The compiler must preserve that shared tap location when it inserts breakpoints and emits netlist rows.

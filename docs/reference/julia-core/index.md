@@ -10,8 +10,8 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Julia Core authoring architecture overview for Pluto direct research and Julia Worker execution.
-version: v1.0.0
+scope: Julia Core authoring architecture overview for Pluto direct research and Julia Runner execution.
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 icon: lucide/cpu
@@ -19,14 +19,14 @@ icon: lucide/cpu
 
 # Julia Core
 
-Julia Core is the scientific authoring and simulation core. It is shared by Pluto notebooks and the Julia Worker / Runner, so research exploration and product execution use the same component, plan, compiler, simulation, and analysis concepts.
+Julia Core is the scientific authoring and simulation core. It is shared by Pluto notebooks and the Julia Runner, so research exploration and product execution use the same component, plan, compiler, simulation, and analysis concepts.
 
 Julia Core does not depend on the Python Backend, FastAPI task state, Next.js UI state, Electron process state, or task queue state.
 
 ## Pipeline
 
 ```text
-Pluto Notebook / Julia Worker
+Pluto Notebook / Julia Runner
         |
         v
 User-Friendly Builder API
@@ -47,16 +47,24 @@ JosephsonCompiledCircuit
 Simulation / Analysis
 ```
 
-Pluto and the Worker are different callers of the same Core pipeline. Pluto uses it for interactive design, sliders, plots, and inspection. The Worker uses it for deterministic task input, build, compile, simulate, and staged output.
+Pluto and the Runner are different callers of the same Core pipeline. Pluto uses it for interactive design, sliders, plots, and inspection. The Runner uses it for deterministic task input, build, compile, simulate, and staged output.
 
 !!! warning "Boundary"
     The Julia Core authoring path is not a Backend task submission path. Backend task lifecycle, metadata, publication, and TraceStore ownership stay in Python Backend contracts.
+
+## Docs-First Implementation Rule
+
+This Julia Core Authoring reference is the source of truth for the next implementation.
+
+If existing Julia names, exports, or helpers conflict with this reference, change the implementation to match these docs. Existing names such as `CircuitDraft` and `finalize_to_josephson_netlist` are transitional implementation details. They may be renamed, removed, or replaced by `CircuitPlan` and `compile_to_josephson`.
+
+Do not preserve outdated APIs as fallback or compatibility layers unless a new source-of-truth decision explicitly requires that exception.
 
 ## Authoring Contract
 
 ```mermaid
 flowchart TD
-    Caller["Pluto Notebook / Julia Worker"] --> Builder["Builder API"]
+    Caller["Pluto Notebook / Julia Runner"] --> Builder["Builder API"]
     Builder --> Plan["Circuit Plan"]
     Plan --> Validation["Validation"]
     Validation --> Compiler["Compiler"]
@@ -118,11 +126,11 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 
     Split authoring validation, compile validation, and physics sanity validation.
 
-- __[Worker-Safe API](worker-safe-api.md)__
+- __[Runner-Safe API](runner-safe-api.md)__
 
     ---
 
-    Keep Pluto and Julia Worker on the same Core API path without duplicating construction or compiler logic.
+    Keep Pluto and Julia Runner on the same Core API path without duplicating construction or compiler logic.
 
 </div>
 
@@ -132,7 +140,7 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 | --- | --- |
 | Julia Core | circuit authoring, Circuit Plan concepts, compiler concepts, simulation helpers, analysis helpers |
 | Pluto Notebook | direct research use of Julia Core, interactive inspection, local research plots |
-| Julia Worker / Runner | deterministic execution of Julia Core work and staged numeric output |
+| Julia Runner | deterministic execution of Julia Core work and staged numeric output |
 | Python Backend | task lifecycle, metadata, publication, TraceStore, platform result APIs |
 | Application / Electron | product workflow UI and local process supervision |
 

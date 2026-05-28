@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler pipeline from Circuit Plan to JosephsonCompiledCircuit and JosephsonCircuits.jl target rows.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -38,6 +38,9 @@ expand composite components
 resolve endpoints
  |
  v
+reject ambiguous line taps / spans
+ |
+ v
 insert taps / split lines
  |
  v
@@ -56,15 +59,16 @@ emit JosephsonCircuits netlist + report
 | --- | --- |
 | 1. expand composite components | flatten Plan-level hierarchy only inside the global compile pass |
 | 2. namespace private nodes | keep internal component nodes from colliding |
-| 3. resolve pins and endpoint aliases | convert public endpoint references into compiler-owned node identities |
-| 4. insert line-tap breakpoints | make point taps on distributed components explicit |
-| 5. split distributed lines into chunks | discretize line components as required by target lowering |
-| 6. lower lumped elements | emit capacitors, linear inductors, and other lumped elements |
-| 7. lower nonlinear inductive elements | emit junctions, SQUIDs, nonlinear parameters, and related values |
-| 8. lower capacitive / inductive couplings | place coupling elements after endpoint resolution |
-| 9. lower distributed coupled windows | emit span-to-span distributed coupling representations |
-| 10. emit JosephsonCircuits.jl netlist | produce target-specific simulator input |
-| 11. generate compile report / maps / provenance | return enough metadata for inspection, debugging, and reproducibility |
+| 3. resolve pins, endpoint aliases, and line references | convert public endpoint references into compiler-owned node identities and line identities |
+| 4. reject ambiguous line taps and spans | fail before target lowering when `line_tap` or `line_span` cannot resolve to one default line |
+| 5. insert line-tap breakpoints | make node taps on distributed components explicit |
+| 6. split distributed lines into chunks | discretize line components as required by target lowering |
+| 7. lower lumped elements | emit capacitors, linear inductors, and other lumped elements |
+| 8. lower nonlinear inductive elements | emit junctions, SQUIDs, nonlinear parameters, and related values |
+| 9. lower capacitive / inductive couplings | place coupling elements after endpoint resolution |
+| 10. lower distributed coupled windows | emit span-to-span distributed coupling representations |
+| 11. emit JosephsonCircuits.jl netlist | produce target-specific simulator input |
+| 12. generate compile report / maps / provenance | return enough metadata for inspection, debugging, and reproducibility |
 
 ## Global Compilation
 

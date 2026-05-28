@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Source-of-truth authoring model for reusable Julia Core circuit components, plans, and compiler lowering.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -21,6 +21,12 @@ updated_by: codex
 Julia Core authoring starts from reusable components and plan-level relations. Users write component and coupling intent; they do not author simulator rows as the primary workflow.
 
 The compiler lowers one complete Circuit Plan into the JosephsonCircuits.jl target. Component composition stays in the plan and is flattened only during global compilation.
+
+## Docs-First Rule
+
+The Julia Core Authoring reference is the source of truth for the next implementation. If implementation names, exports, or builder helpers conflict with these pages, update the implementation to match this authoring model.
+
+Do not preserve outdated APIs as fallback or compatibility layers when they obscure the Circuit Plan, endpoint, compiler, or compiled-circuit contracts.
 
 ## Contract
 
@@ -72,7 +78,7 @@ couple_capacitive!(
     plan;
     id = "lc_to_qwr",
     from = pin(lc, :signal),
-    to = line_tap(qwr; at_m = 1.2mm),
+    to = line_tap(qwr; line = :main, at_m = 1.2mm),
     capacitance = 3.0fF,
 )
 
@@ -100,11 +106,11 @@ SQUID
     = JosephsonJunction + JosephsonJunction + optional loop inductance + flux parameter
 ```
 
-## Current Implementation Name
+## Transitional Names
 
-`CircuitDraft` is the current implementation of the Circuit Plan authoring model.
+`CircuitDraft` is a transitional implementation detail, not the architecture contract. The target concept is `CircuitPlan`.
 
-Docs should use `Circuit Plan` for the architecture concept and may mention `CircuitDraft` only as the current implementation name. This docs task does not require a code rename.
+If code still exposes `CircuitDraft`, implementation work may rename, remove, or replace it while aligning to this reference. The same rule applies to old direct-netlist helpers such as `finalize_to_josephson_netlist`; the target compiler concept is `compile_to_josephson(plan)`.
 
 ## Boundaries
 
@@ -113,5 +119,5 @@ Docs should use `Circuit Plan` for the architecture concept and may mention `Cir
 | Components are Plan-level objects | They can expose public pins, own private nodes, contain elements, or contain subcomponents. |
 | Relations are Plan-level intents | `connect!`, `couple_capacitive!`, `couple_window!`, and related calls are not immediate netlist rows. |
 | Compiler owns lowering | JosephsonCircuits.jl-specific rows are emitted only after plan validation and endpoint resolution. |
-| Pluto and Worker share the path | Pluto should not require a special compute path; Worker execution should call the same Core authoring and compiler logic. |
+| Pluto and Runner share the path | Pluto should not require a special compute path; Runner execution should call the same Core authoring and compiler logic. |
 | Framework boundaries stay outside Core | Julia Core must not depend on FastAPI, Next.js, Electron, or Backend task state. |

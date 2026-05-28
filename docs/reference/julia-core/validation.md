@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Validation layers for authoring, compilation, and physics sanity in the Julia Core Circuit Plan pipeline.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -39,7 +39,7 @@ Authoring validation catches local plan mistakes:
 - invalid element values;
 - invalid span length.
 
-These errors should be clear in Pluto and deterministic in Worker builds.
+These errors should be clear in Pluto and deterministic in Runner builds.
 
 ## Compile Validation
 
@@ -48,7 +48,8 @@ Compile validation catches global lowering problems:
 - unresolved endpoints;
 - overlapping line transformations;
 - missing coupled-window endpoints;
-- invalid tap location.
+- invalid tap location;
+- ambiguous line taps or spans on components with more than one possible line.
 
 This layer has access to the complete plan, so it can reason across components, aliases, taps, spans, and coupling windows.
 
@@ -68,7 +69,7 @@ These checks may produce errors or warnings depending on severity and caller pol
 | Caller | Expected validation behavior |
 | --- | --- |
 | Pluto | surface validation messages near the authoring cell and keep inspection interactive |
-| Julia Worker | fail deterministic task builds clearly when required validation fails |
+| Julia Runner | fail deterministic task builds clearly when required validation fails |
 | Compiler | include recoverable warnings in `JosephsonCompiledCircuit.warnings` |
 
 Validation output should use endpoint and component IDs from the Circuit Plan, not private target netlist row details, whenever possible.

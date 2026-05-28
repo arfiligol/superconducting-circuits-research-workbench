@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Circuit Plan semantics and stored authoring data before JosephsonCircuits.jl compilation.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -20,7 +20,7 @@ updated_by: codex
 
 A `CircuitPlan` is the semantic source of truth before simulation. It stores what the user means to build, not the final JosephsonCircuits.jl representation.
 
-`CircuitDraft` is the current implementation of this Circuit Plan concept.
+`CircuitDraft` is a transitional implementation detail. The architecture contract is `CircuitPlan`, and implementation work should rename, remove, or replace old names when they conflict with this reference.
 
 ## Stored Data
 
@@ -34,10 +34,10 @@ A `CircuitPlan` is the semantic source of truth before simulation. It stores wha
 | line taps | point attachments on distributed components |
 | line spans | distributed interval attachments and transforms |
 | node connections | endpoint aliasing and node merge intent |
-| capacitive couplings | plan-level capacitor placements between point endpoints |
+| capacitive couplings | plan-level capacitor placements between node-resolving endpoints |
 | inductive couplings | mutual or flux-related coupling intent |
 | distributed coupled windows | span-to-span distributed coupling intent |
-| shunt placements | convenience placements from a point endpoint to ground |
+| shunt placements | convenience placements from a node-resolving endpoint to ground |
 | parameters / sweep knobs | user-facing values that may vary across simulation sweeps |
 | provenance | source, builder, and transform metadata needed for inspection and reproducibility |
 
@@ -62,11 +62,11 @@ Pluto can inspect the plan before compilation:
 
 This keeps Pluto interactive without giving Pluto a separate construction path.
 
-## Why It Helps Worker Execution
+## Why It Helps Runner Execution
 
-The Julia Worker can receive deterministic task input, rebuild the same plan, validate it, compile it, simulate it, and stage output with provenance.
+The Julia Runner can receive deterministic task input, rebuild the same plan, validate it, compile it, simulate it, and stage output with provenance.
 
-Worker execution should call the same plan builders and compiler used by Pluto. The caller changes; the Core pipeline does not.
+Runner execution should call the same plan builders and compiler used by Pluto. The caller changes; the Core pipeline does not.
 
 ## Plan-Level Transforms
 
@@ -75,7 +75,7 @@ Plan-level transforms are recorded as semantic intent:
 ```julia
 connect!(plan, pin(a, :right), pin(b, :left))
 
-tap = line_tap(readout; at_m = 2.0mm)
+tap = line_tap(readout; line = :main, at_m = 2.0mm)
 
 shunt_capacitor!(
     plan;
@@ -86,3 +86,25 @@ shunt_capacitor!(
 ```
 
 During compilation, the compiler resolves endpoint aliases, inserts line-tap breakpoints, splits distributed lines, lowers lumped and distributed elements, and emits the target netlist plus maps.
+
+## Line References
+
+`line_tap(component; at_m = ...)` and `line_span(component; from_m, to_m)` are shorthand forms. They are valid only when the component exposes exactly one unambiguous default line.
+
+For components with multiple internal lines, select the line explicitly:
+
+```julia
+line_tap(component; line = :main, at_m = 1.2mm)
+line_span(component; line = :main, from_m = 2.0mm, to_m = 2.5mm)
+```
+
+You can also resolve the line first:
+
+```julia
+main_line = line_ref(component, :main)
+
+line_tap(main_line; at_m = 1.2mm)
+line_span(main_line; from_m = 2.0mm, to_m = 2.5mm)
+```
+
+The compiler must reject an ambiguous line tap or span before target lowering.

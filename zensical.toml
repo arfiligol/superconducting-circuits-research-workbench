@@ -176,7 +176,7 @@ nav = [
         { "Compiler" = "reference/julia-core/compiler.md" },
         { "Compiled Circuit" = "reference/julia-core/compiled-circuit.md" },
         { "Validation" = "reference/julia-core/validation.md" },
-        { "Worker-Safe API" = "reference/julia-core/worker-safe-api.md" },
+        { "Runner-Safe API" = "reference/julia-core/runner-safe-api.md" },
       ] },
       { "Julia Package Surface" = "reference/core/julia-core.md" },
     ] },
