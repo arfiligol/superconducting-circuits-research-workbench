@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the Julia Core parameter sweep execution architecture.
-version: v1.4.1
+version: v1.5.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -116,8 +116,10 @@ HB simulations add more key boundaries. Some changes do not alter circuit topolo
 | pump-axis count | `HBIntentStructuralParameter` target concept | Changes mode tuple dimension and `hb_intent_key` |
 | source slot mode | `HBIntentStructuralParameter` target concept | Changes source slot definition and `hb_intent_key` |
 | observable request | `HBIntentStructuralParameter` target concept | Changes requested solver-output semantics |
-| harmonic count | `HBProblemShapeParameter` target concept | Changes HB problem shape without changing circuit topology |
+| `n_pump_harmonics` | `HBProblemShapeParameter` target concept | Shape follows pump frequencies / pump axes and changes HB problem shape |
+| `n_modulation_harmonics` | `HBProblemShapeParameter` target concept | Belongs to the small-signal modulation basis, not directly to pump-axis count |
 | `returnS` / `returnZ` / `returnQE` / `returnCM` | `HBProblemShapeParameter` target concept | Changes output families and result shape |
+| `maxintermodorder` | `HBProblemShapeParameter` target concept | Changes mode truncation and HB problem interpretation |
 | solver tolerance | `HBRunValueParameter` target concept | Changes numeric convergence behavior without changing problem shape |
 
 `HBIntentStructuralParameter`, `HBProblemShapeParameter`, and `HBRunValueParameter` are target concepts, not exported roles in the current MVP. Until they exist, document these axes explicitly and classify them against `topology_key`, `hb_intent_key`, `hb_problem_shape_key`, and `run_value_key`.
@@ -335,6 +337,8 @@ HB sweeps use the four-key model defined by [HB Simulation Intent](hb-simulation
 | `hb_intent_key` | decides whether pump axes, source slots, modes, and observables are the same |
 | `hb_problem_shape_key` | decides whether harmonic counts and requested output families share one solver problem shape |
 | `run_value_key` | records concrete runtime values such as source currents, pump frequencies, sweep points, and tolerances |
+
+`n_pump_harmonics` aligns with pump axes. `n_modulation_harmonics` belongs to the small-signal / linearized modulation basis and is not required to have the same rank as the pump axes.
 
 ## Parameter Classification
 

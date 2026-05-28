@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines first-class, whitelisted, and unsupported JosephsonCircuits.jl hbsolve controls for Julia Core and Runner use.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -45,8 +45,8 @@ These controls should become typed product / Runner controls because they common
 ```julia
 HBSolverControls(
     pump_frequencies_hz,
-    n_modulation_harmonics,
     n_pump_harmonics,
+    n_modulation_harmonics,
     dc,
     threewavemixing,
     fourwavemixing,
@@ -64,8 +64,8 @@ Julia Core should normalize product-facing frequency values from Hz to the angul
 | Control | Contract |
 | --- | --- |
 | `pump_frequencies_hz` | runtime pump-frequency values bound to declared `PumpAxis` entries |
-| `n_modulation_harmonics` | modulation harmonic tuple; shape must match output mode model |
-| `n_pump_harmonics` | pump harmonic tuple; length must match pump-axis count |
+| `n_pump_harmonics` | harmonic truncation for pump axes; shape follows `pump_frequencies_hz` / `wp` |
+| `n_modulation_harmonics` | harmonic truncation for small-signal / modulation / linearized signal basis; not required to match pump-axis count |
 | `dc` | enables explicit DC mode handling |
 | `threewavemixing` | enables three-wave mixing terms |
 | `fourwavemixing` | enables four-wave mixing terms |
@@ -97,12 +97,82 @@ Every listed control has an explicit status.
 | `switchofflinesearchtol` | optional-whitelisted | advanced solver tuning example |
 | `alphamin` | optional-whitelisted | advanced solver tuning example |
 | `iterations` | optional-whitelisted | advanced solver tuning example |
+| `ftol` | optional-whitelisted | reference nonlinear solve control |
+| `nbatches` | optional-whitelisted | reference batching control |
+| `maxintermodorder` | optional-whitelisted | reference mode-truncation control; contributes to `hb_problem_shape_key` |
 | `returnSnoise` | unsupported | reference-only output family |
 | `returnnodeflux` / `returnvoltage` | unsupported | reference-only node output families |
 | adjoint output flags | unsupported | reference-only output families |
 | sensitivity flags | unsupported | reference marks sensitivity APIs as in progress |
 | custom `factorization` | research-only | reference accepts a runtime object |
-| `maxintermodorder` | unsupported | reference mode-truncation control |
+
+## Product Defaults
+
+The product default should request all core output families.
+
+```julia
+HBSolverControls(
+    pump_frequencies_hz = Dict(:pump => 8.0e9),
+    n_pump_harmonics = Dict(:pump => 16),
+    n_modulation_harmonics = (8,),
+    dc = false,
+    threewavemixing = false,
+    fourwavemixing = true,
+    returnS = true,
+    returnZ = true,
+    returnQE = true,
+    returnCM = true,
+    sorting = :name,
+    keyedarrays = false,
+)
+```
+
+`n_pump_harmonics` can be represented as a named map keyed by pump-axis ID. `n_modulation_harmonics` may be a tuple because it belongs to the modulation basis, not the pump-axis map.
+
+Exact default numeric values may be adjusted per circuit family, but the default return flags are all `true`.
+
+## Scalar Convenience
+
+For single-pump or single-modulation cases, user-facing APIs may accept a single integer for harmonic counts. Julia Core normalizes that scalar into the tuple shape required by JosephsonCircuits.jl.
+
+Pump harmonics:
+
+```julia
+n_pump_harmonics = 16
+```
+
+normalizes to:
+
+```julia
+Npumpharmonics = (16,)
+```
+
+For multiple pump axes, use named entries:
+
+```julia
+n_pump_harmonics = Dict(
+    :pump_1 => 8,
+    :pump_2 => 8,
+)
+```
+
+Modulation harmonics:
+
+```julia
+n_modulation_harmonics = 8
+```
+
+normalizes to:
+
+```julia
+Nmodulationharmonics = (8,)
+```
+
+Users may also provide explicit tuple form:
+
+```julia
+n_modulation_harmonics = (8, 8)
+```
 
 ## Optional Whitelisted Kwargs
 
@@ -118,6 +188,9 @@ Initial whitelist:
 :switchofflinesearchtol
 :alphamin
 :iterations
+:ftol
+:nbatches
+:maxintermodorder
 ```
 
 Rules:
@@ -125,6 +198,7 @@ Rules:
 - product Runner path must reject unknown kwargs;
 - Pluto research APIs require a separate source-of-truth decision before accepting any wider pass-through;
 - optional kwargs must be recorded in provenance.
+- `maxintermodorder` contributes to `hb_problem_shape_key`.
 
 ## Unsupported Product Runner Controls
 
@@ -137,23 +211,24 @@ Unsupported controls must fail clearly in product Runner execution until Julia C
 | adjoint output flags | JosephsonCircuits reference | adjoint result families need separate observable contracts | reject in Runner payload | add explicit adjoint observable request types |
 | sensitivity flags | JosephsonCircuits reference | sensitivity APIs are marked as in progress upstream and need stable provenance | reject in Runner payload | revisit after Core owns sensitivity contracts |
 | custom `factorization` | JosephsonCircuits reference | runtime object injection is not a product task payload contract | reject in Runner payload | expose only through trusted local Julia configuration if needed |
-| `maxintermodorder` | JosephsonCircuits reference | affects mode truncation and result interpretation; not part of MVP schema | reject in Runner payload | promote to first-class control when product workflows need it |
 
 ## Shape Validation Rules
 
 For ordered pump-axis controls:
 
 ```text
-length(pump_frequencies_hz) == length(n_modulation_harmonics)
 length(pump_frequencies_hz) == length(n_pump_harmonics)
 ```
+
+`n_modulation_harmonics` is validated against the small-signal / linearized modulation model, not directly against pump-axis count.
 
 For named-axis schemas:
 
 ```text
-keys(pump_frequencies_hz) == keys(n_modulation_harmonics)
 keys(pump_frequencies_hz) == keys(n_pump_harmonics)
 ```
+
+`n_modulation_harmonics` belongs to the signal/modulation frequency basis declared by `HBIntent` or `HBProblemSpec`.
 
 Source mode rules:
 
@@ -199,12 +274,12 @@ Rules:
 
 ## Unsupported Ambiguous Source Fields
 
-Fields named `amplitude`, `target`, or UI-level drive labels are not HB source semantics.
+Fields named `target`, UI-level drive magnitude, or unlabeled drive values are not HB source semantics.
 
 Rules:
 
 - product Runner rejects ambiguous drive fields;
-- Runner must not convert `amplitude` into physical current;
+- Runner must not convert ambiguous drive magnitude into physical current;
 - Runner must not create source slots from payload fields;
 - future conversion from dBm, voltage, or current requires a separate calibrated source model.
 

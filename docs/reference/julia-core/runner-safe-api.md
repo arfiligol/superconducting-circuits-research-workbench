@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.7.1
+version: v1.7.2
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -95,7 +95,7 @@ Runner must reject:
 - unknown `optional_hb_kwargs`;
 - runtime values that do not satisfy compiled HB validation metadata.
 
-Runner must not create a default S11 observable, create default ports, create source slots from task payloads, or convert ambiguous `amplitude` fields into physical current.
+Runner must not create a default S11 observable, create default ports, create source slots from task payloads, or convert ambiguous drive-magnitude fields into physical current.
 
 ## Runner Component Library Dependencies
 

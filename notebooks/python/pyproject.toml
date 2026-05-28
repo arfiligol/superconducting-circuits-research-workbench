@@ -1,7 +1,7 @@
 [project]
 name = "superconducting-circuits-python-notebooks"
 version = "0.1.0"
-description = "Notebook-only Python dependencies for inspection, migration, and emergency analysis."
+description = "Notebook-only Python dependencies for inspection, schema conversion, and emergency analysis."
 requires-python = ">=3.12"
 dependencies = [
     "juliacall>=0.9.31",

@@ -8,8 +8,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: 磁通掃描分析在 Application/Notebook/Runner 架構下的流程
-version: v0.2.0
-last_updated: 2026-05-28
+version: v0.2.1
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -44,7 +44,7 @@ The expected map usually shows periodic arches or sweet spots where frequency is
 
 1. Import the VNA sweep through `Data Ingestion`.
 2. Verify axes and units in `Raw Data`.
-3. Use a Python notebook to inspect amplitude and phase maps.
+3. Use a Python notebook to inspect magnitude and phase maps.
 4. Promote repeated analysis into a Julia Runner task when it needs tracked execution and artifacts.
 
 ## Result Contract

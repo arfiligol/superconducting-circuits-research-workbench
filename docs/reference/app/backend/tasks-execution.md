@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Backend task lifecycle, runner API, staging result validation, and TraceStore publication
-version: v1.2.1
+version: v1.3.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -117,6 +117,8 @@ They are not arbitrary JosephsonCircuits solver internals with no CircuitPlan va
 
 `current_a = 0.0` is valid source-off behavior when bound to a declared source slot. Backend and Runner validation must not treat zero current as fake compute or a missing source.
 
+This page defines the target product contract. Current implementation may still be behind this contract and should be updated directly toward this shape without compatibility shims.
+
 ## Runner API
 
 | Endpoint | Purpose |
@@ -163,19 +165,17 @@ They are not arbitrary JosephsonCircuits solver internals with no CircuitPlan va
       "solver": {
         "engine": "josephson_circuits",
         "hb_controls": {
-          "n_modulation_harmonics": {
-            "pump": 8
-          },
           "n_pump_harmonics": {
             "pump": 16
           },
+          "n_modulation_harmonics": 8,
           "dc": false,
           "threewavemixing": false,
           "fourwavemixing": true,
           "returnS": true,
           "returnZ": true,
-          "returnQE": false,
-          "returnCM": false,
+          "returnQE": true,
+          "returnCM": true,
           "sorting": "name",
           "keyedarrays": false
         },

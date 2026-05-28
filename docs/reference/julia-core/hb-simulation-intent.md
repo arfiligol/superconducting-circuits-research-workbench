@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines how CircuitPlan declares HB ports, source slots, pump axes, observables, and solver-facing intent.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -334,12 +334,17 @@ run_value_key
 | pump current nonzero to `0.0` | unchanged | unchanged | unchanged | changed |
 | pump frequency value changes | unchanged | unchanged | unchanged | changed |
 | add second pump axis | unchanged unless circuit changes | changed | changed | changed |
-| change harmonic count | unchanged | unchanged | changed | changed |
-| toggle `returnQE` | unchanged | unchanged | changed | changed |
+| change `n_pump_harmonics` | unchanged | unchanged | changed | changed |
+| change `n_modulation_harmonics` | unchanged | unchanged unless modulation basis changes | changed | changed |
+| toggle `returnS` / `returnZ` / `returnQE` / `returnCM` | unchanged | unchanged | changed | changed |
+| change `maxintermodorder` | unchanged | unchanged | changed | changed |
+| change nonlinear tolerance `ftol` | unchanged | unchanged | unchanged | changed |
 | add idler observable | unchanged | changed | may change | changed |
 | add new physical port | changed | changed | changed | changed |
 | change line-tap position | changed | may change | may change | changed |
 | change frequency sweep range | unchanged | unchanged | unchanged | changed |
+
+In the MVP key model, result-family flags such as `returnS`, `returnZ`, `returnQE`, and `returnCM` are grouped under `hb_problem_shape_key` because they affect requested solver outputs and cache compatibility, even if they do not always change the nonlinear solve itself.
 
 ## Validation Boundary
 

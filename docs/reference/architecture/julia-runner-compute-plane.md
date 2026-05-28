@@ -82,7 +82,7 @@ The MVP frequency-sweep adapter loads a selected component-library style plan bu
 
 The same boundary applies to solver controls: Runner may bind frequency arrays, source currents, pump frequencies, harmonic counts, and whitelisted solver kwargs, but those values must be checked against the compiled HB intent before execution. `current = 0.0` is valid source-off behavior for an existing source slot.
 
-Runner must not create a default S11 observable, create default ports, create source slots from task payload, or convert ambiguous `amplitude` fields into physical current.
+Runner must not create a default S11 observable, create default ports, create source slots from task payload, or convert ambiguous drive-magnitude fields into physical current.
 
 ## Validation
 

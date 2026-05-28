@@ -16,7 +16,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Application Simulation/Analysis Workbench requests, Backend task compilation, Runner envelope, Runner manifest, and ResultView API boundaries.
-version: v1.3.0
+version: v1.4.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -42,6 +42,8 @@ The Application and Python Notebook may submit product tasks through Backend con
 `SimulationRequestV1` is the product-facing run request shape. It carries a runtime run request and references a design / circuit definition whose CircuitPlan owns the canonical simulation intent.
 
 The request binds runtime values to compiled HB intent. It does not declare ports, source slots, pump axes, mode tuples, observable semantics, or JosephsonCircuits internals.
+
+This page defines the target product contract. Current implementation may still be behind this contract and should be updated directly toward this shape without compatibility shims.
 
 ## SimulationRequestV1 Minimum Shape
 
@@ -78,19 +80,17 @@ The request binds runtime values to compiled HB intent. It does not declare port
   "solver": {
     "engine": "josephson_circuits",
     "hb_controls": {
-      "n_modulation_harmonics": {
-        "pump": 8
-      },
       "n_pump_harmonics": {
         "pump": 16
       },
+      "n_modulation_harmonics": 8,
       "dc": false,
       "threewavemixing": false,
       "fourwavemixing": true,
       "returnS": true,
       "returnZ": true,
-      "returnQE": false,
-      "returnCM": false,
+      "returnQE": true,
+      "returnCM": true,
       "sorting": "name",
       "keyedarrays": false
     },
