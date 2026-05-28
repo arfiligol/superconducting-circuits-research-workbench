@@ -74,7 +74,7 @@ lc = add_grounded_lc_resonator_component!(
     inductive_element = LinearInductor(8.0nH),
 )
 
-qwr = add_quarter_wave_resonator_component!(plan; id = "qwr", line_spec = qwr_spec)
+qwr = add_quarter_wave_resonator_from_library!(plan; id = "qwr", line_spec = qwr_spec)
 
 couple_capacitive!(
     plan;

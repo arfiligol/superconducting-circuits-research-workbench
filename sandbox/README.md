@@ -27,4 +27,4 @@ The reusable circuit component prototype has been promoted to:
 
 `core/julia/SuperconductingCircuitsCore/`
 
-New development should happen in the Julia Core package. Sandbox copies are retained only as historical prototypes or migration references.
+New development should happen in the Julia Core package and the docs-defined Julia Core authoring model. Sandbox copies of retired circuit-model prototypes should not be kept as runnable fallback implementations.

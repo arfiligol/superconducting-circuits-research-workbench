@@ -1,9 +1,0 @@
-case,lq_nh,c_xy1_ff,c_xy2_ff,c_rq1_ff,c_rq2_ff,coupled_window_length_um,qwr_length_um,pf_length_um,window_label,coupling_label,fq_ghz,re_y_dm_s,normalized_loss,crossed,note
-xy_only_baseline,14.25,2.5,2.3,0.0,0.0,150.0,4731.6735,9900.32,xy_only,xy_only,3.990415772622648,2.9669965432911117e-10,1.0,true,reference XY-only at 4.00 GHz
-xy_only_matched,14.5,2.5,2.3,0.0,0.0,150.0,4731.6735,9900.32,xy_only,xy_only,3.95586601781463,2.9158430012089944e-10,0.9827591500914337,true,pure frequency retuning by Lq
-readout_only_selected,10.25,0.0,0.0,100.0,92.0,600.0,4731.6735,9900.32,window_600_um,rq_100p0_92p0,3.9498436763510134,1.1222383030708578e-13,0.0003782405158537954,true,readout-only standalone contribution
-ideal_additive_reference,NaN,2.5,2.3,100.0,92.0,600.0,4731.6735,9900.32,window_600_um,rq_100p0_92p0,3.95,2.9169652395120655e-10,0.9831373906072876,true,G_xy_matched + G_readout_only
-full_coupled_baseline_lq,14.25,2.5,2.3,100.0,92.0,600.0,4731.6735,9900.32,window_600_um,rq_100p0_92p0,3.3373608537114707,4.436784706645361e-11,0.14953791289975354,true,same bare Lq as XY baseline; frequency shift induced by coupling
-full_coupled_matched,10.25,2.5,2.3,100.0,92.0,600.0,4731.6735,9900.32,window_600_um,rq_100p0_92p0,3.9349897357368686,5.0747180777792456e-11,0.1710388941724268,true,full coupled retuned back to matched frequency
-cross_term_baseline_lq,14.25,2.5,2.3,100.0,92.0,600.0,4731.6735,9900.32,window_600_um,rq_100p0_92p0,3.3373608537114707,-2.4732867688475295e-10,-0.8335994777075341,true,G_full_shift - G_xy_matched - G_readout_only
-cross_term_matched_full,10.25,2.5,2.3,100.0,92.0,600.0,4731.6735,9900.32,window_600_um,rq_100p0_92p0,3.9349897357368686,-2.409493431734141e-10,-0.8120984964348608,true,G_full_matched - G_xy_matched - G_readout_only

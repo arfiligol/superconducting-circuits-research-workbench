@@ -10,14 +10,14 @@ status: stable
 owner: docs-team
 audience: team
 scope: Julia Core scientific API ownership for Pluto direct research and Julia Runner product execution.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Julia Scientific Core
 
-Julia Core is the canonical scientific library for reusable superconducting-circuit construction, delayed lowering, JosephsonCircuits.jl simulation wrappers, sweep helpers, and analysis primitives.
+Julia Core is the canonical scientific library for the docs-defined authoring model, compiler concepts, JosephsonCircuits.jl simulation wrappers, parameter sweep interfaces, and analysis primitives.
 
 Both execution tracks use the same Julia Core APIs:
 
@@ -34,11 +34,10 @@ Python notebooks may analyze local Zarr, exported data, CSV/raw files, and canon
 |---|---|
 | Julia package | `core/julia/SuperconductingCircuitsCore/` |
 | Package entrypoint | `core/julia/SuperconductingCircuitsCore/src/SuperconductingCircuitsCore.jl` |
-| Reusable components | `src/components/` |
-| Circuit Plan implementation / lowering | `src/draft/` |
-| Simulation and sweeps | `src/simulation/` |
-| Plain Julia examples | `core/julia/SuperconductingCircuitsCore/examples/` |
-| Pluto notebooks | `notebooks/pluto/` |
+| Low-level line specs and tuple-netlist helpers | `src/components/` |
+| Simulation and current sweep helpers | `src/simulation/` |
+| Authoring architecture SoT | `docs/reference/julia-core/` |
+| Pluto workflow docs | `docs/how-to/pluto/` |
 
 Use from Julia REPL or Pluto:
 
@@ -55,19 +54,12 @@ Run tests:
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
 ```
 
-Run a plain example:
-
-```bash
-julia --project=core/julia/SuperconductingCircuitsCore core/julia/SuperconductingCircuitsCore/examples/sweep_demo.jl
-```
-
 ## Notebook Roles
 
-| Notebook | Role |
-|---|---|
-| `notebooks/pluto/01_julia_core_quickstart.jl` | Component authoring and JosephsonCircuits netlist finalization. |
-| `notebooks/pluto/02_coupled_window_sweep.jl` | Construction / lowering parameter sweep for coupled-window designs. |
-| `notebooks/pluto/03_manual_hbsolve_frequency_sweep.jl` | Manual JosephsonCircuits.jl execution check through `run_hbsolve`. |
+Pluto is still the direct Julia Core research surface, but the old sandbox notebooks that demonstrated the retired draft/finalize flow have been removed. Use the Pluto how-to pages for the target authoring and sweep workflow:
+
+- [Pluto Authoring Workflow](../../how-to/pluto/authoring-workflow.md)
+- [Pluto Parameter Sweep Workflow](../../how-to/pluto/parameter-sweep-workflow.md)
 
 ## Research Direct Track
 
@@ -75,7 +67,7 @@ julia --project=core/julia/SuperconductingCircuitsCore core/julia/Superconductin
 Pluto Notebook
     -> direct Julia call
 Julia Core
-    -> reusable components / Circuit Plan
+    -> Component Library plan builder / Circuit Plan
 Compiler
     -> JosephsonCompiledCircuit
 JosephsonCircuits.jl target
@@ -83,7 +75,7 @@ JosephsonCircuits.jl target
 Result object / table / plot-ready data
 ```
 
-Pluto notebooks stay thin. They may define parameters, build designs through the public Julia Core API, run a simulation or sweep, and inspect local research outputs. They must not duplicate reusable component definitions, lowering logic, coupled-window compiler logic, or result extraction core logic.
+Pluto notebooks stay thin. They may define parameters, build designs through selected Component Libraries and the public Julia Core API, run a simulation or sweep, and inspect local research outputs. They must not duplicate reusable component definitions, compiler logic, coupled-window lowering logic, or result extraction core logic.
 
 Pluto outputs are research-local by default. Official platform data must enter through an explicit import/publication workflow or through the Product Async Track.
 
@@ -109,7 +101,7 @@ Python notebooks may submit Backend tasks through this product async path when t
 
 | Rule | Meaning |
 |---|---|
-| Julia owns scientific construction | Components, endpoints, Circuit Plan state, coupled-window placement, distributed TL discretization, compiler lowering, simulation wrappers, sweeps, and analysis helpers live in Julia Core. |
+| Julia owns scientific construction contracts | Component interfaces, endpoints, Circuit Plan state, relation/coupling concepts, compiler concepts, simulation wrappers, sweeps, and analysis helpers live in Julia Core. |
 | Delayed lowering stays required | Author a high-level Circuit Plan first; call the compiler only at the end. Do not patch already-flat JosephsonCircuits rows in place. |
 | Pluto is direct research execution | Pluto may call Julia Core directly and inspect intermediate local data. Pluto is not a Backend task submitter. |
 | Runner is product execution | Julia Runner calls Julia Core from Backend task envelopes and writes staging packages for Backend publication. |
