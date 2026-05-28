@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: user
 scope: Pluto workflow for Julia Core SweepSpec preflight, explicit batch sweep execution, and SweepResult inspection.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -65,6 +65,13 @@ params = (
 plan = build_plan(params)
 validate_authoring(plan)
 
+```
+
+!!! note "Target inspection helpers"
+    The helper names in this page describe the target Pluto-facing inspection API.
+    If current implementation names differ, implementation work should align toward these helpers instead of preserving old names as compatibility aliases.
+
+```julia
 inspect_plan(plan)
 inspect_parameters(plan)
 
@@ -144,3 +151,9 @@ acceleration backend
 ```
 
 `SweepResult` should preserve the `SweepExecutionPlan`, per-point status, compile status, simulation status, warnings, and provenance.
+
+## Related
+
+- [Julia Core Parameter Sweeps](../../reference/julia-core/parameter-sweeps.md)
+- [Julia Core Authoring Model](../../reference/julia-core/authoring-model.md)
+- [Component Libraries](../../reference/julia-core/component-libraries.md)

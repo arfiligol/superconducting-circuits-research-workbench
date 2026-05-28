@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the Julia Core parameter sweep execution architecture.
-version: v1.2.0
+version: v1.3.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -73,6 +73,8 @@ The sweep engine should support Pluto and Julia Runner through the same Julia Co
 
 Parameter roles are part of the Julia Core sweep architecture.
 
+This section is a quick role overview. The formal declaration, verification, and strictness contract is defined later in [Parameter Classification](#parameter-classification).
+
 ```text
 StructuralParameter
     changes CircuitPlan topology or compiler lowering result
@@ -103,6 +105,8 @@ AnalysisParameter
 | `pump_frequency` | drive | Changes solver input / source setting |
 | `pump_amplitude` | drive | Changes solver input / source setting |
 | `fit_window` | analysis | Changes post-processing only |
+
+Use this table as a quick reference. For implementation and sweep-engine behavior, follow the declared-role / effective-role model in [Parameter Classification](#parameter-classification).
 
 ## Structural Sweep
 
@@ -765,6 +769,10 @@ Cell 10: inspect SweepResult
 ```
 
 Pluto should provide or support helper functions such as:
+
+!!! note "Target inspection helpers"
+    The helper names in this page describe the target Pluto-facing inspection API.
+    If current implementation names differ, implementation work should align toward these helpers instead of preserving old names as compatibility aliases.
 
 ```julia
 inspect_plan(plan)

@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: user
 scope: Pluto workflow for Julia Core CircuitPlan authoring, inspection, compilation, and single-point simulation.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -84,6 +84,10 @@ validate_authoring(plan)
 
 Inspect before compiling:
 
+!!! note "Target inspection helpers"
+    The helper names in this page describe the target Pluto-facing inspection API.
+    If current implementation names differ, implementation work should align toward these helpers instead of preserving old names as compatibility aliases.
+
 ```julia
 inspect_plan(plan)
 inspect_parameters(plan)
@@ -104,3 +108,9 @@ result = run_frequency_sweep(compiled, freqs)
 Move from this page to [Pluto Parameter Sweep Workflow](parameter-sweep-workflow.md) when you need many parameter points.
 
 Batch sweeps should be explicit. A Pluto slider update should rebuild and simulate one point, not launch a large hidden sweep.
+
+## Related
+
+- [Pluto Parameter Sweep Workflow](parameter-sweep-workflow.md)
+- [Julia Core Authoring Model](../../reference/julia-core/authoring-model.md)
+- [Circuit Plan](../../reference/julia-core/circuit-plan.md)
