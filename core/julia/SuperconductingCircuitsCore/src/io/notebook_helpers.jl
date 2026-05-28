@@ -1,16 +1,18 @@
 function sweep_result_dataframe(result::SweepResult)
     rows = NamedTuple[]
-    axis_names = [axis.name for axis in result.axes]
+    points = get(result.provenance, :points, Dict{Symbol,Any}[])
+    axis_names = _axis_names(result.execution_plan.sweep_spec)
 
-    for point in result.points
+    for idx in eachindex(result.point_statuses)
+        point = idx <= length(points) ? points[idx] : Dict{Symbol,Any}()
         row = Pair{Symbol,Any}[
-            :point_index => point.point_index,
-            :success => point.success,
-            :error_message => point.error_message,
+            :point_index => idx,
+            :status => result.point_statuses[idx],
+            :success => result.point_statuses[idx] == :success,
         ]
 
         for name in axis_names
-            push!(row, Symbol(name) => get(point.parameters, name, missing))
+            push!(row, name => get(point, name, missing))
         end
 
         push!(rows, (; row...))

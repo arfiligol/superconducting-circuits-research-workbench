@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "a3a078ec97dc83437a6b4ed69ca8b7b1244a9b4a"
+project_hash = "e5e3013647819b1fa5e82769c819dc8a6b797134"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "bbc22a9a08a0ef6460041086d8a7b27940ed4ffd"
@@ -854,7 +854,7 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.8.3+2"
 
 [[deps.SuperconductingCircuitsCore]]
-deps = ["DataFrames", "JosephsonCircuits", "Statistics"]
+deps = ["DataFrames", "JosephsonCircuits", "SHA", "Statistics"]
 path = "."
 uuid = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
 version = "0.1.0"
