@@ -36,6 +36,25 @@ function diagnostic_issue_codes(report, diagnostic_errors_fn)
     return [issue.code for issue in issues if hasproperty(issue, :code)]
 end
 
+function topology_diff_entries(diff, fields)
+    entries = Any[]
+    for field in fields
+        @test hasproperty(diff, field)
+        hasproperty(diff, field) || continue
+        append!(entries, collect(getproperty(diff, field)))
+    end
+    return entries
+end
+
+function assert_structured_topology_entries(diff, fields)
+    entries = topology_diff_entries(diff, fields)
+    @test !isempty(entries)
+    for entry in entries
+        @test !(entry isa AbstractString)
+    end
+    return entries
+end
+
 function diagnostic_plan(; id="diagnostics", tap_m=0.1e-3, numeric_domain=(1.0e-15, 2.0e-15))
     plan = CircuitPlan(id)
     qwr = register_component!(plan, MinimalComponentLibrary.TestLineComponent("qwr", [:main], :main))
@@ -68,6 +87,20 @@ function diagnostic_plan(; id="diagnostics", tap_m=0.1e-3, numeric_domain=(1.0e-
         from=pin(lc, :signal),
         to=line_tap(qwr; at_m=tap_m),
         capacitance=1.0e-15,
+    )
+    return plan
+end
+
+function diagnostic_span_plan(; id="span-diagnostics", span_from_m=0.1e-3, span_to_m=0.2e-3)
+    plan = CircuitPlan(id)
+    line_a_component = register_component!(plan, MinimalComponentLibrary.TestLineComponent("qwr_a", [:main], :main))
+    line_b_component = register_component!(plan, MinimalComponentLibrary.TestLineComponent("qwr_b", [:main], :main))
+    couple_window!(
+        plan;
+        id="diagnostic_window",
+        line_a=line_span(line_a_component; from_m=span_from_m, to_m=span_to_m),
+        line_b=line_span(line_b_component; from_m=span_from_m, to_m=span_to_m),
+        spec=base_window_spec(length_m=span_to_m - span_from_m),
     )
     return plan
 end
@@ -151,6 +184,12 @@ end
 
         report = diagnose_plan_fn(diagnostic_bad_plan())
         @test report isa DiagnosticReportType
+        @test hasproperty(report, :stage)
+        if hasproperty(report, :stage)
+            @test report.stage == :authoring
+            @test haskey(report.summary, :stage)
+            haskey(report.summary, :stage) && @test report.summary[:stage] == report.stage
+        end
         @test has_diagnostic_errors_fn(report)
         @test :unresolved_endpoint in diagnostic_issue_codes(report, diagnostic_errors_fn)
     end
@@ -166,6 +205,12 @@ end
 
         report = diagnose_compile_fn(diagnostic_bad_plan())
         @test report isa DiagnosticReportType
+        @test hasproperty(report, :stage)
+        if hasproperty(report, :stage)
+            @test report.stage in (:compile_validation, :compile_lowering)
+            @test haskey(report.summary, :stage)
+            haskey(report.summary, :stage) && @test report.summary[:stage] == report.stage
+        end
         @test has_diagnostic_errors_fn(report)
         issues = diagnostic_errors_fn(report)
         @test any(issue -> hasproperty(issue, :stage) && issue.stage == :compile_validation, issues)
@@ -191,20 +236,61 @@ end
     end
 end
 
-@testset "diff_topology_keys reports structural line tap changes and ignores numeric-only differences" begin
+@testset "diff_topology_keys reports structured line tap changes" begin
     diff_topology_keys_fn = require_diagnostics_api(:diff_topology_keys)
     if !isnothing(diff_topology_keys_fn)
         tap_a = diagnostic_plan(; id="tap-a", tap_m=0.1e-3)
         tap_b = diagnostic_plan(; id="tap-b", tap_m=0.2e-3)
+        before_a = topology_key(tap_a).digest
+        before_b = topology_key(tap_b).digest
+
         tap_diff = diff_topology_keys_fn(tap_a, tap_b)
         @test diagnostic_get(tap_diff, :same_digest) == false
-        @test occursin("line_tap", lowercase(repr(tap_diff))) || occursin("linetap", lowercase(repr(tap_diff)))
+        assert_structured_topology_entries(
+            tap_diff,
+            (:changed_line_taps, :added_line_taps, :removed_line_taps),
+        )
+        @test topology_key(tap_a).digest == before_a
+        @test topology_key(tap_b).digest == before_b
+    end
+end
 
+@testset "diff_topology_keys reports structured line span changes" begin
+    diff_topology_keys_fn = require_diagnostics_api(:diff_topology_keys)
+    if !isnothing(diff_topology_keys_fn)
+        span_a = diagnostic_span_plan(; id="span-a", span_from_m=0.1e-3, span_to_m=0.2e-3)
+        span_b = diagnostic_span_plan(; id="span-b", span_from_m=0.1e-3, span_to_m=0.3e-3)
+        before_a = topology_key(span_a).digest
+        before_b = topology_key(span_b).digest
+
+        span_diff = diff_topology_keys_fn(span_a, span_b)
+        @test diagnostic_get(span_diff, :same_digest) == false
+        assert_structured_topology_entries(
+            span_diff,
+            (:changed_line_spans, :added_line_spans, :removed_line_spans),
+        )
+        @test topology_key(span_a).digest == before_a
+        @test topology_key(span_b).digest == before_b
+    end
+end
+
+@testset "diff_topology_keys treats numeric-only differences as reusable" begin
+    diff_topology_keys_fn = require_diagnostics_api(:diff_topology_keys)
+    if !isnothing(diff_topology_keys_fn)
         numeric_a = diagnostic_plan(; id="numeric-a", tap_m=0.1e-3, numeric_domain=(1.0e-15, 2.0e-15))
         numeric_b = diagnostic_plan(; id="numeric-b", tap_m=0.1e-3, numeric_domain=(9.0e-15, 10.0e-15))
+        before_a = topology_key(numeric_a).digest
+        before_b = topology_key(numeric_b).digest
+
         numeric_diff = diff_topology_keys_fn(numeric_a, numeric_b)
         @test diagnostic_get(numeric_diff, :same_digest) == true
-        @test !occursin("diagnostic_numeric_capacitance", lowercase(repr(diagnostic_get(numeric_diff, :changed_structural_parameters))))
+        for field in (:changed_line_taps, :changed_line_spans, :changed_structural_parameters)
+            @test hasproperty(numeric_diff, field)
+            hasproperty(numeric_diff, field) && @test isempty(getproperty(numeric_diff, field))
+        end
+        @test hasproperty(numeric_diff, :ignored_numeric_parameters)
+        @test topology_key(numeric_a).digest == before_a
+        @test topology_key(numeric_b).digest == before_b
     end
 end
 
@@ -224,6 +310,12 @@ end
 
         report = diagnose_sweep_fn(diagnostic_sweep_plan, sweep)
         @test report isa DiagnosticReportType
+        @test hasproperty(report, :stage)
+        if hasproperty(report, :stage)
+            @test report.stage == :sweep_preflight
+            @test haskey(report.summary, :stage)
+            haskey(report.summary, :stage) && @test report.summary[:stage] == report.stage
+        end
         @test diagnostic_get(report.summary, :axis_count) == 2
         @test diagnostic_get(report.summary, :estimated_simulations) == 4
         @test diagnostic_get(report.summary, :estimated_compiles) == 2
@@ -259,6 +351,7 @@ end
             :endpoint_summary,
             :authoring_diagnostics,
             :compile_diagnostics,
+            :diagnostic_stages,
             :topology_explanation,
             :compiled_summary,
             :preflight_summary,
@@ -267,6 +360,8 @@ end
         )
             @test diagnostic_get(bundle, key) !== nothing
         end
+        @test bundle.diagnostic_stages.authoring == :authoring
+        @test bundle.diagnostic_stages.compile in (:compile_validation, :compile_lowering)
 
         after = (
             component_count=length(plan.components),

@@ -91,21 +91,34 @@ DiagnosticIssue(
 
 ## DiagnosticReport
 
-`DiagnosticReport` groups diagnostic issues with a stable summary.
+`DiagnosticReport` groups diagnostic issues with a report-level stage and a stable summary.
+The report contract is `stage`, `issues`, and `summary`.
 
 Conceptual shape:
 
 ```julia
 struct DiagnosticReport
+    stage
     issues
     summary
 end
 ```
 
+`stage` is the primary diagnostic stage for the report. Individual issues may carry more specific stages, but the report-level stage lets agents, tests, Pluto, and Runner logs quickly route the report without parsing summary fields or issue messages.
+
+Expected report-level stages include:
+
+| API | Report stage |
+| --- | --- |
+| `diagnose_plan(plan)` | `:authoring` |
+| `diagnose_compile(plan)` | `:compile_validation` or `:compile_lowering` |
+| `diagnose_sweep(build_plan, sweep)` | `:sweep_preflight` |
+
 The summary should preserve counts and stage-level metadata that callers can display without parsing messages.
 
 Useful summary fields include:
 
+- report stage;
 - issue counts by severity;
 - component, endpoint, relation, and parameter counts;
 - topology group counts;
@@ -126,6 +139,7 @@ parameter_summary
 endpoint_summary
 authoring_diagnostics
 compile_diagnostics
+diagnostic_stages
 topology_explanation
 compiled_summary
 preflight_summary
@@ -174,7 +188,37 @@ diff_topology_keys(plan_a, plan_b)
 
 `explain_topology_key` should show the digest, components included, relations included, line taps included, line spans included, structural parameters included, numeric parameters excluded, and the underlying summary.
 
-`diff_topology_keys` should compare explainable parts, not only digests. At minimum it should report whether the digest is the same, both digests, added or removed components, relation differences, structural-parameter differences, and a hint.
+## Structured Topology Diff
+
+`diff_topology_keys(plan_a, plan_b)` should compare structured topology categories, not only raw digests or opaque `repr` strings.
+
+The returned diff should preserve stable categories so AI agents can tell whether a topology mismatch comes from components, relation topology, line taps, line spans, or structural parameters.
+
+Required fields:
+
+| Field | Meaning |
+| --- | --- |
+| `same_digest` | whether both plans share the same topology digest |
+| `digest_a` | topology digest for the first plan |
+| `digest_b` | topology digest for the second plan |
+| `added_components` | components present only in the second plan |
+| `removed_components` | components present only in the first plan |
+| `added_relations` | relation topology present only in the second plan |
+| `removed_relations` | relation topology present only in the first plan |
+| `changed_relations` | relation IDs or structural relation entries that exist in both plans but differ |
+| `added_line_taps` | line taps present only in the second plan |
+| `removed_line_taps` | line taps present only in the first plan |
+| `changed_line_taps` | matching line tap references whose positions or structural identity changed |
+| `added_line_spans` | line spans present only in the second plan |
+| `removed_line_spans` | line spans present only in the first plan |
+| `changed_line_spans` | matching line span references whose start, stop, or structural identity changed |
+| `added_structural_parameters` | structural parameters present only in the second plan |
+| `removed_structural_parameters` | structural parameters present only in the first plan |
+| `changed_structural_parameters` | matching structural parameters whose topology-relevant metadata changed |
+| `ignored_numeric_parameters` | numeric, drive, or analysis parameters excluded from topology comparison |
+| `hint` | next diagnostic step or explanation of the mismatch |
+
+Numeric-only changes should not create topology differences. If two plans differ only by numeric parameter values or numeric-only metadata, `same_digest` should remain true, topology-change fields should stay empty, and `ignored_numeric_parameters` should identify the excluded parameter set.
 
 Debug bundle:
 
@@ -182,7 +226,7 @@ Debug bundle:
 debug_bundle(plan; compiled = compiled, preflight = preflight, result = result)
 ```
 
-`debug_bundle` should collect plan summaries, parameter summaries, endpoint summaries, diagnostics, topology explanations, compiled summaries, sweep summaries, and recommended next checks.
+`debug_bundle` should collect plan summaries, parameter summaries, endpoint summaries, diagnostics, report-level diagnostic stages, topology explanations, compiled summaries, sweep summaries, and recommended next checks.
 
 ## Validation Relationship
 
@@ -198,9 +242,10 @@ When an AI agent debugs Julia Core, it should follow this order:
 2. Call the relevant diagnostic helper.
 3. Inspect structured diagnostic fields before editing code.
 4. Use `explain_topology_key` or `diff_topology_keys` for sweep grouping problems.
-5. Use `preflight_sweep` for sweep compile-policy problems.
-6. Patch the smallest layer that owns the failing contract.
-7. Re-run the specific test, then the package test.
+5. For topology mismatch, call `diff_topology_keys(plan_a, plan_b)` and inspect structured fields before editing compiler or sweep code.
+6. Use `preflight_sweep` for sweep compile-policy problems.
+7. Patch the smallest layer that owns the failing contract.
+8. Re-run the specific test, then the package test.
 
 Agents should resolve failures against the Julia Core reference contract, not against retired behavior or old implementation names.
 

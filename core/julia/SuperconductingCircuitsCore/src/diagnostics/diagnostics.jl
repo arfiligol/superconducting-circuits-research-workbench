@@ -13,12 +13,23 @@ Base.@kwdef struct DiagnosticIssue
 end
 
 struct DiagnosticReport
+    stage::Symbol
     issues::Vector{DiagnosticIssue}
     summary::Dict{Symbol,Any}
 end
 
 DiagnosticReport(issues::Vector{DiagnosticIssue}) =
-    DiagnosticReport(issues, _diagnostic_summary(issues))
+    DiagnosticReport(:unknown, issues)
+
+function DiagnosticReport(stage::Symbol, issues::Vector{DiagnosticIssue})
+    return DiagnosticReport(stage, issues, _diagnostic_summary(issues; extra=Dict{Symbol,Any}(:stage => stage)))
+end
+
+function DiagnosticReport(issues::Vector{DiagnosticIssue}, summary::Dict{Symbol,Any})
+    stage = Symbol(get(summary, :stage, :unknown))
+    merged = _diagnostic_summary(issues; extra=merge(Dict{Symbol,Any}(:stage => stage), summary))
+    return DiagnosticReport(stage, issues, merged)
+end
 
 diagnostic_errors(report::DiagnosticReport) = [issue for issue in report.issues if issue.severity == :error]
 diagnostic_warnings(report::DiagnosticReport) = [issue for issue in report.issues if issue.severity == :warning]
@@ -275,35 +286,156 @@ function explain_topology_key(compiled::JosephsonCompiledCircuit)
     )
 end
 
-function _component_ids_from_explanation(explanation)
-    return Set(String(item.id) for item in explanation.components_included)
+function _structured_key(item)
+    return repr(item)
 end
 
-function _repr_set(values)
-    return Set(repr(value) for value in values)
+function _component_items(explanation)
+    return [(id=String(item.id), type=String(item.type)) for item in explanation.components_included]
+end
+
+function _endpoint_item(endpoint)
+    if endpoint isa Tuple && !isempty(endpoint)
+        kind = first(endpoint)
+        kind == :pin && length(endpoint) >= 3 &&
+            return (kind=:pin, component_id=String(endpoint[2]), pin=Symbol(endpoint[3]))
+        kind == :line_tap && length(endpoint) >= 4 &&
+            return (kind=:line_tap, component_id=String(endpoint[2]), line=Symbol(endpoint[3]), at_m=Float64(endpoint[4]))
+        kind == :line_span && length(endpoint) >= 5 &&
+            return (
+                kind=:line_span,
+                component_id=String(endpoint[2]),
+                line=Symbol(endpoint[3]),
+                from_m=Float64(endpoint[4]),
+                to_m=Float64(endpoint[5]),
+            )
+        kind == :ground && return (kind=:ground,)
+        kind == :external_node && length(endpoint) >= 2 &&
+            return (kind=:external_node, name=String(endpoint[2]))
+        kind == :loop && length(endpoint) >= 3 &&
+            return (kind=:loop, component_id=String(endpoint[2]), loop=Symbol(endpoint[3]))
+    end
+    return (kind=:unknown_endpoint, value=endpoint)
+end
+
+function _relation_item(relation)
+    if relation isa Tuple && !isempty(relation)
+        kind = first(relation)
+        kind == :connect && length(relation) >= 3 &&
+            return (kind=:connect, from=_endpoint_item(relation[2]), to=_endpoint_item(relation[3]))
+        kind == :capacitive && length(relation) >= 4 &&
+            return (
+                kind=:capacitive,
+                id=String(relation[2]),
+                from=_endpoint_item(relation[3]),
+                to=_endpoint_item(relation[4]),
+            )
+        kind == :shunt_capacitor && length(relation) >= 3 &&
+            return (kind=:shunt_capacitor, id=String(relation[2]), at=_endpoint_item(relation[3]))
+        kind == :inductive && length(relation) >= 4 &&
+            return (
+                kind=:inductive,
+                id=String(relation[2]),
+                from=_endpoint_item(relation[3]),
+                to=_endpoint_item(relation[4]),
+            )
+        kind == :coupled_window && length(relation) >= 5 &&
+            return (
+                kind=:coupled_window,
+                id=String(relation[2]),
+                line_a=_endpoint_item(relation[3]),
+                line_b=_endpoint_item(relation[4]),
+                spec_type=String(relation[5]),
+            )
+    end
+    return (kind=:unknown_relation, value=relation)
+end
+
+function _structural_parameter_item(parameter)
+    return (
+        name=Symbol(parameter.name),
+        owner=String(parameter.owner),
+        targets=Symbol[parameter.targets...],
+        sweep_name=Symbol(parameter.sweep_name),
+        role=String(parameter.role),
+    )
+end
+
+function _numeric_parameter_item(parameter)
+    return (
+        name=Symbol(parameter.name),
+        owner=String(parameter.owner),
+        targets=Symbol[parameter.targets...],
+        sweep_name=Symbol(parameter.sweep_name),
+        role=String(parameter.role),
+    )
+end
+
+_topology_component_items(explanation) = _component_items(explanation)
+_topology_relation_items(explanation) = [_relation_item(relation) for relation in explanation.relations_included]
+_topology_line_tap_items(explanation) = [_endpoint_item(endpoint) for endpoint in explanation.line_taps_included]
+_topology_line_span_items(explanation) = [_endpoint_item(endpoint) for endpoint in explanation.line_spans_included]
+_topology_structural_parameter_items(explanation) =
+    [_structural_parameter_item(parameter) for parameter in explanation.structural_parameters_included]
+_topology_numeric_parameter_items(explanation) =
+    [_numeric_parameter_item(parameter) for parameter in explanation.numeric_parameters_excluded]
+
+function _items_by_key(items)
+    return Dict{String,Any}(_structured_key(item) => item for item in items)
+end
+
+function _added_items(items_a, items_b)
+    by_a = _items_by_key(items_a)
+    by_b = _items_by_key(items_b)
+    return [by_b[key] for key in sort(collect(setdiff(keys(by_b), keys(by_a))))]
+end
+
+function _removed_items(items_a, items_b)
+    by_a = _items_by_key(items_a)
+    by_b = _items_by_key(items_b)
+    return [by_a[key] for key in sort(collect(setdiff(keys(by_a), keys(by_b))))]
+end
+
+function _changed_items(items_a, items_b)
+    return vcat(_removed_items(items_a, items_b), _added_items(items_a, items_b))
 end
 
 function diff_topology_keys(plan_a::CircuitPlan, plan_b::CircuitPlan)
     explanation_a = explain_topology_key(plan_a)
     explanation_b = explain_topology_key(plan_b)
-    components_a = _component_ids_from_explanation(explanation_a)
-    components_b = _component_ids_from_explanation(explanation_b)
-    relations_a = _repr_set(explanation_a.relations_included)
-    relations_b = _repr_set(explanation_b.relations_included)
-    structural_a = _repr_set(explanation_a.structural_parameters_included)
-    structural_b = _repr_set(explanation_b.structural_parameters_included)
+    components_a = _topology_component_items(explanation_a)
+    components_b = _topology_component_items(explanation_b)
+    relations_a = _topology_relation_items(explanation_a)
+    relations_b = _topology_relation_items(explanation_b)
+    line_taps_a = _topology_line_tap_items(explanation_a)
+    line_taps_b = _topology_line_tap_items(explanation_b)
+    line_spans_a = _topology_line_span_items(explanation_a)
+    line_spans_b = _topology_line_span_items(explanation_b)
+    structural_a = _topology_structural_parameter_items(explanation_a)
+    structural_b = _topology_structural_parameter_items(explanation_b)
+    numeric_a = _topology_numeric_parameter_items(explanation_a)
+    numeric_b = _topology_numeric_parameter_items(explanation_b)
     same_digest = explanation_a.digest == explanation_b.digest
 
     return (
         same_digest=same_digest,
         digest_a=explanation_a.digest,
         digest_b=explanation_b.digest,
-        added_components=sort(collect(setdiff(components_b, components_a))),
-        removed_components=sort(collect(setdiff(components_a, components_b))),
-        added_relations=sort(collect(setdiff(relations_b, relations_a))),
-        removed_relations=sort(collect(setdiff(relations_a, relations_b))),
-        changed_relations=sort(collect(symdiff(relations_a, relations_b))),
-        changed_structural_parameters=sort(collect(symdiff(structural_a, structural_b))),
+        added_components=_added_items(components_a, components_b),
+        removed_components=_removed_items(components_a, components_b),
+        added_relations=_added_items(relations_a, relations_b),
+        removed_relations=_removed_items(relations_a, relations_b),
+        changed_relations=_changed_items(relations_a, relations_b),
+        added_line_taps=_added_items(line_taps_a, line_taps_b),
+        removed_line_taps=_removed_items(line_taps_a, line_taps_b),
+        changed_line_taps=_changed_items(line_taps_a, line_taps_b),
+        added_line_spans=_added_items(line_spans_a, line_spans_b),
+        removed_line_spans=_removed_items(line_spans_a, line_spans_b),
+        changed_line_spans=_changed_items(line_spans_a, line_spans_b),
+        added_structural_parameters=_added_items(structural_a, structural_b),
+        removed_structural_parameters=_removed_items(structural_a, structural_b),
+        changed_structural_parameters=_changed_items(structural_a, structural_b),
+        ignored_numeric_parameters=unique(vcat(numeric_a, numeric_b)),
         hint=same_digest ? "Topology keys match; compiled output can be reused if validation also passes." :
              "Topology keys differ; inspect components, relation endpoints, line taps/spans, and structural parameters.",
     )
@@ -347,6 +479,10 @@ function debug_bundle(plan::CircuitPlan; compiled=nothing, preflight=nothing, re
         endpoint_summary=inspect_endpoints(plan),
         authoring_diagnostics=authoring_diagnostics,
         compile_diagnostics=compile_diagnostics,
+        diagnostic_stages=(
+            authoring=authoring_diagnostics.stage,
+            compile=compile_diagnostics.stage,
+        ),
         topology_explanation=explain_topology_key(topology_source),
         compiled_summary=isnothing(compiled) ? nothing : _compiled_summary(compiled),
         preflight_summary=isnothing(preflight) ? nothing : inspect_sweep_preflight(preflight),
