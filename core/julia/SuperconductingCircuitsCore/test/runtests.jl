@@ -36,4 +36,4 @@ include("test_parameters.jl")
 include("test_compiler_skeleton.jl")
 include("test_sweeps.jl")
 include("test_inspection.jl")
-
+include("test_diagnostics.jl")

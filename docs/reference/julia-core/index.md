@@ -148,6 +148,12 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 
     Split authoring validation, compile validation, and physics sanity validation.
 
+- __[Debugging and Diagnostics](debugging-and-diagnostics.md)__
+
+    ---
+
+    Define machine-readable diagnostic reports, topology-key explanations, debug bundles, and the AI agent debug path.
+
 - __[Runner-Safe API](runner-safe-api.md)__
 
     ---

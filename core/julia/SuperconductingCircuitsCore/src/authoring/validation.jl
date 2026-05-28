@@ -1,8 +1,19 @@
-struct ValidationIssue
+Base.@kwdef struct ValidationIssue
     severity::Symbol
     code::Symbol
     message::String
-    path::Vector{Symbol}
+    path::Vector{Symbol} = Symbol[]
+    stage::Symbol = :unknown
+    object_id::Union{Nothing,String} = nothing
+    expected::Any = nothing
+    actual::Any = nothing
+    hint::Union{Nothing,String} = nothing
+    related_ids::Vector{String} = String[]
+    metadata::Dict{Symbol,Any} = Dict{Symbol,Any}()
+end
+
+function ValidationIssue(severity::Symbol, code::Symbol, message::AbstractString, path::Vector{Symbol})
+    return ValidationIssue(severity=severity, code=code, message=String(message), path=copy(path))
 end
 
 struct ValidationReport
@@ -15,8 +26,36 @@ errors(report::ValidationReport) = [issue for issue in report.issues if issue.se
 warnings(report::ValidationReport) = [issue for issue in report.issues if issue.severity == :warning]
 has_errors(report::ValidationReport) = !isempty(errors(report))
 
-function _issue!(issues, severity::Symbol, code::Symbol, message::AbstractString, path=Symbol[])
-    push!(issues, ValidationIssue(severity, code, String(message), Symbol[path...]))
+function _issue!(
+    issues,
+    severity::Symbol,
+    code::Symbol,
+    message::AbstractString,
+    path=Symbol[];
+    stage::Symbol=:unknown,
+    object_id::Union{Nothing,String}=nothing,
+    expected=nothing,
+    actual=nothing,
+    hint::Union{Nothing,String}=nothing,
+    related_ids=String[],
+    metadata=Dict{Symbol,Any}(),
+)
+    push!(
+        issues,
+        ValidationIssue(
+            severity=severity,
+            code=code,
+            message=String(message),
+            path=Symbol[path...],
+            stage=stage,
+            object_id=object_id,
+            expected=expected,
+            actual=actual,
+            hint=hint,
+            related_ids=String[string(id) for id in related_ids],
+            metadata=Dict{Symbol,Any}(metadata),
+        ),
+    )
 end
 
 function _endpoint_component_ids(endpoint::AbstractCircuitEndpoint)
@@ -39,19 +78,57 @@ end
 function _validate_endpoint_reference!(issues, plan::CircuitPlan, endpoint::AbstractCircuitEndpoint)
     for id in _endpoint_component_ids(endpoint)
         haskey(plan.components, id) ||
-            _issue!(issues, :error, :unresolved_endpoint, "Endpoint references missing component '$(id)'.", [:relations])
+            _issue!(
+                issues,
+                :error,
+                :unresolved_endpoint,
+                "Endpoint references missing component '$(id)'.",
+                [:relations];
+                stage=:endpoint_resolution,
+                object_id=id,
+                expected="registered component id",
+                actual="missing component reference",
+                hint="Register component '$(id)' in the CircuitPlan before connecting or coupling its endpoints.",
+                related_ids=[id],
+                metadata=Dict{Symbol,Any}(:endpoint => _endpoint_summary(endpoint)),
+            )
     end
 end
 
 function _validate_parameter_metadata!(issues, meta::ParameterMetadata, path)
-    isempty(meta.owner) && _issue!(issues, :error, :missing_parameter_owner, "Parameter '$(meta.name)' is missing an owner.", path)
+    isempty(meta.owner) &&
+        _issue!(
+            issues,
+            :error,
+            :missing_parameter_owner,
+            "Parameter '$(meta.name)' is missing an owner.",
+            path;
+            stage=:parameter_classification,
+            object_id=String(meta.name),
+            expected="non-empty parameter owner",
+            actual=meta.owner,
+            hint="Declare the component, relation, or plan builder that introduced this parameter.",
+            metadata=Dict{Symbol,Any}(:sweep_name => meta.sweep_name, :role => string(typeof(meta.role))),
+        )
 end
 
 function validate_authoring(plan::CircuitPlan)::ValidationReport
     issues = ValidationIssue[]
 
     for id in plan.duplicate_component_ids
-        _issue!(issues, :error, :duplicate_component_id, "Duplicate component id '$(id)'.", [:components])
+        _issue!(
+            issues,
+            :error,
+            :duplicate_component_id,
+            "Duplicate component id '$(id)'.",
+            [:components];
+            stage=:authoring,
+            object_id=id,
+            expected="unique component id",
+            actual="duplicate component id",
+            hint="Use unique component IDs before registering components in the CircuitPlan.",
+            related_ids=[id],
+        )
     end
 
     relation_ids = String[]
@@ -69,7 +146,19 @@ function validate_authoring(plan::CircuitPlan)::ValidationReport
     seen = Set{String}()
     for id in relation_ids
         if id in seen
-            _issue!(issues, :error, :duplicate_relation_id, "Duplicate relation id '$(id)'.", [:relations])
+            _issue!(
+                issues,
+                :error,
+                :duplicate_relation_id,
+                "Duplicate relation id '$(id)'.",
+                [:relations];
+                stage=:relation_validation,
+                object_id=id,
+                expected="unique relation id",
+                actual="duplicate relation id",
+                hint="Use unique relation IDs for couplings and named relations.",
+                related_ids=[id],
+            )
         end
         push!(seen, id)
     end
@@ -98,11 +187,16 @@ function validate_compile_ready(plan::CircuitPlan)::ValidationReport
                 :error,
                 :missing_component_interface,
                 "Component '$(id)' does not satisfy the Julia Core component interface: $(sprint(showerror, err))",
-                [:components],
+                [:components];
+                stage=:compile_validation,
+                object_id=id,
+                expected="component_id, component_pins, component_lines, default_line, and component_parameters methods",
+                actual=sprint(showerror, err),
+                hint="Implement the Julia Core component interface for this component-library object.",
+                related_ids=[id],
             )
         end
     end
 
     return ValidationReport(issues)
 end
-

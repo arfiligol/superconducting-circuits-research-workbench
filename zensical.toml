@@ -185,6 +185,7 @@ nav = [
         { "Compiled Circuit" = "reference/julia-core/compiled-circuit.md" },
         { "Parameter Sweeps" = "reference/julia-core/parameter-sweeps.md" },
         { "Validation" = "reference/julia-core/validation.md" },
+        { "Debugging and Diagnostics" = "reference/julia-core/debugging-and-diagnostics.md" },
         { "Runner-Safe API" = "reference/julia-core/runner-safe-api.md" },
       ] },
       { "Julia Package Surface" = "reference/core/julia-core.md" },

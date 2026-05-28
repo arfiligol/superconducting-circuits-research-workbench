@@ -103,6 +103,18 @@ inspect_topology_key(compiled)
 result = run_frequency_sweep(compiled, freqs)
 ```
 
+## Debugging From Pluto
+
+Use diagnostics when validation or compilation fails and you need structured fields instead of message text:
+
+```julia
+diagnose_plan(plan)
+diagnose_compile(plan)
+debug_bundle(plan; compiled = compiled)
+```
+
+`diagnose_plan` should point to authoring, endpoint, relation, and parameter metadata issues. `diagnose_compile` should report compile-readiness and topology-key context. `debug_bundle` collects plan summaries, diagnostics, topology explanation, and compiled output summaries in a Pluto-safe form.
+
 ## Before Batch Sweeps
 
 Move from this page to [Pluto Parameter Sweep Workflow](parameter-sweep-workflow.md) when you need many parameter points.
@@ -114,3 +126,4 @@ Batch sweeps should be explicit. A Pluto slider update should rebuild and simula
 - [Pluto Parameter Sweep Workflow](parameter-sweep-workflow.md)
 - [Julia Core Authoring Model](../../reference/julia-core/authoring-model.md)
 - [Circuit Plan](../../reference/julia-core/circuit-plan.md)
+- [Debugging and Diagnostics](../../reference/julia-core/debugging-and-diagnostics.md)

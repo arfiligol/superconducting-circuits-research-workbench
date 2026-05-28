@@ -21,6 +21,7 @@ include("sweeps/execution_plan.jl")
 include("sweeps/preflight.jl")
 include("sweeps/sweep_result.jl")
 include("inspection/inspection_helpers.jl")
+include("diagnostics/diagnostics.jl")
 include("components/common.jl")
 include("components/coupled_window.jl")
 include("simulation/result_extractors.jl")
@@ -124,6 +125,18 @@ export inspect_endpoints
 export inspect_topology_key
 export inspect_sweep_preflight
 export summarize_sweep_result
+
+export DiagnosticIssue
+export DiagnosticReport
+export diagnostic_errors
+export diagnostic_warnings
+export has_diagnostic_errors
+export diagnose_plan
+export diagnose_compile
+export diagnose_sweep
+export explain_topology_key
+export diff_topology_keys
+export debug_bundle
 
 export RLGCSpec
 export CoupledWindowSpec

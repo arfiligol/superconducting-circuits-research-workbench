@@ -65,6 +65,9 @@ function topology_key(plan::CircuitPlan)::TopologyKey
             :component_count => length(plan.components),
             :relation_count => length(plan.relations),
             :structural_parameters => [item.name for item in ordered.structural_parameters],
+            :components => collect(ordered.components),
+            :relations => collect(ordered.relations),
+            :structural_parameter_details => collect(ordered.structural_parameters),
         ),
     )
 end

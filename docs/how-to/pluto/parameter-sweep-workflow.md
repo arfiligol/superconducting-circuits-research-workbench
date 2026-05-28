@@ -120,6 +120,22 @@ acceleration backend
 
 It should also show declared roles, declaration sources, effective roles, compile groups, and warnings or classification errors.
 
+## Debugging From Pluto
+
+Use diagnostics before editing a notebook or component library when sweep behavior is unclear:
+
+```julia
+diagnose_plan(plan)
+diagnose_compile(plan)
+
+preflight = preflight_sweep(build_plan, sweep)
+diagnose_sweep(build_plan, sweep)
+
+debug_bundle(plan; compiled = compiled, preflight = preflight, result = result)
+```
+
+`diagnose_sweep` should report axis roles, topology groups, estimated compiles, estimated simulations, executor, classification warnings, and preflight failures. `debug_bundle` keeps the plan, compile, preflight, and result context together for Pluto inspection.
+
 ## Avoid Accidental Large Sweeps
 
 Large batch sweeps should not run only because a slider changed.
@@ -157,3 +173,4 @@ acceleration backend
 - [Julia Core Parameter Sweeps](../../reference/julia-core/parameter-sweeps.md)
 - [Julia Core Authoring Model](../../reference/julia-core/authoring-model.md)
 - [Component Libraries](../../reference/julia-core/component-libraries.md)
+- [Debugging and Diagnostics](../../reference/julia-core/debugging-and-diagnostics.md)

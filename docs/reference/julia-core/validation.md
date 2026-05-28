@@ -64,6 +64,23 @@ Physics sanity validation catches values that may compile but are likely wrong:
 
 These checks may produce errors or warnings depending on severity and caller policy.
 
+## Machine-Readable Diagnostics
+
+Validation output is part of the Julia Core diagnostics contract.
+
+`ValidationIssue` is the validation-specific form of `DiagnosticIssue`, or it must be convertible to `DiagnosticIssue`. A validation issue should carry more than human-readable text when the information is available:
+
+- stable `code`;
+- `stage`;
+- `object_id`;
+- `expected`;
+- `actual`;
+- `hint`;
+- `related_ids`;
+- `metadata`.
+
+Use these fields so Pluto can display actionable messages, Runner logs can remain deterministic, tests can assert stable failure modes, and AI agents can inspect the failing contract before editing code.
+
 ## Caller Behavior
 
 | Caller | Expected validation behavior |
