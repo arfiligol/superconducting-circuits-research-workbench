@@ -188,9 +188,9 @@ nav = [
         { "Branch & Worktree Flow" = "reference/guardrails/execution-verification/branch-and-worktree-flow.md" },
         { "CI Gates" = "reference/guardrails/execution-verification/ci-gates.md" },
         { "Phase Gates" = "reference/guardrails/execution-verification/phase-gates.md" },
-        { "Prompt Grading" = "reference/guardrails/execution-verification/prompt-grading.md" },
-        { "Multiple Agent Collaboration" = "reference/guardrails/execution-verification/multi-agent-collaboration.md" },
-        { "Agent Handoff Formats" = "reference/guardrails/execution-verification/contributor-reporting.md" },
+        { "Task Scope Sizing" = "reference/guardrails/execution-verification/prompt-grading.md" },
+        { "Codex Subagent Coordination" = "reference/guardrails/execution-verification/multi-agent-collaboration.md" },
+        { "Work Summary Formats" = "reference/guardrails/execution-verification/contributor-reporting.md" },
       ] },
       { "Code Quality" = [
         { "Code Style" = "reference/guardrails/code-quality/code-style.md" },

@@ -114,14 +114,14 @@ npm run app:stop
 | --- | --- |
 | frontend process | `npm run dev --prefix app/frontend` |
 | backend process | `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000` |
-| runner process | `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; SuperconductingCircuitsRunner.main()'` |
+| runner process | `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'` |
 | optional repo helper | `npm run app:dev` or `./scripts/dev/start_app.sh` starts frontend、backend、runner |
 
 !!! example "Minimal local runtime bring-up"
     ```bash
     npm run dev --prefix app/frontend
     cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000
-    julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; SuperconductingCircuitsRunner.main()'
+    julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'
     ```
 
 ### Verification

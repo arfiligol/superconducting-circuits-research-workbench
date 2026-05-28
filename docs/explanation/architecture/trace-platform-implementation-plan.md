@@ -39,7 +39,8 @@ Use this runtime split:
 | Pluto Notebook | direct Julia Core research cockpit |
 
 Application-triggered simulation and analysis must be asynchronous.
-Notebook direct execution is allowed because the notebook kernel is an explicit research execution environment.
+Pluto direct execution is allowed because the notebook kernel is an explicit research execution environment.
+Python notebooks are Backend API clients, not Julia Core compute surfaces.
 
 ## Data Flow
 

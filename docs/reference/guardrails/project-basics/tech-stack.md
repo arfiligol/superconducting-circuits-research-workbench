@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的 Notebook/Application/Julia Runner 技術選型與工具規範。
-version: v3.2.0
+version: v3.3.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -23,6 +23,8 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；Noteboo
 
 !!! info "How to use this page"
     這頁用來確認正式 baseline stack，不用來討論可選替代方案。若某個技術還沒被列進來，就不應被當成預設依賴。
+
+See [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) for the canonical Pluto / Python Notebook / Application Simulation Workbench split.
 
 ## Canonical Top-Level Surfaces
 
@@ -68,7 +70,7 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；Noteboo
 
 Pluto Notebook is the direct Julia Core research interface. It may directly use `SuperconductingCircuitsCore`, JosephsonCircuits.jl wrappers, sweep helpers, and Julia analysis helpers.
 
-It must not participate in the normal Backend task workflow. If a Pluto result should become official platform data, it must go through an explicit import/publication path defined separately.
+It is not a Backend task submitter in the platform architecture. If a Pluto result should become official platform data, it must go through an explicit import/publication path defined separately.
 
 ### Python Notebook
 
@@ -160,7 +162,7 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 
 - frontend process: `npm run dev --prefix app/frontend`
 - backend process: `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000`
-- runner process: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; SuperconductingCircuitsRunner.main()'`
+- runner process: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'`
 - task claiming is DB-backed through the Python Backend runner API
 - local staging uses filesystem Zarr under `data/staging/tasks/<task_id>/`
 - official numeric authority is Python Backend-managed TraceStore under `data/trace_store/`
@@ -190,6 +192,19 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 - root `backend/`, `frontend/`, and `desktop/` must not exist as active surfaces after relocation to `app/`
 - root command workflow, legacy UI code, and root runtime-worker code are removed from active package discovery
 - root `src/` must not be re-legitimized as canonical target topology
+
+## Forbidden Architecture Regressions
+
+The following changes require a new SoT decision before implementation:
+
+- Reintroducing Pluto Notebook as a Backend task submitter.
+- Reintroducing Python Notebook as a Julia Core / JuliaCall compute surface.
+- Removing Application Simulation Workbench as a first-class product surface.
+- Running heavy simulation in Python Backend request threads.
+- Reintroducing a user-facing CLI product surface.
+- Reintroducing NiceGUI or any retired Python UI runtime.
+- Reintroducing Redis/RQ as the default local runtime queue.
+- Recreating root-level `backend/`, `frontend/`, `desktop/`, `cli/`, or `src/worker` as active architecture surfaces.
 
 ## Storage Direction
 
@@ -260,11 +275,11 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
     - Julia Runner
     - no separate queue service
 - **Interface boundaries**:
-    - Pluto Notebook is the direct Julia research cockpit.
-    - Product task submission belongs to the Application and Python client path.
-    - Python Notebook is a programmable Backend API client.
-    - Python notebook clients must not use `SuperconductingCircuitsCore` or JuliaCall as their normal compute path.
+    - Pluto Notebook is the direct Julia Core research interface and must not submit Backend tasks.
+    - Python Notebook is a programmable Backend API client and must not directly call Julia Core or use JuliaCall as normal compute.
     - Application Simulation Workbench is first-class and submits persisted async tasks through Python Backend and Julia Runner.
+    - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
+    - Julia Runner owns async compute execution and local Zarr staging.
 - **Scripts**:
     - `scripts/dev/`
     - `scripts/build/`

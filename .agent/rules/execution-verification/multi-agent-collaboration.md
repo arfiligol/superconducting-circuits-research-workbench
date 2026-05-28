@@ -1,38 +1,9 @@
-## Multiple Agent Collaboration
-- Use four agent families:
-    - Documentation Agents
-    - Planning & Reviewing Agents
-    - Implementation Agents
-    - Test Agents
-- Documentation Agents:
-    - discuss with humans
-    - update SoT and architecture/contracts before coding when needed
-- Planning & Reviewing Agents:
-    - compare docs and code
-    - produce a written plan artifact
-    - split implementation slices
-    - enumerate missing integration/E2E coverage for Test Agents
-    - own final verification and accepted-slice integration for the delivery line
-    - may edit `Plans/` artifacts only; if SoT must change, hand off to Documentation Agents
-    - own the full `Plans/` lifecycle: create, mark active/blocked/superseded, retire, archive, or delete
-    - remove or retire stale `Plans/` artifacts during merge/cleanup so old prompts are not reused as current instructions
-    - define `Allowed Area` + `Do Not Touch` for implementation prompts by default
-    - review implementation against SoT and product need, not prompt literalism alone
-    - use Playwright-based smoke verification plus screenshot or equivalent visual evidence when reviewing user-visible frontend changes
-- Implementation Agents:
-    - use five implementation lanes:
-        - Frontend
-        - Backend
-        - Core
-        - Runner
-        - Docs
-    - receive assigned slices via prompt (`Allowed Area` + `Do Not Touch` + worktree + verification)
-    - own code + unit tests only
-    - do not own integration/E2E or final branch integration
-- Test Agents:
-    - own integration tests and E2E tests
-    - execute against the plan artifact and SoT
-- Branch roles, worktree policy, merge authority, and bounded autonomous write roots are defined in `Branch & Worktree Flow`.
-- Every agent must use an isolated worktree + branch and run `git status --porcelain` before editing.
-- Do not skip the order:
-    - docs -> planning/reviewing -> implementation -> test -> planning/reviewing
+## Codex Subagent Coordination
+- Codex may open and coordinate subagents internally when useful.
+- The repo no longer requires the old fixed role taxonomy.
+- Do not require a separate planning pass, testing pass, or prewritten prompt bundle before implementation.
+- Do not create new active `Plans/` coordination artifacts.
+- The current conversation owns the final integrated diff, verification, and report.
+- Direct `develop` updates are allowed during Heavy Development / Fast Iteration.
+- Long-term decisions belong in `docs/reference/**`, not temporary planning files.
+- Final reports should summarize changed surfaces, validation, risks, and any skipped checks.

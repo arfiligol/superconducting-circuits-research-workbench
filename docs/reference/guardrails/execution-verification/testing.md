@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的 app/backend、app/frontend、Julia Runner、desktop 與 docs 測試規範。
-version: v3.0.0
+version: v3.1.0
 last_updated: 2026-05-27
 updated_by: codex
 ---
@@ -80,7 +80,7 @@ foundation workflow 目前只要求 deterministic unit tests。
 
 !!! warning "Frontend review needs real browser evidence"
     若交付內容改動 shell、layout、header/sidebar behavior、dialog/drawer interaction、auth entry、或其他明顯 user-visible workflow，
-    `Planning & Reviewing Agent` 在 merge pass 不得只看 code diff 或 unit test。
+    Review 不得只看 code diff 或 unit test。
     必須至少使用 Playwright 走一次實際流程，並透過 screenshot 或等價視覺證據檢查 UI 是否跑掉。
 
 ## Desktop Foundation
@@ -133,7 +133,7 @@ uv run python scripts/check_docs_nav_routes.py --check-built
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
-- For user-visible frontend changes, Planning & Reviewing Agents must use Playwright-based smoke verification and screenshot or equivalent visual evidence during merge review.
+- For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.
 - **Desktop foundation checks**:
     - `npm run lint --prefix app/desktop`
     - `npm run build --prefix app/desktop`

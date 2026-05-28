@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: develop 日常整合與 main release promotion 的 PR 品質門檻，含 app layout、Julia Runner、desktop shell 與 docs route validation。
-version: v3.0.0
+version: v3.1.0
 last_updated: 2026-05-27
 updated_by: codex
 ---
@@ -67,7 +67,7 @@ updated_by: codex
 - `main` 禁止直接 push
 - 日常 feature / docs / test work 預設 merge 到 `develop`
 - `main` 只接從 `develop` 進行的 verified release promotion
-- branch roles、isolated worktree 與 merge authority 以 [Branch & Worktree Flow](./branch-and-worktree-flow.md) 為準
+- branch roles、direct-develop policy 與 optional worktree use 以 [Branch & Worktree Flow](./branch-and-worktree-flow.md) 為準
 - guardrail source 的規則變更需同步更新 `.agent/rules`
 
 ## Agent Rule { #agent-rule }
@@ -89,7 +89,7 @@ updated_by: codex
 - `main` must not receive direct pushes.
 - Daily feature/docs/test integration targets `develop` by default.
 - `main` only receives verified release promotion from `develop`.
-- Branch roles, worktree policy, and merge authority are defined in `Branch & Worktree Flow`.
+- Branch roles, direct-develop policy, and optional worktree use are defined in `Branch & Worktree Flow`.
 - Guardrail source changes must keep `.agent/rules` in sync.
 - Benign `404` warnings from docs preview builds do not fail CI by themselves.
 - Any failing required check blocks merge.

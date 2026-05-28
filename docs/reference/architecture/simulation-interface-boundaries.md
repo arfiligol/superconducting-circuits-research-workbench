@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the boundary between Pluto research simulation, Python Notebook API access, Application Simulation Workbench, Backend, and Julia Runner.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -33,7 +33,9 @@ Pluto Notebook
 
 Pluto Notebook is the direct Julia Core research interface. It is used to prototype physics, component APIs, sweeps, and analysis logic.
 
-It is not part of the normal Backend task submission workflow.
+It is not a Backend task submitter in the platform architecture.
+
+Pluto outputs are research-local by default. They are not canonical TraceStore records. If a Pluto result should become official platform data, it must go through an explicit import/publication workflow defined separately.
 
 ## Product Async Track
 
@@ -49,7 +51,9 @@ Electron Application / Python Notebook
 
 Application Simulation Workbench is the productized simulation surface. It submits persisted simulation requests and renders published results.
 
-Python Notebook is a programmable Application client. It may call Backend APIs, but scientific compute should stay in Pluto direct execution or Julia Runner async execution.
+Python Notebook is a programmable Application client. It may call Backend APIs and submit Backend tasks through the Product Async Track.
+
+It must not bypass the Product Async Track by importing Julia Core or using JuliaCall for normal compute. Python Notebook is useful for debugging, migration, API inspection, and emergency data analysis. It is not the research-grade scientific compute cockpit; that role belongs to Pluto.
 
 ## Surface Responsibilities
 

@@ -1,27 +1,10 @@
-## Agent Handoff Formats
-- Planning & Reviewing Agents MUST produce a written `Plan Artifact v1`.
-- Plan artifacts MUST include lifecycle state, owner, supersedes, and retirement criteria.
-- `Plans/` artifacts are active collaboration artifacts, not long-term product SoT.
-- Planning & Reviewing Agents own cleanup/retirement of `Plans/` artifacts during merge pass.
-- Implementation Agents and Test Agents MUST hand off using `Delivery Report v1`.
-- Planning & Reviewing Agents MUST summarize integration and verification using `Review Merge Report v1`.
-- Delivery reports MUST include:
-    - assigned branch/worktree
-    - allowed area
-    - do-not-touch boundary
-    - assigned slice
-    - commit hashes
-    - changed files with reason
-    - test commands and results
-    - API / contract touched matrix
-    - known risks
-- Review merge reports MUST include:
-    - plans lifecycle cleanup result
-    - SoT pages reread
-    - code context reread
-    - UI evidence for user-visible frontend changes
-    - explicit judgement against current docs and product need
-- Reporting quality rules:
-    - lead with conclusion, then evidence
-    - summarize logs instead of dumping long raw output
-    - explicitly separate completed work, verified work, and items needing planning/reviewing decisions
+## Work Summary Formats
+- Ordinary Heavy Development work does not require committed plan artifacts, lane delivery reports, or review merge reports.
+- Do not create new active `Plans/` artifacts.
+- Use concise final summaries with:
+    - changed surfaces
+    - validation commands/results
+    - residual risks or skipped checks
+    - concrete follow-up when needed
+- For broad work, use Summary / Validation / Risks / Notes in the final response or PR body.
+- Long-term decisions must be promoted to `docs/reference/**`.

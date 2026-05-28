@@ -10,8 +10,8 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 current platform 的 app/core/notebooks/scripts/docs canonical surfaces 與 migration residue 邊界。
-version: v4.2.0
+scope: 定義 current platform 的 app/core/notebooks/scripts/docs canonical surfaces、direct-develop iteration 與 migration residue 邊界。
+version: v4.4.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -26,6 +26,8 @@ root-level `backend/`、`frontend/`、`desktop/`、`cli/` 與 `src/` 不再是 a
 
 !!! info "How to use this page"
     當你不確定新檔案該放哪裡時，先看 placement rules，而不是先照習慣找最近的資料夾塞進去。這頁的重點是 owner boundary，不是完整檔案樹教學。
+
+See [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) before changing notebook, Application Simulation Workbench, Backend task, or Runner ownership.
 
 ## Target Layout
 
@@ -45,7 +47,6 @@ superconducting-circuits-tutorial/
 │   ├── pluto/
 │   └── python/
 ├── docs/                      # zh-TW docs, guardrails, and docs staging tree
-├── Plans/                     # active multi-agent planning artifacts; not long-term SoT
 ├── data/                      # raw / processed / trace-store / local DB
 ├── openapi.json               # committed OpenAPI snapshot for contract sync
 └── scripts/
@@ -78,7 +79,6 @@ superconducting-circuits-tutorial/
 | Python backend/data notebook | `notebooks/python/` |
 | Backend/API notebook client | `notebooks/python/` |
 | dev/build/test/maintenance helper | `scripts/dev/`, `scripts/build/`, `scripts/test/`, `scripts/maintenance/` |
-| multi-agent planning, prompt handoff, test backlog | `Plans/`，由 Planning & Reviewing Agent 建立/退休/刪除 |
 | archived legacy UI / command workflow / runtime residue | `docs/archive/` as inert text only, or delete if not needed |
 | retired root worker runtime residue | 不屬於 target layout；不得新增或恢復 |
 | committed OpenAPI contract snapshot | root `openapi.json` |
@@ -103,20 +103,31 @@ superconducting-circuits-tutorial/
 | `src/app/` | must not exist as active UI/runtime code |
 | root worker runtime folder | must not exist as active runtime code |
 
-## Planning Artifacts
+## Architecture Regression Search Gate
 
-`Plans/` 是協作型 delivery artifacts 的暫存與交接區。
-它可以被 commit 以支援多 agents 共享同一份 plan/prompt/test backlog，但它不是長期產品 SoT。
+Use stale-wording searches when architecture docs, guardrails, runtime layout, or app surfaces change. Check for:
+
+- grouped Electron / Pluto / Python notebook task-flow wording;
+- Pluto wording that makes it a Backend workflow participant;
+- Python Notebook wording that makes it a Julia compute path;
+- Simulation Workbench removal or Pluto replacement wording;
+- active CLI, retired Python UI runtime, retired queue-service runtime, or root worker references.
+
+The expected result is no active architecture text that reintroduces old surfaces or confuses notebook/application responsibilities. Hits are acceptable only when they are explicitly forbidden-regression or retired/inert wording.
+
+## Retired Planning Artifacts
+
+`Plans/` is retired as an active repo surface.
+Do not create new committed plan prompts, lane handoffs, or temporary coordination artifacts there.
 
 | Concern | Rule |
 | --- | --- |
-| Owner | Planning & Reviewing Agent |
-| Purpose | active plan、lane prompts、test backlog、review/fixup coordination |
-| Not for | 產品規格、長期 architecture contract、完成後仍有效的操作手冊 |
-| Promotion | 長期決策必須移到 `docs/reference/**` |
-| Cleanup | merge/cleanup pass 必須刪除、退休或明確保留 active backlog |
+| Durable product / architecture decisions | write them under `docs/reference/**` |
+| Ephemeral planning | keep it in the conversation, issue, PR body, or final report |
+| Existing `Plans/` files | delete unless the user explicitly asks to preserve one as archive |
+| New task slicing | use Codex subagents internally; do not commit lane prompts |
 
-若 `Plans/` 內容與 `docs/reference/**` 衝突，以 `docs/reference/**` 為準；Planning & Reviewing Agent 必須更新 plan 或回交 Documentation Agent。
+If a deleted plan contains a durable decision, promote that decision to `docs/reference/**` before relying on it.
 
 ## Related Blueprints
 
@@ -157,7 +168,7 @@ superconducting-circuits-tutorial/
 - **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
 - **Root worker runtime folder** must not be recreated as a runtime surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
-- **Plans** go to `Plans/` only as active multi-agent coordination artifacts; Planning & Reviewing Agents own creation and cleanup, and long-term decisions must move to `docs/reference/**`.
+- **Plans** is retired as an active repo surface; do not create new committed plan prompts or lane handoffs.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
 - Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces.
 - Dependency direction:

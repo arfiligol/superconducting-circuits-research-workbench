@@ -10,8 +10,8 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "定義 migration phases 最低驗收條件、對應測試類型與深度並行前置條件"
-version: v2.0.0
+scope: "定義 migration phases 最低驗收條件、對應測試類型與深度實作前置條件"
+version: v2.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -33,7 +33,7 @@ updated_by: codex
 - identity/workspace minimal model
 - task runtime / Runner protocol / publication contract
 - error model
-- planning artifact format
+- work summary format
 
 ## Gate Map
 
@@ -42,7 +42,7 @@ updated_by: codex
 | 進入深度 implementation 前需要哪些前置物？ | Required Planning Artifacts |
 | 每個 phase 至少要過哪些測試？ | Minimum Gates by Phase |
 | 各層應搭配哪些測試類型？ | Phase-to-Test Mapping |
-| 何時可以讓 Implementation/Test Agents 大規模並行？ | Entry Criteria for Deep Implementation |
+| 何時可以進入較深的跨面實作？ | Entry Criteria for Deep Implementation |
 
 ## Minimum Gates by Phase
 
@@ -70,7 +70,7 @@ updated_by: codex
 
 ## Entry Criteria for Deep Implementation
 
-在 Implementation Agents 與 Test Agents 可以大規模並行開工前，至少要有：
+在進入跨多個 surfaces 的深度實作前，至少要有：
 
 - [Source of Truth Order](../project-basics/source-of-truth-order.md)
 - [Contract Versioning](../code-quality/contract-versioning.md)
@@ -79,8 +79,8 @@ updated_by: codex
 - [App / Backend / Tasks & Execution](../../app/backend/tasks-execution.md)
 - [Parity Matrix](../../architecture/parity-matrix.md)
 - [Canonical Contract Registry](../../architecture/canonical-contract-registry.md)
-- [Multiple Agent Collaboration](./multi-agent-collaboration.md)
-- [Agent Handoff Formats](./contributor-reporting.md)
+- [Codex Subagent Coordination](./multi-agent-collaboration.md)
+- [Work Summary Formats](./contributor-reporting.md)
 
 !!! warning "Do not declare phase completion early"
     若 contract registry、parity matrix、tests 與 workflow recovery 還沒有對上，就不能只因為畫面能跑或 API 回資料就宣告 phase 完成。
@@ -97,7 +97,7 @@ updated_by: codex
     - identity/workspace minimal model
     - task runtime / Runner protocol / publication contract
     - error model
-    - planning artifact format
+    - work summary format
 - If a public contract changes during any phase, update the parity matrix, contract registry, and relevant tests in the same delivery line.
 - Treat recovery/reattach tests as mandatory for workflow-parity phases, not optional polish.
 ```

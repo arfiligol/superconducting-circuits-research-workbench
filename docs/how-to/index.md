@@ -38,7 +38,7 @@ updated_by: docs-team
 - [Reorder IDs](manage-db/reorder-record-ids.md)
 
 ### [Simulation](simulation/index.md)
-透過 Pluto 或 Julia Runner task 執行電路模擬。
+透過 Pluto direct execution 或 Application/Backend → Julia Runner async task 執行電路模擬。
 
 ### [Contributing](contributing.md)
 專案貢獻流程與規範。

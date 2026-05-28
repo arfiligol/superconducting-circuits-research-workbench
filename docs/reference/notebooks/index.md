@@ -18,9 +18,9 @@ Pluto notebooks own direct Julia exploration:
 - sweep design
 - result inspection before productization
 
-Direct notebook execution is allowed. Application-triggered execution must still go through the async Runner path.
+Direct Pluto execution is allowed. Application-triggered execution must still go through the async Runner path.
 
-Pluto notebooks are outside the normal product task workflow. If their outputs should become official platform data, use an explicit import/publication path.
+Pluto notebooks are not Backend task submitters. If their outputs should become official platform data, use an explicit import/publication path.
 
 ## Python
 

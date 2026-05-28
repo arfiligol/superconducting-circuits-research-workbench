@@ -10,7 +10,7 @@
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
-- For user-visible frontend changes, Planning & Reviewing Agents must use Playwright-based smoke verification and screenshot or equivalent visual evidence during merge review.
+- For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.
 - **Desktop foundation checks**:
     - `npm run lint --prefix app/desktop`
     - `npm run build --prefix app/desktop`

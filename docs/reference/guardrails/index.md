@@ -53,7 +53,7 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceSt
 | [Project Basics](./project-basics/index.md) | 任務會改變產品方向、技術選型、資料權威或 repo 結構 | mission、development phase、stack、folder layout、SoT ordering |
 | [Code Quality](./code-quality/index.md) | 任務會改變實作邊界、service pattern、contract handling 或 error/logging behavior | implementation discipline |
 | [UI/UX Quality](./ui-ux-quality/index.md) | 任務會改變 frontend shell、layout、state、routing、component interaction | app frontend quality baseline |
-| [Execution & Verification](./execution-verification/index.md) | 任務需要 build、test、CI、handoff、multi-agent planning 或 phase acceptance | delivery and verification rules |
+| [Execution & Verification](./execution-verification/index.md) | 任務需要 build、test、CI、handoff、subagent coordination 或 phase acceptance | delivery and verification rules |
 | [Documentation Design](./documentation-design/documentation.md) | 任務直接在寫 docs、改 docs IA、frontmatter 或 page specs | documentation writing and layout |
 
 ## Project Basics
@@ -103,9 +103,9 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceSt
 | [Testing](./execution-verification/testing.md) | pytest / Vitest / Playwright / docs checks | [#agent-rule](./execution-verification/testing.md#agent-rule) |
 | [CI Gates](./execution-verification/ci-gates.md) | rewrite branch 的合併品質門檻 | [#agent-rule](./execution-verification/ci-gates.md#agent-rule) |
 | [Phase Gates](./execution-verification/phase-gates.md) | migration phase 的最低驗收條件與測試對照 | [#agent-rule](./execution-verification/phase-gates.md#agent-rule) |
-| [Prompt Grading](./execution-verification/prompt-grading.md) | Planning & Reviewing 發派任務時的粒度與升降級規則 | [#agent-rule](./execution-verification/prompt-grading.md#agent-rule) |
-| [Multiple Agent Collaboration](./execution-verification/multi-agent-collaboration.md) | Documentation / Planning & Reviewing / Implementation / Test Agents 協作框架 | [#agent-rule](./execution-verification/multi-agent-collaboration.md#agent-rule) |
-| [Agent Handoff Formats](./execution-verification/contributor-reporting.md) | plan / delivery / merge handoff 模板 | [#agent-rule](./execution-verification/contributor-reporting.md#agent-rule) |
+| [Task Scope Sizing](./execution-verification/prompt-grading.md) | task 粒度、驗證深度與是否需要短 plan 的判準 | [#agent-rule](./execution-verification/prompt-grading.md#agent-rule) |
+| [Codex Subagent Coordination](./execution-verification/multi-agent-collaboration.md) | Codex-managed subagents 與單一交付責任 | [#agent-rule](./execution-verification/multi-agent-collaboration.md#agent-rule) |
+| [Work Summary Formats](./execution-verification/contributor-reporting.md) | final summary / PR body / risk report 格式 | [#agent-rule](./execution-verification/contributor-reporting.md#agent-rule) |
 | [Commit Standards](./execution-verification/commit-standards.md) | commit 邊界與訊息規範 | [#agent-rule](./execution-verification/commit-standards.md#agent-rule) |
 
 ## Documentation Design

@@ -144,8 +144,8 @@ rules:
     tier: critical
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve branch roles, worktree isolation, merge authority, or bounded autonomous write roots.
-    triggers: ["branch", "branches", "worktree", "git flow", "merge authority", "develop", "main", "sandbox agent", "example agent"]
+    description: Apply when tasks involve branch roles, direct-develop updates, optional worktree isolation, or release promotion.
+    triggers: ["branch", "branches", "worktree", "git flow", "develop", "main", "direct develop", "fast iteration"]
     touched_paths: ["docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "app/desktop/**", "desktop/**", "legacy/**", "src/**", ".github/**"]
 
   - id: multi-agent-collaboration
@@ -153,8 +153,8 @@ rules:
     tier: critical
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve agent roles, planning, handoff, review, or multi-agent delivery flow.
-    triggers: ["agent", "agents", "planning", "review", "implementation", "test agent", "handoff", "collaboration", "multi-agent"]
+    description: Apply when tasks involve Codex subagents, coordination, review, or integrated delivery flow.
+    triggers: ["subagent", "subagents", "agent", "agents", "planning", "review", "handoff", "collaboration", "multi-agent"]
     touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
   - id: contributor-reporting
@@ -162,8 +162,8 @@ rules:
     tier: standard
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks require planning artifacts, delivery reports, or review merge summaries.
-    triggers: ["report", "handoff", "delivery report", "plan artifact", "merge report"]
+    description: Apply when tasks require final summaries, risk reporting, PR body notes, or handoff context.
+    triggers: ["report", "handoff", "summary", "risk", "PR body", "final report"]
     touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
   - id: prompt-grading
@@ -171,8 +171,8 @@ rules:
     tier: standard
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve prompt sizing, work slicing, or planning/review task decomposition.
-    triggers: ["prompt", "slice", "milestone", "phase push", "task decomposition", "planning"]
+    description: Apply when tasks involve scope sizing, work slicing, short planning, or verification depth.
+    triggers: ["prompt", "scope", "slice", "milestone", "phase push", "task decomposition", "planning"]
     touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
   - id: ui-ux-index

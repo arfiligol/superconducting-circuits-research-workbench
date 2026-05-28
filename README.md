@@ -22,7 +22,7 @@ This repository has two execution tracks.
     - local research plots and scratch outputs
 ```
 
-Pluto Notebook is the direct Julia Core research interface. Normal product task submission belongs to the Product Async Track.
+Pluto Notebook is the direct Julia Core research interface. It is not a Backend task submitter in the platform architecture.
 
 ### Product Async Track
 
@@ -56,6 +56,23 @@ Pluto Notebook is the direct Julia Core research interface. Normal product task 
 
 Electron Application owns the productized workflow. Python Notebook is a programmable Application client. Pluto Notebook is not a task submitter.
 
+Python Notebook appears in this track only as a programmable Backend API client. It is not a scientific compute surface and must not directly call Julia Core as its normal workflow.
+
+See [Simulation Interface Boundaries](docs/reference/architecture/simulation-interface-boundaries.md) for the source-of-truth split between Pluto, Python Notebook, Application Simulation Workbench, Backend, and Julia Runner.
+
+## Interface Responsibilities
+
+| Interface | Responsibility |
+| --- | --- |
+| Pluto Notebook | Direct Julia Core research computation |
+| Python Notebook | Programmable Backend API client |
+| Application Simulation Workbench | Productized simulation request builder, task monitor, and result viewer |
+| Raw Data Browser | Trace browsing and comparison |
+| Python Backend | Task lifecycle, metadata, publication, TraceStore APIs |
+| Julia Runner | Async compute execution and local Zarr staging |
+
+Application Simulation Workbench remains mandatory as the productized simulation workflow surface; Pluto is not its replacement.
+
 ## Repository Layout
 
 ```text
@@ -71,6 +88,7 @@ notebooks/
 app/
   backend/
   frontend/
+    # Application Simulation Workbench, Task Monitor, Raw Data Browser, Dataset UI
   desktop/
 scripts/
   dev/
@@ -161,7 +179,7 @@ Build the static docs with:
 
 ## Current Boundaries
 
-- Pluto Notebook is research direct execution; product task submission belongs to the Application and Python client path.
+- Pluto Notebook is research direct execution and is not a Backend task submitter.
 - Python Notebook is a programmable Application client, not a compute cockpit.
 - Application Simulation Workbench remains a first-class product surface.
 - No user-facing command-line workflow surface.

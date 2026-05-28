@@ -11,14 +11,14 @@ status: stable
 owner: docs-team
 audience: team
 scope: "定義 heavy-development 過程中 reference docs、Julia Core/Runner、Backend、adapter、legacy behavior 的裁決順序"
-version: v2.0.0
+version: v2.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Source of Truth Order
 
-本文件定義目前 reference 體系的裁決順序，避免 Documentation / Planning & Reviewing / Implementation / Test Agents 在 shared contract、backend authority、Runner boundary、page spec 與 implementation 之間自行猜測。
+本文件定義目前 reference 體系的裁決順序，避免人類、Codex 或 Codex subagents 在 shared contract、backend authority、Runner boundary、page spec 與 implementation 之間自行猜測。
 
 !!! warning "Concern-first resolution"
     不可只看「哪個檔案層級比較前面」就裁決衝突。

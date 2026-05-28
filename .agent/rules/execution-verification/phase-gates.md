@@ -7,6 +7,6 @@
     - identity/workspace minimal model
     - task runtime / Runner protocol / publication contract
     - error model
-    - planning artifact format
+    - work summary format
 - If a public contract changes during any phase, update the parity matrix, contract registry, and relevant tests in the same delivery line.
 - Treat recovery/reattach tests as mandatory for workflow-parity phases, not optional polish.

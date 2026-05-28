@@ -34,11 +34,11 @@
     - Julia Runner
     - no separate queue service
 - **Interface boundaries**:
-    - Pluto Notebook is the direct Julia research cockpit.
-    - Product task submission belongs to the Application and Python client path.
-    - Python Notebook is a programmable Backend API client.
-    - Python notebook clients must not use `SuperconductingCircuitsCore` or JuliaCall as their normal compute path.
+    - Pluto Notebook is the direct Julia Core research interface and must not submit Backend tasks.
+    - Python Notebook is a programmable Backend API client and must not directly call Julia Core or use JuliaCall as normal compute.
     - Application Simulation Workbench is first-class and submits persisted async tasks through Python Backend and Julia Runner.
+    - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
+    - Julia Runner owns async compute execution and local Zarr staging.
 - **Scripts**:
     - `scripts/dev/`
     - `scripts/build/`
