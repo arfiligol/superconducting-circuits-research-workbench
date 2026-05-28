@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: current platform 的 Notebook/Application/Julia Runner 技術選型與工具規範。
-version: v3.3.0
+version: v3.4.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -33,7 +33,7 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 | `app/backend/` | canonical Python Backend control/data plane |
 | `app/frontend/` | canonical Next.js application surface |
 | `app/desktop/` | canonical Electron shell surface |
-| `core/julia/SuperconductingCircuitsCore/` | reusable Julia circuit construction / simulation / analysis library |
+| `core/julia/SuperconductingCircuitsCore/` | docs-defined Julia Core Authoring model, simulation helpers, and analysis helpers |
 | `core/julia/SuperconductingCircuitsRunner/` | async Julia compute runner |
 | `core/python/sc_data_contracts/` | optional shared Python schemas/contracts |
 | `notebooks/pluto/` | Julia research cockpit |
@@ -68,7 +68,7 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 
 ### Pluto Notebook
 
-Pluto Notebook is the direct Julia Core research interface. It may directly use `SuperconductingCircuitsCore`, JosephsonCircuits.jl wrappers, sweep helpers, and Julia analysis helpers.
+Pluto Notebook is the direct Julia Core research interface. It may directly use `SuperconductingCircuitsCore` through the docs-defined Julia Core Authoring model, compiler path, simulation helpers, sweep helpers, and Julia analysis helpers.
 
 It is not a Backend task submitter in the platform architecture. If a Pluto result should become official platform data, it must go through an explicit import/publication path defined separately.
 
@@ -150,7 +150,7 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 - 不可把業務流程塞進 Electron main process
 - desktop 包裝不改變 canonical frontend/backend/runner 邊界
 - desktop local mode starts frontend, Python Backend, and Julia Runner
-- desktop local mode must not start a separate queue worker service
+- desktop local mode must not start a separate queue service
 
 ### Backend
 
@@ -185,15 +185,18 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 
 ### Scientific Core
 
-- `SuperconductingCircuitsCore` owns reusable circuit construction, delayed lowering, JosephsonCircuits wrappers, sweep helpers, and analysis helpers
-- `SuperconductingCircuitsRunner` owns task polling/claiming, execution dispatch, local Zarr staging, manifest writing, progress/heartbeat/complete/fail reporting
+- `SuperconductingCircuitsCore` owns the docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers.
+- `SuperconductingCircuitsRunner` calls Julia Core for deterministic task execution and owns task polling/claiming, dispatch, local Zarr staging, manifest writing, progress/heartbeat/complete/fail reporting.
+- Runner adapters must not create a separate circuit construction path.
+- Runner adapters must not preserve outdated Core APIs as fallback paths.
 - Julia Runner does not write formal metadata DB records
 - Python Backend validates Runner manifests and publishes result Zarr into official TraceStore
 
 ### Removed Surface Notes
 
 - root `backend/`, `frontend/`, and `desktop/` must not exist as active surfaces after relocation to `app/`
-- root command workflow, legacy UI code, and root runtime-worker code are removed from active package discovery
+- root command workflow, legacy UI code, and retired root runtime-worker path names are removed from active package discovery
+- Any mention of historical `src/worker` paths refers to retired legacy code, not the active Julia Runner role.
 - root `src/` must not be re-legitimized as canonical target topology
 
 ## Forbidden Architecture Regressions
@@ -208,7 +211,7 @@ The following changes require a new SoT decision before implementation:
 - Reintroducing a user-facing CLI product surface.
 - Reintroducing NiceGUI or any retired Python UI runtime.
 - Reintroducing Redis/RQ as the default local runtime queue.
-- Recreating root-level `backend/`, `frontend/`, `desktop/`, `cli/`, or `src/worker` as active architecture surfaces.
+- Recreating root-level `backend/`, `frontend/`, `desktop/`, `cli/`, or historical `src/worker` legacy paths as active architecture surfaces.
 
 ## Storage Direction
 
@@ -265,9 +268,11 @@ The following changes require a new SoT decision before implementation:
     - fsspec
 - **Julia Core**:
     - `core/julia/SuperconductingCircuitsCore/`
-    - reusable circuit construction, simulation, sweep, and analysis library
+    - docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers
 - **Julia Runner**:
     - `core/julia/SuperconductingCircuitsRunner/`
+    - calls Julia Core for deterministic task execution
+    - Runner adapters must not create a separate circuit construction path or preserve outdated Core APIs as fallback paths
     - HTTP.jl
     - JSON3.jl
     - StructTypes.jl

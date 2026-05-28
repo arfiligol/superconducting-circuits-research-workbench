@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 定義 Python Backend control/data plane、Runner protocol 與 TraceStore publication 邊界。
-version: v2.0.0
+version: v2.0.1
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -91,7 +91,7 @@ app/backend/src/app/
 
 ## Runner Protocol
 
-Backend exposes these Runner-only endpoints:
+Backend exposes these Runner protocol endpoints:
 
 - `POST /runner/v1/tasks/claim`
 - `POST /runner/v1/tasks/{task_id}/heartbeat`

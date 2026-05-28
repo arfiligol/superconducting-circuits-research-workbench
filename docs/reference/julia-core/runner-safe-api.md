@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -41,6 +41,8 @@ Pluto should not require a special compute path. Runner execution should call th
 
 The caller may provide different inputs and output handling, but it should not redefine component construction or compiler semantics.
 
+Runner execution calls Julia Core for deterministic task execution. It does not own a separate circuit construction model.
+
 ## Boundary Rules
 
 | Boundary | Rule |
@@ -52,6 +54,8 @@ The caller may provide different inputs and output handling, but it should not r
 | Application / Electron | owns product UI and desktop process supervision |
 
 Julia Core must not depend on FastAPI, Next.js, Electron, or Backend task state.
+
+The Runner owns execution orchestration and staged output, not authoring semantics. Circuit construction, endpoint resolution, compiler semantics, and simulation result extraction belong to Julia Core.
 
 Large numeric arrays should not move through HTTP JSON. Runner outputs should use staged local filesystem packages, with Backend publication handling canonical TraceStore records.
 
@@ -78,6 +82,14 @@ result = run_frequency_sweep(compiled, task_input.frequency_range_hz)
 
 The Runner adapter may map task payloads into this flow, but the mapping layer should stay outside the Core authoring model.
 
-## Unsupported Shortcut
+## Unsupported Shortcuts
 
-Do not add a second circuit builder inside the Runner adapter. If a task needs a new circuit shape, add or update the reusable Julia Core component and plan builder, then let both Pluto and Runner call it.
+Do not add a second circuit builder inside the Runner adapter.
+
+Do not add Runner-only component construction.
+
+Do not preserve old Core APIs as Runner fallback paths.
+
+Do not bypass the Circuit Plan, Endpoint, Relation, Compiler, or `JosephsonCompiledCircuit` model in Runner code.
+
+If a task needs a new circuit shape, add or update the reusable Julia Core component, endpoint, relation, or compiler path, then let both Pluto and Runner call it.

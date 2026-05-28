@@ -40,6 +40,8 @@ POST /runner/v1/tasks/{task_id}/fail
 
 Application-triggered work must use this async path. Pluto notebooks may still execute Julia Core directly because the notebook kernel is an explicit research execution environment.
 
+For circuit construction tasks, the Runner must call the docs-defined Julia Core Authoring path: components, endpoints, Circuit Plan, compiler, and compiled circuit output. It must not maintain a separate Runner-only construction model.
+
 ## Test Fixtures Are Not Task Kinds
 
 Small staged Zarr fixtures may be used in tests to validate the Backend publisher and manifest validation path.
