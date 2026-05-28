@@ -10,7 +10,7 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 目前 workspace 的 guardrails 總索引，供人類與 AI Agent 載入任務相關規則。
+scope: workspace guardrails 總索引，供人類與 AI Agent 載入任務相關規則。
 version: v3.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -18,17 +18,13 @@ updated_by: codex
 
 # Guardrails
 
-本區是目前 workspace 的開發規範單一真理來源。
-這個 branch 的核心方向已改為 **Notebook Interface + Electron Application Interface + Julia Runner Compute Plane**。
+本區是 workspace 的開發規範單一真理來源。
+核心方向是 **Notebook Interface + Electron Application Interface + Julia Runner Compute Plane**。
 Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceStore 由 Backend publication 流程管理。
 
 !!! info "How to read this section"
     先看 `Project Basics`，再依工作性質進入 `Code Quality`、`UI/UX Quality`、`Execution & Verification` 或 `Documentation Design`。
     不要把整個 guardrails tree 當成一次性必讀清單；先找 owner section，再讀子頁。
-
-!!! important "Current development mode"
-    現階段是 Heavy Development / No Compatible Fallback。
-    backward-compatible fallback 不是預設要求；若某個相容層真的必須保留，必須由 owner SoT 明確寫出。
 
 === "Human Developers"
 
@@ -50,10 +46,10 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceSt
 
 | Section | Use this when | Primary focus |
 | --- | --- | --- |
-| [Project Basics](./project-basics/index.md) | 任務會改變產品方向、技術選型、資料權威或 repo 結構 | mission、development phase、stack、folder layout、SoT ordering |
+| [Project Basics](./project-basics/index.md) | 任務會改變產品方向、技術選型、資料權威或 repo 結構 | mission、stack、folder layout、SoT ordering |
 | [Code Quality](./code-quality/index.md) | 任務會改變實作邊界、service pattern、contract handling 或 error/logging behavior | implementation discipline |
 | [UI/UX Quality](./ui-ux-quality/index.md) | 任務會改變 frontend shell、layout、state、routing、component interaction | app frontend quality baseline |
-| [Execution & Verification](./execution-verification/index.md) | 任務需要 build、test、CI、handoff、subagent coordination 或 phase acceptance | delivery and verification rules |
+| [Execution & Verification](./execution-verification/index.md) | 任務需要 build、test、CI、handoff 或 subagent coordination | delivery and verification rules |
 | [Documentation Design](./documentation-design/documentation.md) | 任務直接在寫 docs、改 docs IA、frontmatter 或 page specs | documentation writing and layout |
 
 ## Project Basics
@@ -102,7 +98,6 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceSt
 | [Linting & Formatting](./execution-verification/linting.md) | Ruff / BasedPyright / frontend checks | [#agent-rule](./execution-verification/linting.md#agent-rule) |
 | [Testing](./execution-verification/testing.md) | pytest / Vitest / Playwright / docs checks | [#agent-rule](./execution-verification/testing.md#agent-rule) |
 | [CI Gates](./execution-verification/ci-gates.md) | rewrite branch 的合併品質門檻 | [#agent-rule](./execution-verification/ci-gates.md#agent-rule) |
-| [Phase Gates](./execution-verification/phase-gates.md) | migration phase 的最低驗收條件與測試對照 | [#agent-rule](./execution-verification/phase-gates.md#agent-rule) |
 | [Task Scope Sizing](./execution-verification/prompt-grading.md) | task 粒度、驗證深度與是否需要短 plan 的判準 | [#agent-rule](./execution-verification/prompt-grading.md#agent-rule) |
 | [Codex Subagent Coordination](./execution-verification/multi-agent-collaboration.md) | Codex-managed subagents 與單一交付責任 | [#agent-rule](./execution-verification/multi-agent-collaboration.md#agent-rule) |
 | [Work Summary Formats](./execution-verification/contributor-reporting.md) | final summary / PR body / risk report 格式 | [#agent-rule](./execution-verification/contributor-reporting.md#agent-rule) |
@@ -129,7 +124,7 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceSt
 - Use `_agent_catalog.yml` to load only task-relevant guardrails instead of loading the full tree.
 - Current architecture is Notebook Interface + Electron Application Interface + Julia Runner Compute Plane.
 - Python Backend is the control/data plane; Julia Runner is the compute plane; Backend-managed TraceStore is the official numeric authority.
-- Legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are migration evidence, not active product/runtime surfaces.
+- Retired command workflow, Python UI runtime, separate queue worker runtime, and Python in-process Julia execution have no authority over current product/runtime surfaces.
 - `.agent/rules/` must be synchronized one-to-one from each guardrail file's `## Agent Rule` block whenever guardrail source changes.
 ```
     安裝與載入是兩件不同的事；任務中通常只需要載入少數必要規則。

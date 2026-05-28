@@ -33,26 +33,26 @@ updated_by: codex
     - UI 若需 readability，可顯示 short `Schema ID`，但 canonical persisted identity 仍是 full UUIDv4
     - 同名 schema 的辨識必須依 short `Schema ID`、`created_at`，以及必要時的 owner / workspace context
 
-!!! warning "No transition period"
-    - 目前 SoT 不承認 legacy numeric definition identity
+!!! warning "UUIDv4-only contract"
+    - 目前 SoT 不承認 numeric definition identity
     - runtime path 不得保留 dual-ID compatibility
     - catalog、editor、schemdraw、simulation 與 task binding 一律以 UUIDv4-only `definition_id` 運作
 
 !!! important "Database version control uses Alembic"
     - backend metadata DB schema versioning 由 Alembic 管理
     - `bootstrap_metadata_schema()` 在 app startup 執行 `alembic upgrade head`
-    - schema identity 的 numeric -> UUIDv4 cutover 由 revision `20260324_0006_definition_identity_uuid_cutover` 升級既有 metadata rows
-    - `alembic_version` 是 metadata DB 的 schema-version authority；reset / rebuild tools 不是 canonical migration strategy
+    - `alembic_version` 是 metadata DB 的 schema-version authority
+    - reset / rebuild tools 不是 canonical schema-version strategy
 
-## Persistence And Migration Contract
+## Persistence And Schema Version Contract
 
 | Concern | Contract |
 |---|---|
 | Metadata DB schema versioning | Alembic revision chain is authoritative |
 | App startup bootstrap | `bootstrap_metadata_schema()` runs Alembic upgrade to `head` before repositories/services consume the DB |
-| Breaking persisted identity change | must ship as an Alembic revision recorded in the metadata DB migration chain |
-| Legacy numeric `definition_id` rows | upgraded in-place to UUIDv4 by revision `20260324_0006_definition_identity_uuid_cutover` |
-| Reset / rebuild tools | development-only recovery path; not the canonical production or team migration story |
+| Persisted identity changes | must ship as Alembic revisions recorded in the metadata DB schema-version chain |
+| Numeric `definition_id` payloads | rejected by the API contract; UUIDv4 is the only valid persisted identity shape |
+| Reset / rebuild tools | development-only recovery path; not the canonical production or team schema-version story |
 
 ---
 

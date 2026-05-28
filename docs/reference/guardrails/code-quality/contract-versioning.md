@@ -10,32 +10,26 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "定義 heavy-development 期間 canonical contracts、資料格式與 adapter payload 的版本與相容性策略"
-version: v1.3.0
+scope: "定義 canonical contracts、資料格式與 adapter payload 的版本策略"
+version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Contract Versioning
 
-本文件定義 migration 期間 contract 演進的最低要求，避免 Julia Core、Julia Runner、Python Backend、Notebook、frontend 之間各自演化。
+本文件定義 contract 演進的最低要求，避免 Julia Core、Julia Runner、Python Backend、Notebook、frontend 之間各自解讀資料格式與 API payload。
 
 !!! info "How to read this page"
-    先判斷變更碰到哪一種 contract，再判斷變更類型是 additive、soft-breaking 還是 breaking。最後依照 required update set 補齊文件與測試。
-
-!!! important "Heavy Development / No Compatible Fallback"
-    目前階段是 **Heavy Development**，不是 release compatibility phase。
-    預設政策是 **No Compatible Fallback**：backward compatibility、dual-path adapter、legacy fallback UI、read-compat shim 都不是預設交付要求。
-    首要目標是把 current product 打穩，讓下一次真的部署上線時功能充分且穩定。
-    既有底層 migration、runtime 或 rebuild 機制可以保留，但不得被 agent 自行升格成產品相容性承諾。
+    先判斷變更碰到哪一種 contract，再判斷變更類型是 additive、soft-breaking 還是 breaking。最後依照 required update set 補齊 owner docs、canonical registry 與測試。
 
 ## Decision Map
 
 | 先回答 | 再決定 |
 | --- | --- |
 | 這是哪一類 contract？ | 需不需要 version-aware 欄位或 lockstep 說明 |
-| 這是 additive 還是 breaking？ | 是否必須同步更新 registry / parity / cutover notes |
-| 這是 persisted data 嗎？ | 是否需要 migration、rebuild 或 explicit unsupported note |
+| 這是 additive 還是 breaking？ | 是否必須同步更新 owner docs、canonical registry 與 tests |
+| 這是 persisted data 嗎？ | 是否需要 schema update、data transform、rebuild path 或 explicit unsupported-data rule |
 
 ## Contracts That Must Be Version-Aware
 
@@ -44,7 +38,8 @@ updated_by: codex
 - task submission / task detail / task result contracts
 - session / workspace context payloads
 - Runner task claim/complete/fail payloads and manifest contracts
-- Notebook inspection/task-submission payloads
+- Notebook inspection payloads
+- Python Backend API payloads
 
 ## Version Fields
 
@@ -55,66 +50,58 @@ updated_by: codex
 | Runner manifest | explicit `schema_version` and validation contract |
 | task/result handle | 必須可追到 result/provenance contract 版本 |
 
-## Compatibility Classes
+## Change Classes
 
 | 類型 | 定義 | 預設處理 |
 | --- | --- | --- |
-| Additive | 新增可選欄位、附加 metadata、保留舊欄位語意 | 可接受，但仍需更新 reference |
+| Additive | 新增可選欄位、附加 metadata、保留舊欄位語意 | 可接受，但仍需更新 owner reference |
 | Soft-breaking | 欄位仍存在，但預設值、排序、空值語意改變 | 視為高風險，需同步寫明行為改變 |
-| Breaking | 刪除欄位、改型別、改必要欄位、改 enum / lifecycle 語意 | heavy-development 期間可接受；必須更新 registry / parity / cutover notes / tests |
+| Breaking | 刪除欄位、改型別、改必要欄位、改 enum / lifecycle 語意 | 必須更新 owner docs、canonical registry、data handling story 與 tests |
 
 ## Persisted Data Rules
 
-- No Compatible Fallback 不代表可以靜默破壞資料；它代表 read-compatible fallback 不是預設 requirement。
-- SQLite metadata、TraceStore payload、export artifact 若因 current product 收斂而 breaking，至少要有下列其一：
-  - migration script
-  - explicit rebuild path
-  - explicit unsupported cutover note
-  - read-compat fallback（只有 owner SoT 明確要求時才需要）
-  - one-time rebuild strategy，且在 parity matrix 記錄影響範圍
-- Julia Core / Runner 與 backend 不得各自維護不同版本解讀規則
-- 既有底層 migration / rebuild / reset tooling 可以保留；除非 owner SoT 要求，不需要為了表面相容性把它們擴成 dual-runtime product path
+- SQLite metadata、TraceStore payload、export artifact 的 persisted contract 不能靜默失效。
+- 如果 persisted contract 改變，必須明確提供下列其中一種 data handling story：
+  - schema update script or Alembic revision
+  - deterministic data transform
+  - rebuild path
+  - explicit unsupported-data rule surfaced in owner docs
+- Julia Core / Runner 與 backend 不得各自維護不同版本解讀規則。
+- Reset/rebuild tooling 可以作為 development recovery path，但不能取代 owner docs 中的 persisted data rule。
 
-## Compatibility Rules
-
-!!! warning "Do not fake compatibility"
-    不要只在 adapter 裡偷偷補 patch，卻讓 registry、parity matrix、reference docs 看起來像完全相容。文件與實作必須同時承認 breaking reality。
+## Contract Rules
 
 | 規則 | 說明 |
 | --- | --- |
-| Compatibility is opt-in | 沒有 owner SoT 明確要求時，不新增 backward-compatible fallback 或 legacy shim |
-| Breaking changes require an explicit note | reference docs、parity matrix、contract registry 與 cutover/migration/rebuild/unsupported notes 必須同步更新 |
-| Heavy-development branch is lockstep by default | 目前不承諾 frontend/backend/runner/core/notebook 的跨 minor 版本相容 |
-| Persisted data needs an explicit cutover story | DB、TraceStore、export artifact 若失去舊資料可讀性，必須寫明 migrate、rebuild 或 unsupported，不可靜默失效 |
+| Contract changes update owner docs | 變更欄位、enum、lifecycle、manifest 或 task payload 時，先更新 owner reference |
+| Registry stays aligned | cross-layer contract 必須同步更新 [Canonical Contract Registry](../../architecture/canonical-contract-registry.md) |
+| Persisted data needs a data handling story | DB、TraceStore、export artifact 的破壞性變更不可靜默失效 |
+| Legacy fallback is not implied | 不因舊資料或舊 adapter 存在就新增 dual-path product behavior |
+| Tests prove the contract | 對應 tests 必須驗證新的 success path 與 rejection path |
 
 ## Required Update Set for Breaking Changes
 
 任何 breaking contract 變更，都必須在同一交付線更新：
 
-1. reference docs
-2. [Parity Matrix](../../architecture/parity-matrix.md)
-3. [Canonical Contract Registry](../../architecture/canonical-contract-registry.md)
-4. cutover / migration / rebuild / unsupported notes
-5. 對應測試
+1. owner reference docs
+2. [Canonical Contract Registry](../../architecture/canonical-contract-registry.md)
+3. persisted data handling story, when the contract stores data
+4. relevant tests
 
 !!! tip "Fast check"
-    如果你無法在同一交付線同時回答「舊資料要 migrate、rebuild 還是明確不支援、consumer 怎麼知道版本變了、哪些文件要更新」，就還不應該送出 breaking contract change。
+    如果你無法在同一交付線同時回答「資料如何維持可解讀、consumer 怎麼知道版本變了、哪些 owner docs 要更新、哪些 tests 驗證拒絕路徑」，就還不應該送出 breaking contract change。
 
 ## Agent Rule { #agent-rule }
 
 ```markdown
 ## Contract Versioning
 - Treat circuit definitions, dataset/trace/result contracts, task contracts, Runner manifests, session/workspace payloads, and notebook/API payloads as version-aware surfaces.
-- Current mode is **Heavy Development / No Compatible Fallback** until an owner SoT explicitly changes the release phase.
-- Backward compatibility is opt-in, not default; do not add dual-path adapters, legacy fallback UI, read-compat shims, or compatibility patches unless an owner SoT requires them.
-- Any breaking contract change MUST update:
-    - reference docs
-    - parity matrix
-    - contract registry
-    - cutover/migration/rebuild/unsupported notes
+- Contract changes MUST update:
+    - owner reference docs
+    - canonical contract registry
+    - persisted data handling story, when the contract stores data
     - relevant tests
-- During heavy development, assume frontend/backend/runner/core/notebook contracts evolve in lockstep on the same branch unless an explicit compatibility promise is documented.
-- Persisted DB/TraceStore/exported data MUST have an explicit migration, rebuild, or unsupported-cutover story before breaking a contract; read-compat fallback is not required by default.
-- Existing low-level migration/runtime/rebuild mechanisms may remain; do not delete them solely because compatibility guarantees are paused.
-- Do not hide compatibility patches only inside adapters; document them.
+- Persisted DB/TraceStore/exported data MUST have an explicit schema update, deterministic transform, rebuild path, or unsupported-data rule before breaking a contract.
+- Legacy fallback is not implied by old data or old adapters; only add dual-path product behavior when an owner SoT requires it.
+- Do not hide contract patches only inside adapters; document them in the owner docs and registry.
 ```

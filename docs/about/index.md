@@ -182,11 +182,4 @@ template: marketing.html
     </div>
   </section>
 
-  <section class="sc-marketing-section sc-marketing-section--cta">
-    <div class="sc-marketing-section__header">
-      <p class="sc-marketing-kicker">Next</p>
-      <h2>下一頁會把這個 design-to-measurement 平台，拆成更具體的系統能力。</h2>
-    </div>
-    <a class="sc-inline-cta" href="./product-capabilities/">前往產品能力</a>
-  </section>
 </section>

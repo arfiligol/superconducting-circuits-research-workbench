@@ -59,7 +59,7 @@ julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
 ```
 
-Runner tests must cover JSON task contract parsing, manifest generation, local Zarr write with small real/imag trace, manifest path/shape validation helpers, and fake `julia_runner_smoke` dispatch.
+Runner tests must cover JSON task contract parsing, manifest generation, local Zarr write with small real/imag fixture data, manifest path/shape validation helpers, unsupported task failure, and real task dispatch boundaries.
 
 ## Frontend
 

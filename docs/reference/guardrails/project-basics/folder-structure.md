@@ -170,7 +170,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
 - **Plans** is retired as an active repo surface; do not create new committed plan prompts or lane handoffs.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
-- Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces.
+- Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces.
 - Dependency direction:
     - frontend depends on API contracts, not backend internals
     - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership

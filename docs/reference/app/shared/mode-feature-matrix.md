@@ -48,7 +48,7 @@ The same application surfaces are used in local and online modes. Runtime owners
 | Capability | Local Mode | Online Mode | Notes |
 |---|---|---|---|
 | App-triggered simulation | `full` | `full` | asynchronous Julia Runner task |
-| App-triggered analysis | `planned` | `planned` | same runner task pattern |
+| App-triggered analysis | `full` | `full` | asynchronous Julia Runner task |
 | Notebook direct execution | `full` | `reduced` | explicit research execution environment |
 | User-facing command workflow | `removed` | `removed` | scripts are not product surface |
 

@@ -51,9 +51,9 @@ The notebook may call Julia Core directly and inspect intermediate arrays.
 Use the Application Interface when the fit should become a tracked task.
 The backend creates a task such as `julia_analysis_resonance_fit`, the Julia Runner writes result artifacts, and the backend validates and publishes derived results.
 
-!!! warning "Initial implementation scope"
-    The first Julia Runner implementation only needs `julia_runner_smoke` and `julia_simulation_parameter_sweep`.
-    LC-SQUID fitting is a compute-plane task kind reserved by the contract, not a required first task implementation.
+!!! info "Fitting execution boundary"
+    LC-SQUID fitting belongs to either direct research execution in Pluto or tracked async execution through Julia Runner.
+    Runner-produced fitting results must use the manifest/TraceStore publication contract.
 
 ---
 

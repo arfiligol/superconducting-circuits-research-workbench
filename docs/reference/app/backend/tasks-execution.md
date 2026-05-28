@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Backend task lifecycle, runner API, staging result validation, and TraceStore publication
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -49,14 +49,16 @@ cancelled
 | `runner_id` | claiming runner identity |
 | `claimed_at`, `started_at`, `heartbeat_at`, `completed_at` | lifecycle timestamps |
 
-## Initial Task Kinds
+## Runner Task Families
 
 | Kind | Purpose |
 |---|---|
-| `julia_runner_smoke` | fake compute task for local contract and CI |
-| `julia_simulation_parameter_sweep` | first real simulation/sweep task family |
+| `julia_simulation_frequency_sweep` | frequency-sweep simulation through Julia Runner |
+| `julia_simulation_parameter_sweep` | parameterized simulation/sweep task family |
+| `julia_analysis_trace_summary` | analysis task family for published trace summaries |
+| `julia_postprocess_coordinate_transform` | post-processing task family for explicit transform jobs |
 
-The contract also allows future Julia analysis and post-processing task kinds, but unsupported kinds must fail clearly instead of falling back to legacy execution.
+Unknown or unsupported task kinds fail clearly. Runner execution must not fall back to fixture output.
 
 ## Runner API
 
@@ -75,8 +77,24 @@ The contract also allows future Julia analysis and post-processing task kinds, b
 {
   "task": {
     "task_id": "task_001",
-    "task_kind": "julia_runner_smoke",
-    "input": {},
+    "task_kind": "julia_simulation_frequency_sweep",
+    "input": {
+      "simulation_setup": {
+        "frequency_sweep": {
+          "start_ghz": 4.0,
+          "stop_ghz": 6.0,
+          "point_count": 401,
+          "spacing": "linear"
+        },
+        "parameter_sweeps": [],
+        "solver": {
+          "solver_family": "josephson_circuits",
+          "max_iterations": 100,
+          "convergence_tolerance": 1e-6
+        },
+        "sources": []
+      }
+    },
     "output_target": {
       "dataset_id": "ds_001",
       "design_id": "design_001"
@@ -128,6 +146,12 @@ When the runner completes:
 | no trusted manifest claims | backend verifies every declared array |
 | no large JSON arrays | numeric traces live in Zarr only |
 | no complex dtype reliance | complex traces use real/imag arrays |
+
+## Execution Rules
+
+- Runner task execution must never silently replace real compute with fixture output.
+- Test fixtures may write small staged Zarr packages, but fixture writers are not product task kinds.
+- Unsupported task dispatch must report failure rather than complete with fake traces.
 
 ## Related
 

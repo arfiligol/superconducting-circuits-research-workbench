@@ -1,14 +1,10 @@
 ## Contract Versioning
 - Treat circuit definitions, dataset/trace/result contracts, task contracts, Runner manifests, session/workspace payloads, and notebook/API payloads as version-aware surfaces.
-- Current mode is **Heavy Development / No Compatible Fallback** until an owner SoT explicitly changes the release phase.
-- Backward compatibility is opt-in, not default; do not add dual-path adapters, legacy fallback UI, read-compat shims, or compatibility patches unless an owner SoT requires them.
-- Any breaking contract change MUST update:
-    - reference docs
-    - parity matrix
-    - contract registry
-    - cutover/migration/rebuild/unsupported notes
+- Contract changes MUST update:
+    - owner reference docs
+    - canonical contract registry
+    - persisted data handling story, when the contract stores data
     - relevant tests
-- During heavy development, assume frontend/backend/runner/core/notebook contracts evolve in lockstep on the same branch unless an explicit compatibility promise is documented.
-- Persisted DB/TraceStore/exported data MUST have an explicit migration, rebuild, or unsupported-cutover story before breaking a contract; read-compat fallback is not required by default.
-- Existing low-level migration/runtime/rebuild mechanisms may remain; do not delete them solely because compatibility guarantees are paused.
-- Do not hide compatibility patches only inside adapters; document them.
+- Persisted DB/TraceStore/exported data MUST have an explicit schema update, deterministic transform, rebuild path, or unsupported-data rule before breaking a contract.
+- Legacy fallback is not implied by old data or old adapters; only add dual-path product behavior when an owner SoT requires it.
+- Do not hide contract patches only inside adapters; document them in the owner docs and registry.

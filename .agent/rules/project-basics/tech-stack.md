@@ -34,9 +34,11 @@
     - Julia Runner
     - no separate queue service
 - **Interface boundaries**:
-    - Pluto Notebook is the direct Julia Core research interface and must not submit Backend tasks.
+    - Pluto Notebook is the direct Julia Core research interface.
+    - Backend task submission is outside the Pluto Notebook role.
     - Python Notebook is a programmable Backend API client and must not directly call Julia Core or use JuliaCall as normal compute.
     - Application Simulation Workbench is first-class and submits persisted async tasks through Python Backend and Julia Runner.
+    - Runner fixture outputs are test utilities only, not product task kinds.
     - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
     - Julia Runner owns async compute execution and local Zarr staging.
 - **Scripts**:
@@ -47,7 +49,7 @@
     - no active command-line product surface
 - **Topology**:
     - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
-    - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces
+    - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
 - **Quality tools**:
     - Ruff
     - BasedPyright

@@ -130,7 +130,7 @@ DatasetRecord
 | rename | updates `name` / display metadata only; `design_id` remains stable | may submit requested label and refresh returned row |
 | merge | re-parents source-scope records into target scope, archives source scope, and writes `redirect_design_id=target_design_id` | may request source + target, then follow backend redirect / returned rows |
 | archive | removes scope from default target selectors and normal analysis targets while preserving persisted history | may hide from normal selectors and expose archived state in browse/history contexts |
-| delete | terminal soft lifecycle state for scopes that are not usable as targets; physical purge is not phase-1 contract | may show destructive confirmation, but must rely on backend `allowed_actions` |
+| delete | terminal soft lifecycle state for scopes that are not usable as targets; physical purge is outside the normal scope lifecycle contract | may show destructive confirmation, but must rely on backend `allowed_actions` |
 
 ### Target Design Scope Selection
 
@@ -154,7 +154,7 @@ Data Ingestion and Simulation publication both require an explicit target scope 
 | Re-parented objects | backend must re-parent trace metadata, trace batches, trace-batch links, analysis runs, result artifacts, derived parameters, design assets, readiness summaries and design-scoped read models |
 | Source scope after merge | source scope becomes `archived` with `redirect_design_id` pointing to target |
 | Target scope after merge | target keeps its `design_id`; source coverage, trace counts, compare readiness, collection projections, analysis readiness and tagged metric summaries must be refreshed or invalidated |
-| TraceStore | phase-1 merge may leave physical TraceStore paths untouched; `store_ref` is backend-owned opaque locator and remains valid after metadata re-parenting |
+| TraceStore | merge does not require physical TraceStore path rewrites; `store_ref` is backend-owned opaque locator and remains valid after metadata re-parenting |
 | Identity stability | trace, batch, run, artifact and derived-parameter identities remain stable unless a dedicated migration contract says otherwise |
 
 !!! warning "Frontend does not re-parent"
@@ -314,7 +314,7 @@ recommended materialization targets：
 | grid rank / shape | `ndim`、`shape` |
 | axis structure | `axis_names`、`axis_units`、`axis_lengths` |
 | sweep readiness | `available_sweep_axes` |
-| phase-1 filtering scope | summary-safe axis existence / shape / typing；不含 coordinate-value / range filtering |
+| summary-safe filtering contract | axis existence / shape / typing；不含 coordinate-value / range filtering |
 | coordinate identity | `axis_signature` 或等價的 coordinate/hash summary |
 | scientific identity | `family`、`parameter`、`representation`、`source_kind`、`stage_kind` |
 | collection derivation | lineage / batch summary、shared-axis summary |
@@ -476,10 +476,10 @@ batch 與 trace 的 membership 關聯。
 
 ## TraceStore Direction
 
-`TraceStore` 採 `Zarr`，並保留 backend abstraction：
+`TraceStore` 採 `Zarr`，並保留 backend storage abstraction：
 
-- 現階段：local filesystem
-- storage extension（deferred）：S3-compatible endpoint（例如 MinIO / S3）
+- baseline：local filesystem Zarr managed by Python Backend
+- remote object storage：only allowed after a storage-backend SoT defines adapter semantics, validation, and operations ownership
 
 ### Recommended Local Layout
 

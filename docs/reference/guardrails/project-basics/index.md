@@ -10,24 +10,20 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 current platform 的專案目標、heavy-development 階段、技術方向、結構與單一真理順序索引。
-version: v1.4.0
+scope: 定義平台專案目標、技術方向、結構與單一真理順序索引。
+version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Project Basics
 
-本區定義目前 branch 的基礎共識：產品範疇、技術選型與 repo 結構。
+本區定義平台的基礎共識：產品範疇、技術選型與 repo 結構。
 任何會影響整體開發方向的修改，都應先更新這些文件。
 
 !!! info "What this section owns"
     `Project Basics` 定義整個 workspace 的共同前提。
     如果問題在問「我們到底在做什麼、用什麼做、檔案應該放哪、衝突時誰說了算」，答案都應該先從這裡找。
-
-!!! important "Development phase"
-    現階段是 Heavy Development / No Compatible Fallback。
-    後續工作以打穩 current product、準備下一次真正部署上線為優先；不要把 backward-compatible fallback 當成預設要求。
 
 ## Page Map
 
@@ -41,16 +37,15 @@ updated_by: codex
 
 !!! tip "Read order"
     先看 `Project Overview`，再看 `Tech Stack` 與 `Folder Structure`。
-    若任務直接碰到 contract 衝突、owner boundary 或 migration 對齊，再補看 `Source of Truth Order` 與 `Backend Architecture`。
+    若任務直接碰到 contract 衝突或 owner boundary，再補看 `Source of Truth Order` 與 `Backend Architecture`。
 
 ## Agent Rule { #agent-rule }
 
 ```markdown
 ## Project Basics
-- Project Basics 定義 current platform 的使命、範疇、heavy-development 階段、技術棧與結構。
-- Current development mode is Heavy Development / No Compatible Fallback; prioritize stabilizing the current product over preserving backward-compatible fallback paths.
+- Project Basics 定義 platform 的使命、範疇、技術棧與結構。
 - 任何影響整體協作與架構一致性的變更，必須先更新本區。
 - 目前 UI 方向為 Next.js，API 方向為 FastAPI，compute plane 方向為 Julia Runner，Notebook 是研究 cockpit。
 - backend 的責任邊界與內部藍圖由 `backend-architecture.md` 定義。
-- 舊的 command workflow、retired Python UI runtime、separate queue worker runtime 與 Python in-process Julia runtime 視為 migration legacy，不應再成為新功能的預設落點。
+- 舊的 command workflow、retired Python UI runtime、separate queue worker runtime 與 Python in-process Julia runtime 不屬於產品 contract，不應再成為新功能的預設落點。
 ```

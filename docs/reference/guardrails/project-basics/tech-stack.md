@@ -40,9 +40,9 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 | `notebooks/python/` | backend/data API inspection, migration, emergency analysis |
 | `scripts/` | dev/build/test/maintenance helpers only |
 
-!!! warning "Root `src/` is not the future umbrella"
+!!! warning "Root `src/` is not the canonical umbrella"
     package-internal `src/` 可以存在於各 top-level surface 內部，
-    但 root-level `src/` 不再是未來 canonical topology 的主要容器。
+    但 root-level `src/` 不是 canonical topology 的主要容器。
     root-level runtime or app code must not be recreated there.
 
 ## Stack Map
@@ -197,10 +197,11 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 
 The following changes require a new SoT decision before implementation:
 
-- Reintroducing Pluto Notebook as a Backend task submitter.
+- Reintroducing Backend task submission into the Pluto Notebook role.
 - Reintroducing Python Notebook as a Julia Core / JuliaCall compute surface.
 - Removing Application Simulation Workbench as a first-class product surface.
 - Running heavy simulation in Python Backend request threads.
+- Treating fixture output as a product Runner task.
 - Reintroducing a user-facing CLI product surface.
 - Reintroducing NiceGUI or any retired Python UI runtime.
 - Reintroducing Redis/RQ as the default local runtime queue.
@@ -217,7 +218,7 @@ The following changes require a new SoT decision before implementation:
   - Runner staging baseline: local filesystem `Zarr v2`
   - official TraceStore baseline: backend-managed local filesystem `Zarr`
   - complex arrays use real/imag arrays, never cross-language complex dtype assumptions
-  - S3-compatible storage remains a future Python Backend storage backend concern
+  - remote object storage requires a storage-backend SoT before it becomes part of the product contract
 
 ??? note "Why alternatives are not listed"
     這頁只記錄正式 baseline，不列出所有曾考慮過的框架。若之後真的更換 stack，應先更新這頁，再讓實作跟上。
@@ -275,7 +276,8 @@ The following changes require a new SoT decision before implementation:
     - Julia Runner
     - no separate queue service
 - **Interface boundaries**:
-    - Pluto Notebook is the direct Julia Core research interface and must not submit Backend tasks.
+    - Pluto Notebook is the direct Julia Core research interface.
+    - Backend task submission is outside the Pluto Notebook role.
     - Python Notebook is a programmable Backend API client and must not directly call Julia Core or use JuliaCall as normal compute.
     - Application Simulation Workbench is first-class and submits persisted async tasks through Python Backend and Julia Runner.
     - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
@@ -288,7 +290,7 @@ The following changes require a new SoT decision before implementation:
     - no active command-line product surface
 - **Topology**:
     - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
-    - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not future canonical surfaces
+    - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
 - **Quality tools**:
     - Ruff
     - BasedPyright

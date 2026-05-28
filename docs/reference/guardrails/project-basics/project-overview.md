@@ -10,25 +10,19 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 current platform 的 Notebook、Application、Julia Runner 與 TraceStore 產品邊界。
-version: v3.2.0
+scope: 定義 Notebook、Application、Julia Runner 與 TraceStore 的產品邊界。
+version: v4.0.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Project Overview
 
-本專案不再把 legacy command workflow、retired Python UI runtime、separate queue worker runtime 或 Python-in-process Julia execution 視為主要產品落點。
-當前 branch 的目標是把既有需求重構為 **Notebook Interface + Electron Application Interface + Julia Runner Compute Plane**。
+本專案的產品架構是 **Notebook Interface + Electron Application Interface + Julia Runner Compute Plane**。
+Legacy command workflow、retired Python UI runtime、separate queue worker runtime 與 Python-in-process Julia execution 不屬於產品落點。
 
 !!! info "How to read this page"
     先用這頁確認產品使命與核心 surface，再去看 `Tech Stack`、`Folder Structure`、`Backend Architecture` 等執行層 guardrails。這頁定的是產品邊界，不是實作細節。
-
-!!! important "Current development mode"
-    現階段是 **Heavy Development / No Compatible Fallback**。
-    專案已撤出「需要維持相容 fallback」的發佈準備階段；現在首要目標是把 current product 打穩，確保下一次真正部署上線時功能足夠充分且穩定。
-    後續 agent 應優先收斂 canonical product path，不要主動補 legacy compatibility path。
-    既有底層 migration、runtime 或 rebuild 機制可以先保留；只有在它們阻礙產品穩定或 owner SoT 要求時，才需要刪除或重寫。
 
 ## Overview Map
 
@@ -90,7 +84,7 @@ updated_by: codex
 - legacy command workflow、retired Python UI runtime、separate queue worker runtime 與 Python in-process Julia runtime 不再是 active product/runtime surfaces
 - backend 可獨立提供 auth/session/workspace、dataset/design/trace metadata、task、TraceStore publication 與 frontend/notebook data API contracts
 - Julia Core 成為 reusable circuit construction / simulation / analysis library
-- Julia Runner 僅能針對 explicit smoke/debug task 寫 smoke Zarr；real task kind 在未實作前必須 fail loudly
+- Runner fixture outputs are test utilities only, not product task kinds; unsupported product task kinds fail loudly
 - frontend 只保留 draft state / interaction state / view state，不保存 canonical computation state
 - Electron 只作為 desktop shell，local mode 啟動 frontend、Python Backend 與 Julia Runner，不啟動 separate queue service
 - task / dataset / result 可在 refresh、reconnect、重開後重新 attach 與重建
@@ -127,7 +121,7 @@ updated_by: codex
 - Core：以 `core/julia/SuperconductingCircuitsCore/` 作為 reusable Julia library
 - Desktop：以 `app/desktop/` 的 **Electron** 包裝 frontend、backend、runner local mode
 - Notebook：以 `notebooks/pluto/` 和 `notebooks/python/` 作為研究與 inspection cockpit
-- Legacy：既有 command workflow、retired Python UI runtime、separate queue worker runtime、Python in-process Julia execution 只作 migration evidence，不再保留 active entrypoint
+- Retired surfaces：既有 command workflow、retired Python UI runtime、separate queue worker runtime、Python in-process Julia execution 不再保留 active entrypoint
 
 ??? note "Command workflow position"
     User-facing command workflow 已從 product surface 移除。需要 automation 的動作應放在 `scripts/dev/`、`scripts/build/`、`scripts/test/` 或 `scripts/maintenance/`，且不得被包裝成使用者工作流 contract。
@@ -143,7 +137,6 @@ updated_by: codex
 ```markdown
 ## Project Goal
 - **Mission**: Build a superconducting-circuit workbench centered on Notebook Interface, Electron Application Interface, and Julia Runner Compute Plane.
-- **Current development mode**: Heavy Development / No Compatible Fallback; prioritize stabilizing the current product for the next real deployment over preserving legacy compatibility paths.
 - **Core product surfaces**:
     - Data Browser
     - Dataset
@@ -166,7 +159,7 @@ updated_by: codex
     - Pluto is the direct Julia research cockpit
     - Python Notebook is a programmable Backend API client
     - Application Simulation Workbench submits persisted simulation tasks through Backend and Runner
-    - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are no longer active product/runtime surfaces
+    - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are not active product/runtime surfaces
 - **Core values**:
     - scientific accuracy
     - reproducible workflows
@@ -175,6 +168,6 @@ updated_by: codex
     - support notebook research, application simulation, data browsing, async analysis, task tracking, and result recovery in one platform
     - keep metadata, trace payloads, Runner manifests, and provenance contracts explicit and reconstructible
     - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
-    - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving compatibility fallbacks
+    - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving legacy product paths
 - **Audience**: researchers, students, and developers working on superconducting-circuit simulation and analysis workflows.
 ```

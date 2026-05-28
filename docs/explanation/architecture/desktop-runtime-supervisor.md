@@ -69,8 +69,8 @@ The renderer should show local runtime startup or degraded state without blockin
 | Local Mode | Electron supervises frontend, Python Backend, and Julia Runner on the user's machine |
 | Online Mode | Electron acts as a client to a remote backend; local heavy runtime is not started |
 
-Local mode is the first implementation target.
-Online mode remains compatible with the same task/result contracts, but deployment and auth are separate concerns.
+Local mode is the packaged desktop baseline.
+Online mode uses the same task/result contracts through a remote backend; deployment and auth are separate concerns.
 
 ## Failure Model
 

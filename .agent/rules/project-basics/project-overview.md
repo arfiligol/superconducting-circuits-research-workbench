@@ -1,6 +1,5 @@
 ## Project Goal
 - **Mission**: Build a superconducting-circuit workbench centered on Notebook Interface, Electron Application Interface, and Julia Runner Compute Plane.
-- **Current development mode**: Heavy Development / No Compatible Fallback; prioritize stabilizing the current product for the next real deployment over preserving legacy compatibility paths.
 - **Core product surfaces**:
     - Data Browser
     - Dataset
@@ -23,7 +22,8 @@
     - Pluto is the direct Julia research cockpit
     - Python Notebook is a programmable Backend API client
     - Application Simulation Workbench submits persisted simulation tasks through Backend and Runner
-    - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are no longer active product/runtime surfaces
+    - Runner fixture outputs are test utilities only, not product task kinds
+    - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are not active product/runtime surfaces
 - **Core values**:
     - scientific accuracy
     - reproducible workflows
@@ -32,5 +32,5 @@
     - support notebook research, application simulation, data browsing, async analysis, task tracking, and result recovery in one platform
     - keep metadata, trace payloads, Runner manifests, and provenance contracts explicit and reconstructible
     - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
-    - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving compatibility fallbacks
+    - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving legacy product paths
 - **Audience**: researchers, students, and developers working on superconducting-circuit simulation and analysis workflows.

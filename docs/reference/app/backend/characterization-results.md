@@ -126,7 +126,7 @@ updated_by: codex
     | Interaction vs scientific model | `selected_trace_ids[]` 是使用者互動輸入，不是最終 scientific meaning；最終 meaning 來自 collection 與 persisted trace axes |
     | ND sweep preservation | 若 source trace 本身為 parameter-swept ND trace，collection 必須直接保留 sweep axes，不得先降成 ad hoc point-trace bag |
     | Structured filtering | collection readiness 與 analysis availability 可依 family、representation、source、stage 與 available sweep axes 判定 |
-    | Phase-1 filtering boundary | phase-1 只支援 axis-name / collection-level / summary-safe filters；不含 coordinate-value / range filtering |
+    | Summary-safe filtering boundary | collection filtering uses axis-name / collection-level / summary-safe filters；coordinate-value / range filtering requires a coordinate-domain summary contract |
     | No provenance parsing | backend 不得以解析 free-form provenance summary 來猜 sweep axis meaning |
     | Derived authority | collection review / input collection 都是 derived read model，不是 editable owner resource |
 
@@ -259,15 +259,11 @@ Characterization results 必須同時區分 source input axes 與 analysis-deriv
 | Scope compatibility | compare candidates 必須先位於同一 active DesignScope；跨來源對齊由 ingestion / publication target selection 或 DesignScope merge 完成 |
 | Identity preservation | compare-preserving result 必須保留 member/source identity，不得把多個 compatible members 平均成單一 surface |
 | Result preview | table / plot preset 應能表達 raw extracted resonance points per source/member，並支援 downstream fit lines per source/member |
-| Implementation honesty | phase-1 runtime 若仍做 aggregation，docs 必須將它標示為 phase-1 truth，而不是 compare-preserving surface |
+| Compare-preserving output | artifact manifest 與 payload 必須保留 member/source identity；`member_dimension` 或等價 compare dimension 需穩定表達 collection member / source identity |
 
-!!! warning "Current phase-1 truth"
-    目前 `admittance_extraction` runtime 會對多筆對齊 selected traces 先做平均，再進入 extraction。
-    因此現在的 phase-1 result surface 不是真正的 cross-source compare overlay result。
-
-!!! tip "Compare-preserving contract path"
-    若要支援多來源 overlay，artifact manifest 與 payload 必須升級成 compare-preserving contract：
-    讓 `member_dimension` 或等價 compare dimension 能穩定表達 collection member / source identity。
+!!! warning "Aggregation is not compare-preserving"
+    Backend analysis surfaces must not average compatible members into a single result when the requested workflow is cross-source comparison.
+    Any aggregation must be explicit in the result contract and visible in provenance.
 
 ### Invalid Cell And Mask Semantics
 

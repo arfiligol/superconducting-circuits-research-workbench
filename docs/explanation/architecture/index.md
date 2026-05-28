@@ -9,7 +9,7 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Architecture 說明索引，涵蓋 Clean Architecture、Data Storage、Trace Platform Plan、Desktop、Observability、Pipeline、Circuit Simulation
+scope: Architecture 說明索引，涵蓋 Clean Architecture、Data Storage、Desktop、Observability、Pipeline、Circuit Simulation
 version: v0.4.0
 last_updated: 2026-03-25
 updated_by: codex
@@ -17,7 +17,7 @@ updated_by: codex
 
 # Architecture
 
-這個區塊整理目前系統的架構觀點，聚焦「為什麼這樣設計」與「接下來怎麼做」。
+這個區塊整理系統的架構觀點，聚焦「為什麼這樣設計」與「如何運作」。
 
 ## Sections
 
@@ -25,8 +25,6 @@ updated_by: codex
   分層邊界、依賴方向、組合位置。
 - [Data Storage](data-storage.md)
   `DesignRecord / TraceRecord / TraceBatchRecord / TraceStore` 的責任分層。
-- [Trace Platform Implementation Plan](trace-platform-implementation-plan.md)
-  docs-first 後的實作切分、驗收條件與 multi-agent 分工。
 - [Desktop Runtime Supervisor](desktop-runtime-supervisor.md)
   為什麼 desktop shell 應採 Electron + runtime profile supervisor，而不是讓 main process 承擔 solver work。
 - [Observability Taxonomy](observability-taxonomy.md)

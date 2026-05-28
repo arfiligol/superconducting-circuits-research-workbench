@@ -10,7 +10,7 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Lightweight work summaries for direct-develop Heavy Development work.
+scope: Lightweight work summaries for direct-develop work.
 version: v3.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -18,7 +18,7 @@ updated_by: codex
 
 # Work Summary Formats
 
-Use lightweight summaries for Heavy Development / Fast Iteration. The repo no longer requires committed plan artifacts, lane delivery reports, or review merge reports for ordinary work.
+Use lightweight summaries for ordinary work. The repo no longer requires committed plan artifacts, lane delivery reports, or review merge reports.
 
 The purpose is still the same: make the result reviewable and make remaining risk visible.
 
@@ -63,7 +63,7 @@ Use one of these instead:
 - update the relevant SoT under `docs/reference/**`;
 - keep ephemeral planning in the conversation;
 - write a PR description when a PR exists;
-- create an issue only when durable backlog tracking is useful.
+- create an issue only when durable tracking is useful.
 
 ## Related
 
@@ -75,7 +75,7 @@ Use one of these instead:
 
 ```markdown
 ## Work Summary Formats
-- Ordinary Heavy Development work does not require committed plan artifacts, lane delivery reports, or review merge reports.
+- Ordinary work does not require committed plan artifacts, lane delivery reports, or review merge reports.
 - Do not create new active `Plans/` artifacts.
 - Use concise final summaries with:
     - changed surfaces

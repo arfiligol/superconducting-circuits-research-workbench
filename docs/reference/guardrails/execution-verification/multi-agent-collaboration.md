@@ -32,7 +32,7 @@ Treat subagents as an execution detail. The current conversation owns the final 
 | Subagent use | optional, chosen by Codex when useful |
 | Manual agent lane split | not required |
 | `Plans/` coordination files | retired; do not create new active plan artifacts |
-| Direct `develop` work | allowed during Heavy Development / Fast Iteration |
+| Direct `develop` work | allowed when the working tree stays coherent and touched-area checks are run |
 | Final accountability | current conversation owns the integrated result |
 
 ## Coordination Rules
@@ -83,7 +83,7 @@ Long-term decisions belong in `docs/reference/**`, not in temporary planning art
 - Do not require a separate planning pass, testing pass, or prewritten prompt bundle before implementation.
 - Do not create new active `Plans/` coordination artifacts.
 - The current conversation owns the final integrated diff, verification, and report.
-- Direct `develop` updates are allowed during Heavy Development / Fast Iteration.
+- Direct `develop` updates are allowed when the working tree stays coherent and touched-area checks are run.
 - Long-term decisions belong in `docs/reference/**`, not temporary planning files.
 - Final reports should summarize changed surfaces, validation, risks, and any skipped checks.
 ```

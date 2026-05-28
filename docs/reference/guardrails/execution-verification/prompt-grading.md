@@ -28,13 +28,13 @@ Use task levels to choose how much context, verification, and reporting a change
 | `L1 Fixup` | one bug, wording issue, contract mismatch, or failing check | closest targeted check |
 | `L2 Slice` | one coherent workflow or surface slice | touched-area unit/integration check |
 | `L3 Milestone` | several related slices in one workstream | broader regression checks for that workstream |
-| `L4 Phase Push` | phase-level migration with stable contracts | phase gates and cross-surface verification |
+| `L4 System Push` | broad system-level contract change | cross-surface verification |
 
 Choose the smallest level that completes a meaningful delivery.
 
 ## Fast Iteration Rule
 
-During Heavy Development, it is acceptable to start implementation directly when the request is clear and the SoT is already known. Do not pause just to produce a formal plan.
+Direct implementation is acceptable when the request is clear and the SoT is already known. Do not pause just to produce a formal plan.
 
 Write a short plan only when it reduces risk:
 
@@ -80,7 +80,7 @@ Do not judge success by whether an internal prompt structure was followed exactl
 ## Task Scope Sizing
 - Use L1/L2/L3/L4 as lightweight task-size guidance, not mandatory dispatch ceremony.
 - Choose the smallest level that completes a meaningful delivery.
-- During Heavy Development, direct implementation is allowed when the request is clear and SoT is known.
+- Direct implementation is allowed when the request is clear and SoT is known.
 - Write a short plan only when it reduces risk or the user asks for one.
 - Dedicated branches/worktrees, `Allowed Area`, `Do Not Touch`, and lane assignments are optional tools.
 - Review outcomes against SoT, actual behavior, and validation results rather than prompt literalism.

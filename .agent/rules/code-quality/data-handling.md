@@ -17,8 +17,8 @@
     - MUST call `uow.commit()` explicitly.
 - **TraceStore**:
     - MUST go through a TraceStore abstraction.
-    - MUST support local filesystem `Zarr v2` as the baseline direction.
-    - MUST keep S3-compatible `Zarr` as a future Python Backend storage backend target.
+    - MUST support local filesystem `Zarr v2` as the baseline storage contract.
+    - MUST require a storage-backend SoT before adding remote object storage.
     - Runner staging is temporary and never authoritative.
     - Backend owns official TraceStore publication.
     - Complex arrays MUST be stored as explicit real/imag arrays.
@@ -31,7 +31,7 @@
     - MUST use mask-first processing and preserve ND axis structure.
     - MUST preserve fully masked slice positions.
 - **Collection projection**:
-    - phase-1 scientific grouping may be derived as a read model with deterministic keys.
+    - scientific grouping may be derived as a read model with deterministic keys.
     - collection keys must be reconstructable from stable structural grouping inputs.
     - do not derive collection identity from analysis-specific readiness or consumer presentation state.
     - do not treat projection as an independent authority resource unless separately specified.
@@ -40,7 +40,7 @@
     - slice/preset queries should be preferred for large tensors/matrices.
     - no large ND arrays over HTTP/JSON.
     - whole dense tensor transport is not the default large-result contract.
-    - phase-1 sweep filtering is limited to summary-safe axis-name / collection-level filters.
+    - sweep filtering is limited to summary-safe axis-name / collection-level filters unless a coordinate-domain summary contract exists.
 - **Edit invalidation**:
     - if an editable trace changes data that affects summaries, collection derivation, readiness, or dependent results, the backend MUST re-materialize or invalidate those surfaces before reporting success.
     - if it cannot maintain that contract, it MUST expose `allowed_actions.edit=false`.

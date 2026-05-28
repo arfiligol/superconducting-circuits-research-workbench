@@ -46,6 +46,8 @@ It must not own heavy compute. Application simulation goes through persisted Bac
 | Characterization | Julia Runner analysis tasks + result browser |
 | Schemdraw standalone workflow | Design Assets / Source Documents |
 
+The Simulation Workbench route may initially reuse the Tasks / Result Browser surface, but the product surface remains Application Simulation Workbench.
+
 ## Page Map
 
 | Page | Core focus | Authority pair |

@@ -31,12 +31,12 @@ This registry names the owner for each active cross-layer contract.
 | Notebook Interface | Pluto + Python notebooks | [Notebook Reference](../notebooks/index.md), [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto research cockpit, Python Backend/API inspection, migration analysis |
 | Backend control/data plane | Python Backend | [Backend Reference](../app/backend/index.md), [Tasks & Execution](../app/backend/tasks-execution.md) | frontend, notebooks, Julia Runner |
 | Julia compute plane | Julia Runner | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | backend runner API and claimed persisted tasks |
-| Runner result manifest | Julia Runner writes; Python Backend validates | [Runner Result Manifest](runner-result-manifest.md) | publisher, tests, future runner tasks |
+| Runner result manifest | Julia Runner writes; Python Backend validates | [Runner Result Manifest](runner-result-manifest.md) | publisher, tests, Runner task families |
 | Canonical TraceStore | Python Backend | [TraceStore Zarr](trace-store-zarr.md), [Datasets & Results](../app/backend/datasets-results.md) | raw data browser, result browser, notebooks |
 | Task lifecycle | Python Backend | [Tasks & Execution](../app/backend/tasks-execution.md) | frontend task monitor, runner claim/complete loop |
 | Runner task protocol | Python Backend API + Julia Runner client | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | local runner, desktop startup |
 | Dataset / Design / Trace metadata | Python Backend | [Datasets & Results](../app/backend/datasets-results.md), [Data Formats](../data-formats/index.md) | dashboard, raw data browser, notebooks |
-| Circuit definition metadata | Python Backend | [Circuit Definitions](../app/backend/circuit-definitions.md), [Data Formats / Circuit Netlist](../data-formats/circuit-netlist.md) | design assets, notebooks, future task builders |
+| Circuit definition metadata | Python Backend | [Circuit Definitions](../app/backend/circuit-definitions.md), [Data Formats / Circuit Netlist](../data-formats/circuit-netlist.md) | design assets, notebooks, simulation task builders |
 | App shell and navigation | Frontend | [Frontend Reference](../app/frontend/index.md), [Sidebar](../app/frontend/shared-shell/sidebar.md) | Electron App |
 | Session/workspace/auth context | Python Backend + shared app model | [Session & Workspace](../app/backend/session-workspace.md), [Shared App Model](../app/shared/index.md) | frontend shell, online mode |
 
@@ -57,6 +57,5 @@ Application Simulation Workbench remains an active contract. It is part of the P
 ## Related
 
 * [Architecture Reference](index.md)
-* [Parity Matrix](parity-matrix.md)
 * [Julia Runner Compute Plane](julia-runner-compute-plane.md)
 * [TraceStore Zarr](trace-store-zarr.md)

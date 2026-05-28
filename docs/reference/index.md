@@ -42,7 +42,7 @@ updated_by: team
 | 類別 | 核心聚焦 |
 |---|---|
 | [Architecture Reference](architecture/index.md) | cross-layer registry、owner boundary 與 parity 對齊 |
-| [Julia Runner Compute Plane](architecture/julia-runner-compute-plane.md) | async compute plane、Runner API 與 smoke task |
+| [Julia Runner Compute Plane](architecture/julia-runner-compute-plane.md) | async compute plane、Runner API 與 task execution boundary |
 | [Runner Result Manifest](architecture/runner-result-manifest.md) | staged result manifest schema 與 Backend validation |
 | [TraceStore Zarr](architecture/trace-store-zarr.md) | canonical local Zarr publication contract |
 | [Application Interface](app/application-interface.md) | Electron data workbench surface |

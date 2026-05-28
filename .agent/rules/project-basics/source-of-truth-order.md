@@ -5,10 +5,10 @@
     - Julia Core / Runner runtime invariants -> `docs/reference/core/*`
     - page behavior/layout -> `docs/reference/app/frontend/**/*`
     - notebook workflow behavior -> `docs/reference/notebooks/*`
-- Use `docs/reference/architecture/*` only as registry/parity guidance, not as the primary owner when owner docs already exist.
+- Use `docs/reference/architecture/*` only as owner-boundary and canonical contract registry guidance, not as the primary owner when owner docs already exist.
 - Treat implementation and old behavior as evidence, not automatic canonical truth.
 - If owner docs and consumer docs conflict, prefer the owner docs unless the user explicitly changes the spec.
 - If Julia Core / Runner and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
-- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as migration evidence only; do not infer future architecture boundaries from them.
-- Record any intentional compatibility exception in the parity matrix or contract registry.
-- Compatibility fallback is opt-in during Heavy Development / No Compatible Fallback; do not add or preserve legacy fallback paths unless an owner SoT explicitly requires them.
+- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as retired surfaces with no authority over product boundaries.
+- Record intentional product-contract exceptions in the owner docs and canonical contract registry.
+- Legacy fallback is not a product contract unless an owner SoT explicitly requires it.

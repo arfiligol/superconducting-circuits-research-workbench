@@ -281,13 +281,7 @@ updated_by: codex
 |---|---|
 | One-time bootstrap | 第一個 platform admin 建立後，不再重複 bootstrap |
 | Audit required | bootstrap 成功與失敗都應留下 audit record |
-| Local-only baseline | 若 deployment 仍是 local DB，這是正式 baseline；更進階 provisioning 可之後擴充 |
-
-## Deferred
-
-??? info "Deferred in current milestone"
-    `Account Recovery` 暫不納入目前正式 contract。
-    後續若補入 password reset / recovery flow，需同步更新 session surface、audit logging 與 admin policy。
+| Local-only baseline | 若 deployment 使用 local DB，bootstrap admin 是正式 baseline；其他 provisioning 模式必須由 auth/session owner doc 定義 |
 
 ## Related
 

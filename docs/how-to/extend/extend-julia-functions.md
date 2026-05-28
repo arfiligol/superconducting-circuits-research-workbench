@@ -67,7 +67,7 @@ result.zarr/
         └── imag
 ```
 
-Use Zarr v2 for the first implementation.
+Runner result packages use Zarr v2.
 Do not send large arrays back through HTTP JSON.
 
 ## Step 3: Write the manifest

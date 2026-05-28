@@ -86,7 +86,6 @@ nav = [
       { "Overview" = "explanation/architecture/index.md" },
       { "Clean Architecture" = "explanation/architecture/design-decisions/clean-architecture.md" },
       { "Data Storage" = "explanation/architecture/data-storage.md" },
-      { "Trace Platform Plan" = "explanation/architecture/trace-platform-implementation-plan.md" },
       { "Pipeline" = [
         { "Overview" = "explanation/architecture/pipeline/index.md" },
         { "Data Flow" = "explanation/architecture/pipeline/data-flow.md" },
@@ -109,7 +108,6 @@ nav = [
       { "Runner Result Manifest" = "reference/architecture/runner-result-manifest.md" },
       { "TraceStore Zarr" = "reference/architecture/trace-store-zarr.md" },
       { "Canonical Contract Registry" = "reference/architecture/canonical-contract-registry.md" },
-      { "Parity Matrix" = "reference/architecture/parity-matrix.md" },
     ] },
     { "App" = [
       { "Application Interface" = "reference/app/application-interface.md" },
@@ -134,6 +132,9 @@ nav = [
         ] },
         { "Shared Workflow" = [
           { "Task Management" = "reference/app/frontend/shared-workflow/task-management.md" },
+        ] },
+        { "Research Workflow" = [
+          { "Circuit Simulation Workbench" = "reference/app/frontend/research-workflow/circuit-simulation.md" },
         ] },
         { "Workspace" = [
           { "Dashboard" = "reference/app/frontend/workspace/dashboard.md" },
@@ -187,7 +188,6 @@ nav = [
         { "Commit Standards" = "reference/guardrails/execution-verification/commit-standards.md" },
         { "Branch & Worktree Flow" = "reference/guardrails/execution-verification/branch-and-worktree-flow.md" },
         { "CI Gates" = "reference/guardrails/execution-verification/ci-gates.md" },
-        { "Phase Gates" = "reference/guardrails/execution-verification/phase-gates.md" },
         { "Task Scope Sizing" = "reference/guardrails/execution-verification/prompt-grading.md" },
         { "Codex Subagent Coordination" = "reference/guardrails/execution-verification/multi-agent-collaboration.md" },
         { "Work Summary Formats" = "reference/guardrails/execution-verification/contributor-reporting.md" },

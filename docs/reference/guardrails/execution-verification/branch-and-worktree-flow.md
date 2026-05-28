@@ -12,7 +12,7 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: main/develop branch roles、Heavy Development direct-develop policy、optional worktree isolation 與 release promotion。
+scope: main/develop branch roles、direct-develop policy、optional worktree isolation 與 release promotion。
 version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -20,21 +20,21 @@ updated_by: codex
 
 # Branch & Worktree Flow
 
-This repo is in Heavy Development / Fast Iteration mode. `develop` is the active integration branch, and direct updates on `develop` are allowed when they keep the working tree coherent and the touched-area checks are run.
+`develop` is the active integration branch, and direct updates on `develop` are allowed when they keep the working tree coherent and the touched-area checks are run.
 
 Use branches and isolated worktrees as tools for risk management, not as mandatory ceremony.
 
 !!! important "`main` is release, `develop` is active development"
     `main` is the release branch. Do not use it for daily work.
 
-    `develop` is the normal place for current implementation, docs, cleanup, and integration work.
+    `develop` is the normal place for implementation, docs, cleanup, and integration work.
 
 ## Branch Roles
 
 | Branch | Canonical role | Rule |
 | --- | --- | --- |
 | `main` | release branch | only receives verified promotion from `develop` |
-| `develop` | active development branch | normal target for direct updates during Heavy Development |
+| `develop` | active development branch | normal target for direct updates |
 | task branch | optional isolation branch | use when risk, review, or parallel work needs separation |
 
 ## Direct Develop Policy
@@ -97,7 +97,7 @@ direct update or task branch
 ## Branch & Worktree Flow
 - `main` is the release branch; do not use it for daily development.
 - `develop` is the active development branch.
-- Heavy Development / Fast Iteration allows direct updates on `develop`.
+- Direct updates on `develop` are allowed when the working tree stays coherent and touched-area checks are run.
 - Branches and isolated worktrees are optional risk-management tools, not mandatory ceremony.
 - Use a task branch/worktree when the change is risky, broad, parallel, review-heavy, or blocked by unrelated dirty files.
 - Always inspect `git status --short` before editing.

@@ -76,7 +76,7 @@ updated_by: codex
     | Resources belong to one workspace | dataset / schema / task / result 只掛一個 `workspace_id` |
     | Role is workspace-scoped | 同一 user 在不同 workspace 可有不同 role |
     | Visibility is backend-enforced | queue visibility 不能只靠前端過濾 |
-    | Cross-workspace sharing is explicit | 跨 workspace 應用 export/import 或 future publish/copy，不做多重掛載 |
+    | Cross-workspace sharing is explicit | 跨 workspace 應用 export/import 或 publish/copy with lineage，不做多重掛載 |
 
 ## Active Context Ordering
 

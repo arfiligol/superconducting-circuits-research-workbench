@@ -93,11 +93,11 @@ For complex arrays, store real and imaginary arrays explicitly:
 /traces/S11/imag
 ```
 
-## Storage Extensions
+## Storage Backend Contract
 
-The first implementation is local filesystem Zarr v2.
-S3-compatible storage is a future Python Backend storage backend concern.
-The Julia Runner should not write directly to S3 in the initial architecture.
+The baseline storage contract is local filesystem Zarr v2 managed by the Python Backend.
+Remote object storage is allowed only after a storage-backend SoT defines the backend adapter, publication semantics, validation rules, and operational ownership.
+The Julia Runner writes local staging packages and does not write directly to object storage.
 
 ## Related
 

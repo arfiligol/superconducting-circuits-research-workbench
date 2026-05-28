@@ -6,30 +6,29 @@ tags:
   - audience/team
   - sot/true
   - topic/core-reference
-status: draft
+status: stable
 owner: docs-team
 audience: team
-scope: Phase 1 Julia scientific core 與 Pluto Notebook research workflow。
-version: v0.2.0
+scope: Julia Core scientific API ownership for Pluto direct research and Julia Runner product execution.
+version: v1.0.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Julia Scientific Core
 
-Phase 1 的核心方向是 Julia Core + Pluto Notebook 快速研究工作流。這不是 Application / Backend / Storage 大修。
+Julia Core is the canonical scientific library for reusable superconducting-circuit construction, delayed lowering, JosephsonCircuits.jl simulation wrappers, sweep helpers, and analysis primitives.
 
-## Julia Core Direction
+Both execution tracks use the same Julia Core APIs:
 
-The Julia Core is the canonical scientific execution surface for reusable superconducting-circuit construction and JosephsonCircuits.jl simulation.
+- Pluto notebooks call Julia Core directly for research-grade exploration.
+- Julia Runner calls Julia Core while executing persisted Backend tasks for product workflows.
 
-Pluto Notebook may directly call the Julia Core for fast research iteration. This is the preferred Phase-1 workflow.
-
-Application / Backend integration is deferred to a later phase. When implemented, the Application must call the same Julia Core instead of reimplementing circuit construction, lowering, or sweep logic in Python.
+The Python Backend, Electron Application, and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or scientific analysis owned by Julia Core.
 
 ## Canonical Package
 
-| Item | Current Canonical Surface |
+| Item | Canonical surface |
 |---|---|
 | Julia package | `core/julia/SuperconductingCircuitsCore/` |
 | Package entrypoint | `core/julia/SuperconductingCircuitsCore/src/SuperconductingCircuitsCore.jl` |
@@ -68,7 +67,7 @@ julia --project=core/julia/SuperconductingCircuitsCore core/julia/Superconductin
 | `notebooks/pluto/02_coupled_window_sweep.jl` | Construction / lowering parameter sweep for coupled-window designs. |
 | `notebooks/pluto/03_manual_hbsolve_frequency_sweep.jl` | Manual JosephsonCircuits.jl execution check through `run_hbsolve`. |
 
-## Research Workflow
+## Research Direct Track
 
 ```text
 Pluto Notebook
@@ -80,34 +79,56 @@ JosephsonCircuits.jl netlist
 Result object / table / plot-ready data
 ```
 
-Pluto notebooks must stay thin. They may define parameters, build designs through the public Julia Core API, run a simulation or sweep, and inspect results. They must not duplicate reusable component definitions, lowering logic, coupled-window compiler logic, or result extraction core logic.
+Pluto notebooks stay thin. They may define parameters, build designs through the public Julia Core API, run a simulation or sweep, and inspect local research outputs. They must not duplicate reusable component definitions, lowering logic, coupled-window compiler logic, or result extraction core logic.
+
+Pluto outputs are research-local by default. Official platform data must enter through an explicit import/publication workflow or through the Product Async Track.
+
+## Product Async Track
+
+```text
+Application Simulation Workbench / Python Notebook
+    -> Python Backend task
+Julia Runner
+    -> Julia Core
+    -> local Zarr staging + manifest
+Python Backend Publisher
+    -> TraceStore + metadata records
+```
+
+Julia Runner is the product execution adapter around Julia Core. It receives Backend-owned task envelopes, executes the relevant Julia Core operations, writes staged result packages, and reports manifest locators.
+
+Python Backend owns task lifecycle, publication, provenance, TraceStore registration, and result APIs. It does not run heavy scientific compute in request threads.
 
 ## Ownership Rules
 
 | Rule | Meaning |
 |---|---|
-| Julia owns scientific construction | Components, symbolic pins, draft graph, coupled-window placement, distributed TL discretization, lowering, simulation wrappers, and sweeps live in Julia Core. |
+| Julia owns scientific construction | Components, symbolic pins, draft graph, coupled-window placement, distributed TL discretization, lowering, simulation wrappers, sweeps, and analysis helpers live in Julia Core. |
 | Delayed lowering stays required | Author high-level drafts first; call `finalize_to_josephson_netlist` only at the end. Do not patch already-flat JosephsonCircuits netlists in place. |
-| Python/backend does not own lowering | Later productized workflows should call Julia Core instead of reimplementing construction or sweep logic in Python. |
-| Application is deferred | Backend/frontend integration is not a Phase-1 implementation target. |
+| Pluto is direct research execution | Pluto may call Julia Core directly and inspect intermediate local data. Pluto is not a Backend task submitter. |
+| Runner is product execution | Julia Runner calls Julia Core from Backend task envelopes and writes staging packages for Backend publication. |
+| Python/backend does not own lowering | Python Backend validates requests and publishes results; it does not reimplement construction, lowering, sweep, fitting, or analysis logic. |
 
-## Manual hbsolve Validation
+## JosephsonCircuits Validation
 
-Phase 1 does not require automated JosephsonCircuits.jl integration tests. The intended workflow is to validate `run_hbsolve` manually from Pluto while the Julia Core API is still changing quickly.
+The wrapper keywords must follow the installed JosephsonCircuits.jl API. When changing wrapper keywords, check the official docs, docstrings, or source first.
 
-The wrapper keywords must follow the currently installed JosephsonCircuits.jl API. When changing wrapper keywords, check the official docs, docstrings, or source first. Do not add compatibility fallback branches for older keyword sets.
+Compatibility branches for older keyword sets are not part of the Julia Core contract unless a dedicated owner SoT defines them.
 
-## Future Storage Direction
+## Storage Boundary
 
-This is a planning note only; storage is not implemented in Phase 1.
+Julia Core returns scientific results to its caller. Storage authority belongs outside Julia Core:
 
-| Mode | Metadata DB | TraceStore / ArtifactStore |
-|---|---|---|
-| Local Mode / Notebook / single-user research | SQLite | local filesystem or S3-compatible storage |
-| Online Mode / multi-user / server | PostgreSQL | S3-compatible storage |
+| Caller | Storage responsibility |
+|---|---|
+| Pluto Notebook | local research outputs, scratch plots, and notebook-owned analysis artifacts |
+| Julia Runner | local staging Zarr package plus `manifest.json` |
+| Python Backend | canonical TraceStore publication, metadata records, provenance, and result APIs |
 
 ## Related
 
 - [Core Reference](index.md)
 - [Julia Core](julia-core.md)
 - [Julia Wrapper](julia-wrapper.md)
+- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
+- [Simulation Interface Boundaries](../architecture/simulation-interface-boundaries.md)

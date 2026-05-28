@@ -223,7 +223,7 @@ trace surface 必須嚴格拆成以下 path families：
 | Point-level browse | implementation 可提供 point / slice read model，但必須能回指 canonical `trace_id`，不得把 projection 當唯一 persisted authority |
 | Axis discoverability | trace browse 與 trace detail 至少必須讓 consumer 知道 axis names、是否存在 sweep axes，以及哪些 axes 可供 Characterization / explorer 使用 |
 | Structured filtering | backend 應支援以 family、representation、source、stage、axis name、available sweep axes 等 structured characteristics 篩選 traces |
-| Phase-1 sweep filtering scope | phase-1 只支援 axis-name / collection-level / summary-safe filters；若需 coordinate-value / range filtering，必須另定 coordinate-domain summary contract，不得預設打開 dense coordinates |
+| Summary-safe sweep filtering | 支援 axis-name / collection-level / summary-safe filters；coordinate-value / range filtering 需要明確的 coordinate-domain summary contract，不得預設打開 dense coordinates |
 | Collection projection | backend 可回傳 UI-safe `collection_projection`，表示由 shared axes / lineage 派生的 scientific grouping；但它是 read model，不取代 trace identity |
 | Characterization selection | Characterization 可以從 selected traces 派生 collection；raw checkbox list 不是最終 scientific model |
 
@@ -241,7 +241,7 @@ minimum direction：
 | coordinate identity | `axis_signature` 或等價 hash / signature summary |
 | scientific typing | `family`、`parameter`、`representation`、`source_kind`、`stage_kind` |
 | grouping inputs | batch / lineage / shared-axis summary |
-| phase-1 filtering scope | axis-name / collection-level / summary-safe filters；不含 coordinate-value / range filtering |
+| summary-safe filtering contract | axis-name / collection-level / summary-safe filters；不含 coordinate-value / range filtering |
 
 !!! warning "List paths are summary-first"
     trace list、design browse、analysis readiness 與 filter suggestion path 不得預設載入完整 ND values。
@@ -305,21 +305,21 @@ minimum projection direction：
 | `available_sweep_axes[]` | 當前 design scope 可見的 structured sweep axis names |
 | `collection_projection[]` | optional；由 shared axes / source batch lineage 派生的 scientific grouping summary |
 | `analysis_readiness` | optional；某 analysis 是否在當前 trace structure 下可形成有效 collection 的摘要 |
-| `phase_1_filter_scope` | summary-safe filter capability 描述；至少指出 phase-1 不支援 coordinate-value / range filtering |
+| `summary_filter_scope` | summary-safe filter capability 描述；指出 coordinate-value / range filtering 需要 coordinate-domain summary contract |
 
 !!! tip "Selection remains user-driven"
     使用者仍可明確勾選 traces。
     但 backend 在 Characterization submit / result query 時，應以 persisted trace structure 解讀那些 selection，而不是只看 checkbox list 本身。
 
-## Collection Projection Phase-1 Contract
+## Collection Projection Contract
 
 | Concern | Rule |
 | --- | --- |
 | Authority | `collection_projection` 是由 canonical trace structure 派生的 read model，不是獨立 owner |
-| Identity | phase-1 projection 可暴露 deterministic `collection_key`，供 deep-linking、caching 與 UI restoration 使用 |
+| Identity | projection 可暴露 deterministic `collection_key`，供 deep-linking、caching 與 UI restoration 使用 |
 | Allowed derivation inputs | `collection_key` 與 projection summary 只能來自 dataset/design scope、shared axes / `axis_signature`、lineage / batch grouping，以及 trace set 內在的 scientific typing 等 stable structural inputs |
 | Disallowed derivation inputs | analysis-specific readiness outcome、per-analysis compatibility verdict、consumer-specific presentation choice、UI sort/filter state 不可參與 `collection_key` identity |
-| Phase-1 scope | phase-1 不要求 persisted `TraceCollectionRecord` 或可編輯 collection resource |
+| Read-model scope | collection projection 不要求 persisted `TraceCollectionRecord` 或可編輯 collection resource |
 | Stronger contract path | 若需可儲存 / bookmark / edit 的 collection，必須另定更強 contract，而不是直接把 projection 當成 authority |
 | Identity discipline | `collection_key` 可作 projection identity，但不得被當成獨立 persisted resource existence proof |
 

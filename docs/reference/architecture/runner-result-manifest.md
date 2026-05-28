@@ -8,6 +8,8 @@ icon: lucide/file-json
 
 The manifest is the only control-plane payload the Runner returns after writing a local result package. It points to staged Zarr arrays and describes their shapes, chunks, dtypes, axes, logs, and producer metadata.
 
+The example below is a minimal manifest shape example. It is not a fixture-task contract and does not define a special Runner task kind.
+
 ## Minimum Shape
 
 ```json
@@ -51,7 +53,7 @@ The manifest is the only control-plane payload the Runner returns after writing 
 ## Rules
 
 - Use `schema_version = "sc.runner.result.v1"`.
-- Use Zarr v2 for the first implementation.
+- Runner result packages use Zarr v2.
 - Keep `array_store.uri` relative to the staging task directory.
 - Keep trace and axis paths inside the Zarr root.
 - Store complex arrays as separate real/imag arrays.

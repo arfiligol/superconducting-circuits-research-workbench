@@ -18,8 +18,8 @@ updated_by: codex
 
 # End-to-End SQUID Fitting
 
-This tutorial shows the current end-to-end route:
-ingest HFSS data through the Application Interface, inspect traces through backend-backed browsers, then run fitting either in a notebook or as a Julia Runner task when that task kind is implemented.
+This tutorial shows the end-to-end route:
+ingest HFSS data through the Application Interface, inspect traces through backend-backed browsers, then run fitting either in a notebook or as a Julia Runner task when the result should be tracked and published.
 
 ## Workflow
 
@@ -64,9 +64,9 @@ Use `Raw Data` to verify:
 Use a notebook when you are still exploring model assumptions.
 Use a Julia Runner task when the analysis should be tracked, reproducible, and published as artifacts.
 
-!!! warning "Initial runner scope"
-    The first Runner implementation supports smoke and parameter-sweep tasks.
-    LC-SQUID fitting is a reserved compute-plane task kind and should be added behind the Runner manifest/TraceStore contract.
+!!! info "Fitting execution boundary"
+    LC-SQUID fitting belongs to either direct research execution in Pluto or tracked async execution through Julia Runner.
+    Runner-produced fitting results must use the manifest/TraceStore publication contract.
 
 ## 4. Publish Results
 

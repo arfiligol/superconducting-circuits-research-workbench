@@ -45,16 +45,6 @@ updated_by: docs-team
 | **Visualization** | 繪製 Amplitude/Phase 熱圖 | Application Raw Data Browser / Python notebook | [Notebook Interface](../reference/notebooks/index.md) |
 | **Phase Tuning** | 相位解包裹與單位轉換 | Julia Runner analysis task / notebook | [Julia Runner Compute Plane](../reference/architecture/julia-runner-compute-plane.md) |
 
-## 3. Advanced / Experimental
-
-這些功能用於特定診斷或遺留支援。
-
-| Feature | Description | Implementations (Code) | Documentation |
-|---------|-------------|------------------------|---------------|
-| **Effective C Fit** | 假設 $L_s=0$，快速估算電容 | Julia Runner analysis task / notebook | (future work) |
-| **Q-Factor** | 從相位群延遲估算 Q 值 | Julia Runner analysis task / notebook | (future work) |
-| **Compare Fits** | 比較多次擬合結果 | Python notebook inspection | (future work) |
-
 ## Learning Path
 
 建議的學習順序：

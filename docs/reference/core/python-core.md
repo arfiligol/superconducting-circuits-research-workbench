@@ -59,8 +59,8 @@ updated_by: codex
 
 | Adopter Surface | Role | Why it is not the owner |
 |---|---|---|
-| `core/shared/persistence/repositories/` | current implementation 中將 persisted rows 映射到 canonical objects | repository 實作是 adapter；canonical shape 由 `sc_core` 決定；最終不應反向定義 `core/` topology |
-| `core/shared/persistence/trace_store.py` | current implementation 中實作 TraceStore backend binding | backend binding 與 runtime config 不等於 storage contract owner |
+| `core/shared/persistence/repositories/` | persisted rows 映射到 canonical objects | repository 實作是 adapter；canonical shape 由 `sc_core` 決定；不得反向定義 `core/` topology |
+| `core/shared/persistence/trace_store.py` | TraceStore backend binding | backend binding 與 runtime config 不等於 storage contract owner |
 | `app/backend/src/app/infrastructure/persistence/` | app backend persistence adapter | backend adapter consumes contracts; it does not redefine them |
 | `app/backend/src/app/services/` | task lifecycle and publication services | service layer orchestrates contracts; compute remains in Julia Runner |
 

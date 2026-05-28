@@ -37,7 +37,6 @@ Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electro
 | [Runner Result Manifest](runner-result-manifest.md) | manifest schema、safe path rules、Zarr declaration |
 | [TraceStore Zarr](trace-store-zarr.md) | canonical local Zarr authority owned by Python Backend |
 | [Canonical Contract Registry](canonical-contract-registry.md) | cross-layer contracts and owners |
-| [Parity Matrix](parity-matrix.md) | adoption state for retained surfaces |
 
 ## Current Boundaries
 

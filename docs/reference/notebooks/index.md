@@ -20,7 +20,7 @@ Pluto notebooks own direct Julia exploration:
 
 Direct Pluto execution is allowed. Application-triggered execution must still go through the async Runner path.
 
-Pluto notebooks are not Backend task submitters. If their outputs should become official platform data, use an explicit import/publication path.
+Backend task submission is outside the Pluto notebook role. If Pluto outputs should become official platform data, use an explicit import/publication path.
 
 ## Python
 

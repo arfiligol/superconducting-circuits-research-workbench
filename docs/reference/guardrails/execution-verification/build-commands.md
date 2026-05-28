@@ -133,7 +133,7 @@ npm run app:stop
 | task read model | `curl --fail 'http://127.0.0.1:8000/tasks?status_filter=active'` |
 | task submit path | 透過 app workflow 或 `/tasks` submit mutation 建立一筆 local task，確認 task row 與 detail 都以 `task_id` 回應 |
 | runner claim path | `POST /runner/v1/tasks/claim` can claim one queued task |
-| publication path | completing a smoke task writes staging Zarr, validates manifest, and publishes canonical TraceStore batch |
+| publication path | completing a real Runner task or publisher fixture validates staging Zarr, validates manifest, and publishes canonical TraceStore batch |
 | process separation | 使用 `lsof -ti tcp:8000`、frontend dev-server PID、runner PID 或等價工具確認 backend、frontend、runner 不是同一個 PID |
 
 ### Teardown

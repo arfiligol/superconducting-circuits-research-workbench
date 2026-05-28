@@ -51,6 +51,8 @@ Electron Application / Python Notebook
 
 Application Simulation Workbench is the productized simulation surface. It submits persisted simulation requests and renders published results.
 
+Application Simulation Workbench is expected to submit real simulation requests. It must not rely on Runner fixture tasks as a substitute for compute implementation.
+
 Python Notebook is a programmable Application client. It may call Backend APIs and submit Backend tasks through the Product Async Track.
 
 It must not bypass the Product Async Track by importing Julia Core or using JuliaCall for normal compute. Python Notebook is useful for debugging, migration, API inspection, and emergency data analysis. It is not the research-grade scientific compute cockpit; that role belongs to Pluto.
@@ -73,6 +75,7 @@ It must not bypass the Product Async Track by importing Julia Core or using Juli
 - Application frontend must not run heavy simulation.
 - Python Backend must not run heavy simulation in request threads.
 - Julia Runner must not own formal metadata DB records.
+- Fixture outputs must not be treated as product simulation results.
 
 ## Promotion Path
 

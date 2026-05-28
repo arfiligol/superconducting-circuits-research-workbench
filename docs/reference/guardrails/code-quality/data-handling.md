@@ -177,7 +177,7 @@ Rules:
 - Backend must validate manifest paths, Zarr layout, dtype, shape, chunk shape, and axis lengths before publication
 - Backend must reject absolute paths and path traversal such as `../`
 - Runner must not write DatasetRecord, TraceRecord, TraceBatchRecord, workspace, auth, or provenance tables
-- first implementation uses Zarr v2 local filesystem staging
+- Runner result packages use Zarr v2 local filesystem staging
 - S3-compatible direct write from Julia Runner is not allowed
 
 ### 5.2 Complex Arrays
@@ -206,10 +206,10 @@ Do not rely on cross-language `ComplexF64` dtype compatibility.
 - invalid cells 不得授權 consumer collapse axes、drop sweep structure 或默默 reshape authority payload
 - fully masked slice 仍須保留原 axis position，不得因整段無效而刪除該 slice
 
-### 6.2 Collection Projection Phase 1
+### 6.2 Collection Projection Contract
 
 - scientific `collection_projection` 可以由 canonical trace structure 派生
-- phase-1 projection 是 read model，不是獨立 authority resource
+- collection projection 是 read model，不是獨立 authority resource
 - 可使用 deterministic `collection_key` 支援 deep-linking、cache 與 UI restoration
 - `collection_key` 必須可由 dataset/design scope、shared axis structure / `axis_signature`、lineage 與 trace set 內在的 stable scientific typing 重建
 - analysis-specific readiness、consumer-specific presentation choice、UI sort/filter state 不可參與 `collection_key` identity
@@ -221,7 +221,7 @@ Do not rely on cross-language `ComplexF64` dtype compatibility.
 - large matrix / tensor payload 應優先支援 slice / preset query，而不是總是整包 inline
 - chunking / retrieval 應對齊主要 scientific access pattern
 - whole dense tensor transport 不是 large result 的預設 contract
-- phase-1 sweep filtering 只支援 summary-safe axis-name / collection-level filter，不支援 coordinate-value / range filtering
+- sweep filtering uses summary-safe axis-name / collection-level filters; coordinate-value / range filtering requires a coordinate-domain summary contract
 - 目前優先 access pattern：
   - fixed sweep point -> read full frequency slice
   - fixed result axes -> read one plot / table projection
@@ -272,8 +272,8 @@ Do not rely on cross-language `ComplexF64` dtype compatibility.
     - MUST call `uow.commit()` explicitly.
 - **TraceStore**:
     - MUST go through a TraceStore abstraction.
-    - MUST support local filesystem `Zarr v2` as the baseline direction.
-    - MUST keep S3-compatible `Zarr` as a future Python Backend storage backend target.
+    - MUST support local filesystem `Zarr v2` as the baseline storage contract.
+    - MUST require a storage-backend SoT before adding remote object storage.
     - Runner staging is temporary and never authoritative.
     - Backend owns official TraceStore publication.
     - Complex arrays MUST be stored as explicit real/imag arrays.
@@ -286,7 +286,7 @@ Do not rely on cross-language `ComplexF64` dtype compatibility.
     - MUST use mask-first processing and preserve ND axis structure.
     - MUST preserve fully masked slice positions.
 - **Collection projection**:
-    - phase-1 scientific grouping may be derived as a read model with deterministic keys.
+    - scientific grouping may be derived as a read model with deterministic keys.
     - collection keys must be reconstructable from stable structural grouping inputs.
     - do not derive collection identity from analysis-specific readiness or consumer presentation state.
     - do not treat projection as an independent authority resource unless separately specified.
@@ -295,7 +295,7 @@ Do not rely on cross-language `ComplexF64` dtype compatibility.
     - slice/preset queries should be preferred for large tensors/matrices.
     - no large ND arrays over HTTP/JSON.
     - whole dense tensor transport is not the default large-result contract.
-    - phase-1 sweep filtering is limited to summary-safe axis-name / collection-level filters.
+    - sweep filtering is limited to summary-safe axis-name / collection-level filters unless a coordinate-domain summary contract exists.
 - **Edit invalidation**:
     - if an editable trace changes data that affects summaries, collection derivation, readiness, or dependent results, the backend MUST re-materialize or invalidate those surfaces before reporting success.
     - if it cannot maintain that contract, it MUST expose `allowed_actions.edit=false`.
