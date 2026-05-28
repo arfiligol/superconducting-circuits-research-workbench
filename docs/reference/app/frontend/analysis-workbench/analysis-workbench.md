@@ -12,7 +12,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: productized Application Analysis Workbench contract
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -60,6 +60,64 @@ It must not own:
 - TraceStore publication
 - heavy compute
 
+## Analysis Selection Model
+
+- User may explicitly select traces.
+- Backend interprets selections through persisted trace structure.
+- Analysis Workbench may consume analysis-facing trace projection from [Datasets & Results](../../backend/datasets-results.md).
+- Raw checkbox list is not the final scientific collection model.
+- `collection_projection` is a read model, not a persisted owner.
+- Result handles may be selected as upstream inputs when the analysis depends on prior published results.
+
+## AnalysisRequestV1 Minimum Shape
+
+```json
+{
+  "schema_version": "app.analysis_request.v1",
+  "dataset_id": "ds_001",
+  "design_id": "design_001",
+  "analysis_family": "resonance_fit",
+  "selection": {
+    "trace_ids": ["trace_001"],
+    "result_handles": [],
+    "collection_key": null
+  },
+  "parameters": {},
+  "output_target": {
+    "mode": "existing_design",
+    "design_id": "design_001"
+  }
+}
+```
+
+`AnalysisRequestV1` is a product request. The workbench must not build `RunnerTaskEnvelopeV1`, manifest locators, or staging paths.
+
+## UI States
+
+| State | Meaning |
+| --- | --- |
+| `empty` | no dataset/design context selected |
+| `selecting_traces` | user is selecting traces, result handles, or collection projection |
+| `selection_invalid` | Backend cannot derive a valid analysis collection from the selection |
+| `ready_to_submit` | AnalysisRequestV1 can be submitted |
+| `submitting` | submit mutation is in flight |
+| `attached_task_waiting` | task exists but is waiting/preparing |
+| `attached_task_running` | Julia Runner is executing the analysis |
+| `publishing` | Backend is validating/publishing Runner output |
+| `completed` | ResultView bootstrap is available |
+| `failed` | task or publication failed |
+| `cancelled` | task was cancelled |
+| `result_unavailable` | task exists but no published ResultView is available |
+
+## Request Behavior
+
+- Workbench sends `AnalysisRequestV1`, not `RunnerTaskEnvelopeV1`.
+- Workbench receives `task_id` from the Backend and uses the Task / Execution Center or a stage-local panel for status.
+- Workbench opens ResultView only after Backend publication.
+- Workbench may reuse shared task/result components.
+- Workbench must not duplicate task lifecycle authority.
+- Workbench must not directly mutate full arrays or publish TraceStore records.
+
 ## Related
 
 * [Application Interface](../../application-interface.md)
@@ -67,4 +125,5 @@ It must not own:
 * [Task Management](../shared-workflow/task-management.md)
 * [Datasets & Results](../../backend/datasets-results.md)
 * [Product Async Contracts](../../../architecture/product-async-contracts.md)
+* [ResultView API](../../backend/result-view-api.md)
 * [Simulation Interface Boundaries](../../../architecture/simulation-interface-boundaries.md)

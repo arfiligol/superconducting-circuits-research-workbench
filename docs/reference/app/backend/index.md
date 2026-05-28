@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Python Backend control/data plane authority surfaces
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -26,6 +26,7 @@ The Python Backend owns the control plane and data plane. It does not own heavy 
 | [Session & Workspace](session-workspace.md) | Header, app shell, notebooks | runtime mode, session, workspace, active dataset, capabilities |
 | [Datasets & Results](datasets-results.md) | Dashboard, Dataset, Raw Data, Tasks, notebooks | dataset/design/trace metadata, trace preview, result handles |
 | [Tasks & Execution](tasks-execution.md) | Tasks page, Header, Julia Runner | task lifecycle, runner API, completion publication |
+| [ResultView API](result-view-api.md) | Simulation Workbench, Analysis Workbench, Raw Data Browser, Python Notebook | published result bootstrap, previews, projections, bounded slices |
 | [Circuit Definitions](circuit-definitions.md) | Design Assets, Schema Editor, notebooks | source/design metadata |
 | [Audit Logs](audit-logs.md) | governance and diagnostics | append-only audit query |
 

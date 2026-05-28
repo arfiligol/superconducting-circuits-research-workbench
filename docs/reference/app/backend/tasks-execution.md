@@ -205,6 +205,7 @@ Polling is the baseline status sync mechanism. SSE or WebSocket may be added as 
 
 * [Julia Runner Compute Plane](../../architecture/julia-runner-compute-plane.md)
 * [Product Async Contracts](../../architecture/product-async-contracts.md)
+* [ResultView API](result-view-api.md)
 * [Runner Result Manifest](../../architecture/runner-result-manifest.md)
 * [TraceStore Zarr](../../architecture/trace-store-zarr.md)
 * [Task Management](../frontend/shared-workflow/task-management.md)

@@ -60,13 +60,13 @@ The canonical Analysis Workbench route is `/tasks?lane=analysis` unless a future
 | [Sidebar](shared-shell/sidebar.md) | navigation-only app IA | [Application Interface](../application-interface.md) |
 | [Auth Entry](shared-shell/auth-entry.md) | online-mode auth entry | [Authentication & Authorization](../shared/authentication-and-authorization.md) |
 | [Circuit Simulation Workbench](simulation-workbench/circuit-simulation.md) | productized simulation request/result workflow | [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) |
-| [Analysis Workbench](analysis-workbench/analysis-workbench.md) | productized analysis/fitting/post-processing workflow | [Product Async Contracts](../../architecture/product-async-contracts.md) |
+| [Analysis Workbench](analysis-workbench/analysis-workbench.md) | productized analysis/fitting/post-processing workflow | [Product Async Contracts](../../architecture/product-async-contracts.md), [ResultView API](../backend/result-view-api.md) |
 | [Task Management](shared-workflow/task-management.md) | shared task execution monitoring and attach/recover behavior | [Tasks & Execution](../backend/tasks-execution.md) |
 | [Dashboard](workspace/dashboard.md) | workspace overview | [Datasets & Results](../backend/datasets-results.md) |
 | [Dataset](workspace/dataset.md) | dataset selection and lifecycle | [Datasets & Results](../backend/datasets-results.md) |
-| [Tasks](workspace/tasks.md) | Task / Execution Center | [Tasks & Execution](../backend/tasks-execution.md) |
+| [Tasks](workspace/tasks.md) | Task / Execution Center | [Tasks & Execution](../backend/tasks-execution.md), [ResultView API](../backend/result-view-api.md) |
 | [Data Ingestion](workspace/data-ingestion.md) | raw data intake | [Datasets & Results](../backend/datasets-results.md) |
-| [Raw Data Browser](workspace/raw-data-browser.md) | trace browse and preview | [Datasets & Results](../backend/datasets-results.md), [TraceStore Zarr](../../architecture/trace-store-zarr.md) |
+| [Raw Data Browser](workspace/raw-data-browser.md) | trace browse and preview | [Datasets & Results](../backend/datasets-results.md), [ResultView API](../backend/result-view-api.md), [TraceStore Zarr](../../architecture/trace-store-zarr.md) |
 | [Schemas](definition/schemas.md) | design/source asset catalog | [Circuit Definitions](../backend/circuit-definitions.md) |
 | [Schema Editor](definition/schema-editor.md) | edit one design/source asset | [Circuit Definitions](../backend/circuit-definitions.md) |
 

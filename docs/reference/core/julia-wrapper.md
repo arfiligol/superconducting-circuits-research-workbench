@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Julia Core and Julia Runner compute boundary。
-version: v0.5.2
+version: v0.5.3
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -18,7 +18,7 @@ updated_by: codex
 # Julia Compute Boundary
 
 Julia compute now has two active packages:
-Julia Core holds the docs-defined authoring model, Circuit Plan, compiler concepts, simulation helpers, sweep helpers, and analysis logic.
+Julia Core holds the docs-defined authoring model, Circuit Plan, compiler concepts, parameter sweep architecture, compile policies, executor interfaces, simulation helpers, sweep helpers, and analysis logic.
 Julia Runner wraps that logic as asynchronous task execution and writes local staging artifacts.
 
 Concrete component libraries are dependencies selected by the caller, notebook, or Runner task environment. They are not part of the Julia Core Kernel contract.
@@ -27,7 +27,7 @@ Concrete component libraries are dependencies selected by the caller, notebook, 
 
 | Package | Path | Responsibility |
 |---|---|---|
-| SuperconductingCircuitsCore | `core/julia/SuperconductingCircuitsCore/` | docs-defined authoring model, Circuit Plan, compiler concepts, simulation helpers, sweep engine, analysis helpers |
+| SuperconductingCircuitsCore | `core/julia/SuperconductingCircuitsCore/` | docs-defined authoring model, Circuit Plan, compiler concepts, parameter sweep architecture, compile policies, executor interfaces, simulation helpers, sweep engine, analysis helpers |
 | SuperconductingCircuitsRunner | `core/julia/SuperconductingCircuitsRunner/` | backend polling, task dispatch, local Zarr staging writer, manifest generation, complete/fail reporting |
 
 ## Boundary

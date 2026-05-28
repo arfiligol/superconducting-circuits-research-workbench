@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.3.0
+version: v1.4.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -87,6 +87,8 @@ Simulation / Analysis
 ```
 
 The Runner must not copy component-library logic into a separate Runner-only construction path.
+
+Runner sweep tasks should call the Julia Core sweep engine. Runner adapters may map Backend payloads into `SweepSpec`, `CompilePolicy`, `Executor`, and `AccelerationPolicy`, but they must not implement a separate sweep execution model.
 
 ## API Shape
 

@@ -93,6 +93,8 @@ The manifest is not trusted until the Backend validates it and publishes the res
 
 ResultView is a Backend-owned read model for Application and Python Notebook consumers. It is the product-facing result availability and rendering contract after Backend publication.
 
+The detailed Backend authoring contract lives in [ResultView API](../app/backend/result-view-api.md).
+
 It provides:
 
 - task state and publication state
@@ -159,6 +161,7 @@ Application / Python Notebook
 
 - [Simulation Interface Boundaries](simulation-interface-boundaries.md)
 - [Tasks & Execution](../app/backend/tasks-execution.md)
+- [ResultView API](../app/backend/result-view-api.md)
 - [Julia Runner Compute Plane](julia-runner-compute-plane.md)
 - [Runner Result Manifest](runner-result-manifest.md)
 - [TraceStore Zarr](trace-store-zarr.md)

@@ -2,7 +2,6 @@
 aliases:
   - Backend Analysis Results
   - Analysis Result Service
-  - Backend Characterization Results
 tags:
   - diataxis/reference
   - audience/team

@@ -116,6 +116,7 @@ nav = [
     ] },
     { "App" = [
       { "Application Interface" = "reference/app/application-interface.md" },
+      { "Application Authoring Map" = "reference/app/application-authoring.md" },
       { "Shared" = [
         { "Overview" = "reference/app/shared/index.md" },
         { "Runtime Modes" = "reference/app/shared/runtime-modes.md" },
@@ -161,6 +162,7 @@ nav = [
         { "Tasks & Execution" = "reference/app/backend/tasks-execution.md" },
         { "Audit Logs" = "reference/app/backend/audit-logs.md" },
         { "Datasets & Results" = "reference/app/backend/datasets-results.md" },
+        { "ResultView API" = "reference/app/backend/result-view-api.md" },
       ] },
     ] },
     { "Core" = [
@@ -177,6 +179,7 @@ nav = [
         { "Relations and Couplings" = "reference/julia-core/relations-and-couplings.md" },
         { "Compiler" = "reference/julia-core/compiler.md" },
         { "Compiled Circuit" = "reference/julia-core/compiled-circuit.md" },
+        { "Parameter Sweeps" = "reference/julia-core/parameter-sweeps.md" },
         { "Validation" = "reference/julia-core/validation.md" },
         { "Runner-Safe API" = "reference/julia-core/runner-safe-api.md" },
       ] },
@@ -243,9 +246,10 @@ nav = [
     ] },
     { "Contributors" = "reference/contributors.md" },
   ] },
-  { "Notebooks" = [
-    { "Overview" = "reference/notebooks/index.md" },
-    { "Floating Qubit Study" = "notebooks/floating-qubit-study.md" },
+    { "Notebooks" = [
+      { "Overview" = "reference/notebooks/index.md" },
+      { "Python Notebook Authoring" = "reference/notebooks/python-authoring.md" },
+      { "Floating Qubit Study" = "notebooks/floating-qubit-study.md" },
     { "Floating Qubit Real-Part Admittance Extraction" = "notebooks/floating-qubit-real-part-admittance-extraction.md" },
     { "S-Parameter Resonance Fit Theory" = "notebooks/s-parameter-resonance-fit-theory.md" },
     { "Macroscopic Wavefunction" = "notebooks/macroscopic-wavefunction.md" },

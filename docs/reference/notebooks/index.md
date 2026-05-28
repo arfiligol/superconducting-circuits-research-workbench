@@ -42,6 +42,8 @@ Python notebooks should not become a second scientific compute authority. They m
 
 If a Python notebook needs heavier analysis dependencies for inspection or emergency work, use `notebooks/python/pyproject.toml` rather than adding them to `app/backend`.
 
+See [Python Notebook Authoring](python-authoring.md) for helper boundaries such as `open_trace_zarr_readonly()`, `submit_simulation_request()`, `submit_analysis_request()`, and forbidden direct publication helpers.
+
 ## Handoff
 
 When a notebook workflow becomes a product workflow:

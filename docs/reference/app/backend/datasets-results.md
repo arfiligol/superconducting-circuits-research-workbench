@@ -6,11 +6,11 @@ tags:
   - audience/team
   - sot/true
   - topic/app-reference
-status: draft
+status: stable
 owner: docs-team
 audience: team
 scope: Backend dataset catalog、DesignScope lifecycle / target selection、sweep-aware trace browse / preview / mutation、analysis-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
-version: v0.15.0
+version: v1.0.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -18,6 +18,10 @@ updated_by: codex
 # Datasets & Results
 
 本頁定義 Dashboard、Header dataset switcher、Raw Data Browser、Analysis Workbench 與 ResultView 依賴的 dataset / design / trace / result surface。
+
+!!! important "Authoring authority"
+    This page is the current Backend data-surface authority for Dataset Catalog, Dataset Profile, DesignScope, Trace Surface, Result Handles, sweep-aware trace browse, and summary-first query rules.
+    Future implementation agents should treat these contracts as active unless a newer source-of-truth explicitly replaces them.
 
 !!! info "Surface Boundary"
     本頁負責 dataset catalog、dataset profile、dataset-local DesignScope browse / lifecycle / target selection、sweep-aware trace browse / preview / edit payload、trace mutation gating、analysis-facing trace filtering projection、tagged core metrics summary 與 provenance-bearing result handles。
@@ -214,6 +218,8 @@ trace surface 必須嚴格拆成以下 path families：
 !!! warning "Summary-first browse"
     trace metadata list path 只能提供 summary-safe 欄位。
     不得在 list query 時一併回傳大型 numeric payload。
+
+    Full numeric arrays and full coordinate arrays only belong to detail, explorer, ResultView, or export paths with explicit payload bounds.
 
 ## Sweep-aware Trace Browse Rules
 
@@ -820,6 +826,7 @@ They are consumed by ResultView API and Application workbenches after Backend pu
 - [Frontend Reference](../frontend/index.md)
 - [Analysis Results](characterization-results.md)
 - [Product Async Contracts](../../architecture/product-async-contracts.md)
+- [ResultView API](result-view-api.md)
 - [Dataset / Design / Trace Schema](../../data-formats/dataset-record.md)
 - [Analysis Result](../../data-formats/analysis-result.md)
 - [Data Handling](../../guardrails/code-quality/data-handling.md)

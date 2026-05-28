@@ -10,7 +10,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: Julia-native core and runner package reference surface.
-version: v0.6.2
+version: v0.6.3
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -40,7 +40,7 @@ For concrete component families, use project-space or lab-space component librar
 
     | Surface | Role |
     |---|---|
-    | `core/julia/SuperconductingCircuitsCore/` | docs-defined Julia Core Authoring model, Circuit Plan, endpoints, compiler concepts, simulation helpers, and analysis helpers |
+    | `core/julia/SuperconductingCircuitsCore/` | docs-defined Julia Core Authoring model, Circuit Plan, endpoints, compiler concepts, parameter sweep architecture and execution interfaces, simulation helpers, and analysis helpers |
     | JosephsonCircuits.jl runtime | numerical circuit solve engine called from Julia-owned code |
     | Pluto notebooks | direct research cockpit for explicit Julia execution |
 

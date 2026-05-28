@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: team
 scope: productized Application Simulation Workbench contract
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -43,10 +43,75 @@ See [Product Async Contracts](../../../architecture/product-async-contracts.md) 
 - Application code must submit async tasks and render published data.
 - Large numeric arrays must stay in local filesystem Zarr stores.
 
+## Responsibilities
+
+Simulation Workbench owns:
+
+- simulation request form
+- dataset/design target selection
+- circuit/design source selection
+- solver/request configuration
+- output request selection
+- submit
+- task attachment and recovery
+- stage-local progress context
+- ResultView bootstrap
+- result rendering
+
+It must not own:
+
+- heavy compute
+- Backend task lifecycle
+- Runner runtime
+- TraceStore publication
+- direct full Zarr reading
+
+## Authoring Sections
+
+| Section | Purpose |
+| --- | --- |
+| Dataset / Design target | select existing `dataset_id + design_id` or create-new target intent |
+| Circuit / Design source selection | choose source document, schema, or saved design asset |
+| Frequency sweep setup | define start/stop/count/spacing and units |
+| Optional parameter sweep setup | define sweep axes and value domains without embedding dense result arrays |
+| Output request setup | choose requested traces, summaries, and default ResultView |
+| Solver / engine settings | configure small control values for the Backend request |
+| Submit / validation summary | show request readiness and Backend validation errors |
+| Attached task status | show waiting/running/publishing state through shared task components |
+| ResultView panel | bootstrap and render published results |
+| Error / recovery panel | expose retry, attach, cancellation, and publication failure recovery |
+
+## UI States
+
+| State | Meaning |
+| --- | --- |
+| `empty` | no dataset/design/source context selected |
+| `draft` | user is editing request fields |
+| `validating` | Backend or local schema validation is running |
+| `ready_to_submit` | SimulationRequestV1 can be submitted |
+| `submitting` | submit mutation is in flight |
+| `attached_task_waiting` | task exists but is waiting/preparing |
+| `attached_task_running` | Julia Runner is executing the task |
+| `publishing` | Backend is validating/publishing Runner output |
+| `completed` | ResultView bootstrap is available |
+| `failed` | task or publication failed |
+| `cancelled` | task was cancelled |
+| `result_unavailable` | task exists but no published ResultView is available |
+
+## Request Behavior
+
+- Workbench sends `SimulationRequestV1`, not `RunnerTaskEnvelopeV1`.
+- Workbench receives `task_id` from the Backend and uses the Task / Execution Center or a stage-local panel for status.
+- Workbench opens ResultView only after Backend publication.
+- Workbench may reuse shared task/result components.
+- Workbench must not duplicate task lifecycle authority.
+- Workbench must not read canonical Zarr directly; product rendering goes through ResultView API.
+
 ## Related
 
 * [Application Interface](../../application-interface.md)
 * [Simulation Interface Boundaries](../../../architecture/simulation-interface-boundaries.md)
 * [Product Async Contracts](../../../architecture/product-async-contracts.md)
+* [ResultView API](../../backend/result-view-api.md)
 * [Julia Runner Compute Plane](../../../architecture/julia-runner-compute-plane.md)
 * [TraceStore Zarr](../../../architecture/trace-store-zarr.md)

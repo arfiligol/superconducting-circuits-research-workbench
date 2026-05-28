@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core authoring architecture overview for Pluto direct research and Julia Runner execution.
-version: v1.2.0
+version: v1.3.0
 last_updated: 2026-05-28
 updated_by: codex
 icon: lucide/cpu
@@ -136,6 +136,12 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 
     Treat compiler output as netlist plus maps, warnings, provenance, and metadata.
 
+- __[Parameter Sweeps](parameter-sweeps.md)__
+
+    ---
+
+    Define structural, numeric, and hybrid sweeps, compile policies, topology keys, parallel execution, and optional fixed-topology numeric acceleration.
+
 - __[Validation](validation.md)__
 
     ---
@@ -154,7 +160,7 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 
 | Surface | Owns |
 | --- | --- |
-| Julia Core Kernel | component authoring contract, Circuit Plan concepts, endpoint model, compiler concepts, simulation helpers, analysis helpers |
+| Julia Core Kernel | component authoring contract, Circuit Plan concepts, endpoint model, compiler concepts, parameter sweep execution interfaces, simulation helpers, analysis helpers |
 | Component Libraries | concrete reusable components, component-specific parameters, reusable plan builders, component-specific validation helpers |
 | Pluto Notebook | direct research use of Julia Core, interactive inspection, local research plots |
 | Julia Runner | deterministic execution of Julia Core work and staged numeric output |
