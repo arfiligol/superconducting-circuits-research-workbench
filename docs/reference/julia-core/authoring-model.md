@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Source-of-truth authoring model for reusable Julia Core circuit components, plans, and compiler lowering.
-version: v1.2.1
+version: v1.3.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -21,6 +21,8 @@ updated_by: codex
 Julia Core authoring starts from reusable components and plan-level relations. Users write component and coupling intent; they do not author simulator rows as the primary workflow.
 
 The compiler lowers one complete Circuit Plan into the JosephsonCircuits.jl target. Component composition stays in the plan and is flattened only during global compilation.
+
+The target human authoring surface is the [Macro Authoring DSL](macro-authoring-dsl.md), which expands into the canonical functional API and records an [EngineeringGraph](engineering-graph.md). The EngineeringGraph is the human-facing semantic view; the JosephsonCircuits.jl netlist is the solver-facing view.
 
 ## Docs-First Rule
 
@@ -34,10 +36,16 @@ Do not preserve outdated APIs as alternate support layers when they obscure the 
 Reusable Circuit Components
         |
         v
+Macro DSL / Functional API
+        |
+        v
 Circuit Plan
         |
         v
 Plan-level relations / couplings / transforms
+        |
+        v
+EngineeringGraph
         |
         v
 Compiler

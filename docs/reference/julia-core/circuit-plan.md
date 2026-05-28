@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Circuit Plan semantics and stored authoring data before JosephsonCircuits.jl compilation.
-version: v1.3.0
-last_updated: 2026-05-28
+version: v1.4.0
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -39,6 +39,7 @@ A `CircuitPlan` is the semantic source of truth before simulation. It stores wha
 | distributed coupled windows | span-to-span distributed coupling intent |
 | shunt placements | convenience placements from a node-resolving endpoint to ground |
 | parameter metadata / sweep knobs | declared parameter roles, effective-role validation inputs, parameter owners, parameter bindings, high-level Plan Builder mappings, valid domains, units, and sweep-facing names |
+| engineering graph records | component display names, engineering roles, relation semantics, ports, groups, HB overlays, source provenance, and schematic export hints |
 | provenance | source, builder, and transform metadata needed for inspection and reproducibility |
 
 A Circuit Plan should preserve parameter metadata from components, relations, and plan builders so the sweep engine can classify axes, build topology keys, and validate compile reuse.
@@ -65,6 +66,25 @@ This metadata allows the sweep engine to:
 - preserve provenance in SweepResult.
 ```
 
+## EngineeringGraph Records
+
+A `CircuitPlan` should preserve enough authoring information to build an [`EngineeringGraph`](engineering-graph.md) without reading the compiled solver netlist.
+
+EngineeringGraph records include:
+
+```text
+- component identity and display names;
+- reusable component type and engineering role;
+- named pins, ports, source slots, and observable requests;
+- relation verbs such as connect, couple, drive, observe, feeds, and terminates;
+- through components such as couplers or feed structures;
+- groups such as readout chain, pump network, and coupling network;
+- source-code or notebook provenance;
+- schematic export hints.
+```
+
+The compiler may preserve links from compiled rows back to these records, but the engineering graph remains a plan-level semantic representation.
+
 ## Not A Netlist
 
 A Circuit Plan is not yet a JosephsonCircuits.jl netlist. It may contain hierarchy, aliases, symbolic endpoints, line transformations, validation state, and unresolved target-specific decisions.
@@ -73,6 +93,8 @@ The compiler is responsible for turning the complete plan into target-specific r
 
 !!! tip "Practical rule"
     Keep user intent in the plan as long as possible. Lower to JosephsonCircuits.jl only after validation has seen the whole circuit.
+
+The EngineeringGraph follows the same rule. Human visualization should use EngineeringGraph, not a reverse-engineered view of target rows.
 
 ## Why It Helps Pluto
 

@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler pipeline from Circuit Plan to JosephsonCompiledCircuit and JosephsonCircuits.jl target rows.
-version: v1.2.0
+version: v1.3.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -26,10 +26,15 @@ compiled = compile_to_josephson(plan)
 
 The compiler is target-specific. Other targets may use the same Circuit Plan concepts but different lowering rules and compiled outputs.
 
+The compiler consumes a `CircuitPlan` that may also contain EngineeringGraph records. It should preserve trace links from compiled rows back to plan and EngineeringGraph IDs, but it must not treat the JosephsonCircuits netlist as the source of human-facing engineering semantics.
+
 ## Pipeline
 
 ```text
 Plan
+ |
+ v
+preserve EngineeringGraph trace links
  |
  v
 expand composite components

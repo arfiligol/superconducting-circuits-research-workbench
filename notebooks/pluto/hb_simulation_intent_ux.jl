@@ -2,12 +2,24 @@
 # v1.0.1
 
 #> [frontmatter]
-#> title = "HB Simulation Intent UX Prototype"
-#> tags = ["julia-core", "hb-intent", "ux-prototype", "acceptance-harness"]
-#> description = "Executable Pluto UX prototype for the target CircuitPlan + HBIntent + HBProblemSpec workflow."
+#> title = "HB Simulation Intent + EngineeringGraph UX Prototype"
+#> tags = ["julia-core", "hb-intent", "engineering-graph", "ux-prototype", "acceptance-harness"]
+#> description = "Executable Pluto UX prototype for the target Macro DSL + EngineeringGraph + HBProblemSpec workflow."
 
 using Markdown
 using InteractiveUtils
+
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following standalone @bind definition gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    #! format: off
+    return quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+    #! format: on
+end
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37001
 begin
@@ -22,17 +34,19 @@ begin
 end
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37002
-TableOfContents(title = "HB UX Prototype")
+TableOfContents(title = "HB + EngineeringGraph UX Prototype")
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37003
 md"""
-# HB Simulation Intent UX Prototype
+# HB Simulation Intent + EngineeringGraph UX Prototype
 
 This notebook is a tutorial, API design surface, and implementation acceptance harness for the target Julia Core HB workflow.
 
 ```text
 Component Library
+    -> Macro DSL
     -> CircuitPlan
+    -> EngineeringGraph
     -> ExternalPort
     -> HBIntent
     -> compile_to_josephson
@@ -118,6 +132,26 @@ It uses the target user-facing API directly. If Julia Core does not implement an
     <div class="hb-card hb-step"><strong>CompiledCircuit</strong><code>validated maps</code></div>
     <div class="hb-card hb-step"><strong>HBProblemSpec</strong><code>normalized hbsolve inputs</code></div>
     <div class="hb-card hb-step"><strong>Solver</strong><code>run_hb_problem</code></div>
+</div>
+""")
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37056
+md"""
+## Engineering Semantics Overview
+
+Netlist rows are for solvers. `EngineeringGraph` is for humans.
+
+The Macro DSL should capture reusable components, relation verbs, ports, HB source slots, observables, groups, and source provenance before compilation lowers anything to JosephsonCircuits rows.
+"""
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37057
+@htl("""
+<div class="hb-grid">
+    <div class="hb-card"><strong>Reusable Components</strong><span class="hb-pill">display names</span><span class="hb-pill">roles</span><span class="hb-pill">parameters</span></div>
+    <div class="hb-card"><strong>Relations / Couplers</strong><span class="hb-pill">connect</span><span class="hb-pill">couple</span><span class="hb-pill">through</span></div>
+    <div class="hb-card"><strong>Ports / Sources</strong><span class="hb-pill">signal</span><span class="hb-pill">pump</span><span class="hb-pill">readout</span></div>
+    <div class="hb-card"><strong>Observables</strong><span class="hb-pill">S</span><span class="hb-pill">Z</span><span class="hb-pill">QE</span><span class="hb-pill">CM</span></div>
+    <div class="hb-card"><strong>Compiled Netlist</strong><span class="hb-pill">solver rows</span><span class="hb-pill">trace links</span></div>
 </div>
 """)
 
@@ -305,41 +339,148 @@ plot(
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3702e
 md"""
-## CircuitPlan
+## Macro DSL Circuit Section
 
-The following cell uses the target Component Library API. It should fail until a component library provides `LumpedResonator` with this user-facing constructor.
+The following cell uses the target Macro DSL as the primary authoring syntax.
+
+It should fail until Julia Core implements `@circuit`, the macro expansion contract, and a component library provides `LumpedResonator`.
 """
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3702f
-begin
-    plan = CircuitPlan("hb-intent-demo")
-
-    res = register_component!(
-        plan,
+plan = @circuit "hb-intent-demo" begin
+    res = component(
         LumpedResonator(
-            id = "res",
             capacitance = capacitance,
             inductance = inductance,
-        ),
+        );
+        display_name = :res,
+        role = :resonator,
     )
+
+    port(:signal_port) do
+        index = 1
+        endpoint = pin(res, :signal)
+        resistance = port_resistance
+        role = :mixed
+    end
 end
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37066
+md"""
+## Macro Expansion Preview
+
+The macro expansion should show canonical Julia Core calls plus EngineeringGraph recording calls. This cell should fail if `@circuit` is missing or expands into unsupported hidden behavior.
+"""
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37067
+macro_expansion = macroexpand(
+    @__MODULE__,
+    quote
+        @circuit "hb-intent-demo" begin
+            res = component(
+                LumpedResonator(
+                    capacitance = capacitance,
+                    inductance = inductance,
+                );
+                display_name = :res,
+                role = :resonator,
+            )
+
+            port(:signal_port) do
+                index = 1
+                endpoint = pin(res, :signal)
+                resistance = port_resistance
+                role = :mixed
+            end
+        end
+    end;
+    recursive = true,
+)
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37058
+md"""
+## EngineeringGraph Preview
+
+The EngineeringGraph is the component-level semantic graph created from the authored `CircuitPlan`. It is the source for human visualization and schematic export.
+"""
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37059
+engineering_graph = engineering_graph(plan)
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3705a
+engineering_graph.components
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3705b
+engineering_graph.relations
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3705c
+engineering_graph.ports
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3705d
+engineering_graph.groups
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3705e
+@htl("""
+<div class="hb-grid">
+    <div class="hb-card">
+        <strong>Engineering component</strong>
+        <span class="hb-pill">display: <code>res</code></span>
+        <span class="hb-pill">type: <code>LumpedResonator</code></span>
+        <span class="hb-pill">role: <code>:resonator</code></span>
+    </div>
+    <div class="hb-card">
+        <strong>Engineering port</strong>
+        <span class="hb-pill">id: <code>:signal_port</code></span>
+        <span class="hb-pill">role: <code>:mixed</code></span>
+        <span class="hb-pill">component endpoint: <code>res.signal</code></span>
+    </div>
+</div>
+""")
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3705f
+md"""
+## DOT / Graph Preview
+
+`to_dot(engineering_graph)` is the target component-graph export. This notebook displays DOT text directly; if a Graphviz renderer is added later, renderer errors should be visible rather than hidden.
+"""
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37060
+dot = to_dot(engineering_graph)
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37061
+Markdown.parse("```dot\n$(dot)\n```")
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37062
+md"""
+## Schemdraw Export Preview
+
+`to_schemdraw_spec(engineering_graph)` returns renderer-neutral data intended for a later Python Schemdraw renderer.
+
+Julia Core does not call Schemdraw directly in this notebook.
+"""
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37063
+schemdraw_spec = to_schemdraw_spec(engineering_graph)
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37064
+schemdraw_spec
+
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37065
+md"""
+### Python Schemdraw Future Renderer
+
+A later Python renderer can consume `SchematicExportSpec` and call Schemdraw to produce SVG, PNG, or PDF. This keeps Python drawing dependencies outside Julia Core while preserving enough engineering semantics for schematic generation.
+"""
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37030
 md"""
 ## ExternalPort
 
-Ports belong to `CircuitPlan`. Runner task payloads do not create them.
+The `:signal_port` declaration above belongs to `CircuitPlan` through the Macro DSL. Runner task payloads do not create it.
 """
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37031
-signal_port = external_port!(
-    plan;
-    id = :signal_port,
-    index = 1,
-    endpoint = pin(res, :signal),
-    resistance = port_resistance,
-    role = :mixed,
-)
+engineering_graph.ports[:signal_port]
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37032
 @htl("""
@@ -569,6 +710,9 @@ authoring_report = validate_authoring(plan)
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37040
 compiled = compile_to_josephson(plan)
 
+# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37068
+compiled.netlist
+
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37041
 hb_report = validate_hb_intent(compiled)
 
@@ -709,26 +853,14 @@ hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitd
 ```
 """
 
-# ╔═╡ 00000000-0000-0000-0000-000000000001
-PLUTO_PROJECT_TOML_CONTENTS = """
-[deps]
-HypertextLiteral = "ac1192a8-f4b3-4d9f-9b3f-fdef8e5ef241"
-Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-SuperconductingCircuitsCore = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
-"""
-
-# ╔═╡ 00000000-0000-0000-0000-000000000002
-PLUTO_MANIFEST_TOML_CONTENTS = """
-# This notebook intentionally omits a pinned manifest until the target API exists.
-"""
-
 # ╔═╡ Cell order:
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37001
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37002
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37003
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37004
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37005
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37056
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37057
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37006
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37007
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37008
@@ -767,28 +899,45 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37054
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37029
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702a
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3702b
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702c
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3702d
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702e
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3702f
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37030
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702b
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3702c
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702d
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3702e
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3702f
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37066
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37067
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37058
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37059
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3705a
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3705b
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3705c
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3705d
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3705e
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3705f
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37060
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37061
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37062
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37063
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37064
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37065
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37030
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37031
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37032
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37033
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37034
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37035
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37032
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37033
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37034
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37035
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37036
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37037
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37038
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37039
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37038
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37039
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3703a
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3703b
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3703c
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3703d
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3703e
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3703b
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3703c
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3703d
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3703e
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3703f
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37040
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37068
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37041
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37042
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37043
@@ -801,13 +950,11 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3704a
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3704b
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3704c
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3704d
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3704e
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3704d
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3704e
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3704f
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37050
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37051
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37052
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37050
+# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37051
+# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37052
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37053
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37055
-# ╟─00000000-0000-0000-0000-000000000001
-# ╟─00000000-0000-0000-0000-000000000002

@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.7.2
+version: v1.8.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -58,6 +58,8 @@ Julia Core must not depend on FastAPI, Next.js, Electron, or Backend task state.
 The Runner owns execution orchestration and staged output, not authoring semantics. Circuit construction, endpoint resolution, compiler semantics, and simulation result extraction belong to Julia Core.
 
 Runner receives a RunSpec and binds it to a compiled HB intent. Runner must not invent ports, source slots, pump axes, mode tuples, observable requests, or solver-output semantics.
+
+Runner also must not invent EngineeringGraph semantics. Component identity, engineering roles, relation types, port roles, source slots, observable requests, groups, and schematic export hints come from CircuitPlan authoring and selected Component Libraries.
 
 Large numeric arrays should not move through HTTP JSON. Runner outputs should use staged local filesystem packages, with Backend publication handling canonical TraceStore records.
 
@@ -112,6 +114,9 @@ Component Library plan builder
 CircuitPlan
         |
         v
+EngineeringGraph
+        |
+        v
 Validation
         |
         v
@@ -125,6 +130,15 @@ Simulation / Analysis
 ```
 
 The Runner must not copy component-library logic into a separate Runner-only construction path.
+
+When Runner needs a report, preview, or schematic export, it should call Julia Core APIs such as:
+
+```julia
+graph = engineering_graph(plan)
+spec = to_schemdraw_spec(graph)
+```
+
+Those APIs return renderer-neutral data. A Python Schemdraw renderer may consume the export later, but Julia Core and Runner should not depend on Schemdraw.
 
 ## Runner Sweep Execution
 
@@ -188,5 +202,7 @@ Do not add Runner-only component construction.
 Do not preserve old Core APIs as Runner alternate paths.
 
 Do not bypass the Circuit Plan, Endpoint, Relation, Compiler, or `JosephsonCompiledCircuit` model in Runner code.
+
+Do not reconstruct component-level schematic meaning from target netlist rows.
 
 If a task needs a new circuit shape, add or update the reusable Julia Core component, endpoint, relation, or compiler path, then let both Pluto and Runner call it.

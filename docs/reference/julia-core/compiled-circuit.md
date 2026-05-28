@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler output contract for JosephsonCompiledCircuit, maps, warnings, provenance, and caller inspection.
-version: v1.2.1
+version: v1.3.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -21,6 +21,8 @@ updated_by: codex
 The compiler output should be richer than raw netlist rows. Pluto needs inspection and debugging metadata; Runner execution needs deterministic simulation input and provenance.
 
 The target concept is `JosephsonCompiledCircuit`.
+
+Compiled output is the solver-facing representation. Human-facing engineering structure belongs to [`EngineeringGraph`](engineering-graph.md). The compiler should preserve trace links from solver rows back to plan and EngineeringGraph records, but it should not make the netlist the source of engineering semantics.
 
 ## Target Contract
 
@@ -61,6 +63,20 @@ The current MVP struct does not yet contain every target field. Implementation s
 | `warnings` | compile warnings, physics sanity warnings, and recoverable lowering notes |
 | `provenance` | builder, transform, source, and reproducibility metadata |
 | `metadata` | target version, compiler settings, discretization settings, and auxiliary data |
+
+## EngineeringGraph Links
+
+`JosephsonCompiledCircuit` should preserve links to the EngineeringGraph where useful:
+
+```text
+- component_map entries should reference EngineeringComponent IDs;
+- port_map entries should reference EngineeringPort IDs;
+- source_slot_map entries should reference EngineeringHBIntentOverlay source slots;
+- observable_request_map entries should reference EngineeringHBIntentOverlay observable requests;
+- provenance should identify the CircuitPlan and EngineeringGraph source version.
+```
+
+These links let Pluto and Runner logs explain compiled rows in engineering language. They do not make the compiled netlist the canonical human-facing schematic.
 
 ## HB Simulation Metadata
 

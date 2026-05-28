@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core authoring architecture overview for Pluto direct research and Julia Runner execution.
-version: v1.4.1
+version: v1.5.0
 last_updated: 2026-05-29
 updated_by: codex
 icon: lucide/cpu
@@ -123,6 +123,18 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
     ---
 
     Specify node connections, capacitive couplings, shunts, inductive couplings, and distributed windows as plan-level intents.
+
+- __[Macro Authoring DSL](macro-authoring-dsl.md)__
+
+    ---
+
+    Capture human authoring syntax while expanding into the canonical CircuitPlan and HBIntent APIs.
+
+- __[Engineering Graph](engineering-graph.md)__
+
+    ---
+
+    Preserve component-level engineering semantics for Pluto visualization, debugging, and schematic export.
 
 - __[Compiler](compiler.md)__
 

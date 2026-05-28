@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the boundary between Julia Core Kernel and user/lab/project component libraries.
-version: v1.2.0
-last_updated: 2026-05-28
+version: v1.3.0
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -27,7 +27,7 @@ Julia Core provides the authoring kernel. Component Libraries provide concrete c
 | Layer | Owns |
 | --- | --- |
 | Julia Core Kernel | `CircuitPlan`, `Endpoint`, Relation, Validation, Compiler, `JosephsonCompiledCircuit`, simulation / sweep interfaces |
-| Component Library | concrete components, component-specific parameters, component-specific validation, reusable plan builders |
+| Component Library | concrete components, component-specific parameters, engineering roles, schematic export hints, component-specific validation, reusable plan builders |
 | Pluto Notebook | interactive use of Julia Core and selected component libraries |
 | Julia Runner | deterministic execution of Julia Core and selected component libraries |
 
@@ -74,6 +74,38 @@ build_qwr_readout_with_shunt_plan(params)
 ```
 
 These builders should return `CircuitPlan` objects and should use Julia Core endpoints, relations, validation, compiler, and simulation interfaces.
+
+## EngineeringGraph Metadata
+
+Component Libraries should provide the component-level information that Julia Core records into [`EngineeringGraph`](engineering-graph.md):
+
+```text
+- stable component ID;
+- display name;
+- reusable component type;
+- engineering role;
+- user-facing parameters with default units;
+- named pins and anchors;
+- schematic kind and optional render hints;
+- source provenance when available.
+```
+
+These records are for human visualization, debugging, reports, and schematic export. They are not JosephsonCircuits.jl rows and should not be inferred from solver netlists.
+
+Plan Builders should also record engineering relations when they connect reusable components:
+
+```julia
+record_engineering_relation!(
+    plan;
+    relation_type = :couple,
+    from = pin(feedline, :output),
+    to = pin(resonator, :input),
+    through = CapacitiveCoupler(capacitance = Cc),
+    role = :readout_coupling,
+)
+```
+
+The same metadata should be available whether the plan was authored with the Macro DSL or ordinary functional calls.
 
 ## Plan Builder Parameter Metadata
 
