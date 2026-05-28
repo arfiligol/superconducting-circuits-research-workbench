@@ -68,7 +68,7 @@ function _coupled_branch_prefix(prefix::AbstractString, line_tag::AbstractString
 end
 
 """
-    add_coupled_window!(
+    _emit_coupled_window!(
         circuit;
         prefix,
         left_node_a,
@@ -79,7 +79,8 @@ end
         ground_node="0",
     )
 
-Add a finite-length coupled window between two distributed transmission-line paths.
+Internal compiler helper for emitting a finite-length coupled window between
+two distributed transmission-line paths.
 
 `spec` is expressed in per-unit-length mutual form:
 - line A self inductance `l11_per_m_h`
@@ -98,7 +99,7 @@ Each discrete section emits:
 The `K` element uses the coupling coefficient `k = M / sqrt(L1 * L2)`, which is
 the convention JosephsonCircuits expects for mutual inductors.
 """
-function add_coupled_window!(
+function _emit_coupled_window!(
     circuit;
     prefix::AbstractString,
     left_node_a,

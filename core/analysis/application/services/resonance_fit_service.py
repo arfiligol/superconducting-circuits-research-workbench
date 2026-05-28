@@ -348,7 +348,7 @@ class ResonanceFitService:
         if not slice_results:
             raise ValueError("No valid bias slices found with enough data points to fit.")
 
-        # If single slice, return flat dict for backward compatibility
+        # If single slice, return the legacy flat response shape.
         if len(slice_results) == 1:
             return slice_results[0]
 

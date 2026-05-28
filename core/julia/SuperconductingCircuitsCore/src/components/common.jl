@@ -34,7 +34,7 @@ function phase_velocity(spec::RLGCSpec)
 end
 
 """
-    add_distributed_segment!(
+    _emit_distributed_segment!(
         circuit;
         prefix,
         start_node,
@@ -44,12 +44,10 @@ end
         add_shunt_at_last_node=true,
     )
 
-Public wrapper around the reusable RLGC ladder generator.
-
-This is the lowest-level building block for manually assembling longer
-transmission-line structures section by section.
+Internal compiler helper for emitting a discretized RLGC ladder into a
+target tuple netlist.
 """
-function add_distributed_segment!(
+function _emit_distributed_segment!(
     circuit;
     prefix::AbstractString,
     start_node,

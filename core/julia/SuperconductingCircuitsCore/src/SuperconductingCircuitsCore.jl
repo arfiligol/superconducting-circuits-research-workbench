@@ -21,9 +21,6 @@ export phase_velocity
 export section_values
 export coupled_window_section_values
 
-export add_distributed_segment!
-export add_coupled_window!
-
 export run_hbsolve
 export run_frequency_sweep
 export run_design_sweep

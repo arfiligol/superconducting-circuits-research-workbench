@@ -59,9 +59,9 @@ end
     @test values.cm_f ≈ 1.0e-12 * 0.1mm
 end
 
-@testset "add_distributed_segment! row count" begin
+@testset "_emit_distributed_segment! row count" begin
     circuit = Tuple{String,String,String,Any}[]
-    add_distributed_segment!(
+    SuperconductingCircuitsCore._emit_distributed_segment!(
         circuit;
         prefix="tl",
         start_node="a",
@@ -71,9 +71,9 @@ end
     @test length(circuit) == 4
 end
 
-@testset "add_coupled_window! row count" begin
+@testset "_emit_coupled_window! row count" begin
     circuit = Tuple{String,String,String,Any}[]
-    add_coupled_window!(
+    SuperconductingCircuitsCore._emit_coupled_window!(
         circuit;
         prefix="window",
         left_node_a="a0",
