@@ -27,7 +27,7 @@ def test_runner_claim_complete_publishes_staged_zarr() -> None:
 
     progress_response = client.post(
         f"/runner/v1/tasks/{created['task_id']}/progress",
-        json={"percent_complete": 33, "summary": "Runner smoke progress."},
+        json={"percent_complete": 33, "summary": "Runner fixture progress."},
     )
     assert progress_response.status_code == 200
     assert progress_response.json()["data"]["status"] == "running"
@@ -162,7 +162,9 @@ def _publish_small_runner_result(summary: str) -> dict[str, object]:
     }
 
 
-def _submit_simulation_task(*, summary: str = "Runner smoke publication.") -> dict[str, object]:
+def _submit_simulation_task(
+    *, summary: str = "Runner staged-result publication fixture."
+) -> dict[str, object]:
     response = client.post(
         "/tasks",
         json={
@@ -178,7 +180,7 @@ def _submit_simulation_task(*, summary: str = "Runner smoke publication.") -> di
                 },
                 "parameter_sweeps": [],
                 "solver": {
-                    "solver_family": "runner-smoke",
+                    "solver_family": "josephson_circuits",
                     "max_iterations": 1,
                     "convergence_tolerance": 1e-6,
                     "harmonic_balance": {"enabled": False},
@@ -200,6 +202,8 @@ def _submit_simulation_task(*, summary: str = "Runner smoke publication.") -> di
 
 
 def _write_small_result_package(task_dir: Path, *, task_id: str) -> Path:
+    """Write a tiny test fixture package for Backend publication validation only."""
+
     result_root = task_dir / "result.zarr"
     _write_group(result_root)
     _write_group(result_root / "axes")
@@ -209,7 +213,7 @@ def _write_small_result_package(task_dir: Path, *, task_id: str) -> Path:
     _write_zarr_array(result_root / "traces" / "S11" / "real", [1.0, 0.5, 0.0, -0.5, -1.0])
     _write_zarr_array(result_root / "traces" / "S11" / "imag", [0.0, 0.1, 0.2, 0.1, 0.0])
     (task_dir / "logs").mkdir(parents=True, exist_ok=True)
-    (task_dir / "logs" / "runner.log").write_text("runner smoke\n")
+    (task_dir / "logs" / "runner.log").write_text("runner staged-result fixture\n")
     manifest = {
         "schema_version": "sc.runner.result.v1",
         "task_id": task_id,

@@ -54,7 +54,7 @@ def test_hfss_nd_grid_ingestion_persists_trace_store_and_is_characterization_eli
         json={
             "kind": "layout_simulation",
             "design_name": "PF6FQ Integrated HFSS",
-            "provenance_label": "HFSS Y11 frequency by L_jun smoke",
+            "provenance_label": "HFSS Y11 frequency by L_jun fixture",
             "traces": [
                 {
                     "family": "y_matrix",

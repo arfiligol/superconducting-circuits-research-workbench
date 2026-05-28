@@ -113,8 +113,8 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     created_response = client.post(
         "/circuit-definitions",
         json={
-            "name": "RewriteDefinitionAuthoringSmoke",
-            "source_text": _sample_definition_source("rewrite_definition_authoring_smoke"),
+            "name": "RewriteDefinitionAuthoringFixture",
+            "source_text": _sample_definition_source("rewrite_definition_authoring_fixture"),
         },
     )
 
@@ -124,11 +124,11 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     created_detail = created_payload["data"]["definition"]
     created_definition_id = created_detail["definition_id"]
     assert created_payload["data"]["operation"] == "created"
-    assert created_detail["name"] == "RewriteDefinitionAuthoringSmoke"
+    assert created_detail["name"] == "RewriteDefinitionAuthoringFixture"
     assert created_detail["source_text"] == _sample_definition_source(
-        "rewrite_definition_authoring_smoke"
+        "rewrite_definition_authoring_fixture"
     ).rstrip()
-    assert "rewrite_definition_authoring_smoke" in created_detail["normalized_output"]
+    assert "rewrite_definition_authoring_fixture" in created_detail["normalized_output"]
     assert len(created_detail["preview_artifacts"]) >= 1
 
     created_detail_response = client.get(f"/circuit-definitions/{created_definition_id}")
@@ -140,8 +140,8 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     updated_response = client.put(
         f"/circuit-definitions/{created_definition_id}",
         json={
-            "name": "RewriteDefinitionAuthoringSmokeV2",
-            "source_text": _sample_definition_source("rewrite_definition_authoring_smoke_v2"),
+            "name": "RewriteDefinitionAuthoringFixtureV2",
+            "source_text": _sample_definition_source("rewrite_definition_authoring_fixture_v2"),
         },
     )
 
@@ -150,11 +150,11 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     assert updated_payload["ok"] is True
     updated_detail = updated_payload["data"]["definition"]
     assert updated_payload["data"]["operation"] == "updated"
-    assert updated_detail["name"] == "RewriteDefinitionAuthoringSmokeV2"
+    assert updated_detail["name"] == "RewriteDefinitionAuthoringFixtureV2"
     assert updated_detail["source_text"] == _sample_definition_source(
-        "rewrite_definition_authoring_smoke_v2"
+        "rewrite_definition_authoring_fixture_v2"
     ).rstrip()
-    assert "rewrite_definition_authoring_smoke_v2" in updated_detail["normalized_output"]
+    assert "rewrite_definition_authoring_fixture_v2" in updated_detail["normalized_output"]
     assert updated_detail["validation_summary"]["status"] in {"valid", "warning", "invalid"}
     assert updated_detail["preview_artifacts"] == created_detail["preview_artifacts"]
 
@@ -166,7 +166,7 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     assert refreshed_catalog_payload["ok"] is True
     refreshed_catalog_rows = refreshed_catalog_payload["data"]["rows"]
     assert refreshed_catalog_rows[0]["definition_id"] == created_definition_id
-    assert refreshed_catalog_rows[0]["name"] == "RewriteDefinitionAuthoringSmokeV2"
+    assert refreshed_catalog_rows[0]["name"] == "RewriteDefinitionAuthoringFixtureV2"
     assert "source_text" not in refreshed_catalog_rows[0]
     assert "normalized_output" not in refreshed_catalog_rows[0]
 

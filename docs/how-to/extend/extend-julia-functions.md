@@ -94,7 +94,8 @@ The backend must verify every declared Zarr array before publishing it into Trac
 
 ## Step 5: Add tests
 
-Use a small fake task before adding heavy JosephsonCircuits coverage.
+Start with direct unit coverage for task parsing and test-only staged-result fixtures, then add real Julia Core / JosephsonCircuits coverage for implemented compute paths.
+Fixture writers must stay inside tests and must not become Runner task kinds.
 
 ```bash
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'

@@ -12,7 +12,6 @@ export manifest_sha256
 export parse_task_claim
 export run_polling_runner
 export write_trace_zarr_package
-export write_smoke_result_package
 
 include("staging/zarr_writer.jl")
 
@@ -147,9 +146,7 @@ function report_fail(
 end
 
 function execute_task(claim::RunnerClaim)::String
-    if claim.task_kind == "julia_runner_smoke"
-        return write_smoke_result_package(claim.task_dir; task_id=claim.task_id)
-    elseif claim.task_kind == "julia_simulation_parameter_sweep"
+    if claim.task_kind == "julia_simulation_parameter_sweep"
         return execute_simulation_parameter_sweep(claim)
     elseif claim.task_kind == "julia_simulation_frequency_sweep"
         return execute_simulation_frequency_sweep(claim)
@@ -162,58 +159,19 @@ function execute_task(claim::RunnerClaim)::String
 end
 
 function execute_simulation_parameter_sweep(claim::RunnerClaim)::String
-    error("julia_simulation_parameter_sweep is not implemented yet. Refusing to write smoke output.")
+    error("julia_simulation_parameter_sweep is not implemented yet. Refusing to write fixture output.")
 end
 
 function execute_simulation_frequency_sweep(claim::RunnerClaim)::String
-    error("julia_simulation_frequency_sweep is not implemented yet. Refusing to write smoke output.")
+    error("julia_simulation_frequency_sweep is not implemented yet. Refusing to write fixture output.")
 end
 
 function execute_analysis_task(claim::RunnerClaim)::String
-    error("$(claim.task_kind) is not implemented yet. Refusing to write smoke output.")
+    error("$(claim.task_kind) is not implemented yet. Refusing to write fixture output.")
 end
 
 function execute_postprocess_task(claim::RunnerClaim)::String
-    error("$(claim.task_kind) is not implemented yet. Refusing to write smoke output.")
-end
-
-function write_smoke_result_package(task_dir::AbstractString; task_id::AbstractString)
-    frequency = Float64[4.0e9, 4.5e9, 5.0e9, 5.5e9, 6.0e9]
-    real = Float64[1.0, 0.5, 0.0, -0.5, -1.0]
-    imag = Float64[0.0, 0.1, 0.2, 0.1, 0.0]
-    return write_trace_zarr_package(
-        task_dir;
-        task_id=task_id,
-        axes=[
-            Dict{String,Any}(
-                "name" => "frequency",
-                "unit" => "Hz",
-                "path" => "/axes/frequency",
-                "values" => frequency,
-            ),
-        ],
-        traces=[
-            Dict{String,Any}(
-                "trace_key" => "S11",
-                "family" => "s_matrix",
-                "parameter" => "S11",
-                "representation" => "complex",
-                "real" => real,
-                "imag" => imag,
-                "axes" => ["frequency"],
-                "chunk_shape" => [5],
-            ),
-        ],
-        manifest_metadata=Dict{String,Any}(
-            "sweep" => Dict{String,Any}(
-                "total_points" => 1,
-                "success_points" => 1,
-                "failed_points" => 0,
-                "failed" => Any[],
-            ),
-            "log_message" => "SuperconductingCircuitsRunner smoke task completed at $(_timestamp_now()).\n",
-        ),
-    )
+    error("$(claim.task_kind) is not implemented yet. Refusing to write fixture output.")
 end
 
 function manifest_sha256(path::AbstractString)::String

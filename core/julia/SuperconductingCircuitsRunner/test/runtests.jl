@@ -2,15 +2,24 @@ using JSON3
 using SuperconductingCircuitsRunner
 using Test
 
+function thrown_error_message(f)
+    try
+        f()
+    catch err
+        return sprint(showerror, err)
+    end
+    return nothing
+end
+
 @testset "runner task contract" begin
     payload = Dict(
         "task" => Dict(
             "task_id" => "306",
-            "task_kind" => "julia_runner_smoke",
+            "task_kind" => "julia_simulation_frequency_sweep",
             "input" => Dict{String,Any}(),
             "output_target" => Dict(
                 "dataset_id" => "local-dataset-001",
-                "design_id" => "design_runner_smoke",
+                "design_id" => "design_frequency_fixture",
             ),
         ),
         "staging" => Dict(
@@ -24,12 +33,12 @@ using Test
     claim = parse_task_claim(payload)
     @test claim !== nothing
     @test claim.task_id == "306"
-    @test claim.task_kind == "julia_runner_smoke"
+    @test claim.task_kind == "julia_simulation_frequency_sweep"
     @test claim.dataset_id == "local-dataset-001"
-    @test claim.design_id == "design_runner_smoke"
+    @test claim.design_id == "design_frequency_fixture"
 end
 
-@testset "runner dispatch" begin
+@testset "runner rejects smoke task kind" begin
     mktempdir() do dir
         smoke_claim = SuperconductingCircuitsRunner.RunnerClaim(
             "task_smoke",
@@ -41,37 +50,48 @@ end
             joinpath(dir, "result.zarr"),
             joinpath(dir, "manifest.json"),
         )
-        manifest_path = execute_task(smoke_claim)
-        @test isfile(manifest_path)
-        @test isdir(joinpath(dir, "result.zarr"))
-        @test isfile(joinpath(dir, "result.zarr", ".zgroup"))
-        @test isfile(joinpath(dir, "result.zarr", "axes", "frequency", ".zarray"))
-        @test isfile(joinpath(dir, "result.zarr", "traces", "S11", "real", ".zarray"))
-        @test isfile(joinpath(dir, "result.zarr", "traces", "S11", "imag", ".zarray"))
-        @test isfile(joinpath(dir, "result.zarr", "traces", "S11", "real", "0"))
-        @test isfile(joinpath(dir, "logs", "runner.log"))
+        message = thrown_error_message(() -> execute_task(smoke_claim))
+        @test message !== nothing
+        @test occursin("Unsupported Julia Runner task kind: julia_runner_smoke", message)
+        @test !isdir(joinpath(dir, "result.zarr"))
+        @test !isfile(joinpath(dir, "manifest.json"))
+    end
+end
 
-        manifest = JSON3.read(read(manifest_path, String))
-        @test manifest.schema_version == "sc.runner.result.v1"
-        @test manifest.task_id == "task_smoke"
-        @test manifest.array_store.zarr_format == 2
-        @test manifest.traces[1].real_path == "/traces/S11/real"
-        @test manifest.traces[1].imag_path == "/traces/S11/imag"
-        @test manifest.traces[1].shape == [5]
-        @test manifest_sha256(manifest_path) isa String
+@testset "runner public API does not expose smoke writer" begin
+    removed_name = Symbol("write_" * "smoke_result_package")
+    @test !isdefined(SuperconductingCircuitsRunner, removed_name)
+end
 
-        frequency_claim = SuperconductingCircuitsRunner.RunnerClaim(
-            "task_frequency",
+@testset "real task kinds fail clearly until implemented" begin
+    mktempdir() do dir
+        task_kinds = [
             "julia_simulation_frequency_sweep",
-            Dict{String,Any}(),
-            nothing,
-            nothing,
-            dir,
-            joinpath(dir, "result.zarr"),
-            joinpath(dir, "manifest.json"),
-        )
-        @test_throws ErrorException execute_task(frequency_claim)
+            "julia_simulation_parameter_sweep",
+            "julia_analysis_trace_summary",
+            "julia_postprocess_coordinate_transform",
+        ]
+        for task_kind in task_kinds
+            claim = SuperconductingCircuitsRunner.RunnerClaim(
+                "task_real_boundary",
+                task_kind,
+                Dict{String,Any}(),
+                nothing,
+                nothing,
+                dir,
+                joinpath(dir, "result.zarr"),
+                joinpath(dir, "manifest.json"),
+            )
+            message = thrown_error_message(() -> execute_task(claim))
+            @test message !== nothing
+            @test occursin("not implemented yet", message)
+            @test occursin("Refusing to write fixture output", message)
+        end
+    end
+end
 
+@testset "unknown runner task kind fails clearly" begin
+    mktempdir() do dir
         unknown_claim = SuperconductingCircuitsRunner.RunnerClaim(
             "task_unknown",
             "unknown_kind",
@@ -82,11 +102,13 @@ end
             joinpath(dir, "result.zarr"),
             joinpath(dir, "manifest.json"),
         )
-        @test_throws ErrorException execute_task(unknown_claim)
+        message = thrown_error_message(() -> execute_task(unknown_claim))
+        @test message !== nothing
+        @test occursin("Unsupported Julia Runner task kind: unknown_kind", message)
     end
 end
 
-@testset "trace zarr package writer" begin
+@testset "small trace zarr fixture package writer" begin
     mktempdir() do dir
         frequency = collect(range(4.0e9, 6.0e9; length=5))
         sweep1 = Float64[1.0, 2.0]

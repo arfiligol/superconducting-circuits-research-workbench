@@ -193,6 +193,16 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 - Julia Runner does not write formal metadata DB records
 - Python Backend validates Runner manifests and publishes result Zarr into official TraceStore
 
+## No Fake-First Compute Policy
+
+The project does not use fake Runner compute to make product workflows appear complete.
+
+- Real task kinds execute real Julia Core / JosephsonCircuits / analysis logic.
+- Unimplemented task kinds fail clearly.
+- Test fixtures stay inside tests.
+- Production dispatch must not call fixture writers.
+- AI agents must not add smoke, fake, or dummy task kinds to satisfy tests.
+
 ### Removed Surface Notes
 
 - root `backend/`, `frontend/`, and `desktop/` must not exist as active surfaces after relocation to `app/`
