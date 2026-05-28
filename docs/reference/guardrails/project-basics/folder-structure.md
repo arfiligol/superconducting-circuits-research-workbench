@@ -76,8 +76,8 @@ superconducting-circuits-tutorial/
 | Python data contract schemas if needed | `core/python/sc_data_contracts/` |
 | Pluto notebook | `notebooks/pluto/` |
 | Direct research notebook | `notebooks/pluto/` |
-| Python backend/data notebook | `notebooks/python/` |
-| Backend/API notebook client | `notebooks/python/` |
+| Python data-analysis / inspection notebook | `notebooks/python/` |
+| Backend/API notebook inspection client | `notebooks/python/` |
 | dev/build/test/maintenance helper | `scripts/dev/`, `scripts/build/`, `scripts/test/`, `scripts/maintenance/` |
 | archived legacy UI / command workflow / runtime residue | `docs/archive/` as inert text only, or delete if not needed |
 | retired root worker runtime residue | 不屬於 target layout；不得新增或恢復 |
@@ -90,7 +90,7 @@ superconducting-circuits-tutorial/
 !!! important "Notebook boundary"
     Pluto notebooks are allowed to directly use Julia Core. Python notebooks are not.
 
-    Python notebooks should be treated as programmable clients of the Application Backend, not as a second scientific compute surface.
+    Python notebooks may directly read local/exported/canonical data files for ad hoc analysis, but must use Backend contracts for platform state changes.
 
 ## Removed Root Surfaces
 
@@ -140,7 +140,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 2. `app/desktop/` 依賴 frontend build、backend/runner process supervision 與受控 IPC，不承載業務規則
 3. `app/backend/` API 層依賴 services/domain/infrastructure，不執行 heavy compute
 4. Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
-5. `notebooks/python/` depends on Backend API contracts, not the Julia scientific core
+5. `notebooks/python/` may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
 6. Application Simulation Workbench depends on Backend task/result APIs, not Julia Core
 7. `core/julia/SuperconductingCircuitsRunner/` depends on Julia Core and Backend Runner protocol, and does not own formal metadata DB
 8. `core/julia/SuperconductingCircuitsCore/` does not depend on FastAPI, Next.js, Electron, or Python Backend internals
@@ -162,7 +162,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 - **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
 - **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
 - **Pluto notebooks** may directly use `SuperconductingCircuitsCore`.
-- **Python notebooks** are programmable Backend API clients and are not a second scientific compute surface.
+- **Python notebooks** are programmable data-analysis and inspection surfaces; they may directly read data files, but platform state changes must go through Backend contracts.
 - **Application Simulation Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
 - **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
 - **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
@@ -176,7 +176,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
     - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
     - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
     - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
-    - Python notebook clients depend on Backend API contracts, not the Julia scientific core
+    - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
     - Application Simulation Workbench depends on Backend task/result APIs, not Julia Core
     - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
     - Julia Core must stay framework-agnostic

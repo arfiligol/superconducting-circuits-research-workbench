@@ -10,7 +10,7 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Defines the boundary between Pluto research simulation, Python Notebook API access, Application Simulation Workbench, Backend, and Julia Runner.
+scope: Defines the boundary between Pluto research simulation, Python Notebook data inspection, Application Simulation Workbench, Backend, and Julia Runner.
 version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -18,7 +18,7 @@ updated_by: codex
 
 # Simulation Interface Boundaries
 
-This page defines which interface owns each simulation-facing workflow. Use it when you need to decide whether work belongs in Pluto, a Python notebook, the Electron application, the Python Backend, or Julia Runner.
+This page defines which interface owns each simulation-facing workflow and platform state change. Use it when you need to decide whether work belongs in Pluto, a Python notebook, the Electron application, the Python Backend, or Julia Runner.
 
 The project has two simulation-facing tracks.
 
@@ -53,16 +53,29 @@ Application Simulation Workbench is the productized simulation surface. It submi
 
 Application Simulation Workbench is expected to submit real simulation requests. It must not rely on Runner fixture tasks as a substitute for compute implementation.
 
-Python Notebook is a programmable Application client. It may call Backend APIs and submit Backend tasks through the Product Async Track.
+Python Notebook is a programmable data-analysis and inspection surface.
 
-It must not bypass the Product Async Track by importing Julia Core or using JuliaCall for normal compute. Python Notebook is useful for debugging, migration, API inspection, and emergency data analysis. It is not the research-grade scientific compute cockpit; that role belongs to Pluto.
+It may:
+
+- call Backend APIs for dataset, task, trace, result metadata, and platform-aware queries;
+- submit tasks through the same Backend contracts used by the Application;
+- directly read local Zarr, exported data, CSV/raw files, and canonical TraceStore files for ad hoc analysis.
+
+It must not:
+
+- directly mutate the formal metadata DB;
+- directly publish, overwrite, or register canonical TraceStore records;
+- define a separate simulation request schema;
+- use JuliaCall or Julia Core as the normal simulation compute path.
+
+Python Notebook is useful for file inspection, debugging, migration checks, emergency analysis, and platform-aware API inspection. It is not the research-grade scientific compute cockpit; that role belongs to Pluto.
 
 ## Surface Responsibilities
 
 | Surface | Responsibility |
 | --- | --- |
 | Pluto Notebook | Direct research computation through Julia Core |
-| Python Notebook | Backend API inspection, task submission, data/query/migration/debug client |
+| Python Notebook | Programmable data analysis, file inspection, Backend metadata/task/result API usage |
 | Application Simulation Workbench | Productized simulation request builder, task monitor, result viewer |
 | Python Backend | Task lifecycle, request validation, publication, TraceStore, result view APIs |
 | Julia Runner | Async compute execution and local Zarr staging |
@@ -71,7 +84,7 @@ It must not bypass the Product Async Track by importing Julia Core or using Juli
 ## Non-Goals
 
 - Pluto Notebook must not become an Application workflow client.
-- Python Notebook must not become a Julia compute cockpit.
+- Python Notebook must not become a Julia compute cockpit or direct platform publication path.
 - Application frontend must not run heavy simulation.
 - Python Backend must not run heavy simulation in request threads.
 - Julia Runner must not own formal metadata DB records.

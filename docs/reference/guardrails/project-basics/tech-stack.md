@@ -37,7 +37,7 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 | `core/julia/SuperconductingCircuitsRunner/` | async Julia compute runner |
 | `core/python/sc_data_contracts/` | optional shared Python schemas/contracts |
 | `notebooks/pluto/` | Julia research cockpit |
-| `notebooks/python/` | backend/data API inspection, migration, emergency analysis |
+| `notebooks/python/` | programmable data analysis, file inspection, Backend API inspection, migration, emergency analysis |
 | `scripts/` | dev/build/test/maintenance helpers only |
 
 !!! warning "Root `src/` is not the canonical umbrella"
@@ -58,13 +58,13 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 
 ## Interface Boundary Rules
 
-| Surface | Role | May use the Julia scientific core directly? | May submit Backend tasks? |
-| --- | --- | ---: | ---: |
-| Pluto Notebook | Research-grade simulation cockpit | Yes | No |
-| Python Notebook | Programmable Application client | No | Yes |
-| Electron Application / Simulation Workbench | Productized workflow UI | No | Yes |
-| Python Backend | Control/data plane | No | Owns task lifecycle |
-| Julia Runner | Compute plane | Uses Julia Core through task execution | Claims tasks |
+| Surface | Role | May use the Julia scientific core directly? | May read local/exported/canonical data files directly? | May submit Backend tasks? |
+| --- | --- | ---: | ---: | ---: |
+| Pluto Notebook | Research-grade simulation cockpit | Yes | Yes | No |
+| Python Notebook | Programmable data-analysis and inspection surface | No | Yes | Yes |
+| Electron Application / Simulation Workbench | Productized workflow UI | No | Through Backend APIs | Yes |
+| Python Backend | Control/data plane | No | Owns storage adapters | Owns task lifecycle |
+| Julia Runner | Compute plane | Uses Julia Core through task execution | Writes staging packages | Claims tasks |
 
 ### Pluto Notebook
 
@@ -74,9 +74,11 @@ It is not a Backend task submitter in the platform architecture. If a Pluto resu
 
 ### Python Notebook
 
-Python Notebook is a programmable Application client. It may call Python Backend APIs for datasets, tasks, traces, result views, migration, debugging, and emergency analysis.
+Python Notebook is a programmable data-analysis and inspection surface. It may call Python Backend APIs for datasets, tasks, traces, result views, migration, debugging, and emergency analysis.
 
-It must not directly call `SuperconductingCircuitsCore` or use JuliaCall as a normal compute path. Scientific compute belongs to Pluto direct execution or Julia Runner async execution.
+It may directly read local Zarr, exported data, CSV/raw files, and canonical TraceStore files for ad hoc analysis. It must use Backend contracts for platform state changes, including task creation, metadata mutation, TraceStore publication, result registration, provenance, and indexing.
+
+It must not directly call `SuperconductingCircuitsCore` or use JuliaCall as a normal simulation compute path. Scientific simulation compute belongs to Pluto direct execution or Julia Runner async execution.
 
 ### Application Simulation Workbench
 
@@ -278,7 +280,8 @@ The following changes require a new SoT decision before implementation:
 - **Interface boundaries**:
     - Pluto Notebook is the direct Julia Core research interface.
     - Backend task submission is outside the Pluto Notebook role.
-    - Python Notebook is a programmable Backend API client and must not directly call Julia Core or use JuliaCall as normal compute.
+    - Python Notebook is a programmable data-analysis and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts.
+    - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
     - Application Simulation Workbench is first-class and submits persisted async tasks through Python Backend and Julia Runner.
     - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
     - Julia Runner owns async compute execution and local Zarr staging.

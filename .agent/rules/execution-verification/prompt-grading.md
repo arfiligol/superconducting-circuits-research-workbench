@@ -3,6 +3,6 @@
 - Choose the smallest level that completes a meaningful delivery.
 - Direct implementation is allowed when the request is clear and SoT is known.
 - Write a short plan only when it reduces risk or the user asks for one.
-- Dedicated branches/worktrees, `Allowed Area`, `Do Not Touch`, and lane assignments are optional tools.
+- Dedicated branches/worktrees, `Allowed Area`, `Do Not Touch`, and subagent work lane assignments are optional tools.
 - Review outcomes against SoT, actual behavior, and validation results rather than prompt literalism.
 - For user-visible frontend changes, include browser-based verification with screenshot or equivalent visual evidence when practical.

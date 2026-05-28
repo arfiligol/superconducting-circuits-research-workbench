@@ -20,9 +20,8 @@
     - Julia Runner is the async compute plane
     - Electron is the local desktop shell around frontend, backend, and runner
     - Pluto is the direct Julia research cockpit
-    - Python Notebook is a programmable Backend API client
+    - Python Notebook is a programmable data-analysis and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts
     - Application Simulation Workbench submits persisted simulation tasks through Backend and Runner
-    - Runner fixture outputs are test utilities only, not product task kinds
     - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are not active product/runtime surfaces
 - **Core values**:
     - scientific accuracy

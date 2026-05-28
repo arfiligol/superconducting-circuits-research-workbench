@@ -18,7 +18,7 @@ updated_by: codex
 
 # Work Summary Formats
 
-Use lightweight summaries for ordinary work. The repo no longer requires committed plan artifacts, lane delivery reports, or review merge reports.
+Use lightweight summaries for ordinary work. The repo no longer requires committed plan artifacts, committed lane reports, or review merge reports.
 
 The purpose is still the same: make the result reviewable and make remaining risk visible.
 
@@ -75,7 +75,7 @@ Use one of these instead:
 
 ```markdown
 ## Work Summary Formats
-- Ordinary work does not require committed plan artifacts, lane delivery reports, or review merge reports.
+- Ordinary work does not require committed plan artifacts, committed lane reports, or review merge reports.
 - Do not create new active `Plans/` artifacts.
 - Use concise final summaries with:
     - changed surfaces

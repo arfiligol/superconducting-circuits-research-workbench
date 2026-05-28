@@ -24,7 +24,9 @@ Both execution tracks use the same Julia Core APIs:
 - Pluto notebooks call Julia Core directly for research-grade exploration.
 - Julia Runner calls Julia Core while executing persisted Backend tasks for product workflows.
 
-The Python Backend, Electron Application, and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or scientific analysis owned by Julia Core.
+The Python Backend, Electron Application, and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or simulation analysis owned by Julia Core.
+
+Python notebooks may analyze local Zarr, exported data, CSV/raw files, and canonical TraceStore files directly. That read-only analysis role does not make them Julia Core simulation owners or platform publication authorities.
 
 ## Canonical Package
 
@@ -99,6 +101,8 @@ Julia Runner is the product execution adapter around Julia Core. It receives Bac
 
 Python Backend owns task lifecycle, publication, provenance, TraceStore registration, and result APIs. It does not run heavy scientific compute in request threads.
 
+Python notebooks may submit Backend tasks through this product async path when the result should become platform state. They must not publish TraceStore records directly.
+
 ## Ownership Rules
 
 | Rule | Meaning |
@@ -108,6 +112,7 @@ Python Backend owns task lifecycle, publication, provenance, TraceStore registra
 | Pluto is direct research execution | Pluto may call Julia Core directly and inspect intermediate local data. Pluto is not a Backend task submitter. |
 | Runner is product execution | Julia Runner calls Julia Core from Backend task envelopes and writes staging packages for Backend publication. |
 | Python/backend does not own lowering | Python Backend validates requests and publishes results; it does not reimplement construction, lowering, sweep, fitting, or analysis logic. |
+| Python Notebook is read/inspect only for files | Python notebooks may analyze data files directly, but do not own Julia Core simulation, lowering, fitting, platform publication, or metadata mutation authority. |
 
 ## JosephsonCircuits Validation
 
@@ -122,6 +127,7 @@ Julia Core returns scientific results to its caller. Storage authority belongs o
 | Caller | Storage responsibility |
 |---|---|
 | Pluto Notebook | local research outputs, scratch plots, and notebook-owned analysis artifacts |
+| Python Notebook | read-only local/exported/canonical data-file analysis; platform writes go through Backend contracts |
 | Julia Runner | local staging Zarr package plus `manifest.json` |
 | Python Backend | canonical TraceStore publication, metadata records, provenance, and result APIs |
 

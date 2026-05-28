@@ -99,7 +99,7 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceSt
 | [Testing](./execution-verification/testing.md) | pytest / Vitest / Playwright / docs checks | [#agent-rule](./execution-verification/testing.md#agent-rule) |
 | [CI Gates](./execution-verification/ci-gates.md) | rewrite branch 的合併品質門檻 | [#agent-rule](./execution-verification/ci-gates.md#agent-rule) |
 | [Task Scope Sizing](./execution-verification/prompt-grading.md) | task 粒度、驗證深度與是否需要短 plan 的判準 | [#agent-rule](./execution-verification/prompt-grading.md#agent-rule) |
-| [Codex Subagent Coordination](./execution-verification/multi-agent-collaboration.md) | Codex-managed subagents 與單一交付責任 | [#agent-rule](./execution-verification/multi-agent-collaboration.md#agent-rule) |
+| [Codex Subagent Coordination](./execution-verification/multi-agent-collaboration.md) | Codex-managed subagent work lanes 與單一交付責任 | [#agent-rule](./execution-verification/multi-agent-collaboration.md#agent-rule) |
 | [Work Summary Formats](./execution-verification/contributor-reporting.md) | final summary / PR body / risk report 格式 | [#agent-rule](./execution-verification/contributor-reporting.md#agent-rule) |
 | [Commit Standards](./execution-verification/commit-standards.md) | commit 邊界與訊息規範 | [#agent-rule](./execution-verification/commit-standards.md#agent-rule) |
 

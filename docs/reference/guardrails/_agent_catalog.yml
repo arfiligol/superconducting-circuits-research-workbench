@@ -153,8 +153,8 @@ rules:
     tier: critical
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve Codex subagents, coordination, review, or integrated delivery flow.
-    triggers: ["subagent", "subagents", "agent", "agents", "planning", "review", "handoff", "collaboration", "multi-agent"]
+    description: Apply when tasks involve Codex subagents, work lanes, coordination, review, or integrated delivery flow.
+    triggers: ["subagent", "subagents", "work lane", "work lanes", "agent", "agents", "planning", "review", "handoff", "collaboration", "multi-agent"]
     touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
   - id: contributor-reporting

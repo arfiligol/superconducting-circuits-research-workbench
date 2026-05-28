@@ -1,5 +1,5 @@
 ## Work Summary Formats
-- Ordinary work does not require committed plan artifacts, lane delivery reports, or review merge reports.
+- Ordinary work does not require committed plan artifacts, committed lane reports, or review merge reports.
 - Do not create new active `Plans/` artifacts.
 - Use concise final summaries with:
     - changed surfaces

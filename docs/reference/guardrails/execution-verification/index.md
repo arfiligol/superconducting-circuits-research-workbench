@@ -36,7 +36,7 @@ updated_by: codex
 | [Branch & Worktree Flow](./branch-and-worktree-flow.md) | 你在定義 `develop` direct update、optional branch/worktree 或 release promotion | canonical Git/worktree policy |
 | [CI Gates](./ci-gates.md) | 你在改 GitHub Actions 或 merge criteria | pipeline acceptance |
 | [Task Scope Sizing](./prompt-grading.md) | 你在決定 task 粒度、驗證深度或是否需要短 plan | task sizing |
-| [Codex Subagent Coordination](./multi-agent-collaboration.md) | 你在決定是否使用 Codex subagents 或如何回報整合結果 | collaboration framework |
+| [Codex Subagent Coordination](./multi-agent-collaboration.md) | 你在決定是否使用 Codex subagents、如何切 work lanes、或如何回報整合結果 | subagent work lanes |
 | [Work Summary Formats](./contributor-reporting.md) | 你要撰寫 final summary、PR body 或風險回報 | summary structure |
 
 !!! warning "Do not skip verification ownership"
@@ -51,5 +51,5 @@ updated_by: codex
 - branch roles、direct-develop policy 與 optional worktree use 由 `Branch & Worktree Flow` 定義。
 - 變更程式碼時，優先執行與 touched area 直接相關的檢查。
 - workspace delivery baseline 包含 app/frontend、app/backend、Julia Runner、desktop、docs 五條驗證線。
-- task scope、驗證深度與 subagent coordination 需對齊本區規則。
+- task scope、驗證深度與 subagent work lane coordination 需對齊本區規則。
 ```

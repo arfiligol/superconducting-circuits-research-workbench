@@ -31,7 +31,7 @@ updated_by: codex
 請以以下兩頁為準：
 
 - [Branch & Worktree Flow](../reference/guardrails/execution-verification/branch-and-worktree-flow.md)
-- [Multiple Agent Collaboration](../reference/guardrails/execution-verification/multi-agent-collaboration.md)
+- [Codex Subagent Coordination](../reference/guardrails/execution-verification/multi-agent-collaboration.md)
 
 若您想直接使用本專案常見的 Codex 協作工作流，請參考：
 
@@ -161,7 +161,7 @@ uv run --group dev zensical serve
 | | [目錄結構](../reference/guardrails/project-basics/folder-structure.md) | [#agent-rule](../reference/guardrails/project-basics/folder-structure.md#agent-rule) |
 | **執行驗證** | [執行指令](../reference/guardrails/execution-verification/build-commands.md) | [#agent-rule](../reference/guardrails/execution-verification/build-commands.md#agent-rule) |
 | | [Branch & Worktree Flow](../reference/guardrails/execution-verification/branch-and-worktree-flow.md) | [#agent-rule](../reference/guardrails/execution-verification/branch-and-worktree-flow.md#agent-rule) |
-| | [Multiple Agent Collaboration](../reference/guardrails/execution-verification/multi-agent-collaboration.md) | [#agent-rule](../reference/guardrails/execution-verification/multi-agent-collaboration.md#agent-rule) |
+| | [Codex Subagent Coordination](../reference/guardrails/execution-verification/multi-agent-collaboration.md) | [#agent-rule](../reference/guardrails/execution-verification/multi-agent-collaboration.md#agent-rule) |
 | | [Linting](../reference/guardrails/execution-verification/linting.md) | [#agent-rule](../reference/guardrails/execution-verification/linting.md#agent-rule) |
 | | [測試](../reference/guardrails/execution-verification/testing.md) | [#agent-rule](../reference/guardrails/execution-verification/testing.md#agent-rule) |
 | **程式品質** | [程式碼風格](../reference/guardrails/code-quality/code-style.md) | [#agent-rule](../reference/guardrails/code-quality/code-style.md#agent-rule) |

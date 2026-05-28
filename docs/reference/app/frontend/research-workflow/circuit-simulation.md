@@ -37,7 +37,7 @@ The workbench builds product-grade simulation requests, submits them to the Back
 ## Boundary
 
 - Direct Julia experimentation belongs in Pluto notebooks.
-- Python notebooks may act as programmable Backend clients.
+- Python notebooks may directly inspect data files and use Backend contracts when platform metadata, task submission, or result registration is needed.
 - Application code must submit async tasks and render published data.
 - Large numeric arrays must stay in local filesystem Zarr stores.
 

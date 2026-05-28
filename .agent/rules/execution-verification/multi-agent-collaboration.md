@@ -1,9 +1,17 @@
 ## Codex Subagent Coordination
-- Codex may open and coordinate subagents internally when useful.
-- The repo no longer requires the old fixed role taxonomy.
-- Do not require a separate planning pass, testing pass, or prewritten prompt bundle before implementation.
-- Do not create new active `Plans/` coordination artifacts.
-- The current conversation owns the final integrated diff, verification, and report.
+- The main thread owns goal definition, SoT loading, lane selection, integration, conflict resolution, validation, and final reporting.
+- Subagent work lanes are optional delegation scopes, not permanent ownership teams or fixed named agent roles.
+- Use subagents only when they reduce real coordination cost.
+- Recommended lanes are:
+    - Julia Core + Pluto Research
+    - Product Async Contracts
+    - Backend + Runner Integration
+    - Application Workbench
+    - Python Notebook / Data Inspection
+    - Docs / SoT Consistency
+- Subagents must stay inside assigned folder structure and owner-boundary rules, avoid redefining architecture, and report findings/changes/risks back to the main thread.
+- Cross-lane conflicts are resolved by the main thread against the relevant SoT.
+- Do not create new active `Plans/` coordination artifacts or committed lane handoffs.
 - Direct `develop` updates are allowed when the working tree stays coherent and touched-area checks are run.
 - Long-term decisions belong in `docs/reference/**`, not temporary planning files.
 - Final reports should summarize changed surfaces, validation, risks, and any skipped checks.

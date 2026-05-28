@@ -28,7 +28,7 @@ This registry names the owner for each active cross-layer contract.
 | Contract | Owner | Source of truth | Primary consumers |
 |---|---|---|---|
 | Application Interface | Electron App + Frontend | [Application Interface](../app/application-interface.md), [Frontend Reference](../app/frontend/index.md), [Simulation Interface Boundaries](simulation-interface-boundaries.md) | users submitting simulations, browsing datasets, tasks, traces, and results |
-| Notebook Interface | Pluto + Python notebooks | [Notebook Reference](../notebooks/index.md), [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto research cockpit, Python Backend/API inspection, migration analysis |
+| Notebook Interface | Pluto + Python notebooks | [Notebook Reference](../notebooks/index.md), [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto research cockpit, Python data analysis, file inspection, Backend metadata/task/result API usage |
 | Backend control/data plane | Python Backend | [Backend Reference](../app/backend/index.md), [Tasks & Execution](../app/backend/tasks-execution.md) | frontend, notebooks, Julia Runner |
 | Julia compute plane | Julia Runner | [Julia Runner Compute Plane](julia-runner-compute-plane.md) | backend runner API and claimed persisted tasks |
 | Runner result manifest | Julia Runner writes; Python Backend validates | [Runner Result Manifest](runner-result-manifest.md) | publisher, tests, Runner task families |
