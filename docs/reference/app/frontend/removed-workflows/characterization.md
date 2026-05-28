@@ -2,7 +2,6 @@
 title: "Retired Characterization Route"
 aliases:
   - "Characterization UI"
-  - "Characterization Workbench Removed"
 tags:
   - diataxis/reference
   - audience/team

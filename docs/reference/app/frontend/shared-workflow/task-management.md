@@ -61,7 +61,7 @@ Runner completion does not equal product result availability. Result handoff bel
 |---|---|
 | task detail wins over row summary | page detail must refetch by `task_id` |
 | no large arrays in task payloads | trace previews must use backend trace APIs |
-| no duplicate execution runtime inside workbenches | workbenches may submit tasks and render results, but they must not recreate a separate task lifecycle, Runner dashboard, or compute runtime |
+| no duplicate execution runtime inside workbenches | workbenches may submit tasks and render results, but they must not recreate a separate task lifecycle, Runner runtime surface, or compute runtime |
 | no standalone runtime wall | show Runner runtime status compactly as execution context, not as the product metaphor |
 
 ## Related

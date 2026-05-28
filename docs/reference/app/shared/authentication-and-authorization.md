@@ -237,7 +237,7 @@ updated_by: codex
 | Leave workspace | `viewer` / `member` 可自行 leave |
 | Owner leave | 只有在 workspace 仍有另一位 `owner` 時才允許；否則必須先 transfer ownership |
 | Remove member | `owner` 或 `admin` 可移除其他 membership |
-| Active session rebinding | 若使用者被移出目前 active workspace，session 必須立即清除 active workspace、active dataset 與 queue context |
+| Active session rebinding | 若使用者被移出目前 active workspace，session 必須立即清除 active workspace、active dataset 與 task context |
 
 ## Workspace Collaboration Permission Matrix
 

@@ -38,9 +38,11 @@ The same application surfaces are used in local and online modes. Runtime owners
 |---|---|---|---|
 | Dashboard | `full` | `full` | local data root vs hosted workspace data |
 | Dataset | `full` | `full` | dataset metadata owned by backend |
+| Simulation Workbench | `full` | `full` | submits persisted simulation tasks through Backend |
+| Analysis Workbench | `full` | `full` | submits persisted analysis/fitting/post-processing tasks through Backend |
 | Data Ingestion | `full` | `full` | explicit import/upload only |
 | Raw Data | `full` | `full` | trace APIs read canonical store |
-| Tasks / Result Browser | `full` | `full` | local uses local runner, online uses server-side compute plane |
+| Task / Execution Center | `full` | `full` | local uses local runner, online uses server-side compute plane |
 | Design Assets | `full` | `full` | source/design metadata, not simulation cockpit |
 
 ## Compute Matrix

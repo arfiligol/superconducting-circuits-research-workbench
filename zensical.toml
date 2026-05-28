@@ -138,8 +138,9 @@ nav = [
         { "Shared Workflow" = [
           { "Task Management" = "reference/app/frontend/shared-workflow/task-management.md" },
         ] },
-        { "Simulation Workbench" = [
+        { "Product Workbenches" = [
           { "Circuit Simulation Workbench" = "reference/app/frontend/simulation-workbench/circuit-simulation.md" },
+          { "Analysis Workbench" = "reference/app/frontend/analysis-workbench/analysis-workbench.md" },
         ] },
         { "Workspace" = [
           { "Dashboard" = "reference/app/frontend/workspace/dashboard.md" },

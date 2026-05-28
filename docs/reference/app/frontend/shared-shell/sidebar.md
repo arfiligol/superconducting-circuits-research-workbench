@@ -20,13 +20,13 @@ updated_by: codex
 
 # Sidebar
 
-Sidebar is navigation only. It does not own task state, dataset state, worker status, or help copy.
+Sidebar is navigation only. It does not own task state, dataset state, Runner runtime status, or help copy.
 
 ## Group Contract
 
 | Group | Contains | Must not contain |
 |---|---|---|
-| Workspace | Dashboard, Dataset, Simulation Workbench, Tasks | data pipeline steps |
+| Workspace | Dashboard, Dataset, Simulation Workbench, Analysis Workbench, Task / Execution Center | data pipeline steps |
 | Data | Data Ingestion, Raw Data | task runtime controls |
 | Design Assets | Schemas | full simulation or diagram workflows |
 

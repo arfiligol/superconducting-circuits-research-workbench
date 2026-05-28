@@ -9,6 +9,7 @@
 - **Pluto notebooks** may directly use `SuperconductingCircuitsCore`.
 - **Python notebooks** are programmable data-analysis and inspection surfaces; they may directly read data files, but platform state changes must go through Backend contracts.
 - **Application Simulation Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
+- **Application Analysis Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
 - **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
 - **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
 - **Root worker runtime folder** must not be recreated as a runtime surface.
@@ -22,7 +23,7 @@
     - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
     - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
     - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
-    - Application Simulation Workbench depends on Backend task/result APIs, not Julia Core
+    - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
     - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
     - Julia Core must stay framework-agnostic
     - scripts are helpers, not user-facing workflow contracts

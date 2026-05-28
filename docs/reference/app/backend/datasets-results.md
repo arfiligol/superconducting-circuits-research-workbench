@@ -441,7 +441,7 @@ They are consumed by ResultView API and Application workbenches after Backend pu
       "data": {
         "dataset_id": "ds_xy_001",
         "device_type": "transmon",
-        "capabilities": ["characterization", "simulation_review"],
+        "capabilities": ["analysis", "simulation_review"],
         "source": "manual",
         "updated_at": "2026-03-14T10:20:00Z"
       }
@@ -454,7 +454,7 @@ They are consumed by ResultView API and Application workbenches after Backend pu
     {
       "dataset_id": "ds_xy_001",
       "device_type": "transmon",
-      "capabilities": ["characterization", "simulation_review"]
+      "capabilities": ["analysis", "simulation_review"]
     }
     ```
 
@@ -465,7 +465,7 @@ They are consumed by ResultView API and Application workbenches after Backend pu
       "data": {
         "dataset_id": "ds_xy_001",
         "device_type": "transmon",
-        "capabilities": ["characterization", "simulation_review"],
+        "capabilities": ["analysis", "simulation_review"],
         "source": "manual",
         "updated_at": "2026-03-14T10:22:00Z"
       }

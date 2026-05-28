@@ -22,7 +22,7 @@ updated_by: codex
 
 !!! info "App-level ownership"
     這份文件回答的是 App collaboration model。
-    它同時服務 shared header、shared task queue、backend session surface 與 resource visibility。
+    它同時服務 shared header、shared task execution、backend session surface 與 resource visibility。
 
 !!! warning "Session owns active context"
     `Session` 是 active workspace、active dataset、user summary 與 capability exposure 的 canonical owner。
@@ -75,7 +75,7 @@ updated_by: codex
     |---|---|
     | Resources belong to one workspace | dataset / schema / task / result 只掛一個 `workspace_id` |
     | Role is workspace-scoped | 同一 user 在不同 workspace 可有不同 role |
-    | Visibility is backend-enforced | queue visibility 不能只靠前端過濾 |
+    | Visibility is backend-enforced | task visibility 不能只靠前端過濾 |
     | Cross-workspace sharing is explicit | 跨 workspace 應用 export/import 或 publish/copy with lineage，不做多重掛載 |
 
 ## Active Context Ordering
@@ -90,7 +90,7 @@ updated_by: codex
 | page-local filters / selections | page-local UI state | 最低 |
 
 !!! warning "Runtime Mode Rebinds Everything Below It"
-    一旦 `Runtime Mode` 切換，`Active Workspace`、`Active Dataset`、queue visibility、attached task validity 與 capability summary 都必須重新驗證。
+    一旦 `Runtime Mode` 切換，`Active Workspace`、`Active Dataset`、task visibility、attached task validity 與 capability summary 都必須重新驗證。
 
 ## Relationship Model
 

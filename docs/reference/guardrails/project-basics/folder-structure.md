@@ -27,7 +27,7 @@ root-level `backend/`、`frontend/`、`desktop/`、`cli/` 與 `src/` 不再是 a
 !!! info "How to use this page"
     當你不確定新檔案該放哪裡時，先看 placement rules，而不是先照習慣找最近的資料夾塞進去。這頁的重點是 owner boundary，不是完整檔案樹教學。
 
-See [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) before changing notebook, Application Simulation Workbench, Backend task, or Runner ownership.
+See [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) before changing notebook, Application Simulation/Analysis Workbench, Backend task, or Runner ownership.
 
 ## Target Layout
 
@@ -67,6 +67,7 @@ superconducting-circuits-tutorial/
 | --- | --- |
 | Next.js page, layout, component | `app/frontend/` |
 | Application Simulation Workbench UI | `app/frontend/` |
+| Application Analysis Workbench UI | `app/frontend/` |
 | Electron main / preload / packaging | `app/desktop/` |
 | API router, service, persistence | `app/backend/` |
 | Simulation request / result view API | `app/backend/` |
@@ -110,7 +111,7 @@ Use stale-wording searches when architecture docs, guardrails, runtime layout, o
 - grouped Electron / Pluto / Python notebook task-flow wording;
 - Pluto wording that makes it a Backend workflow participant;
 - Python Notebook wording that makes it a Julia compute path;
-- Simulation Workbench removal or Pluto replacement wording;
+- Simulation / Analysis Workbench removal or Pluto replacement wording;
 - active CLI, retired Python UI runtime, retired queue-service runtime, or root worker references.
 
 The expected result is no active architecture text that reintroduces old surfaces or confuses notebook/application responsibilities. Hits are acceptable only when they are explicitly forbidden-regression or retired/inert wording.
@@ -141,7 +142,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 3. `app/backend/` API 層依賴 services/domain/infrastructure，不執行 heavy compute
 4. Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
 5. `notebooks/python/` may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
-6. Application Simulation Workbench depends on Backend task/result APIs, not Julia Core
+6. Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
 7. `core/julia/SuperconductingCircuitsRunner/` depends on Julia Core and Backend Runner protocol, and does not own formal metadata DB
 8. `core/julia/SuperconductingCircuitsCore/` does not depend on FastAPI, Next.js, Electron, or Python Backend internals
 9. `scripts/` 不得成為 user-facing command-line product surface
@@ -164,6 +165,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 - **Pluto notebooks** may directly use `SuperconductingCircuitsCore`.
 - **Python notebooks** are programmable data-analysis and inspection surfaces; they may directly read data files, but platform state changes must go through Backend contracts.
 - **Application Simulation Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
+- **Application Analysis Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
 - **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
 - **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
 - **Root worker runtime folder** must not be recreated as a runtime surface.
@@ -177,7 +179,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
     - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
     - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
     - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
-    - Application Simulation Workbench depends on Backend task/result APIs, not Julia Core
+    - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
     - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
     - Julia Core must stay framework-agnostic
     - scripts are helpers, not user-facing workflow contracts

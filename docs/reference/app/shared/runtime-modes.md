@@ -28,7 +28,7 @@ updated_by: codex
 
 !!! warning "Mode Switch Must Rebind Shell Context"
     mode switch 不是單純換一個 label。
-    它必須重新繫結 session、workspace、dataset、queue visibility 與 user summary，避免 local / online 內容混用。
+    它必須重新繫結 session、workspace、dataset、task visibility 與 user summary，避免 local / online 內容混用。
 
 ## Mode Pairing
 
@@ -116,10 +116,10 @@ updated_by: codex
 |---|---|
 | 1. User selects mode | 可從 app-level mode switcher 選 `Local Mode` 或 `Online Mode` |
 | 2. App freezes unsafe context | 若目前存在 unsaved page changes、attached task 或 destructive context，先要求確認 |
-| 3. Session is invalidated | 舊 mode 的 session envelope、capability cache、queue cache、attached task refs 與 remote auth continuity 全部失效 |
+| 3. Session is invalidated | 舊 mode 的 session envelope、capability cache、task cache、attached task refs 與 remote auth continuity 全部失效 |
 | 4. New connection target is bound | local mode 指向本機 backend；online mode 指向 validated active server target |
 | 5. New session is established | local mode 直接回 local session；切到 online mode 時一律重建 online session，並重新進入 auth entry |
-| 6. Shell context is rebuilt | active workspace、dataset、queue 與 user summary 用新 mode 重新計算 |
+| 6. Shell context is rebuilt | active workspace、dataset、task visibility 與 user summary 用新 mode 重新計算 |
 
 !!! warning "Mode switch does not preserve remote login"
     使用者從 `Online Mode` 切到 `Local Mode`，再切回 `Online Mode` 時，不應自動恢復先前的遠端登入狀態。

@@ -28,7 +28,7 @@ Pluto Notebook is not a Backend task submitter in the platform architecture.
 ### Product Async Track
 
 ```text
-[Electron Application / Simulation Workbench / Python Notebook when submitting platform tasks]
+[Electron Application / Simulation Workbench / Analysis Workbench / Python Notebook when submitting platform tasks]
     |
     | POST /tasks or domain-specific Backend API
     v
@@ -55,9 +55,9 @@ Pluto Notebook is not a Backend task submitter in the platform architecture.
 [Application Result Viewer / Raw Data Browser / Python Notebook]
 ```
 
-Application Simulation Workbench is the productized simulation surface in this track. Electron Application owns the productized workflow. Python Notebook can submit tasks through the same Backend contracts when it needs platform state. Pluto Notebook is not a task submitter.
+Application Simulation Workbench and Analysis Workbench are productized surfaces in this track. Electron Application owns the productized workflow. Python Notebook can submit tasks through the same Backend contracts when it needs platform state. Pluto Notebook is not a task submitter.
 
-See [Product Async Contracts](docs/reference/architecture/product-async-contracts.md) for the `SimulationRequestV1`, `RunnerTaskEnvelopeV1`, `RunnerResultManifestV1`, and `ResultView API` boundary.
+See [Product Async Contracts](docs/reference/architecture/product-async-contracts.md) for the `SimulationRequestV1`, `AnalysisRequestV1`, `RunnerTaskEnvelopeV1`, `RunnerResultManifestV1`, and `ResultView API` boundary.
 
 ### Data / Platform Notebook Track
 
@@ -77,7 +77,7 @@ See [Product Async Contracts](docs/reference/architecture/product-async-contract
 
 Python Notebook is a programmable data-analysis and inspection surface. It may directly read local Zarr, exported data, raw files, and canonical TraceStore files for ad hoc analysis; any platform mutation, task creation, publication, metadata update, or result registration must go through the Python Backend.
 
-See [Simulation Interface Boundaries](docs/reference/architecture/simulation-interface-boundaries.md) for the source-of-truth split between Pluto, Python Notebook, Application Simulation Workbench, Backend, and Julia Runner.
+See [Simulation Interface Boundaries](docs/reference/architecture/simulation-interface-boundaries.md) for the source-of-truth split between Pluto, Python Notebook, Application Simulation/Analysis Workbenches, Backend, and Julia Runner.
 
 ## Interface Responsibilities
 
@@ -86,11 +86,13 @@ See [Simulation Interface Boundaries](docs/reference/architecture/simulation-int
 | Pluto Notebook | Direct Julia Core research computation |
 | Python Notebook | Programmable data-analysis and inspection surface |
 | Application Simulation Workbench | Productized simulation request builder, task monitor, and result viewer |
+| Application Analysis Workbench | Productized fitting, post-processing, comparison, and derived-parameter workflow |
+| Task / Execution Center | Cross-workbench execution history, Runner runtime status summary, task detail, and result handoff |
 | Raw Data Browser | Trace browsing and comparison |
 | Python Backend | Task lifecycle, metadata, publication, TraceStore APIs |
 | Julia Runner | Async compute execution and local Zarr staging |
 
-Application Simulation Workbench remains mandatory as the productized simulation workflow surface; Pluto is not its replacement.
+Application Simulation Workbench and Analysis Workbench remain mandatory as productized workflow surfaces; Pluto is not their replacement.
 
 ## Repository Layout
 
@@ -107,7 +109,7 @@ notebooks/
 app/
   backend/
   frontend/
-    # Application Simulation Workbench, Task Monitor, Raw Data Browser, Dataset UI
+    # Simulation Workbench, Analysis Workbench, Task / Execution Center, Raw Data Browser, Dataset UI
   desktop/
 scripts/
   dev/
@@ -203,6 +205,8 @@ Build the static docs with:
 - Python Notebook may directly read data files for analysis, but platform state changes must go through Backend contracts.
 - Python Notebook read-only file analysis is allowed without Backend APIs; platform state changes must use Backend contracts.
 - Application Simulation Workbench remains a first-class product surface.
+- Application Analysis Workbench remains a first-class product surface.
+- `/tasks` is the Task / Execution Center, not a queue-service product surface.
 - Local Mode is the managed local app runtime: frontend + Python Backend + Julia Runner. UI-only shell preview is a developer tool, not a product runtime mode.
 - No user-facing command-line workflow surface.
 - No retired Python UI runtime.

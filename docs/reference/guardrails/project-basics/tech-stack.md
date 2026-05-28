@@ -209,7 +209,7 @@ The following changes require a new SoT decision before implementation:
 - Removing Application Simulation Workbench as a first-class product surface.
 - Removing Application Analysis Workbench as a first-class product surface.
 - Running heavy simulation in Python Backend request threads.
-- Reintroducing queue-service or worker-dashboard product metaphors for task execution.
+- Reintroducing queue-service or standalone runtime-wall product metaphors for task execution.
 - Treating fixture output as a product Runner task.
 - Reintroducing a user-facing CLI product surface.
 - Reintroducing NiceGUI or any retired Python UI runtime.
