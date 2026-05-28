@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines how CircuitPlan declares HB ports, source slots, pump axes, observables, and solver-facing intent.
-version: v1.2.0
+version: v1.3.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -273,6 +273,46 @@ Rules:
 - changing the number of source slots changes `HBIntent`;
 - changing observable requests changes output intent.
 
+## Pure Linear / No-Pump Profile
+
+Pure linear sweeps should not require a pump axis.
+
+Target declaration:
+
+```julia
+hb_intent!(
+    plan;
+    pump_axes = [],
+    source_slots = [],
+    observables = [
+        SParameterRequest(
+            id = :s11_signal,
+            outputmode = (),
+            outputport = :signal_port,
+            inputmode = (),
+            inputport = :signal_port,
+        ),
+    ],
+    default_solver_controls = HBSolverControls(
+        n_modulation_harmonics = 0,
+        returnS = true,
+        returnZ = true,
+        returnQE = true,
+        returnCM = true,
+    ),
+)
+```
+
+Rules:
+
+- pure linear profile uses no pump axes;
+- it has no pump source slot;
+- it may request S/Z/QE/CM outputs when the selected solver path supports them;
+- pure-linear observable modes use the empty mode tuple `()`;
+- source-off pumped simulation is different from pure linear simulation.
+
+Do not create a pump axis with zero current only to run a pure linear sweep.
+
 ## Key Separation
 
 Julia Core uses separate keys for topology, HB intent, HB problem shape, and concrete runtime values.
@@ -369,11 +409,31 @@ HB validation is split across compile time and run time.
 
 - frequency sweep values are positive;
 - pump frequency values are positive;
-- harmonic tuple lengths match pump axis count;
+- pump harmonic tuple lengths match pump axis count;
+- modulation harmonic tuple lengths match the declared modulation basis;
 - source current values are present or have explicit defaults;
 - `current = 0.0` is accepted;
 - optional solver kwargs are whitelisted;
 - requested observables can be extracted from solver output.
+
+## Output Family Capability Validation
+
+Default requested outputs are S, Z, QE, and CM. Julia Core must validate whether each requested output family is supported by the selected circuit, HB profile, and solver configuration.
+
+Target API:
+
+```julia
+capability_report = validate_output_capabilities(compiled, hb_problem)
+```
+
+| Output | Requested default | Validation behavior |
+| --- | ---: | --- |
+| S | true | run only when supported |
+| Z | true | run only when supported |
+| QE | true | fail clearly if unsupported |
+| CM | true | fail clearly if unsupported |
+
+Julia Core and Runner must not silently drop requested output families or reduce a run to S-only output.
 
 ## Implementation Status
 

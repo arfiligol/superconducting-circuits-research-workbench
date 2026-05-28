@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the Julia Core parameter sweep execution architecture.
-version: v1.5.0
+version: v1.5.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -116,6 +116,7 @@ HB simulations add more key boundaries. Some changes do not alter circuit topolo
 | pump-axis count | `HBIntentStructuralParameter` target concept | Changes mode tuple dimension and `hb_intent_key` |
 | source slot mode | `HBIntentStructuralParameter` target concept | Changes source slot definition and `hb_intent_key` |
 | observable request | `HBIntentStructuralParameter` target concept | Changes requested solver-output semantics |
+| pure linear / no-pump profile | `HBIntentStructuralParameter` target concept | Uses no pump axes and empty observable mode tuple `()` |
 | `n_pump_harmonics` | `HBProblemShapeParameter` target concept | Shape follows pump frequencies / pump axes and changes HB problem shape |
 | `n_modulation_harmonics` | `HBProblemShapeParameter` target concept | Belongs to the small-signal modulation basis, not directly to pump-axis count |
 | `returnS` / `returnZ` / `returnQE` / `returnCM` | `HBProblemShapeParameter` target concept | Changes output families and result shape |

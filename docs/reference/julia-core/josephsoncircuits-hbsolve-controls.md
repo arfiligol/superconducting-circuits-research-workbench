@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines first-class, whitelisted, and unsupported JosephsonCircuits.jl hbsolve controls for Julia Core and Runner use.
-version: v1.2.0
+version: v1.3.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -28,11 +28,11 @@ This inventory is not allowed to be hand-wavy. If a control is promoted to first
 
 | Example | Source / URL | Observed call shape | `hbsolve` inputs used | Source mode shape | Solver flags | Outputs inspected |
 | --- | --- | --- | --- | --- | --- | --- |
-| Single-pump JPA | [official examples](https://josephsoncircuits.org/stable/#Josephson-parametric-amplifier-(JPA)) | `hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)` | `ws`, `wp`, `sources`, `Nmodulationharmonics`, `Npumpharmonics`, `circuit`, `circuitdefs` | `(1,)` | four-wave mixing default | `S` |
-| Double-pump JPA | [official examples](https://josephsoncircuits.org/stable/#Double-pumped-Josephson-parametric-amplifier-(JPA)) | `hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)` | same family with two pump frequencies | `(1, 0)`, `(0, 1)` | pump harmonic tuples for two independent pumps | `S` |
-| Flux-pumped JPA | [official examples](https://josephsoncircuits.org/stable/#Flux-pumped-Josephson-parametric-amplifier-(JPA)) | `hbsolve(...; dc=true, threewavemixing=true, fourwavemixing=true)` | same family with DC and pump sources | `(0,)`, `(1,)` | `dc`, `threewavemixing`, `fourwavemixing` | `S` |
+| Single-pump JPA | [official examples](https://josephsoncircuits.org/stable/#Josephson-parametric-amplifier-(JPA)) | `Npumpharmonics = (16,)`; `Nmodulationharmonics = (8,)`; `hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)` | `ws`, `wp`, `sources`, `Nmodulationharmonics`, `Npumpharmonics`, `circuit`, `circuitdefs` | `(1,)` | four-wave mixing default | `S` |
+| Double-pump JPA | [official examples](https://josephsoncircuits.org/stable/#Double-pumped-Josephson-parametric-amplifier-(JPA)) | `Npumpharmonics = (8, 8)`; `Nmodulationharmonics = (8, 8)`; `hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)` | same family with two pump frequencies | `(1, 0)`, `(0, 1)` | pump harmonic tuples for two independent pumps | `S` |
+| Flux-pumped JPA | [official examples](https://josephsoncircuits.org/stable/#Flux-pumped-Josephson-parametric-amplifier-(JPA)) | `sources = [(mode=(0,), port=2, current=Idc), (mode=(1,), port=2, current=Ip)]`; `Npumpharmonics = (16,)`; `Nmodulationharmonics = (8,)`; `hbsolve(...; dc=true, threewavemixing=true, fourwavemixing=true)` | same family with DC and pump sources | `(0,)`, `(1,)` | `dc`, `threewavemixing`, `fourwavemixing` | `S` |
 | SNAIL PA | [official repository README](https://github.com/kpobrien/JosephsonCircuits.jl#snail-parametric-amplifier) | `hbsolve(...; dc=true, threewavemixing=true, fourwavemixing=true)` | same family with DC and pump sources | `(0,)`, `(1,)` | `dc`, `threewavemixing`, `fourwavemixing` | `S` |
-| JTWPA | [official examples](https://josephsoncircuits.org/stable/#Josephson-traveling-wave-parametric-amplifier-(JTWPA)) | `hbsolve(...)` with larger harmonic counts | same family with signal, pump, and idler modes | `(1,)` plus idler output modes | larger harmonic counts | `S`, `QE`, `QEideal`, `CM` |
+| JTWPA | [official examples](https://josephsoncircuits.org/stable/#Josephson-traveling-wave-parametric-amplifier-(JTWPA)) | `Npumpharmonics = (20,)`; `Nmodulationharmonics = (10,)`; `hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)` | same family with signal, pump, and idler modes | `(1,)` plus idler output modes | `Npumpharmonics = (20,)`, `Nmodulationharmonics = (10,)` | `S`, `QE`, `QEideal`, `CM` |
 | Advanced solver tuning | [official examples](https://josephsoncircuits.org/stable/#Example-with-switchofflinesearchtol) and [reference](https://josephsoncircuits.org/stable/reference/) | `hbsolve(...; switchofflinesearchtol=..., alphamin=..., iterations=...)` | same family with solver tuning | varies | `switchofflinesearchtol`, `alphamin`, `iterations` | varies |
 
 !!! note "Pump-off is still a real source slot"
@@ -130,6 +130,55 @@ HBSolverControls(
 `n_pump_harmonics` can be represented as a named map keyed by pump-axis ID. `n_modulation_harmonics` may be a tuple because it belongs to the modulation basis, not the pump-axis map.
 
 Exact default numeric values may be adjusted per circuit family, but the default return flags are all `true`.
+
+## Example Call Shapes
+
+The target Julia Core API normalizes user-facing values into JosephsonCircuits-facing shapes like these official examples.
+
+Single-pump JPA:
+
+```julia
+ws = 2*pi*(4.5:0.001:5.0)*1e9
+wp = (2*pi*4.75001*1e9,)
+sources = [(mode=(1,), port=1, current=Ip)]
+Npumpharmonics = (16,)
+Nmodulationharmonics = (8,)
+hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)
+```
+
+Double-pump JPA:
+
+```julia
+wp = (2*pi*4.65001*1e9, 2*pi*4.85001*1e9)
+sources = [
+    (mode=(1, 0), port=1, current=Ip),
+    (mode=(0, 1), port=1, current=Ip),
+]
+Npumpharmonics = (8, 8)
+Nmodulationharmonics = (8, 8)
+hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)
+```
+
+Flux-pumped / DC style:
+
+```julia
+sources = [
+    (mode=(0,), port=2, current=Idc),
+    (mode=(1,), port=2, current=Ip),
+]
+Npumpharmonics = (16,)
+Nmodulationharmonics = (8,)
+hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics,
+    circuit, circuitdefs; dc=true, threewavemixing=true, fourwavemixing=true)
+```
+
+JTWPA:
+
+```julia
+Npumpharmonics = (20,)
+Nmodulationharmonics = (10,)
+hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics, circuit, circuitdefs)
+```
 
 ## Scalar Convenience
 
