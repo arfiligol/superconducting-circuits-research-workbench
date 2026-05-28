@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the boundary between Julia Core Kernel and user/lab/project component libraries.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -74,6 +74,24 @@ build_qwr_readout_with_shunt_plan(params)
 ```
 
 These builders should return `CircuitPlan` objects and should use Julia Core endpoints, relations, validation, compiler, and simulation interfaces.
+
+## Parameter Role Declarations
+
+Component Libraries should declare default parameter roles for the parameters they introduce.
+
+Examples:
+
+| Component-library parameter | Default role |
+| --- | --- |
+| capacitance value | `NumericParameter` |
+| inductance value | `NumericParameter` |
+| line length | `StructuralParameter` if it changes line segmentation, node map, or emitted rows |
+| section count | `StructuralParameter` |
+| boundary choice | `StructuralParameter` |
+| junction critical current | `NumericParameter` if junction topology is unchanged |
+| SQUID external flux | `NumericParameter` or `DriveParameter` if topology is unchanged |
+
+These declared roles are inputs to the sweep engine. The compiler / sweep engine still validates effective roles through topology-key consistency.
 
 ## Pluto Usage
 

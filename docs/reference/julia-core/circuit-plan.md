@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Circuit Plan semantics and stored authoring data before JosephsonCircuits.jl compilation.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -38,8 +38,10 @@ A `CircuitPlan` is the semantic source of truth before simulation. It stores wha
 | inductive couplings | mutual or flux-related coupling intent |
 | distributed coupled windows | span-to-span distributed coupling intent |
 | shunt placements | convenience placements from a node-resolving endpoint to ground |
-| parameters / sweep knobs | user-facing values that may vary across simulation sweeps |
+| parameter metadata / sweep knobs | declared parameter roles, parameter owners, parameter bindings, and sweep-facing names |
 | provenance | source, builder, and transform metadata needed for inspection and reproducibility |
+
+A Circuit Plan should preserve parameter metadata from components, relations, and plan builders so the sweep engine can classify axes, build topology keys, and validate compile reuse.
 
 ## Not A Netlist
 

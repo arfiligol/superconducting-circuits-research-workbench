@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the Julia Core parameter sweep execution architecture.
-version: v1.0.0
+version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -311,10 +311,47 @@ Compile equivalence is therefore stronger than matching user-facing parameter na
 
 The sweep system should not rely only on user labels.
 
-Parameter classification is part user-declared and part compiler-verifiable.
+Parameter roles are declared at authoring time and verified at sweep / compile time.
+
+The default role of a parameter should be declared by the object that owns or introduces that parameter. The effective role is determined by compiler-visible topology-key consistency.
+
+### Parameter Role Declaration Source
+
+The declared role is an authoring contract, not only a `SweepSpec` annotation.
+
+| Source | Declares |
+| --- | --- |
+| Component Library | component-owned parameters such as capacitance, inductance, line length, section count, boundary, junction parameters |
+| Relation / Coupling | relation-owned parameters such as coupling capacitance, mutual inductance, line tap position, line span start / stop |
+| Plan Builder | high-level user-facing knobs that map into one or more component or relation parameters |
+| SweepSpec | sweep axes and requested role assumptions for a specific sweep |
+
+The declared role is not automatically trusted as final. The compiler and sweep engine must verify whether the declared role is consistent with the topology key.
 
 ```text
-User declares parameter role:
+Declared role
+    provided by Component Library / Relation / Plan Builder / SweepSpec
+
+Effective role
+    validated or inferred by Compiler / Sweep Engine
+```
+
+| Parameter | Declaration source | Default declared role | Effective-role check |
+| --- | --- | --- | --- |
+| `capacitance_f` | Component Library | `NumericParameter` | topology key must not change |
+| `line_length_m` | Component Library or Plan Builder | usually `StructuralParameter` | line segmentation, node map, or emitted rows may change |
+| `n_sections` | Component Library | `StructuralParameter` | target netlist size changes |
+| `coupling_capacitance_f` | Relation / Coupling | `NumericParameter` if endpoints are unchanged | coupling relation must already exist |
+| `line_tap_at_m` | Endpoint / Relation | `StructuralParameter` | breakpoint insertion and node map change |
+| `line_span_start_stop` | Endpoint / Relation | `StructuralParameter` | distributed coupling region changes |
+| `external_flux` | Component Library or Plan Builder | `NumericParameter` or `DriveParameter` | topology key must not change |
+| `pump_frequency` | SweepSpec or solver setup | `DriveParameter` | solver input changes, not circuit topology |
+| `fit_window` | SweepSpec or analysis setup | `AnalysisParameter` | post-processing changes only |
+
+The sweep engine should use declared roles as input, but the compiler-visible topology key determines whether a compiled circuit can actually be reused.
+
+```text
+Authoring inputs declare parameter role:
     structural / numeric / drive / analysis
 
 Compiler validates whether the role is consistent:
@@ -322,19 +359,19 @@ Compiler validates whether the role is consistent:
     structural parameter may change topology key
 ```
 
-If a user declares a parameter numeric but it changes the topology key, the sweep engine must fail or reclassify according to strictness policy.
+If the declared role and effective role disagree, strictness policy decides the behavior.
 
 Supported strictness policies:
 
 ```text
 StrictSweepClassification
-    error if declared role disagrees with compiler result
+    error if declared role disagrees with compiler-verified effective role
 
 PermissiveSweepClassification
-    warn and promote numeric parameter to structural
+    warn and promote the parameter to the compiler-verified effective role
 
 DebugSweepClassification
-    compile every point and report inferred roles
+    compile every point and report declared role, inferred effective role, and topology-key differences
 ```
 
 The recommended default is:

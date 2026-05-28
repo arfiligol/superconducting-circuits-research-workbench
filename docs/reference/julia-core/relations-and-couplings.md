@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Plan-level relations, endpoint constraints, capacitive couplings, inductive couplings, shunts, and distributed windows.
-version: v1.1.0
+version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
 ---
@@ -77,6 +77,22 @@ line_span(line_ref(component, :main); from_m = 2.0mm, to_m = 2.5mm)
 ```
 
 The compiler must reject an ambiguous line tap or ambiguous line span before target lowering.
+
+## Relation Parameter Roles
+
+Relations and couplings may introduce their own parameters. These parameters should also declare default roles.
+
+Examples:
+
+| Relation parameter | Default role |
+| --- | --- |
+| capacitive coupling value | `NumericParameter` if endpoints are unchanged |
+| mutual inductance value | `NumericParameter` if coupling topology is unchanged |
+| line tap position | `StructuralParameter` |
+| line span start / stop | `StructuralParameter` |
+| coupled-window length | `StructuralParameter` |
+
+The declared role is a sweep input. The compiler and sweep engine still verify whether each relation parameter changes the topology key before compiled output is reused.
 
 ## LC To Quarter-Wave Resonator
 
