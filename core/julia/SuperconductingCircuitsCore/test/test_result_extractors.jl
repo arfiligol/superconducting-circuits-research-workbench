@@ -81,12 +81,14 @@ end
     )
 
     message = _result_extractor_validation_message() do
-        extract_linearized_traces(solution; requested_families=(:S, :Z, :QEideal))
+        extract_linearized_traces(solution; requested_families=(:S, :Z, :QE, :QEideal, :CM))
     end
 
     @test occursin("requested", lowercase(message))
     @test occursin("Z", message)
+    @test occursin("QE", message)
     @test occursin("QEideal", message)
+    @test occursin("CM", message)
 end
 
 @testset "result extractors allow unrequested output families to be absent" begin
@@ -105,4 +107,28 @@ end
     @test !haskey(traces, :qe_mode) || isempty(traces[:qe_mode])
     @test !haskey(traces, :qeideal_mode) || isempty(traces[:qeideal_mode])
     @test !haskey(traces, :cm_mode) || isempty(traces[:cm_mode])
+end
+
+@testset "result extractors preserve solver-returned NaN values" begin
+    solution = ResultExtractorSolution(
+        ResultExtractorFullLinearized(
+            [(0,)],
+            [1],
+            reshape(ComplexF64[NaN + 0im, 2 + 0im], 1, 1, 2),
+            _extractor_complex_cube(10),
+            reshape(Float64[NaN, 22], 1, 1, 2),
+            _extractor_real_cube(30),
+            reshape(Float64[NaN, 42], 1, 1, 2),
+        ),
+    )
+
+    traces = extract_linearized_traces(
+        solution;
+        requested_families=(:S, :QE, :CM),
+    )
+
+    label = "om=0|op=1|im=0|ip=1"
+    @test isnan(real(traces[:s_parameter_mode][label][1]))
+    @test isnan(traces[:qe_mode][label][1])
+    @test isnan(traces[:cm_mode]["om=0|op=1"][1])
 end

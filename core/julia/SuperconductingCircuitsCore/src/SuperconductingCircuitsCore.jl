@@ -127,11 +127,11 @@ export HBSolverControls
 export HBIntent
 export HBRunSpec
 export HBProblemSpec
-export OutputCapabilityReport
+export OutputRequestConfigurationReport
 export hb_intent!
 export validate_hb_intent
 export build_hb_problem
-export validate_output_capabilities
+export validate_output_request_configuration
 export run_hb_problem
 
 export AbstractSweepAxis

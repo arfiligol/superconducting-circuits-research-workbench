@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Plan-level relations, endpoint constraints, capacitive couplings, inductive couplings, shunts, and distributed windows.
-version: v1.3.0
-last_updated: 2026-05-28
+version: v1.4.0
+last_updated: 2026-05-29
 updated_by: codex
 ---
 
@@ -29,8 +29,15 @@ They are not immediate JosephsonCircuits.jl rows.
 | `connect!` | endpoint aliasing or node connection intent |
 | `couple_capacitive!` | capacitor placement between node-resolving endpoints |
 | `shunt_capacitor!` | convenience capacitor placement from a node-resolving endpoint to implicit ground |
+| `shunt_inductor!` | convenience inductor placement from a node-resolving endpoint to implicit ground |
 | `couple_window!` | distributed span-to-span coupling intent |
 | `couple_inductive!` | inductive, mutual, or flux-related coupling intent |
+
+## EngineeringGraph Capture
+
+Physical relation operations record matching [`EngineeringGraph`](engineering-graph.md) relations while they update the Circuit Plan. Standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `couple_inductive!`, and `couple_window!` calls keep the solver-facing relation and human-facing semantic graph synchronized.
+
+Users should not normally call `record_engineering_relation!` after those standard operations. Use manual relation recording only for extra semantic annotations, non-physical overlays, or metadata that is not already represented by the physical operation.
 
 ## Endpoint Constraints
 
@@ -39,6 +46,7 @@ They are not immediate JosephsonCircuits.jl rows.
 | `connect!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `couple_capacitive!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `shunt_capacitor!` | `NodeEndpoint` -> implicit `GroundEndpoint` |
+| `shunt_inductor!` | `NodeEndpoint` -> implicit `GroundEndpoint` |
 | `couple_window!` | `LineSpanEndpoint` <-> `LineSpanEndpoint` |
 | `couple_inductive!` | `LineTapEndpoint` or `LineSpanEndpoint` <-> `LoopEndpoint` or `InductiveTargetEndpoint` |
 
@@ -55,6 +63,8 @@ couple_capacitive!(
     capacitance = capacitance,
 )
 ```
+
+`shunt_inductor!(plan; id, at, inductance)` is the corresponding inductive termination from `at` to `ground()`.
 
 `InductiveTargetEndpoint` is the relation-side category for non-loop inductive targets. It is not a node-resolving endpoint.
 

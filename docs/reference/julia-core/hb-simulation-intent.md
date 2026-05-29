@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines how CircuitPlan declares HB ports, source slots, pump axes, observables, and solver-facing intent.
-version: v1.4.0
+version: v1.5.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -307,7 +307,10 @@ Rules:
 - observable modes must be compatible with pump axes;
 - unsupported observable families must fail clearly;
 - requested S, Z, QE, QEideal, and CM families must be extracted from solver output when requested;
+- Julia Core extraction is family-complete: if a family is requested, Core extracts the full requested family, while upper layers decide filtering, persistence, and display;
 - if a requested output family is absent from the solver result, extraction must fail clearly instead of silently dropping the family;
+- if an unrequested output family is absent from the solver result, extraction should ignore that absence;
+- solver-returned `NaN` values are preserved and surfaced; Core must not create NaN-placeholder values for missing families;
 - Runner result extraction should follow declared observables, not hardcoded S11 forever.
 
 ## HBIntent
@@ -505,28 +508,40 @@ HB validation is split across compile time and run time.
 - `controls.dc = true` is set when an intent declares a DC bias source slot;
 - `current = 0.0` is accepted;
 - optional solver kwargs are whitelisted;
-- requested observables can be extracted from solver output.
-- requested S/Z/QE/QEideal/CM output families are present in solver output or fail clearly.
+- requested observable families are enabled by the output-request configuration.
+- `validate_output_request_configuration(compiled, hb_problem)` validates request configuration before solve.
+- actual requested-family availability is checked after `hbsolve` output returns.
 
-## Output Family Capability Validation
+## Output Request Configuration And Extraction
 
-Default requested outputs are S, Z, QE, QEideal, and CM. Julia Core must validate whether each requested output family is supported by the selected circuit, HB profile, and solver configuration.
+Default requested outputs are S, Z, QE, QEideal, and CM. Julia Core validates the requested output configuration before solve, then validates actual requested-family availability after `hbsolve` output returns.
+
+Pre-solve validation checks whether the request is internally consistent with the compiled circuit, observable declarations, and solver controls. It does not prove that JosephsonCircuits.jl will return every requested family.
 
 Target API:
 
 ```julia
-capability_report = validate_output_capabilities(compiled, hb_problem)
+output_request_report = validate_output_request_configuration(compiled, hb_problem)
 ```
 
 | Output | Requested default | Validation behavior |
 | --- | ---: | --- |
-| S | true | run only when supported |
-| Z | true | run only when supported |
-| QE | true | fail clearly if unsupported |
-| QEideal | true when QE-family extraction is requested | fail clearly if absent from solver output |
-| CM | true | fail clearly if unsupported |
+| S | true | request only when enabled; post-solve extraction fails if requested family is absent |
+| Z | true | request only when enabled; post-solve extraction fails if requested family is absent |
+| QE | true | request only when enabled; post-solve extraction fails if requested family is absent |
+| QEideal | true when QE-family extraction is requested | request with QE-family extraction; post-solve extraction fails if absent from solver output |
+| CM | true | request only when enabled; post-solve extraction fails if requested family is absent |
 
-Julia Core and Runner must not silently drop requested output families or reduce a run to S-only output. Absence is a validation or extraction failure, not an empty trace set.
+Julia Core and Runner must not silently drop requested output families or reduce a run to S-only output. Requested-family absence after solver execution is an extraction failure, not an empty trace set.
+
+Extraction is family-complete. If S, Z, QE, QEideal, or CM is requested, Julia Core extracts the full requested family from the solver result. Upper layers handle filtering, persistence, and display decisions.
+
+Missing-output and `NaN` policy:
+
+- missing requested family: fail clearly and name the missing family / observable;
+- missing unrequested family: allowed;
+- solver-returned `NaN`: preserve and surface the value;
+- missing family: never create NaN-placeholder values.
 
 ## Implementation Status
 

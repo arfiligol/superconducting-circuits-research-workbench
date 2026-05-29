@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler output contract for JosephsonCompiledCircuit, maps, warnings, provenance, and caller inspection.
-version: v1.3.1
+version: v1.4.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -92,6 +92,10 @@ The compiled HB handoff includes:
 - netlist rows and component values needed by `run_hb_problem`.
 
 Pump-off does not remove compiled HB metadata. The compiled circuit still carries the pump axis and pump source slot; runtime binds the pump source current to `0.0`.
+
+The compiled circuit records output request intent, not solver-output availability. `validate_output_request_configuration(compiled, hb_problem)` validates the request configuration before solve. Actual S/Z/QE/QEideal/CM availability is checked after `hbsolve` returns.
+
+When a family is requested, Julia Core extracts the full requested family. Upper layers handle filtering, persistence, and display. Missing requested families fail clearly; missing unrequested families are allowed. Solver-returned `NaN` values are preserved, and Core does not create NaN-placeholder values for missing families.
 
 ## HBProblemSpec Handoff
 

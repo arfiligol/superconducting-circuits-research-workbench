@@ -13,27 +13,6 @@ function _frequency_vector_hz(frequency_range_hz)
     return collect(Float64.(frequency_range_hz))
 end
 
-const _RESERVED_HBSOLVE_KWARGS = Set{Symbol}([
-    :returnS,
-    :returnZ,
-    :returnQE,
-    :returnCM,
-    :dc,
-    :threewavemixing,
-    :fourwavemixing,
-    :sorting,
-    :keyedarrays,
-])
-
-function _validate_optional_hb_kwargs(optional_hb_kwargs::AbstractDict)
-    _validate_optional_hb_kwargs_supported(optional_hb_kwargs)
-    reserved = intersect(Set(Symbol.(keys(optional_hb_kwargs))), _RESERVED_HBSOLVE_KWARGS)
-    isempty(reserved) || _validation_error(
-        "optional_hb_kwargs must not override HBProblemSpec controls: $(join(string.(sort(collect(reserved); by=string)), ", ")).",
-    )
-    return nothing
-end
-
 function _call_josephson_hbsolve(ws, wp, sources, n_modulation, n_pump, netlist, component_values; kwargs...)
     return JosephsonCircuits.hbsolve(
         ws,
@@ -52,7 +31,7 @@ function run_hb_problem(problem::HBProblemSpec)
     isempty(compiled.netlist) && _validation_error(
         "HBProblemSpec compiled circuit has an empty netlist. Refusing to execute HB solve without a real compiled circuit.",
     )
-    validate_output_capabilities(compiled, problem)
+    validate_output_request_configuration(compiled, problem)
     _validate_optional_hb_kwargs(problem.optional_hb_kwargs)
 
     controls = problem.controls
@@ -143,6 +122,9 @@ function run_hbsolve(
         Tuple(fill(Int(n_pump_harmonics), length(wp)))
     end
 
+    optional_hb_kwargs = Dict{Symbol,Any}(Symbol(key) => value for (key, value) in pairs(kwargs))
+    _validate_optional_hb_kwargs(optional_hb_kwargs)
+
     solution = _call_josephson_hbsolve(
         ws,
         wp,
@@ -160,7 +142,7 @@ function run_hbsolve(
         fourwavemixing=fourwavemixing,
         sorting=sorting,
         keyedarrays=keyedarrays,
-        kwargs...,
+        optional_hb_kwargs...,
     )
 
     return HBSolveResult(

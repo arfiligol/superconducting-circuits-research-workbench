@@ -9,6 +9,114 @@ function _framework_validation_message(f)
     return ""
 end
 
+function _output_request_problem(;
+    controls=HBSolverControls(
+        n_pump_harmonics=1,
+        n_modulation_harmonics=1,
+    ),
+    observables=nothing,
+)
+    plan = CircuitPlan("output-request")
+    component = register_component!(
+        plan,
+        MinimalComponentLibrary.TestGroundedComponent("res");
+        display_name=:res,
+        role=:resonator,
+    )
+    external_port!(
+        plan;
+        id=:signal_port,
+        index=1,
+        endpoint=pin(component, :signal),
+        resistance=50.0,
+        role=:mixed,
+    )
+    hb_intent!(
+        plan;
+        pump_axes=[
+            PumpAxis(id=:pump, frequency_parameter=:pump_frequency),
+        ],
+        source_slots=[
+            HBSourceSlot(
+                id=:pump_in,
+                role=:pump,
+                port=:signal_port,
+                mode=(1,),
+                current_parameter=:pump_current,
+            ),
+        ],
+        observables=isnothing(observables) ? [
+            SParameterRequest(
+                id=:s11_signal,
+                outputmode=(0,),
+                outputport=:signal_port,
+                inputmode=(0,),
+                inputport=:signal_port,
+            ),
+        ] : observables,
+        default_solver_controls=controls,
+    )
+    compiled = compile_to_josephson(plan)
+    problem = build_hb_problem(
+        compiled,
+        HBRunSpec(
+            frequency_sweep=[4.0e9],
+            pump_frequencies=Dict(:pump => 8.0e9),
+            source_currents=Dict(:pump_in => 0.0),
+        ),
+    )
+    return compiled, problem
+end
+
+@testset "output request configuration validation is explicit" begin
+    @test isdefined(SuperconductingCircuitsCore, :validate_output_request_configuration)
+    @test :validate_output_request_configuration in names(SuperconductingCircuitsCore)
+    @test isdefined(SuperconductingCircuitsCore, :OutputRequestConfigurationReport)
+    @test :OutputRequestConfigurationReport in names(SuperconductingCircuitsCore)
+    removed_function = Symbol("validate_" * "output_capabilities")
+    @test !isdefined(SuperconductingCircuitsCore, removed_function)
+    @test !(removed_function in names(SuperconductingCircuitsCore))
+
+    compiled, problem = _output_request_problem()
+    report = validate_output_request_configuration(compiled, problem)
+    @test report isa OutputRequestConfigurationReport
+    @test report.S
+    @test report.Z
+    @test report.QE
+    @test report.QEideal
+    @test report.CM
+
+    compiled_disabled, problem_disabled = _output_request_problem(
+        observables=Any[Dict(:id => :z11_signal, :family => :Z)],
+        controls=HBSolverControls(
+            n_pump_harmonics=1,
+            n_modulation_harmonics=1,
+            returnS=true,
+            returnZ=false,
+            returnQE=true,
+            returnCM=true,
+        ),
+    )
+    disabled_message = _framework_validation_message() do
+        validate_output_request_configuration(compiled_disabled, problem_disabled)
+    end
+    @test occursin("z11_signal", disabled_message)
+    @test occursin("disables", disabled_message)
+    @test occursin("Z", disabled_message)
+
+    compiled_keyed, problem_keyed = _output_request_problem(
+        controls=HBSolverControls(
+            n_pump_harmonics=1,
+            n_modulation_harmonics=1,
+            keyedarrays=true,
+        ),
+    )
+    keyed_message = _framework_validation_message() do
+        validate_output_request_configuration(compiled_keyed, problem_keyed)
+    end
+    @test occursin("keyedarrays=false", keyed_message)
+end
+
 @testset "HBProblemSpec pump-off problem keeps pump axis and source slot" begin
     plan = CircuitPlan("pump-off")
     component = register_component!(

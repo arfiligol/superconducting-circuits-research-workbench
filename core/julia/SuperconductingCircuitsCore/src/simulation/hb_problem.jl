@@ -14,6 +14,18 @@ const _OPTIONAL_HB_KWARG_WHITELIST = Set{Symbol}([
     :maxintermodorder,
 ])
 
+const _RESERVED_HBSOLVE_KWARGS = Set{Symbol}([
+    :returnS,
+    :returnZ,
+    :returnQE,
+    :returnCM,
+    :dc,
+    :threewavemixing,
+    :fourwavemixing,
+    :sorting,
+    :keyedarrays,
+])
+
 struct HBProblemSpec
     compiled::JosephsonCompiledCircuit
     frequencies_hz::Vector{Float64}
@@ -27,7 +39,7 @@ struct HBProblemSpec
     optional_hb_kwargs::Dict{Symbol,Any}
 end
 
-struct OutputCapabilityReport
+struct OutputRequestConfigurationReport
     S::Bool
     Z::Bool
     QE::Bool
@@ -66,7 +78,7 @@ function _canonical_output_family(family)
     return family_symbol
 end
 
-function _capability_enabled(report::OutputCapabilityReport, family)::Bool
+function _request_family_enabled(report::OutputRequestConfigurationReport, family)::Bool
     canonical = _canonical_output_family(family)
     canonical == :S && return report.S
     canonical == :Z && return report.Z
@@ -131,6 +143,15 @@ function _validate_optional_hb_kwargs_supported(optional_hb_kwargs::AbstractDict
     return nothing
 end
 
+function _validate_optional_hb_kwargs(optional_hb_kwargs::AbstractDict)
+    reserved = intersect(Set(Symbol.(keys(optional_hb_kwargs))), _RESERVED_HBSOLVE_KWARGS)
+    isempty(reserved) || _validation_error(
+        "optional_hb_kwargs must not override HB solver controls: $(join(string.(sort(collect(reserved); by=string)), ", ")).",
+    )
+    _validate_optional_hb_kwargs_supported(optional_hb_kwargs)
+    return nothing
+end
+
 function build_hb_problem(compiled::JosephsonCompiledCircuit, run_spec::HBRunSpec)::HBProblemSpec
     intent = _hb_intent_from(compiled)
     isnothing(intent) && _validation_error("Compiled circuit does not contain HBIntent metadata.")
@@ -139,7 +160,7 @@ function build_hb_problem(compiled::JosephsonCompiledCircuit, run_spec::HBRunSpe
     !isempty(frequencies) || _validation_error("HBRunSpec frequency_sweep must contain at least one value.")
     all(frequency -> isfinite(frequency) && frequency > 0, frequencies) ||
         _validation_error("HBRunSpec frequency_sweep values must be finite positive frequencies in Hz.")
-    _validate_optional_hb_kwargs_supported(run_spec.optional_hb_kwargs)
+    _validate_optional_hb_kwargs(run_spec.optional_hb_kwargs)
 
     controls = intent.default_solver_controls
     port_map = _compiled_port_map(compiled)
@@ -220,15 +241,15 @@ function build_hb_problem(compiled::JosephsonCompiledCircuit, run_spec::HBRunSpe
     )
 end
 
-function validate_output_capabilities(compiled::JosephsonCompiledCircuit, hb_problem::HBProblemSpec)
+function validate_output_request_configuration(compiled::JosephsonCompiledCircuit, hb_problem::HBProblemSpec)
     compiled === hb_problem.compiled || _validation_error(
-        "validate_output_capabilities must receive the compiled circuit carried by HBProblemSpec.",
+        "validate_output_request_configuration must receive the compiled circuit carried by HBProblemSpec.",
     )
     controls = hb_problem.controls
     controls.keyedarrays && _validation_error(
         "HB output extraction currently requires HBSolverControls(keyedarrays=false).",
     )
-    report = OutputCapabilityReport(
+    report = OutputRequestConfigurationReport(
         controls.returnS,
         controls.returnZ,
         controls.returnQE,
@@ -239,7 +260,7 @@ function validate_output_capabilities(compiled::JosephsonCompiledCircuit, hb_pro
     for observable in hb_problem.observables
         family = _observable_family(observable)
         if !isnothing(family) && family in (:S, :Z, :QE, :QEideal, :CM)
-            _capability_enabled(report, family) || _validation_error(
+            _request_family_enabled(report, family) || _validation_error(
                 "Observable '$(_observable_id_label(observable))' requests output family '$(family)', but HBSolverControls disables that family.",
             )
         end

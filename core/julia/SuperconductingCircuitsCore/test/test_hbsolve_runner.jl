@@ -85,6 +85,86 @@ end
     @test result.traces[:zero_mode_s]["S11"] == ComplexF64[1 + 0im, 2 + 0im]
 end
 
+@testset "run_hbsolve validates optional HB kwargs" begin
+    calls = Any[]
+    netlist = HBRunnerRecordingNetlist(calls)
+    sources = [(mode=(1,), port=1, current=0.0)]
+
+    accepted = run_hbsolve(
+        netlist,
+        Dict(:L_res => 8.0e-9),
+        [4.0e9];
+        pump_frequencies_hz=(8.0e9,),
+        sources=sources,
+        n_modulation_harmonics=(8,),
+        n_pump_harmonics=(16,),
+        switchofflinesearchtol=0.2,
+        alphamin=0.1,
+        iterations=8,
+        ftol=1.0e-8,
+        nbatches=2,
+        maxintermodorder=3,
+    )
+    @test accepted isa HBSolveResult
+    accepted_call = only(calls)
+    @test accepted_call.kwargs[:switchofflinesearchtol] == 0.2
+    @test accepted_call.kwargs[:alphamin] == 0.1
+    @test accepted_call.kwargs[:iterations] == 8
+    @test accepted_call.kwargs[:ftol] == 1.0e-8
+    @test accepted_call.kwargs[:nbatches] == 2
+    @test accepted_call.kwargs[:maxintermodorder] == 3
+
+    unknown_message = try
+        run_hbsolve(
+            netlist,
+            Dict(:L_res => 8.0e-9),
+            [4.0e9];
+            pump_frequencies_hz=(8.0e9,),
+            sources=sources,
+            n_modulation_harmonics=(8,),
+            n_pump_harmonics=(16,),
+            unsupported_solver_knob=true,
+        )
+        ""
+    catch err
+        @test err isa FrameworkValidationError
+        sprint(showerror, err)
+    end
+    @test occursin("Unsupported optional_hb_kwargs", unknown_message)
+    @test occursin("unsupported_solver_knob", unknown_message)
+
+    reserved_compiled = JosephsonCompiledCircuit(
+        netlist=Any[("R_reserved", "n_reserved", "0", :R_reserved)],
+        component_values=Dict(:R_reserved => 50.0),
+    )
+    reserved_problem = HBProblemSpec(
+        reserved_compiled,
+        [4.0e9],
+        [2π * 4.0e9],
+        (2π * 8.0e9,),
+        Any[(mode=(1,), port=1, current=0.0)],
+        (1,),
+        (1,),
+        HBSolverControls(
+            n_pump_harmonics=1,
+            n_modulation_harmonics=1,
+            returnS=true,
+            returnZ=false,
+        ),
+        Any[],
+        Dict{Symbol,Any}(:returnS => false),
+    )
+    reserved_message = try
+        run_hb_problem(reserved_problem)
+        ""
+    catch err
+        @test err isa FrameworkValidationError
+        sprint(showerror, err)
+    end
+    @test occursin("optional_hb_kwargs", reserved_message)
+    @test occursin("returnS", reserved_message)
+end
+
 @testset "HBProblemSpec normalized frequencies are the solver-facing values" begin
     plan = CircuitPlan("hb-normalized-frequency-payload")
     component = register_component!(

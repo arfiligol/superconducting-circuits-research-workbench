@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.8.1
+version: v1.9.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -98,12 +98,27 @@ Runner must reject:
 - unknown observable ID;
 - unknown `optional_hb_kwargs`;
 - missing, non-finite, or non-positive pump frequency for a declared pump axis;
-- absent requested S/Z/QE/QEideal/CM output family;
+- post-solve absence of a requested S/Z/QE/QEideal/CM output family;
 - runtime values that do not satisfy compiled HB validation metadata.
 
 Runner must not create a default S11 observable, create default ports, create source slots from task payloads, or convert ambiguous drive-magnitude fields into physical current.
 
 Circuit-family forbidden-frequency validation is a planned target with no recorded implementation date as of 2026-05-29. When that validation exists, the Runner should treat those failures as Core validation errors rather than task orchestration errors.
+
+## Output Request Boundary
+
+`validate_output_request_configuration(compiled, hb_problem)` is the pre-solve guard for requested output configuration. It validates that compiled observables and solver-control return flags agree before Runner calls the HB solver.
+
+That guard does not inspect solver output. Actual S/Z/QE/QEideal/CM availability is checked after `hbsolve` returns, during Julia Core extraction.
+
+Extraction rules:
+
+- if S, Z, QE, QEideal, or CM is requested, Julia Core extracts the full requested family;
+- upper layers handle filtering, persistence, and display;
+- missing requested families fail clearly;
+- missing unrequested families are allowed;
+- solver-returned `NaN` values are preserved and surfaced;
+- Core never creates NaN-placeholder values for missing families.
 
 ## Runner Component Library Dependencies
 

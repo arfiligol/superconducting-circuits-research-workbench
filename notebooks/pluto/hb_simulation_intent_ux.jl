@@ -217,26 +217,13 @@ resonator_inductance = shunt_inductor!(
 )
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37025
-record_engineering_relation!(
-    plan;
-    relation_type=:terminates,
-    from=pin(resonator, :signal),
-    to=ground(),
-    through=:capacitance,
-    role=:resonator_capacitance,
-    label="capacitance to ground",
-)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37026
-record_engineering_relation!(
-    plan;
-    relation_type=:terminates,
-    from=pin(resonator, :signal),
-    to=ground(),
-    through=:inductance,
-    role=:resonator_inductance,
-    label="inductance to ground",
-)
+md"""
+!!! note "EngineeringGraph relation recording"
+    Physical Julia Core operations such as `shunt_capacitor!` and `shunt_inductor!`
+    also record the corresponding EngineeringGraph relation. This keeps the solver
+    model and the human-facing graph synchronized without a duplicate manual
+    graph-recording call.
+"""
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3700f
 md"""
@@ -429,7 +416,7 @@ hb_problem = build_hb_problem(compiled, run_spec)
 )
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37022
-capability_report = validate_output_capabilities(compiled, hb_problem)
+output_request_report = validate_output_request_configuration(compiled, hb_problem)
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37023
 md"""
@@ -459,7 +446,6 @@ result = run_hb_problem(hb_problem)
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3700d
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3700e
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37025
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37026
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3700f
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37010
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37011

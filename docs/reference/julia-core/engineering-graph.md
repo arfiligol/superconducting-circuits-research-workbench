@@ -12,7 +12,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Human-facing engineering semantic graph, visualization, and schematic export contract for Julia Core authoring.
-version: v1.0.1
+version: v1.1.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -238,18 +238,22 @@ register_component!(
 )
 ```
 
+Standard physical operations record their EngineeringGraph relations as part of the same call. Users should normally call the physical operation, not duplicate it with a manual `record_engineering_relation!`.
+
 ```julia
-record_engineering_relation!(
+couple_capacitive!(
     plan;
-    relation_type = :couple,
+    id = "feedline_to_resonator",
     from = pin(feedline, :output),
     to = pin(resonator, :input),
-    through = CapacitiveCoupler(capacitance = Cc),
+    capacitance = Cc,
     role = :readout_coupling,
 )
 ```
 
-This lets Runner adapters, generated code, and tests build the same semantic representation without macro syntax.
+The same rule applies to standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `couple_inductive!`, and `couple_window!` calls. Manual `record_engineering_relation!` is for extra semantic annotations, non-physical overlays, or metadata that is not already captured by the physical operation.
+
+This lets Runner adapters, generated code, and tests build the same semantic representation without macro syntax while keeping the solver model and human-facing graph synchronized.
 
 ## Visualization Backends
 

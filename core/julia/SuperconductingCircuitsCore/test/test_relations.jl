@@ -59,6 +59,44 @@
     @test any(relation -> relation isa ShuntInductor, plan.relations)
     @test validate_authoring(plan).issues == ValidationIssue[]
 
+    graph_relations = engineering_graph(plan).relations
+    @test length(graph_relations) == length(plan.relations)
+    @test any(
+        relation ->
+            relation.id == :connect_1 &&
+                relation.relation_type == :connect &&
+                relation.role == :node_connection,
+        graph_relations,
+    )
+    @test any(
+        relation ->
+            relation.id == :lc_to_qwr &&
+                relation.relation_type == :couple &&
+                relation.role == :capacitive_coupling,
+        graph_relations,
+    )
+    @test any(
+        relation ->
+            relation.id == :shunt &&
+                relation.relation_type == :terminates &&
+                relation.through == :capacitance,
+        graph_relations,
+    )
+    @test any(
+        relation ->
+            relation.id == :readout_shunt_l &&
+                relation.relation_type == :terminates &&
+                relation.through == :inductance,
+        graph_relations,
+    )
+    @test any(
+        relation ->
+            relation.id == :window &&
+                relation.relation_type == :couple &&
+                relation.through == :coupled_window,
+        graph_relations,
+    )
+
     @test_throws FrameworkValidationError connect!(plan, line_span(qwr; from_m=0.1mm, to_m=0.2mm), ground())
     @test_throws FrameworkValidationError couple_capacitive!(
         plan;

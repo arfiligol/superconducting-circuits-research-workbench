@@ -39,6 +39,7 @@ const SCC = SuperconductingCircuitsCore
     @test graph.ports[:signal_port].component == :res
     @test graph.ports[:signal_port].port_index == 1
     @test graph.ports[:signal_port].resistance == 50.0
+    @test isempty(graph.relations)
 
     group = SCC.record_engineering_group!(
         plan;
@@ -63,7 +64,7 @@ const SCC = SuperconductingCircuitsCore
 
     @test relation isa SCC.EngineeringRelation
     @test length(graph.relations) == 1
-    @test graph.relations[1].relation_type == :feeds
+    @test graph.relations[end].relation_type == :feeds
 end
 
 @testset "EngineeringGraph exports DOT and schematic specs" begin
@@ -108,6 +109,6 @@ end
     @test spec.components[1].id == :res
     @test spec.components[1].schematic_kind == :TestGroundedComponent
     @test spec.ports[1].role == :mixed
-    @test spec.relations[1].schematic_kind == :feeds
+    @test only(spec.relations).schematic_kind == :feeds
     @test spec.render_hints[:renderer] == :schemdraw
 end

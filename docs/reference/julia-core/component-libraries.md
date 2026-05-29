@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the boundary between Julia Core Kernel and user/lab/project component libraries.
-version: v1.3.2
+version: v1.4.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -110,18 +110,20 @@ Component Libraries should provide the component-level information that Julia Co
 
 These records are for human visualization, debugging, reports, and schematic export. They are not JosephsonCircuits.jl rows and should not be inferred from solver netlists.
 
-Plan Builders should also record engineering relations when they connect reusable components:
+Plan Builders should use Julia Core physical relation helpers when they connect reusable components. Those helpers update the Circuit Plan and record the standard EngineeringGraph relation in the same operation:
 
 ```julia
-record_engineering_relation!(
+couple_capacitive!(
     plan;
-    relation_type = :couple,
+    id = "feedline_to_resonator",
     from = pin(feedline, :output),
     to = pin(resonator, :input),
-    through = CapacitiveCoupler(capacitance = Cc),
+    capacitance = Cc,
     role = :readout_coupling,
 )
 ```
+
+Do not duplicate standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `couple_inductive!`, or `couple_window!` calls with a manual `record_engineering_relation!`. Use manual recording only for extra semantic annotations or overlays that are not already captured by the physical operation.
 
 The same metadata should be available whether the plan was authored with the Macro DSL or ordinary functional calls.
 

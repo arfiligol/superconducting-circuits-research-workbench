@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines first-class, whitelisted, and unsupported JosephsonCircuits.jl hbsolve controls for Julia Core and Runner use.
-version: v1.4.0
+version: v1.5.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -358,6 +358,8 @@ Rules:
 
 Requested output families are part of the HB problem shape and result contract.
 
+Before solve, `validate_output_request_configuration(compiled, hb_problem)` validates that requested observables and `HBSolverControls` agree. This is request-configuration validation only; actual family availability is checked after `hbsolve` returns.
+
 | Family | Solver surface | Extraction rule |
 | --- | --- | --- |
 | S | `linearized.S` | extract requested mode/port traces or fail if absent |
@@ -366,7 +368,11 @@ Requested output families are part of the HB problem shape and result contract.
 | QEideal | `linearized.QEideal` | extract requested mode/port traces or fail if absent |
 | CM | `linearized.CM` | extract requested mode/port traces or fail if absent |
 
-Runner and Julia Core must not silently reduce a requested HB result to S-only traces. If a requested family is absent from the solver result, the extractor should raise a clear validation error naming the missing family and requested observable.
+Runner and Julia Core must not silently reduce a requested HB result to S-only traces. Extraction is family-complete: if S, Z, QE, QEideal, or CM is requested, Julia Core extracts the full requested family. Upper layers own filtering, persistence, and display.
+
+If a requested family is absent from the solver result, the extractor should raise a clear validation error naming the missing family and requested observable. Missing unrequested families are allowed.
+
+Solver-returned `NaN` values are preserved and surfaced as solver output. Julia Core must not create NaN-placeholder values for missing families; missing requested families fail, and missing unrequested families remain absent.
 
 ## Implementation Status
 

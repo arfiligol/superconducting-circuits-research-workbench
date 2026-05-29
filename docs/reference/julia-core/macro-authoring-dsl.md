@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Target macro authoring DSL contract for CircuitPlan, HBIntent, and EngineeringGraph capture.
-version: v1.0.2
+version: v1.1.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -145,7 +145,7 @@ end
 
 The runtime binding for this slot is `source_currents[:dc_bias]`. The corresponding controls must enable DC handling with `dc = true`.
 
-Requested output families should be explicit in the expanded intent or associated controls. S/Z/QE/QEideal/CM extraction must fail clearly when the requested solver family is absent.
+Requested output families should be explicit in the expanded intent or associated controls. S/Z/QE/QEideal/CM extraction must be family-complete for requested families and must fail clearly when a requested solver family is absent.
 
 ## Expansion Contract
 
@@ -155,13 +155,15 @@ Macro expansion should call canonical functions like:
 register_component!(...)
 external_port!(...)
 hb_intent!(...)
+connect!(...) / couple_capacitive!(...) / shunt_capacitor!(...) / shunt_inductor!(...)
 record_engineering_component!(...)
-record_engineering_relation!(...)
 record_engineering_port!(...)
 record_engineering_group!(...)
 ```
 
-The recording calls populate the EngineeringGraph. The compiler still lowers the CircuitPlan into the target solver representation.
+Physical relation calls populate the standard EngineeringGraph relations while they update the CircuitPlan. Macro expansion should call `record_engineering_relation!(...)` only for extra semantic annotations or overlays that are not already captured by `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `couple_inductive!`, or `couple_window!`.
+
+The compiler still lowers the CircuitPlan into the target solver representation.
 
 ## Functional API Parity
 
@@ -175,12 +177,12 @@ resonator = register_component!(
     role = :readout_resonator,
 )
 
-record_engineering_relation!(
+couple_capacitive!(
     plan;
-    relation_type = :couple,
+    id = "feedline_to_resonator",
     from = pin(feedline, :output),
     to = pin(resonator, :input),
-    through = CapacitiveCoupler(capacitance = Cc),
+    capacitance = Cc,
     role = :readout_coupling,
 )
 ```
