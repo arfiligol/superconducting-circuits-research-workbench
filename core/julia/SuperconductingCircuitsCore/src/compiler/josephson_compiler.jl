@@ -154,6 +154,16 @@ function _prepare_node_resolution!(ctx::_JosephsonCompileContext)
             _validate_endpoint_for_lumped_lowering(ctx.plan, relation.at)
             _ensure_endpoint!(ctx, relation.at)
             _ensure_endpoint!(ctx, ground())
+        elseif relation isa SeriesInductor
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.from)
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.to)
+            _ensure_endpoint!(ctx, relation.from)
+            _ensure_endpoint!(ctx, relation.to)
+        elseif relation isa SeriesResistor
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.from)
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.to)
+            _ensure_endpoint!(ctx, relation.from)
+            _ensure_endpoint!(ctx, relation.to)
         elseif relation isa InductiveCoupling
             _validation_error("InductiveCoupling '$(relation.id)' is not supported by the lumped Josephson compiler MVP yet.")
         elseif relation isa CoupledWindowRelation
@@ -271,6 +281,25 @@ function _emit_inductor_relation!(
     return row_index
 end
 
+function _emit_resistor_relation!(
+    ctx::_JosephsonCompileContext;
+    relation::AbstractCircuitRelation,
+    row_name::AbstractString,
+    node_a::AbstractString,
+    node_b::AbstractString,
+    resistance,
+)
+    value = resistance
+    _require(value isa Number || value isa ParameterBinding || value isa Symbol || value isa AbstractString,
+        "Resistor relation '$(row_name)' must use a numeric value or parameter binding.")
+
+    value_ref = _component_value_ref!(ctx, row_name, value)
+    _push_component!(ctx.netlist, row_name, node_a, node_b, value_ref)
+    row_index = length(ctx.netlist)
+    _record_row_provenance!(ctx, relation, row_index)
+    return row_index
+end
+
 function _lower_relation!(ctx::_JosephsonCompileContext, relation::NodeConnection)
     return nothing
 end
@@ -305,6 +334,28 @@ function _lower_relation!(ctx::_JosephsonCompileContext, relation::ShuntInductor
         node_a=_resolved_node(ctx, relation.at),
         node_b="0",
         inductance=relation.inductance,
+    )
+end
+
+function _lower_relation!(ctx::_JosephsonCompileContext, relation::SeriesInductor)
+    return _emit_inductor_relation!(
+        ctx;
+        relation=relation,
+        row_name="L_$(_sanitize_node_part(relation.id))",
+        node_a=_resolved_node(ctx, relation.from),
+        node_b=_resolved_node(ctx, relation.to),
+        inductance=relation.inductance,
+    )
+end
+
+function _lower_relation!(ctx::_JosephsonCompileContext, relation::SeriesResistor)
+    return _emit_resistor_relation!(
+        ctx;
+        relation=relation,
+        row_name="R_$(_sanitize_node_part(relation.id))",
+        node_a=_resolved_node(ctx, relation.from),
+        node_b=_resolved_node(ctx, relation.to),
+        resistance=relation.resistance,
     )
 end
 

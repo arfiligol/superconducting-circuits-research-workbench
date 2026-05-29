@@ -98,12 +98,16 @@ export NodeConnection
 export CapacitiveCoupling
 export ShuntCapacitor
 export ShuntInductor
+export SeriesInductor
+export SeriesResistor
 export InductiveCoupling
 export CoupledWindowRelation
 export connect!
 export couple_capacitive!
 export shunt_capacitor!
 export shunt_inductor!
+export series_inductor!
+export series_resistor!
 export couple_inductive!
 export couple_window!
 

@@ -26,6 +26,22 @@ function _call_josephson_hbsolve(ws, wp, sources, n_modulation, n_pump, netlist,
     )
 end
 
+function _hb_problem_failure_summary(problem::HBProblemSpec)
+    pump_frequencies_hz = [Float64(value) / (2π) for value in problem.wp]
+    requested_outputs = _requested_output_families(problem.controls)
+    requested_label = isempty(requested_outputs) ? "none" : join(string.(requested_outputs), ",")
+    return join(
+        [
+            "number of netlist rows: $(length(problem.compiled.netlist))",
+            "frequency count: $(length(problem.frequencies_hz))",
+            "pump frequencies: $(pump_frequencies_hz)",
+            "source count: $(length(problem.sources))",
+            "requested outputs: $(requested_label)",
+        ],
+        "\n  ",
+    )
+end
+
 function run_hb_problem(problem::HBProblemSpec)
     compiled = problem.compiled
     isempty(compiled.netlist) && _validation_error(
@@ -57,7 +73,12 @@ function run_hb_problem(problem::HBProblemSpec)
         )
     catch err
         err isa FrameworkValidationError && rethrow()
-        _validation_error("JosephsonCircuits.hbsolve failed for HBProblemSpec: $(sprint(showerror, err))")
+        _validation_error(
+            "JosephsonCircuits.hbsolve failed for HBProblemSpec.\n" *
+            "Exception type: $(typeof(err))\n" *
+            "Exception message: $(sprint(showerror, err))\n" *
+            "HBProblemSpec summary:\n  $(_hb_problem_failure_summary(problem))",
+        )
     end
 
     return HBSolveResult(

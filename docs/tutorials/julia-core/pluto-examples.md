@@ -11,8 +11,8 @@ tags:
 status: incubating
 owner: docs-team
 audience: user
-scope: Pluto example workflow for Julia Core HB simulation intent, S-parameter extraction, and full requested-output-family inspection.
-version: v0.1.0
+scope: Pluto example workflow for Julia Core HB simulation intent, S/Z/QE/CM extraction, pump-off semantics, and readout-line examples.
+version: v0.2.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -21,8 +21,9 @@ updated_by: codex
 
 Use these Pluto examples as the Julia Core learning path for harmonic-balance simulation intent, executable HB problem construction, and result-family inspection. The examples are notebook-first: Pluto calls Julia Core directly, while Backend task submission, persistence, publication, and display remain upper-layer responsibilities.
 
-!!! warning "Implementation status"
-    This page lists the current and target notebook set. `notebooks/pluto/hb_simulation_intent_ux.jl`, `notebooks/pluto/01_grounded_lc_reflection.jl`, and `notebooks/pluto/02_pump_off_resonator_s11.jl` are present in this checkout as of 2026-05-29. The remaining notebook titles are target titles with no source notebook yet, and must not be described as working examples until their source notebooks exist.
+!!! info "Notebook status"
+    The canonical learning-path notebooks are numbered `00` through `05` under `notebooks/pluto/`.
+    Older unnumbered notebook files may remain in the repository during iteration, but this page documents the numbered suite as the official example path.
 
 ## Workflow Contract
 
@@ -56,16 +57,32 @@ Julia Core owns full requested-output extraction. If a notebook requests S, Z, Q
 
 This keeps solver availability, extraction, persistence, and display as separate decisions.
 
-## Target Notebook Set
+Full extraction can grow large for multi-mode or multi-port simulations. Storage, artifact-writing, and reporting layers may choose not to persist every extracted trace, but that persistence policy sits outside Julia Core.
 
-| Notebook | Goal | Teaches | Inspect | Current implementation status |
-| --- | --- | --- | --- | --- |
-| 00 HB Simulation Intent Tutorial | Walk through the end-to-end HB intent path with a small local grounded-resonator component. | CircuitPlan authoring, EngineeringGraph inspection, HBIntent declarations, pump-off/pumped runtime bindings, HBProblemSpec normalization, and the executable `run_hb_problem` gate. | `graph.components`, `graph.ports`, `graph.relations`, `graph.hb_overlay`, `compiled.netlist`, `compiled.port_map`, `hb_report`, `hb_problem.sources`, `output_request_report`, and `result`. | Implemented as `notebooks/pluto/hb_simulation_intent_ux.jl`. Its title is currently `HB Simulation Intent Tutorial`; the numbered title is the target learning-path label. |
-| 01 Grounded LC Reflection | Show the smallest grounded LC reflection problem before adding pump semantics. | One-port resonator authoring, external-port lowering, frequency-sweep setup, and baseline reflection interpretation. | `example.graph.components`, `example.graph.ports`, `example.graph.relations`, `example.compiled.netlist`, `keys(result.traces)`, `zero_mode_s(result, 1, 1)`, and `zero_mode_z(result, 1, 1)`. | Present as `notebooks/pluto/01_grounded_lc_reflection.jl`; it uses `notebooks/pluto/includes/hb_example_helpers.jl` and plots real `HBSolveResult` S/Z traces. |
-| 02 Pump-Off Resonator S11 | Demonstrate a declared pump problem with the pump source intentionally off. | `pump_current = 0.0` as a valid source-off binding, finite positive pump-frequency binding, source-slot identity, and S11 extraction from solver output. | `PumpAxis`, `HBSourceSlot(:pump_in)`, `source_currents[:pump_in]`, `hb_problem.wp`, `hb_problem.sources`, output request validation, `keys(result.traces)`, and S11 traces. | Present as `notebooks/pluto/02_pump_off_resonator_s11.jl`; it requests the default output families and plots real `HBSolveResult` S11 data. |
-| 03 Pumped JPA-style S11 | Move from pump-off to a pumped JPA-style S11 example without hiding mode, source, or control semantics. | Pumped source bindings, harmonic controls, three-wave/four-wave mixing flags where applicable, and interpreting gain from solver output. | Source modes, pump modes, `HBSolverControls`, optional HB kwargs, requested output families, and solver-returned S11 values. | Target notebook; no matching source notebook exists in `notebooks/pluto/` as of 2026-05-29. |
-| 04 Two-Port S-Parameters | Extend the inspection path from one-port S11 to a two-port S-parameter matrix. | Multiple external ports, mode/port labels, matrix-shaped S/Z extraction, and port-index provenance. | `compiled.port_map`, observable requests for S11/S21/S12/S22, `traces[:s_parameter_mode]`, `traces[:z_parameter_mode]`, and mode-port labels. | Target notebook; no matching source notebook exists in `notebooks/pluto/` as of 2026-05-29. |
-| 05 Output Families QE/CM | Make the full requested-output-family contract visible in Pluto. | S/Z/QE/QEideal/CM extraction, clear failure for missing requested families, allowed absence for unrequested families, and preservation of solver-returned `NaN`. | `traces[:s_parameter_mode]`, `traces[:z_parameter_mode]`, `traces[:qe_mode]`, `traces[:qeideal_mode]`, `traces[:cm_mode]`, missing-family errors, and `NaN` values. | Target notebook; Core extractor tests cover the policy, but no matching Pluto notebook exists in `notebooks/pluto/` as of 2026-05-29. |
+## Notebook Set
+
+| Notebook | Goal | Main output | Status |
+| --- | --- | --- | --- |
+| `00_hb_simulation_intent_tutorial.jl` | Minimal end-to-end Julia Core tutorial for local component authoring, EngineeringGraph, HBIntent, compile, HBProblemSpec, and solve. | S11, phase(S11), Z11 | executable |
+| `01_grounded_lc_reflection.jl` | Physics-focused one-port grounded LC reflection example with a resonance estimate. | S11 magnitude/phase, Z11 real/imag | executable |
+| `02_pump_off_resonator.jl` | Pump-off semantics: pump axis exists, pump frequency exists, pump source exists, source current is `0.0`. | S11 magnitude | executable |
+| `03_readout_line_hanging_qwr.jl` | Two-port readout line with a capacitively hanging ladder resonator. | S21/S11, Z11/Z21, derived Y21 | executable MVP |
+| `04_coupling_sweep.jl` | Sweep coupling capacitance for the readout-line/hanging-resonator MVP. | S21 and S11 curve families | executable MVP |
+| `05_output_families_s_z_qe_cm.jl` | Inspect full requested output families from Julia Core extraction. | S/Z/QE/QEideal/CM keys and representative traces | executable |
+
+## Common Format
+
+Each numbered notebook should include these seven elements:
+
+| Requirement | Example surface |
+| --- | --- |
+| Understandable system code | Local component or local plan builder, not raw netlist rows only |
+| Julia Core authoring path | `@circuit`, `CircuitPlan`, Core relations, `EngineeringGraph` |
+| Compiled representation | `compiled.netlist`, `compiled.port_map`, `compiled.component_values` |
+| HB problem representation | `hb_problem.frequencies_hz`, `wp`, `sources`, `Nmodulationharmonics`, `Npumpharmonics` |
+| Real solver execution | `result = run_hb_problem(hb_problem)` or an equivalent helper that calls it |
+| Real result visualization | Plots read from `result.traces` |
+| Physics sanity check | A short "What should I expect?" section |
 
 ## Notebook Authoring Rules
 

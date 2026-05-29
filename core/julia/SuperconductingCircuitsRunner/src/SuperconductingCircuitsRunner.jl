@@ -380,14 +380,19 @@ function _build_mvp_frequency_sweep_plan(definition_id::AbstractString, setup::A
         metadata=Dict{Symbol,Any}(
             :runner_adapter => :frequency_sweep_mvp,
             :definition_id => string(definition_id),
-            :external_ports => [
-                (name="port_1", index=1, resistance_ohm=_MVP_PORT_RESISTANCE_OHM),
-            ],
         ),
     )
     registered = SuperconductingCircuitsCore.register_component!(plan, component)
     signal = SuperconductingCircuitsCore.pin(registered, :signal)
     port = SuperconductingCircuitsCore.external_node("port_1")
+    SuperconductingCircuitsCore.external_port!(
+        plan;
+        id=:port_1,
+        index=1,
+        endpoint=port,
+        resistance=_MVP_PORT_RESISTANCE_OHM,
+        role=:signal,
+    )
     SuperconductingCircuitsCore.connect!(plan, signal, port)
     SuperconductingCircuitsCore.shunt_capacitor!(
         plan;

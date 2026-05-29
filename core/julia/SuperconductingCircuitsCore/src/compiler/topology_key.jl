@@ -19,6 +19,10 @@ function _relation_summary(relation::AbstractCircuitRelation)
         return (:capacitive, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
     relation isa ShuntCapacitor && return (:shunt_capacitor, relation.id, _endpoint_summary(relation.at))
     relation isa ShuntInductor && return (:shunt_inductor, relation.id, _endpoint_summary(relation.at))
+    relation isa SeriesInductor &&
+        return (:series_inductor, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
+    relation isa SeriesResistor &&
+        return (:series_resistor, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
     relation isa InductiveCoupling &&
         return (:inductive, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
     relation isa CoupledWindowRelation &&

@@ -2,7 +2,7 @@
 # v1.0.1
 
 #> [frontmatter]
-#> title = "Grounded LC Reflection"
+#> title = "01 Grounded LC Reflection"
 #> tags = ["julia-core", "hb", "s-parameters", "lc-resonator"]
 #> description = "A small Julia Core Pluto example that solves a one-port grounded LC resonator and plots real S/Z traces from HBSolveResult."
 
@@ -29,7 +29,7 @@ end
 
 # ╔═╡ 40fbad2b-47b1-4943-a1f8-1d0506ec882c
 md"""
-# Grounded LC Reflection
+# 01 Grounded LC Reflection
 
 This notebook simulates a one-port grounded LC resonator through the Julia Core HB path:
 
@@ -41,11 +41,13 @@ port 1 + 50 ohm reference
 ```
 
 The solver output below is real `HBSolveResult` data. The plots read directly from `result.traces`.
+
+The notebook follows the shared seven-point structure: parameters, reusable plan builder, EngineeringGraph, compiled circuit, HBProblemSpec, solver result, and real plotted traces with a physics sanity check.
 """
 
 # ╔═╡ ad208c65-0358-440b-a4ac-169d414127ec
 md"""
-## Parameters
+## 1. Parameters And f0 Estimate
 
 All user-facing values use default Julia Core units: farads, henries, ohms, hertz, and amperes.
 """
@@ -72,6 +74,24 @@ begin
     )
 end
 
+# ╔═╡ d7842212-1f9d-4d92-a48c-6ecbd08a8104
+begin
+    f0_estimate_hz = 1 / (2π * sqrt(inductance * capacitance))
+    (
+        formula="1/(2π*sqrt(L*C))",
+        capacitance_farad=capacitance,
+        inductance_henry=inductance,
+        f0_estimate_ghz=f0_estimate_hz / 1e9,
+    )
+end
+
+# ╔═╡ c3307206-1833-427d-9884-5ef9ea2b42c2
+md"""
+## 2. Reusable Plan Builder
+
+This helper keeps the notebook compact while still returning the inspectable Julia Core objects: `plan`, `graph`, `compiled`, `hb_problem`, and the real solver `result`.
+"""
+
 # ╔═╡ de46ddde-15dc-42cb-af0f-d37322bb9e5f
 example = build_grounded_lc_example(
     id="grounded-lc-reflection",
@@ -90,7 +110,7 @@ example = build_grounded_lc_example(
 
 # ╔═╡ b6abfdc0-b1b1-40c2-8b56-c95b9589272b
 md"""
-## Inspect the Plan
+## 3. EngineeringGraph
 
 The EngineeringGraph remains component-level and human-facing. The compiled netlist is the solver representation.
 """
@@ -104,12 +124,48 @@ example.graph.ports
 # ╔═╡ 6504a7c3-93bd-4cd6-8e2a-96226f435c1f
 example.graph.relations
 
+# ╔═╡ f99a2267-dff5-46fd-b92b-48d338ad287d
+md"""
+## 4. Compiled Circuit
+
+The compiler output is the solver-facing representation. Inspect the netlist rows, external port map, and component values before looking at solver output.
+"""
+
 # ╔═╡ a31c69d4-e191-4242-b7d2-43e7c9208bde
 example.compiled.netlist
 
+# ╔═╡ 536e763e-7b0b-40fd-9f0f-f09b03e7272e
+example.compiled.port_map
+
+# ╔═╡ 3b2e5a45-8138-477c-a195-23cf9e20edc0
+example.compiled.component_values
+
+# ╔═╡ 9168eae7-7f76-4d65-a2dc-498a5030ea1c
+md"""
+## 5. HBProblemSpec
+
+`HBProblemSpec` carries the normalized frequencies, angular frequencies, pump axis, zero-current source binding, harmonics, controls, observables, and solver kwargs.
+"""
+
+# ╔═╡ 2d59d427-2a76-4f3c-af0b-d7abe0db63c7
+hb_problem = example.hb_problem
+
+# ╔═╡ 95bbd69d-164c-43b4-85e9-ed59f518970b
+(
+    frequencies_hz=hb_problem.frequencies_hz,
+    ws_count=length(hb_problem.ws),
+    wp=hb_problem.wp,
+    sources=hb_problem.sources,
+    Nmodulationharmonics=hb_problem.Nmodulationharmonics,
+    Npumpharmonics=hb_problem.Npumpharmonics,
+    controls=hb_problem.controls,
+    observables=hb_problem.observables,
+    optional_hb_kwargs=hb_problem.optional_hb_kwargs,
+)
+
 # ╔═╡ ff39a5a5-0452-4a2d-9ec6-33ba3f96496e
 md"""
-## Solver Result
+## 6. Solver Result
 
 The result contains all requested output families returned by the solver. This notebook plots a small subset for teaching.
 """
@@ -127,6 +183,27 @@ begin
     z_traces = get(result.traces, :z_parameter_mode, nothing)
     z11 = z_traces isa AbstractDict && haskey(z_traces, z_label) ? zero_mode_z(result, 1, 1) : nothing
     frequencies_ghz = result.frequencies_hz ./ 1e9
+end
+
+# ╔═╡ 843549ea-5324-490b-97b7-f4e2b1d6b4f8
+md"""
+## 7. Expected Physics And Real Plots
+
+For a lossless grounded parallel LC, the ideal shunt impedance is largest near `f0 = 1/(2π*sqrt(L*C))`. Reflection magnitude should remain near 0 dB because this one-port has no dissipative loss, while S11 phase and Z11 carry the resonance signature.
+"""
+
+# ╔═╡ 95d0c7ea-898a-4564-b2eb-d3f75e51a708
+begin
+    nearest_f0_index = argmin(abs.(result.frequencies_hz .- f0_estimate_hz))
+
+    (
+        f0_estimate_ghz=f0_estimate_hz / 1e9,
+        nearest_simulated_frequency_ghz=frequencies_ghz[nearest_f0_index],
+        s11_magnitude_db_near_f0=20 * log10(abs(s11[nearest_f0_index])),
+        s11_near_unit_magnitude=abs(abs(s11[nearest_f0_index]) - 1) <= 0.25,
+        z11_available=!isnothing(z11),
+        z11_imag_crosses_zero=!isnothing(z11) ? minimum(imag.(z11)) <= 0 <= maximum(imag.(z11)) : missing,
+    )
 end
 
 # ╔═╡ 2ed2ac19-e7d0-42c4-af38-f597931fbf7d
@@ -171,16 +248,26 @@ end
 # ╟─40fbad2b-47b1-4943-a1f8-1d0506ec882c
 # ╟─ad208c65-0358-440b-a4ac-169d414127ec
 # ╠═db955f48-67d8-4549-9c65-1fdb8b232cd8
+# ╠═d7842212-1f9d-4d92-a48c-6ecbd08a8104
+# ╟─c3307206-1833-427d-9884-5ef9ea2b42c2
 # ╠═de46ddde-15dc-42cb-af0f-d37322bb9e5f
 # ╟─b6abfdc0-b1b1-40c2-8b56-c95b9589272b
 # ╠═3f85c3f9-f7b4-4551-8a57-f2bc714fa891
 # ╠═43ab6fea-e482-4473-abd0-81a6adc375c7
 # ╠═6504a7c3-93bd-4cd6-8e2a-96226f435c1f
+# ╟─f99a2267-dff5-46fd-b92b-48d338ad287d
 # ╠═a31c69d4-e191-4242-b7d2-43e7c9208bde
+# ╠═536e763e-7b0b-40fd-9f0f-f09b03e7272e
+# ╠═3b2e5a45-8138-477c-a195-23cf9e20edc0
+# ╟─9168eae7-7f76-4d65-a2dc-498a5030ea1c
+# ╠═2d59d427-2a76-4f3c-af0b-d7abe0db63c7
+# ╠═95bbd69d-164c-43b4-85e9-ed59f518970b
 # ╟─ff39a5a5-0452-4a2d-9ec6-33ba3f96496e
 # ╠═09ba2ec8-4d94-4033-b4cc-bf6c520a8112
 # ╠═9f5da57c-ce18-48a3-bba0-86fd67613e1c
 # ╠═ad62c614-e336-4a3b-a8c2-98bb6675cc18
+# ╟─843549ea-5324-490b-97b7-f4e2b1d6b4f8
+# ╠═95d0c7ea-898a-4564-b2eb-d3f75e51a708
 # ╠═2ed2ac19-e7d0-42c4-af38-f597931fbf7d
 # ╠═adf182b9-3b6c-4fe4-b731-207fae096f0c
 # ╠═20614025-d8ce-40f2-b32c-c56d536e766e

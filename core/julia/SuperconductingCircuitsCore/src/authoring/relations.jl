@@ -25,6 +25,22 @@ struct ShuntInductor <: AbstractCircuitRelation
     parameters::Vector{ParameterMetadata}
 end
 
+struct SeriesInductor <: AbstractCircuitRelation
+    id::String
+    from::AbstractNodeEndpoint
+    to::AbstractNodeEndpoint
+    inductance::Any
+    parameters::Vector{ParameterMetadata}
+end
+
+struct SeriesResistor <: AbstractCircuitRelation
+    id::String
+    from::AbstractNodeEndpoint
+    to::AbstractNodeEndpoint
+    resistance::Any
+    parameters::Vector{ParameterMetadata}
+end
+
 struct InductiveCoupling <: AbstractCircuitRelation
     id::String
     from::AbstractCircuitEndpoint
@@ -210,6 +226,82 @@ function shunt_inductor!(
         parameters=_engineering_relation_parameters(
             :inductance,
             inductance,
+            params;
+            schematic_kind=schematic_kind,
+        ),
+        source_location=source_location,
+    )
+    return relation
+end
+
+function series_inductor!(
+    plan::CircuitPlan;
+    id,
+    from,
+    to,
+    inductance,
+    parameters=ParameterMetadata[],
+    role=:series_inductor,
+    label=nothing,
+    schematic_kind=:inductor,
+    source_location=nothing,
+)
+    from isa AbstractNodeEndpoint && to isa AbstractNodeEndpoint ||
+        _validation_error("series_inductor! requires NodeEndpoint <-> NodeEndpoint.")
+    params = _parameter_vector(parameters)
+    relation = SeriesInductor(String(id), from, to, inductance, params)
+    push!(plan.relations, relation)
+    _register_relation_parameters!(plan, params)
+    record_engineering_relation!(
+        plan;
+        id=relation.id,
+        relation_type=:series,
+        from=from,
+        to=to,
+        through=:inductance,
+        role=role,
+        label=_engineering_label(label),
+        parameters=_engineering_relation_parameters(
+            :inductance,
+            inductance,
+            params;
+            schematic_kind=schematic_kind,
+        ),
+        source_location=source_location,
+    )
+    return relation
+end
+
+function series_resistor!(
+    plan::CircuitPlan;
+    id,
+    from,
+    to,
+    resistance,
+    parameters=ParameterMetadata[],
+    role=:series_resistor,
+    label=nothing,
+    schematic_kind=:resistor,
+    source_location=nothing,
+)
+    from isa AbstractNodeEndpoint && to isa AbstractNodeEndpoint ||
+        _validation_error("series_resistor! requires NodeEndpoint <-> NodeEndpoint.")
+    params = _parameter_vector(parameters)
+    relation = SeriesResistor(String(id), from, to, resistance, params)
+    push!(plan.relations, relation)
+    _register_relation_parameters!(plan, params)
+    record_engineering_relation!(
+        plan;
+        id=relation.id,
+        relation_type=:series,
+        from=from,
+        to=to,
+        through=:resistance,
+        role=role,
+        label=_engineering_label(label),
+        parameters=_engineering_relation_parameters(
+            :resistance,
+            resistance,
             params;
             schematic_kind=schematic_kind,
         ),

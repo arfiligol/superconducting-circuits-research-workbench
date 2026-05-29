@@ -37,6 +37,29 @@
             ),
         ],
     )
+    series_inductor!(
+        plan;
+        id="readout_series_l",
+        from=line_tap(readout; at_m=0.1mm),
+        to=external_node("readout_mid"),
+        inductance=1.2e-9,
+    )
+    series_resistor!(
+        plan;
+        id="readout_series_r",
+        from=external_node("readout_mid"),
+        to=external_node("readout_out"),
+        resistance=2.5,
+        parameters=[
+            ParameterMetadata(
+                name=:readout_series_resistance,
+                role=NumericParameter(),
+                owner="readout_series_r",
+                targets=[:resistance],
+                units="ohm",
+            ),
+        ],
+    )
     couple_window!(
         plan;
         id="window",
@@ -52,11 +75,14 @@
         mutual_inductance=3.0e-12,
     )
 
-    @test length(plan.relations) == 6
+    @test length(plan.relations) == 8
     @test haskey(plan.parameters, :coupling_capacitance)
     @test haskey(plan.parameters, :readout_shunt_inductance)
+    @test haskey(plan.parameters, :readout_series_resistance)
     @test any(relation -> relation isa ShuntCapacitor, plan.relations)
     @test any(relation -> relation isa ShuntInductor, plan.relations)
+    @test any(relation -> relation isa SeriesInductor, plan.relations)
+    @test any(relation -> relation isa SeriesResistor, plan.relations)
     @test validate_authoring(plan).issues == ValidationIssue[]
 
     graph_relations = engineering_graph(plan).relations
@@ -91,6 +117,20 @@
     )
     @test any(
         relation ->
+            relation.id == :readout_series_l &&
+                relation.relation_type == :series &&
+                relation.through == :inductance,
+        graph_relations,
+    )
+    @test any(
+        relation ->
+            relation.id == :readout_series_r &&
+                relation.relation_type == :series &&
+                relation.through == :resistance,
+        graph_relations,
+    )
+    @test any(
+        relation ->
             relation.id == :window &&
                 relation.relation_type == :couple &&
                 relation.through == :coupled_window,
@@ -110,5 +150,19 @@
         id="bad_inductor",
         at=line_span(qwr; from_m=0.1mm, to_m=0.2mm),
         inductance=1.0e-9,
+    )
+    @test_throws FrameworkValidationError series_inductor!(
+        plan;
+        id="bad_series_inductor",
+        from=line_span(qwr; from_m=0.1mm, to_m=0.2mm),
+        to=ground(),
+        inductance=1.0e-9,
+    )
+    @test_throws FrameworkValidationError series_resistor!(
+        plan;
+        id="bad_series_resistor",
+        from=line_span(qwr; from_m=0.1mm, to_m=0.2mm),
+        to=ground(),
+        resistance=50.0,
     )
 end
