@@ -163,6 +163,26 @@ end
     end
     @test occursin("optional_hb_kwargs", reserved_message)
     @test occursin("returnS", reserved_message)
+
+    keyed_message = try
+        run_hbsolve(
+            netlist,
+            Dict(:L_res => 8.0e-9),
+            [4.0e9];
+            pump_frequencies_hz=(8.0e9,),
+            sources=sources,
+            n_modulation_harmonics=(8,),
+            n_pump_harmonics=(16,),
+            keyedarrays=true,
+        )
+        ""
+    catch err
+        @test err isa FrameworkValidationError
+        sprint(showerror, err)
+    end
+    @test occursin("keyedarrays=false", keyed_message)
+    @test occursin("not supported", keyed_message)
+    @test length(calls) == 1
 end
 
 @testset "HBProblemSpec normalized frequencies are the solver-facing values" begin

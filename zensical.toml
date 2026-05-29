@@ -60,6 +60,9 @@ nav = [
   ] },
   { "Tutorials" = [
     { "Overview" = "tutorials/index.md" },
+    { "Julia Core" = [
+      { "Pluto Examples" = "tutorials/julia-core/pluto-examples.md" },
+    ] },
     { "App Circuit Simulation" = [
       { "Overview" = "tutorials/app-circuit-simulation/index.md" },
       { "Circuit Netlist Getting Started" = "tutorials/schematic-netlist-getting-started.md" },

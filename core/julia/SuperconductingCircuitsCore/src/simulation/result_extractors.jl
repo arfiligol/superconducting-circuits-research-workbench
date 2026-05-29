@@ -63,7 +63,10 @@ function _linearized_family_available(linearized, family)::Bool
 end
 
 function _validate_requested_output_families(solution, requested_families)
-    requested = unique(_canonical_output_family.(collect(requested_families)))
+    requested = unique([
+        _validate_known_output_family(family; context="Requested solver output family") for
+        family in collect(requested_families)
+    ])
     isempty(requested) && return nothing
 
     linearized = _linearized_output(solution)

@@ -122,6 +122,10 @@ function run_hbsolve(
         Tuple(fill(Int(n_pump_harmonics), length(wp)))
     end
 
+    keyedarrays && _validation_error(
+        "HB output extraction currently requires keyedarrays=false; keyed-array extraction is not supported yet.",
+    )
+
     optional_hb_kwargs = Dict{Symbol,Any}(Symbol(key) => value for (key, value) in pairs(kwargs))
     _validate_optional_hb_kwargs(optional_hb_kwargs)
 

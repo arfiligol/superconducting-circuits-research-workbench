@@ -26,6 +26,14 @@ const _RESERVED_HBSOLVE_KWARGS = Set{Symbol}([
     :keyedarrays,
 ])
 
+const _KNOWN_HB_OUTPUT_FAMILIES = Set{Symbol}([
+    :S,
+    :Z,
+    :QE,
+    :QEideal,
+    :CM,
+])
+
 struct HBProblemSpec
     compiled::JosephsonCompiledCircuit
     frequencies_hz::Vector{Float64}
@@ -86,6 +94,14 @@ function _request_family_enabled(report::OutputRequestConfigurationReport, famil
     canonical == :QEideal && return report.QEideal
     canonical == :CM && return report.CM
     return false
+end
+
+function _validate_known_output_family(family; context::AbstractString="HB output request")
+    canonical = _canonical_output_family(family)
+    canonical in _KNOWN_HB_OUTPUT_FAMILIES || _validation_error(
+        "$(context) uses unknown HB output family '$(family)'. Known output families are $(join(string.(sort(collect(_KNOWN_HB_OUTPUT_FAMILIES); by=string)), ", ")).",
+    )
+    return canonical
 end
 
 function _observable_id_label(observable)
@@ -259,7 +275,11 @@ function validate_output_request_configuration(compiled::JosephsonCompiledCircui
 
     for observable in hb_problem.observables
         family = _observable_family(observable)
-        if !isnothing(family) && family in (:S, :Z, :QE, :QEideal, :CM)
+        if !isnothing(family)
+            family = _validate_known_output_family(
+                family;
+                context="Observable '$(_observable_id_label(observable))'",
+            )
             _request_family_enabled(report, family) || _validation_error(
                 "Observable '$(_observable_id_label(observable))' requests output family '$(family)', but HBSolverControls disables that family.",
             )

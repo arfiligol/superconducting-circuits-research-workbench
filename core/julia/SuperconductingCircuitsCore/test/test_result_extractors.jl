@@ -91,6 +91,28 @@ end
     @test occursin("CM", message)
 end
 
+@testset "result extractors reject unknown requested output families" begin
+    solution = ResultExtractorSolution(
+        ResultExtractorSOnlyLinearized(
+            [(0,)],
+            [1],
+            reshape(ComplexF64[1 + 0im, 2 + 0im], 1, 1, 2),
+        ),
+    )
+
+    message = _result_extractor_validation_message() do
+        extract_linearized_traces(solution; requested_families=(:UnknownThing,))
+    end
+
+    @test occursin("unknown", lowercase(message))
+    @test occursin("UnknownThing", message)
+    @test occursin("S", message)
+    @test occursin("Z", message)
+    @test occursin("QE", message)
+    @test occursin("QEideal", message)
+    @test occursin("CM", message)
+end
+
 @testset "result extractors allow unrequested output families to be absent" begin
     solution = ResultExtractorSolution(
         ResultExtractorSOnlyLinearized(

@@ -22,6 +22,7 @@ begin
     end
 
     using SuperconductingCircuitsCore
+    using Plots
 end
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37001
@@ -95,7 +96,7 @@ local component library object
     -> run_hb_problem
 ```
 
-It does not generate substitute traces, fake gain curves, or fake solver output. The final cell remains the acceptance gate:
+It does not synthesize solver output. The final cell remains the acceptance gate:
 
 ```julia
 result = run_hb_problem(hb_problem)
@@ -424,11 +425,44 @@ md"""
 
 This is the implementation acceptance gate. It calls the executable HBProblemSpec API with the normalized compiled circuit, pump, source, harmonic, control, observable, and solver-kwarg values.
 
-Do not replace this with generated traces or a plotted placeholder.
+Do not replace this with substitute curves or non-solver values.
 """
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37024
 result = run_hb_problem(hb_problem)
+
+# ╔═╡ 0613bc7e-fe07-4d18-ba7a-a60bebf9168f
+result
+
+# ╔═╡ 652be638-dd53-4317-826c-7f54def7a8eb
+keys(result.traces)
+
+# ╔═╡ 42213dd5-376b-4bec-8754-ac98cdfb7bae
+zero_mode_s11 = begin
+    zero_mode_s_traces = get(result.traces, :zero_mode_s, Dict{String,Vector{ComplexF64}}())
+    haskey(zero_mode_s_traces, "S11") ? zero_mode_s_traces["S11"] :
+    "S11 is not available. Available zero-mode labels: $(join(sort(collect(keys(zero_mode_s_traces))), ", "))"
+end
+
+# ╔═╡ daf0be54-cca4-4ddf-ab78-6c9c2660dcb1
+begin
+    zero_mode_s_traces = get(result.traces, :zero_mode_s, nothing)
+    zero_mode_s_traces isa AbstractDict ||
+        error("result.traces does not contain :zero_mode_s.")
+    haskey(zero_mode_s_traces, "S11") ||
+        error("result.traces[:zero_mode_s] does not contain S11. Available labels: $(join(sort(collect(keys(zero_mode_s_traces))), ", "))")
+
+    s11 = zero_mode_s_traces["S11"]
+    plot(
+        result.frequencies_hz ./ 1e9,
+        20 .* log10.(abs.(s11));
+        xlabel="Frequency (GHz)",
+        ylabel="|S11| (dB)",
+        label="S11",
+        marker=:circle,
+        title="Zero-mode S11 from HBSolveResult",
+    )
+end
 
 # ╔═╡ Cell order:
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37001
@@ -468,3 +502,7 @@ result = run_hb_problem(hb_problem)
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37022
 # ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37023
 # ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37024
+# ╠═0613bc7e-fe07-4d18-ba7a-a60bebf9168f
+# ╠═652be638-dd53-4317-826c-7f54def7a8eb
+# ╠═42213dd5-376b-4bec-8754-ac98cdfb7bae
+# ╠═daf0be54-cca4-4ddf-ab78-6c9c2660dcb1

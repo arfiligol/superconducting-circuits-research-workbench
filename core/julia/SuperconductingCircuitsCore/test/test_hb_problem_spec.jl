@@ -104,6 +104,21 @@ end
     @test occursin("disables", disabled_message)
     @test occursin("Z", disabled_message)
 
+    compiled_unknown, problem_unknown = _output_request_problem(
+        observables=Any[Dict(:id => :unknown_family_probe, :family => :UnknownThing)],
+    )
+    unknown_message = _framework_validation_message() do
+        validate_output_request_configuration(compiled_unknown, problem_unknown)
+    end
+    @test occursin("unknown_family_probe", unknown_message)
+    @test occursin("unknown", lowercase(unknown_message))
+    @test occursin("UnknownThing", unknown_message)
+    @test occursin("S", unknown_message)
+    @test occursin("Z", unknown_message)
+    @test occursin("QE", unknown_message)
+    @test occursin("QEideal", unknown_message)
+    @test occursin("CM", unknown_message)
+
     compiled_keyed, problem_keyed = _output_request_problem(
         controls=HBSolverControls(
             n_pump_harmonics=1,
