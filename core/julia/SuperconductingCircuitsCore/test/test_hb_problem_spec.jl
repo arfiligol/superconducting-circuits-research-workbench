@@ -9,8 +9,8 @@ function _framework_validation_message(f)
     return ""
 end
 
-@testset "HBIntent pure linear no-pump problem spec" begin
-    plan = CircuitPlan("pure-linear")
+@testset "HBProblemSpec pump-off problem keeps pump axis and source slot" begin
+    plan = CircuitPlan("pump-off")
     component = register_component!(
         plan,
         MinimalComponentLibrary.TestGroundedComponent("res");
@@ -27,19 +27,30 @@ end
     )
     hb_intent!(
         plan;
-        pump_axes=PumpAxis[],
-        source_slots=HBSourceSlot[],
+        pump_axes=[
+            PumpAxis(id=:pump, frequency_parameter=:pump_frequency),
+        ],
+        source_slots=[
+            HBSourceSlot(
+                id=:pump_in,
+                role=:pump,
+                port=:signal_port,
+                mode=(1,),
+                current_parameter=:pump_current,
+            ),
+        ],
         observables=[
             SParameterRequest(
                 id=:s11_signal,
-                outputmode=(),
+                outputmode=(0,),
                 outputport=:signal_port,
-                inputmode=(),
+                inputmode=(0,),
                 inputport=:signal_port,
             ),
         ],
         default_solver_controls=HBSolverControls(
-            n_modulation_harmonics=0,
+            n_pump_harmonics=16,
+            n_modulation_harmonics=(8,),
             returnS=true,
             returnZ=true,
             returnQE=true,
@@ -50,15 +61,16 @@ end
     compiled = compile_to_josephson(plan)
     run_spec = HBRunSpec(
         frequency_sweep=range(4e9, 6e9; length=3),
-        pump_frequencies=Dict{Symbol,Float64}(),
-        source_currents=Dict{Symbol,Float64}(),
+        pump_frequencies=Dict(:pump => 8.0e9),
+        source_currents=Dict(:pump_in => 0.0),
     )
     problem = build_hb_problem(compiled, run_spec)
 
-    @test problem.wp == ()
-    @test isempty(problem.sources)
-    @test problem.Npumpharmonics == ()
-    @test problem.Nmodulationharmonics == (0,)
+    @test problem.ws == collect(2π .* Float64.(run_spec.frequency_sweep))
+    @test problem.wp == (2π * 8.0e9,)
+    @test problem.sources == [(mode=(1,), port=1, current=0.0)]
+    @test problem.Npumpharmonics == (16,)
+    @test problem.Nmodulationharmonics == (8,)
     @test problem.controls.returnS
     @test problem.controls.returnZ
     @test problem.controls.returnQE
@@ -122,7 +134,71 @@ end
     @test problem.sources == [(mode=(1,), port=1, current=0.0)]
     @test problem.Npumpharmonics == (16,)
     @test problem.Nmodulationharmonics == (8,)
-    @test_throws FrameworkValidationError run_hb_problem(problem)
+    @test problem.compiled === compiled
+end
+
+@testset "HBProblemSpec carries compiled execution payload for supported plans" begin
+    plan = CircuitPlan("hb-execution-payload")
+    component = register_component!(
+        plan,
+        MinimalComponentLibrary.TestGroundedComponent("res");
+        display_name=:res,
+        role=:resonator,
+    )
+    external_port!(
+        plan;
+        id=:signal_port,
+        index=1,
+        endpoint=pin(component, :signal),
+        resistance=50.0,
+        role=:mixed,
+    )
+    hb_intent!(
+        plan;
+        pump_axes=[
+            PumpAxis(id=:pump, frequency_parameter=:pump_frequency),
+        ],
+        source_slots=[
+            HBSourceSlot(
+                id=:pump_in,
+                role=:pump,
+                port=:signal_port,
+                mode=(1,),
+                current_parameter=:pump_current,
+            ),
+        ],
+        observables=[
+            SParameterRequest(
+                id=:s11_signal,
+                outputmode=(0,),
+                outputport=:signal_port,
+                inputmode=(0,),
+                inputport=:signal_port,
+            ),
+        ],
+        default_solver_controls=HBSolverControls(
+            n_pump_harmonics=16,
+            n_modulation_harmonics=(8,),
+        ),
+    )
+
+    compiled = compile_to_josephson(plan)
+    @test !isempty(compiled.netlist)
+    @test !isempty(compiled.component_values)
+
+    problem = build_hb_problem(
+        compiled,
+        HBRunSpec(
+            frequency_sweep=[4.0e9, 5.0e9],
+            pump_frequencies=Dict(:pump => 8.0e9),
+            source_currents=Dict(:pump_in => 0.0),
+        ),
+    )
+
+    @test problem.compiled === compiled
+    @test problem.frequencies_hz == [4.0e9, 5.0e9]
+    @test !isempty(problem.compiled.netlist)
+    @test !isempty(problem.compiled.component_values)
 end
 
 @testset "modulation harmonics are independent from pump-axis count" begin
@@ -147,7 +223,22 @@ end
             PumpAxis(id=:pump_1, frequency_parameter=:pump_1_frequency),
             PumpAxis(id=:pump_2, frequency_parameter=:pump_2_frequency),
         ],
-        source_slots=HBSourceSlot[],
+        source_slots=[
+            HBSourceSlot(
+                id=:pump_1_in,
+                role=:pump,
+                port=:signal_port,
+                mode=(1, 0),
+                current_parameter=:pump_1_current,
+            ),
+            HBSourceSlot(
+                id=:pump_2_in,
+                role=:pump,
+                port=:signal_port,
+                mode=(0, 1),
+                current_parameter=:pump_2_current,
+            ),
+        ],
         observables=[
             SParameterRequest(
                 id=:s11_signal,
@@ -169,10 +260,14 @@ end
         HBRunSpec(
             frequency_sweep=[5.0e9],
             pump_frequencies=Dict(:pump_1 => 8.0e9, :pump_2 => 9.0e9),
-            source_currents=Dict{Symbol,Float64}(),
+            source_currents=Dict(:pump_1_in => 0.0, :pump_2_in => 0.0),
         ),
     )
 
+    @test problem.sources == [
+        (mode=(1, 0), port=1, current=0.0),
+        (mode=(0, 1), port=1, current=0.0),
+    ]
     @test problem.Npumpharmonics == (8, 10)
     @test problem.Nmodulationharmonics == (6,)
 end

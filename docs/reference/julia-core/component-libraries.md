@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines the boundary between Julia Core Kernel and user/lab/project component libraries.
-version: v1.3.1
+version: v1.3.2
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -76,6 +76,8 @@ Tutorial notebooks may define small local reusable components when they need an 
 | Component library | reusable lab/project components and plan builders | dependence from Julia Core back into the library |
 
 The fixture should keep the notebook readable: Markdown, tables, and small callouts should carry the tutorial explanation; renderer or plotting dependencies should be optional unless the notebook is explicitly testing that renderer.
+
+HB tutorial fixtures should use the product profiles `:pump_off`, `:pumped`, and `:pumped_dc`. Pump-off keeps the pump axis and pump source slot in the local fixture and binds `pump_current = 0.0`; it should not switch to a separate empty-pump construction path.
 
 ## Plan Builders
 
@@ -151,6 +153,15 @@ A Plan Builder should declare metadata such as:
 
 This metadata is stored in the CircuitPlan and used by the sweep engine.
 
+For HB-capable plan builders, the component library should also declare the HB intent needed by Runner-safe execution:
+
+- pump-axis IDs and their frequency-parameter names;
+- pump and DC source slots, including `HBSourceSlot(role = :dc_bias, mode = (0,))` where DC bias exists;
+- observable requests for S/Z/QE/QEideal/CM extraction;
+- default `HBSolverControls` suitable for the circuit family.
+
+Runtime values still arrive through `HBRunSpec`. A component library should not hide pump-off behavior by emitting a different plan without the pump source slot.
+
 ## Parameter Role Declarations
 
 Component Libraries should declare default parameter roles for component-owned parameters and for high-level Plan Builder knobs.
@@ -180,7 +191,8 @@ using MyLabComponents
 plan = build_grounded_lc_to_qwr_plan(params)
 
 compiled = compile_to_josephson(plan)
-result = run_frequency_sweep(compiled, freqs)
+hb_problem = build_hb_problem(compiled, run_spec)
+result = run_hb_problem(hb_problem)
 ```
 
 Pluto should not require component libraries to become part of Julia Core.

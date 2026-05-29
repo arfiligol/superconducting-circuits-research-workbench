@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines how CircuitPlan declares HB ports, source slots, pump axes, observables, and solver-facing intent.
-version: v1.3.1
+version: v1.4.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -54,10 +54,27 @@ CircuitPlan declares what is allowed. The compiler validates and maps that inten
 | `HBIntent` | declares ports, pump axes, source slots, observables, and default controls on the `CircuitPlan` |
 | `HBRunSpec` | carries runtime values such as frequency sweep, pump frequencies, `source_currents`, and optional whitelisted kwargs |
 | `build_hb_problem` | validates compiled intent against runtime values and creates `HBProblemSpec` |
-| `HBProblemSpec` | stores normalized JosephsonCircuits-facing `ws`, `wp`, `sources`, harmonics, controls, observables, and kwargs |
-| `run_hb_problem` | executes the validated problem or fails clearly when the solver path is not implemented |
+| `HBProblemSpec` | executable problem spec carrying the compiled circuit handoff, netlist values, normalized `ws`, `wp`, `sources`, harmonics, controls, observables, and kwargs |
+| `run_hb_problem` | executes the validated problem through the product-aligned HB entry point |
 
 Low-level `run_hbsolve` is a JosephsonCircuits-facing adapter name. It must not contradict the product path or become the tutorial/Runner handoff when `HBProblemSpec` is available.
+
+## HBProblemSpec Execution Contract
+
+`HBProblemSpec` is the executable handoff between compilation and HB execution. It should contain, or carry a stable reference to, the compiled circuit and the exact solver inputs derived from it:
+
+| Field family | Contract |
+| --- | --- |
+| compiled circuit handoff | compiled `JosephsonCompiledCircuit` identity, netlist rows, component values, port map, source-slot map, and observable map |
+| frequencies | normalized angular `ws` from positive sweep frequencies in hertz |
+| pumps | normalized angular `wp` from declared pump-axis bindings |
+| sources | JosephsonCircuits source entries derived from declared `HBSourceSlot` records and `source_currents` |
+| harmonics | `Nmodulationharmonics` and `Npumpharmonics` normalized to tuple shape |
+| controls | typed `HBSolverControls` selected by the plan intent and runtime profile |
+| observables | declared output requests for S/Z/QE/QEideal/CM extraction |
+| kwargs | whitelisted optional HB kwargs recorded for provenance |
+
+Runner code should pass `HBProblemSpec` to `run_hb_problem`; it should not reassemble a separate `hbsolve` call from task payload fields.
 
 ## ExternalPort
 
@@ -117,6 +134,14 @@ Rules:
 - single-pump mode examples use tuples like `(1,)`;
 - double-pump mode examples use tuples like `(1, 0)` and `(0, 1)`;
 - DC mode `(0,)` must be explicitly allowed where relevant.
+
+Runtime binding rules:
+
+- every declared pump axis requires a pump-frequency binding;
+- pump frequency values are in hertz at the user/API boundary;
+- pump frequency values must be finite and positive;
+- pump frequency remains required when the pump source current is `0.0`;
+- circuit-family forbidden-frequency validation is a planned target with no recorded implementation date as of 2026-05-29.
 
 ## HBSourceSlot
 
@@ -266,13 +291,14 @@ SParameterRequest(
 )
 ```
 
-Optional future observable families include:
+Output-family requests include:
 
 ```julia
+SParameterRequest(...)
+ZParameterRequest(...)
 QERequest(...)
 QEIdealRequest(...)
 CMRequest(...)
-ZParameterRequest(...)
 ```
 
 Rules:
@@ -280,6 +306,8 @@ Rules:
 - observable ports must reference declared external ports;
 - observable modes must be compatible with pump axes;
 - unsupported observable families must fail clearly;
+- requested S, Z, QE, QEideal, and CM families must be extracted from solver output when requested;
+- if a requested output family is absent from the solver result, extraction must fail clearly instead of silently dropping the family;
 - Runner result extraction should follow declared observables, not hardcoded S11 forever.
 
 ## HBIntent
@@ -305,28 +333,47 @@ Rules:
 - changing the number of source slots changes `HBIntent`;
 - changing observable requests changes output intent.
 
-## Pure Linear / No-Pump Profile
+## Product HB Profiles
 
-Pure linear sweeps should not require a pump axis.
+Product HB profiles are named by runtime behavior, not by removing HB structure.
 
-Target declaration:
+| Profile | Pump axis | Pump source slot | DC source slot | Runtime binding |
+| --- | --- | --- | --- | --- |
+| `:pump_off` | declared | declared | absent | `pump_current = 0.0` |
+| `:pumped` | declared | declared | absent | `pump_current` may be nonzero |
+| `:pumped_dc` | declared | declared | declared | `pump_current` plus `dc_current` |
+
+Pump-off is an executable HB problem with a declared pump axis and source slot. It is not an empty-pump product path.
+
+Shared pump-off / pumped declaration:
 
 ```julia
 hb_intent!(
     plan;
-    pump_axes = [],
-    source_slots = [],
+    pump_axes = [
+        PumpAxis(id = :pump, frequency_parameter = :pump_frequency),
+    ],
+    source_slots = [
+        HBSourceSlot(
+            id = :pump_in,
+            role = :pump,
+            port = :pump_port,
+            mode = (1,),
+            current_parameter = :pump_current,
+        ),
+    ],
     observables = [
         SParameterRequest(
             id = :s11_signal,
-            outputmode = (),
+            outputmode = (0,),
             outputport = :signal_port,
-            inputmode = (),
+            inputmode = (0,),
             inputport = :signal_port,
         ),
     ],
     default_solver_controls = HBSolverControls(
-        n_modulation_harmonics = 0,
+        n_pump_harmonics = 16,
+        n_modulation_harmonics = 8,
         returnS = true,
         returnZ = true,
         returnQE = true,
@@ -335,15 +382,23 @@ hb_intent!(
 )
 ```
 
+Pump-off runtime binding:
+
+```julia
+HBRunSpec(
+    frequency_sweep = frequency_sweep,
+    pump_frequencies = Dict(:pump => pump_frequency),
+    source_currents = Dict(:pump_in => 0.0),
+)
+```
+
 Rules:
 
-- pure linear profile uses no pump axes;
-- it has no pump source slot;
-- it may request S/Z/QE/CM outputs when the selected solver path supports them;
-- pure-linear observable modes use the empty mode tuple `()`;
-- source-off pumped simulation is different from pure linear simulation.
-
-Do not create a pump axis with zero current only to run a pure linear sweep.
+- `:pump_off` keeps the same pump axis and source slot as `:pumped`;
+- `pump_frequency` is required, finite, and positive for all three profiles;
+- `pump_current = 0.0` is the source-off binding for `:pump_off`;
+- product HB code must not model pump-off by deleting pump axes or source slots;
+- S/Z/QE/QEideal/CM outputs may be requested when the selected solver path supports them.
 
 ## Key Separation
 
@@ -385,6 +440,7 @@ run_value_key
 
 - harmonic counts;
 - `returnS` / `returnZ` / `returnQE` / `returnCM`;
+- requested S/Z/QE/QEideal/CM result-family set;
 - `keyedarrays`;
 - `sorting` if it changes output shape or indexing assumptions;
 - mode truncation controls;
@@ -408,7 +464,7 @@ run_value_key
 | add second pump axis | unchanged unless circuit changes | changed | changed | changed |
 | change `n_pump_harmonics` | unchanged | unchanged | changed | changed |
 | change `n_modulation_harmonics` | unchanged | unchanged unless modulation basis changes | changed | changed |
-| toggle `returnS` / `returnZ` / `returnQE` / `returnCM` | unchanged | unchanged | changed | changed |
+| change requested S/Z/QE/QEideal/CM families | unchanged | unchanged | changed | changed |
 | change `maxintermodorder` | unchanged | unchanged | changed | changed |
 | change nonlinear tolerance `ftol` | unchanged | unchanged | unchanged | changed |
 | add idler observable | unchanged | changed | may change | changed |
@@ -416,7 +472,7 @@ run_value_key
 | change line-tap position | changed | may change | may change | changed |
 | change frequency sweep range | unchanged | unchanged | unchanged | changed |
 
-In the MVP key model, result-family flags such as `returnS`, `returnZ`, `returnQE`, and `returnCM` are grouped under `hb_problem_shape_key` because they affect requested solver outputs and cache compatibility, even if they do not always change the nonlinear solve itself.
+In the MVP key model, result-family flags such as `returnS`, `returnZ`, `returnQE`, and `returnCM` are grouped under `hb_problem_shape_key` because they affect requested solver outputs and cache compatibility, even if they do not always change the nonlinear solve itself. `QEideal` is part of the requested result-family set and must be extracted or reported as absent whenever the solver result does not contain it.
 
 ## Validation Boundary
 
@@ -440,7 +496,8 @@ HB validation is split across compile time and run time.
 `build_hb_problem(compiled, run_spec)` validates:
 
 - frequency sweep values are positive;
-- pump frequency values are positive;
+- pump frequency values are finite and positive;
+- pump frequency bindings exist even when a pump source current is `0.0`;
 - pump harmonic tuple lengths match pump axis count;
 - modulation harmonic tuple lengths match the declared modulation basis;
 - source current values are present or have explicit defaults;
@@ -449,10 +506,11 @@ HB validation is split across compile time and run time.
 - `current = 0.0` is accepted;
 - optional solver kwargs are whitelisted;
 - requested observables can be extracted from solver output.
+- requested S/Z/QE/QEideal/CM output families are present in solver output or fail clearly.
 
 ## Output Family Capability Validation
 
-Default requested outputs are S, Z, QE, and CM. Julia Core must validate whether each requested output family is supported by the selected circuit, HB profile, and solver configuration.
+Default requested outputs are S, Z, QE, QEideal, and CM. Julia Core must validate whether each requested output family is supported by the selected circuit, HB profile, and solver configuration.
 
 Target API:
 
@@ -465,9 +523,10 @@ capability_report = validate_output_capabilities(compiled, hb_problem)
 | S | true | run only when supported |
 | Z | true | run only when supported |
 | QE | true | fail clearly if unsupported |
+| QEideal | true when QE-family extraction is requested | fail clearly if absent from solver output |
 | CM | true | fail clearly if unsupported |
 
-Julia Core and Runner must not silently drop requested output families or reduce a run to S-only output.
+Julia Core and Runner must not silently drop requested output families or reduce a run to S-only output. Absence is a validation or extraction failure, not an empty trace set.
 
 ## Implementation Status
 
@@ -481,8 +540,8 @@ This page is stable as the target source of truth. It is not claiming that every
 | `HBObservableRequest` | first-class observable declaration | current Runner extraction still MVP / trace-specific | target |
 | `HBSolverControls` | typed first-class controls | current Runner only partially maps controls | target |
 | `optional_hb_kwargs` | whitelist only | not fully implemented | target |
-| `HBProblemSpec` | normalized HB execution shape | MVP struct and `build_hb_problem` path exist | design-stable |
-| `run_hb_problem` | product-aligned HB execution entry | exported but intentionally fails until solver execution is implemented | target |
+| `HBProblemSpec` | executable HB execution shape carrying compiled circuit handoff, netlist values, normalized solver inputs, controls, observables, and kwargs | MVP struct carries compiled circuit plus normalized solver inputs | design-stable |
+| `run_hb_problem` | product-aligned HB execution entry | executable target API for HBProblemSpec | design-stable |
 | `current = 0.0` | valid source-off runtime binding | should be accepted | design-stable |
 
 ## Related

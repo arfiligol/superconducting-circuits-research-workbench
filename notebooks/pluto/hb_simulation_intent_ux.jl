@@ -119,7 +119,7 @@ begin
     stop_frequency = 6.0e9
     point_count = 5
 
-    hb_profile = :pumped
+    hb_profile = :pump_off
     pump_frequency = 8.0e9
     pump_current = 0.0
     dc_current = 0.0
@@ -146,15 +146,24 @@ end
 frequency_sweep = range(start_frequency, stop_frequency; length=point_count)
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37007
-(
-    capacitance=capacitance,
-    inductance=inductance,
-    resistance=resistance,
-    frequency_sweep=collect(frequency_sweep),
-    hb_profile=hb_profile,
-    pump_frequency=pump_frequency,
-    pump_current=pump_current,
-)
+begin
+    hb_profile in (:pump_off, :pumped, :pumped_dc) ||
+        error("Unsupported hb_profile: $(hb_profile). Use :pump_off, :pumped, or :pumped_dc.")
+    isfinite(pump_frequency) && pump_frequency > 0 ||
+        error("pump_frequency must be finite and positive, even when pump_current is zero.")
+
+    effective_pump_current = hb_profile == :pump_off ? 0.0 : pump_current
+
+    (
+        capacitance=capacitance,
+        inductance=inductance,
+        resistance=resistance,
+        frequency_sweep=collect(frequency_sweep),
+        hb_profile=hb_profile,
+        pump_frequency=pump_frequency,
+        pump_current=effective_pump_current,
+    )
+end
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37008
 md"""
@@ -259,35 +268,13 @@ md"""
 
 `CircuitPlan` declares the HB simulation intent. Runtime values bind to declared IDs later; they do not invent ports, pump axes, source slots, or observables.
 
-Set `hb_profile = :pure_linear` for a no-pump profile. Set `hb_profile = :pumped` to keep a pump source slot even when `pump_current == 0.0`.
+Use `hb_profile = :pump_off`, `:pumped`, or `:pumped_dc`. Pump-off is still a declared pump problem: the pump axis and source slot exist, `pump_frequency` is finite and positive, and the bound `pump_current` is `0.0`.
 
 For DC bias, add a `HBSourceSlot(role = :dc_bias, mode = (0,))` and bind its current through `source_currents`.
 """
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37016
-hb_intent = if hb_profile == :pure_linear
-    hb_intent!(
-        plan;
-        pump_axes=PumpAxis[],
-        source_slots=HBSourceSlot[],
-        observables=[
-            SParameterRequest(
-                id=:s11_signal,
-                outputmode=(),
-                outputport=:signal_port,
-                inputmode=(),
-                inputport=:signal_port,
-            ),
-        ],
-        default_solver_controls=HBSolverControls(
-            n_modulation_harmonics=0,
-            returnS=returnS,
-            returnZ=returnZ,
-            returnQE=returnQE,
-            returnCM=returnCM,
-        ),
-    )
-elseif hb_profile == :pumped
+hb_intent = if hb_profile in (:pump_off, :pumped)
     hb_intent!(
         plan;
         pump_axes=[
@@ -377,7 +364,7 @@ elseif hb_profile == :pumped_dc
         ),
     )
 else
-    error("Unsupported hb_profile: $(hb_profile). Use :pure_linear, :pumped, or :pumped_dc.")
+    error("Unsupported hb_profile: $(hb_profile). Use :pump_off, :pumped, or :pumped_dc.")
 end
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37017
@@ -387,21 +374,15 @@ graph.hb_overlay
 md"""
 ## Runtime Bindings
 
-The runtime spec binds concrete frequency and current values to the compiled intent. `pump_current = 0.0` is a real source-off binding for the declared `:pump_in` slot.
+The runtime spec binds concrete frequency and current values to the compiled intent. `pump_current = 0.0` is a real source-off binding for the declared `:pump_in` slot, not a request to remove the pump axis.
 """
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37019
-run_spec = if hb_profile == :pure_linear
-    HBRunSpec(
-        frequency_sweep=frequency_sweep,
-        pump_frequencies=Dict{Symbol,Float64}(),
-        source_currents=Dict{Symbol,Float64}(),
-        optional_hb_kwargs=optional_hb_kwargs,
-    )
-else
+run_spec = begin
     currents = hb_profile == :pumped_dc ?
-        Dict(:dc_bias => dc_current, :pump_in => pump_current) :
-        Dict(:pump_in => pump_current)
+        Dict(:dc_bias => dc_current, :pump_in => effective_pump_current) :
+        Dict(:pump_in => effective_pump_current)
+
     HBRunSpec(
         frequency_sweep=frequency_sweep,
         pump_frequencies=Dict(:pump => pump_frequency),
@@ -437,6 +418,8 @@ hb_problem = build_hb_problem(compiled, run_spec)
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37021
 (
+    compiled_netlist_rows=length(hb_problem.compiled.netlist),
+    frequencies_hz=hb_problem.frequencies_hz,
     ws_count=length(hb_problem.ws),
     wp=hb_problem.wp,
     sources=hb_problem.sources,
@@ -452,7 +435,7 @@ capability_report = validate_output_capabilities(compiled, hb_problem)
 md"""
 ## Acceptance Gate
 
-This is the implementation acceptance gate. It must call the real API and fail clearly while `run_hb_problem` is not implemented for this `HBProblemSpec`.
+This is the implementation acceptance gate. It calls the executable HBProblemSpec API with the normalized compiled circuit, pump, source, harmonic, control, observable, and solver-kwarg values.
 
 Do not replace this with generated traces or a plotted placeholder.
 """

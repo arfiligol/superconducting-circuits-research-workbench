@@ -13,6 +13,84 @@ function _frequency_vector_hz(frequency_range_hz)
     return collect(Float64.(frequency_range_hz))
 end
 
+const _RESERVED_HBSOLVE_KWARGS = Set{Symbol}([
+    :returnS,
+    :returnZ,
+    :returnQE,
+    :returnCM,
+    :dc,
+    :threewavemixing,
+    :fourwavemixing,
+    :sorting,
+    :keyedarrays,
+])
+
+function _validate_optional_hb_kwargs(optional_hb_kwargs::AbstractDict)
+    _validate_optional_hb_kwargs_supported(optional_hb_kwargs)
+    reserved = intersect(Set(Symbol.(keys(optional_hb_kwargs))), _RESERVED_HBSOLVE_KWARGS)
+    isempty(reserved) || _validation_error(
+        "optional_hb_kwargs must not override HBProblemSpec controls: $(join(string.(sort(collect(reserved); by=string)), ", ")).",
+    )
+    return nothing
+end
+
+function _call_josephson_hbsolve(ws, wp, sources, n_modulation, n_pump, netlist, component_values; kwargs...)
+    return JosephsonCircuits.hbsolve(
+        ws,
+        wp,
+        sources,
+        n_modulation,
+        n_pump,
+        netlist,
+        component_values;
+        kwargs...,
+    )
+end
+
+function run_hb_problem(problem::HBProblemSpec)
+    compiled = problem.compiled
+    isempty(compiled.netlist) && _validation_error(
+        "HBProblemSpec compiled circuit has an empty netlist. Refusing to execute HB solve without a real compiled circuit.",
+    )
+    validate_output_capabilities(compiled, problem)
+    _validate_optional_hb_kwargs(problem.optional_hb_kwargs)
+
+    controls = problem.controls
+    solution = try
+        _call_josephson_hbsolve(
+            problem.ws,
+            problem.wp,
+            problem.sources,
+            problem.Nmodulationharmonics,
+            problem.Npumpharmonics,
+            compiled.netlist,
+            Dict(compiled.component_values);
+            returnS=controls.returnS,
+            returnZ=controls.returnZ,
+            returnQE=controls.returnQE,
+            returnCM=controls.returnCM,
+            dc=controls.dc,
+            threewavemixing=controls.threewavemixing,
+            fourwavemixing=controls.fourwavemixing,
+            sorting=controls.sorting,
+            keyedarrays=controls.keyedarrays,
+            problem.optional_hb_kwargs...,
+        )
+    catch err
+        err isa FrameworkValidationError && rethrow()
+        _validation_error("JosephsonCircuits.hbsolve failed for HBProblemSpec: $(sprint(showerror, err))")
+    end
+
+    return HBSolveResult(
+        problem.frequencies_hz,
+        solution,
+        extract_linearized_traces(
+            solution;
+            requested_families=_requested_output_families(controls),
+        ),
+    )
+end
+
 """
     run_hbsolve(netlist, component_values, frequency_range_hz; kwargs...)
 
@@ -43,11 +121,19 @@ function run_hbsolve(
 )
     frequencies_hz = _frequency_vector_hz(frequency_range_hz)
     _require(!isempty(frequencies_hz), "frequency_range_hz must contain at least one frequency.")
-    _require(all(f -> f > 0, frequencies_hz), "frequency_range_hz values must be positive.")
+    _require(
+        all(f -> isfinite(f) && f > 0, frequencies_hz),
+        "frequency_range_hz values must be finite positive frequencies in Hz.",
+    )
 
     ws = 2π .* frequencies_hz
     wp = Tuple(2π .* Float64.(collect(pump_frequencies_hz)))
-    _require(all(>(0), wp), "pump_frequencies_hz values must be positive when provided.")
+    _require(!isempty(wp), "pump_frequencies_hz must contain at least one pump frequency; use a source current of 0.0 for pump-off HB execution.")
+    _require(!isempty(sources), "sources must contain at least one source entry; use current=0.0 for pump-off HB execution.")
+    _require(
+        all(f -> isfinite(f) && f > 0, wp),
+        "pump_frequencies_hz values must be finite and positive when provided.",
+    )
     n_modulation = _tuple_harmonics(n_modulation_harmonics)
     n_pump = if n_pump_harmonics isa Tuple || n_pump_harmonics isa AbstractVector
         result = Tuple(Int.(n_pump_harmonics))
@@ -57,7 +143,7 @@ function run_hbsolve(
         Tuple(fill(Int(n_pump_harmonics), length(wp)))
     end
 
-    solution = JosephsonCircuits.hbsolve(
+    solution = _call_josephson_hbsolve(
         ws,
         wp,
         sources,
@@ -80,7 +166,16 @@ function run_hbsolve(
     return HBSolveResult(
         frequencies_hz,
         solution,
-        extract_linearized_traces(solution; port_indices=port_indices),
+        extract_linearized_traces(
+            solution;
+            port_indices=port_indices,
+            requested_families=_requested_output_families(
+                returnS=returnS,
+                returnZ=returnZ,
+                returnQE=returnQE,
+                returnCM=returnCM,
+            ),
+        ),
     )
 end
 

@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Target macro authoring DSL contract for CircuitPlan, HBIntent, and EngineeringGraph capture.
-version: v1.0.1
+version: v1.0.2
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -130,6 +130,8 @@ end
 
 The macro should expand into the same `hb_intent!`, `PumpAxis`, `HBSourceSlot`, and observable request objects used by the functional API.
 
+The runtime profiles are `:pump_off`, `:pumped`, and `:pumped_dc`. They should share the same declared pump axis and pump source slot; `:pump_off` binds `source_currents[:pump_in] = 0.0` and still requires a finite positive `pump_frequencies[:pump]` value.
+
 DC bias uses the same source-slot mechanism:
 
 ```julia
@@ -142,6 +144,8 @@ end
 ```
 
 The runtime binding for this slot is `source_currents[:dc_bias]`. The corresponding controls must enable DC handling with `dc = true`.
+
+Requested output families should be explicit in the expanded intent or associated controls. S/Z/QE/QEideal/CM extraction must fail clearly when the requested solver family is absent.
 
 ## Expansion Contract
 

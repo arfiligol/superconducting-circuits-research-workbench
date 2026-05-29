@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Defines first-class, whitelisted, and unsupported JosephsonCircuits.jl hbsolve controls for Julia Core and Runner use.
-version: v1.3.1
+version: v1.4.0
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -73,7 +73,7 @@ Julia Core should normalize product-facing frequency values from Hz to the angul
 | `fourwavemixing` | enables four-wave mixing terms |
 | `returnS` | requests scattering-parameter output |
 | `returnZ` | requests impedance output |
-| `returnQE` | requests quantum-efficiency output |
+| `returnQE` | requests quantum-efficiency output and QEideal extraction when the solver provides it |
 | `returnCM` | requests commutation-relation output |
 | `sorting` | controls target node ordering behavior |
 | `keyedarrays` | controls keyed-array output shape |
@@ -92,7 +92,7 @@ Every listed control has an explicit status.
 | `fourwavemixing` | first-class | flux-pumped and SNAIL examples |
 | `returnS` | first-class | reference and examples inspect `S` |
 | `returnZ` | first-class | reference output control |
-| `returnQE` | first-class | JTWPA / reference output control |
+| `returnQE` | first-class | JTWPA / reference output control; includes QE and QEideal result-family extraction |
 | `returnCM` | first-class | JTWPA / reference output control |
 | `sorting` | first-class | reference output / indexing control |
 | `keyedarrays` | first-class | reference output / indexing control |
@@ -110,7 +110,9 @@ Every listed control has an explicit status.
 
 ## Product Defaults
 
-The product default should request all core output families.
+The product default should request all core output families: S, Z, QE, QEideal, and CM.
+
+Product HB profiles are `:pump_off`, `:pumped`, and `:pumped_dc`. All three keep a declared pump axis and require a finite positive pump frequency. `:pump_off` binds the declared pump source slot with `pump_current = 0.0`; it does not remove the pump from the HB problem.
 
 ```julia
 HBSolverControls(
@@ -131,7 +133,7 @@ HBSolverControls(
 
 `n_pump_harmonics` can be represented as a named map keyed by pump-axis ID. `n_modulation_harmonics` may be a tuple because it belongs to the modulation basis, not the pump-axis map.
 
-Exact default numeric values may be adjusted per circuit family, but the default return flags are all `true`.
+Exact default numeric values may be adjusted per circuit family, but the default return flags are all `true`. QEideal is not a separate current `HBSolverControls` flag; it is part of the requested QE-family extraction and must fail clearly if the solver result does not contain it.
 
 ## Example Call Shapes
 
@@ -283,6 +285,14 @@ keys(pump_frequencies_hz) == keys(n_pump_harmonics)
 
 `n_modulation_harmonics` belongs to the signal/modulation frequency basis declared by `HBIntent` or `HBProblemSpec`.
 
+Pump frequency rules:
+
+- every declared pump axis requires a runtime pump-frequency binding;
+- pump frequency values are hertz at the caller boundary and angular frequencies in normalized `HBProblemSpec.wp`;
+- pump frequency values must be finite and positive;
+- pump frequency remains required for `:pump_off`, even though the pump source current is `0.0`;
+- circuit-family forbidden-frequency validation is a planned target with no recorded implementation date as of 2026-05-29.
+
 Source mode rules:
 
 - source mode tuple length must match the pump-axis count;
@@ -291,6 +301,7 @@ Source mode rules:
 - DC bias current is bound through `source_currents`, not a separate DC binding map;
 - `controls.dc = true` is required when a DC bias source slot is declared;
 - `current_a = 0.0` is valid;
+- pump-off is represented by the declared pump source slot with `current = 0.0`;
 - missing source slot binding is invalid unless the source slot declares an explicit default;
 - unknown source slot ID is invalid.
 
@@ -327,6 +338,7 @@ Rules:
 - `current_a = 0.0` is legal;
 - source role, source mode, and source port are declared in CircuitPlan source slots;
 - runtime only binds current values by source slot ID;
+- `:pump_off` binds `source_currents[:pump_in] = 0.0` and still binds `pump_frequencies[:pump]`;
 - DC bias uses the same binding map with an `HBSourceSlot(mode = (0,))`;
 - DC handling is enabled by `controls.dc = true`;
 - Julia Core maps validated source slots to JosephsonCircuits `(mode, port, current)` entries.
@@ -340,7 +352,21 @@ Rules:
 - product Runner rejects ambiguous drive fields;
 - Runner must not convert ambiguous drive magnitude into physical current;
 - Runner must not create source slots from payload fields;
-- future conversion from dBm, voltage, or current requires a separate calibrated source model.
+- conversion from dBm, voltage, or current requires a separate calibrated source model and has no recorded implementation date as of 2026-05-29.
+
+## Output Extraction
+
+Requested output families are part of the HB problem shape and result contract.
+
+| Family | Solver surface | Extraction rule |
+| --- | --- | --- |
+| S | `linearized.S` | extract requested mode/port traces or fail if absent |
+| Z | `linearized.Z` | extract requested mode/port traces or fail if absent |
+| QE | `linearized.QE` | extract requested mode/port traces or fail if absent |
+| QEideal | `linearized.QEideal` | extract requested mode/port traces or fail if absent |
+| CM | `linearized.CM` | extract requested mode/port traces or fail if absent |
+
+Runner and Julia Core must not silently reduce a requested HB result to S-only traces. If a requested family is absent from the solver result, the extractor should raise a clear validation error naming the missing family and requested observable.
 
 ## Implementation Status
 
@@ -348,12 +374,13 @@ This page is stable as the target source of truth. It is not claiming that every
 
 | Concept | Target contract | Current implementation | Status |
 | --- | --- | --- | --- |
-| `ExternalPort` | first-class CircuitPlan declaration | currently approximated by `metadata[:external_ports]` in MVP | target |
-| `HBIntent` | first-class plan-level intent | not implemented as a struct yet | target |
-| `HBSourceSlot` | first-class source slot declaration | not implemented yet | target |
+| `ExternalPort` | first-class CircuitPlan declaration | MVP struct and compiler port map exist | design-stable |
+| `HBIntent` | first-class plan-level intent | MVP struct and `hb_intent!` path exist | design-stable |
+| `HBSourceSlot` | first-class source slot declaration | MVP struct exists; DC mode validation is part of compile validation | design-stable |
 | `HBObservableRequest` | first-class observable declaration | current Runner extraction still MVP / trace-specific | target |
 | `HBSolverControls` | typed first-class controls | current Runner only partially maps controls | target |
 | `optional_hb_kwargs` | whitelist only | not fully implemented | target |
+| `HBProblemSpec` | executable normalized HB handoff | MVP struct carries compiled circuit plus normalized solver inputs | design-stable |
 | `current = 0.0` | valid source-off runtime binding | should be accepted | design-stable |
 
 ## Related

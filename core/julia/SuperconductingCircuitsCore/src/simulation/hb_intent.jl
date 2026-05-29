@@ -34,8 +34,8 @@ Base.@kwdef struct HBSolverControls
 end
 
 Base.@kwdef struct HBIntent
-    pump_axes::Vector{PumpAxis} = PumpAxis[]
-    source_slots::Vector{HBSourceSlot} = HBSourceSlot[]
+    pump_axes::Vector{PumpAxis}
+    source_slots::Vector{HBSourceSlot}
     observables::Vector{Any} = Any[]
     default_solver_controls::HBSolverControls = HBSolverControls()
 end
@@ -44,8 +44,8 @@ _is_dc_mode(mode::Tuple) = mode == (0,)
 
 function hb_intent!(
     plan::CircuitPlan;
-    pump_axes=PumpAxis[],
-    source_slots=HBSourceSlot[],
+    pump_axes,
+    source_slots,
     observables=Any[],
     default_solver_controls=HBSolverControls(),
 )

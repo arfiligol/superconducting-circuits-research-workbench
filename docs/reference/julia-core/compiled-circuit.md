@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Compiler output contract for JosephsonCompiledCircuit, maps, warnings, provenance, and caller inspection.
-version: v1.3.0
+version: v1.3.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -80,7 +80,24 @@ These links let Pluto and Runner logs explain compiled rows in engineering langu
 
 ## HB Simulation Metadata
 
-HB metadata is part of the target compiled-circuit contract. Current MVP support is smaller: the compiler can emit JosephsonCircuits-compatible port rows for supported lumped plans, but the full `HBIntent` metadata contract is still a target contract for the next implementation step.
+HB metadata is part of the compiled-circuit contract. The compiler should preserve enough intent metadata for `build_hb_problem` to create an executable `HBProblemSpec` without asking Runner payloads to redefine HB semantics.
+
+The compiled HB handoff includes:
+
+- declared pump axes and their stable IDs;
+- source slots, roles, mode tuples, compiled port indices, and current-parameter names;
+- DC source-slot validation, including `role = :dc_bias`, `mode = (0,)`, and `dc = true`;
+- observable requests and their output/input mode-port extraction paths;
+- default solver controls and output-family requests;
+- netlist rows and component values needed by `run_hb_problem`.
+
+Pump-off does not remove compiled HB metadata. The compiled circuit still carries the pump axis and pump source slot; runtime binds the pump source current to `0.0`.
+
+## HBProblemSpec Handoff
+
+`HBProblemSpec` is the executable object produced from a compiled circuit plus runtime bindings. It should carry, or reference immutably, the compiled circuit identity, netlist rows, component values, normalized `ws`, `wp`, `sources`, harmonic tuples, solver controls, observables, and whitelisted kwargs.
+
+Runner execution should pass this problem spec to `run_hb_problem`. It should not rebuild source slots, infer observables, or re-map ports from raw task payload fields.
 
 ## Pluto Inspection
 

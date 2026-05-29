@@ -11,7 +11,7 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Runner-safe Julia Core API boundaries shared by Pluto direct research and Julia Runner execution.
-version: v1.8.0
+version: v1.8.1
 last_updated: 2026-05-29
 updated_by: codex
 ---
@@ -87,6 +87,8 @@ Runner binds runtime values and executes
 
 `current = 0.0` is a valid runtime binding for an existing source slot. It means the source is intentionally off. It is not fake compute, a missing source, or dummy behavior.
 
+Product HB profiles are `:pump_off`, `:pumped`, and `:pumped_dc`. `:pump_off` still has a declared pump axis, a finite positive pump-frequency binding, and a declared pump source slot with `pump_current = 0.0`.
+
 The Runner may reject malformed runtime bindings, unknown solver controls, or unsupported observables. It must not repair them by creating new ports or source slots outside the compiled intent.
 
 Runner must reject:
@@ -95,9 +97,13 @@ Runner must reject:
 - unknown pump axis ID;
 - unknown observable ID;
 - unknown `optional_hb_kwargs`;
+- missing, non-finite, or non-positive pump frequency for a declared pump axis;
+- absent requested S/Z/QE/QEideal/CM output family;
 - runtime values that do not satisfy compiled HB validation metadata.
 
 Runner must not create a default S11 observable, create default ports, create source slots from task payloads, or convert ambiguous drive-magnitude fields into physical current.
+
+Circuit-family forbidden-frequency validation is a planned target with no recorded implementation date as of 2026-05-29. When that validation exists, the Runner should treat those failures as Core validation errors rather than task orchestration errors.
 
 ## Runner Component Library Dependencies
 
@@ -178,7 +184,9 @@ validate_authoring(plan)
 
 compiled = compile_to_josephson(plan)
 
-result = run_frequency_sweep(compiled, task_input.frequency_range_hz)
+hb_problem = build_hb_problem(compiled, task_input.hb_run_spec)
+
+result = run_hb_problem(hb_problem)
 ```
 
 For parameter sweeps:
