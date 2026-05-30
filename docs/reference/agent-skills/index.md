@@ -72,12 +72,14 @@ Agent 可以把同一份 Skill template 轉成不同工具的原生格式：
 | Skill | Status | Use when | Template |
 | --- | --- | --- | --- |
 | `work-lane-orchestration` | Recommended | 任務需要主 thread 統整、多 surface vertical slice、subagent work lanes、SoT loading、跨邊界驗收 | [Work Lane Orchestration](work-lane-orchestration.md) |
+| `write-pluto-notebook` | Recommended | 任務需要建立、修改、轉換或審查 Pluto.jl reactive notebook，尤其是 `.jl` notebook、PlutoUI / `@bind`、package environment、cell dependency 或 duplicate global definition 問題 | [Write Pluto Notebook](write-pluto-notebook.md) |
 
 ??? example "Copy this table as Markdown"
     ```markdown
     | Skill | Status | Use when | Template |
     | --- | --- | --- | --- |
     | `work-lane-orchestration` | Recommended | 任務需要主 thread 統整、多 surface vertical slice、subagent work lanes、SoT loading、跨邊界驗收 | [Work Lane Orchestration](work-lane-orchestration.md) |
+    | `write-pluto-notebook` | Recommended | 任務需要建立、修改、轉換或審查 Pluto.jl reactive notebook，尤其是 `.jl` notebook、PlutoUI / `@bind`、package environment、cell dependency 或 duplicate global definition 問題 | [Write Pluto Notebook](write-pluto-notebook.md) |
     ```
 
 ## Update Rules

@@ -1,7 +1,6 @@
 ---
 title: "TraceStore Zarr"
 description: "Defines the canonical local Zarr TraceStore managed by the Python Backend."
-icon: lucide/database
 ---
 
 # TraceStore Zarr

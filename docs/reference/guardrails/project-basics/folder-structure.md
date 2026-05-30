@@ -40,6 +40,7 @@ superconducting-circuits-tutorial/
 ├── core/
 │   ├── julia/
 │   │   ├── SuperconductingCircuitsCore/
+│   │   ├── SuperconductingCircuitsVisualizer/
 │   │   └── SuperconductingCircuitsRunner/
 │   └── python/
 │       └── sc_data_contracts/
@@ -72,6 +73,7 @@ superconducting-circuits-tutorial/
 | API router, service, persistence | `app/backend/` |
 | Simulation request / result view API | `app/backend/` |
 | Julia circuit construction / simulation / analysis library | `core/julia/SuperconductingCircuitsCore/` |
+| Julia PlotlyJS visualization helpers | `core/julia/SuperconductingCircuitsVisualizer/` |
 | Julia async compute runner | `core/julia/SuperconductingCircuitsRunner/` |
 | Julia Runner task execution | `core/julia/SuperconductingCircuitsRunner/` |
 | Python data contract schemas if needed | `core/python/sc_data_contracts/` |
@@ -144,9 +146,10 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 5. `notebooks/python/` may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
 6. Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
 7. `core/julia/SuperconductingCircuitsRunner/` depends on Julia Core and Backend Runner protocol, and does not own formal metadata DB
-8. `core/julia/SuperconductingCircuitsCore/` does not depend on FastAPI, Next.js, Electron, or Python Backend internals
-9. `scripts/` 不得成為 user-facing command-line product surface
-10. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
+8. `core/julia/SuperconductingCircuitsVisualizer/` may depend on PlotlyJS and Julia numeric traces, but Julia Core and Julia Runner must not depend on PlotlyJS
+9. `core/julia/SuperconductingCircuitsCore/` does not depend on FastAPI, Next.js, Electron, Python Backend internals, or PlotlyJS
+10. `scripts/` 不得成為 user-facing command-line product surface
+11. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
 
 ??? note "Why the full tree is still shown"
     這頁保留完整 target layout，是因為 folder boundary 本身就是 reference contract。其餘 guardrails 不需要都像這樣展開。
@@ -159,6 +162,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 - **Desktop shell** work goes to `app/desktop/`.
 - **Backend** work goes to `app/backend/`.
 - **Julia Core** work goes to `core/julia/SuperconductingCircuitsCore/`.
+- **Julia Visualizer** work goes to `core/julia/SuperconductingCircuitsVisualizer/`.
 - **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
 - **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
 - **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
@@ -178,6 +182,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
     - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
     - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
     - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
+    - Julia Visualizer may depend on PlotlyJS and Julia numeric traces; Julia Core and Julia Runner must not depend on PlotlyJS
     - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
     - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
     - Julia Runner owns compute execution and staging result packages, not formal metadata DB records

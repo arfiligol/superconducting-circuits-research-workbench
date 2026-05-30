@@ -33,11 +33,12 @@ They are not immediate JosephsonCircuits.jl rows.
 | `series_inductor!` | inductor placement between two node-resolving endpoints |
 | `series_resistor!` | resistor placement between two node-resolving endpoints |
 | `couple_window!` | distributed span-to-span coupling intent |
+| `couple_transmission_window!` | `TransmissionLineLadder` coupled-window helper |
 | `couple_inductive!` | inductive, mutual, or flux-related coupling intent |
 
 ## EngineeringGraph Capture
 
-Physical relation operations record matching [`EngineeringGraph`](engineering-graph.md) relations while they update the Circuit Plan. Standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `series_inductor!`, `series_resistor!`, `couple_inductive!`, and `couple_window!` calls keep the solver-facing relation and human-facing semantic graph synchronized.
+Physical relation operations record matching [`EngineeringGraph`](engineering-graph.md) relations while they update the Circuit Plan. Standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `series_inductor!`, `series_resistor!`, `couple_inductive!`, `couple_window!`, and `couple_transmission_window!` calls keep the solver-facing relation and human-facing semantic graph synchronized.
 
 Users should not normally call `record_engineering_relation!` after those standard operations. Use manual relation recording only for extra semantic annotations, non-physical overlays, or metadata that is not already represented by the physical operation.
 
@@ -52,7 +53,8 @@ Users should not normally call `record_engineering_relation!` after those standa
 | `series_inductor!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `series_resistor!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `couple_window!` | `LineSpanEndpoint` <-> `LineSpanEndpoint` |
-| `couple_inductive!` | `LineTapEndpoint` or `LineSpanEndpoint` <-> `LoopEndpoint` or `InductiveTargetEndpoint` |
+| `couple_transmission_window!` | `TransmissionLineLadder` <-> `TransmissionLineLadder`; aligned section windows |
+| `couple_inductive!` | branch inductor references for lowerable mutual inductance, or line/loop endpoints for semantic flux intent |
 
 The compiler should fail early when a relation receives the wrong endpoint category.
 
@@ -123,6 +125,7 @@ Examples:
 | `line_tap(...)` | tap position | `StructuralParameter` |
 | `line_span(...)` | start / stop | `StructuralParameter` |
 | `couple_window!` | window length | `StructuralParameter` |
+| `couple_transmission_window!` | start distances and window length | `StructuralParameter` |
 
 Relation-owned metadata should be stored in the CircuitPlan so `preflight_sweep` can classify sweep axes before execution.
 
@@ -166,16 +169,21 @@ The plan records endpoint aliasing. During compilation, the compiler resolves no
 ## Two QWRs With Fixed-Length Distributed Coupling
 
 ```julia
-couple_window!(
+window = couple_transmission_window!(
     plan;
     id = "qwr_a_qwr_b_window",
-    line_a = line_span(qwr_a; line = :main, from_m = 2.0mm, to_m = 2.5mm),
-    line_b = line_span(qwr_b; line = :main, from_m = 2.0mm, to_m = 2.5mm),
-    spec = CoupledWindowSpec(...),
+    line1 = qwr_a_ladder,
+    line2 = qwr_b_ladder,
+    start1 = 2.0e-3,
+    start2 = 2.0e-3,
+    length = 0.5e-3,
+    model = MTLCoupledWindowSpec(...),
 )
 ```
 
-This is span-to-span distributed coupling. The compiler owns the discretization and coupled-window lowering.
+This expresses a fixed-length coupled region between two generated ladder models. It augments the ladders with generated C12 and K primitive relations and records an EngineeringGraph `:coupled_window` relation.
+
+`couple_window!(line_span(...), line_span(...))` carries span-to-span intent for component-level distributed lines. Executable examples should use the Core API path that provides real compiler lowering for the declared model.
 
 ## QWR To Readout Line With Shunt
 

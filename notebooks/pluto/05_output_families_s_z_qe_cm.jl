@@ -13,15 +13,25 @@ begin
     import Pkg
 
     core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
+    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
     core_project_file = normpath(joinpath(core_project, "Project.toml"))
+    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
     active_project_file = normpath(something(Base.active_project(), ""))
 
-    if active_project_file != core_project_file
+    if active_project_file != core_project_file && active_project_file != visualizer_project_file
         Pkg.develop(path=core_project)
+        Pkg.develop(path=visualizer_project)
+    else
+        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
+        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
     end
 
     using SuperconductingCircuitsCore
-    using Plots
+    using SuperconductingCircuitsVisualizer
+
+    figure_config = PlotlyFigureConfig(
+        download_filename=splitext(basename(@__FILE__))[1],
+    )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
     using .HBExampleHelpers
@@ -124,13 +134,16 @@ begin
 end
 
 # ╔═╡ b1f04f14-fb44-4713-bf3b-a9a12a5e69de
-plot(
-    frequencies_ghz,
-    [db20(s11) real.(z11) imag.(z11)];
-    xlabel="Frequency (GHz)",
-    ylabel="Trace value",
-    label=["|S11| (dB)" "real(Z11)" "imag(Z11)"],
-    title="Representative S/Z traces",
+multi_curve_figure(
+    result.frequencies_hz,
+    [
+        "|S11| (dB)" => db20(s11),
+        "real(Z11)" => real.(z11),
+        "imag(Z11)" => imag.(z11),
+    ];
+    title="Representative S/Z Traces",
+    yaxis_title="Trace value",
+    config=figure_config,
 )
 
 # ╔═╡ c0553d20-7895-4834-82e5-a6ad6887fe74
@@ -144,13 +157,16 @@ begin
 end
 
 # ╔═╡ 022c7266-8c74-431b-a967-f5f38f047566
-plot(
-    frequencies_ghz,
-    [qe_trace qeideal_trace cm_trace];
-    xlabel="Frequency (GHz)",
-    ylabel="Solver-returned value",
-    label=["QE: $(qe_label)" "QEideal: $(qeideal_label)" "CM: $(cm_label)"],
-    title="Representative QE / QEideal / CM traces",
+multi_curve_figure(
+    result.frequencies_hz,
+    [
+        "QE: $(qe_label)" => qe_trace,
+        "QEideal: $(qeideal_label)" => qeideal_trace,
+        "CM: $(cm_label)" => cm_trace,
+    ];
+    title="Representative QE / QEideal / CM Traces",
+    yaxis_title="Solver-returned value",
+    config=figure_config,
 )
 
 # ╔═╡ Cell order:

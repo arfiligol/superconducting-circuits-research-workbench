@@ -14,8 +14,8 @@ status: draft
 owner: docs-team
 audience: team
 scope: "/raw-data 的 dataset-local DesignScope lifecycle、trace summary CRUD、single-trace preview、batch delete 與 mutation gating contract"
-version: v0.11.0
-last_updated: 2026-04-30
+version: v0.11.1
+last_updated: 2026-05-30
 updated_by: codex
 ---
 
@@ -54,7 +54,7 @@ updated_by: codex
 | 類型 | 內容 |
 | --- | --- |
 | Primary goals | 選擇 design、管理 DesignScope lifecycle request、篩選 trace summaries、聚焦單筆 preview、對允許的 trace 執行 edit / delete、對多筆允許刪除的 trace 執行 batch delete |
-| Non-goals | dataset profile 編輯、raw data ingest、simulation / analysis execution、system-generated trace 的來源重建或 republish |
+| Non-goals | dataset profile 編輯、raw data ingest、simulation / analysis execution、system-produced trace 的來源重建或 republish |
 
 !!! tip "Preview 與 Selection 分離"
     `focused_trace_id` 只決定右側 single-trace preview。
@@ -71,11 +71,11 @@ graph TD
     Header[Workspace Header]
     Sidebar[Unified Sidebar]
     Main[Main Content]
-    
+
     Page --> Header
     Page --> Sidebar
     Page --> Main
-    
+
     subgraph Browser_Workflow
         Main --> H_Design["1. Design Scopes Section"]
         H_Design --> H_DesignList["Search Design + Paged Design List"]
@@ -163,7 +163,7 @@ graph TD
 | Stable identity | `trace_id` 是 stable trace identity；successful edit 不建立第二個 trace identity |
 | Editable fields | 只有 `numeric_payload` 與 UI-safe summary metadata 可以被 edit；metadata 僅限 backend 明確允許的欄位，例如 `parameter`、`representation`、`provenance_summary` |
 | Immutable fields | `trace_id`、`dataset_id`、`design_id`、`family`、`trace_mode_group`、`source_kind`、`stage_kind`、`payload_ref` authority handle、`result_handles[]` 不可由本頁改寫 |
-| Origin restrictions | provenance-bearing 或 system-generated traces 可能 `edit=false` 但 `delete=true`；page 不得自行從 `source_kind` / `stage_kind` 猜測，必須依 backend `allowed_actions` 與 restriction summary 顯示 |
+| Origin restrictions | provenance-bearing 或 system-produced traces 可能 `edit=false` 但 `delete=true`；page 不得自行從 `source_kind` / `stage_kind` 猜測，必須依 backend `allowed_actions` 與 restriction summary 顯示 |
 | Batch operations | 目前只支援 batch delete；batch edit 不屬於本頁範圍 |
 | Audit semantics | edit / delete 應被視為 audited mutation；versioned trace lineage 若需要獨立保存，需由 backend contract 另行定義，本頁不自行發明 |
 

@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: Backend dataset catalog、DesignScope lifecycle / target selection、sweep-aware trace browse / preview / mutation、analysis-facing trace projection、dataset profile、tagged core metrics 與 provenance-bearing result handles
-version: v1.1.0
-last_updated: 2026-05-28
+version: v1.1.1
+last_updated: 2026-05-30
 updated_by: codex
 ---
 
@@ -297,7 +297,7 @@ minimum direction：
 | Edit invalidation obligation | 若 numeric edit 或 editable metadata 會影響 axis structure、coordinate identity、materialized summaries、collection derivation、analysis readiness 或 persisted analysis/result truth，backend 必須同步 re-materialize 或 invalidate 這些依賴面 |
 | Minimum downstream scope | edit path 至少必須處理 `axis_signature`、materialized metadata summary、`collection_projection`、analysis readiness summary 與所有依賴該 trace truth 的 persisted analysis/result surfaces；若 axis / coordinates 改變，axis-derived summaries 也必須重算 |
 | Edit availability rule | 若 backend 無法維持上述 invalidation / recomputation contract，該 trace class 的 `allowed_actions.edit` 必須為 `false` |
-| Origin restriction | provenance-bearing 或 system-generated traces 可以是 `edit=false`、`delete=true`；frontend 不得自行從 `source_kind` / `stage_kind` 推導，必須依 `allowed_actions` 與 `mutation_policy_summary` 呈現 |
+| Origin restriction | provenance-bearing 或 system-produced traces 可以是 `edit=false`、`delete=true`；frontend 不得自行從 `source_kind` / `stage_kind` 推導，必須依 `allowed_actions` 與 `mutation_policy_summary` 呈現 |
 | Audit semantics | edit / delete 是 in-place mutation + audited operation；trace version lineage 若需要獨立保存，必須由專門 contract 定義 |
 | Batch scope | 目前只支援 batch delete；batch edit 不屬於本頁 SoT |
 
@@ -608,7 +608,7 @@ They are consumed by ResultView API and Application workbenches after Backend pu
               "edit": false,
               "delete": true
             },
-            "mutation_policy_summary": "Provenance-bearing or system-generated trace; delete is allowed, but edit from the source workflow."
+            "mutation_policy_summary": "Provenance-bearing or system-produced trace; delete is allowed, but edit from the source workflow."
           }
         ]
       },

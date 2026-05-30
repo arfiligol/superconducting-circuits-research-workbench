@@ -475,7 +475,7 @@ run_value_key
 | change line-tap position | changed | may change | may change | changed |
 | change frequency sweep range | unchanged | unchanged | unchanged | changed |
 
-In the MVP key model, result-family flags such as `returnS`, `returnZ`, `returnQE`, and `returnCM` are grouped under `hb_problem_shape_key` because they affect requested solver outputs and cache compatibility, even if they do not always change the nonlinear solve itself. `QEideal` is part of the requested result-family set and must be extracted or reported as absent whenever the solver result does not contain it.
+Result-family flags such as `returnS`, `returnZ`, `returnQE`, and `returnCM` are grouped under `hb_problem_shape_key` because they affect requested solver outputs and cache compatibility, even if they do not always change the nonlinear solve itself. `QEideal` is part of the requested result-family set and must be extracted or reported as absent whenever the solver result does not contain it.
 
 ## Validation Boundary
 
@@ -542,22 +542,6 @@ Missing-output and `NaN` policy:
 - missing unrequested family: allowed;
 - solver-returned `NaN`: preserve and surface the value;
 - missing family: never create NaN-placeholder values.
-
-## Implementation Status
-
-This page is stable as the target source of truth. It is not claiming that every concept is already implemented.
-
-| Concept | Target contract | Current implementation | Status |
-| --- | --- | --- | --- |
-| `ExternalPort` | first-class CircuitPlan declaration | MVP struct and `external_port!` path exist | design-stable |
-| `HBIntent` | first-class plan-level intent | MVP struct and `hb_intent!` path exist | design-stable |
-| `HBSourceSlot` | first-class source slot declaration | MVP struct exists; DC mode validation is part of compile validation | design-stable |
-| `HBObservableRequest` | first-class observable declaration | current Runner extraction still MVP / trace-specific | target |
-| `HBSolverControls` | typed first-class controls | current Runner only partially maps controls | target |
-| `optional_hb_kwargs` | whitelist only | not fully implemented | target |
-| `HBProblemSpec` | executable HB execution shape carrying compiled circuit handoff, netlist values, normalized solver inputs, controls, observables, and kwargs | MVP struct carries compiled circuit plus normalized solver inputs | design-stable |
-| `run_hb_problem` | product-aligned HB execution entry | executable target API for HBProblemSpec | design-stable |
-| `current = 0.0` | valid source-off runtime binding | should be accepted | design-stable |
 
 ## Related
 

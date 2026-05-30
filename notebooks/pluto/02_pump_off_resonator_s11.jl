@@ -14,15 +14,25 @@ begin
     import Pkg
 
     core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
+    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
     core_project_file = normpath(joinpath(core_project, "Project.toml"))
+    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
     active_project_file = normpath(something(Base.active_project(), ""))
 
-    if active_project_file != core_project_file
+    if active_project_file != core_project_file && active_project_file != visualizer_project_file
         Pkg.develop(path=core_project)
+        Pkg.develop(path=visualizer_project)
+    else
+        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
+        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
     end
 
     using SuperconductingCircuitsCore
-    using Plots
+    using SuperconductingCircuitsVisualizer
+
+    figure_config = PlotlyFigureConfig(
+        download_filename=splitext(basename(@__FILE__))[1],
+    )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
     using .HBExampleHelpers
@@ -262,14 +272,11 @@ end
 
 # ╔═╡ 80f93110-704a-4f7d-9995-758dda622f5d
 begin
-    plot(
-        result.frequencies_hz ./ 1e9,
-        20 .* log10.(abs.(s11));
-        xlabel="Frequency (GHz)",
-        ylabel="|S11| (dB)",
-        label="S11",
-        marker=:circle,
-        title="Pump-off resonator S11 from HBSolveResult",
+    s_parameter_magnitude_figure(
+        result.frequencies_hz,
+        ["S11" => s11];
+        title="Pump-off Resonator S11 from HBSolveResult",
+        config=figure_config,
     )
 end
 

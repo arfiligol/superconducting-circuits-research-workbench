@@ -9,9 +9,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Julia-native core and runner package reference surface.
-version: v0.6.3
-last_updated: 2026-05-28
+scope: Julia-native core, visualizer, and runner package reference surface.
+version: v0.7.0
+last_updated: 2026-05-30
 updated_by: codex
 ---
 
@@ -19,7 +19,7 @@ updated_by: codex
 
 本頁記錄 Julia-native simulation / analysis runtime 的目前邊界，以及 repo 內正式存在的 Julia package surfaces。
 
-For the reusable Circuit Plan authoring architecture, use [Julia Core Authoring](../julia-core/index.md). This page only records package placement and package-level ownership.
+For the reusable Circuit Plan authoring architecture, use [Julia Core Authoring](../julia-core/index.md). For PlotlyJS figure contracts, use [Julia Visualizer](../julia-visualizer/index.md). This page records package placement and package-level ownership.
 
 For concrete component families, use project-space or lab-space component libraries built on the Julia Core authoring kernel.
 
@@ -27,10 +27,12 @@ For concrete component families, use project-space or lab-space component librar
     canonical Julia surface 已收斂到 `core/julia/`。
     目前 repository 內的 Julia packages 是：
     1. `core/julia/SuperconductingCircuitsCore/`
-    2. `core/julia/SuperconductingCircuitsRunner/`
+    2. `core/julia/SuperconductingCircuitsVisualizer/`
+    3. `core/julia/SuperconductingCircuitsRunner/`
 
 !!! warning "Ownership Boundary"
     Julia Core owns reusable compute logic.
+    Julia Visualizer owns Pluto-facing PlotlyJS figures from real `HBSolveResult` traces.
     Julia Runner owns asynchronous compute execution and staged result packages.
     Python Backend still owns task lifecycle, canonical TraceStore publication, and provenance records.
 
@@ -43,6 +45,14 @@ For concrete component families, use project-space or lab-space component librar
     | `core/julia/SuperconductingCircuitsCore/` | docs-defined Julia Core Authoring model, Circuit Plan, endpoints, compiler concepts, parameter sweep architecture and execution interfaces, simulation helpers, and analysis helpers |
     | JosephsonCircuits.jl runtime | numerical circuit solve engine called from Julia-owned code |
     | Pluto notebooks | direct research cockpit for explicit Julia execution |
+
+=== "Julia Visualizer"
+
+    | Surface | Role |
+    |---|---|
+    | `core/julia/SuperconductingCircuitsVisualizer/` | PlotlyJS figure package for Pluto-facing static interactive figures built from `HBSolveResult` traces |
+    | `PlotlyJS.jl` runtime | figure backend loaded by the visualizer package, not by Core or Runner |
+    | Pluto notebooks | display surface for local research figures |
 
 === "Julia Runner"
 
@@ -57,20 +67,22 @@ For concrete component families, use project-space or lab-space component librar
 | File | What it means in the current design |
 |---|---|
 | `core/julia/SuperconductingCircuitsCore/Project.toml` | Julia Core package environment |
+| `core/julia/SuperconductingCircuitsVisualizer/Project.toml` | Julia Visualizer package environment |
 | `core/julia/SuperconductingCircuitsRunner/Project.toml` | Julia Runner package environment |
 | `core/julia/SuperconductingCircuitsRunner/src/staging/zarr_writer.jl` | local filesystem Zarr v2 staging writer |
 
 ## Consumer Pairing
 
-| Consumer | Reads Julia Core through |
+| Consumer | Reads Julia surface through |
 |---|---|
 | Python Backend | [Julia Compute Boundary](julia-wrapper.md) and runner API docs |
-| Advanced Julia users / contributors | [Notebook Interface](../notebooks/index.md) and Pluto notebooks |
+| Advanced Julia users / contributors | [Notebook Interface](../notebooks/index.md), [Julia Visualizer](../julia-visualizer/index.md), and Pluto notebooks |
 | Julia Runner contributors | [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md) |
 
 ## Related
 
 - [Julia Core Authoring](../julia-core/index.md)
+- [Julia Visualizer](../julia-visualizer/index.md)
 - [Julia Compute Boundary](julia-wrapper.md)
 - [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
 - [Notebook Interface](../notebooks/index.md)

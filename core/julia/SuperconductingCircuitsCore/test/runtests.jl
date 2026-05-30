@@ -29,6 +29,8 @@ function base_window_spec(; length_m=0.1mm, n_sections=2)
 end
 
 include("test_low_level_helpers.jl")
+include("test_transmission_line_ladder.jl")
+include("test_mtl_coupled_window.jl")
 include("test_circuit_plan.jl")
 include("test_endpoints.jl")
 include("test_relations.jl")
@@ -43,3 +45,4 @@ include("test_result_extractors.jl")
 include("test_sweeps.jl")
 include("test_inspection.jl")
 include("test_diagnostics.jl")
+include("test_pluto_example_builders.jl")

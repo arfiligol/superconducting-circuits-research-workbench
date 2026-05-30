@@ -27,6 +27,8 @@ include("inspection/inspection_helpers.jl")
 include("diagnostics/diagnostics.jl")
 include("components/common.jl")
 include("components/coupled_window.jl")
+include("components/transmission_lines.jl")
+include("examples/pluto_examples.jl")
 include("simulation/result_extractors.jl")
 include("simulation/hbsolve_runner.jl")
 include("io/notebook_helpers.jl")
@@ -101,6 +103,7 @@ export ShuntInductor
 export SeriesInductor
 export SeriesResistor
 export InductiveCoupling
+export MutualInductiveCoupling
 export CoupledWindowRelation
 export connect!
 export couple_capacitive!
@@ -180,10 +183,25 @@ export debug_bundle
 
 export RLGCSpec
 export CoupledWindowSpec
+export TransmissionLineSpec
+export TransmissionLineLadder
+export MTLCoupledWindowSpec
+export CoupledTransmissionWindow
 
 export phase_velocity
 export section_values
 export coupled_window_section_values
+export build_lc_ladder_line!
+export couple_transmission_window!
+export node_at_distance
+export section_index_at_distance
+export section_range_from_window
+
+export build_lc_resonator_example
+export build_cpw_ladder_example
+export build_purcell_filter_mvp_example
+export build_long_readout_line_example
+export build_hanging_qwr_mtl_example
 
 export run_hbsolve
 export run_frequency_sweep

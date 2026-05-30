@@ -30,7 +30,7 @@ updated_by: codex
 | --- | --- |
 | Foundation workspace | backend pytest + frontend unit + desktop lint + runner tests |
 | Backend | `cd app/backend && uv run pytest` |
-| Julia Core / Runner | `Pkg.test()` per Julia package |
+| Julia Core / Visualizer / Runner | `Pkg.test()` per Julia package |
 | Frontend | unit tests，必要時 E2E |
 | Desktop foundation | lint + build |
 | Docs | source check + build + built-route check |
@@ -41,6 +41,7 @@ updated_by: codex
 cd app/backend && uv run pytest
 npm run test --prefix app/frontend
 npm run lint --prefix app/desktop
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
 ```
 
@@ -52,10 +53,11 @@ cd app/backend && uv run pytest
 
 Backend tests for Runner publication must cover create task, claim task, heartbeat/progress, complete with small staging Zarr manifest, canonical TraceStore publication, TraceRecord creation, trace slice read, invalid manifest rejection, and path traversal rejection.
 
-## Julia Core / Runner
+## Julia Core / Visualizer / Runner
 
 ```bash
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
 ```
 
@@ -130,6 +132,7 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 - **Backend/core tests**:
     - `cd app/backend && uv run pytest`
     - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
+    - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`

@@ -74,6 +74,12 @@ function _relation_endpoints(relation::AbstractCircuitRelation)
     relation isa SeriesInductor && return AbstractCircuitEndpoint[relation.from, relation.to]
     relation isa SeriesResistor && return AbstractCircuitEndpoint[relation.from, relation.to]
     relation isa InductiveCoupling && return AbstractCircuitEndpoint[relation.from, relation.to]
+    relation isa MutualInductiveCoupling && return AbstractCircuitEndpoint[
+        relation.inductor_a.from,
+        relation.inductor_a.to,
+        relation.inductor_b.from,
+        relation.inductor_b.to,
+    ]
     relation isa CoupledWindowRelation && return AbstractCircuitEndpoint[relation.line_a, relation.line_b]
     return AbstractCircuitEndpoint[]
 end

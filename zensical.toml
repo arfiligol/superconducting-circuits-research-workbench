@@ -120,6 +120,7 @@ nav = [
     { "Agent Skills" = [
       { "Overview" = "reference/agent-skills/index.md" },
       { "Work Lane Orchestration" = "reference/agent-skills/work-lane-orchestration.md" },
+      { "Write Pluto Notebook" = "reference/agent-skills/write-pluto-notebook.md" },
     ] },
     { "App" = [
       { "Application Interface" = "reference/app/application-interface.md" },
@@ -184,6 +185,8 @@ nav = [
         { "Component Libraries" = "reference/julia-core/component-libraries.md" },
         { "Endpoints" = "reference/julia-core/endpoints.md" },
         { "Relations and Couplings" = "reference/julia-core/relations-and-couplings.md" },
+        { "Coupling Models" = "reference/julia-core/coupling-models.md" },
+        { "Transmission Line Ladder" = "reference/julia-core/transmission-line-ladder.md" },
         { "Macro Authoring DSL" = "reference/julia-core/macro-authoring-dsl.md" },
         { "Engineering Graph" = "reference/julia-core/engineering-graph.md" },
         { "Compiler" = "reference/julia-core/compiler.md" },
@@ -194,6 +197,10 @@ nav = [
         { "Validation" = "reference/julia-core/validation.md" },
         { "Debugging and Diagnostics" = "reference/julia-core/debugging-and-diagnostics.md" },
         { "Runner-Safe API" = "reference/julia-core/runner-safe-api.md" },
+      ] },
+      { "Julia Visualizer" = [
+        { "Overview" = "reference/julia-visualizer/index.md" },
+        { "PlotlyJS Figures" = "reference/julia-visualizer/plotlyjs-figures.md" },
       ] },
       { "Julia Package Surface" = "reference/core/julia-core.md" },
     ] },

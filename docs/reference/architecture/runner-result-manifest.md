@@ -1,7 +1,6 @@
 ---
 title: "Runner Result Manifest"
 description: "Defines the staged result manifest written by the Julia Runner and validated by the Backend."
-icon: lucide/file-json
 ---
 
 # Runner Result Manifest

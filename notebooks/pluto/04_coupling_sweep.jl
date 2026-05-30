@@ -2,9 +2,9 @@
 # v1.0.1
 
 #> [frontmatter]
-#> title = "04 Coupling Sweep"
-#> tags = ["julia-core", "hb", "readout", "coupling-sweep", "s21"]
-#> description = "Executable Pluto tutorial sweeping the coupling capacitance of a readout line with a hanging resonator and plotting real S21 traces."
+#> title = "Point-Coupled Readout Resonator Sweep"
+#> tags = ["julia-core", "hb", "readout", "point-coupling", "s21"]
+#> description = "Executable Pluto tutorial sweeping a lumped point coupling capacitance and plotting real HBSolveResult S-parameter traces."
 
 using Markdown
 
@@ -13,15 +13,25 @@ begin
     import Pkg
 
     core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
+    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
     core_project_file = normpath(joinpath(core_project, "Project.toml"))
+    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
     active_project_file = normpath(something(Base.active_project(), ""))
 
-    if active_project_file != core_project_file
+    if active_project_file != core_project_file && active_project_file != visualizer_project_file
         Pkg.develop(path=core_project)
+        Pkg.develop(path=visualizer_project)
+    else
+        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
+        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
     end
 
     using SuperconductingCircuitsCore
-    using Plots
+    using SuperconductingCircuitsVisualizer
+
+    figure_config = PlotlyFigureConfig(
+        download_filename=splitext(basename(@__FILE__))[1],
+    )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
     using .HBExampleHelpers
@@ -29,9 +39,11 @@ end
 
 # ╔═╡ a0ac5c2e-5a97-4e6b-8c25-683518732c66
 md"""
-# 04 Coupling Sweep
+# Point-Coupled Readout Resonator Sweep
 
-This notebook repeats the readout-line + hanging-resonator example while sweeping the coupling capacitance `Cc`.
+This notebook repeats a readout-line + resonator point-coupled model while sweeping the lumped point coupling capacitance `Cc`.
+
+It does not model a finite-length MTL coupled window. The MTL version is `04_readout_line_hanging_qwr_mtl.jl`.
 
 Every curve below comes from a separate real Julia Core solve:
 
@@ -46,7 +58,7 @@ md"""
 
 - Larger `Cc` increases interaction between the through line and hanging resonator.
 - The S21 feature should change depth and width as coupling changes.
-- This is a lumped ladder sensitivity example, not a calibrated distributed CPW model.
+- This is a lumped point-coupled ladder sensitivity example, not a calibrated distributed CPW / MTL model.
 """
 
 # ╔═╡ 6932d6fc-6c7a-40be-b6ef-d990a57373a3
@@ -76,7 +88,7 @@ end
 
 # ╔═╡ d3f995a1-fbcb-4a5e-8a4c-909a7fb516ff
 examples = [
-    build_readout_line_hanging_qwr_example(;
+    build_point_coupled_readout_resonator_mvp_example(;
         id="coupling-sweep-$(index)",
         coupling_capacitance=coupling,
         common_kwargs...,
@@ -136,31 +148,33 @@ keys(results[1].traces)
 
 # ╔═╡ 66a5a642-dded-4c35-8334-1fa62ef3183b
 begin
-    frequencies_ghz = results[1].frequencies_hz ./ 1e9
-    s21_curves = hcat([db20(zero_mode_s(result, 2, 1)) for result in results]...)
-    labels = reshape(["Cc=$(round(coupling * 1e15; digits=2)) fF" for coupling in coupling_values], 1, :)
+    s21_curves = [
+        "Cc=$(round(coupling * 1e15; digits=2)) fF" => db20(zero_mode_s(result, 2, 1))
+        for (coupling, result) in zip(coupling_values, results)
+    ]
 end
 
 # ╔═╡ f4bb20d0-f90a-4b37-a86c-51c1fa1884ac
-plot(
-    frequencies_ghz,
+multi_curve_figure(
+    results[1].frequencies_hz,
     s21_curves;
-    xlabel="Frequency (GHz)",
-    ylabel="|S21| (dB)",
-    label=labels,
-    title="Coupling sweep: S21 from HBSolveResult",
+    title="Point-Coupling Sweep: S21 from HBSolveResult",
+    yaxis_title="|S21| (dB)",
+    config=figure_config,
 )
 
 # ╔═╡ 915d5d2e-4971-4d13-8099-738a16cae8cf
 begin
-    s11_curves = hcat([db20(zero_mode_s(result, 1, 1)) for result in results]...)
-    plot(
-        frequencies_ghz,
+    s11_curves = [
+        "Cc=$(round(coupling * 1e15; digits=2)) fF" => db20(zero_mode_s(result, 1, 1))
+        for (coupling, result) in zip(coupling_values, results)
+    ]
+    multi_curve_figure(
+        results[1].frequencies_hz,
         s11_curves;
-        xlabel="Frequency (GHz)",
-        ylabel="|S11| (dB)",
-        label=labels,
-        title="Coupling sweep: S11 from HBSolveResult",
+        title="Point-Coupling Sweep: S11 from HBSolveResult",
+        yaxis_title="|S11| (dB)",
+        config=figure_config,
     )
 end
 

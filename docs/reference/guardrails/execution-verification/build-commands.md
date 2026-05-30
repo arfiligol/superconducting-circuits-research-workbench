@@ -45,6 +45,7 @@ cd app/backend && uv sync
 npm install --prefix app/frontend
 npm install --prefix app/desktop
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'
 ./scripts/prepare_docs_locales.sh
 ```
@@ -94,6 +95,12 @@ npm run app:stop
 
     ```bash
     julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+    ```
+
+=== "Julia Visualizer"
+
+    ```bash
+    julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
     ```
 
 === "Julia Runner"
@@ -174,6 +181,7 @@ uv run python scripts/check_docs_nav_routes.py --check-built
     - `npm run app:stop`
 - **Python install**: `uv sync`
 - **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Visualizer install**: `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
 - **Frontend**:
     - `npm install --prefix app/frontend`
@@ -186,6 +194,8 @@ uv run python scripts/check_docs_nav_routes.py --check-built
     - `cd app/backend && uv sync`
     - `cd app/backend && uv run pytest`
     - `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000`
+- **Julia Visualizer**:
+    - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
 - **Julia Runner**:
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Desktop**:

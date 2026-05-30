@@ -10,8 +10,8 @@ status: stable
 owner: docs-team
 audience: team
 scope: Backend task lifecycle, runner API, staging result validation, and TraceStore publication
-version: v1.3.0
-last_updated: 2026-05-29
+version: v1.3.1
+last_updated: 2026-05-30
 updated_by: codex
 ---
 
@@ -95,14 +95,14 @@ Backend state remains the lifecycle authority. Product labels are UI vocabulary.
 
 | Kind | Purpose |
 |---|---|
-| `julia_simulation_frequency_sweep` | frequency-sweep simulation through Julia Runner; currently implemented for the MVP supported design adapter |
-| `julia_simulation_parameter_sweep` | parameterized simulation/sweep task family; fails clearly until real sweep execution is implemented |
+| `julia_simulation_frequency_sweep` | frequency-sweep simulation through Julia Runner using a declared design adapter |
+| `julia_simulation_parameter_sweep` | parameterized simulation/sweep task family with explicit validation and failure reporting for unsupported payloads |
 | `julia_analysis_trace_summary` | analysis task family for published trace summaries |
 | `julia_postprocess_coordinate_transform` | post-processing task family for explicit transform jobs |
 
 Unknown or unsupported task kinds fail clearly. Runner execution must not fall back to fixture output.
 
-The first code-backed Runner compute path is `julia_simulation_frequency_sweep` for the MVP supported design path, including the Local Space resonator seed definition. It calls Julia Core to build and compile a `CircuitPlan`, runs JosephsonCircuits through Julia Core simulation helpers, and stages real S-parameter traces.
+The Runner compute path for `julia_simulation_frequency_sweep` calls Julia Core to build and compile a `CircuitPlan`, runs JosephsonCircuits through Julia Core simulation helpers, and stages real S-parameter traces.
 
 Product task payloads separate design intent from runtime values:
 
@@ -246,7 +246,7 @@ Polling is the baseline status sync mechanism. SSE or WebSocket may be added as 
 
 - Runner task execution must never silently replace real compute with fixture output.
 - Test fixtures may write small staged Zarr packages, but fixture writers are not product task kinds.
-- Unsupported task dispatch must report failure rather than complete with fake traces.
+- Unsupported task dispatch must report failure rather than complete with fabricated traces.
 
 ## Related
 

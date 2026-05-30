@@ -100,6 +100,7 @@ Application Simulation Workbench and Analysis Workbench remain mandatory as prod
 core/
   julia/
     SuperconductingCircuitsCore/
+    SuperconductingCircuitsVisualizer/
     SuperconductingCircuitsRunner/
   python/
     sc_data_contracts/

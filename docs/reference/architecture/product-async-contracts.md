@@ -1,7 +1,6 @@
 ---
 title: "Product Async Contracts"
 description: "Defines the Application-to-Backend-to-Runner contracts for productized async simulation and result viewing."
-icon: lucide/workflow
 aliases:
   - Product Async Contract
   - SimulationRequestV1

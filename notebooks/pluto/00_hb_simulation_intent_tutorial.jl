@@ -2,537 +2,228 @@
 # v1.0.1
 
 #> [frontmatter]
-#> title = "00 HB Simulation Intent Tutorial"
-#> tags = ["julia-core", "hb-intent", "engineering-graph", "acceptance-harness"]
-#> description = "Markdown-first Pluto tutorial for the Julia Core CircuitPlan, EngineeringGraph, HBIntent, and HBProblemSpec workflow."
+#> title = "00 LC Resonator Reflection"
+#> tags = ["julia-core", "hb", "lc-resonator", "s-parameters"]
+#> description = "Self-contained Julia Core Pluto tutorial for a grounded LC resonator, HBProblemSpec construction, and real S11/Z11 plots from HBSolveResult."
 
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37002
+# ╔═╡ 2a35f7a7-4bf1-4b18-8e06-8709ff044900
 begin
     import Pkg
 
     core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
+    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
     core_project_file = normpath(joinpath(core_project, "Project.toml"))
+    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
     active_project_file = normpath(something(Base.active_project(), ""))
 
-    if active_project_file != core_project_file
+    if active_project_file != core_project_file && active_project_file != visualizer_project_file
         Pkg.develop(path=core_project)
+        Pkg.develop(path=visualizer_project)
+    else
+        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
+        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
     end
 
     using SuperconductingCircuitsCore
-    using Plots
+    using SuperconductingCircuitsVisualizer
+
+    figure_config = PlotlyFigureConfig(
+        download_filename=splitext(basename(@__FILE__))[1],
+    )
+
+    include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
+    using .HBExampleHelpers: db20, phase_deg, zero_mode_s, zero_mode_z
 end
 
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37001
-using Markdown
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37009
-module NotebookComponents
-
-using SuperconductingCircuitsCore
-
-import SuperconductingCircuitsCore:
-    component_id,
-    component_pins,
-    component_lines,
-    default_line,
-    component_parameters
-
-Base.@kwdef struct GroundedResonator <: AbstractCircuitComponent
-    id::String = "res"
-    capacitance::Float64
-    inductance::Float64
-end
-
-component_id(component::GroundedResonator) = component.id
-component_pins(::GroundedResonator) = [:signal]
-component_lines(::GroundedResonator) = Symbol[]
-default_line(::GroundedResonator) = nothing
-
-function component_parameters(component::GroundedResonator)
-    return [
-        ParameterMetadata(
-            name=:capacitance,
-            role=NumericParameter(),
-            owner=component.id,
-            targets=[:capacitance],
-            sweep_name=:capacitance,
-            units="F",
-            assumptions=["changing capacitance does not change component topology"],
-        ),
-        ParameterMetadata(
-            name=:inductance,
-            role=NumericParameter(),
-            owner=component.id,
-            targets=[:inductance],
-            sweep_name=:inductance,
-            units="H",
-            assumptions=["changing inductance does not change component topology"],
-        ),
-    ]
-end
-
-end
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3700a
-using .NotebookComponents: GroundedResonator
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37003
+# ╔═╡ 8532fbc3-1b76-4a57-8fb1-6729fbf50901
 md"""
-# 00 HB Simulation Intent Tutorial
+# 00 LC Resonator / Grounded LC Reflection
 
-This notebook is a small, executable tutorial for the Julia Core authoring path in the common seven-point format:
+This notebook is the minimal Julia Core workflow. It builds a one-port shunt LC resonator:
 
 ```text
-1. Parameters
-2. Local component
-3. @circuit plan with shunt C/L
-4. EngineeringGraph
-5. HBIntent and runtime bindings
-6. compile_to_josephson and HBProblemSpec
-7. run_hb_problem and real S11/Z11 extraction
+50 ohm port -> node
+                 |-- C -- ground
+                 |-- L -- ground
 ```
 
-It does not synthesize solver output. The final cell remains the acceptance gate:
-
-```julia
-result = run_hb_problem(hb_problem)
-```
+The system is lumped: the capacitor and inductor are point elements at the same circuit node. No transmission-line or coupling-window approximation is used here.
 """
 
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37004
+# ╔═╡ 9a7f2a7d-f772-48d1-88c4-b12b440b7402
 md"""
-## 1. Parameters
+## Physics And Modeling Convention
 
-Use simple Julia names for user-facing parameters. Frequencies are in hertz, currents are in amperes, capacitance is in farads, and inductance is in henries.
+A parallel LC has admittance `Y = jωC + 1/(jωL)`. Near
+`f0 = 1 / (2π * sqrt(L * C))`, the ideal shunt admittance crosses through zero and the shunt impedance is large.
+
+For a lossless one-port, `|S11|` remains close to unity. The resonance is easiest to see in `phase(S11)` and in the real/imaginary parts of `Z11`.
 """
 
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37005
+# ╔═╡ 49fc223e-0102-4cb3-a747-d05865f88755
 begin
-    capacitance = 80e-15
-    inductance = 10e-9
-    resistance = 50.0
+    capacitance = 80.0e-15
+    inductance = 10.0e-9
+    port_resistance = 50.0
 
-    start_frequency = 4.0e9
-    stop_frequency = 6.0e9
-    point_count = 5
+    start_frequency = 1.0e9
+    stop_frequency = 10.0e9
+    point_count = 101
 
-    hb_profile = :pump_off
     pump_frequency = 8.0e9
     pump_current = 0.0
-    dc_current = 0.0
-
-    n_pump_harmonics = 16
-    n_modulation_harmonics = 8
-
-    returnS = true
-    returnZ = true
-    returnQE = true
-    returnCM = true
 
     optional_hb_kwargs = Dict{Symbol,Any}(
-        :iterations => 200,
+        :nbatches => 1,
+        :iterations => 120,
         :ftol => 1e-8,
-        :alphamin => 1e-4,
-        :switchofflinesearchtol => 1e-5,
-        :nbatches => max(1, Threads.nthreads()),
-        :maxintermodorder => 16,
     )
 end
 
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37006
-frequency_sweep = range(start_frequency, stop_frequency; length=point_count)
+# ╔═╡ 950c83dd-31d4-4546-8f91-34c1d75c76e2
+f0_estimate = 1 / (2π * sqrt(inductance * capacitance))
 
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37007
-begin
-    hb_profile in (:pump_off, :pumped, :pumped_dc) ||
-        error("Unsupported hb_profile: $(hb_profile). Use :pump_off, :pumped, or :pumped_dc.")
-    isfinite(pump_frequency) && pump_frequency > 0 ||
-        error("pump_frequency must be finite and positive, even when pump_current is zero.")
-
-    effective_pump_current = hb_profile == :pump_off ? 0.0 : pump_current
-
-    (
-        capacitance=capacitance,
-        inductance=inductance,
-        resistance=resistance,
-        frequency_sweep=collect(frequency_sweep),
-        hb_profile=hb_profile,
-        pump_frequency=pump_frequency,
-        pump_current=effective_pump_current,
-    )
-end
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37008
-md"""
-## 2. Local Component
-
-Julia Core owns the authoring contract. Concrete component families belong in a component library.
-
-For this tutorial, the component library is intentionally local to the notebook. It is not a Core-exported demo component.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3700b
-md"""
-## 3. @circuit Plan With Shunt C/L
-
-The macro DSL is the human-facing authoring syntax. It should still expand to canonical Julia Core calls such as `CircuitPlan`, `register_component!`, `external_port!`, and EngineeringGraph recording.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3700c
-plan = @circuit "hb-intent-demo" begin
-    resonator = component(
-        GroundedResonator(
-            capacitance=capacitance,
-            inductance=inductance,
-        );
-        display_name=:resonator,
-        role=:resonator,
-    )
-
-    port(:signal_port) do
-        index = 1
-        endpoint = pin(resonator, :signal)
-        resistance = resistance
-        role = :mixed
-    end
-end
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3700d
-resonator_capacitance = shunt_capacitor!(
-    plan;
-    id="resonator_capacitance",
-    at=pin(resonator, :signal),
-    capacitance=capacitance,
-)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3700e
-resonator_inductance = shunt_inductor!(
-    plan;
-    id="resonator_inductance",
-    at=pin(resonator, :signal),
-    inductance=inductance,
-)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37025
-md"""
-!!! note "EngineeringGraph relation recording"
-    Physical Julia Core operations such as `shunt_capacitor!` and `shunt_inductor!`
-    also record the corresponding EngineeringGraph relation. This keeps the solver
-    model and the human-facing graph synchronized without a duplicate manual
-    graph-recording call.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3700f
-md"""
-The current lumped compiler MVP lowers explicit capacitor, inductor, and external port rows. The local component preserves both `capacitance` and `inductance` as component-library metadata, while explicit Core relations define the physical solver elements.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37010
-md"""
-## 4. EngineeringGraph
-
-The EngineeringGraph is the human-facing semantic graph. Keep this inspection component-level rather than reconstructing meaning from solver rows.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37011
-graph = engineering_graph(plan)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37012
-graph.components
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37013
-graph.ports
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37014
-graph.relations
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37015
-md"""
-## 5. HBIntent And Runtime Bindings
-
-`CircuitPlan` declares the HB simulation intent. Runtime values bind to declared IDs later; they do not invent ports, pump axes, source slots, or observables.
-
-Use `hb_profile = :pump_off`, `:pumped`, or `:pumped_dc`. Pump-off is still a declared pump problem: the pump axis and source slot exist, `pump_frequency` is finite and positive, and the bound `pump_current` is `0.0`.
-
-For DC bias, add a `HBSourceSlot(role = :dc_bias, mode = (0,))` and bind its current through `source_currents`.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37016
-hb_intent = if hb_profile in (:pump_off, :pumped)
-    hb_intent!(
-        plan;
-        pump_axes=[
-            PumpAxis(
-                id=:pump,
-                frequency_parameter=:pump_frequency,
-            ),
-        ],
-        source_slots=[
-            HBSourceSlot(
-                id=:pump_in,
-                role=:pump,
-                port=:signal_port,
-                mode=(1,),
-                current_parameter=:pump_current,
-            ),
-        ],
-        observables=[
-            SParameterRequest(
-                id=:s11_signal,
-                outputmode=(0,),
-                outputport=:signal_port,
-                inputmode=(0,),
-                inputport=:signal_port,
-            ),
-        ],
-        default_solver_controls=HBSolverControls(
-            n_pump_harmonics=n_pump_harmonics,
-            n_modulation_harmonics=n_modulation_harmonics,
-            dc=false,
-            threewavemixing=false,
-            fourwavemixing=true,
-            returnS=returnS,
-            returnZ=returnZ,
-            returnQE=returnQE,
-            returnCM=returnCM,
-            sorting=:name,
-            keyedarrays=false,
-        ),
-    )
-elseif hb_profile == :pumped_dc
-    hb_intent!(
-        plan;
-        pump_axes=[
-            PumpAxis(
-                id=:pump,
-                frequency_parameter=:pump_frequency,
-            ),
-        ],
-        source_slots=[
-            HBSourceSlot(
-                id=:dc_bias,
-                role=:dc_bias,
-                port=:signal_port,
-                mode=(0,),
-                current_parameter=:dc_current,
-            ),
-            HBSourceSlot(
-                id=:pump_in,
-                role=:pump,
-                port=:signal_port,
-                mode=(1,),
-                current_parameter=:pump_current,
-            ),
-        ],
-        observables=[
-            SParameterRequest(
-                id=:s11_signal,
-                outputmode=(0,),
-                outputport=:signal_port,
-                inputmode=(0,),
-                inputport=:signal_port,
-            ),
-        ],
-        default_solver_controls=HBSolverControls(
-            n_pump_harmonics=n_pump_harmonics,
-            n_modulation_harmonics=n_modulation_harmonics,
-            dc=true,
-            threewavemixing=true,
-            fourwavemixing=true,
-            returnS=returnS,
-            returnZ=returnZ,
-            returnQE=returnQE,
-            returnCM=returnCM,
-            sorting=:name,
-            keyedarrays=false,
-        ),
-    )
-else
-    error("Unsupported hb_profile: $(hb_profile). Use :pump_off, :pumped, or :pumped_dc.")
-end
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37017
-graph.hb_overlay
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37018
-md"""
-### Runtime Bindings
-
-The runtime spec binds concrete frequency and current values to the compiled intent. `pump_current = 0.0` is a real source-off binding for the declared `:pump_in` slot, not a request to remove the pump axis.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37019
-run_spec = begin
-    currents = hb_profile == :pumped_dc ?
-        Dict(:dc_bias => dc_current, :pump_in => effective_pump_current) :
-        Dict(:pump_in => effective_pump_current)
-
-    HBRunSpec(
-        frequency_sweep=frequency_sweep,
-        pump_frequencies=Dict(:pump => pump_frequency),
-        source_currents=currents,
-        optional_hb_kwargs=optional_hb_kwargs,
-    )
-end
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3701a
-md"""
-## 6. Compile And HBProblemSpec
-
-These cells exercise the target Julia Core API up to HB problem construction. They inspect solver inputs, not solver outputs.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3701b
-authoring_report = validate_authoring(plan)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3701c
-compiled = compile_to_josephson(plan)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3701d
-compiled.netlist
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3701e
-compiled.port_map
-
-# ╔═╡ 1c14801e-86b0-4f76-a3c3-f05029f83f2d
-compiled.component_values
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3701f
-hb_report = validate_hb_intent(compiled)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37020
-hb_problem = build_hb_problem(compiled, run_spec)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37021
+# ╔═╡ 4dd73542-6d50-4f02-aaf5-ffcf67e6516e
 (
-    compiled_netlist_rows=length(hb_problem.compiled.netlist),
+    capacitance_f=capacitance,
+    inductance_h=inductance,
+    f0_estimate_ghz=f0_estimate / 1e9,
+    frequency_span_ghz=(start_frequency / 1e9, stop_frequency / 1e9),
+)
+
+# ╔═╡ c421ced1-bc7d-4265-aef9-51e153086981
+md"""
+## Julia Core Authoring
+
+`build_lc_resonator_example` is a non-Pluto Core builder that returns the same objects a notebook would build manually: `CircuitPlan`, `EngineeringGraph`, compiled netlist, `HBProblemSpec`, and a real solver result.
+"""
+
+# ╔═╡ 6037c548-7e6b-4295-9ef3-387bb26dfe51
+example = build_lc_resonator_example(
+    capacitance=capacitance,
+    inductance=inductance,
+    port_resistance=port_resistance,
+    start_frequency=start_frequency,
+    stop_frequency=stop_frequency,
+    point_count=point_count,
+    pump_frequency=pump_frequency,
+    pump_current=pump_current,
+    optional_hb_kwargs=optional_hb_kwargs,
+)
+
+# ╔═╡ 673a74d5-d030-42e7-81f8-ce062d1d8fbb
+md"""
+## EngineeringGraph Inspection
+
+The graph shows the human-facing model: one external port and two shunt relations to ground.
+"""
+
+# ╔═╡ 61666273-7670-441e-98d9-3ea04bd38ca6
+example.graph.ports
+
+# ╔═╡ f80ead68-9277-47a0-bf3f-a916dfe99a27
+example.graph.relations
+
+# ╔═╡ 57595d3d-7f52-4887-82a7-fc8d54fd0bc4
+md"""
+## Compiled Solver Representation
+
+The compiler lowers the port, reference resistor, shunt capacitor, and shunt inductor into JosephsonCircuits rows.
+"""
+
+# ╔═╡ e048d733-bcc6-4ab9-9953-8e7101a8e4ae
+example.compiled.netlist
+
+# ╔═╡ da63ed47-cf58-4027-a58c-1830afb6e1af
+example.compiled.component_values
+
+# ╔═╡ 59f1b851-a8f2-4266-99f7-b86395c97afe
+md"""
+## HBProblemSpec And Real Solver Output
+
+Pump-off HB still declares a pump axis and source slot. The source current is bound to `0.0`; the solver path is still real.
+"""
+
+# ╔═╡ b8a6e98a-0633-49fb-8bd4-309ac58c7661
+hb_problem = example.hb_problem
+
+# ╔═╡ f9ef4311-9296-4da2-8d4a-1fbf6fb2db44
+(
     frequencies_hz=hb_problem.frequencies_hz,
-    ws_count=length(hb_problem.ws),
     wp=hb_problem.wp,
     sources=hb_problem.sources,
-    Nmodulationharmonics=hb_problem.Nmodulationharmonics,
-    Npumpharmonics=hb_problem.Npumpharmonics,
-    optional_hb_kwargs=hb_problem.optional_hb_kwargs,
+    controls=hb_problem.controls,
 )
 
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37022
-output_request_report = validate_output_request_configuration(compiled, hb_problem)
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37023
-md"""
-## 7. Solve And Extract Real Traces
-
-This is the implementation acceptance gate. It calls the executable HBProblemSpec API with the normalized compiled circuit, pump, source, harmonic, control, observable, and solver-kwarg values.
-
-Do not replace this with substitute curves or non-solver values. The plots below read real `HBSolveResult` S11 traces and Z11 when the requested Z family is available.
-"""
-
-# ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37024
+# ╔═╡ 24e55e1c-594d-41c6-a46f-89bf9381a255
 result = run_hb_problem(hb_problem)
 
-# ╔═╡ 0613bc7e-fe07-4d18-ba7a-a60bebf9168f
-result
-
-# ╔═╡ 652be638-dd53-4317-826c-7f54def7a8eb
+# ╔═╡ f3dd44ef-bab5-4db5-a312-c923368645d7
 keys(result.traces)
 
-# ╔═╡ 42213dd5-376b-4bec-8754-ac98cdfb7bae
+# ╔═╡ b6e1fb3c-22da-4db0-86cf-c6aa3d0df32b
 begin
-    zero_mode_s_traces = get(result.traces, :zero_mode_s, Dict{String,Vector{ComplexF64}}())
-    haskey(zero_mode_s_traces, "S11") ||
-        error("result.traces[:zero_mode_s] does not contain S11. Available labels: $(join(sort(collect(keys(zero_mode_s_traces))), ", "))")
-
-    s11 = zero_mode_s_traces["S11"]
-    z_label = "om=0|op=1|im=0|ip=1"
-    z_traces = get(result.traces, :z_parameter_mode, nothing)
-    z11 = z_traces isa AbstractDict && haskey(z_traces, z_label) ? z_traces[z_label] : nothing
     frequencies_ghz = result.frequencies_hz ./ 1e9
+    s11 = zero_mode_s(result, 1, 1)
+    z11 = zero_mode_z(result, 1, 1)
 end
 
-# ╔═╡ daf0be54-cca4-4ddf-ab78-6c9c2660dcb1
-plot(
-    frequencies_ghz,
-    20 .* log10.(abs.(s11));
-    xlabel="Frequency (GHz)",
-    ylabel="|S11| (dB)",
-    label="S11",
-    marker=:circle,
-    title="Zero-mode S11 Magnitude",
+# ╔═╡ 057f6279-1ad2-4050-8de1-5781f6a933b9
+(
+    nearest_f0_ghz=frequencies_ghz[argmin(abs.(result.frequencies_hz .- f0_estimate))],
+    s11_near_unit_magnitude=abs(abs(s11[argmin(abs.(result.frequencies_hz .- f0_estimate))]) - 1) < 0.25,
+    z11_imag_crosses_zero=minimum(imag.(z11)) <= 0 <= maximum(imag.(z11)),
 )
 
-# ╔═╡ 783f3a84-a66d-483b-bc59-703d3697a4e2
-plot(
-    frequencies_ghz,
-    rad2deg.(angle.(s11));
-    xlabel="Frequency (GHz)",
-    ylabel="phase(S11) (deg)",
-    label="S11 phase",
-    marker=:circle,
-    title="Zero-mode S11 Phase",
+# ╔═╡ 5133f75f-6a53-4300-ac41-84f2963cc172
+s_parameter_magnitude_figure(
+    result.frequencies_hz,
+    ["S11" => s11];
+    title="Grounded LC Reflection Magnitude",
+    config=figure_config,
 )
 
-# ╔═╡ 5cfa9968-0e45-48e7-b713-34192d3d12ef
-begin
-    if isnothing(z11)
-        z_traces = get(result.traces, :z_parameter_mode, Dict())
-        "Z11 is not available. Available Z labels: $(join(sort(collect(keys(z_traces))), ", "))"
-    else
-        plot(
-            frequencies_ghz,
-            [real.(z11) imag.(z11)];
-            xlabel="Frequency (GHz)",
-            ylabel="Z11 (ohm)",
-            label=["real(Z11)" "imag(Z11)"],
-            title="Zero-mode Z11",
-        )
-    end
-end
+# ╔═╡ 458de99d-89e9-46fd-9813-d083fd864d8a
+s_parameter_phase_figure(
+    result.frequencies_hz,
+    ["S11" => s11];
+    title="Grounded LC Reflection Phase",
+    config=figure_config,
+)
+
+# ╔═╡ c437e4c6-8083-4264-a4d6-9353e58384b6
+z_trace_figure(
+    result.frequencies_hz,
+    ["Z11" => z11];
+    title="Grounded LC Input Impedance",
+    config=figure_config,
+)
 
 # ╔═╡ Cell order:
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37001
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37002
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37003
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37004
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37005
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37006
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37007
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37008
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37009
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3700a
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3700b
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3700c
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3700d
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3700e
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37025
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3700f
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37010
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37011
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37012
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37013
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37014
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37015
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37016
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37017
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37018
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37019
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf3701a
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3701b
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3701c
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3701d
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3701e
-# ╠═1c14801e-86b0-4f76-a3c3-f05029f83f2d
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf3701f
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37020
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37021
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37022
-# ╟─4b8f6c4c-bd0e-4554-bf14-c7267cf37023
-# ╠═4b8f6c4c-bd0e-4554-bf14-c7267cf37024
-# ╠═0613bc7e-fe07-4d18-ba7a-a60bebf9168f
-# ╠═652be638-dd53-4317-826c-7f54def7a8eb
-# ╠═42213dd5-376b-4bec-8754-ac98cdfb7bae
-# ╠═daf0be54-cca4-4ddf-ab78-6c9c2660dcb1
-# ╠═783f3a84-a66d-483b-bc59-703d3697a4e2
-# ╠═5cfa9968-0e45-48e7-b713-34192d3d12ef
+# ╠═2a35f7a7-4bf1-4b18-8e06-8709ff044900
+# ╟─8532fbc3-1b76-4a57-8fb1-6729fbf50901
+# ╟─9a7f2a7d-f772-48d1-88c4-b12b440b7402
+# ╠═49fc223e-0102-4cb3-a747-d05865f88755
+# ╠═950c83dd-31d4-4546-8f91-34c1d75c76e2
+# ╠═4dd73542-6d50-4f02-aaf5-ffcf67e6516e
+# ╟─c421ced1-bc7d-4265-aef9-51e153086981
+# ╠═6037c548-7e6b-4295-9ef3-387bb26dfe51
+# ╟─673a74d5-d030-42e7-81f8-ce062d1d8fbb
+# ╠═61666273-7670-441e-98d9-3ea04bd38ca6
+# ╠═f80ead68-9277-47a0-bf3f-a916dfe99a27
+# ╟─57595d3d-7f52-4887-82a7-fc8d54fd0bc4
+# ╠═e048d733-bcc6-4ab9-9953-8e7101a8e4ae
+# ╠═da63ed47-cf58-4027-a58c-1830afb6e1af
+# ╟─59f1b851-a8f2-4266-99f7-b86395c97afe
+# ╠═b8a6e98a-0633-49fb-8bd4-309ac58c7661
+# ╠═f9ef4311-9296-4da2-8d4a-1fbf6fb2db44
+# ╠═24e55e1c-594d-41c6-a46f-89bf9381a255
+# ╠═f3dd44ef-bab5-4db5-a312-c923368645d7
+# ╠═b6e1fb3c-22da-4db0-86cf-c6aa3d0df32b
+# ╠═057f6279-1ad2-4050-8de1-5781f6a933b9
+# ╠═5133f75f-6a53-4300-ac41-84f2963cc172
+# ╠═458de99d-89e9-46fd-9813-d083fd864d8a
+# ╠═c437e4c6-8083-4264-a4d6-9353e58384b6

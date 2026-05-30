@@ -11,10 +11,9 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core authoring architecture overview for Pluto direct research and Julia Runner execution.
-version: v1.5.0
-last_updated: 2026-05-29
+version: v1.6.0
+last_updated: 2026-05-30
 updated_by: codex
-icon: lucide/cpu
 ---
 
 # Julia Core
@@ -123,6 +122,18 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
     ---
 
     Specify node connections, capacitive couplings, shunts, inductive couplings, and distributed windows as plan-level intents.
+
+- __[Coupling Models](coupling-models.md)__
+
+    ---
+
+    Distinguish point capacitive coupling, branch mutual inductance, MTL coupled windows, and physical model generators.
+
+- __[Transmission Line Ladder](transmission-line-ladder.md)__
+
+    ---
+
+    Define CPW / line head-tail orientation, section indexing, LC ladder generation, and open/short terminations.
 
 - __[Macro Authoring DSL](macro-authoring-dsl.md)__
 

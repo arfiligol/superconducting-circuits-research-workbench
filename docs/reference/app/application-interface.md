@@ -1,7 +1,6 @@
 ---
 title: "Application Interface"
 description: "Defines the Electron application surface for the current Product Async architecture."
-icon: lucide/layout-dashboard
 ---
 
 # Application Interface

@@ -49,6 +49,15 @@ struct InductiveCoupling <: AbstractCircuitRelation
     parameters::Vector{ParameterMetadata}
 end
 
+struct MutualInductiveCoupling <: AbstractCircuitRelation
+    id::String
+    inductor_a::SeriesInductor
+    inductor_b::SeriesInductor
+    mutual_inductance::Any
+    coupling_coefficient::Any
+    parameters::Vector{ParameterMetadata}
+end
+
 struct CoupledWindowRelation <: AbstractCircuitRelation
     id::String
     line_a::LineSpanEndpoint
@@ -313,15 +322,43 @@ end
 function couple_inductive!(
     plan::CircuitPlan;
     id,
-    from,
-    to,
-    mutual_inductance,
+    from=nothing,
+    to=nothing,
+    inductor_a=nothing,
+    inductor_b=nothing,
+    mutual_inductance=nothing,
+    coupling_coefficient=nothing,
     parameters=ParameterMetadata[],
     role=:inductive_coupling,
     label=nothing,
     schematic_kind=:inductive_coupling,
     source_location=nothing,
 )
+    if !isnothing(inductor_a) || !isnothing(inductor_b)
+        isnothing(from) && isnothing(to) ||
+            _validation_error("Branch mutual inductive coupling uses inductor_a/inductor_b, not from/to endpoints.")
+        return _couple_branch_inductive!(
+            plan;
+            id=id,
+            inductor_a=inductor_a,
+            inductor_b=inductor_b,
+            mutual_inductance=mutual_inductance,
+            coupling_coefficient=coupling_coefficient,
+            parameters=parameters,
+            role=role,
+            label=label,
+            schematic_kind=schematic_kind,
+            source_location=source_location,
+        )
+    end
+
+    !isnothing(from) && !isnothing(to) ||
+        _validation_error("couple_inductive! requires either from/to endpoints or inductor_a/inductor_b branches.")
+    !isnothing(mutual_inductance) ||
+        _validation_error("Endpoint inductive coupling requires mutual_inductance.")
+    isnothing(coupling_coefficient) ||
+        _validation_error("Endpoint inductive coupling currently accepts mutual_inductance, not coupling_coefficient.")
+
     line_like = Union{LineTapEndpoint,LineSpanEndpoint}
     source = from
     target = to
@@ -351,6 +388,89 @@ function couple_inductive!(
             params;
             schematic_kind=schematic_kind,
         ),
+        source_location=source_location,
+    )
+    return relation
+end
+
+function _numeric_series_inductance(inductor::SeriesInductor, label::AbstractString)
+    value = inductor.inductance
+    value isa Number ||
+        _validation_error("$(label) inductance must be numeric to derive mutual coupling coefficient.")
+    Float64(value) > 0 ||
+        _validation_error("$(label) inductance must be positive to derive mutual coupling coefficient.")
+    return Float64(value)
+end
+
+function _branch_mutual_values(inductor_a::SeriesInductor, inductor_b::SeriesInductor, mutual_inductance, coupling_coefficient)
+    provided_m = !isnothing(mutual_inductance)
+    provided_k = !isnothing(coupling_coefficient)
+    xor(provided_m, provided_k) ||
+        _validation_error("Branch mutual inductive coupling requires exactly one of mutual_inductance or coupling_coefficient.")
+
+    l1 = _numeric_series_inductance(inductor_a, "inductor_a")
+    l2 = _numeric_series_inductance(inductor_b, "inductor_b")
+    limit = sqrt(l1 * l2)
+
+    if provided_k
+        k = Float64(coupling_coefficient)
+        -1 < k < 1 ||
+            _validation_error("coupling_coefficient must satisfy -1 < k < 1.")
+        return (mutual_inductance=k * limit, coupling_coefficient=k)
+    end
+
+    m = Float64(mutual_inductance)
+    abs(m) < limit ||
+        _validation_error("abs(mutual_inductance) must be less than sqrt(L1 * L2).")
+    return (mutual_inductance=m, coupling_coefficient=m / limit)
+end
+
+function _couple_branch_inductive!(
+    plan::CircuitPlan;
+    id,
+    inductor_a,
+    inductor_b,
+    mutual_inductance,
+    coupling_coefficient,
+    parameters=ParameterMetadata[],
+    role=:inductive_coupling,
+    label=nothing,
+    schematic_kind=:inductive_coupling,
+    source_location=nothing,
+)
+    inductor_a isa SeriesInductor && inductor_b isa SeriesInductor ||
+        _validation_error("Branch mutual inductive coupling requires SeriesInductor inductor_a and inductor_b.")
+    values = _branch_mutual_values(inductor_a, inductor_b, mutual_inductance, coupling_coefficient)
+    params = _parameter_vector(parameters)
+    relation = MutualInductiveCoupling(
+        String(id),
+        inductor_a,
+        inductor_b,
+        values.mutual_inductance,
+        values.coupling_coefficient,
+        params,
+    )
+    push!(plan.relations, relation)
+    _register_relation_parameters!(plan, params)
+    graph_parameters = _engineering_relation_parameters(
+        :mutual_inductance,
+        values.mutual_inductance,
+        params;
+        schematic_kind=schematic_kind,
+    )
+    graph_parameters[:coupling_coefficient] = values.coupling_coefficient
+    graph_parameters[:inductor_a] = inductor_a.id
+    graph_parameters[:inductor_b] = inductor_b.id
+    record_engineering_relation!(
+        plan;
+        id=relation.id,
+        relation_type=:couple,
+        from=Symbol(inductor_a.id),
+        to=Symbol(inductor_b.id),
+        through=Symbol(relation.id),
+        role=role,
+        label=_engineering_label(label),
+        parameters=graph_parameters,
         source_location=source_location,
     )
     return relation

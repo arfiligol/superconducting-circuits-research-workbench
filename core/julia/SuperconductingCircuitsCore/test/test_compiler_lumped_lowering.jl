@@ -84,7 +84,7 @@ end
     @test !any(warning -> occursin("skeleton", lowercase(warning)), compiled.warnings)
 end
 
-@testset "lumped compiler fails clearly on unsupported relation paths" begin
+@testset "lumped compiler fails clearly on non-lowerable relation paths" begin
     plan = CircuitPlan("unsupported-window")
     line_a = register_component!(plan, MinimalComponentLibrary.TestLineComponent("line_a", [:main], :main))
     line_b = register_component!(plan, MinimalComponentLibrary.TestLineComponent("line_b", [:main], :main))
@@ -101,7 +101,7 @@ end
         @test false
     catch err
         @test err isa FrameworkValidationError
-        @test occursin("not supported", sprint(showerror, err))
+        @test occursin("not lowerable", sprint(showerror, err))
         @test occursin("CoupledWindowRelation", sprint(showerror, err))
     end
 
@@ -121,7 +121,7 @@ end
         @test false
     catch err
         @test err isa FrameworkValidationError
-        @test occursin("not supported", sprint(showerror, err))
+        @test occursin("not lowerable", sprint(showerror, err))
         @test occursin("InductiveCoupling", sprint(showerror, err))
     end
 end

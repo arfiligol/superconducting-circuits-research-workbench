@@ -374,21 +374,6 @@ If a requested family is absent from the solver result, the extractor should rai
 
 Solver-returned `NaN` values are preserved and surfaced as solver output. Julia Core must not create NaN-placeholder values for missing families; missing requested families fail, and missing unrequested families remain absent.
 
-## Implementation Status
-
-This page is stable as the target source of truth. It is not claiming that every concept is already implemented.
-
-| Concept | Target contract | Current implementation | Status |
-| --- | --- | --- | --- |
-| `ExternalPort` | first-class CircuitPlan declaration | MVP struct and compiler port map exist | design-stable |
-| `HBIntent` | first-class plan-level intent | MVP struct and `hb_intent!` path exist | design-stable |
-| `HBSourceSlot` | first-class source slot declaration | MVP struct exists; DC mode validation is part of compile validation | design-stable |
-| `HBObservableRequest` | first-class observable declaration | current Runner extraction still MVP / trace-specific | target |
-| `HBSolverControls` | typed first-class controls | current Runner only partially maps controls | target |
-| `optional_hb_kwargs` | whitelist only | not fully implemented | target |
-| `HBProblemSpec` | executable normalized HB handoff | MVP struct carries compiled circuit plus normalized solver inputs | design-stable |
-| `current = 0.0` | valid source-off runtime binding | should be accepted | design-stable |
-
 ## Related
 
 - [HB Simulation Intent](hb-simulation-intent.md)

@@ -34,6 +34,7 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 | `app/frontend/` | canonical Next.js application surface |
 | `app/desktop/` | canonical Electron shell surface |
 | `core/julia/SuperconductingCircuitsCore/` | docs-defined Julia Core Authoring model, simulation helpers, and analysis helpers |
+| `core/julia/SuperconductingCircuitsVisualizer/` | Julia PlotlyJS figure construction for Pluto and report figures |
 | `core/julia/SuperconductingCircuitsRunner/` | async Julia compute runner |
 | `core/python/sc_data_contracts/` | optional shared Python schemas/contracts |
 | `notebooks/pluto/` | Julia research cockpit |
@@ -54,6 +55,7 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 | Compute runner | Julia + HTTP.jl + JSON3.jl + StructTypes.jl + Zarr.jl |
 | Local runtime | frontend + Python Backend + Julia Runner |
 | Scientific core | Julia package under `core/julia/SuperconductingCircuitsCore/` |
+| Scientific visualization | Julia package under `core/julia/SuperconductingCircuitsVisualizer/` |
 | Desktop shell | Electron |
 
 ## Interface Boundary Rules
@@ -127,6 +129,7 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 | --- | --- |
 | `juliaup` | Julia version management |
 | `JosephsonCircuits.jl` | 核心電路模擬引擎 inside Julia Core/Runner |
+| `PlotlyJS.jl` | figure backend inside Julia Visualizer |
 | `HTTP.jl` | Runner client for backend task protocol |
 | `JSON3.jl`, `StructTypes.jl` | Runner task / manifest contracts |
 | `Zarr.jl` | local filesystem Zarr v2 staging writer |
@@ -187,9 +190,11 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 ### Scientific Core
 
 - `SuperconductingCircuitsCore` owns the docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers.
+- `SuperconductingCircuitsVisualizer` owns Julia-side PlotlyJS figure construction, display/export configuration, trace-to-figure helpers, and Pluto/report presentation helpers.
 - `SuperconductingCircuitsRunner` calls Julia Core for deterministic task execution and owns task polling/claiming, dispatch, local Zarr staging, manifest writing, progress/heartbeat/complete/fail reporting.
 - Runner adapters must not create a separate circuit construction path.
 - Runner adapters must not preserve outdated Core APIs as fallback paths.
+- Julia Core and Julia Runner must not depend on PlotlyJS; PlotlyJS belongs to `SuperconductingCircuitsVisualizer`.
 - Julia Runner does not write formal metadata DB records
 - Python Backend validates Runner manifests and publishes result Zarr into official TraceStore
 

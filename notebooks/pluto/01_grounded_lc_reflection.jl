@@ -7,21 +7,32 @@
 #> description = "A small Julia Core Pluto example that solves a one-port grounded LC resonator and plots real S/Z traces from HBSolveResult."
 
 using Markdown
+using InteractiveUtils
 
 # ╔═╡ 91fd6d8b-4c2f-4512-8734-1c18848986e1
 begin
     import Pkg
 
     core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
+    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
     core_project_file = normpath(joinpath(core_project, "Project.toml"))
+    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
     active_project_file = normpath(something(Base.active_project(), ""))
 
-    if active_project_file != core_project_file
+    if active_project_file != core_project_file && active_project_file != visualizer_project_file
         Pkg.develop(path=core_project)
+        Pkg.develop(path=visualizer_project)
+    else
+        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
+        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
     end
 
     using SuperconductingCircuitsCore
-    using Plots
+    using SuperconductingCircuitsVisualizer
+
+    figure_config = PlotlyFigureConfig(
+        download_filename=splitext(basename(@__FILE__))[1],
+    )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
     using .HBExampleHelpers
@@ -58,18 +69,18 @@ begin
     inductance = 10e-9
     resistance = 50.0
 
-    start_frequency = 4.0e9
-    stop_frequency = 6.0e9
-    point_count = 31
+    start_frequency = 1.0e9
+    stop_frequency = 10.0e9
+    point_count = 1000
 
     pump_frequency = 8.0e9
     pump_current = 0.0
-    n_pump_harmonics = 1
-    n_modulation_harmonics = 1
+    n_pump_harmonics = 8
+    n_modulation_harmonics = 16
 
     optional_hb_kwargs = Dict{Symbol,Any}(
         :nbatches => 1,
-        :iterations => 100,
+        :iterations => 200,
         :ftol => 1e-8,
     )
 end
@@ -182,6 +193,7 @@ begin
     z_label = "om=0|op=1|im=0|ip=1"
     z_traces = get(result.traces, :z_parameter_mode, nothing)
     z11 = z_traces isa AbstractDict && haskey(z_traces, z_label) ? zero_mode_z(result, 1, 1) : nothing
+    y11 = 1 ./ z11
     frequencies_ghz = result.frequencies_hz ./ 1e9
 end
 
@@ -207,38 +219,45 @@ begin
 end
 
 # ╔═╡ 2ed2ac19-e7d0-42c4-af38-f597931fbf7d
-plot(
-    frequencies_ghz,
-    db20(s11);
-    xlabel="Frequency (GHz)",
-    ylabel="|S11| (dB)",
-    label="S11",
+s_parameter_magnitude_figure(
+    result.frequencies_hz,
+    ["S11" => s11];
     title="Grounded LC Reflection Magnitude",
+    config=figure_config,
 )
 
 # ╔═╡ adf182b9-3b6c-4fe4-b731-207fae096f0c
-plot(
-    frequencies_ghz,
-    phase_deg(s11);
-    xlabel="Frequency (GHz)",
-    ylabel="phase(S11) (deg)",
-    label="S11 phase",
+s_parameter_phase_figure(
+    result.frequencies_hz,
+    ["S11" => s11];
     title="Grounded LC Reflection Phase",
+    config=figure_config,
 )
 
 # ╔═╡ 20614025-d8ce-40f2-b32c-c56d536e766e
 begin
     if isnothing(z11)
-        z_traces = get(result.traces, :z_parameter_mode, Dict())
         "Z11 is not available. Available Z labels: $(join(sort(collect(keys(z_traces))), ", "))"
     else
-        plot(
-            frequencies_ghz,
-            [real.(z11) imag.(z11)];
-            xlabel="Frequency (GHz)",
-            ylabel="Z11 (ohm)",
-            label=["real(Z11)" "imag(Z11)"],
+        z_trace_figure(
+            result.frequencies_hz,
+            ["Z11" => z11];
             title="Grounded LC Input Impedance",
+            config=figure_config,
+        )
+    end
+end
+
+# ╔═╡ 2ef40f9c-b518-4fa7-aad3-23ea171a7551
+begin
+    if isnothing(z11)
+        "Y11 is not available because Z11 is not available."
+    else
+        y_trace_figure(
+            result.frequencies_hz,
+            ["Y11" => y11];
+            title="Grounded LC Input Admittance",
+            config=figure_config,
         )
     end
 end
@@ -271,3 +290,4 @@ end
 # ╠═2ed2ac19-e7d0-42c4-af38-f597931fbf7d
 # ╠═adf182b9-3b6c-4fe4-b731-207fae096f0c
 # ╠═20614025-d8ce-40f2-b32c-c56d536e766e
+# ╠═2ef40f9c-b518-4fa7-aad3-23ea171a7551

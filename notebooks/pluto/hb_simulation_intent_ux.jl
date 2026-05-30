@@ -14,15 +14,26 @@ begin
     import Pkg
 
     core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
+    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
     core_project_file = normpath(joinpath(core_project, "Project.toml"))
+    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
     active_project_file = normpath(something(Base.active_project(), ""))
 
-    if active_project_file != core_project_file
+    if active_project_file != core_project_file && active_project_file != visualizer_project_file
         Pkg.develop(path=core_project)
+        Pkg.develop(path=visualizer_project)
+    else
+        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
+        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
     end
 
     using SuperconductingCircuitsCore
-    using Plots
+    using SuperconductingCircuitsVisualizer
+
+    figure_config = PlotlyFigureConfig(
+        download_filename=splitext(basename(@__FILE__))[1],
+    )
+
 end
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37001
@@ -114,11 +125,11 @@ Use simple Julia names for user-facing parameters. Frequencies are in hertz, cur
 begin
     capacitance = 80e-15
     inductance = 10e-9
-    resistance = 50.0
+    port_resistance = 50.0
 
     start_frequency = 4.0e9
     stop_frequency = 6.0e9
-    point_count = 5
+    point_count = 1000
 
     hb_profile = :pump_off
     pump_frequency = 8.0e9
@@ -158,7 +169,7 @@ begin
     (
         capacitance=capacitance,
         inductance=inductance,
-        resistance=resistance,
+        port_resistance=port_resistance,
         frequency_sweep=collect(frequency_sweep),
         hb_profile=hb_profile,
         pump_frequency=pump_frequency,
@@ -196,7 +207,7 @@ plan = @circuit "hb-intent-demo" begin
     port(:signal_port) do
         index = 1
         endpoint = pin(resonator, :signal)
-        resistance = resistance
+        resistance = port_resistance
         role = :mixed
     end
 end
@@ -228,7 +239,7 @@ md"""
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf3700f
 md"""
-The current lumped compiler MVP lowers explicit capacitor, inductor, and external port rows. The local component preserves both `capacitance` and `inductance` as component-library metadata, while explicit Core relations define the physical solver elements.
+The lumped compiler path lowers explicit capacitor, inductor, and external port rows. The local component preserves both `capacitance` and `inductance` as component-library metadata, while explicit Core relations define the physical solver elements.
 """
 
 # ╔═╡ 4b8f6c4c-bd0e-4554-bf14-c7267cf37010
@@ -438,11 +449,11 @@ result
 keys(result.traces)
 
 # ╔═╡ 42213dd5-376b-4bec-8754-ac98cdfb7bae
-zero_mode_s11 = begin
-    zero_mode_s_traces = get(result.traces, :zero_mode_s, Dict{String,Vector{ComplexF64}}())
-    haskey(zero_mode_s_traces, "S11") ? zero_mode_s_traces["S11"] :
-    "S11 is not available. Available zero-mode labels: $(join(sort(collect(keys(zero_mode_s_traces))), ", "))"
-end
+# zero_mode_s11 = begin
+#     zero_mode_s_traces = get(result.traces, :zero_mode_s, Dict{String,Vector{ComplexF64}}())
+#     haskey(zero_mode_s_traces, "S11") ? zero_mode_s_traces["S11"] :
+#     "S11 is not available. Available zero-mode labels: $(join(sort(collect(keys(zero_mode_s_traces))), ", "))"
+# end
 
 # ╔═╡ daf0be54-cca4-4ddf-ab78-6c9c2660dcb1
 begin
@@ -453,14 +464,11 @@ begin
         error("result.traces[:zero_mode_s] does not contain S11. Available labels: $(join(sort(collect(keys(zero_mode_s_traces))), ", "))")
 
     s11 = zero_mode_s_traces["S11"]
-    plot(
-        result.frequencies_hz ./ 1e9,
-        20 .* log10.(abs.(s11));
-        xlabel="Frequency (GHz)",
-        ylabel="|S11| (dB)",
-        label="S11",
-        marker=:circle,
+    s_parameter_magnitude_figure(
+        result.frequencies_hz,
+        ["S11" => s11];
         title="Zero-mode S11 from HBSolveResult",
+        config=figure_config,
     )
 end
 

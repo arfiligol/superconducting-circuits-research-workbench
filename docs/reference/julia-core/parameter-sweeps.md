@@ -113,17 +113,17 @@ HB simulations add more key boundaries. Some changes do not alter circuit topolo
 | source current value | `DriveParameter` | Binds current for an existing source slot |
 | source current from nonzero to zero | `DriveParameter` | `current = 0.0` turns the source off without changing topology |
 | pump frequency value | `DriveParameter` | Binds a runtime value for an existing pump axis |
-| pump-axis count | `HBIntentStructuralParameter` target concept | Changes mode tuple dimension and `hb_intent_key` |
-| source slot mode | `HBIntentStructuralParameter` target concept | Changes source slot definition and `hb_intent_key` |
-| observable request | `HBIntentStructuralParameter` target concept | Changes requested solver-output semantics |
+| pump-axis count | `HBIntentStructuralParameter` | Changes mode tuple dimension and `hb_intent_key` |
+| source slot mode | `HBIntentStructuralParameter` | Changes source slot definition and `hb_intent_key` |
+| observable request | `HBIntentStructuralParameter` | Changes requested solver-output semantics |
 | pump-off profile | `DriveParameter` plus existing `HBIntent` | Keeps pump axis and pump source slot; binds source current to `0.0` |
-| `n_pump_harmonics` | `HBProblemShapeParameter` target concept | Shape follows pump frequencies / pump axes and changes HB problem shape |
-| `n_modulation_harmonics` | `HBProblemShapeParameter` target concept | Belongs to the small-signal modulation basis, not directly to pump-axis count |
-| `returnS` / `returnZ` / `returnQE` / `returnCM` | `HBProblemShapeParameter` target concept | Changes output families and result shape |
-| `maxintermodorder` | `HBProblemShapeParameter` target concept | Changes mode truncation and HB problem interpretation |
-| solver tolerance | `HBRunValueParameter` target concept | Changes numeric convergence behavior without changing problem shape |
+| `n_pump_harmonics` | `HBProblemShapeParameter` | Shape follows pump frequencies / pump axes and changes HB problem shape |
+| `n_modulation_harmonics` | `HBProblemShapeParameter` | Belongs to the small-signal modulation basis, not directly to pump-axis count |
+| `returnS` / `returnZ` / `returnQE` / `returnCM` | `HBProblemShapeParameter` | Changes output families and result shape |
+| `maxintermodorder` | `HBProblemShapeParameter` | Changes mode truncation and HB problem interpretation |
+| solver tolerance | `HBRunValueParameter` | Changes numeric convergence behavior without changing problem shape |
 
-`HBIntentStructuralParameter`, `HBProblemShapeParameter`, and `HBRunValueParameter` are target concepts, not exported roles in the current MVP. Until they exist, document these axes explicitly and classify them against `topology_key`, `hb_intent_key`, `hb_problem_shape_key`, and `run_value_key`.
+Classify these axes against `topology_key`, `hb_intent_key`, `hb_problem_shape_key`, and `run_value_key` before deciding whether a compiled topology can be reused.
 
 Use this table as a quick reference. For implementation and sweep-engine behavior, follow the declared-role / effective-role model in [Parameter Classification](#parameter-classification).
 
@@ -800,9 +800,9 @@ Cell 10: inspect SweepResult
 
 Pluto should provide or support helper functions such as:
 
-!!! note "Target inspection helpers"
-    The helper names in this page describe the target Pluto-facing inspection API.
-    If current implementation names differ, implementation work should align toward these helpers instead of preserving old names as compatibility aliases.
+!!! note "Inspection helpers"
+    The helper names in this page define the Pluto-facing inspection API.
+    Preserve these names rather than adding compatibility aliases for older names.
 
 ```julia
 inspect_plan(plan)

@@ -165,9 +165,14 @@ function _prepare_node_resolution!(ctx::_JosephsonCompileContext)
             _ensure_endpoint!(ctx, relation.from)
             _ensure_endpoint!(ctx, relation.to)
         elseif relation isa InductiveCoupling
-            _validation_error("InductiveCoupling '$(relation.id)' is not supported by the lumped Josephson compiler MVP yet.")
+            _validation_error("InductiveCoupling '$(relation.id)' is not lowerable by this Josephson compiler path.")
+        elseif relation isa MutualInductiveCoupling
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.inductor_a.from)
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.inductor_a.to)
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.inductor_b.from)
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.inductor_b.to)
         elseif relation isa CoupledWindowRelation
-            _validation_error("CoupledWindowRelation '$(relation.id)' is not supported by the lumped Josephson compiler MVP yet.")
+            _validation_error("CoupledWindowRelation '$(relation.id)' is not lowerable by this Josephson compiler path.")
         else
             _validation_error("Unsupported relation for Josephson lowering: $(typeof(relation)).")
         end
@@ -360,11 +365,22 @@ function _lower_relation!(ctx::_JosephsonCompileContext, relation::SeriesResisto
 end
 
 function _lower_relation!(::_JosephsonCompileContext, relation::InductiveCoupling)
-    _validation_error("InductiveCoupling '$(relation.id)' is not supported by the lumped Josephson compiler MVP yet.")
+    _validation_error("InductiveCoupling '$(relation.id)' is not lowerable by this Josephson compiler path.")
+end
+
+function _lower_relation!(ctx::_JosephsonCompileContext, relation::MutualInductiveCoupling)
+    row_name = "K_$(_sanitize_node_part(relation.id))"
+    inductor_a = "L_$(_sanitize_node_part(relation.inductor_a.id))"
+    inductor_b = "L_$(_sanitize_node_part(relation.inductor_b.id))"
+    value_ref = _component_value_ref!(ctx, row_name, relation.coupling_coefficient)
+    _push_component!(ctx.netlist, row_name, inductor_a, inductor_b, value_ref)
+    row_index = length(ctx.netlist)
+    _record_row_provenance!(ctx, relation, row_index)
+    return row_index
 end
 
 function _lower_relation!(::_JosephsonCompileContext, relation::CoupledWindowRelation)
-    _validation_error("CoupledWindowRelation '$(relation.id)' is not supported by the lumped Josephson compiler MVP yet.")
+    _validation_error("CoupledWindowRelation '$(relation.id)' is not lowerable by this Josephson compiler path.")
 end
 
 function _lower_relation!(::_JosephsonCompileContext, relation::AbstractCircuitRelation)

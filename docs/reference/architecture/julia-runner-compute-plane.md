@@ -1,7 +1,6 @@
 ---
 title: "Julia Runner Compute Plane"
 description: "Defines the async Julia compute plane used by the application and notebooks."
-icon: lucide/cpu
 ---
 
 # Julia Runner Compute Plane
@@ -60,8 +59,8 @@ The Runner task families are:
 
 | Task family | Responsibility |
 |---|---|
-| `julia_simulation_frequency_sweep` | execute a Backend-provided frequency sweep through Julia Core / JosephsonCircuits; the first implemented path is the MVP supported design adapter |
-| `julia_simulation_parameter_sweep` | parameterized sweep family; fails clearly until the real sweep executor is wired to Runner |
+| `julia_simulation_frequency_sweep` | execute a Backend-provided frequency sweep through Julia Core / JosephsonCircuits using a declared design adapter |
+| `julia_simulation_parameter_sweep` | parameterized sweep family with explicit validation and failure reporting for unsupported payloads |
 | `julia_analysis_trace_summary` | compute summary tables or derived trace metadata from published traces |
 | `julia_analysis_resonance_fit` | fit resonator/SQUID model parameters and write result artifacts |
 | `julia_analysis_sy_z_compare` | compare S/Y/Z representations through explicit transform and validation logic |
@@ -78,7 +77,7 @@ Each task family follows the same execution contract:
 
 Analysis and post-processing tasks may write summary tables or artifacts instead of S-parameter traces, but they still use the same staging and manifest authority boundary.
 
-The MVP frequency-sweep adapter loads a selected component-library style plan builder, builds a `CircuitPlan`, compiles through Julia Core, runs JosephsonCircuits through `run_frequency_sweep`, and writes Zarr traces. The initial supported design path covers the Local Space resonator seed definition and the internal `runner_mvp_minimal_core_plan` alias. It must not become a separate Runner-owned circuit construction model.
+The frequency-sweep adapter loads a selected component-library style plan builder, builds a `CircuitPlan`, compiles through Julia Core, runs JosephsonCircuits through `run_frequency_sweep`, and writes Zarr traces. Runner adapters must not become a separate Runner-owned circuit construction model.
 
 The same boundary applies to solver controls: Runner may bind frequency arrays, source currents, pump frequencies, harmonic counts, and whitelisted solver kwargs, but those values must be checked against the compiled HB intent before execution. `current = 0.0` is valid source-off behavior for an existing source slot.
 

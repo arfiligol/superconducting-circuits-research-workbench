@@ -44,7 +44,7 @@ struct JosephsonCompiledCircuit
 end
 ```
 
-The current MVP struct does not yet contain every target field. Implementation should move toward this target rather than adding long-term HB metadata through ad hoc dictionaries.
+The compiled circuit record is the structured handoff between authoring and execution. HB metadata belongs in typed fields rather than ad hoc dictionaries.
 
 ## Fields
 
@@ -129,7 +129,7 @@ run_frequency_sweep(compiled, frequency_range_hz; kwargs...)
 
 The Runner should stage numeric arrays through filesystem packages such as Zarr when results are large. HTTP JSON should carry control payloads, status, manifest locators, summaries, and small metadata, not large numeric arrays.
 
-The current MVP compiler emits real JosephsonCircuits-compatible rows for supported lumped plans. Component rows use target value references and `component_values`; port rows use integer port indices. Unsupported compiler paths fail clearly before Runner writes output.
+The compiler emits real JosephsonCircuits-compatible rows for lowerable plans. Component rows use target value references and `component_values`; port rows use integer port indices. Invalid compiler paths fail clearly before Runner writes output.
 
 Runner execution must bind runtime values to compiled HB intent. It must not invent source slots, port roles, pump axes, or observable semantics from task payloads alone.
 

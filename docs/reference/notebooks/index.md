@@ -1,7 +1,6 @@
 ---
 title: "Notebook Interface"
 description: "Defines Pluto and Python notebook roles in the current architecture."
-icon: lucide/notebook-tabs
 ---
 
 # Notebook Interface

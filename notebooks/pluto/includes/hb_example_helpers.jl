@@ -22,7 +22,7 @@ export GroundedResonator,
     zero_mode_y_matrix,
     mode_trace,
     build_grounded_lc_example,
-    build_readout_line_hanging_qwr_example
+    build_point_coupled_readout_resonator_mvp_example
 
 Base.@kwdef struct GroundedResonator <: AbstractCircuitComponent
     id::String = "res"
@@ -454,8 +454,8 @@ function build_grounded_lc_example(;
     )
 end
 
-function build_readout_line_hanging_qwr_example(;
-    id="readout-line-hanging-qwr",
+function build_point_coupled_readout_resonator_mvp_example(;
+    id="point-coupled-readout-resonator-mvp",
     line_sections=2,
     resonator_sections=2,
     readout_series_inductance=0.6e-9,

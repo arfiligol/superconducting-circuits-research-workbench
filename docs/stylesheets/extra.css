@@ -4,6 +4,12 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+/* Hide sidebar status badges while preserving status frontmatter for docs tooling. */
+.md-nav .md-status,
+.md-sidebar .md-status {
+    display: none !important;
+}
+
 /* 移除 Zensical 預設 Hero 可能帶有的生硬邊框 */
 .zen-hero {
     border: none !important;
