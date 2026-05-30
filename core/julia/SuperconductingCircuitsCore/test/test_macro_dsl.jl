@@ -24,6 +24,9 @@ using SuperconductingCircuitsCore
         )
     end
 
+    @test lc_resonator! isa CircuitComponentBuilder
+    @test component_builder_allowed_keywords(lc_resonator!) == [:signal, :capacitance, :inductance]
+
     plan = CircuitPlan("component-macro")
     drive = external_node("drive")
     instance = lc_resonator!(
@@ -50,6 +53,79 @@ using SuperconductingCircuitsCore
         to=drive,
         capacitance=1e-15,
     )
+
+    keyword_error = try
+        lc_resonator!(
+            CircuitPlan("component-keyword-error");
+            id=:bad,
+            singal=drive,
+            capacitance=58.2e-15,
+            inductance=21.5e-9,
+        )
+    catch err
+        err
+    end
+    @test keyword_error isa FrameworkValidationError
+    keyword_message = sprint(showerror, keyword_error)
+    @test occursin("lc_resonator", keyword_message)
+    @test occursin("singal", keyword_message)
+    @test occursin("signal", keyword_message)
+    @test occursin("capacitance", keyword_message)
+
+    parameter_error = try
+        lc_resonator!(
+            CircuitPlan("component-parameter-error");
+            id=:bad,
+            signal=drive,
+            capacotance=58.2e-15,
+            inductance=21.5e-9,
+        )
+    catch err
+        err
+    end
+    @test parameter_error isa FrameworkValidationError
+    @test occursin("capacotance", sprint(showerror, parameter_error))
+
+    missing_error = try
+        lc_resonator!(
+            CircuitPlan("component-missing-parameter");
+            id=:bad,
+            signal=drive,
+            inductance=21.5e-9,
+        )
+    catch err
+        err
+    end
+    @test missing_error isa FrameworkValidationError
+    missing_message = sprint(showerror, missing_error)
+    @test occursin("lc_resonator", missing_message)
+    @test occursin("capacitance", missing_message)
+    @test occursin("Allowed keywords", missing_message)
+end
+
+@testset "@circuit_component line declarations expose distance taps" begin
+    single_line! = @circuit_component "single_line" begin
+        line :main
+        parameter(:length_m; unit="m")
+    end
+    multi_line! = @circuit_component "multi_line" begin
+        line(:main)
+        line(:auxiliary)
+        parameter(:length_m; unit="m")
+    end
+
+    single = single_line!(CircuitPlan("single-line"); id=:line, length_m=1.0e-3)
+    @test component_lines(single) == [:main]
+    single_tap = tap(single, 0.25e-3)
+    @test single_tap isa LineTapEndpoint
+    @test single_tap.line_ref == LineRef("line", :main)
+    @test single_tap.at_m == 0.25e-3
+
+    multi = multi_line!(CircuitPlan("multi-line"); id=:multi, length_m=2.0e-3)
+    @test component_lines(multi) == [:auxiliary, :main]
+    @test_throws FrameworkValidationError tap(multi, 0.25e-3)
+    selected = line_tap(multi; line=:auxiliary, at_m=0.25e-3)
+    @test selected.line_ref == LineRef("multi", :auxiliary)
 end
 
 @testset "@circuit expansion calls canonical APIs" begin
@@ -88,6 +164,60 @@ end
     @test occursin("external_port!", expanded_text)
     @test occursin("record_engineering_group!", expanded_text)
     @test !occursin("component" * "(", expanded_text)
+end
+
+@testset "@circuit grammar accepts canonical calls and component builders only" begin
+    local_lc! = @circuit_component "local_lc" begin
+        pin :signal
+        parameter(:capacitance; unit="F")
+        parameter(:inductance; unit="H")
+
+        shunt_capacitor!(id=:C, at=pin(:signal), capacitance=capacitance)
+        shunt_inductor!(id=:L, at=pin(:signal), inductance=inductance)
+    end
+
+    plan = SuperconductingCircuitsCore.@circuit "component-builder-plan" begin
+        drive = external_node("drive")
+        res = local_lc!(
+            id=:res,
+            signal=drive,
+            capacitance=58.2e-15,
+            inductance=21.5e-9,
+        )
+        shunt_capacitor!(id=:Cdrive, at=pin(res, :signal), capacitance=1e-15)
+    end
+
+    @test haskey(plan.components, "res")
+    @test Set(relation.id for relation in plan.relations if hasproperty(relation, :id)) ==
+          Set(["res_C", "res_L", "Cdrive"])
+
+    push_error = try
+        SuperconductingCircuitsCore.@circuit "bad-push" begin
+            values = Int[]
+            push!(values, 1)
+        end
+    catch err
+        err
+    end
+    @test push_error isa FrameworkValidationError
+    @test occursin("Unsupported @circuit statement", sprint(showerror, push_error))
+
+    unsupported_error = try
+        Core.eval(
+            @__MODULE__,
+            quote
+                SuperconductingCircuitsCore.@circuit "bad-expression" begin
+                    if true
+                        nothing
+                    end
+                end
+            end
+        )
+    catch err
+        err
+    end
+    @test unsupported_error isa LoadError || unsupported_error isa ErrorException
+    @test occursin("Unsupported @circuit statement", sprint(showerror, unsupported_error))
 end
 
 @testset "@circuit builds runnable plan with primitive, port, group, and schematic layout" begin
@@ -141,6 +271,20 @@ end
 end
 
 @testset "@hbintent is plan-bound and port-role neutral" begin
+    probe_only = SuperconductingCircuitsCore.@circuit "probe-role-only" begin
+        drive = external_node("drive")
+        shunt_capacitor!(id=:Cdrive, at=drive, capacitance=1e-12)
+
+        port(:probe_port) do
+            index = 1
+            endpoint = drive
+            resistance = 50.0
+            role = :probe
+        end
+    end
+
+    @test !haskey(probe_only.metadata, :hb_intent)
+
     plan = SuperconductingCircuitsCore.@circuit "hb-plan" begin
         drive = external_node("drive")
         shunt_capacitor!(id=:Cdrive, at=drive, capacitance=1e-12)
@@ -167,11 +311,24 @@ end
             inputmode = (0,)
             inputport = :probe_port
         end
+        solver_controls() do
+            n_pump_harmonics = 3
+            n_modulation_harmonics = 2
+            returnS = true
+            returnZ = true
+            returnQE = false
+            returnCM = false
+            keyedarrays = false
+        end
     end
 
     @test validate_hb_intent(plan).issues == ValidationIssue[]
     @test length(plan.metadata[:hb_intent].source_slots) == 1
     @test length(plan.metadata[:hb_intent].observables) == 1
+    @test plan.metadata[:hb_intent].default_solver_controls.n_pump_harmonics == 3
+    @test plan.metadata[:hb_intent].default_solver_controls.n_modulation_harmonics == 2
+    @test plan.metadata[:hb_intent].default_solver_controls.returnQE == false
+    @test plan.metadata[:hb_intent].default_solver_controls.returnCM == false
 
     invalid = CircuitPlan("invalid-hb")
     external_port!(

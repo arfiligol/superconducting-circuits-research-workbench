@@ -3,13 +3,13 @@
 
 #> [frontmatter]
 #> title = "05 Readout Line Hanging QWR MTL"
-#> tags = ["julia-core", "pluto", "readout-line", "quarter-wave-resonator", "mtl-coupling"]
-#> description = "Canonical Pluto notebook for a readout line with a hanging QWR and finite MTL coupled window."
+#> tags = ["julia-core", "pluto", "hb", "mtl", "qwr"]
+#> description = "Macro DSL tutorial for a readout CPW finite-window coupled to a hanging quarter-wave resonator."
 
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 6d014f3d-d3ca-5721-8750-ace93cb7ac27
+# ╔═╡ 13c5bd32-cbbb-5d78-b539-5215862bf55f
 begin
     import Pkg
     using PlutoUI
@@ -40,68 +40,50 @@ begin
     )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
-    using .HBExampleHelpers: db20, phase_deg, zero_mode_s, zero_mode_z
+    using .HBExampleHelpers: zero_mode_s, zero_mode_z
 end
 
-# ╔═╡ 73f73882-c2c8-565b-a20b-19543764b269
+# ╔═╡ e21e8421-183a-5b9d-8d13-ee7d8ea6ebd0
 TableOfContents()
 
-# ╔═╡ de8a31e4-34f6-530c-9264-f06d12b2c132
+# ╔═╡ caff7b9a-5b47-5983-9182-5f9e4d599779
 md"""
-# 05 Readout Line / Hanging QWR / MTL Coupling
+# 05 Readout Line Hanging QWR With MTL Coupling
 
-This notebook owns the finite distributed coupling-window convention for a readout line and hanging quarter-wave resonator.
-
-## Purpose
-
-Use a real MTL window primitive, inspect the coupled-window component, preserve explicit Core compile and HB solve cells, and plot real two-port `S11` / `S21` traces in magnitude figures.
+This notebook models a pure readout CPW coupled to a grounded-head/open-tail quarter-wave resonator by a finite MTL window.
 """
 
-# ╔═╡ 70a08ed6-f4be-58f6-8d83-3639dc817402
+# ╔═╡ 46fe8430-f7c1-5559-a1d5-63b766f2147b
 md"""
 ## Owns
 
 - Readout CPW ladder plus hanging QWR ladder.
-- Finite MTL coupled-window parameters.
-- Distinction between point capacitive coupling and distributed coupling.
+- Finite MTL coupled-window parameters and coupled-section overrides.
+- Distinction between localized capacitor coupling and distributed coupled-window modeling.
 """
 
-# ╔═╡ 8b2bf24e-1591-5c5e-b84a-88d5de249f8e
+# ╔═╡ 3796afcc-0549-5af7-bb65-06052fb4db95
 LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-05-readout-line-hanging-qwr-mtl.svg"))
 
-# ╔═╡ c63df8e5-f40f-5034-9a17-33dcccab6b1c
+# ╔═╡ 179049e6-be96-5cd9-9af8-1841572bc7c0
 md"""
-## LaTeX Physics
+## Modeling Convention
 
-A quarter-wave resonator has a grounded or voltage-node end and an open or voltage-antinode end. In the ideal line model,
+The uncoupled sections use the single-line RLGC baseline. Inside the coupled window, each line uses the coupled self terms from `MTLCoupledRLGCSpec`, and the window generator adds cross capacitance and mutual inductance relations.
 
-```math
-f_{\lambda/4} \approx \frac{v_p}{4l}.
-```
-
-A finite MTL window changes the coupled section's self terms and adds cross terms rather than inserting one lumped capacitor:
+For each coupled section,
 
 ```math
-C_{12,\mathrm{sec}} = -C'_{12,\mathrm{matrix}}\Delta x,\qquad
-M_{12,\mathrm{sec}} = L'_{12}\Delta x.
+C_{12,\mathrm{sec}} = C'_{12}\Delta x, \qquad
+M_{12,\mathrm{sec}} = L'_m\Delta x.
 ```
 """
 
-# ╔═╡ c667696c-beb5-5b11-b7d8-4cadb6774d18
-md"""
-## Modeling Conventions
-
-- The readout line is a two-port ladder.
-- The QWR head is grounded/coupled and the tail is open.
-- The coupling window is a physical span with start positions and length on both ladders.
-"""
-
-# ╔═╡ 21df14a8-b4ac-58da-851f-c4c5509e234a
+# ╔═╡ 10bffd4c-ab29-5687-83f3-d838361a516b
 begin
-    readout_length_m = 9.0e-3
-    resonator_length_m = 5.28371e-3
+    readout_length_m = 6.0e-3
+    resonator_length_m = 3.0e-3
     section_length_m = 0.75e-3
-
     readout_l_per_m_h = 404.313e-9
     readout_c_per_m_f = 179.86e-12
     resonator_l_per_m_h = 404.313e-9
@@ -109,41 +91,26 @@ begin
 
     window_start_readout_m = 2.25e-3
     window_start_resonator_m = 0.0
-    window_length_m = 200e-6
+    window_length_m = 1.5e-3
     l_matrix_per_m_h = [410.86374 19.08527; 19.08527 410.85454] .* 1e-9
     c_matrix_per_m_f = [170.29805 -8.09678; -8.09678 170.29538] .* 1e-12
-
     port_resistance = 50.0
 
-    start_frequency = 5.0e9
-    stop_frequency = 6.0e9
+    start_frequency = 6.0e9
+    stop_frequency = 12.0e9
     point_count = 1000
 
     pump_frequency = 14.0e9
     pump_current = 0.0
 
-    optional_hb_kwargs = Dict{Symbol,Any}(
-        :nbatches => 1,
-        :iterations => 160,
-        :ftol => 1e-8,
-    )
+    optional_hb_kwargs = Dict{Symbol,Any}(:nbatches => 1, :iterations => 160, :ftol => 1e-8)
 end
 
-# ╔═╡ 567fdfbc-ce0c-58fe-a0c0-884dfe084b2f
+# ╔═╡ 9a4971cb-87fa-5155-82c8-acb1630b0c05
 begin
-    readout_model = RLGCSpec(
-        length_m=readout_length_m,
-        section_length_m=section_length_m,
-        l_per_m_h=readout_l_per_m_h,
-        c_per_m_f=readout_c_per_m_f,
-    )
-    resonator_model = RLGCSpec(
-        length_m=resonator_length_m,
-        section_length_m=section_length_m,
-        l_per_m_h=resonator_l_per_m_h,
-        c_per_m_f=resonator_c_per_m_f,
-    )
-    window_model = MTLCoupledRLGCSpec(
+    readout_spec = RLGCSpec(length_m=readout_length_m, section_length_m=section_length_m, l_per_m_h=readout_l_per_m_h, c_per_m_f=readout_c_per_m_f)
+    qwr_spec = RLGCSpec(length_m=resonator_length_m, section_length_m=section_length_m, l_per_m_h=resonator_l_per_m_h, c_per_m_f=resonator_c_per_m_f)
+    mtl_model = MTLCoupledRLGCSpec(
         start1_m=window_start_readout_m,
         start2_m=window_start_resonator_m,
         length_m=window_length_m,
@@ -153,346 +120,313 @@ begin
     )
 end
 
-# ╔═╡ 49d7184f-ff4b-5a08-96df-5b1f54f7d5fa
-(
-    readout_sections=readout_model.n_sections,
-    resonator_sections=resonator_model.n_sections,
-    qwr_frequency_estimate_ghz=phase_velocity(resonator_model) / (4 * resonator_length_m) / 1e9,
-    mutual_k=mutual_inductance_per_m_h(window_model) / sqrt(window_model.l_matrix_per_m_h[1, 1] * window_model.l_matrix_per_m_h[2, 2]),
-    c12_per_m_f=mutual_capacitance_per_m_f(window_model),
-)
+# ╔═╡ a15bfe4e-0d12-5033-86c9-53fbd5cbac53
+parameter_table = [
+    (name="readout length", value=readout_length_m, unit="m", meaning="through CPW length"),
+    (name="QWR length", value=resonator_length_m, unit="m", meaning="grounded-head/open-tail resonator length"),
+    (name="window start", value=(window_start_readout_m, window_start_resonator_m), unit="m", meaning="distance from each head"),
+    (name="window length", value=window_length_m, unit="m", meaning="finite MTL span"),
+]
 
-# ╔═╡ 6390bc28-0f63-5ba6-8443-041dec21f5d7
-md"""
-## Primitive-Built Component And Core Authoring
-
-The coupled window is selected by distance from each ladder head. The readout line and QWR both include the window boundaries as ladder breakpoints, so Core can generate matching mutual-capacitance and mutual-inductance sections without silently rounding the physical length.
-
-`add_quarter_wave_resonator!` is the local primitive convention here: it builds the QWR ladder with a grounded head (`head_termination=:short`) and an open tail (`tail_termination=:open`), then the tutorial function applies the coupled-section overrides before declaring the MTL window.
-"""
-
-# ╔═╡ c3dbbe99-e0d4-5dfe-bca2-b008a2e2e7e5
+# ╔═╡ e53543ab-a42d-501d-bb90-22487840e775
 begin
-    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
-        point_count > 0 || throw(ArgumentError("point_count must be positive."))
-        point_count == 1 && return [Float64(start_frequency)]
-        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
-    end
+    circuit_plan = @circuit "readout-line-hanging-qwr-mtl" begin
+        input = external_node("input")
+        output = external_node("output")
+        qwr_grounded_head = external_node("qwr_grounded_head")
+        qwr_open_tail = external_node("qwr_open_tail")
 
-    function external_two_port_tutorial!(plan; input, output, port_resistance)
-        external_port!(plan; id=:input_port, index=1, endpoint=input, resistance=port_resistance, role=:signal)
-        external_port!(plan; id=:output_port, index=2, endpoint=output, resistance=port_resistance, role=:readout)
-        return nothing
-    end
-
-    function add_hb_intent_tutorial!(plan; ports)
-        observables = Any[]
-        for output_port in ports
-            for source_port in ports
-                push!(
-                    observables,
-                    SParameterRequest(
-                        id=Symbol(:s, output_port, :_, source_port),
-                        outputmode=(0,),
-                        outputport=output_port,
-                        inputmode=(0,),
-                        inputport=source_port,
-                    ),
-                )
-            end
-        end
-
-        return hb_intent!(
-            plan;
-            pump_axes=[
-                PumpAxis(
-                    id=:pump,
-                    frequency_parameter=:pump_frequency,
-                ),
-            ],
-            source_slots=[
-                HBSourceSlot(
-                    id=:pump_in,
-                    role=:pump,
-                    port=first(ports),
-                    mode=(1,),
-                    current_parameter=:pump_current,
-                ),
-            ],
-            observables=observables,
-            default_solver_controls=HBSolverControls(
-                n_pump_harmonics=1,
-                n_modulation_harmonics=1,
-                returnS=true,
-                returnZ=true,
-                returnQE=true,
-                returnCM=true,
-                keyedarrays=false,
-            ),
-        )
-    end
-
-    function add_readout_hanging_qwr_mtl_tutorial!(
-        plan;
-        id,
-        input,
-        output,
-        qwr_grounded_head,
-        qwr_open_tail,
-        readout_spec::RLGCSpec,
-        resonator_spec::RLGCSpec,
-        mtl_model::MTLCoupledRLGCSpec,
-    )
-        readout_breakpoints = [mtl_model.start1_m, mtl_model.start1_m + mtl_model.length_m]
-        qwr_breakpoints = [mtl_model.start2_m, mtl_model.start2_m + mtl_model.length_m]
-        readout_line = build_lc_ladder_line!(
-            plan;
-            id=string(id, "_readout_line"),
+        readout_line = transmission_line!(
+            id=:readout_line,
             head=input,
             tail=output,
             spec=readout_spec,
             head_termination=:external,
             tail_termination=:external,
-            breakpoints_m=readout_breakpoints,
+            breakpoints_m=[window_start_readout_m, window_start_readout_m + window_length_m],
             section_overrides=[coupled_line_section_override(mtl_model, 1)],
         )
-        qwr_component = add_quarter_wave_resonator!(
-            plan;
-            id=string(id, "_qwr"),
+        qwr = quarter_wave_resonator!(
+            id=:qwr,
             grounded_head=qwr_grounded_head,
             open_tail=qwr_open_tail,
-            spec=resonator_spec,
-            breakpoints_m=qwr_breakpoints,
+            spec=qwr_spec,
+            breakpoints_m=[window_start_resonator_m, window_start_resonator_m + window_length_m],
             section_overrides=[coupled_line_section_override(mtl_model, 2)],
         )
         window = couple_transmission_window!(
-            plan;
-            id=string(id, "_readout_qwr_mtl_window"),
+            id=:readout_qwr_mtl_window,
             line1=readout_line,
-            line2=qwr_component.line,
-            start1=mtl_model.start1_m,
-            start2=mtl_model.start2_m,
-            length=mtl_model.length_m,
+            line2=qwr.line,
+            start1=window_start_readout_m,
+            start2=window_start_resonator_m,
+            length=window_length_m,
             model=mtl_model,
         )
 
-        return (
-            id=string(id),
-            readout_line=readout_line,
-            qwr=qwr_component.line,
-            qwr_component=qwr_component,
-            window=window,
-            window_model=mtl_model,
-        )
+        port(:input_port) do
+            index = 1
+            endpoint = input
+            resistance = port_resistance
+            role = :readout_input
+        end
+        port(:output_port) do
+            index = 2
+            endpoint = output
+            resistance = port_resistance
+            role = :readout_output
+        end
+
+        group(:readout_qwr_system) do
+            label = "Readout line with hanging QWR"
+            role = :readout_resonator_system
+            members = [:readout_line, :qwr, :readout_qwr_mtl_window, :input_port, :output_port]
+        end
+
+        schematic!(:notebook_view) do
+            track(:readout_track) do
+                line = readout_line
+                orientation = :left_to_right
+                relative_order = :top
+                role = :readout_line
+                label = "readout"
+            end
+            track(:qwr_track) do
+                line = qwr.line
+                orientation = :left_to_right
+                relative_order = :bottom
+                role = :quarter_wave_resonator
+                label = "QWR"
+            end
+            segment(:readout_window_segment) do
+                track = :readout_track
+                from = window_start_readout_m
+                to = window_start_readout_m + window_length_m
+                label = "coupled"
+            end
+            segment(:qwr_window_segment) do
+                track = :qwr_track
+                from = window_start_resonator_m
+                to = window_start_resonator_m + window_length_m
+                label = "coupled"
+            end
+            coupled_span(:readout_qwr_window_span) do
+                relation = window
+                track1 = :readout_track
+                track2 = :qwr_track
+                from1 = window_start_readout_m
+                to1 = window_start_readout_m + window_length_m
+                from2 = window_start_resonator_m
+                to2 = window_start_resonator_m + window_length_m
+                label = "MTL window"
+                render = :parallel_cpw_window
+            end
+            terminal(:input_terminal) do
+                endpoint = input
+                track = :readout_track
+                side = :left
+                kind = :port
+                label = "1"
+            end
+            terminal(:output_terminal) do
+                endpoint = output
+                track = :readout_track
+                side = :right
+                kind = :port
+                label = "2"
+            end
+            terminal(:qwr_ground_terminal) do
+                endpoint = qwr_grounded_head
+                track = :qwr_track
+                side = :left
+                kind = :ground
+                label = "ground"
+            end
+            terminal(:qwr_open_terminal) do
+                endpoint = qwr_open_tail
+                track = :qwr_track
+                side = :right
+                kind = :open
+                label = "open"
+            end
+        end
     end
 
-    tutorial_circuit = let
-        plan = CircuitPlan("readout-line-hanging-qwr-mtl-tutorial")
-        input = external_node("input")
-        output = external_node("output")
-        qwr_grounded_head = external_node("qwr_grounded_head")
-        qwr_open_tail = external_node("qwr_open_tail")
-        external_two_port_tutorial!(plan; input=input, output=output, port_resistance=port_resistance)
-        component = add_readout_hanging_qwr_mtl_tutorial!(
-            plan;
-            id="readout_qwr",
-            input=input,
-            output=output,
-            qwr_grounded_head=qwr_grounded_head,
-            qwr_open_tail=qwr_open_tail,
-            readout_spec=readout_model,
-            resonator_spec=resonator_model,
-            mtl_model=window_model,
-        )
-        add_hb_intent_tutorial!(plan; ports=[:input_port, :output_port])
-        (plan=plan, component=component)
+
+    @hbintent circuit_plan begin
+        pump_axis(:pump; frequency_parameter=:pump_frequency)
+        source_slot(:pump_in) do
+            role = :pump
+            port = :input_port
+            mode = (1,)
+            current_parameter = :pump_current
+        end
+        sparameter(:s11) do
+            outputmode = (0,)
+            outputport = :input_port
+            inputmode = (0,)
+            inputport = :input_port
+        end
+        sparameter(:s21) do
+            outputmode = (0,)
+            outputport = :output_port
+            inputmode = (0,)
+            inputport = :input_port
+        end
+        sparameter(:s12) do
+            outputmode = (0,)
+            outputport = :input_port
+            inputmode = (0,)
+            inputport = :output_port
+        end
+        sparameter(:s22) do
+            outputmode = (0,)
+            outputport = :output_port
+            inputmode = (0,)
+            inputport = :output_port
+        end
+        solver_controls() do
+            n_pump_harmonics = 1
+            n_modulation_harmonics = 1
+            returnS = true
+            returnZ = true
+            returnQE = true
+            returnCM = true
+            keyedarrays = false
+        end
     end
+
+    circuit_plan
 end
-
-# ╔═╡ f1c0cab3-0945-54e8-86ec-dd0569c5b484
-circuit_plan = tutorial_circuit.plan
-
-# ╔═╡ 0d63bc89-5809-51f9-9112-613b4608b662
-engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
-
-# ╔═╡ ed91e532-4f0c-5b4c-8ae9-b012ad943890
-compiled_circuit = compile_to_josephson(circuit_plan)
-
-# ╔═╡ ed05445e-32b9-563f-8558-0ab03419f337
-primitive_component = tutorial_circuit.component
-
-# ╔═╡ 48866a58-6a35-569a-9ccb-860a20623e05
-(
-    readout_window_sections=primitive_component.window.section_range1,
-    resonator_window_sections=primitive_component.window.section_range2,
-    generated_c12_relations=length(primitive_component.window.capacitive_couplings),
-    generated_m12_relations=length(primitive_component.window.inductive_couplings),
-    qwr_head_termination=primitive_component.qwr.head_termination,
-    qwr_tail_termination=primitive_component.qwr.tail_termination,
-)
-
-# ╔═╡ 6bd6bfb5-d12c-5568-a0f1-96423ec24416
-(
-    plan_id=circuit_plan.id,
-    relation_count=length(circuit_plan.relations),
-    parameter_count=length(circuit_plan.parameters),
-    port_ids=sort(collect(keys(engineering_graph.ports))),
-)
-
-# ╔═╡ 00868c44-17b2-5c0b-a5c7-6bc7efe129ef
-engineering_graph.relations
-
-# ╔═╡ 9449b896-eb50-5e63-9059-23b38a8f2689
-compiled_circuit.netlist
-
-# ╔═╡ f5f3b87c-1273-5383-9d45-19705c72a0cf
-compiled_circuit.component_values
-
-# ╔═╡ 437f7cac-1c8b-563f-9437-a4914f2615d4
+# ╔═╡ 5c3f32ae-2a36-5ce0-af2a-b9b4dd676608
 md"""
-## HBProblemSpec And Real Solver Output
-
-The notebook keeps the solve boundary visible. `hb_problem` is inspectable before execution, and the next cell is intentionally the explicit solver call used by all canonical Pluto notebooks.
+## Inspect Core Representations
 """
 
-# ╔═╡ 32326c3a-ca01-5c63-9b84-22e802880b17
+# ╔═╡ c83c8e19-5e5c-506e-83e2-3bdef3176de6
+hb_validation_report = validate_hb_intent(circuit_plan)
+
+# ╔═╡ 3201f07f-7c08-5797-90b6-f543429580ef
+graph = engineering_graph(circuit_plan)
+
+# ╔═╡ c57921e8-e67f-5c79-82a6-bc9c4b1135ca
+layout = schematic_layout_intent(circuit_plan)
+
+# ╔═╡ 1ef26e6f-ff68-5a6c-8e46-42596f6c9991
+schematic_export = to_schematic_export_spec(circuit_plan)
+
+# ╔═╡ f5abe72b-3325-5874-8669-6a13d33a4472
+graph_summary = (
+    components=sort(collect(keys(graph.components)); by=string),
+    ports=sort(collect(keys(graph.ports)); by=string),
+    groups=sort(collect(keys(graph.groups)); by=string),
+    relation_count=length(graph.relations),
+)
+
+# ╔═╡ 7b6094c2-4f2e-5980-be4d-f0a57d9525bb
+layout_summary = (
+    tracks=sort(collect(keys(layout.tracks)); by=string),
+    segments=sort(collect(keys(layout.segments)); by=string),
+    coupled_spans=sort(collect(keys(layout.coupled_spans)); by=string),
+    terminals=sort(collect(keys(layout.terminals)); by=string),
+    node_labels=sort(collect(keys(layout.node_labels)); by=string),
+)
+
+# ╔═╡ f9dea896-7259-5a61-85e9-4a6ff2fb9170
+export_summary = (
+    components=length(schematic_export.components),
+    relations=length(schematic_export.relations),
+    ports=length(schematic_export.ports),
+    tracks=length(schematic_export.tracks),
+    terminals=length(schematic_export.terminals),
+)
+
+# ╔═╡ bf70b2a1-fd3e-59be-a5bc-8b0557479241
+compiled_circuit = compile_to_josephson(circuit_plan)
+
+# ╔═╡ 9d9c2880-668e-5629-868b-dba3d8a17c58
+compiled_summary = (
+    netlist_rows=length(compiled_circuit.netlist),
+    port_ids=sort(collect(keys(compiled_circuit.port_map)); by=string),
+    warning_count=length(compiled_circuit.warnings),
+)
+
+# ╔═╡ fd65d7c1-daa1-57d4-8946-72dbfff30e77
+frequency_sweep = point_count == 1 ? [Float64(start_frequency)] : range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+
 hb_problem = build_hb_problem(
     compiled_circuit,
     HBRunSpec(
-        frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
+        frequency_sweep=frequency_sweep,
         pump_frequencies=Dict(:pump => Float64(pump_frequency)),
         source_currents=Dict(:pump_in => Float64(pump_current)),
         optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
     ),
 )
 
-# ╔═╡ 0c2d392a-d6e5-5044-9c31-0554ba670226
-(
-    frequency_points=length(hb_problem.frequencies_hz),
-    pump_axes=hb_problem.wp,
-    sources=hb_problem.sources,
-    controls=hb_problem.controls,
-)
+# ╔═╡ 77cd668f-767d-5593-99ae-7d1f26d99c15
+output_request_report = validate_output_request_configuration(compiled_circuit, hb_problem)
 
-# ╔═╡ c09b35f4-1c61-5048-b5f9-e487a9ccc403
+# ╔═╡ 108ae9d7-f1c8-5af9-b1d7-8f99c1544a65
 result = run_hb_problem(hb_problem)
 
-# ╔═╡ 520668de-97b1-51ad-b157-fb353de9ed66
-output_family_labels = let
-    labels = Dict{Symbol,Vector{String}}()
-    for family_name in (:zero_mode_s, :s_parameter_mode, :z_parameter_mode, :qe_mode, :qeideal_mode, :cm_mode)
-        traces = get(result.traces, family_name, nothing)
-        if traces isa AbstractDict
-            labels[family_name] = sort(string.(collect(keys(traces))))
-        end
-    end
-    labels
-end
+# ╔═╡ 52250c2e-558d-5839-b1f9-4f621178fae3
+trace_families = sort(collect(keys(result.traces)); by=string)
 
-# ╔═╡ 5a4e581f-22f2-54c8-a8d2-2f0e34349281
+# ╔═╡ 88d882a0-9c93-541a-bd80-a97a454bd08f
 begin
-    frequencies_ghz = result.frequencies_hz ./ 1e9
     s11 = zero_mode_s(result, 1, 1)
     s21 = zero_mode_s(result, 2, 1)
-    z11 = zero_mode_z(result, 1, 1)
-    z21 = zero_mode_z(result, 2, 1)
 end
 
-# ╔═╡ 58ce3425-5f20-5de6-b5ce-704f2c467767
+# ╔═╡ 1a1c1a7f-97e2-5ecc-a032-ab06222b603c
 sanity = (
     point_count_matches=length(result.frequencies_hz) == point_count,
-    s11_points=length(s11),
-    s21_points=length(s21),
-    finite_s_traces=all(isfinite, real.(s11)) && all(isfinite, imag.(s11)) && all(isfinite, real.(s21)) && all(isfinite, imag.(s21)),
-    s21_notch_frequency_ghz=frequencies_ghz[argmin(db20(s21))],
+    has_coupled_span=haskey(layout.coupled_spans, :readout_qwr_window_span),
+    finite_s21=all(isfinite, real.(s21)) && all(isfinite, imag.(s21)),
+    hb_intent_ok=!has_errors(hb_validation_report),
 )
 
-# ╔═╡ 281ae891-b531-5d1d-80a7-e43b917e2e39
+# ╔═╡ 4e9b8adf-b250-55d1-8ec0-1584153ac0ac
 sanity
 
-# ╔═╡ 9ce0e0f4-7283-5b11-9ea3-c12fa473410f
+# ╔═╡ 5d53874b-0361-5d42-b1a0-c067a7ee7baa
 begin
-    s_parameter_db_magnitude_figure(
-        result.frequencies_hz,
-        [
-            "S11" => s11,
-            "S21" => s21,
-        ];
-        title="Readout + Hanging QWR S-Parameter Magnitudes",
-        config=figure_config,
-    )
+    s_parameter_db_magnitude_figure(result.frequencies_hz, ["S11" => s11, "S21" => s21]; title="Readout Line With Hanging QWR", config=figure_config)
 end |> wide_figure_cell
 
-# ╔═╡ 92fc7a97-1191-5f6f-8f14-1e5d30a42f9e
+# ╔═╡ 29f1a589-aa75-558c-8a22-a3dc21457061
 begin
-    s_parameter_abs_magnitude_figure(
-        result.frequencies_hz,
-        [
-            "S11" => s11,
-            "S21" => s21,
-        ];
-        title="Readout + Hanging QWR S-Parameter Linear Magnitudes",
-        config=figure_config,
-    )
-end |> wide_figure_cell
-
-# ╔═╡ 65b22a67-fcfd-50c3-880c-260e6aa999ca
-begin
-    s_parameter_phase_figure(
-        result.frequencies_hz,
-        [
-            "S11" => s11,
-            "S21" => s21,
-        ];
-        title="Readout + Hanging QWR Phase",
-        config=figure_config,
-    )
-end |> wide_figure_cell
-
-# ╔═╡ fdde7f27-9497-599b-963a-f6a19dbd8baf
-begin
-    z_trace_figure(
-        result.frequencies_hz,
-        [
-            "Z11" => z11,
-            "Z21" => z21,
-        ];
-        title="Readout + Hanging QWR Z Parameters",
-        config=figure_config,
-    )
+    s_parameter_abs_magnitude_figure(result.frequencies_hz, ["S11" => s11, "S21" => s21]; title="Readout-QWR Absolute Magnitude", config=figure_config, y_range=(0.0, 1.1))
 end |> wide_figure_cell
 
 # ╔═╡ Cell order:
-# ╠═6d014f3d-d3ca-5721-8750-ace93cb7ac27
-# ╠═73f73882-c2c8-565b-a20b-19543764b269
-# ╟─de8a31e4-34f6-530c-9264-f06d12b2c132
-# ╟─70a08ed6-f4be-58f6-8d83-3639dc817402
-# ╠═8b2bf24e-1591-5c5e-b84a-88d5de249f8e
-# ╟─c63df8e5-f40f-5034-9a17-33dcccab6b1c
-# ╟─c667696c-beb5-5b11-b7d8-4cadb6774d18
-# ╠═21df14a8-b4ac-58da-851f-c4c5509e234a
-# ╠═567fdfbc-ce0c-58fe-a0c0-884dfe084b2f
-# ╠═49d7184f-ff4b-5a08-96df-5b1f54f7d5fa
-# ╟─6390bc28-0f63-5ba6-8443-041dec21f5d7
-# ╠═c3dbbe99-e0d4-5dfe-bca2-b008a2e2e7e5
-# ╠═f1c0cab3-0945-54e8-86ec-dd0569c5b484
-# ╠═0d63bc89-5809-51f9-9112-613b4608b662
-# ╠═ed91e532-4f0c-5b4c-8ae9-b012ad943890
-# ╠═ed05445e-32b9-563f-8558-0ab03419f337
-# ╠═48866a58-6a35-569a-9ccb-860a20623e05
-# ╠═6bd6bfb5-d12c-5568-a0f1-96423ec24416
-# ╠═00868c44-17b2-5c0b-a5c7-6bc7efe129ef
-# ╠═9449b896-eb50-5e63-9059-23b38a8f2689
-# ╠═f5f3b87c-1273-5383-9d45-19705c72a0cf
-# ╟─437f7cac-1c8b-563f-9437-a4914f2615d4
-# ╠═32326c3a-ca01-5c63-9b84-22e802880b17
-# ╠═0c2d392a-d6e5-5044-9c31-0554ba670226
-# ╠═c09b35f4-1c61-5048-b5f9-e487a9ccc403
-# ╠═520668de-97b1-51ad-b157-fb353de9ed66
-# ╠═5a4e581f-22f2-54c8-a8d2-2f0e34349281
-# ╠═58ce3425-5f20-5de6-b5ce-704f2c467767
-# ╠═281ae891-b531-5d1d-80a7-e43b917e2e39
-# ╠═9ce0e0f4-7283-5b11-9ea3-c12fa473410f
-# ╠═92fc7a97-1191-5f6f-8f14-1e5d30a42f9e
-# ╠═65b22a67-fcfd-50c3-880c-260e6aa999ca
-# ╠═fdde7f27-9497-599b-963a-f6a19dbd8baf
+# ╠═13c5bd32-cbbb-5d78-b539-5215862bf55f
+# ╠═e21e8421-183a-5b9d-8d13-ee7d8ea6ebd0
+# ╟─caff7b9a-5b47-5983-9182-5f9e4d599779
+# ╟─46fe8430-f7c1-5559-a1d5-63b766f2147b
+# ╠═3796afcc-0549-5af7-bb65-06052fb4db95
+# ╟─179049e6-be96-5cd9-9af8-1841572bc7c0
+# ╠═10bffd4c-ab29-5687-83f3-d838361a516b
+# ╠═9a4971cb-87fa-5155-82c8-acb1630b0c05
+# ╠═a15bfe4e-0d12-5033-86c9-53fbd5cbac53
+# ╠═e53543ab-a42d-501d-bb90-22487840e775
+# ╟─5c3f32ae-2a36-5ce0-af2a-b9b4dd676608
+# ╠═c83c8e19-5e5c-506e-83e2-3bdef3176de6
+# ╠═3201f07f-7c08-5797-90b6-f543429580ef
+# ╠═c57921e8-e67f-5c79-82a6-bc9c4b1135ca
+# ╠═1ef26e6f-ff68-5a6c-8e46-42596f6c9991
+# ╠═f5abe72b-3325-5874-8669-6a13d33a4472
+# ╠═7b6094c2-4f2e-5980-be4d-f0a57d9525bb
+# ╠═f9dea896-7259-5a61-85e9-4a6ff2fb9170
+# ╠═bf70b2a1-fd3e-59be-a5bc-8b0557479241
+# ╠═9d9c2880-668e-5629-868b-dba3d8a17c58
+# ╠═fd65d7c1-daa1-57d4-8946-72dbfff30e77
+# ╠═77cd668f-767d-5593-99ae-7d1f26d99c15
+# ╠═108ae9d7-f1c8-5af9-b1d7-8f99c1544a65
+# ╠═52250c2e-558d-5839-b1f9-4f621178fae3
+# ╠═88d882a0-9c93-541a-bd80-a97a454bd08f
+# ╠═1a1c1a7f-97e2-5ecc-a032-ab06222b603c
+# ╠═4e9b8adf-b250-55d1-8ec0-1584153ac0ac
+# ╠═5d53874b-0361-5d42-b1a0-c067a7ee7baa
+# ╠═29f1a589-aa75-558c-8a22-a3dc21457061

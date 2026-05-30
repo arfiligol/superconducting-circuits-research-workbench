@@ -11,6 +11,18 @@ struct CircuitComponentInstance <: AbstractCircuitComponent
     metadata::Dict{Symbol,Any}
 end
 
+struct CircuitComponentBuilder
+    template_id::Symbol
+    allowed_keywords::Vector{Symbol}
+    builder::Function
+end
+
+function (builder::CircuitComponentBuilder)(plan; id, kwargs...)
+    return builder.builder(plan; id=id, kwargs...)
+end
+
+component_builder_allowed_keywords(builder::CircuitComponentBuilder) = builder.allowed_keywords
+
 function component_id(component)
     throw(MethodError(component_id, (component,)))
 end

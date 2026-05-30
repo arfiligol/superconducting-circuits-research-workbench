@@ -60,6 +60,73 @@ function _macro_call_name(callee)
     return nothing
 end
 
+const _CIRCUIT_AUTHORING_CALLS = Set{Symbol}([
+    :connect!,
+    :shunt_capacitor!,
+    :shunt_inductor!,
+    :series_inductor!,
+    :series_resistor!,
+    :josephson_junction!,
+    :couple_capacitive!,
+    :couple_inductive!,
+    :couple_window!,
+    :build_lc_ladder_line!,
+    :transmission_line!,
+    :quarter_wave_resonator!,
+    :half_wave_resonator!,
+    :couple_transmission_window!,
+    :add_parallel_lc_resonator!,
+    :add_reflective_jpa!,
+    :add_half_wave_resonator!,
+    :add_quarter_wave_resonator!,
+    :add_readout_line_with_purcell_filter!,
+    :add_readout_purcell_qwr_mtl!,
+])
+
+function _looks_like_authoring_call(name)
+    isnothing(name) && return false
+    text = String(name)
+    return name in _CIRCUIT_AUTHORING_CALLS || (!isempty(text) && text[end] == '!')
+end
+
+function _unsupported_circuit_statement_message()
+    return "Unsupported @circuit statement. Only endpoint bindings, canonical Core authoring calls, circuit component builders, port blocks, group blocks, and schematic layout blocks are allowed."
+end
+
+function _allowed_keyword_list(allowed_keywords)
+    values = unique(Symbol[:id; Symbol.(allowed_keywords)])
+    sort!(values; by=string)
+    return join(string.(values), ", ")
+end
+
+function _validate_component_builder_keywords(template_id, kwargs::Dict{Symbol,Any}, allowed_keywords)
+    allowed = Set(Symbol.(allowed_keywords))
+    for key in keys(kwargs)
+        key in allowed && continue
+        _validation_error(
+            "Unknown keyword '$(key)' for component template '$(template_id)'. Allowed keywords: $(_allowed_keyword_list(allowed_keywords)).",
+        )
+    end
+    return nothing
+end
+
+function _missing_component_parameter_error(template_id, parameter_name, allowed_keywords)
+    _validation_error(
+        "Component template '$(template_id)' is missing required parameter '$(parameter_name)'. Allowed keywords: $(_allowed_keyword_list(allowed_keywords)).",
+    )
+end
+
+function _invoke_circuit_authoring_call(plan, callee, callee_name::Symbol, args...; kwargs...)
+    if callee_name in _CIRCUIT_AUTHORING_CALLS
+        return callee(plan, args...; kwargs...)
+    elseif callee isa CircuitComponentBuilder
+        isempty(args) ||
+            _validation_error("Circuit component builder '$(callee.template_id)' does not accept positional arguments inside @circuit.")
+        return callee(plan; kwargs...)
+    end
+    _validation_error(_unsupported_circuit_statement_message())
+end
+
 function _literal_symbol(value)
     value isa QuoteNode && value.value isa Symbol && return value.value
     value isa Symbol && return value
@@ -77,9 +144,10 @@ function _declaration_name_arg(stmt)
     return nothing, nothing
 end
 
-function _macro_injected_call(plan_var, expr; namespace_id=nothing)
+function _macro_dispatch_call(plan_var, expr; namespace_id=nothing)
     expr isa Expr && expr.head == :call || error("Expected call expression.")
     callee = expr.args[1]
+    callee_name = _macro_call_name(callee)
     args = Any[]
     parameters = Any[]
     for arg in expr.args[2:end]
@@ -107,9 +175,16 @@ function _macro_injected_call(plan_var, expr; namespace_id=nothing)
             push!(args, _component_body_expr(arg, namespace_id))
         end
     end
-    call_args = Any[esc(callee)]
+    call_args = Any[
+        _macro_core_ref(:_invoke_circuit_authoring_call),
+    ]
     !isempty(parameters) && push!(call_args, Expr(:parameters, parameters...))
     push!(call_args, plan_var)
+    push!(
+        call_args,
+        !isnothing(callee_name) && callee_name in _CIRCUIT_AUTHORING_CALLS ? _macro_core_ref(callee_name) : esc(callee),
+    )
+    push!(call_args, isnothing(callee_name) ? QuoteNode(Symbol("<anonymous>")) : QuoteNode(callee_name))
     append!(call_args, args)
     return Expr(:call, call_args...)
 end
@@ -136,15 +211,15 @@ end
 function _component_relation_statement(plan_var, stmt, namespace_id)
     if stmt isa Expr && stmt.head == :call
         name = _macro_call_name(stmt.args[1])
-        if !isnothing(name) && endswith(String(name), "!")
-            return _macro_injected_call(plan_var, stmt; namespace_id=namespace_id)
+        if _looks_like_authoring_call(name)
+            return _macro_dispatch_call(plan_var, stmt; namespace_id=namespace_id)
         end
     elseif stmt isa Expr && stmt.head == :(=)
         rhs = stmt.args[2]
         if rhs isa Expr && rhs.head == :call
             name = _macro_call_name(rhs.args[1])
-            if !isnothing(name) && endswith(String(name), "!")
-                return :($(esc(stmt.args[1])) = $(_macro_injected_call(plan_var, rhs; namespace_id=namespace_id)))
+            if _looks_like_authoring_call(name)
+                return :($(esc(stmt.args[1])) = $(_macro_dispatch_call(plan_var, rhs; namespace_id=namespace_id)))
             end
         end
         return Expr(:(=), esc(stmt.args[1]), _component_body_expr(rhs, namespace_id))
@@ -172,9 +247,11 @@ function _parse_component_macro(block)
             elseif decl_name == :anchor
                 push!(anchors, _literal_symbol(decl_arg))
                 continue
-            elseif decl_name == :tap
+            elseif decl_name == :line
                 push!(lines, _literal_symbol(decl_arg))
                 continue
+            elseif decl_name == :tap
+                error("@circuit_component line interfaces must be declared with line(...). tap(...) is reserved for distance-based endpoint access.")
             end
             name = _macro_call_name(stmt.args[1])
             if name == :parameter
@@ -217,18 +294,30 @@ macro var"circuit_component"(template_id, block)
     parameter_assignments = Any[
         quote
             haskey($(kwargs_var), $(QuoteNode(name))) ||
-                $(_macro_core_ref(:_validation_error))($("Component parameter '$(String(name))' is required."))
+                $(_macro_core_ref(:_missing_component_parameter_error))(
+                    Symbol($(esc(template_id))),
+                    $(QuoteNode(name)),
+                    __allowed_component_keywords__,
+                )
             local $(esc(name)) = $(kwargs_var)[$(QuoteNode(name))]
         end for (name, _) in parameters
     ]
     transformed_body = [_component_relation_statement(plan_var, stmt, id_var) for stmt in body]
 
     builder_var = gensym(:component_builder)
+    allowed_keywords = unique(Symbol[pins...; first.(parameters)...])
+    allowed_keyword_literals = [QuoteNode(key) for key in allowed_keywords]
 
     return quote
         function $(builder_var)($(plan_var)::$(_macro_core_ref(:CircuitPlan)); id, kwargs...)
             local $(id_var) = String(id)
             local $(kwargs_var) = Dict{Symbol,Any}(kwargs)
+            local __allowed_component_keywords__ = Symbol[$(allowed_keyword_literals...)]
+            $(_macro_core_ref(:_validate_component_builder_keywords))(
+                Symbol($(esc(template_id))),
+                $(kwargs_var),
+                __allowed_component_keywords__,
+            )
             $(parameter_assignments...)
             local __component_pins__ = Dict{Symbol,Any}($(pin_pairs...))
             local __component_probes__ = Dict{Symbol,Any}($(probe_pairs...))
@@ -269,7 +358,11 @@ macro var"circuit_component"(template_id, block)
             $(transformed_body...)
             $(instance_var)
         end
-        $(builder_var)
+        $(_macro_core_ref(:CircuitComponentBuilder))(
+            Symbol($(esc(template_id))),
+            Symbol[$(allowed_keyword_literals...)],
+            $(builder_var),
+        )
     end
 end
 
@@ -366,8 +459,8 @@ end
 function _circuit_call_expansion(plan_var, expr)
     if expr isa Expr && expr.head == :call
         name = _macro_call_name(expr.args[1])
-        if !isnothing(name) && endswith(String(name), "!")
-            return _macro_injected_call(plan_var, expr)
+        if _looks_like_authoring_call(name)
+            return _macro_dispatch_call(plan_var, expr)
         end
     end
     return esc(expr)
@@ -379,6 +472,8 @@ function _circuit_statement_expansion(plan_var, stmt, source)
         rhs = stmt.args[2]
         return :($(esc(stmt.args[1])) = $(_circuit_call_expansion(plan_var, rhs)))
     elseif stmt isa Expr && stmt.head == :call
+        name = _macro_call_name(stmt.args[1])
+        _looks_like_authoring_call(name) || error(_unsupported_circuit_statement_message())
         return _circuit_call_expansion(plan_var, stmt)
     elseif stmt isa Expr && stmt.head == :do
         call_expr = stmt.args[1]
@@ -388,7 +483,7 @@ function _circuit_statement_expansion(plan_var, stmt, source)
         name == :group && return _group_expansion(plan_var, stmt)
         name == :schematic! && return _layout_block_expansion(plan_var, stmt)
     end
-    error("Unsupported @circuit statement: $(stmt).")
+    error(_unsupported_circuit_statement_message())
 end
 
 macro circuit(id, block)
@@ -451,6 +546,26 @@ function _hb_do_statement_expr(stmt)
                 inputport=$(esc(_required_block_value(values, :inputport, "sparameter"))),
             )
         )
+    elseif name == :solver_controls
+        length(call_expr.args) == 1 || error("solver_controls() do ... end does not accept positional arguments.")
+        allowed = Set([
+            :n_pump_harmonics,
+            :n_modulation_harmonics,
+            :dc,
+            :threewavemixing,
+            :fourwavemixing,
+            :returnS,
+            :returnZ,
+            :returnQE,
+            :returnCM,
+            :sorting,
+            :keyedarrays,
+        ])
+        unsupported = setdiff(Set(keys(values)), allowed)
+        isempty(unsupported) ||
+            error("Unsupported solver_controls assignment(s): $(join(string.(sort(collect(unsupported); by=string)), ", ")).")
+        parameters = [Expr(:kw, key, esc(value)) for (key, value) in values]
+        return Expr(:call, _macro_core_ref(:HBSolverControls), Expr(:parameters, parameters...))
     end
     return nothing
 end
@@ -460,6 +575,7 @@ macro hbintent(plan, block)
     pump_axes = Any[]
     source_slots = Any[]
     observables = Any[]
+    solver_controls = :($(_macro_core_ref(:HBSolverControls))())
     for stmt in block.args
         stmt isa LineNumberNode && continue
         if stmt isa Expr && stmt.head == :call
@@ -470,7 +586,13 @@ macro hbintent(plan, block)
             expr = _hb_do_statement_expr(stmt)
             isnothing(expr) && error("Unsupported @hbintent do block: $(stmt).")
             name = _macro_call_name(stmt.args[1].args[1])
-            name == :source_slot ? push!(source_slots, expr) : push!(observables, expr)
+            if name == :source_slot
+                push!(source_slots, expr)
+            elseif name == :solver_controls
+                solver_controls = expr
+            else
+                push!(observables, expr)
+            end
         else
             error("Unsupported @hbintent statement: $(stmt).")
         end
@@ -481,6 +603,7 @@ macro hbintent(plan, block)
             pump_axes=$(_macro_core_ref(:PumpAxis))[$(pump_axes...)],
             source_slots=$(_macro_core_ref(:HBSourceSlot))[$(source_slots...)],
             observables=Any[$(observables...)],
+            default_solver_controls=$(solver_controls),
         )
     end
 end

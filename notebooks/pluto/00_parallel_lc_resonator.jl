@@ -3,13 +3,13 @@
 
 #> [frontmatter]
 #> title = "00 Parallel LC Resonator"
-#> tags = ["julia-core", "pluto", "hb", "parallel-lc", "s-parameters"]
-#> description = "Canonical Pluto notebook for a one-port parallel LC resonator and real HB S/Z traces."
+#> tags = ["julia-core", "pluto", "hb", "parallel-lc"]
+#> description = "Macro DSL tutorial for a one-port parallel LC resonator and real HB admittance traces."
 
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 9534149b-2579-50b1-ad6e-3c803cdde067
+# ╔═╡ 3d128bb8-1bcf-57bb-a996-eb9d4cbe06e5
 begin
     import Pkg
     using PlutoUI
@@ -40,64 +40,53 @@ begin
     )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
-    using .HBExampleHelpers: zero_mode_z
+    using .HBExampleHelpers: zero_mode_s, zero_mode_z
 end
 
-# ╔═╡ 3507bfd4-fb7d-5010-8209-63cc178dad0f
+# ╔═╡ dbd30a94-62de-54a8-ac42-f8bbc3594c88
 TableOfContents()
 
-# ╔═╡ 5d6cb8e5-d3d9-5fa0-b026-31082acf4e01
+# ╔═╡ 7b464e61-ff9e-5113-b753-aeefd1116a04
 md"""
 # 00 Parallel LC Resonator
 
-This notebook establishes the smallest pump-off HB workflow: a 50 ohm one-port drives a node with a capacitor and inductor in parallel to ground.
+This notebook studies a one-port parallel LC resonator. A 50 ohm port drives one node, and the capacitor and inductor are both shunted from that node to ground.
 
-## Purpose
-
-Show the common notebook pattern before adding coupling, distributed lines, or nonlinear devices: parameters first, local reusable component construction from Core primitives next, `CircuitPlan` / `EngineeringGraph` / compiled circuit inspection, explicit `HBProblemSpec`, explicit `result = run_hb_problem(hb_problem)`, real trace extraction, PlotlyJS figures through `WideCell`, and a compact sanity check.
+The authoring path is the Core SoT flow: define a reusable component, instantiate it with `@circuit`, declare solver intent with `@hbintent`, inspect semantic graph and schematic export, compile, run HB, then plot real solver traces.
 """
 
-# ╔═╡ 5660a2ba-95d5-5c48-bbd3-4002f33f40ff
+# ╔═╡ c6c8d380-bb0f-57dc-88d9-4e8abfe13c7e
 md"""
 ## Owns
 
-- One-port parallel LC teaching example.
-- Pump-off HB setup with a zero pump source slot.
-- Parallel LC admittance interpretation from real solver output.
+- Parallel LC resonator physics.
+- Admittance interpretation of a one-port resonator.
+- Minimal pump-off HB workflow using `@circuit_component`, `@circuit`, and `@hbintent`.
 """
 
-# ╔═╡ 5ede2082-1fbe-5a5b-8630-9788bee699a8
+# ╔═╡ 9b7f1ff5-8378-5874-893c-896642fedd35
 LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-00-parallel-lc-resonator.svg"))
 
-# ╔═╡ 8a783451-e145-59fa-89bd-78bfb281fe00
+# ╔═╡ ccd34d3a-7df7-5497-bd1d-0f35522f00f6
 md"""
-## LaTeX Physics
+## Physics
 
 For a parallel LC at angular frequency ``\omega``,
 
 ```math
-Y_{LC}(\omega) = j\omega C + \frac{1}{j\omega L}
+Y_{LC}(\omega) = j\omega C + \frac{1}{j\omega L}.
 ```
 
-and the ideal resonance is
+The ideal resonance occurs when the capacitive and inductive susceptances cancel:
 
 ```math
 f_0 = \frac{1}{2\pi\sqrt{LC}}.
 ```
 
-The resonance is clearest in admittance: the imaginary part crosses zero and the admittance magnitude exposes the shunt response directly.
+Because this is a shunt resonator, admittance is the natural quantity to inspect.
 """
 
-# ╔═╡ 392f1aed-60a4-5ba5-918b-971c81b7fc8e
-md"""
-## Modeling Conventions
-
-- Lumped elements only: no line section or coupling-window approximation.
-- Port resistance is the reference impedance used by the HB problem.
-- Pump current is set to `0.0`, but the pump axis remains present so the same solve path is exercised.
-"""
-
-# ╔═╡ d1a11a1e-5f11-597b-87a0-420a44d8102c
+# ╔═╡ 1779d63b-0581-584c-b3de-63f5bfb1bcf0
 begin
     capacitance = 58.2e-15
     inductance = 21.5e-9
@@ -117,253 +106,213 @@ begin
     )
 end
 
-# ╔═╡ 7e6b1165-f72b-5d3c-9639-289d164ff4b0
+# ╔═╡ 3cec03d7-4422-57cf-9c82-edbcd40a315f
+parameter_table = [
+    (name="C", value=capacitance, unit="F", meaning="parallel capacitance"),
+    (name="L", value=inductance, unit="H", meaning="parallel inductance"),
+    (name="Z0", value=port_resistance, unit="ohm", meaning="port resistance"),
+    (name="frequency span", value=(start_frequency, stop_frequency), unit="Hz", meaning="HB sweep"),
+]
+
+# ╔═╡ 3baaa01d-e6ba-5be2-99a6-6bb7a054be20
 f0_estimate = 1 / (2π * sqrt(inductance * capacitance))
 
-# ╔═╡ 8d7dd4c8-6a71-5279-84b6-015779f6dad0
-(
-    capacitance_f=capacitance,
-    inductance_h=inductance,
-    f0_estimate_ghz=f0_estimate / 1e9,
-    frequency_span_ghz=(start_frequency / 1e9, stop_frequency / 1e9),
-)
-
-# ╔═╡ 17e5af7d-902d-5c6d-9e62-c4fa8d711d3c
+# ╔═╡ 4c9a3754-d8fd-564d-981d-53da43ba3c55
 md"""
-## Primitive-Built Component And Core Authoring
+## Reusable Component
 
-The reusable component is just two Core primitive relations: a shunt capacitor and a shunt inductor attached to the same node. The local tutorial builder below creates the reusable component, attaches the visible HB intent, and leaves the compile and solve boundaries explicit in notebook cells.
+The component exposes one electrical pin, `:signal`. Its internal implementation is two primitive shunt relations. The component does not create ports or solver intent; those belong to the system-level circuit.
 """
 
-# ╔═╡ 5b98253a-2eb1-57d2-a61e-90da2fd7410a
-begin
-    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
-        point_count > 0 || throw(ArgumentError("point_count must be positive."))
-        point_count == 1 && return [Float64(start_frequency)]
-        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
-    end
+# ╔═╡ 6bd95036-eb4d-5549-a226-9d2910e953f0
+parallel_lc_resonator! = @circuit_component "parallel_lc_resonator" begin
+    pin :signal
 
-    function port_hb_intent_tutorial!(
-        plan::CircuitPlan;
-        ports,
-        pump_frequency_parameter=:pump_frequency,
-        pump_current_parameter=:pump_current,
-        pump_slot=:pump_in,
-        input_port=first(ports),
-        n_pump_harmonics=1,
-        n_modulation_harmonics=1,
+    parameter(:capacitance; unit="F")
+    parameter(:inductance; unit="H")
+
+    shunt_capacitor!(
+        id=:capacitance,
+        at=pin(:signal),
+        capacitance=capacitance,
+        role=:parallel_lc_capacitance,
+        label="C",
     )
-        observables = Any[]
-        for output_port in ports
-            for source_port in ports
-                push!(
-                    observables,
-                    SParameterRequest(
-                        id=Symbol(:s, output_port, :_, source_port),
-                        outputmode=(0,),
-                        outputport=output_port,
-                        inputmode=(0,),
-                        inputport=source_port,
-                    ),
-                )
-            end
-        end
-
-        return hb_intent!(
-            plan;
-            pump_axes=[
-                PumpAxis(
-                    id=:pump,
-                    frequency_parameter=pump_frequency_parameter,
-                ),
-            ],
-            source_slots=[
-                HBSourceSlot(
-                    id=pump_slot,
-                    role=:pump,
-                    port=input_port,
-                    mode=(1,),
-                    current_parameter=pump_current_parameter,
-                ),
-            ],
-            observables=observables,
-            default_solver_controls=HBSolverControls(
-                n_pump_harmonics=n_pump_harmonics,
-                n_modulation_harmonics=n_modulation_harmonics,
-                returnS=true,
-                returnZ=true,
-                returnQE=true,
-                returnCM=true,
-                keyedarrays=false,
-            ),
-        )
-    end
-
-    function add_parallel_lc_resonator_tutorial!(
-        plan::CircuitPlan;
-        id,
-        node,
-        capacitance,
-        inductance,
+    shunt_inductor!(
+        id=:inductance,
+        at=pin(:signal),
+        inductance=inductance,
+        role=:parallel_lc_inductance,
+        label="L",
     )
-        capacitor = shunt_capacitor!(
-            plan;
-            id="$(id)_capacitance",
-            at=node,
-            capacitance=capacitance,
-            role=:parallel_lc_capacitance,
-            label="parallel LC C",
-        )
-        inductor = shunt_inductor!(
-            plan;
-            id="$(id)_inductance",
-            at=node,
-            inductance=inductance,
-            role=:parallel_lc_inductance,
-            label="parallel LC L",
-        )
-        return (node=node, capacitor=capacitor, inductor=inductor)
-    end
-
-    function build_parallel_lc_plan_tutorial(;
-        id="parallel-lc-resonator-tutorial",
-        capacitance,
-        inductance,
-        port_resistance,
-    )
-        plan = CircuitPlan(id)
-        signal = external_node("signal")
-        external_port!(plan; id=:signal_port, index=1, endpoint=signal, resistance=port_resistance, role=:mixed)
-        add_parallel_lc_resonator_tutorial!(
-            plan;
-            id="resonator",
-            node=signal,
-            capacitance=capacitance,
-            inductance=inductance,
-        )
-        port_hb_intent_tutorial!(plan; ports=[:signal_port])
-        return plan
-    end
-
-    function hb_run_spec_tutorial(;
-        start_frequency,
-        stop_frequency,
-        point_count,
-        pump_frequency,
-        pump_current,
-        optional_hb_kwargs,
-    )
-        return HBRunSpec(
-            frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
-            pump_frequencies=Dict(:pump => Float64(pump_frequency)),
-            source_currents=Dict(:pump_in => Float64(pump_current)),
-            optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
-        )
-    end
 end
 
-# ╔═╡ f70f5b54-a011-54ff-9cd0-06484f69d097
-circuit_plan = build_parallel_lc_plan_tutorial(
-    capacitance=capacitance,
-    inductance=inductance,
-    port_resistance=port_resistance,
-)
-
-# ╔═╡ d1f9dcf2-e22c-555a-b847-c8a1a0f2ee45
-engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
-
-# ╔═╡ e1b18589-45a7-5c49-b57f-f6beaeadc3be
-compiled_circuit = compile_to_josephson(circuit_plan)
-
-# ╔═╡ 2dd70db0-1de6-5bff-9285-a5d3065919ad
-primitive_component = (
-    shunt_capacitors=filter(relation -> relation isa ShuntCapacitor, circuit_plan.relations),
-    shunt_inductors=filter(relation -> relation isa ShuntInductor, circuit_plan.relations),
-)
-
-# ╔═╡ 1d5d5042-a2c5-56e9-a192-9dd8744ba65c
-primitive_component
-
-# ╔═╡ 97b220ce-1687-5883-829f-8f15e27122d5
-(
-    plan_id=circuit_plan.id,
-    relation_count=length(circuit_plan.relations),
-    parameter_count=length(circuit_plan.parameters),
-    port_ids=sort(collect(keys(engineering_graph.ports))),
-)
-
-# ╔═╡ 95f075ea-492e-5a7e-87b1-747df86eaccc
-engineering_graph.relations
-
-# ╔═╡ 23809eab-197e-589f-b6c9-c9f273f9f70c
-compiled_circuit.netlist
-
-# ╔═╡ 8c277327-69d3-5f71-b992-a6c34ac61c12
-compiled_circuit.component_values
-
-# ╔═╡ 725d1e59-b1b0-546a-847f-a2b2e48146c5
+# ╔═╡ 72a243d3-d8cf-5137-bd5f-bedf26221d4f
 md"""
-## HBProblemSpec And Real Solver Output
+## Circuit Plan
 
-The notebook keeps the solve boundary visible. `hb_problem` is inspectable before execution, and the next cell is intentionally the explicit solver call used by all canonical Pluto notebooks.
+The complete runnable system is a component instance plus one physical port. The port role is descriptive metadata only; the solver source and observable are declared later in `@hbintent`.
 """
 
-# ╔═╡ 1a072efd-3ba2-55f6-a4f3-9374c84517bb
+# ╔═╡ 04935fb0-fbc0-537c-9dd4-0ae9462a0ce0
+begin
+    circuit_plan = @circuit "parallel-lc-resonator" begin
+        signal = external_node("signal")
+        resonator = parallel_lc_resonator!(
+            id=:resonator,
+            signal=signal,
+            capacitance=capacitance,
+            inductance=inductance,
+        )
+
+        port(:signal_port) do
+            index = 1
+            endpoint = pin(resonator, :signal)
+            resistance = port_resistance
+            role = :reflection
+        end
+
+        group(:one_port_resonator) do
+            label = "One-port parallel LC"
+            role = :resonator_example
+            members = [:resonator, :signal_port]
+        end
+
+        schematic!(:notebook_view) do
+            terminal(:signal_terminal) do
+                endpoint = signal
+                side = :left
+                kind = :port
+                label = "1"
+            end
+            node_label(:signal_node) do
+                target = signal
+                label = "signal"
+            end
+        end
+    end
+
+
+    @hbintent circuit_plan begin
+        pump_axis(:pump; frequency_parameter=:pump_frequency)
+        source_slot(:pump_in) do
+            role = :pump
+            port = :signal_port
+            mode = (1,)
+            current_parameter = :pump_current
+        end
+        sparameter(:s11) do
+            outputmode = (0,)
+            outputport = :signal_port
+            inputmode = (0,)
+            inputport = :signal_port
+        end
+        solver_controls() do
+            n_pump_harmonics = 1
+            n_modulation_harmonics = 1
+            returnS = true
+            returnZ = true
+            returnQE = true
+            returnCM = true
+            keyedarrays = false
+        end
+    end
+
+    circuit_plan
+end
+# ╔═╡ c4a819ae-cd12-5994-bad2-c2375369e34b
+md"""
+## Inspect Core Representations
+"""
+
+# ╔═╡ 7995b3e2-9e90-5dbb-9e1d-a6accb4f8835
+hb_validation_report = validate_hb_intent(circuit_plan)
+
+# ╔═╡ 8c9512d6-4746-577c-94c9-dd65a987fe3f
+graph = engineering_graph(circuit_plan)
+
+# ╔═╡ 3db97704-1928-5103-a6e3-182828cadef4
+layout = schematic_layout_intent(circuit_plan)
+
+# ╔═╡ 2195250e-8da9-52ad-81d4-039583dc9d82
+schematic_export = to_schematic_export_spec(circuit_plan)
+
+# ╔═╡ a9fc3311-b430-547b-8a2e-a85b582f7dae
+graph_summary = (
+    components=sort(collect(keys(graph.components)); by=string),
+    ports=sort(collect(keys(graph.ports)); by=string),
+    groups=sort(collect(keys(graph.groups)); by=string),
+    relation_count=length(graph.relations),
+)
+
+# ╔═╡ 2d9f25da-d25d-56cb-8ffd-f3c593c1ab96
+layout_summary = (
+    tracks=sort(collect(keys(layout.tracks)); by=string),
+    segments=sort(collect(keys(layout.segments)); by=string),
+    coupled_spans=sort(collect(keys(layout.coupled_spans)); by=string),
+    terminals=sort(collect(keys(layout.terminals)); by=string),
+    node_labels=sort(collect(keys(layout.node_labels)); by=string),
+)
+
+# ╔═╡ 8a753a11-84ab-5ee5-948f-a4a533751027
+export_summary = (
+    components=length(schematic_export.components),
+    relations=length(schematic_export.relations),
+    ports=length(schematic_export.ports),
+    tracks=length(schematic_export.tracks),
+    terminals=length(schematic_export.terminals),
+)
+
+# ╔═╡ 72441715-726a-5788-a1f7-2241b06f02ca
+compiled_circuit = compile_to_josephson(circuit_plan)
+
+# ╔═╡ a2dc1188-3746-5b63-b2f9-ecdf9f44a83e
+compiled_summary = (
+    netlist_rows=length(compiled_circuit.netlist),
+    port_ids=sort(collect(keys(compiled_circuit.port_map)); by=string),
+    warning_count=length(compiled_circuit.warnings),
+)
+
+# ╔═╡ 1a0328f5-f32d-5679-8851-11b3b2e17105
+frequency_sweep = point_count == 1 ? [Float64(start_frequency)] : range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+
 hb_problem = build_hb_problem(
     compiled_circuit,
-    hb_run_spec_tutorial(
-        start_frequency=start_frequency,
-        stop_frequency=stop_frequency,
-        point_count=point_count,
-        pump_frequency=pump_frequency,
-        pump_current=pump_current,
-        optional_hb_kwargs=optional_hb_kwargs,
+    HBRunSpec(
+        frequency_sweep=frequency_sweep,
+        pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+        source_currents=Dict(:pump_in => Float64(pump_current)),
+        optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
     ),
 )
 
-# ╔═╡ b33ab863-eaa9-5797-815f-a8adfaf7d1d4
-(
-    frequency_points=length(hb_problem.frequencies_hz),
-    pump_axes=hb_problem.wp,
-    sources=hb_problem.sources,
-    controls=hb_problem.controls,
-)
+# ╔═╡ 3481f53c-8125-574b-b8b0-3cb7362d384a
+output_request_report = validate_output_request_configuration(compiled_circuit, hb_problem)
 
-# ╔═╡ 7d7143fd-9a05-53f7-ba2e-1f32ff78c38a
+# ╔═╡ 4684a14f-a683-59c4-ab6f-3a0cd5c0cded
 result = run_hb_problem(hb_problem)
 
-# ╔═╡ c8e7067f-7077-514f-8788-45b6d484a293
-output_family_labels = let
-    labels = Dict{Symbol,Vector{String}}()
-    for family_name in (:zero_mode_s, :s_parameter_mode, :z_parameter_mode, :qe_mode, :qeideal_mode, :cm_mode)
-        traces = get(result.traces, family_name, nothing)
-        if traces isa AbstractDict
-            labels[family_name] = sort(string.(collect(keys(traces))))
-        end
-    end
-    labels
-end
+# ╔═╡ 3aec22cc-b6b7-599a-ba08-1b9459956adc
+trace_families = sort(collect(keys(result.traces)); by=string)
 
-# ╔═╡ b37adf3d-8eb2-5c29-9a44-1ca8edf83343
+# ╔═╡ d834a02a-a42e-5003-834d-6376a55ad823
 begin
-    frequencies_ghz = result.frequencies_hz ./ 1e9
     z11 = zero_mode_z(result, 1, 1)
     y11 = 1 ./ z11
 end
 
-# ╔═╡ fbcb058d-2e35-5326-b0ea-c353390fd955
+# ╔═╡ a33fb5f5-b5e5-599c-8ace-9190213ac952
 sanity = (
     point_count_matches=length(result.frequencies_hz) == point_count,
-    z11_points=length(z11),
-    y11_points=length(y11),
     finite_y_trace=all(isfinite, real.(y11)) && all(isfinite, imag.(y11)),
     resonance_in_span=start_frequency <= f0_estimate <= stop_frequency,
+    hb_intent_ok=!has_errors(hb_validation_report),
 )
 
-# ╔═╡ 3e628e29-6491-5103-a89b-e79c6ee0d078
+# ╔═╡ a296f796-4254-5479-a43a-f9e7f05815dc
 sanity
 
-# ╔═╡ 90ed2100-833a-58f4-8af8-d1af241015f6
+# ╔═╡ 4aab55d3-0e73-515d-906a-74d7afe36186
 begin
     y_trace_figure(
         result.frequencies_hz,
@@ -374,33 +323,34 @@ begin
 end |> wide_figure_cell
 
 # ╔═╡ Cell order:
-# ╠═9534149b-2579-50b1-ad6e-3c803cdde067
-# ╠═3507bfd4-fb7d-5010-8209-63cc178dad0f
-# ╟─5d6cb8e5-d3d9-5fa0-b026-31082acf4e01
-# ╟─5660a2ba-95d5-5c48-bbd3-4002f33f40ff
-# ╠═5ede2082-1fbe-5a5b-8630-9788bee699a8
-# ╟─8a783451-e145-59fa-89bd-78bfb281fe00
-# ╟─392f1aed-60a4-5ba5-918b-971c81b7fc8e
-# ╠═d1a11a1e-5f11-597b-87a0-420a44d8102c
-# ╠═7e6b1165-f72b-5d3c-9639-289d164ff4b0
-# ╠═8d7dd4c8-6a71-5279-84b6-015779f6dad0
-# ╟─17e5af7d-902d-5c6d-9e62-c4fa8d711d3c
-# ╠═5b98253a-2eb1-57d2-a61e-90da2fd7410a
-# ╠═f70f5b54-a011-54ff-9cd0-06484f69d097
-# ╠═d1f9dcf2-e22c-555a-b847-c8a1a0f2ee45
-# ╠═e1b18589-45a7-5c49-b57f-f6beaeadc3be
-# ╠═2dd70db0-1de6-5bff-9285-a5d3065919ad
-# ╠═1d5d5042-a2c5-56e9-a192-9dd8744ba65c
-# ╠═97b220ce-1687-5883-829f-8f15e27122d5
-# ╠═95f075ea-492e-5a7e-87b1-747df86eaccc
-# ╠═23809eab-197e-589f-b6c9-c9f273f9f70c
-# ╠═8c277327-69d3-5f71-b992-a6c34ac61c12
-# ╟─725d1e59-b1b0-546a-847f-a2b2e48146c5
-# ╠═1a072efd-3ba2-55f6-a4f3-9374c84517bb
-# ╠═b33ab863-eaa9-5797-815f-a8adfaf7d1d4
-# ╠═7d7143fd-9a05-53f7-ba2e-1f32ff78c38a
-# ╠═c8e7067f-7077-514f-8788-45b6d484a293
-# ╠═b37adf3d-8eb2-5c29-9a44-1ca8edf83343
-# ╠═fbcb058d-2e35-5326-b0ea-c353390fd955
-# ╠═3e628e29-6491-5103-a89b-e79c6ee0d078
-# ╠═90ed2100-833a-58f4-8af8-d1af241015f6
+# ╠═3d128bb8-1bcf-57bb-a996-eb9d4cbe06e5
+# ╠═dbd30a94-62de-54a8-ac42-f8bbc3594c88
+# ╟─7b464e61-ff9e-5113-b753-aeefd1116a04
+# ╟─c6c8d380-bb0f-57dc-88d9-4e8abfe13c7e
+# ╠═9b7f1ff5-8378-5874-893c-896642fedd35
+# ╟─ccd34d3a-7df7-5497-bd1d-0f35522f00f6
+# ╠═1779d63b-0581-584c-b3de-63f5bfb1bcf0
+# ╠═3cec03d7-4422-57cf-9c82-edbcd40a315f
+# ╠═3baaa01d-e6ba-5be2-99a6-6bb7a054be20
+# ╟─4c9a3754-d8fd-564d-981d-53da43ba3c55
+# ╠═6bd95036-eb4d-5549-a226-9d2910e953f0
+# ╟─72a243d3-d8cf-5137-bd5f-bedf26221d4f
+# ╠═04935fb0-fbc0-537c-9dd4-0ae9462a0ce0
+# ╟─c4a819ae-cd12-5994-bad2-c2375369e34b
+# ╠═7995b3e2-9e90-5dbb-9e1d-a6accb4f8835
+# ╠═8c9512d6-4746-577c-94c9-dd65a987fe3f
+# ╠═3db97704-1928-5103-a6e3-182828cadef4
+# ╠═2195250e-8da9-52ad-81d4-039583dc9d82
+# ╠═a9fc3311-b430-547b-8a2e-a85b582f7dae
+# ╠═2d9f25da-d25d-56cb-8ffd-f3c593c1ab96
+# ╠═8a753a11-84ab-5ee5-948f-a4a533751027
+# ╠═72441715-726a-5788-a1f7-2241b06f02ca
+# ╠═a2dc1188-3746-5b63-b2f9-ecdf9f44a83e
+# ╠═1a0328f5-f32d-5679-8851-11b3b2e17105
+# ╠═3481f53c-8125-574b-b8b0-3cb7362d384a
+# ╠═4684a14f-a683-59c4-ab6f-3a0cd5c0cded
+# ╠═3aec22cc-b6b7-599a-ba08-1b9459956adc
+# ╠═d834a02a-a42e-5003-834d-6376a55ad823
+# ╠═a33fb5f5-b5e5-599c-8ace-9190213ac952
+# ╠═a296f796-4254-5479-a43a-f9e7f05815dc
+# ╠═4aab55d3-0e73-515d-906a-74d7afe36186

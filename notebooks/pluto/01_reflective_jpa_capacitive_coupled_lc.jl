@@ -3,13 +3,13 @@
 
 #> [frontmatter]
 #> title = "01 Reflective JPA Capacitive-Coupled LC"
-#> tags = ["julia-core", "pluto", "jpa", "nonlinear", "reflection"]
-#> description = "Canonical Pluto notebook structure for a reflective JPA with a capacitively coupled LC mode."
+#> tags = ["julia-core", "pluto", "hb", "jpa"]
+#> description = "Macro DSL tutorial for a capacitively coupled reflective JPA and real HB S11 traces."
 
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 5b5fb3c0-7d7b-528c-bc3e-b01bf07f7185
+# ╔═╡ 84d7ce6d-9fff-5e7e-9a64-7c723c625a2a
 begin
     import Pkg
     using PlutoUI
@@ -40,67 +40,43 @@ begin
     )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
-    using .HBExampleHelpers: db20, phase_deg, zero_mode_s, zero_mode_z
+    using .HBExampleHelpers: zero_mode_s, zero_mode_z
 end
 
-# ╔═╡ a79e2c58-acd9-57c1-bff0-634f473c981e
+# ╔═╡ aaded962-1fa3-552d-b154-4e926d3249f6
 TableOfContents()
 
-# ╔═╡ dbd7364d-5052-57d5-89c2-2bc2e40ca7cc
+# ╔═╡ 43dfba0c-e615-5124-a5e6-f2bd66a9ef23
 md"""
-# 01 Reflective JPA / Capacitive-Coupled LC
+# 01 Reflective JPA: Capacitively Coupled LC
 
-This notebook builds a one-port reflective JPA from a coupling capacitor, a resonator capacitance, and a Josephson junction branch.
-
-## Purpose
-
-Show how nonlinear Core primitives enter the same authoring flow as passive LC circuits: parameters, reusable component construction, `CircuitPlan`, `EngineeringGraph`, compiled circuit, `HBProblemSpec`, explicit solve, real trace extraction, PlotlyJS figures through `WideCell`, and sanity checks.
+This notebook adds a nonlinear Josephson element to the same one-port authoring flow. A port couples through a capacitor into a resonator node with a shunt capacitor and Josephson junction.
 """
 
-# ╔═╡ 3f45a386-f4b4-5257-85fa-2f768634f88c
+# ╔═╡ f281bf9f-c353-5f2c-85da-bb7e064826fe
 md"""
 ## Owns
 
-- One-port reflective JPA topology.
-- Capacitive coupling between a 50 ohm environment and the nonlinear LC mode.
-- Real `S11` magnitude, phase, and input impedance from the pumped HB solve.
+- Reflective JPA topology with capacitive input coupling.
+- Josephson junction as a nonlinear Core primitive.
+- Pumped HB intent and real S11 traces.
 """
 
-# ╔═╡ 1567e5ff-6e0a-5589-b7f1-9f1eb1a0aeca
+# ╔═╡ b4b5301b-0394-57ad-9fb4-64eee1b5d8d4
 LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-01-reflective-jpa-capacitive-coupled-lc.svg"))
 
-# ╔═╡ 03e9e911-d989-5ed1-93e3-c18cd562353c
+# ╔═╡ cfc3ab1e-2a99-5f78-8e17-08c85a98065d
 md"""
-## LaTeX Physics
+## Physics
 
-A pumped reflective JPA is read through its reflection coefficient
+The coupling capacitor separates the external 50 ohm environment from the resonator node. The Josephson junction contributes a nonlinear inductive element; the pump is declared explicitly in HB intent.
 
-```math
-\Gamma(\omega) = \frac{Z_{in}(\omega) - Z_0}{Z_{in}(\omega) + Z_0}.
-```
-
-The small-signal resonance is set by the effective nonlinear inductance and total capacitance,
-
-```math
-\omega_r \approx \frac{1}{\sqrt{L_{J,eff} C_\Sigma}}.
-```
-
-The notebook does not invent gain curves. The plotted traces come from `run_hb_problem(hb_problem)`.
+The plotted S-parameters are not invented by the notebook. They are extracted from `run_hb_problem(hb_problem)`.
 """
 
-# ╔═╡ 31e5052e-4f40-5d6d-9c31-b74660a4b59d
-md"""
-## Modeling Conventions
-
-- One reflective signal port.
-- A lumped coupling capacitor separates the port node from the JPA resonator node.
-- Pump parameters are explicit drive inputs, not hidden notebook state.
-- The Josephson branch lowers to a JosephsonCircuits `Lj` row.
-"""
-
-# ╔═╡ 30fa5e0f-8a16-58db-b33a-d46b621843ad
+# ╔═╡ 13a4980e-252e-564b-a9e4-b363117635e4
 begin
-    coupling_capacitance = 6.0e-15
+    coupling_capacitance = 16.0e-15
     resonator_capacitance = 90.0e-15
     josephson_inductance = 7.5e-9
     port_resistance = 50.0
@@ -110,293 +86,221 @@ begin
     point_count = 1000
 
     pump_frequency = 12.0e9
-    pump_current = 20.0e-9
+    pump_current = 0.12e-6
 
     optional_hb_kwargs = Dict{Symbol,Any}(
         :nbatches => 1,
-        :iterations => 180,
+        :iterations => 160,
         :ftol => 1e-8,
     )
 end
 
-# ╔═╡ bc03d638-9631-53e9-b857-48ec8cd6d994
-linear_f0_estimate = 1 / (2π * sqrt(josephson_inductance * resonator_capacitance))
+# ╔═╡ 9ac3a1c5-c268-5bcf-8b8c-5529b396e4f3
+parameter_table = [
+    (name="Cc", value=coupling_capacitance, unit="F", meaning="port-to-resonator coupling capacitor"),
+    (name="Cres", value=resonator_capacitance, unit="F", meaning="resonator shunt capacitance"),
+    (name="Lj", value=josephson_inductance, unit="H", meaning="Josephson inductance"),
+    (name="pump", value=(pump_frequency, pump_current), unit="Hz, A", meaning="large-signal pump binding"),
+]
 
-# ╔═╡ c471be37-792a-50ca-9252-8fd1f895ccb4
-(
-    coupling_capacitance_f=coupling_capacitance,
-    resonator_capacitance_f=resonator_capacitance,
-    josephson_inductance_h=josephson_inductance,
-    linear_f0_estimate_ghz=linear_f0_estimate / 1e9,
-)
-
-# ╔═╡ 7d62378c-f755-5076-8405-22a4071c2fac
+# ╔═╡ 10e5dd9a-7e4b-5f15-a19d-13552892fd39
 md"""
-## Primitive-Built Component And Core Authoring
+## Reusable Component
 
-The reusable component is made from the same Core relations used by passive notebooks: a point coupling capacitor, shunt capacitance, and a `JosephsonJunction`. The local tutorial builder below creates that component directly from primitives and keeps the full `CircuitPlan` and `HBProblemSpec` visible before the explicit solve.
+The reusable JPA component exposes only the external signal pin. The resonator node is private to the component instance.
 """
 
-# ╔═╡ 8c11a0c6-5045-53f3-bf4f-2026bb14e7a5
+# ╔═╡ 4262a5cb-e929-51b2-b46c-b09972aeb727
+reflective_jpa! = @circuit_component "reflective_jpa" begin
+    pin :signal
+
+    parameter(:coupling_capacitance; unit="F")
+    parameter(:resonator_capacitance; unit="F")
+    parameter(:josephson_inductance; unit="H")
+
+    resonator_node = external_node("resonator_node")
+
+    couple_capacitive!(
+        id=:coupling_capacitance,
+        from=pin(:signal),
+        to=resonator_node,
+        capacitance=coupling_capacitance,
+        role=:jpa_coupling_capacitance,
+        label="Cc",
+    )
+    shunt_capacitor!(
+        id=:resonator_capacitance,
+        at=resonator_node,
+        capacitance=resonator_capacitance,
+        role=:jpa_resonator_capacitance,
+        label="Cres",
+    )
+    josephson_junction!(
+        id=:junction,
+        from=resonator_node,
+        to=ground(),
+        josephson_inductance=josephson_inductance,
+        role=:jpa_josephson_junction,
+        label="JJ",
+    )
+end
+
+# ╔═╡ 03936a83-ffc8-58b7-b639-691d48a1dd2c
 begin
-    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
-        point_count > 0 || throw(ArgumentError("point_count must be positive."))
-        point_count == 1 && return [Float64(start_frequency)]
-        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
-    end
-
-    function port_hb_intent_tutorial!(
-        plan::CircuitPlan;
-        ports,
-        pump_frequency_parameter=:pump_frequency,
-        pump_current_parameter=:pump_current,
-        pump_slot=:pump_in,
-        input_port=first(ports),
-        n_pump_harmonics=1,
-        n_modulation_harmonics=1,
-    )
-        observables = Any[]
-        for output_port in ports
-            for source_port in ports
-                push!(
-                    observables,
-                    SParameterRequest(
-                        id=Symbol(:s, output_port, :_, source_port),
-                        outputmode=(0,),
-                        outputport=output_port,
-                        inputmode=(0,),
-                        inputport=source_port,
-                    ),
-                )
-            end
-        end
-
-        return hb_intent!(
-            plan;
-            pump_axes=[
-                PumpAxis(
-                    id=:pump,
-                    frequency_parameter=pump_frequency_parameter,
-                ),
-            ],
-            source_slots=[
-                HBSourceSlot(
-                    id=pump_slot,
-                    role=:pump,
-                    port=input_port,
-                    mode=(1,),
-                    current_parameter=pump_current_parameter,
-                ),
-            ],
-            observables=observables,
-            default_solver_controls=HBSolverControls(
-                n_pump_harmonics=n_pump_harmonics,
-                n_modulation_harmonics=n_modulation_harmonics,
-                returnS=true,
-                returnZ=true,
-                returnQE=true,
-                returnCM=true,
-                keyedarrays=false,
-            ),
-        )
-    end
-
-    function add_reflective_jpa_tutorial!(
-        plan::CircuitPlan;
-        id,
-        port_node,
-        resonator_node,
-        coupling_capacitance,
-        resonator_capacitance,
-        josephson_inductance,
-    )
-        coupling = couple_capacitive!(
-            plan;
-            id="$(id)_coupling_capacitance",
-            from=port_node,
-            to=resonator_node,
-            capacitance=coupling_capacitance,
-            role=:jpa_coupling_capacitance,
-            label="JPA coupling C",
-        )
-        capacitance = shunt_capacitor!(
-            plan;
-            id="$(id)_resonator_capacitance",
-            at=resonator_node,
-            capacitance=resonator_capacitance,
-            role=:jpa_resonator_capacitance,
-            label="JPA resonator C",
-        )
-        junction = josephson_junction!(
-            plan;
-            id="$(id)_josephson_junction",
-            from=resonator_node,
-            to=ground(),
-            josephson_inductance=josephson_inductance,
-            role=:jpa_josephson_junction,
-            label="JPA Josephson junction",
-        )
-        return (
-            port_node=port_node,
-            resonator_node=resonator_node,
-            coupling=coupling,
-            capacitance=capacitance,
-            junction=junction,
-        )
-    end
-
-    function build_reflective_jpa_plan_tutorial(;
-        id="reflective-jpa-capacitive-coupled-lc-tutorial",
-        coupling_capacitance,
-        resonator_capacitance,
-        josephson_inductance,
-        port_resistance,
-    )
-        plan = CircuitPlan(id)
-        port_node = external_node("signal")
-        resonator_node = external_node("jpa_resonator")
-        external_port!(plan; id=:signal_port, index=1, endpoint=port_node, resistance=port_resistance, role=:signal)
-        add_reflective_jpa_tutorial!(
-            plan;
-            id="jpa",
-            port_node=port_node,
-            resonator_node=resonator_node,
+    circuit_plan = @circuit "reflective-jpa-capacitive-coupled-lc" begin
+        signal = external_node("signal")
+        jpa = reflective_jpa!(
+            id=:jpa,
+            signal=signal,
             coupling_capacitance=coupling_capacitance,
             resonator_capacitance=resonator_capacitance,
             josephson_inductance=josephson_inductance,
         )
-        port_hb_intent_tutorial!(
-            plan;
-            ports=[:signal_port],
-            n_pump_harmonics=4,
-            n_modulation_harmonics=2,
-        )
-        return plan
+
+        port(:signal_port) do
+            index = 1
+            endpoint = pin(jpa, :signal)
+            resistance = port_resistance
+            role = :reflection
+        end
+
+        group(:reflective_jpa) do
+            label = "Capacitively coupled reflective JPA"
+            role = :nonlinear_reflection_circuit
+            members = [:jpa, :signal_port]
+        end
+
+        schematic!(:notebook_view) do
+            terminal(:signal_terminal) do
+                endpoint = signal
+                side = :left
+                kind = :port
+                label = "1"
+            end
+            node_label(:signal_label) do
+                target = signal
+                label = "signal"
+            end
+        end
     end
 
-    function hb_run_spec_tutorial(;
-        start_frequency,
-        stop_frequency,
-        point_count,
-        pump_frequency,
-        pump_current,
-        optional_hb_kwargs,
-    )
-        return HBRunSpec(
-            frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
-            pump_frequencies=Dict(:pump => Float64(pump_frequency)),
-            source_currents=Dict(:pump_in => Float64(pump_current)),
-            optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
-        )
+
+    @hbintent circuit_plan begin
+        pump_axis(:pump; frequency_parameter=:pump_frequency)
+        source_slot(:pump_in) do
+            role = :pump
+            port = :signal_port
+            mode = (1,)
+            current_parameter = :pump_current
+        end
+        sparameter(:s11) do
+            outputmode = (0,)
+            outputport = :signal_port
+            inputmode = (0,)
+            inputport = :signal_port
+        end
+        solver_controls() do
+            n_pump_harmonics = 4
+            n_modulation_harmonics = 2
+            returnS = true
+            returnZ = true
+            returnQE = true
+            returnCM = true
+            keyedarrays = false
+        end
     end
+
+    circuit_plan
 end
-
-# ╔═╡ 61c90184-a06a-5ec4-ac38-d54203445552
-circuit_plan = build_reflective_jpa_plan_tutorial(
-    coupling_capacitance=coupling_capacitance,
-    resonator_capacitance=resonator_capacitance,
-    josephson_inductance=josephson_inductance,
-    port_resistance=port_resistance,
-)
-
-# ╔═╡ 00db8292-dc5c-5faf-b7cd-974c2533e7f2
-engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
-
-# ╔═╡ f203fae3-8592-5073-ba37-d5a6857884c9
-compiled_circuit = compile_to_josephson(circuit_plan)
-
-# ╔═╡ 1fe44711-dab7-5539-ae04-5d5abd87e63f
-primitive_component = (
-    capacitive_couplings=filter(relation -> relation isa CapacitiveCoupling, circuit_plan.relations),
-    shunt_capacitors=filter(relation -> relation isa ShuntCapacitor, circuit_plan.relations),
-    josephson_junctions=filter(relation -> relation isa JosephsonJunction, circuit_plan.relations),
-)
-
-# ╔═╡ c61d0c0b-e261-52dd-840b-d8bd7aaf9d3c
-primitive_component
-
-# ╔═╡ e6746168-653d-5c68-a8a4-d69dcd95f1db
-primitive_component
-
-# ╔═╡ 6e26ea2b-52c9-521e-84bc-ac335a92f33b
-(
-    plan_id=circuit_plan.id,
-    relation_count=length(circuit_plan.relations),
-    parameter_count=length(circuit_plan.parameters),
-    port_ids=sort(collect(keys(engineering_graph.ports))),
-)
-
-# ╔═╡ 22a09ccb-0b18-52b2-99c2-9e32184a5dc8
-engineering_graph.relations
-
-# ╔═╡ 07a42219-4279-5eff-be2b-1af83d2b6b1c
-compiled_circuit.netlist
-
-# ╔═╡ ac62cbc1-e775-5b1f-9aa5-f499e387bc46
-compiled_circuit.component_values
-
-# ╔═╡ 0652553d-aa70-5814-a1a9-c22078dd90f3
+# ╔═╡ 618a152f-eb74-5acb-a12f-029f073be5ad
 md"""
-## HBProblemSpec And Real Solver Output
-
-The notebook keeps the solve boundary visible. `hb_problem` is inspectable before execution, and the next cell is intentionally the explicit solver call used by all canonical Pluto notebooks.
+## Inspect Core Representations
 """
 
-# ╔═╡ c5291a16-c18c-50a3-b9dd-7a5551d137e3
+# ╔═╡ 67bc027a-71cb-572e-a7d8-a9d93339628c
+hb_validation_report = validate_hb_intent(circuit_plan)
+
+# ╔═╡ ca8dfa30-70ef-5690-ab04-e29be313be1e
+graph = engineering_graph(circuit_plan)
+
+# ╔═╡ 1dafabd8-0ffe-57c0-a634-341a3ed4cc75
+layout = schematic_layout_intent(circuit_plan)
+
+# ╔═╡ c0955fa0-9a39-527c-88f7-f2a45a3e0317
+schematic_export = to_schematic_export_spec(circuit_plan)
+
+# ╔═╡ 9ef16c4f-a3d0-5dc5-a1a9-9aa908007990
+graph_summary = (
+    components=sort(collect(keys(graph.components)); by=string),
+    ports=sort(collect(keys(graph.ports)); by=string),
+    groups=sort(collect(keys(graph.groups)); by=string),
+    relation_count=length(graph.relations),
+)
+
+# ╔═╡ 3e5ef822-ee55-5a17-ad3c-08e9aac6ce58
+layout_summary = (
+    tracks=sort(collect(keys(layout.tracks)); by=string),
+    segments=sort(collect(keys(layout.segments)); by=string),
+    coupled_spans=sort(collect(keys(layout.coupled_spans)); by=string),
+    terminals=sort(collect(keys(layout.terminals)); by=string),
+    node_labels=sort(collect(keys(layout.node_labels)); by=string),
+)
+
+# ╔═╡ ad5c9ec6-0e14-5944-bf00-ab04c6e7c23e
+export_summary = (
+    components=length(schematic_export.components),
+    relations=length(schematic_export.relations),
+    ports=length(schematic_export.ports),
+    tracks=length(schematic_export.tracks),
+    terminals=length(schematic_export.terminals),
+)
+
+# ╔═╡ 67758047-49cb-5b6e-bcf5-aa599fd2d6e0
+compiled_circuit = compile_to_josephson(circuit_plan)
+
+# ╔═╡ fa21a3c5-dc7c-50bc-babd-623cbe6cb1df
+compiled_summary = (
+    netlist_rows=length(compiled_circuit.netlist),
+    port_ids=sort(collect(keys(compiled_circuit.port_map)); by=string),
+    warning_count=length(compiled_circuit.warnings),
+)
+
+# ╔═╡ ab59648f-4803-51fa-9f45-a01ac0c13089
+frequency_sweep = point_count == 1 ? [Float64(start_frequency)] : range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+
 hb_problem = build_hb_problem(
     compiled_circuit,
-    hb_run_spec_tutorial(
-        start_frequency=start_frequency,
-        stop_frequency=stop_frequency,
-        point_count=point_count,
-        pump_frequency=pump_frequency,
-        pump_current=pump_current,
-        optional_hb_kwargs=optional_hb_kwargs,
+    HBRunSpec(
+        frequency_sweep=frequency_sweep,
+        pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+        source_currents=Dict(:pump_in => Float64(pump_current)),
+        optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
     ),
 )
 
-# ╔═╡ c4f02681-e9e0-5d70-b514-88d5eddba7d1
-(
-    frequency_points=length(hb_problem.frequencies_hz),
-    pump_axes=hb_problem.wp,
-    sources=hb_problem.sources,
-    controls=hb_problem.controls,
-)
+# ╔═╡ bb5b884c-946a-54f0-86c6-98826db7a954
+output_request_report = validate_output_request_configuration(compiled_circuit, hb_problem)
 
-# ╔═╡ a53a7ef1-4154-5042-b400-12723ce7b2b1
+# ╔═╡ 5a0a9249-1633-5556-8ecb-2b89266d7ff7
 result = run_hb_problem(hb_problem)
 
-# ╔═╡ 2c17fe33-6b3e-54a5-b691-fb323084d0be
-output_family_labels = let
-    labels = Dict{Symbol,Vector{String}}()
-    for family_name in (:zero_mode_s, :s_parameter_mode, :z_parameter_mode, :qe_mode, :qeideal_mode, :cm_mode)
-        traces = get(result.traces, family_name, nothing)
-        if traces isa AbstractDict
-            labels[family_name] = sort(string.(collect(keys(traces))))
-        end
-    end
-    labels
-end
+# ╔═╡ 9bd75fdc-1092-5d3b-bdeb-af7a6dd028c9
+trace_families = sort(collect(keys(result.traces)); by=string)
 
-# ╔═╡ c59a0ca6-a945-5424-8350-626685df4c15
-begin
-    frequencies_ghz = result.frequencies_hz ./ 1e9
-    s11 = zero_mode_s(result, 1, 1)
-    z11 = zero_mode_z(result, 1, 1)
-end
+# ╔═╡ c2e9380c-3fd1-5bfc-9614-7e5c723f2b06
+s11 = zero_mode_s(result, 1, 1)
 
-# ╔═╡ 83182941-8356-5e40-a688-e58332642138
+# ╔═╡ f333b9a9-5b74-5e6c-9867-5a3678f8acac
 sanity = (
     point_count_matches=length(result.frequencies_hz) == point_count,
-    s11_points=length(s11),
     finite_s11=all(isfinite, real.(s11)) && all(isfinite, imag.(s11)),
-    linear_resonance_in_span=start_frequency <= linear_f0_estimate <= stop_frequency,
+    hb_intent_ok=!has_errors(hb_validation_report),
 )
 
-# ╔═╡ 55b4a31d-7821-545d-be25-e63d027f63b8
+# ╔═╡ 6de17a18-ec12-5a57-97cb-60325ddad5b1
 sanity
 
-# ╔═╡ a891c8e6-4f03-5541-89c5-96a37a6f0a11
+# ╔═╡ da2c33b1-42c7-5666-bdb8-15f78ca59cc1
 begin
     s_parameter_db_magnitude_figure(
         result.frequencies_hz,
@@ -406,17 +310,17 @@ begin
     )
 end |> wide_figure_cell
 
-# ╔═╡ 75e57b8e-5759-5aa8-85f0-b433705d2d01
+# ╔═╡ 4286746d-40e4-50dc-bbfb-35e2c3e97b35
 begin
     s_parameter_abs_magnitude_figure(
         result.frequencies_hz,
         ["S11" => s11];
-        title="Reflective JPA S11 Linear Magnitude",
+        title="Reflective JPA S11 Absolute Magnitude",
         config=figure_config,
     )
 end |> wide_figure_cell
 
-# ╔═╡ 0aaa76ba-15d7-5440-a6b1-8420d0106a2f
+# ╔═╡ 15d62b6b-1afe-5cd7-bd87-07a75c2d7a4d
 begin
     s_parameter_phase_figure(
         result.frequencies_hz,
@@ -426,48 +330,35 @@ begin
     )
 end |> wide_figure_cell
 
-# ╔═╡ 897da0f4-16e9-55e7-8fa5-2d6d9cce2a08
-begin
-    z_trace_figure(
-        result.frequencies_hz,
-        ["Z11" => z11];
-        title="Reflective JPA Input Impedance",
-        config=figure_config,
-    )
-end |> wide_figure_cell
-
 # ╔═╡ Cell order:
-# ╠═5b5fb3c0-7d7b-528c-bc3e-b01bf07f7185
-# ╠═a79e2c58-acd9-57c1-bff0-634f473c981e
-# ╟─dbd7364d-5052-57d5-89c2-2bc2e40ca7cc
-# ╟─3f45a386-f4b4-5257-85fa-2f768634f88c
-# ╠═1567e5ff-6e0a-5589-b7f1-9f1eb1a0aeca
-# ╟─03e9e911-d989-5ed1-93e3-c18cd562353c
-# ╟─31e5052e-4f40-5d6d-9c31-b74660a4b59d
-# ╠═30fa5e0f-8a16-58db-b33a-d46b621843ad
-# ╠═bc03d638-9631-53e9-b857-48ec8cd6d994
-# ╠═c471be37-792a-50ca-9252-8fd1f895ccb4
-# ╟─7d62378c-f755-5076-8405-22a4071c2fac
-# ╠═8c11a0c6-5045-53f3-bf4f-2026bb14e7a5
-# ╠═61c90184-a06a-5ec4-ac38-d54203445552
-# ╠═00db8292-dc5c-5faf-b7cd-974c2533e7f2
-# ╠═f203fae3-8592-5073-ba37-d5a6857884c9
-# ╠═1fe44711-dab7-5539-ae04-5d5abd87e63f
-# ╠═c61d0c0b-e261-52dd-840b-d8bd7aaf9d3c
-# ╠═e6746168-653d-5c68-a8a4-d69dcd95f1db
-# ╠═6e26ea2b-52c9-521e-84bc-ac335a92f33b
-# ╠═22a09ccb-0b18-52b2-99c2-9e32184a5dc8
-# ╠═07a42219-4279-5eff-be2b-1af83d2b6b1c
-# ╠═ac62cbc1-e775-5b1f-9aa5-f499e387bc46
-# ╟─0652553d-aa70-5814-a1a9-c22078dd90f3
-# ╠═c5291a16-c18c-50a3-b9dd-7a5551d137e3
-# ╠═c4f02681-e9e0-5d70-b514-88d5eddba7d1
-# ╠═a53a7ef1-4154-5042-b400-12723ce7b2b1
-# ╠═2c17fe33-6b3e-54a5-b691-fb323084d0be
-# ╠═c59a0ca6-a945-5424-8350-626685df4c15
-# ╠═83182941-8356-5e40-a688-e58332642138
-# ╠═55b4a31d-7821-545d-be25-e63d027f63b8
-# ╠═a891c8e6-4f03-5541-89c5-96a37a6f0a11
-# ╠═75e57b8e-5759-5aa8-85f0-b433705d2d01
-# ╠═0aaa76ba-15d7-5440-a6b1-8420d0106a2f
-# ╠═897da0f4-16e9-55e7-8fa5-2d6d9cce2a08
+# ╠═84d7ce6d-9fff-5e7e-9a64-7c723c625a2a
+# ╠═aaded962-1fa3-552d-b154-4e926d3249f6
+# ╟─43dfba0c-e615-5124-a5e6-f2bd66a9ef23
+# ╟─f281bf9f-c353-5f2c-85da-bb7e064826fe
+# ╠═b4b5301b-0394-57ad-9fb4-64eee1b5d8d4
+# ╟─cfc3ab1e-2a99-5f78-8e17-08c85a98065d
+# ╠═13a4980e-252e-564b-a9e4-b363117635e4
+# ╠═9ac3a1c5-c268-5bcf-8b8c-5529b396e4f3
+# ╟─10e5dd9a-7e4b-5f15-a19d-13552892fd39
+# ╠═4262a5cb-e929-51b2-b46c-b09972aeb727
+# ╠═03936a83-ffc8-58b7-b639-691d48a1dd2c
+# ╟─618a152f-eb74-5acb-a12f-029f073be5ad
+# ╠═67bc027a-71cb-572e-a7d8-a9d93339628c
+# ╠═ca8dfa30-70ef-5690-ab04-e29be313be1e
+# ╠═1dafabd8-0ffe-57c0-a634-341a3ed4cc75
+# ╠═c0955fa0-9a39-527c-88f7-f2a45a3e0317
+# ╠═9ef16c4f-a3d0-5dc5-a1a9-9aa908007990
+# ╠═3e5ef822-ee55-5a17-ad3c-08e9aac6ce58
+# ╠═ad5c9ec6-0e14-5944-bf00-ab04c6e7c23e
+# ╠═67758047-49cb-5b6e-bcf5-aa599fd2d6e0
+# ╠═fa21a3c5-dc7c-50bc-babd-623cbe6cb1df
+# ╠═ab59648f-4803-51fa-9f45-a01ac0c13089
+# ╠═bb5b884c-946a-54f0-86c6-98826db7a954
+# ╠═5a0a9249-1633-5556-8ecb-2b89266d7ff7
+# ╠═9bd75fdc-1092-5d3b-bdeb-af7a6dd028c9
+# ╠═c2e9380c-3fd1-5bfc-9614-7e5c723f2b06
+# ╠═f333b9a9-5b74-5e6c-9867-5a3678f8acac
+# ╠═6de17a18-ec12-5a57-97cb-60325ddad5b1
+# ╠═da2c33b1-42c7-5666-bdb8-15f78ca59cc1
+# ╠═4286746d-40e4-50dc-bbfb-35e2c3e97b35
+# ╠═15d62b6b-1afe-5cd7-bd87-07a75c2d7a4d

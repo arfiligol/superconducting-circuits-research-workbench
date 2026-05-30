@@ -39,6 +39,8 @@ export FrameworkValidationError
 export CircuitPlan
 export AbstractCircuitComponent
 export CircuitComponentInstance
+export CircuitComponentBuilder
+export component_builder_allowed_keywords
 export AbstractCircuitEndpoint
 export AbstractNodeEndpoint
 export AbstractLineSpanEndpoint

@@ -97,7 +97,7 @@ end
         plan;
         id=:measurement_path,
         label="Measurement path",
-        role=:user_defined_measurement_path,
+        role=:custom_lab_specific_group,
         members=[:signal_port, :res],
     )
 
@@ -194,6 +194,8 @@ end
 
     @test layout === SCC.schematic_layout_intent(plan)
     @test layout.id == :paper_view
+    @test graph.groups[:measurement_path].role == :custom_lab_specific_group
+    @test !haskey(layout.groups, :measurement_path)
     @test layout.tracks[:readout_track].hints[:color] == :blue
     @test layout.coupled_spans[:middle_window].from1_m == 1.2e-3
     @test layout.anchors[:window_center].target == :coupled_window_center
@@ -204,6 +206,17 @@ end
         track=:missing_track,
         from=0.0,
         to=1.0,
+    )
+    @test_throws FrameworkValidationError SCC.record_schematic_coupled_span!(
+        layout;
+        id=:bad_same_track_span,
+        relation=:signal_feeds_res,
+        track1=:readout_track,
+        track2=:readout_track,
+        from1=0.0,
+        to1=0.5e-3,
+        from2=0.0,
+        to2=0.5e-3,
     )
     @test_throws FrameworkValidationError SCC.record_schematic_anchor!(
         layout;

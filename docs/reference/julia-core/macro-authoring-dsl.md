@@ -50,19 +50,34 @@ The macro layer is not a separate netlist language. It records source provenance
 | Interface concept | Meaning |
 | --- | --- |
 | `pin` | electrical endpoint intentionally exposed for normal external connection |
-| `tap` | electrical endpoint on a distributed model, usually addressed by distance from head |
+| `line` | exposed line-like interface that can be addressed by distance from head |
 | `probe` | internal electrical endpoint intentionally exposed for measurement, debug, or coupling |
 | `anchor` | non-electrical schematic, report, or layout reference point |
 
-Only `pin`, `tap`, and `probe` expose electrical endpoints. An `anchor` is not electrically connectable. If a reference point must accept a capacitor, port, transmission-window attachment, or other electrical relation, model it as a `pin`, `tap`, or `probe`.
+Only `pin`, line taps derived from `line`, and `probe` expose electrical endpoints. An `anchor` is not electrically connectable. If a reference point must accept a capacitor, port, transmission-window attachment, or other electrical relation, model it as a `pin`, line tap, or `probe`.
+
+Line-like interfaces are declared with `line :main` or `line(:main)`. The `tap` accessor is not a declaration keyword; it retrieves an endpoint on a component line after an instance exists.
 
 Component instances expose their public interface through stable accessors:
 
 ```julia
 pin(instance, :name)
 tap(instance, distance_from_head)
+line_tap(instance; line = :main, at_m = distance_from_head)
 probe(instance, :name)
 anchor(instance, :name)
+```
+
+The shorthand `tap(instance, distance_from_head)` is valid only when the component exposes one unambiguous default line. Components with multiple exposed lines must use `line_tap(instance; line = :name, at_m = distance_from_head)`.
+
+```julia
+transmission_path! = @circuit_component "transmission_path" begin
+    pin :head
+    pin :tail
+    line :main
+
+    parameter(:length_m; unit = "m")
+end
 ```
 
 The instance keeps hierarchy available for `EngineeringGraph` and schematic export. The compiler may flatten the instance into solver rows after validation.
@@ -352,6 +367,16 @@ begin
             outputport = :output_port
             inputmode = (0,)
             inputport = :input_port
+        end
+
+        solver_controls() do
+            n_pump_harmonics = 1
+            n_modulation_harmonics = 1
+            returnS = true
+            returnZ = true
+            returnQE = true
+            returnCM = true
+            keyedarrays = false
         end
     end
 
