@@ -75,8 +75,8 @@ Use `@circuit_component` when a circuit fragment is meant to become reusable:
 lc_resonator! = @circuit_component "lc_resonator" begin
     pin :signal
 
-    parameter :capacitance unit = "F"
-    parameter :inductance unit = "H"
+    parameter(:capacitance; unit = "F")
+    parameter(:inductance; unit = "H")
 
     shunt_capacitor!(
         id = :Cres,
@@ -226,8 +226,8 @@ floating_lc! = @circuit_component "floating_lc" begin
     pin :island2
     probe :differential_mode
 
-    parameter :capacitance unit = "F"
-    parameter :inductance unit = "H"
+    parameter(:capacitance; unit = "F")
+    parameter(:inductance; unit = "H")
 
     couple_capacitive!(
         id = :Cq,

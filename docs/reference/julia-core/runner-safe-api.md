@@ -156,7 +156,7 @@ When Runner needs a report, preview, or schematic export, it should call Julia C
 
 ```julia
 graph = engineering_graph(plan)
-spec = to_schemdraw_spec(graph)
+spec = to_schematic_export_spec(plan)
 ```
 
 Those APIs return renderer-neutral data. A Python Schemdraw renderer may consume the export later, but Julia Core and Runner should not depend on Schemdraw.

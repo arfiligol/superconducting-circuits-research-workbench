@@ -8,6 +8,16 @@ struct PinEndpoint <: AbstractNodeEndpoint
     pin::Symbol
 end
 
+struct ProbeEndpoint <: AbstractNodeEndpoint
+    component_id::String
+    probe::Symbol
+end
+
+struct AnchorRef
+    component_id::String
+    anchor::Symbol
+end
+
 struct LineRef
     component_id::String
     line::Symbol
@@ -55,8 +65,39 @@ struct LoopEndpoint <: AbstractLoopEndpoint
     loop::Symbol
 end
 
+function pin(component::CircuitComponentInstance, name::Symbol)
+    haskey(component.pins, name) ||
+        _validation_error("Component '$(component.id)' does not expose pin '$(name)'.")
+    return component.pins[name]
+end
+
 pin(component, name::Symbol) = PinEndpoint(_component_id_value(component), name)
 pin(component_id::AbstractString, name::Symbol) = PinEndpoint(String(component_id), name)
+
+function probe(component::CircuitComponentInstance, name::Symbol)
+    haskey(component.probes, name) ||
+        _validation_error("Component '$(component.id)' does not expose probe '$(name)'.")
+    return component.probes[name]
+end
+
+probe(component, name::Symbol) = ProbeEndpoint(_component_id_value(component), name)
+probe(component_id::AbstractString, name::Symbol) = ProbeEndpoint(String(component_id), name)
+
+function anchor(component::CircuitComponentInstance, name::Symbol)
+    haskey(component.anchors, name) ||
+        _validation_error("Component '$(component.id)' does not expose anchor '$(name)'.")
+    return component.anchors[name]
+end
+
+anchor(component, name::Symbol) = AnchorRef(_component_id_value(component), name)
+anchor(component_id::AbstractString, name::Symbol) = AnchorRef(String(component_id), name)
+
+function tap(component::CircuitComponentInstance, distance_from_head::Real)
+    selected = _default_line_or_error(component, "tap")
+    return line_tap(line_ref(component, selected); at_m=distance_from_head)
+end
+
+tap(component, distance_from_head::Real) = line_tap(component; at_m=distance_from_head)
 
 function line_ref(component, line::Symbol)
     id = _component_id_value(component)

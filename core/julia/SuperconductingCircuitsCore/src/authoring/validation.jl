@@ -60,6 +60,7 @@ end
 
 function _endpoint_component_ids(endpoint::AbstractCircuitEndpoint)
     endpoint isa PinEndpoint && return [endpoint.component_id]
+    endpoint isa ProbeEndpoint && return [endpoint.component_id]
     endpoint isa LineTapEndpoint && return [endpoint.line_ref.component_id]
     endpoint isa LineSpanEndpoint && return [endpoint.line_ref.component_id]
     endpoint isa LoopEndpoint && return [endpoint.component_id]
@@ -122,6 +123,136 @@ function _validate_parameter_metadata!(issues, meta::ParameterMetadata, path)
         )
 end
 
+function _relation_is_generated_by_owner(relation::AbstractCircuitRelation, owner::AbstractString)
+    id = _relation_id(relation)
+    isnothing(id) && return false
+    return startswith(String(id), "$(owner)_")
+end
+
+function _external_terminal_satisfied(plan::CircuitPlan, requirement)
+    endpoint = requirement.endpoint
+    ports = get(plan.metadata, :external_ports, Dict{Symbol,ExternalPort}())
+    if ports isa Dict
+        any(port -> port.endpoint == endpoint, values(ports)) && return true
+    end
+    for relation in plan.relations
+        _relation_is_generated_by_owner(relation, requirement.owner) && continue
+        endpoint in _relation_endpoints(relation) && return true
+    end
+    return false
+end
+
+function _validate_external_terminations!(issues, plan::CircuitPlan)
+    requirements = get(plan.metadata, :external_terminal_requirements, Any[])
+    requirements isa Vector || return
+    for requirement in requirements
+        _external_terminal_satisfied(plan, requirement) && continue
+        _issue!(
+            issues,
+            :error,
+            :dangling_external_endpoint,
+            "Transmission-line $(requirement.side) endpoint for '$(requirement.owner)' is declared :external but has no enclosing connection.",
+            [:terminations];
+            stage=:authoring,
+            object_id=requirement.owner,
+            expected="external port, component connection, or declared relation",
+            actual="dangling external endpoint",
+            hint="Use :open for an intentional open boundary, or connect the :external endpoint explicitly.",
+            metadata=Dict{Symbol,Any}(:side => requirement.side, :endpoint => _endpoint_summary(requirement.endpoint)),
+        )
+    end
+end
+
+function _validate_schematic_layout!(issues, plan::CircuitPlan)
+    layout = schematic_layout_intent(plan)
+    track_ids = Set(keys(layout.tracks))
+
+    for segment in values(layout.segments)
+        segment.track in track_ids || _issue!(
+            issues,
+            :error,
+            :unknown_schematic_track,
+            "Schematic segment '$(segment.id)' references unknown track '$(segment.track)'.",
+            [:schematic_layout, :segments];
+            stage=:layout_validation,
+            object_id=String(segment.id),
+        )
+    end
+
+    for span in values(layout.coupled_spans)
+        span.track1 in track_ids || _issue!(
+            issues,
+            :error,
+            :unknown_schematic_track,
+            "Schematic coupled span '$(span.id)' references unknown track '$(span.track1)'.",
+            [:schematic_layout, :coupled_spans];
+            stage=:layout_validation,
+            object_id=String(span.id),
+        )
+        span.track2 in track_ids || _issue!(
+            issues,
+            :error,
+            :unknown_schematic_track,
+            "Schematic coupled span '$(span.id)' references unknown track '$(span.track2)'.",
+            [:schematic_layout, :coupled_spans];
+            stage=:layout_validation,
+            object_id=String(span.id),
+        )
+        span.track1 != span.track2 || _issue!(
+            issues,
+            :error,
+            :invalid_coupled_span_tracks,
+            "Schematic coupled span '$(span.id)' must reference two distinct tracks.",
+            [:schematic_layout, :coupled_spans];
+            stage=:layout_validation,
+            object_id=String(span.id),
+        )
+    end
+
+    for terminal in values(layout.terminals)
+        if !isnothing(terminal.track) && !(terminal.track in track_ids)
+            _issue!(
+                issues,
+                :error,
+                :unknown_schematic_track,
+                "Schematic terminal '$(terminal.id)' references unknown track '$(terminal.track)'.",
+                [:schematic_layout, :terminals];
+                stage=:layout_validation,
+                object_id=String(terminal.id),
+            )
+        end
+    end
+
+    for label in values(layout.segment_labels)
+        if !isnothing(label.track) && !(label.track in track_ids)
+            _issue!(
+                issues,
+                :error,
+                :unknown_schematic_track,
+                "Schematic segment label '$(label.id)' references unknown track '$(label.track)'.",
+                [:schematic_layout, :segment_labels];
+                stage=:layout_validation,
+                object_id=String(label.id),
+            )
+        end
+    end
+
+    for anchor in values(layout.anchors)
+        if anchor.target isa AbstractCircuitEndpoint
+            _issue!(
+                issues,
+                :error,
+                :electrical_anchor_target,
+                "Schematic anchor '$(anchor.id)' targets an electrical endpoint.",
+                [:schematic_layout, :anchors];
+                stage=:layout_validation,
+                object_id=String(anchor.id),
+                hint="Use a pin, tap, probe, or terminal for connectable electrical points; anchors are non-electrical.",
+            )
+        end
+    end
+end
+
 function validate_authoring(plan::CircuitPlan)::ValidationReport
     issues = ValidationIssue[]
 
@@ -176,6 +307,9 @@ function validate_authoring(plan::CircuitPlan)::ValidationReport
     for meta in values(plan.parameters)
         _validate_parameter_metadata!(issues, meta, [:parameters])
     end
+
+    _validate_external_terminations!(issues, plan)
+    _validate_schematic_layout!(issues, plan)
 
     return ValidationReport(issues)
 end

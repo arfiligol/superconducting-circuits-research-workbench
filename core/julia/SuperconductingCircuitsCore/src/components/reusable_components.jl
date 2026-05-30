@@ -140,6 +140,10 @@ function add_half_wave_resonator!(
     return HalfWaveResonator(string(id), line)
 end
 
+function half_wave_resonator!(plan::CircuitPlan; kwargs...)
+    return add_half_wave_resonator!(plan; kwargs...)
+end
+
 function add_quarter_wave_resonator!(
     plan::CircuitPlan;
     id,
@@ -165,6 +169,10 @@ function add_quarter_wave_resonator!(
         section_overrides=section_overrides,
     )
     return QuarterWaveResonator(string(id), line)
+end
+
+function quarter_wave_resonator!(plan::CircuitPlan; kwargs...)
+    return add_quarter_wave_resonator!(plan; kwargs...)
 end
 
 function add_readout_line_with_purcell_filter!(

@@ -41,8 +41,16 @@
     @test haskey(plan.metadata[:transmission_line_ladders], :line)
     @test any(relation -> relation.relation_type == :transmission_line_ladder, engineering_graph(plan).relations)
 
+    external_port!(
+        plan;
+        id=:head_port,
+        index=1,
+        endpoint=head,
+        resistance=50.0,
+        role=:line_head,
+    )
     compiled = compile_to_josephson(plan)
-    @test length(compiled.netlist) == 8
+    @test length(compiled.netlist) == 10
     @test ("L_line_l_1", "ext_head", "ext_line_node_1", :L_line_l_1) in compiled.netlist
     @test ("C_line_c_4", "ext_tail", "0", :C_line_c_4) in compiled.netlist
 end
@@ -145,7 +153,50 @@ end
     @test length(ladder.termination_relations) == 1
     @test ladder.tail_termination == :short
 
+    external_port!(
+        plan;
+        id=:head_port,
+        index=1,
+        endpoint=ladder.head,
+        resistance=50.0,
+        role=:line_head,
+    )
     compiled = compile_to_josephson(plan)
     @test compiled.node_map[ladder.tail] == "0"
     @test !any(row -> row[1] == "C_shorted_c_2" && row[2] == "0" && row[3] == "0", compiled.netlist)
+end
+
+@testset "External line terminations require enclosing connections" begin
+    spec = RLGCSpec(
+        length_m=1.0mm,
+        n_sections=2,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+    )
+    plan = CircuitPlan("dangling-external")
+    build_lc_ladder_line!(
+        plan;
+        id="line",
+        head=external_node("head"),
+        tail=external_node("tail"),
+        spec=spec,
+        head_termination=:external,
+        tail_termination=:open,
+    )
+
+    report = validate_authoring(plan)
+    @test has_errors(report)
+    @test any(issue -> issue.code == :dangling_external_endpoint, errors(report))
+
+    open_plan = CircuitPlan("intentional-open")
+    build_lc_ladder_line!(
+        open_plan;
+        id="line",
+        head=external_node("head"),
+        tail=external_node("tail"),
+        spec=spec,
+        head_termination=:open,
+        tail_termination=:open,
+    )
+    @test !any(issue -> issue.code == :dangling_external_endpoint, validate_authoring(open_plan).issues)
 end

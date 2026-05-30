@@ -5,6 +5,7 @@ end
 
 function _endpoint_summary(endpoint::AbstractCircuitEndpoint)
     endpoint isa PinEndpoint && return (:pin, endpoint.component_id, endpoint.pin)
+    endpoint isa ProbeEndpoint && return (:probe, endpoint.component_id, endpoint.probe)
     endpoint isa LineTapEndpoint && return (:line_tap, endpoint.line_ref.component_id, endpoint.line_ref.line, endpoint.at_m)
     endpoint isa LineSpanEndpoint && return (:line_span, endpoint.line_ref.component_id, endpoint.line_ref.line, endpoint.from_m, endpoint.to_m)
     endpoint isa GroundEndpoint && return (:ground,)

@@ -97,6 +97,10 @@ function _raw_node_name(endpoint::PinEndpoint)
     return "n_$(_sanitize_node_part(endpoint.component_id))_$(_sanitize_node_part(endpoint.pin))"
 end
 
+function _raw_node_name(endpoint::ProbeEndpoint)
+    return "probe_$(_sanitize_node_part(endpoint.component_id))_$(_sanitize_node_part(endpoint.probe))"
+end
+
 function _raw_node_name(endpoint::LineTapEndpoint)
     at_tag = replace(string(endpoint.at_m), "." => "p", "-" => "m")
     return "tap_$(_sanitize_node_part(endpoint.line_ref.component_id))_$(_sanitize_node_part(endpoint.line_ref.line))_$(at_tag)"
@@ -119,6 +123,16 @@ function _validate_endpoint_for_lumped_lowering(plan::CircuitPlan, endpoint::Abs
         )
         endpoint.pin in component_pins(component) || _validation_error(
             "Component '$(endpoint.component_id)' does not expose pin '$(endpoint.pin)'.",
+        )
+    elseif endpoint isa ProbeEndpoint
+        component = get(plan.components, endpoint.component_id, nothing)
+        isnothing(component) && _validation_error(
+            "Cannot lower probe endpoint for missing component '$(endpoint.component_id)'.",
+        )
+        component isa CircuitComponentInstance ||
+            _validation_error("Probe endpoint lowering requires a CircuitComponentInstance.")
+        haskey(component.probes, endpoint.probe) || _validation_error(
+            "Component '$(endpoint.component_id)' does not expose probe '$(endpoint.probe)'.",
         )
     elseif endpoint isa LineTapEndpoint
         component = get(plan.components, endpoint.line_ref.component_id, nothing)

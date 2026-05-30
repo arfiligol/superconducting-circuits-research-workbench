@@ -115,6 +115,22 @@ end
     @test graph_window.parameters[:l1_per_m_h] ≈ 4.3e-7
     @test graph_window.parameters[:c12_per_m_f] ≈ 1.0e-12
 
+    external_port!(
+        plan;
+        id=:line1_head_port,
+        index=1,
+        endpoint=line1.head,
+        resistance=50.0,
+        role=:line_head,
+    )
+    external_port!(
+        plan;
+        id=:line2_head_port,
+        index=2,
+        endpoint=line2.head,
+        resistance=50.0,
+        role=:line_head,
+    )
     compiled = compile_to_josephson(plan)
     @test count(row -> startswith(row[1], "C_window_c12"), compiled.netlist) == 2
     @test count(row -> startswith(row[1], "K_window_m12"), compiled.netlist) == 2

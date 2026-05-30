@@ -89,13 +89,33 @@ struct CoupledTransmissionWindow
 end
 
 const _LADDER_GROUNDED_TERMINATIONS = Set([:short, :ground, :grounded])
-const _LADDER_OPEN_TERMINATIONS = Set([:open, :external])
+const _LADDER_OPEN_TERMINATIONS = Set([:open])
+const _LADDER_EXTERNAL_TERMINATIONS = Set([:external])
 
 function _validate_ladder_termination(value)
     termination = Symbol(value)
-    termination in _LADDER_OPEN_TERMINATIONS || termination in _LADDER_GROUNDED_TERMINATIONS ||
+    termination in _LADDER_OPEN_TERMINATIONS || termination in _LADDER_EXTERNAL_TERMINATIONS ||
+        termination in _LADDER_GROUNDED_TERMINATIONS ||
         _validation_error("Unsupported transmission-line termination '$(value)'. Use :external, :open, :short, or :grounded.")
     return termination
+end
+
+function _record_external_termination_requirement!(plan::CircuitPlan, id, side::Symbol, endpoint, termination::Symbol)
+    termination in _LADDER_EXTERNAL_TERMINATIONS || return nothing
+    requirements = get!(plan.metadata, :external_terminal_requirements) do
+        Any[]
+    end
+    requirements isa Vector ||
+        _validation_error("CircuitPlan metadata[:external_terminal_requirements] is reserved for transmission-line validation.")
+    push!(
+        requirements,
+        (
+            owner=String(id),
+            side=side,
+            endpoint=endpoint,
+        ),
+    )
+    return last(requirements)
 end
 
 function _ladder_internal_node(id::AbstractString, index::Int)
@@ -354,6 +374,7 @@ function build_lc_ladder_line!(
 
     head_short = _grounded_termination_relation!(plan, id, head, :head, head_term)
     !isnothing(head_short) && push!(termination_relations, head_short)
+    _record_external_termination_requirement!(plan, id, :head, head, head_term)
 
     for section in 1:ladder_spec.n_sections
         values = _section_values_for_dx(section_rlgc_per_m[section], section_lengths_m[section])
@@ -414,6 +435,7 @@ function build_lc_ladder_line!(
 
     tail_short = _grounded_termination_relation!(plan, id, tail, :tail, tail_term)
     !isnothing(tail_short) && push!(termination_relations, tail_short)
+    _record_external_termination_requirement!(plan, id, :tail, tail, tail_term)
 
     ladder = TransmissionLineLadder(
         string(id),
@@ -435,6 +457,10 @@ function build_lc_ladder_line!(
     )
     _record_transmission_line_ladder!(plan, ladder)
     return _store_ladder!(plan, ladder)
+end
+
+function transmission_line!(plan::CircuitPlan; kwargs...)
+    return build_lc_ladder_line!(plan; kwargs...)
 end
 
 function _boundary_index_at_distance(ladder::TransmissionLineLadder, distance_m::Real, label::AbstractString)

@@ -9,6 +9,7 @@ mutable struct CircuitPlan
     relations::Vector{AbstractCircuitRelation}
     parameters::Dict{Symbol,ParameterMetadata}
     engineering_graph::EngineeringGraph
+    schematic_layout_intent::SchematicLayoutIntent
     metadata::Dict{Symbol,Any}
     duplicate_component_ids::Vector{String}
 end
@@ -21,6 +22,7 @@ function CircuitPlan(; id::AbstractString, metadata=Dict{Symbol,Any}())
         AbstractCircuitRelation[],
         Dict{Symbol,ParameterMetadata}(),
         EngineeringGraph(),
+        SchematicLayoutIntent(),
         Dict{Symbol,Any}(metadata),
         String[],
     )

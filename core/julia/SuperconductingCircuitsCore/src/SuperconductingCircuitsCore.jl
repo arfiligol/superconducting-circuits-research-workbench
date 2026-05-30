@@ -38,11 +38,14 @@ export FrameworkValidationError
 
 export CircuitPlan
 export AbstractCircuitComponent
+export CircuitComponentInstance
 export AbstractCircuitEndpoint
 export AbstractNodeEndpoint
 export AbstractLineSpanEndpoint
 export AbstractLoopEndpoint
 export PinEndpoint
+export ProbeEndpoint
+export AnchorRef
 export LineTapEndpoint
 export LineSpanEndpoint
 export GroundEndpoint
@@ -50,6 +53,9 @@ export ExternalNodeEndpoint
 export LoopEndpoint
 export LineRef
 export pin
+export tap
+export probe
+export anchor
 export line_tap
 export line_span
 export line_ref
@@ -70,16 +76,36 @@ export EngineeringPort
 export EngineeringGroup
 export ExternalPort
 export EngineeringGraph
+export SchematicLayoutGroup
+export SchematicTrack
+export SchematicSegment
+export SchematicCoupledSpan
+export SchematicTerminal
+export SchematicNodeLabel
+export SchematicSegmentLabel
+export SchematicAnchor
+export SchematicLayoutIntent
 export SchematicExportSpec
 export engineering_graph
+export schematic_layout_intent
 export record_engineering_component!
 export record_engineering_relation!
 export record_engineering_port!
 export record_engineering_group!
+export record_schematic_group!
+export record_schematic_track!
+export record_schematic_segment!
+export record_schematic_coupled_span!
+export record_schematic_terminal!
+export record_schematic_node_label!
+export record_schematic_segment_label!
+export record_schematic_anchor!
+export schematic!
 export to_dot
-export to_schemdraw_spec
-export component
+export to_schematic_export_spec
 export @circuit
+export @circuit_component
+export @hbintent
 
 export AbstractParameterRole
 export StructuralParameter
@@ -205,6 +231,7 @@ export mutual_capacitance_per_m_f
 export mutual_inductance_per_m_h
 export coupled_line_section_override
 export build_lc_ladder_line!
+export transmission_line!
 export couple_transmission_window!
 export node_at_distance
 export section_index_at_distance
@@ -213,6 +240,8 @@ export add_parallel_lc_resonator!
 export add_reflective_jpa!
 export add_half_wave_resonator!
 export add_quarter_wave_resonator!
+export half_wave_resonator!
+export quarter_wave_resonator!
 export add_readout_line_with_purcell_filter!
 export add_readout_purcell_qwr_mtl!
 

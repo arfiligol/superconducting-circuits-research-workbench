@@ -225,19 +225,35 @@ Macro DSL should capture engineering semantics from user code.
 
 ```julia
 plan = @circuit "readout-chain-demo" begin
-    feedline = component(CPWFeedline(...); role = :feedline)
-    resonator = component(QuarterWaveResonator(...); role = :readout_resonator)
-    qubit = component(FloatingTransmon(...); role = :qubit)
+    feedline = transmission_line!(
+        id = :feedline,
+        head = external_node("readout_in"),
+        tail = external_node("readout_out"),
+        spec = feedline_spec,
+        head_termination = :external,
+        tail_termination = :external,
+        role = :feedline,
+    )
 
-    couple(
-        feedline.output,
-        resonator.input;
-        through = CapacitiveCoupler(capacitance = Cc),
+    resonator = quarter_wave_resonator!(
+        id = :resonator,
+        grounded_head = ground(),
+        open_tail = external_node("resonator_open"),
+        spec = resonator_spec,
+        role = :readout_resonator,
+    )
+
+    couple_capacitive!(
+        id = :feedline_to_resonator,
+        from = node_at_distance(feedline, coupling_position_m),
+        to = resonator.line.nodes[end],
+        capacitance = Cc,
         role = :readout_coupling,
     )
 
     port(:readout_port) do
-        endpoint = feedline.input
+        index = 1
+        endpoint = feedline.head
         role = :readout
         resistance = 50
     end
@@ -246,8 +262,8 @@ end
 
 The macro should record:
 
-- component variable names such as `feedline`, `resonator`, and `qubit`;
-- component types such as `CPWFeedline`, `QuarterWaveResonator`, and `FloatingTransmon`;
+- component variable names such as `feedline` and `resonator`;
+- component or generator types such as `transmission_line!` and `quarter_wave_resonator!`;
 - relation type such as `couple`;
 - through component type such as `CapacitiveCoupler`;
 - port role such as `:readout`;
