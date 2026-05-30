@@ -29,8 +29,8 @@ They define orientation, sectioning, generated primitive relations, and boundary
 spec = RLGCSpec(
     length_m=6.0e-3,
     section_length_m=0.75e-3,
-    l_per_m_h=4.2e-7,
-    c_per_m_f=1.7e-10,
+    l_per_m_h=404.313e-9,
+    c_per_m_f=179.86e-12,
     r_per_m_ohm=0.0,
     g_per_m_s=0.0,
 )
@@ -98,6 +98,8 @@ G_section = g_per_m_s * dx
 `build_lc_ladder_line!` emits a series inductor for every section and a shunt capacitor at each section tail node unless that node is a grounded terminal.
 
 When `r_per_m_ohm > 0`, each section includes a series resistor before its series inductor. When `g_per_m_s > 0`, each shunt conductance is represented by a resistor `1 / G_section` to ground.
+
+Section-level RLGC overrides are part of the ladder contract for physical spans such as coupled MTL windows. Overrides must resolve to generated section boundaries and are applied while the ladder is built, before any cross-coupling relations are added.
 
 ## Builder
 

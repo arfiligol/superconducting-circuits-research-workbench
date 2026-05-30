@@ -124,6 +124,7 @@ function add_half_wave_resonator!(
     tail,
     spec::RLGCSpec,
     breakpoints_m=nothing,
+    section_overrides=nothing,
 )
     line = build_lc_ladder_line!(
         plan;
@@ -134,6 +135,7 @@ function add_half_wave_resonator!(
         head_termination=:open,
         tail_termination=:open,
         breakpoints_m=breakpoints_m,
+        section_overrides=section_overrides,
     )
     return HalfWaveResonator(string(id), line)
 end
@@ -145,6 +147,7 @@ function add_quarter_wave_resonator!(
     open_tail,
     spec::RLGCSpec,
     breakpoints_m=nothing,
+    section_overrides=nothing,
 )
     grounded_head isa AbstractNodeEndpoint ||
         _validation_error("add_quarter_wave_resonator! requires grounded_head to be a NodeEndpoint.")
@@ -159,6 +162,7 @@ function add_quarter_wave_resonator!(
         head_termination=:short,
         tail_termination=:open,
         breakpoints_m=breakpoints_m,
+        section_overrides=section_overrides,
     )
     return QuarterWaveResonator(string(id), line)
 end
@@ -174,6 +178,7 @@ function add_readout_line_with_purcell_filter!(
     input_coupling_f,
     output_coupling_f,
     filter_breakpoints_m=nothing,
+    filter_section_overrides=nothing,
 )
     input isa AbstractNodeEndpoint ||
         _validation_error("add_readout_line_with_purcell_filter! requires input to be a NodeEndpoint.")
@@ -202,6 +207,7 @@ function add_readout_line_with_purcell_filter!(
         head_termination=:open,
         tail_termination=:open,
         breakpoints_m=filter_breakpoints_m,
+        section_overrides=filter_section_overrides,
     )
     output_line = build_lc_ladder_line!(
         plan;
@@ -257,14 +263,10 @@ function add_readout_purcell_qwr_mtl!(
     output_coupling_f,
     qwr_grounded_head,
     qwr_open_tail,
-    window_start_filter_m,
-    window_start_qwr_m,
-    window_length_m,
-    c12_per_m_f,
-    lm_per_m_h,
+    mtl_model::MTLCoupledRLGCSpec,
 )
-    filter_breakpoints = [window_start_filter_m, Float64(window_start_filter_m) + Float64(window_length_m)]
-    qwr_breakpoints = [window_start_qwr_m, Float64(window_start_qwr_m) + Float64(window_length_m)]
+    filter_breakpoints = [mtl_model.start1_m, mtl_model.start1_m + mtl_model.length_m]
+    qwr_breakpoints = [mtl_model.start2_m, mtl_model.start2_m + mtl_model.length_m]
     readout_filter = add_readout_line_with_purcell_filter!(
         plan;
         id="$(id)_readout_filter",
@@ -276,6 +278,7 @@ function add_readout_purcell_qwr_mtl!(
         input_coupling_f=input_coupling_f,
         output_coupling_f=output_coupling_f,
         filter_breakpoints_m=filter_breakpoints,
+        filter_section_overrides=[coupled_line_section_override(mtl_model, 1)],
     )
     qwr = add_quarter_wave_resonator!(
         plan;
@@ -284,24 +287,17 @@ function add_readout_purcell_qwr_mtl!(
         open_tail=qwr_open_tail,
         spec=qwr_spec,
         breakpoints_m=qwr_breakpoints,
-    )
-    model = MTLCoupledWindowSpec(
-        start1_m=window_start_filter_m,
-        start2_m=window_start_qwr_m,
-        length_m=window_length_m,
-        section_length_m=min(filter_spec.reference_section_length_m, qwr_spec.reference_section_length_m),
-        c12_per_m_f=c12_per_m_f,
-        lm_per_m_h=lm_per_m_h,
+        section_overrides=[coupled_line_section_override(mtl_model, 2)],
     )
     window = couple_transmission_window!(
         plan;
         id="$(id)_filter_qwr_mtl_window",
         line1=readout_filter.filter_line,
         line2=qwr.line,
-        start1=window_start_filter_m,
-        start2=window_start_qwr_m,
-        length=window_length_m,
-        model=model,
+        start1=mtl_model.start1_m,
+        start2=mtl_model.start2_m,
+        length=mtl_model.length_m,
+        model=mtl_model,
     )
     return ReadoutPurcellQWRMTL(string(id), readout_filter, qwr, window)
 end

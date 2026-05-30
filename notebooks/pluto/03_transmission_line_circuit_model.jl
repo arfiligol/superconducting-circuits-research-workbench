@@ -75,15 +75,15 @@ md"""
 
 For a low-loss line,
 
-$$
+```math
 Z_0 \approx \sqrt{\frac{L'}{C'}}, \qquad v_p \approx \frac{1}{\sqrt{L'C'}}.
-$$
+```
 
-Each ladder section of length $\Delta x$ contributes
+Each ladder section of length ``\Delta x`` contributes
 
-$$
-L_{sec}=L'\Delta x, \qquad C_{sec}=C'\Delta x.
-$$
+```math
+L_{\mathrm{sec}}=L'\Delta x, \qquad C_{\mathrm{sec}}=C'\Delta x.
+```
 """
 
 # ╔═╡ 18299c1a-77ac-548e-9aa1-817fca113650
@@ -99,8 +99,8 @@ md"""
 begin
     line_length_m = 4.0e-3
     section_length_m = 0.5e-3
-    l_per_m_h = 4.2e-7
-    c_per_m_f = 1.7e-10
+    l_per_m_h = 404.313e-9
+    c_per_m_f = 179.86e-12
     port_resistance = 50.0
 
     start_frequency = 1.0e9
@@ -140,35 +140,143 @@ line_model = RLGCSpec(
 md"""
 ## Primitive-Built Component And Core Authoring
 
-The model starts from `RLGCSpec`, then Core expands it into series inductors and shunt capacitors with head/tail ordering preserved. The library-equivalent builder below returns the generated ladder so the node and section mapping can be inspected before solving.
+The model starts from `RLGCSpec`, then Core expands it into series inductors and shunt capacitors with head/tail ordering preserved. The local tutorial builder below calls the ladder primitive directly so the generated node and section mapping can be inspected before solving.
 """
 
 # ╔═╡ 77099ab5-5be5-596a-a39f-b256fe8dd84f
-example = build_transmission_line_circuit_model_example(
-    length_m=line_length_m,
-    section_length_m=section_length_m,
-    l_per_m_h=l_per_m_h,
-    c_per_m_f=c_per_m_f,
-    port_resistance=port_resistance,
-    start_frequency=start_frequency,
-    stop_frequency=stop_frequency,
-    point_count=point_count,
-    pump_frequency=pump_frequency,
-    pump_current=pump_current,
-    optional_hb_kwargs=optional_hb_kwargs,
-)
+begin
+    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
+        point_count > 0 || throw(ArgumentError("point_count must be positive."))
+        point_count == 1 && return [Float64(start_frequency)]
+        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+    end
+
+    function port_hb_intent_tutorial!(
+        plan::CircuitPlan;
+        ports,
+        pump_frequency_parameter=:pump_frequency,
+        pump_current_parameter=:pump_current,
+        pump_slot=:pump_in,
+        input_port=first(ports),
+        n_pump_harmonics=1,
+        n_modulation_harmonics=1,
+    )
+        observables = Any[]
+        for output_port in ports
+            for source_port in ports
+                push!(
+                    observables,
+                    SParameterRequest(
+                        id=Symbol(:s, output_port, :_, source_port),
+                        outputmode=(0,),
+                        outputport=output_port,
+                        inputmode=(0,),
+                        inputport=source_port,
+                    ),
+                )
+            end
+        end
+
+        return hb_intent!(
+            plan;
+            pump_axes=[
+                PumpAxis(
+                    id=:pump,
+                    frequency_parameter=pump_frequency_parameter,
+                ),
+            ],
+            source_slots=[
+                HBSourceSlot(
+                    id=pump_slot,
+                    role=:pump,
+                    port=input_port,
+                    mode=(1,),
+                    current_parameter=pump_current_parameter,
+                ),
+            ],
+            observables=observables,
+            default_solver_controls=HBSolverControls(
+                n_pump_harmonics=n_pump_harmonics,
+                n_modulation_harmonics=n_modulation_harmonics,
+                returnS=true,
+                returnZ=true,
+                returnQE=true,
+                returnCM=true,
+                keyedarrays=false,
+            ),
+        )
+    end
+
+    function add_through_cpw_line_tutorial!(
+        plan::CircuitPlan;
+        id,
+        input,
+        output,
+        spec::RLGCSpec,
+    )
+        return build_lc_ladder_line!(
+            plan;
+            id=id,
+            head=input,
+            tail=output,
+            spec=spec,
+            head_termination=:external,
+            tail_termination=:external,
+        )
+    end
+
+    function build_through_cpw_line_plan_tutorial(;
+        id="transmission-line-circuit-model-tutorial",
+        line_model,
+        port_resistance,
+    )
+        plan = CircuitPlan(id)
+        input = external_node("input")
+        output = external_node("output")
+        external_port!(plan; id=:input_port, index=1, endpoint=input, resistance=port_resistance, role=:signal)
+        external_port!(plan; id=:output_port, index=2, endpoint=output, resistance=port_resistance, role=:readout)
+        add_through_cpw_line_tutorial!(
+            plan;
+            id="cpw",
+            input=input,
+            output=output,
+            spec=line_model,
+        )
+        port_hb_intent_tutorial!(plan; ports=[:input_port, :output_port])
+        return plan
+    end
+
+    function hb_run_spec_tutorial(;
+        start_frequency,
+        stop_frequency,
+        point_count,
+        pump_frequency,
+        pump_current,
+        optional_hb_kwargs,
+    )
+        return HBRunSpec(
+            frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
+            pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+            source_currents=Dict(:pump_in => Float64(pump_current)),
+            optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
+        )
+    end
+end
 
 # ╔═╡ 65e97c66-6248-5a6f-bd7d-7214d096004d
-circuit_plan = example.plan
+circuit_plan = build_through_cpw_line_plan_tutorial(
+    line_model=line_model,
+    port_resistance=port_resistance,
+)
 
 # ╔═╡ e8e3e629-83fd-52b6-b957-095c315c13cf
-engineering_graph = example.graph
+engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
 
 # ╔═╡ 040be686-55ec-510b-9bdd-95c0c611d3c0
-compiled_circuit = example.compiled
+compiled_circuit = compile_to_josephson(circuit_plan)
 
 # ╔═╡ 95fea1db-ad47-56aa-8657-eb3594f75089
-primitive_component = example.line
+primitive_component = circuit_plan.metadata[:transmission_line_ladders][:cpw]
 
 # ╔═╡ 9e70be9c-692d-521d-a7a5-6ea07a7b6cee
 (
@@ -205,7 +313,17 @@ The notebook keeps the solve boundary visible. `hb_problem` is inspectable befor
 """
 
 # ╔═╡ fa9dbdea-e3f1-5193-b1d8-5e29cfbaff4a
-hb_problem = example.hb_problem
+hb_problem = build_hb_problem(
+    compiled_circuit,
+    hb_run_spec_tutorial(
+        start_frequency=start_frequency,
+        stop_frequency=stop_frequency,
+        point_count=point_count,
+        pump_frequency=pump_frequency,
+        pump_current=pump_current,
+        optional_hb_kwargs=optional_hb_kwargs,
+    ),
+)
 
 # ╔═╡ 975be4b0-b8ae-5ee3-b830-bbda6eff2fb9
 (
@@ -253,13 +371,26 @@ sanity
 
 # ╔═╡ 33f2d55a-49bf-59c9-a7a9-d36bffd1a965
 begin
-    s_parameter_magnitude_figure(
+    s_parameter_db_magnitude_figure(
         result.frequencies_hz,
         [
             "S11" => s11,
             "S21" => s21,
         ];
         title="Transmission Line S-Parameter Magnitudes",
+        config=figure_config,
+    )
+end |> wide_figure_cell
+
+# ╔═╡ 8502c791-7d99-59df-9e61-fd6f08388903
+begin
+    s_parameter_abs_magnitude_figure(
+        result.frequencies_hz,
+        [
+            "S11" => s11,
+            "S21" => s21,
+        ];
+        title="Transmission Line S-Parameter Linear Magnitudes",
         config=figure_config,
     )
 end |> wide_figure_cell
@@ -321,5 +452,6 @@ end |> wide_figure_cell
 # ╠═e129926c-d881-52ef-9336-c045d1123498
 # ╠═539e5d27-382a-5f1c-87b0-a6286f40d50e
 # ╠═33f2d55a-49bf-59c9-a7a9-d36bffd1a965
+# ╠═8502c791-7d99-59df-9e61-fd6f08388903
 # ╠═fdb1f785-69c3-53dd-bbcf-9354b3c88ba2
 # ╠═adeadaa6-c4cd-58b8-acd5-69bd53ae069b

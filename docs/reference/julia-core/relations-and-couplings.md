@@ -182,11 +182,11 @@ window = couple_transmission_window!(
     start1 = 2.0e-3,
     start2 = 2.0e-3,
     length = 0.5e-3,
-    model = MTLCoupledWindowSpec(...),
+    model = MTLCoupledRLGCSpec(...),
 )
 ```
 
-This expresses a fixed-length coupled region between two generated ladder models. It augments the ladders with generated C12 and K primitive relations and records an EngineeringGraph `:coupled_window` relation.
+This expresses a fixed-length coupled region between two generated ladder models. The coupled window uses coupled-section self terms in the generated ladder sections, then adds generated C12 and K primitive relations and records an EngineeringGraph `:coupled_window` relation.
 
 `couple_window!(line_span(...), line_span(...))` carries span-to-span intent for component-level distributed lines. Executable examples should use the Core API path that provides real compiler lowering for the declared model.
 

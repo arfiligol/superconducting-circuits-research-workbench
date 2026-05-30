@@ -65,6 +65,39 @@ end
     @test values.c_f ≈ 1.7e-10 * spec.section_length_m
 end
 
+@testset "Transmission-line section overrides replace per-section RLGC values" begin
+    spec = RLGCSpec(
+        length_m=2.0mm,
+        section_length_m=0.5mm,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+    )
+    override = TransmissionLineSectionOverride(
+        start_m=0.5mm,
+        length_m=1.0mm,
+        l_per_m_h=4.1e-7,
+        c_per_m_f=1.8e-10,
+        tag=:coupled_section,
+    )
+    plan = CircuitPlan("section-override")
+    ladder = build_lc_ladder_line!(
+        plan;
+        id="line",
+        head=external_node("head"),
+        tail=external_node("tail"),
+        spec=spec,
+        section_overrides=[override],
+    )
+
+    @test ladder.section_boundaries_m ≈ [0.0, 0.5mm, 1.0mm, 1.5mm, 2.0mm]
+    @test ladder.section_rlgc_per_m[1].l_per_m_h ≈ 4.2e-7
+    @test ladder.section_rlgc_per_m[2].l_per_m_h ≈ 4.1e-7
+    @test ladder.series_inductors[2].inductance ≈ 4.1e-7 * 0.5mm
+    @test ladder.shunt_capacitors[2].capacitance ≈ 1.8e-10 * 0.5mm
+    graph_ladder = only(filter(relation -> relation.relation_type == :transmission_line_ladder, engineering_graph(plan).relations))
+    @test graph_ladder.parameters[:section_rlgc_per_m][2].c_per_m_f ≈ 1.8e-10
+end
+
 @testset "Quarter-wave reusable builder uses grounded head and open tail" begin
     spec = RLGCSpec(
         length_m=1.5mm,

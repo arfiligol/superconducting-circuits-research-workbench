@@ -7,7 +7,8 @@ export PlotlyFigureConfig,
     frequency_ghz,
     multi_curve_figure,
     plotly_display_config,
-    s_parameter_magnitude_figure,
+    s_parameter_abs_magnitude_figure,
+    s_parameter_db_magnitude_figure,
     s_parameter_phase_figure,
     unwrap_phase_trace,
     y_trace_figure,
@@ -251,7 +252,27 @@ function _db20(values)
     return 20 .* log10.(abs.(values))
 end
 
-function s_parameter_magnitude_figure(
+function s_parameter_abs_magnitude_figure(
+    frequencies_hz,
+    named_traces;
+    title,
+    config::PlotlyFigureConfig=PlotlyFigureConfig(),
+    x_range_ghz=nothing,
+    y_range=nothing,
+)
+    curves = [_trace_name(pair) => abs.(_trace_values(pair)) for pair in _named_pairs(named_traces)]
+    return multi_curve_figure(
+        frequencies_hz,
+        curves;
+        title=title,
+        yaxis_title="|Magnitude|",
+        config=config,
+        x_range_ghz=x_range_ghz,
+        y_range=y_range,
+    )
+end
+
+function s_parameter_db_magnitude_figure(
     frequencies_hz,
     named_traces;
     title,

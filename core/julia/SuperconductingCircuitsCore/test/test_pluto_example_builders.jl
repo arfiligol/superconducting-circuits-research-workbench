@@ -38,21 +38,45 @@ end
     _assert_real_example_solve(jpa)
     @test any(row -> startswith(string(row[1]), "Lj"), jpa.compiled.netlist)
 
-    floating = build_floating_lc_xy_line_example(;
-        common_kwargs...,
-        line_length_m=2.0mm,
-        coupling_center_m=1.0mm,
-        coupling_separation_m=1.0mm,
-        section_length_m=1.0mm,
+    floating = build_floating_lc_xy_line_example(; common_kwargs...)
+    _assert_prepared_example(floating; expected_ports=3, min_relations=7)
+    floating_result = _assert_real_example_solve(floating)
+    @test floating.pad1 isa AbstractNodeEndpoint
+    @test floating.pad2 isa AbstractNodeEndpoint
+    @test floating.xy_node isa AbstractNodeEndpoint
+    @test floating.capacitance_summary.alpha ≈
+        (102.4903555082012e-15 + 0.1742182638751523e-15) /
+        (102.4903555082012e-15 + 0.1742182638751523e-15 + 101.8251170216874e-15 + 0.7451414067385129e-15)
+    @test floating.capacitance_summary.beta ≈ 1 - floating.capacitance_summary.alpha
+    @test floating.capacitance_summary.c_d_xy_f ≈
+        (102.4903555082012e-15 * 0.7451414067385129e-15 -
+         101.8251170216874e-15 * 0.1742182638751523e-15) /
+        (102.4903555082012e-15 + 0.1742182638751523e-15 + 101.8251170216874e-15 + 0.7451414067385129e-15)
+    @test floating.capacitance_summary.c_eff_q_f ≈
+        58.12081132735904e-15 +
+        (102.4903555082012e-15 * 101.8251170216874e-15) /
+        (102.4903555082012e-15 + 101.8251170216874e-15) +
+        (0.1742182638751523e-15 * 0.7451414067385129e-15) /
+        (0.1742182638751523e-15 + 0.7451414067385129e-15)
+    for row_name in (
+        "C_floating_xy_c_g1",
+        "C_floating_xy_c_g2",
+        "C_floating_xy_c_q",
+        "C_floating_xy_c_xy1",
+        "C_floating_xy_c_xy2",
+        "L_floating_xy_l_q1",
+        "L_floating_xy_l_q2",
     )
-    _assert_prepared_example(floating; expected_ports=2, min_relations=6)
-    _assert_real_example_solve(floating)
-    @test floating.line isa TransmissionLineLadder
+        @test any(row -> row[1] == row_name, floating.compiled.netlist)
+    end
+    @test length(floating_result.traces[:portnumbers]) == 3
 
     cpw = build_transmission_line_circuit_model_example(; common_kwargs..., length_m=2.0mm, section_length_m=1.0mm)
     _assert_prepared_example(cpw; expected_ports=2, min_relations=4)
     _assert_real_example_solve(cpw)
     @test cpw.line isa TransmissionLineLadder
+    @test cpw.line.spec.l_per_m_h ≈ 404.313e-9
+    @test cpw.line.spec.c_per_m_f ≈ 179.86e-12
 
     purcell = build_readout_line_purcell_filter_example(;
         common_kwargs...,
@@ -80,6 +104,8 @@ end
     @test mtl.window isa CoupledTransmissionWindow
     @test mtl.qwr.head_termination == :short
     @test mtl.qwr.tail_termination == :open
+    @test mtl.readout_line.section_rlgc_per_m[mtl.window.section_range1.start].l_per_m_h ≈ 410.86374e-9
+    @test mtl.qwr.section_rlgc_per_m[mtl.window.section_range2.start].c_per_m_f ≈ 170.29538e-12
     @test any(relation -> relation.relation_type == :coupled_window, mtl.graph.relations)
 
     exact_length_mtl = build_readout_line_hanging_qwr_mtl_example(;

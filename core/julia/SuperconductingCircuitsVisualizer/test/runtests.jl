@@ -52,16 +52,29 @@ end
     frequencies = [4.0e9, 4.5e9, 5.0e9]
     s11 = ComplexF64[1 + 0im, 0.5 + 0im, 0 - 1im]
 
-    magnitude = s_parameter_magnitude_figure(
+    db_magnitude = s_parameter_db_magnitude_figure(
         frequencies,
         ["S11" => s11];
         title="S magnitude",
         y_range=(-40.0, 1.0),
     )
-    @test length(magnitude.data) == 1
-    @test trace_fields(magnitude, 1)[:name] == "S11"
-    @test trace_fields(magnitude, 1)[:y] ≈ [0.0, -6.020599913279624, 0.0]
-    @test layout_fields(magnitude)[:yaxis][:range] == [-40.0, 1.0]
+    @test length(db_magnitude.data) == 1
+    @test trace_fields(db_magnitude, 1)[:name] == "S11"
+    @test trace_fields(db_magnitude, 1)[:y] ≈ [0.0, -6.020599913279624, 0.0]
+    @test layout_fields(db_magnitude)[:yaxis][:title][:text] == "Magnitude (dB)"
+    @test layout_fields(db_magnitude)[:yaxis][:range] == [-40.0, 1.0]
+
+    abs_magnitude = s_parameter_abs_magnitude_figure(
+        frequencies,
+        ["S11" => s11];
+        title="S abs",
+        y_range=(0.0, 1.0),
+    )
+    @test length(abs_magnitude.data) == 1
+    @test trace_fields(abs_magnitude, 1)[:name] == "S11"
+    @test trace_fields(abs_magnitude, 1)[:y] ≈ [1.0, 0.5, 1.0]
+    @test layout_fields(abs_magnitude)[:yaxis][:title][:text] == "|Magnitude|"
+    @test layout_fields(abs_magnitude)[:yaxis][:range] == [0.0, 1.0]
 
     phase_deg = s_parameter_phase_figure(frequencies, ["S11" => s11]; title="S phase deg", unit=:deg)
     @test trace_fields(phase_deg, 1)[:y] ≈ [0.0, 0.0, -90.0]

@@ -188,7 +188,8 @@ export RLGCSpec
 export AbstractTransmissionLineModel
 export CoupledWindowSpec
 export TransmissionLineLadder
-export MTLCoupledWindowSpec
+export TransmissionLineSectionOverride
+export MTLCoupledRLGCSpec
 export CoupledTransmissionWindow
 export ParallelLCResonator
 export ReflectiveJPA
@@ -200,6 +201,9 @@ export ReadoutPurcellQWRMTL
 export phase_velocity
 export section_values
 export coupled_window_section_values
+export mutual_capacitance_per_m_f
+export mutual_inductance_per_m_h
+export coupled_line_section_override
 export build_lc_ladder_line!
 export couple_transmission_window!
 export node_at_distance

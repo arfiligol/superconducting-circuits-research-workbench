@@ -54,7 +54,7 @@ This notebook models a half-wave Purcell filter coupled between two readout port
 
 ## Purpose
 
-Show the point-coupled filter convention, inspect the filter ladder primitive, preserve explicit Core compile and HB cells, and plot real two-port `S11` / `S21` traces in one magnitude figure.
+Show the point-coupled filter convention, inspect the filter ladder primitive, preserve explicit Core compile and HB cells, and plot real two-port `S11` / `S21` traces in magnitude figures.
 """
 
 # ╔═╡ a308caf5-d3ea-5a84-81bc-2d934b60317e
@@ -75,11 +75,11 @@ md"""
 
 A filter modifies the electromagnetic environment seen through the readout line. In a simplified admittance view,
 
-$$
+```math
 \Gamma(\omega) = \frac{Y_0 - Y_{in}(\omega)}{Y_0 + Y_{in}(\omega)},
-$$
+```
 
-while transmission notches appear in $S_{21}(\omega)$ near coupled resonant modes. The plotted curves below come only from the HB result.
+while transmission notches appear in ``S_{21}(\omega)`` near coupled resonant modes. The plotted curves below come only from the HB result.
 """
 
 # ╔═╡ 48f8c8a4-8816-5d9d-829b-36e67d82a8ca
@@ -97,8 +97,8 @@ begin
     filter_length_m = 8.0e-3
     output_line_length_m = 2.0e-3
     section_length_m = 0.5e-3
-    l_per_m_h = 4.2e-7
-    c_per_m_f = 1.7e-10
+    l_per_m_h = 404.313e-9
+    c_per_m_f = 179.86e-12
 
     input_coupling_f = 2.0e-15
     output_coupling_f = 2.0e-15
@@ -119,16 +119,32 @@ begin
 end
 
 # ╔═╡ 32d227d2-bf1b-5a76-9028-6fbcc94facbe
-filter_model = RLGCSpec(
-    length_m=filter_length_m,
-    section_length_m=section_length_m,
-    l_per_m_h=l_per_m_h,
-    c_per_m_f=c_per_m_f,
-)
+begin
+    input_line_model = RLGCSpec(
+        length_m=input_line_length_m,
+        section_length_m=section_length_m,
+        l_per_m_h=l_per_m_h,
+        c_per_m_f=c_per_m_f,
+    )
+    filter_model = RLGCSpec(
+        length_m=filter_length_m,
+        section_length_m=section_length_m,
+        l_per_m_h=l_per_m_h,
+        c_per_m_f=c_per_m_f,
+    )
+    output_line_model = RLGCSpec(
+        length_m=output_line_length_m,
+        section_length_m=section_length_m,
+        l_per_m_h=l_per_m_h,
+        c_per_m_f=c_per_m_f,
+    )
+end
 
 # ╔═╡ 3e48e080-0ef9-51d7-b512-3bacdb9f77e7
 (
+    input_sections=input_line_model.n_sections,
     filter_sections=filter_model.n_sections,
+    output_sections=output_line_model.n_sections,
     filter_actual_section_length_m=filter_model.section_length_m,
     input_coupling_fF=input_coupling_f * 1e15,
     output_coupling_fF=output_coupling_f * 1e15,
@@ -138,47 +154,186 @@ filter_model = RLGCSpec(
 md"""
 ## Primitive-Built Component And Core Authoring
 
-The topology is three CPW ladders connected by two localized coupling capacitors. The library-equivalent builder below keeps the filter ladder and point-coupling relations available for inspection before the solve.
+The topology is three CPW ladders connected by two localized coupling capacitors. The local tutorial function below keeps the filter ladder and point-coupling relations available for inspection before the solve.
 """
 
 # ╔═╡ b1c72e4b-e768-5e64-a6ad-bc67a14be5ad
-example = build_readout_line_purcell_filter_example(
-    input_line_length_m=input_line_length_m,
-    filter_length_m=filter_length_m,
-    output_line_length_m=output_line_length_m,
-    section_length_m=section_length_m,
-    l_per_m_h=l_per_m_h,
-    c_per_m_f=c_per_m_f,
-    input_coupling_f=input_coupling_f,
-    output_coupling_f=output_coupling_f,
-    port_resistance=port_resistance,
-    start_frequency=start_frequency,
-    stop_frequency=stop_frequency,
-    point_count=point_count,
-    pump_frequency=pump_frequency,
-    pump_current=pump_current,
-    optional_hb_kwargs=optional_hb_kwargs,
-)
+begin
+    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
+        point_count > 0 || throw(ArgumentError("point_count must be positive."))
+        point_count == 1 && return [Float64(start_frequency)]
+        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+    end
+
+    function external_two_port_tutorial!(plan; input, output, port_resistance)
+        external_port!(plan; id=:input_port, index=1, endpoint=input, resistance=port_resistance, role=:signal)
+        external_port!(plan; id=:output_port, index=2, endpoint=output, resistance=port_resistance, role=:readout)
+        return nothing
+    end
+
+    function add_hb_intent_tutorial!(plan; ports)
+        observables = Any[]
+        for output_port in ports
+            for source_port in ports
+                push!(
+                    observables,
+                    SParameterRequest(
+                        id=Symbol(:s, output_port, :_, source_port),
+                        outputmode=(0,),
+                        outputport=output_port,
+                        inputmode=(0,),
+                        inputport=source_port,
+                    ),
+                )
+            end
+        end
+
+        return hb_intent!(
+            plan;
+            pump_axes=[
+                PumpAxis(
+                    id=:pump,
+                    frequency_parameter=:pump_frequency,
+                ),
+            ],
+            source_slots=[
+                HBSourceSlot(
+                    id=:pump_in,
+                    role=:pump,
+                    port=first(ports),
+                    mode=(1,),
+                    current_parameter=:pump_current,
+                ),
+            ],
+            observables=observables,
+            default_solver_controls=HBSolverControls(
+                n_pump_harmonics=1,
+                n_modulation_harmonics=1,
+                returnS=true,
+                returnZ=true,
+                returnQE=true,
+                returnCM=true,
+                keyedarrays=false,
+            ),
+        )
+    end
+
+    function add_readout_purcell_filter_tutorial!(
+        plan;
+        id,
+        input,
+        output,
+        input_line_spec::RLGCSpec,
+        filter_spec::RLGCSpec,
+        output_line_spec::RLGCSpec,
+        input_coupling_f,
+        output_coupling_f,
+    )
+        input_tail = external_node(string(id, "_input_tail"))
+        filter_head = external_node(string(id, "_filter_head"))
+        filter_tail = external_node(string(id, "_filter_tail"))
+        output_head = external_node(string(id, "_output_head"))
+
+        input_line = build_lc_ladder_line!(
+            plan;
+            id=string(id, "_input_line"),
+            head=input,
+            tail=input_tail,
+            spec=input_line_spec,
+            head_termination=:external,
+            tail_termination=:open,
+        )
+        filter_line = build_lc_ladder_line!(
+            plan;
+            id=string(id, "_purcell_filter"),
+            head=filter_head,
+            tail=filter_tail,
+            spec=filter_spec,
+            head_termination=:open,
+            tail_termination=:open,
+        )
+        output_line = build_lc_ladder_line!(
+            plan;
+            id=string(id, "_output_line"),
+            head=output_head,
+            tail=output,
+            spec=output_line_spec,
+            head_termination=:open,
+            tail_termination=:external,
+        )
+        input_coupling = couple_capacitive!(
+            plan;
+            id=string(id, "_input_point_coupling"),
+            from=input_tail,
+            to=filter_head,
+            capacitance=input_coupling_f,
+            role=:purcell_filter_point_coupling,
+            label=string(id, " input Cc"),
+        )
+        output_coupling = couple_capacitive!(
+            plan;
+            id=string(id, "_output_point_coupling"),
+            from=filter_tail,
+            to=output_head,
+            capacitance=output_coupling_f,
+            role=:purcell_filter_point_coupling,
+            label=string(id, " output Cc"),
+        )
+
+        return (
+            id=string(id),
+            input_line=input_line,
+            filter_line=filter_line,
+            output_line=output_line,
+            input_coupling=input_coupling,
+            output_coupling=output_coupling,
+            input_node=input,
+            output_node=output,
+            filter_head=filter_head,
+            filter_tail=filter_tail,
+        )
+    end
+
+    tutorial_circuit = let
+        plan = CircuitPlan("readout-line-purcell-filter-tutorial")
+        input = external_node("input")
+        output = external_node("output")
+        external_two_port_tutorial!(plan; input=input, output=output, port_resistance=port_resistance)
+        component = add_readout_purcell_filter_tutorial!(
+            plan;
+            id="readout_purcell",
+            input=input,
+            output=output,
+            input_line_spec=input_line_model,
+            filter_spec=filter_model,
+            output_line_spec=output_line_model,
+            input_coupling_f=input_coupling_f,
+            output_coupling_f=output_coupling_f,
+        )
+        add_hb_intent_tutorial!(plan; ports=[:input_port, :output_port])
+        (plan=plan, component=component)
+    end
+end
 
 # ╔═╡ 52b50448-bec0-5669-9f38-8e65f245aec6
-circuit_plan = example.plan
+circuit_plan = tutorial_circuit.plan
 
 # ╔═╡ 065c255e-5328-5165-a1ea-7927ac56910a
-engineering_graph = example.graph
+engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
 
 # ╔═╡ ad4cc808-acd0-5286-adc1-9b3b28eb8693
-compiled_circuit = example.compiled
+compiled_circuit = compile_to_josephson(circuit_plan)
 
 # ╔═╡ 53bf7ab0-2a2b-5c6d-b496-96834ccdb462
-primitive_component = example.filter
+primitive_component = tutorial_circuit.component
 
 # ╔═╡ 5f438872-bb8b-566d-be96-52de20602cdf
 (
-    filter_head=primitive_component.head,
-    filter_tail=primitive_component.tail,
-    head_termination=primitive_component.head_termination,
-    tail_termination=primitive_component.tail_termination,
-    section_count=length(primitive_component.series_inductors),
+    filter_head=primitive_component.filter_line.head,
+    filter_tail=primitive_component.filter_line.tail,
+    head_termination=primitive_component.filter_line.head_termination,
+    tail_termination=primitive_component.filter_line.tail_termination,
+    section_count=length(primitive_component.filter_line.series_inductors),
     point_couplings=count(relation -> relation isa CapacitiveCoupling, circuit_plan.relations),
 )
 
@@ -207,7 +362,15 @@ The notebook keeps the solve boundary visible. `hb_problem` is inspectable befor
 """
 
 # ╔═╡ 139032c1-21d4-572e-a8e5-4b05f282e83a
-hb_problem = example.hb_problem
+hb_problem = build_hb_problem(
+    compiled_circuit,
+    HBRunSpec(
+        frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
+        pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+        source_currents=Dict(:pump_in => Float64(pump_current)),
+        optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
+    ),
+)
 
 # ╔═╡ 9ddeb728-26cf-53df-94e4-1ff5756b19b3
 (
@@ -255,13 +418,26 @@ sanity
 
 # ╔═╡ dbfb7174-055e-5aff-8e4a-c4e35a1dc99a
 begin
-    s_parameter_magnitude_figure(
+    s_parameter_db_magnitude_figure(
         result.frequencies_hz,
         [
             "S11" => s11,
             "S21" => s21,
         ];
         title="Purcell Filter S-Parameter Magnitudes",
+        config=figure_config,
+    )
+end |> wide_figure_cell
+
+# ╔═╡ 815908ef-18bd-534d-88e2-cb2086f54504
+begin
+    s_parameter_abs_magnitude_figure(
+        result.frequencies_hz,
+        [
+            "S11" => s11,
+            "S21" => s21,
+        ];
+        title="Purcell Filter S-Parameter Linear Magnitudes",
         config=figure_config,
     )
 end |> wide_figure_cell
@@ -323,5 +499,6 @@ end |> wide_figure_cell
 # ╠═9104ba98-175f-5a06-a824-d8740d58658e
 # ╠═e7d18aa4-5a6c-5cea-bf35-c112d073a629
 # ╠═dbfb7174-055e-5aff-8e4a-c4e35a1dc99a
+# ╠═815908ef-18bd-534d-88e2-cb2086f54504
 # ╠═64d26a74-2220-55dd-9569-f2a4f46bbfda
 # ╠═c230a4a1-9cff-5cd0-8a5e-d63dc20b4024

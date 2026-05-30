@@ -75,15 +75,15 @@ md"""
 
 A pumped reflective JPA is read through its reflection coefficient
 
-$$
+```math
 \Gamma(\omega) = \frac{Z_{in}(\omega) - Z_0}{Z_{in}(\omega) + Z_0}.
-$$
+```
 
 The small-signal resonance is set by the effective nonlinear inductance and total capacitance,
 
-$$
+```math
 \omega_r \approx \frac{1}{\sqrt{L_{J,eff} C_\Sigma}}.
-$$
+```
 
 The notebook does not invent gain curves. The plotted traces come from `run_hb_problem(hb_problem)`.
 """
@@ -134,37 +134,186 @@ linear_f0_estimate = 1 / (2π * sqrt(josephson_inductance * resonator_capacitanc
 md"""
 ## Primitive-Built Component And Core Authoring
 
-The reusable component is made from the same Core relations used by passive notebooks: a point coupling capacitor, shunt capacitance, and a `JosephsonJunction`. The library-equivalent builder below keeps the full `CircuitPlan` and `HBProblemSpec` visible before the explicit solve.
+The reusable component is made from the same Core relations used by passive notebooks: a point coupling capacitor, shunt capacitance, and a `JosephsonJunction`. The local tutorial builder below creates that component directly from primitives and keeps the full `CircuitPlan` and `HBProblemSpec` visible before the explicit solve.
 """
 
 # ╔═╡ 8c11a0c6-5045-53f3-bf4f-2026bb14e7a5
-reflective_jpa_core_builder = build_reflective_jpa_capacitive_coupled_lc_example
+begin
+    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
+        point_count > 0 || throw(ArgumentError("point_count must be positive."))
+        point_count == 1 && return [Float64(start_frequency)]
+        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+    end
+
+    function port_hb_intent_tutorial!(
+        plan::CircuitPlan;
+        ports,
+        pump_frequency_parameter=:pump_frequency,
+        pump_current_parameter=:pump_current,
+        pump_slot=:pump_in,
+        input_port=first(ports),
+        n_pump_harmonics=1,
+        n_modulation_harmonics=1,
+    )
+        observables = Any[]
+        for output_port in ports
+            for source_port in ports
+                push!(
+                    observables,
+                    SParameterRequest(
+                        id=Symbol(:s, output_port, :_, source_port),
+                        outputmode=(0,),
+                        outputport=output_port,
+                        inputmode=(0,),
+                        inputport=source_port,
+                    ),
+                )
+            end
+        end
+
+        return hb_intent!(
+            plan;
+            pump_axes=[
+                PumpAxis(
+                    id=:pump,
+                    frequency_parameter=pump_frequency_parameter,
+                ),
+            ],
+            source_slots=[
+                HBSourceSlot(
+                    id=pump_slot,
+                    role=:pump,
+                    port=input_port,
+                    mode=(1,),
+                    current_parameter=pump_current_parameter,
+                ),
+            ],
+            observables=observables,
+            default_solver_controls=HBSolverControls(
+                n_pump_harmonics=n_pump_harmonics,
+                n_modulation_harmonics=n_modulation_harmonics,
+                returnS=true,
+                returnZ=true,
+                returnQE=true,
+                returnCM=true,
+                keyedarrays=false,
+            ),
+        )
+    end
+
+    function add_reflective_jpa_tutorial!(
+        plan::CircuitPlan;
+        id,
+        port_node,
+        resonator_node,
+        coupling_capacitance,
+        resonator_capacitance,
+        josephson_inductance,
+    )
+        coupling = couple_capacitive!(
+            plan;
+            id="$(id)_coupling_capacitance",
+            from=port_node,
+            to=resonator_node,
+            capacitance=coupling_capacitance,
+            role=:jpa_coupling_capacitance,
+            label="JPA coupling C",
+        )
+        capacitance = shunt_capacitor!(
+            plan;
+            id="$(id)_resonator_capacitance",
+            at=resonator_node,
+            capacitance=resonator_capacitance,
+            role=:jpa_resonator_capacitance,
+            label="JPA resonator C",
+        )
+        junction = josephson_junction!(
+            plan;
+            id="$(id)_josephson_junction",
+            from=resonator_node,
+            to=ground(),
+            josephson_inductance=josephson_inductance,
+            role=:jpa_josephson_junction,
+            label="JPA Josephson junction",
+        )
+        return (
+            port_node=port_node,
+            resonator_node=resonator_node,
+            coupling=coupling,
+            capacitance=capacitance,
+            junction=junction,
+        )
+    end
+
+    function build_reflective_jpa_plan_tutorial(;
+        id="reflective-jpa-capacitive-coupled-lc-tutorial",
+        coupling_capacitance,
+        resonator_capacitance,
+        josephson_inductance,
+        port_resistance,
+    )
+        plan = CircuitPlan(id)
+        port_node = external_node("signal")
+        resonator_node = external_node("jpa_resonator")
+        external_port!(plan; id=:signal_port, index=1, endpoint=port_node, resistance=port_resistance, role=:signal)
+        add_reflective_jpa_tutorial!(
+            plan;
+            id="jpa",
+            port_node=port_node,
+            resonator_node=resonator_node,
+            coupling_capacitance=coupling_capacitance,
+            resonator_capacitance=resonator_capacitance,
+            josephson_inductance=josephson_inductance,
+        )
+        port_hb_intent_tutorial!(
+            plan;
+            ports=[:signal_port],
+            n_pump_harmonics=4,
+            n_modulation_harmonics=2,
+        )
+        return plan
+    end
+
+    function hb_run_spec_tutorial(;
+        start_frequency,
+        stop_frequency,
+        point_count,
+        pump_frequency,
+        pump_current,
+        optional_hb_kwargs,
+    )
+        return HBRunSpec(
+            frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
+            pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+            source_currents=Dict(:pump_in => Float64(pump_current)),
+            optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
+        )
+    end
+end
 
 # ╔═╡ 61c90184-a06a-5ec4-ac38-d54203445552
-example = reflective_jpa_core_builder(
+circuit_plan = build_reflective_jpa_plan_tutorial(
     coupling_capacitance=coupling_capacitance,
     resonator_capacitance=resonator_capacitance,
     josephson_inductance=josephson_inductance,
     port_resistance=port_resistance,
-    start_frequency=start_frequency,
-    stop_frequency=stop_frequency,
-    point_count=point_count,
-    pump_frequency=pump_frequency,
-    pump_current=pump_current,
-    optional_hb_kwargs=optional_hb_kwargs,
 )
 
 # ╔═╡ 00db8292-dc5c-5faf-b7cd-974c2533e7f2
-circuit_plan = example.plan
+engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
 
 # ╔═╡ f203fae3-8592-5073-ba37-d5a6857884c9
-engineering_graph = example.graph
+compiled_circuit = compile_to_josephson(circuit_plan)
 
 # ╔═╡ 1fe44711-dab7-5539-ae04-5d5abd87e63f
-compiled_circuit = example.compiled
+primitive_component = (
+    capacitive_couplings=filter(relation -> relation isa CapacitiveCoupling, circuit_plan.relations),
+    shunt_capacitors=filter(relation -> relation isa ShuntCapacitor, circuit_plan.relations),
+    josephson_junctions=filter(relation -> relation isa JosephsonJunction, circuit_plan.relations),
+)
 
 # ╔═╡ c61d0c0b-e261-52dd-840b-d8bd7aaf9d3c
-primitive_component = example.jpa
+primitive_component
 
 # ╔═╡ e6746168-653d-5c68-a8a4-d69dcd95f1db
 primitive_component
@@ -194,7 +343,17 @@ The notebook keeps the solve boundary visible. `hb_problem` is inspectable befor
 """
 
 # ╔═╡ c5291a16-c18c-50a3-b9dd-7a5551d137e3
-hb_problem = example.hb_problem
+hb_problem = build_hb_problem(
+    compiled_circuit,
+    hb_run_spec_tutorial(
+        start_frequency=start_frequency,
+        stop_frequency=stop_frequency,
+        point_count=point_count,
+        pump_frequency=pump_frequency,
+        pump_current=pump_current,
+        optional_hb_kwargs=optional_hb_kwargs,
+    ),
+)
 
 # ╔═╡ c4f02681-e9e0-5d70-b514-88d5eddba7d1
 (
@@ -239,10 +398,20 @@ sanity
 
 # ╔═╡ a891c8e6-4f03-5541-89c5-96a37a6f0a11
 begin
-    s_parameter_magnitude_figure(
+    s_parameter_db_magnitude_figure(
         result.frequencies_hz,
         ["S11" => s11];
         title="Reflective JPA S11 Magnitude",
+        config=figure_config,
+    )
+end |> wide_figure_cell
+
+# ╔═╡ 75e57b8e-5759-5aa8-85f0-b433705d2d01
+begin
+    s_parameter_abs_magnitude_figure(
+        result.frequencies_hz,
+        ["S11" => s11];
+        title="Reflective JPA S11 Linear Magnitude",
         config=figure_config,
     )
 end |> wide_figure_cell
@@ -299,5 +468,6 @@ end |> wide_figure_cell
 # ╠═83182941-8356-5e40-a688-e58332642138
 # ╠═55b4a31d-7821-545d-be25-e63d027f63b8
 # ╠═a891c8e6-4f03-5541-89c5-96a37a6f0a11
+# ╠═75e57b8e-5759-5aa8-85f0-b433705d2d01
 # ╠═0aaa76ba-15d7-5440-a6b1-8420d0106a2f
 # ╠═897da0f4-16e9-55e7-8fa5-2d6d9cce2a08

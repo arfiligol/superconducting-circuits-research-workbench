@@ -93,27 +93,48 @@ window = couple_transmission_window!(
     start1=2.25e-3,
     start2=0.0,
     length=1.5e-3,
-    model=MTLCoupledWindowSpec(...),
+    model=MTLCoupledRLGCSpec(...),
 )
 ```
 
-An MTL coupled window is a finite distributed region between two transmission-line ladders. It is not a single `Cc`. The sectioned representation is driven by the `RLGCSpec` self values on each line plus the distributed coupling values in the coupled-window model.
+An MTL coupled window is a finite distributed region between two transmission-line ladders. It is not a single `Cc`. The sectioned representation is driven by the uncoupled `RLGCSpec` outside the window and by coupled-section per-unit-length matrices inside the window.
 
-For each coupled section, Julia Core keeps the original line sections and adds:
+For each coupled section, Julia Core emits self terms from the coupled-section matrices and cross terms between the two generated sections:
 
 ```text
 Line 1:
-  series L1
-  shunt C1g
+  series L11
+  shunt C11
 
 Line 2:
-  series L2
-  shunt C2g
+  series L22
+  shunt C22
 
 Between lines:
-  C12 between corresponding section nodes
-  M12 / K between corresponding section inductors
+  physical C12 from the capacitance matrix off-diagonal
+  M12 / K from the inductance matrix off-diagonal
 ```
+
+The canonical matrix form is:
+
+```julia
+model = MTLCoupledRLGCSpec(
+    start1_m=2.25e-3,
+    start2_m=0.0,
+    length_m=1.5e-3,
+    section_length_m=0.75e-3,
+    l_matrix_per_m_h=[
+        L11 L12
+        L12 L22
+    ],
+    c_matrix_per_m_f=[
+        C11 -C12
+        -C12 C22
+    ],
+)
+```
+
+Even/odd mode inputs may be converted into the same matrix representation before ladder generation.
 
 Coupled-window invariants are strict:
 
@@ -122,8 +143,8 @@ Coupled-window invariants are strict:
 | Sections | every coupled segment must have explicit section parameters |
 | Boundaries | `start1`, `start2`, and `length` must resolve to generated section boundaries |
 | Section geometry | corresponding coupled sections must have matching physical length |
-| Self values | line self values come from each line's `RLGCSpec` |
-| Coupling values | `c12_per_m_f` and `lm_per_m_h` scale by the actual coupled-section length |
+| Self values | coupled sections are built with `L11`, `C11`, `L22`, and `C22` |
+| Coupling values | `-C[1,2]` and `L[1,2]` scale by the actual coupled-section length |
 
 No silent snapping or interpolation is allowed. Builders create semantic section boundaries at physical window starts and ends so the requested physical window is preserved.
 
@@ -135,8 +156,8 @@ No silent snapping or interpolation is allowed. Builders create semantic section
 relation_type = :coupled_window
 from = (line = "readout_line", sections = i:j)
 to = (line = "qwr", sections = k:l)
-through = MTLCoupledWindowSpec(...)
-parameters = start distances, length, section count, per-unit coupling values
+through = MTLCoupledRLGCSpec(...)
+parameters = start distances, length, section count, per-unit matrix values
 ```
 
 This lets notebooks show statements such as:

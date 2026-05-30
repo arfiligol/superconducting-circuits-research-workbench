@@ -3,8 +3,8 @@
 
 #> [frontmatter]
 #> title = "02 Floating LC XY Line"
-#> tags = ["julia-core", "pluto", "floating-lc", "xy-line", "two-port"]
-#> description = "Canonical Pluto notebook structure for a floating LC mode coupled to an XY drive line."
+#> tags = ["julia-core", "pluto", "floating-lc", "xy-line", "three-port"]
+#> description = "Floating-qubit XY-line notebook using the thesis three-node Pad1/Pad2/XY capacitance model."
 
 using Markdown
 using InteractiveUtils
@@ -39,9 +39,6 @@ begin
         max_width=max(1000, something(figure_config.display_width_px, 1000) + 80),
     )
 
-    include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
-    using .HBExampleHelpers: db20, phase_deg, zero_mode_s, zero_mode_z
-
     include(joinpath(@__DIR__, "includes", "port_matrix_post_processing.jl"))
     using .PortMatrixPostProcessing:
         zero_mode_y_matrix_stack,
@@ -58,21 +55,20 @@ TableOfContents()
 md"""
 # 02 Floating LC / XY Line
 
-This notebook analyzes a floating LC mode capacitively coupled to an XY drive line terminated by 50 ohm ports.
+This notebook analyzes the thesis floating-qubit XY-line circuit: two floating qubit pads and one XY environment node.
 
 ## Purpose
 
-Show the raw Core solve first, then apply notebook-side port-matrix post-processing: port termination compensation, common/differential coordinate transform, and Kron reduction.
+Show the raw Core solve first, then apply notebook-side port-matrix post-processing: probe-port termination compensation, weighted common/differential coordinate transform, and Kron reduction to the qubit differential mode.
 """
 
 # ╔═╡ 4fcc1ac4-5803-594a-9dc9-fd654f146700
 md"""
 ## Owns
 
-- Two-port XY line with a side-coupled floating LC mode.
-- Floating-mode parameter naming and trace display conventions.
-- Combined `S11` / `S21` magnitude figure for two-port notebooks.
-- Raw S/Z/Y post-processing from real solver traces.
+- Three-node floating XY-line circuit: Pad1, Pad2, and XY node.
+- Q3D capacitance naming for `Cg1`, `Cg2`, `Cq`, `Cxy1`, and `Cxy2`.
+- PTC, weighted common/differential transform, and Kron reduction from real solver traces.
 """
 
 # ╔═╡ a717b102-1313-5de7-8881-86aadd9c8e27
@@ -82,40 +78,58 @@ LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-02-floatin
 md"""
 ## LaTeX Physics
 
-The floating mode is represented by an effective capacitance and inductance,
+The floating qubit pads are first described in the node basis. The Q3D Maxwell off-diagonal entries become positive branch capacitances:
 
-$$
-\omega_f = \frac{1}{\sqrt{L_f C_f}}.
-$$
+```math
+C_{ij} = -C^{\mathrm{Maxwell}}_{ij}.
+```
 
-A small capacitive tap to the XY line loads the through-line response. The observable teaching question is how the side-coupled mode changes both reflection and transmission:
+The XY-line problem is then read through the weighted floating coordinates
 
-$$
-S_{11}(\omega), \quad S_{21}(\omega).
-$$
+```math
+\Phi_{\mathrm{cm}} = \alpha\Phi_1 + \beta\Phi_2,\qquad
+\Phi_{\mathrm{dm}} = \Phi_1 - \Phi_2,
+```
+
+where
+
+```math
+\alpha = \frac{C_{g1}+C_{xy1}}{C_{g1}+C_{xy1}+C_{g2}+C_{xy2}},\qquad
+\beta = 1-\alpha.
+```
+
+The differential-mode coupling and reduced qubit capacitance are
+
+```math
+C_{d,xy} = \frac{C_{g1}C_{xy2}-C_{g2}C_{xy1}}
+{C_{g1}+C_{xy1}+C_{g2}+C_{xy2}},
+```
+
+```math
+C_{\mathrm{eff},q}
+= C_q + \frac{C_{g1}C_{g2}}{C_{g1}+C_{g2}}
++ \frac{C_{xy1}C_{xy2}}{C_{xy1}+C_{xy2}}.
+```
 """
 
 # ╔═╡ a1d16a5e-a140-555d-b58b-69e9790212ff
 md"""
 ## Modeling Conventions
 
-- The XY line is a two-port distributed or ladder primitive owned by Core.
-- The LC mode is floating, so its node ownership must not be collapsed to ground in the notebook.
-- Coupling capacitance is a real primitive relation, not an analytic notch overlay.
+- Ports 1 and 2 are qubit-pad probe ports. Their artificial 50 ohm shunts are removed by PTC.
+- Port 3 is the physical XY environment. Its 50 ohm termination remains in the reduced admittance.
+- `Cxy_ground` is retained as a Q3D diagnostic value, but is not inserted as a shunt in this Core circuit to avoid double-counting the XY-line environment.
 """
 
 # ╔═╡ 973aee0b-0062-5eb5-9411-05ade9edcecd
 begin
-    line_length_m = 4.0e-3
-    coupling_separation_m = 0.5e-3
-    coupling_center_m = line_length_m / 2
-    section_length_m = 0.5e-3
-    l_per_m_h = 4.2e-7
-    c_per_m_f = 1.7e-10
-
-    resonator_capacitance = 75.0e-15
-    resonator_inductance = 8.0e-9
-    coupling_capacitance = 3.0e-15
+    c_g1_f = 102.4903555082012e-15
+    c_g2_f = 101.8251170216874e-15
+    c_q_f = 58.12081132735904e-15
+    c_xy1_f = 0.1742182638751523e-15
+    c_xy2_f = 0.7451414067385129e-15
+    c_xy_ground_f = 627.8043424559959e-15
+    l_jun_h = 24.0e-9
     port_resistance = 50.0
 
     start_frequency = 2.0e9
@@ -133,71 +147,305 @@ begin
 end
 
 # ╔═╡ ba9caf28-78c2-5d90-97e0-ffb13ab2779c
-floating_f0_estimate = 1 / (2π * sqrt(resonator_inductance * resonator_capacitance))
+begin
+    w1_f = c_g1_f + c_xy1_f
+    w2_f = c_g2_f + c_xy2_f
+    alpha = w1_f / (w1_f + w2_f)
+    beta = w2_f / (w1_f + w2_f)
+    c_d_xy_f = (c_g1_f * c_xy2_f - c_g2_f * c_xy1_f) / (w1_f + w2_f)
+    c_eff_q_f = c_q_f + (c_g1_f * c_g2_f) / (c_g1_f + c_g2_f) + (c_xy1_f * c_xy2_f) / (c_xy1_f + c_xy2_f)
+    l_eff_h = l_jun_h / 2
+    floating_f0_estimate = 1 / (2π * sqrt(l_eff_h * c_eff_q_f))
+end
 
 # ╔═╡ ee2e6985-d950-5e3c-8811-0f33591160d3
-xy_line_model = RLGCSpec(
-    length_m=line_length_m,
-    section_length_m=section_length_m,
-    l_per_m_h=l_per_m_h,
-    c_per_m_f=c_per_m_f,
-)
+q3d_source = "sandbox/thesis_pf6fq_external_coupling_analysis/raw/Q0/Q0_XY_Q3D_C_Matrix.m"
 
 # ╔═╡ 5e47b9f1-5e14-5ce2-8538-0a8f3ee57584
 (
-    xy_line_sections=xy_line_model.n_sections,
-    xy_line_phase_velocity_m_per_s=phase_velocity(xy_line_model),
+    q3d_source=q3d_source,
+    c_g1_fF=c_g1_f * 1e15,
+    c_g2_fF=c_g2_f * 1e15,
+    c_q_fF=c_q_f * 1e15,
+    c_xy1_fF=c_xy1_f * 1e15,
+    c_xy2_fF=c_xy2_f * 1e15,
+    c_xy_ground_diagnostic_fF=c_xy_ground_f * 1e15,
+    alpha=alpha,
+    beta=beta,
+    c_d_xy_fF=c_d_xy_f * 1e15,
+    c_eff_q_fF=c_eff_q_f * 1e15,
     floating_f0_estimate_ghz=floating_f0_estimate / 1e9,
-    coupling_fF=coupling_capacitance * 1e15,
 )
 
 # ╔═╡ e2a3b4ae-5787-5fe0-8c43-66f6f79c81a7
 md"""
 ## Primitive-Built Component And Core Authoring
 
-The component combines one RLGC line with a floating LC branch and two point coupling capacitors. The library-equivalent builder below keeps the primitive relations inspectable and leaves the solve boundary visible.
+The component is the thesis reduced circuit: two qubit pads, one XY node, five capacitance branches, and two equal inductive branches between the pads. The local tutorial builder below creates those primitive relations directly and leaves the compile and solve boundaries visible.
 """
 
 # ╔═╡ 3cfd3e81-07d6-5bdd-82f9-f5e1a8425a0a
-floating_lc_xy_core_builder = build_floating_lc_xy_line_example
+begin
+    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
+        point_count > 0 || throw(ArgumentError("point_count must be positive."))
+        point_count == 1 && return [Float64(start_frequency)]
+        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+    end
+
+    function relation_by_id_tutorial(plan::CircuitPlan, id)
+        matches = filter(relation -> hasproperty(relation, :id) && relation.id == string(id), plan.relations)
+        length(matches) == 1 || throw(ArgumentError("expected exactly one relation with id $(id), found $(length(matches))."))
+        return only(matches)
+    end
+
+    function port_hb_intent_tutorial!(
+        plan::CircuitPlan;
+        ports,
+        pump_frequency_parameter=:pump_frequency,
+        pump_current_parameter=:pump_current,
+        pump_slot=:pump_in,
+        input_port=first(ports),
+        n_pump_harmonics=1,
+        n_modulation_harmonics=1,
+    )
+        observables = Any[]
+        for output_port in ports
+            for source_port in ports
+                push!(
+                    observables,
+                    SParameterRequest(
+                        id=Symbol(:s, output_port, :_, source_port),
+                        outputmode=(0,),
+                        outputport=output_port,
+                        inputmode=(0,),
+                        inputport=source_port,
+                    ),
+                )
+            end
+        end
+
+        return hb_intent!(
+            plan;
+            pump_axes=[
+                PumpAxis(
+                    id=:pump,
+                    frequency_parameter=pump_frequency_parameter,
+                ),
+            ],
+            source_slots=[
+                HBSourceSlot(
+                    id=pump_slot,
+                    role=:pump,
+                    port=input_port,
+                    mode=(1,),
+                    current_parameter=pump_current_parameter,
+                ),
+            ],
+            observables=observables,
+            default_solver_controls=HBSolverControls(
+                n_pump_harmonics=n_pump_harmonics,
+                n_modulation_harmonics=n_modulation_harmonics,
+                returnS=true,
+                returnZ=true,
+                returnQE=true,
+                returnCM=true,
+                keyedarrays=false,
+            ),
+        )
+    end
+
+    function add_floating_lc_xy_tutorial!(
+        plan::CircuitPlan;
+        pad1,
+        pad2,
+        xy_node,
+        c_g1_f,
+        c_g2_f,
+        c_q_f,
+        c_xy1_f,
+        c_xy2_f,
+        l_jun_h,
+    )
+        c_g1 = shunt_capacitor!(
+            plan;
+            id="floating_xy_c_g1",
+            at=pad1,
+            capacitance=c_g1_f,
+            role=:floating_xy_pad_ground_capacitance,
+            label="floating XY Cg1",
+        )
+        c_g2 = shunt_capacitor!(
+            plan;
+            id="floating_xy_c_g2",
+            at=pad2,
+            capacitance=c_g2_f,
+            role=:floating_xy_pad_ground_capacitance,
+            label="floating XY Cg2",
+        )
+        c_q = couple_capacitive!(
+            plan;
+            id="floating_xy_c_q",
+            from=pad1,
+            to=pad2,
+            capacitance=c_q_f,
+            role=:floating_xy_qubit_capacitance,
+            label="floating XY Cq",
+        )
+        c_xy1 = couple_capacitive!(
+            plan;
+            id="floating_xy_c_xy1",
+            from=pad1,
+            to=xy_node,
+            capacitance=c_xy1_f,
+            role=:floating_xy_line_coupling,
+            label="floating XY Cxy1",
+        )
+        c_xy2 = couple_capacitive!(
+            plan;
+            id="floating_xy_c_xy2",
+            from=pad2,
+            to=xy_node,
+            capacitance=c_xy2_f,
+            role=:floating_xy_line_coupling,
+            label="floating XY Cxy2",
+        )
+        l_q1 = series_inductor!(
+            plan;
+            id="floating_xy_l_q1",
+            from=pad1,
+            to=pad2,
+            inductance=l_jun_h,
+            role=:floating_xy_qubit_inductance,
+            label="floating XY Lq1",
+        )
+        l_q2 = series_inductor!(
+            plan;
+            id="floating_xy_l_q2",
+            from=pad1,
+            to=pad2,
+            inductance=l_jun_h,
+            role=:floating_xy_qubit_inductance,
+            label="floating XY Lq2",
+        )
+        return (
+            c_g1=c_g1,
+            c_g2=c_g2,
+            c_q=c_q,
+            c_xy1=c_xy1,
+            c_xy2=c_xy2,
+            l_q1=l_q1,
+            l_q2=l_q2,
+        )
+    end
+
+    function build_floating_lc_xy_plan_tutorial(;
+        id="floating-lc-xy-line-tutorial",
+        c_g1_f,
+        c_g2_f,
+        c_q_f,
+        c_xy1_f,
+        c_xy2_f,
+        c_xy_ground_f,
+        l_jun_h,
+        port_resistance,
+    )
+        values = Float64.((c_g1_f, c_g2_f, c_q_f, c_xy1_f, c_xy2_f, l_jun_h))
+        all(value -> value > 0, values) ||
+            throw(ArgumentError("floating XY capacitances and l_jun_h must be positive."))
+        Float64(c_xy_ground_f) >= 0 ||
+            throw(ArgumentError("c_xy_ground_f must be non-negative."))
+
+        plan = CircuitPlan(id)
+        pad1 = external_node("pad1")
+        pad2 = external_node("pad2")
+        xy_node = external_node("xy_node")
+        external_port!(plan; id=:pad1_port, index=1, endpoint=pad1, resistance=port_resistance, role=:probe)
+        external_port!(plan; id=:pad2_port, index=2, endpoint=pad2, resistance=port_resistance, role=:probe)
+        external_port!(plan; id=:xy_port, index=3, endpoint=xy_node, resistance=port_resistance, role=:xy_line)
+        add_floating_lc_xy_tutorial!(
+            plan;
+            pad1=pad1,
+            pad2=pad2,
+            xy_node=xy_node,
+            c_g1_f=Float64(c_g1_f),
+            c_g2_f=Float64(c_g2_f),
+            c_q_f=Float64(c_q_f),
+            c_xy1_f=Float64(c_xy1_f),
+            c_xy2_f=Float64(c_xy2_f),
+            l_jun_h=Float64(l_jun_h),
+        )
+        port_hb_intent_tutorial!(plan; ports=[:pad1_port, :pad2_port, :xy_port])
+        return plan
+    end
+
+    function hb_run_spec_tutorial(;
+        start_frequency,
+        stop_frequency,
+        point_count,
+        pump_frequency,
+        pump_current,
+        optional_hb_kwargs,
+    )
+        return HBRunSpec(
+            frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
+            pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+            source_currents=Dict(:pump_in => Float64(pump_current)),
+            optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
+        )
+    end
+end
 
 # ╔═╡ d949456d-2760-5e42-92ee-e412c83587c5
-example = floating_lc_xy_core_builder(
-    line_length_m=line_length_m,
-    coupling_separation_m=coupling_separation_m,
-    coupling_center_m=coupling_center_m,
-    section_length_m=section_length_m,
-    l_per_m_h=l_per_m_h,
-    c_per_m_f=c_per_m_f,
-    resonator_capacitance=resonator_capacitance,
-    resonator_inductance=resonator_inductance,
-    coupling_capacitance=coupling_capacitance,
+circuit_plan = build_floating_lc_xy_plan_tutorial(
+    c_g1_f=c_g1_f,
+    c_g2_f=c_g2_f,
+    c_q_f=c_q_f,
+    c_xy1_f=c_xy1_f,
+    c_xy2_f=c_xy2_f,
+    c_xy_ground_f=c_xy_ground_f,
+    l_jun_h=l_jun_h,
     port_resistance=port_resistance,
-    start_frequency=start_frequency,
-    stop_frequency=stop_frequency,
-    point_count=point_count,
-    pump_frequency=pump_frequency,
-    pump_current=pump_current,
-    optional_hb_kwargs=optional_hb_kwargs,
 )
 
 # ╔═╡ 613e431b-dcce-58a9-9df7-ff763690c4e9
-circuit_plan = example.plan
+engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
 
 # ╔═╡ be11e7b0-7f07-5e18-be95-dac21d35fbc4
-engineering_graph = example.graph
+compiled_circuit = compile_to_josephson(circuit_plan)
 
 # ╔═╡ 1a3a9e91-9ed4-5204-be6d-9a7d583b36b2
-compiled_circuit = example.compiled
+primitive_component = (
+    pad1=external_node("pad1"),
+    pad2=external_node("pad2"),
+    xy_node=external_node("xy_node"),
+    c_g1=relation_by_id_tutorial(circuit_plan, "floating_xy_c_g1"),
+    c_g2=relation_by_id_tutorial(circuit_plan, "floating_xy_c_g2"),
+    c_q=relation_by_id_tutorial(circuit_plan, "floating_xy_c_q"),
+    c_xy1=relation_by_id_tutorial(circuit_plan, "floating_xy_c_xy1"),
+    c_xy2=relation_by_id_tutorial(circuit_plan, "floating_xy_c_xy2"),
+    l_q1=relation_by_id_tutorial(circuit_plan, "floating_xy_l_q1"),
+    l_q2=relation_by_id_tutorial(circuit_plan, "floating_xy_l_q2"),
+    capacitance_summary=(
+        c_g1_f=c_g1_f,
+        c_g2_f=c_g2_f,
+        c_q_f=c_q_f,
+        c_xy1_f=c_xy1_f,
+        c_xy2_f=c_xy2_f,
+        c_xy_ground_f=c_xy_ground_f,
+        w1_f=w1_f,
+        w2_f=w2_f,
+        alpha=alpha,
+        beta=beta,
+        c_d_xy_f=c_d_xy_f,
+        c_eff_q_f=c_eff_q_f,
+        l_jun_h=l_jun_h,
+        l_eff_h=l_eff_h,
+        f0_estimate_hz=floating_f0_estimate,
+    ),
+)
 
 # ╔═╡ 45567dac-133c-5806-86f7-d5d358ee8014
-primitive_component = (
-    xy_line=example.line,
-    resonator_capacitance=example.resonator_cap,
-    resonator_inductance=example.resonator_ind,
-    left_coupling=example.left_coupling,
-    right_coupling=example.right_coupling,
-)
+primitive_component
 
 # ╔═╡ 532f1460-c5ec-572c-94d6-220d68080b12
 primitive_component
@@ -227,7 +475,17 @@ The notebook keeps the solve boundary visible. `hb_problem` is inspectable befor
 """
 
 # ╔═╡ 113902e3-ec9d-5436-9479-74d8b3cbc9ec
-hb_problem = example.hb_problem
+hb_problem = build_hb_problem(
+    compiled_circuit,
+    hb_run_spec_tutorial(
+        start_frequency=start_frequency,
+        stop_frequency=stop_frequency,
+        point_count=point_count,
+        pump_frequency=pump_frequency,
+        pump_current=pump_current,
+        optional_hb_kwargs=optional_hb_kwargs,
+    ),
+)
 
 # ╔═╡ e071498e-12ed-5289-9665-99b5f358bf90
 (
@@ -252,30 +510,65 @@ output_family_labels = let
     labels
 end
 
+# ╔═╡ 45eb022b-7573-43e0-aa80-9d67c07b38d7
+md"""
+## Port-Matrix Post-Processing
+
+The raw solve includes the artificial probe-port terminations. Probe termination compensation removes the 50 ohm shunts from the qubit pads while leaving the physical XY environment termination in place:
+
+```math
+Y^{\mathrm{PTC}}_{ii}(\omega) = Y^{\mathrm{raw}}_{ii}(\omega) - \frac{1}{Z_0}, \qquad i\in\{1,2\}.
+```
+"""
+
+# ╔═╡ 509d9cdb-690b-4120-a724-a790bdb80824
+md"""
+The floating pad variables are then rewritten into weighted common and differential coordinates:
+
+```math
+\Phi_{\mathrm{cm}} = \alpha\Phi_1 + \beta\Phi_2,\qquad
+\Phi_{\mathrm{dm}} = \Phi_1 - \Phi_2.
+```
+
+For the Q0 capacitance data,
+
+```math
+\alpha = \frac{C_{g1}+C_{xy1}}{(C_{g1}+C_{xy1})+(C_{g2}+C_{xy2})},\qquad
+\beta = \frac{C_{g2}+C_{xy2}}{(C_{g1}+C_{xy1})+(C_{g2}+C_{xy2})}.
+```
+"""
+
+# ╔═╡ f0cfb74f-aa04-49b1-bb09-606ac3de6d76
+md"""
+Kron reduction keeps the qubit differential mode and eliminates the common and XY coordinates:
+
+```math
+Y_{\mathrm{eff}} = Y_{aa} - Y_{ab}Y_{bb}^{-1}Y_{ba}.
+```
+
+Here `a` is the kept differential coordinate, and `b` contains the eliminated modes.
+"""
+
 # ╔═╡ f939dd9a-40ae-50bc-bf81-380299e6eb7c
 begin
     frequencies_ghz = result.frequencies_hz ./ 1e9
-    s11 = zero_mode_s(result, 1, 1)
-    s21 = zero_mode_s(result, 2, 1)
-    z11 = zero_mode_z(result, 1, 1)
-    z21 = zero_mode_z(result, 2, 1)
+    raw_y_stack = zero_mode_y_matrix_stack(result; ports=[1, 2, 3])
 end
 
 # ╔═╡ 2eeaf4f8-e51f-4c55-841d-5d97f7a3a1db
 begin
-    raw_y_stack = zero_mode_y_matrix_stack(result; ports=[1, 2])
     deembedded_y_stack = apply_port_termination_compensation(
         raw_y_stack;
         resistance_ohm_by_port=Dict(1 => port_resistance, 2 => port_resistance),
     )
-    common_differential_matrix = common_differential_transform(2, 1, 2)
+    common_differential_matrix = common_differential_transform(3, 1, 2; alpha=alpha, beta=beta)
     cd_y_stack = apply_coordinate_transform(
         deembedded_y_stack,
         common_differential_matrix;
-        labels=["common", "differential"],
+        labels=["common", "differential", "xy"],
     )
     differential_y_stack = kron_reduce(cd_y_stack; keep_indices=[2])
-    differential_y_trace = vec(differential_y_stack.values[1, 1, :])
+    y_eff_trace = vec(differential_y_stack.values[1, 1, :])
 end
 
 # ╔═╡ 6b15f9b2-5654-48e4-a563-1c15b2f01667
@@ -288,9 +581,8 @@ end
 # ╔═╡ 16f1deb4-ec16-50f9-86d5-24d581dbda5d
 sanity = (
     point_count_matches=length(result.frequencies_hz) == point_count,
-    s11_points=length(s11),
-    s21_points=length(s21),
-    finite_s_traces=all(isfinite, real.(s11)) && all(isfinite, imag.(s11)) && all(isfinite, real.(s21)) && all(isfinite, imag.(s21)),
+    y_eff_points=length(y_eff_trace),
+    finite_y_eff=all(isfinite, real.(y_eff_trace)) && all(isfinite, imag.(y_eff_trace)),
     floating_resonance_in_span=start_frequency <= floating_f0_estimate <= stop_frequency,
 )
 
@@ -299,49 +591,10 @@ sanity
 
 # ╔═╡ ec574764-5b0d-5d25-bd69-3c505aea2b22
 begin
-    s_parameter_magnitude_figure(
-        result.frequencies_hz,
-        [
-            "S11" => s11,
-            "S21" => s21,
-        ];
-        title="Floating LC XY Line S-Parameter Magnitudes",
-        config=figure_config,
-    )
-end |> wide_figure_cell
-
-# ╔═╡ e802f724-8d53-5ce7-8856-5ec050ae5862
-begin
-    s_parameter_phase_figure(
-        result.frequencies_hz,
-        [
-            "S11" => s11,
-            "S21" => s21,
-        ];
-        title="Floating LC XY Line Phase",
-        config=figure_config,
-    )
-end |> wide_figure_cell
-
-# ╔═╡ 19344f88-8dee-50eb-90ab-c80f72cbae54
-begin
-    z_trace_figure(
-        result.frequencies_hz,
-        [
-            "Z11" => z11,
-            "Z21" => z21,
-        ];
-        title="Floating LC XY Line Z Parameters",
-        config=figure_config,
-    )
-end |> wide_figure_cell
-
-# ╔═╡ e1dbd97c-63d7-4ddb-8644-5f076703c7a2
-begin
     y_trace_figure(
         result.frequencies_hz,
-        ["differential Y" => differential_y_trace];
-        title="Floating LC Differential Admittance After PTC / Transform / Kron",
+        ["Yeff" => y_eff_trace];
+        title="Floating XY Reduced Differential Admittance",
         config=figure_config,
     )
 end |> wide_figure_cell
@@ -375,12 +628,12 @@ end |> wide_figure_cell
 # ╠═e071498e-12ed-5289-9665-99b5f358bf90
 # ╠═ca45a85a-381e-5ae7-8d0c-5701ff588414
 # ╠═3b925f5b-b9f8-5ae6-828c-a05c4559fb12
+# ╟─45eb022b-7573-43e0-aa80-9d67c07b38d7
+# ╟─509d9cdb-690b-4120-a724-a790bdb80824
+# ╟─f0cfb74f-aa04-49b1-bb09-606ac3de6d76
 # ╠═f939dd9a-40ae-50bc-bf81-380299e6eb7c
 # ╠═2eeaf4f8-e51f-4c55-841d-5d97f7a3a1db
 # ╠═6b15f9b2-5654-48e4-a563-1c15b2f01667
 # ╠═16f1deb4-ec16-50f9-86d5-24d581dbda5d
 # ╠═3bf216fd-6f55-5344-98c6-213167ab49c5
 # ╠═ec574764-5b0d-5d25-bd69-3c505aea2b22
-# ╠═e802f724-8d53-5ce7-8856-5ec050ae5862
-# ╠═19344f88-8dee-50eb-90ab-c80f72cbae54
-# ╠═e1dbd97c-63d7-4ddb-8644-5f076703c7a2

@@ -62,7 +62,7 @@ The public figure helpers receive a frequency vector and named numeric traces se
 result = run_hb_problem(hb_problem)
 s21 = zero_mode_s(result, 2, 1)
 
-s_parameter_magnitude_figure(
+s_parameter_db_magnitude_figure(
     result.frequencies_hz,
     ["S21" => s21];
     title = "Readout Transmission",
@@ -122,7 +122,8 @@ The package provides PlotlyJS figures for the result families used by the Pluto 
 
 | Figure family | Input data |
 | --- | --- |
-| `s_parameter_magnitude_figure` | Frequency vector and named complex S traces; plots `20log10(abs(Sij))` in dB. |
+| `s_parameter_db_magnitude_figure` | Frequency vector and named complex S traces; plots `20log10(abs(Sij))` in dB. |
+| `s_parameter_abs_magnitude_figure` | Frequency vector and named complex S traces; plots linear `abs(Sij)` with y-axis `\|Magnitude\|`. |
 | `s_parameter_phase_figure` | Frequency vector and named complex S traces; plots phase with `unit = :deg` or `unit = :rad`. |
 | `unwrap_phase_trace` | Complex traces or wrapped phase values; returns an explicit unwrapped phase trace before plotting. |
 | `z_trace_figure` | Frequency vector and named complex Z traces; expands each trace into real and imaginary curves. |

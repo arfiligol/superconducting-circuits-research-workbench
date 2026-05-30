@@ -54,7 +54,7 @@ This notebook combines the point-coupled Purcell-filter readout path with the fi
 
 ## Purpose
 
-Expose the integrated topology as one compiled circuit: parameters, primitive component extraction, graph and compile inspection, explicit `HBProblemSpec`, explicit solve, real `S11` / `S21` traces in one magnitude figure, and sanity checks.
+Expose the integrated topology as one compiled circuit: parameters, primitive component extraction, graph and compile inspection, explicit `HBProblemSpec`, explicit solve, real `S11` / `S21` traces in magnitude figures, and sanity checks.
 """
 
 # ╔═╡ fbdc641a-af8c-5840-901b-59ce29209138
@@ -75,17 +75,17 @@ md"""
 
 The integrated response is a product of loading and interference effects, not a sum of independent curves. The notebook should expose the actual Core solve for
 
-$$
+```math
 S_{11}(\omega), \quad S_{21}(\omega)
-$$
+```
 
 with the Purcell filter and QWR present in the same compiled circuit.
 
 The QWR estimate remains
 
-$$
+```math
 f_{\lambda/4} \approx \frac{v_p}{4l},
-$$
+```
 
 while the Purcell filter contributes an additional mode and admittance transformation along the readout path.
 """
@@ -107,8 +107,8 @@ begin
     qwr_length_m = 5.28371e-3
     section_length_m = 0.75e-3
 
-    l_per_m_h = 4.2e-7
-    c_per_m_f = 1.7e-10
+    l_per_m_h = 404.313e-9
+    c_per_m_f = 179.86e-12
 
     input_coupling_f = 2.0e-15
     output_coupling_f = 2.0e-15
@@ -116,8 +116,8 @@ begin
     window_start_filter_m = 2.25e-3
     window_start_qwr_m = 0.0
     window_length_m = 200e-6
-    c12_per_m_f = 8.09678e-11
-    lm_per_m_h = 19.08527e-8
+    l_matrix_per_m_h = [410.86374 19.08527; 19.08527 410.85454] .* 1e-9
+    c_matrix_per_m_f = [170.29805 -8.09678; -8.09678 170.29538] .* 1e-12
 
     port_resistance = 50.0
 
@@ -136,19 +136,21 @@ begin
 end
 
 # ╔═╡ 632d69f3-2300-5ab2-b27a-e96000077456
-combined_window_model = MTLCoupledWindowSpec(
-    window_start_filter_m,
-    window_start_qwr_m,
-    window_length_m,
-    section_length_m,
-    c12_per_m_f,
-    lm_per_m_h,
-)
-
-# ╔═╡ 5b15341e-c123-5cd4-8d8a-0af9af04a0a8
-let
-    purcell_model = RLGCSpec(
+begin
+    input_line_model = RLGCSpec(
+        length_m=input_line_length_m,
+        section_length_m=section_length_m,
+        l_per_m_h=l_per_m_h,
+        c_per_m_f=c_per_m_f,
+    )
+    filter_model = RLGCSpec(
         length_m=filter_length_m,
+        section_length_m=section_length_m,
+        l_per_m_h=l_per_m_h,
+        c_per_m_f=c_per_m_f,
+    )
+    output_line_model = RLGCSpec(
+        length_m=output_line_length_m,
         section_length_m=section_length_m,
         l_per_m_h=l_per_m_h,
         c_per_m_f=c_per_m_f,
@@ -159,62 +161,250 @@ let
         l_per_m_h=l_per_m_h,
         c_per_m_f=c_per_m_f,
     )
-    (
-        purcell_sections=purcell_model.n_sections,
-        qwr_sections=qwr_model.n_sections,
-        qwr_frequency_estimate_ghz=phase_velocity(qwr_model) / (4 * qwr_length_m) / 1e9,
-        input_coupling_fF=input_coupling_f * 1e15,
-        output_coupling_fF=output_coupling_f * 1e15,
-        mutual_k=combined_window_model.lm_per_m_h / l_per_m_h,
+    combined_window_model = MTLCoupledRLGCSpec(
+        start1_m=window_start_filter_m,
+        start2_m=window_start_qwr_m,
+        length_m=window_length_m,
+        section_length_m=section_length_m,
+        l_matrix_per_m_h=l_matrix_per_m_h,
+        c_matrix_per_m_f=c_matrix_per_m_f,
     )
 end
+
+# ╔═╡ 5b15341e-c123-5cd4-8d8a-0af9af04a0a8
+(
+    input_sections=input_line_model.n_sections,
+    purcell_sections=filter_model.n_sections,
+    output_sections=output_line_model.n_sections,
+    qwr_sections=qwr_model.n_sections,
+    qwr_frequency_estimate_ghz=phase_velocity(qwr_model) / (4 * qwr_length_m) / 1e9,
+    input_coupling_fF=input_coupling_f * 1e15,
+    output_coupling_fF=output_coupling_f * 1e15,
+    mutual_k=mutual_inductance_per_m_h(combined_window_model) / sqrt(combined_window_model.l_matrix_per_m_h[1, 1] * combined_window_model.l_matrix_per_m_h[2, 2]),
+    c12_per_m_f=mutual_capacitance_per_m_f(combined_window_model),
+)
 
 # ╔═╡ 49bec8d4-acae-5e23-b624-6d6ca2003d6a
 md"""
 ## Primitive-Built Component And Core Authoring
 
-The builder below constructs one integrated `CircuitPlan`. The selected MTL window is on the Purcell filter's middle CPW segment, not on a separate overlaid circuit.
+The local tutorial function below constructs one integrated `CircuitPlan`. The selected MTL window is the Purcell filter's middle CPW ladder, not a separate overlaid circuit.
 """
 
 # ╔═╡ 3037fa4d-26eb-58f9-b9f5-d8c7b13f3a44
-integrated_readout_core_builder = build_readout_purcell_hanging_qwr_mtl_example
+begin
+    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
+        point_count > 0 || throw(ArgumentError("point_count must be positive."))
+        point_count == 1 && return [Float64(start_frequency)]
+        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+    end
+
+    function external_two_port_tutorial!(plan; input, output, port_resistance)
+        external_port!(plan; id=:input_port, index=1, endpoint=input, resistance=port_resistance, role=:signal)
+        external_port!(plan; id=:output_port, index=2, endpoint=output, resistance=port_resistance, role=:readout)
+        return nothing
+    end
+
+    function add_hb_intent_tutorial!(plan; ports)
+        observables = Any[]
+        for output_port in ports
+            for source_port in ports
+                push!(
+                    observables,
+                    SParameterRequest(
+                        id=Symbol(:s, output_port, :_, source_port),
+                        outputmode=(0,),
+                        outputport=output_port,
+                        inputmode=(0,),
+                        inputport=source_port,
+                    ),
+                )
+            end
+        end
+
+        return hb_intent!(
+            plan;
+            pump_axes=[
+                PumpAxis(
+                    id=:pump,
+                    frequency_parameter=:pump_frequency,
+                ),
+            ],
+            source_slots=[
+                HBSourceSlot(
+                    id=:pump_in,
+                    role=:pump,
+                    port=first(ports),
+                    mode=(1,),
+                    current_parameter=:pump_current,
+                ),
+            ],
+            observables=observables,
+            default_solver_controls=HBSolverControls(
+                n_pump_harmonics=1,
+                n_modulation_harmonics=1,
+                returnS=true,
+                returnZ=true,
+                returnQE=true,
+                returnCM=true,
+                keyedarrays=false,
+            ),
+        )
+    end
+
+    function add_readout_purcell_hanging_qwr_mtl_tutorial!(
+        plan;
+        id,
+        input,
+        output,
+        input_line_spec::RLGCSpec,
+        filter_spec::RLGCSpec,
+        output_line_spec::RLGCSpec,
+        qwr_spec::RLGCSpec,
+        input_coupling_f,
+        output_coupling_f,
+        qwr_grounded_head,
+        qwr_open_tail,
+        mtl_model::MTLCoupledRLGCSpec,
+    )
+        input_tail = external_node(string(id, "_input_tail"))
+        filter_head = external_node(string(id, "_filter_head"))
+        filter_tail = external_node(string(id, "_filter_tail"))
+        output_head = external_node(string(id, "_output_head"))
+        filter_breakpoints = [mtl_model.start1_m, mtl_model.start1_m + mtl_model.length_m]
+        qwr_breakpoints = [mtl_model.start2_m, mtl_model.start2_m + mtl_model.length_m]
+
+        input_line = build_lc_ladder_line!(
+            plan;
+            id=string(id, "_input_line"),
+            head=input,
+            tail=input_tail,
+            spec=input_line_spec,
+            head_termination=:external,
+            tail_termination=:open,
+        )
+        filter_line = build_lc_ladder_line!(
+            plan;
+            id=string(id, "_purcell_filter"),
+            head=filter_head,
+            tail=filter_tail,
+            spec=filter_spec,
+            head_termination=:open,
+            tail_termination=:open,
+            breakpoints_m=filter_breakpoints,
+            section_overrides=[coupled_line_section_override(mtl_model, 1)],
+        )
+        output_line = build_lc_ladder_line!(
+            plan;
+            id=string(id, "_output_line"),
+            head=output_head,
+            tail=output,
+            spec=output_line_spec,
+            head_termination=:open,
+            tail_termination=:external,
+        )
+        input_coupling = couple_capacitive!(
+            plan;
+            id=string(id, "_input_point_coupling"),
+            from=input_tail,
+            to=filter_head,
+            capacitance=input_coupling_f,
+            role=:purcell_filter_point_coupling,
+            label=string(id, " input Cc"),
+        )
+        output_coupling = couple_capacitive!(
+            plan;
+            id=string(id, "_output_point_coupling"),
+            from=filter_tail,
+            to=output_head,
+            capacitance=output_coupling_f,
+            role=:purcell_filter_point_coupling,
+            label=string(id, " output Cc"),
+        )
+        qwr_component = add_quarter_wave_resonator!(
+            plan;
+            id=string(id, "_qwr"),
+            grounded_head=qwr_grounded_head,
+            open_tail=qwr_open_tail,
+            spec=qwr_spec,
+            breakpoints_m=qwr_breakpoints,
+            section_overrides=[coupled_line_section_override(mtl_model, 2)],
+        )
+        purcell_window_line = filter_line
+        window = couple_transmission_window!(
+            plan;
+            id=string(id, "_filter_qwr_mtl_window"),
+            line1=purcell_window_line,
+            line2=qwr_component.line,
+            start1=mtl_model.start1_m,
+            start2=mtl_model.start2_m,
+            length=mtl_model.length_m,
+            model=mtl_model,
+        )
+
+        readout_filter = (
+            id=string(id, "_readout_filter"),
+            input_line=input_line,
+            filter_line=filter_line,
+            output_line=output_line,
+            input_coupling=input_coupling,
+            output_coupling=output_coupling,
+            input_node=input,
+            output_node=output,
+            filter_head=filter_head,
+            filter_tail=filter_tail,
+        )
+
+        return (
+            id=string(id),
+            readout_filter=readout_filter,
+            qwr=qwr_component.line,
+            qwr_component=qwr_component,
+            window=window,
+            purcell_window_line=purcell_window_line,
+            window_model=mtl_model,
+        )
+    end
+end
 
 # ╔═╡ d7bee3d9-27d1-56e1-9ad2-25fb1621dd3b
-example = integrated_readout_core_builder(
-    input_line_length_m=input_line_length_m,
-    filter_length_m=filter_length_m,
-    output_line_length_m=output_line_length_m,
-    qwr_length_m=qwr_length_m,
-    section_length_m=section_length_m,
-    l_per_m_h=l_per_m_h,
-    c_per_m_f=c_per_m_f,
-    input_coupling_f=input_coupling_f,
-    output_coupling_f=output_coupling_f,
-    window_start_filter_m=window_start_filter_m,
-    window_start_qwr_m=window_start_qwr_m,
-    window_length_m=window_length_m,
-    c12_per_m_f=c12_per_m_f,
-    lm_per_m_h=lm_per_m_h,
-    port_resistance=port_resistance,
-    start_frequency=start_frequency,
-    stop_frequency=stop_frequency,
-    point_count=point_count,
-    pump_frequency=pump_frequency,
-    pump_current=pump_current,
-    optional_hb_kwargs=optional_hb_kwargs,
-)
+tutorial_circuit = let
+    plan = CircuitPlan("readout-purcell-hanging-qwr-mtl-tutorial")
+    input = external_node("input")
+    output = external_node("output")
+    qwr_grounded_head = external_node("qwr_grounded_head")
+    qwr_open_tail = external_node("qwr_open_tail")
+    external_two_port_tutorial!(plan; input=input, output=output, port_resistance=port_resistance)
+    component = add_readout_purcell_hanging_qwr_mtl_tutorial!(
+        plan;
+        id="readout_purcell_qwr",
+        input=input,
+        output=output,
+        input_line_spec=input_line_model,
+        filter_spec=filter_model,
+        output_line_spec=output_line_model,
+        qwr_spec=qwr_model,
+        input_coupling_f=input_coupling_f,
+        output_coupling_f=output_coupling_f,
+        qwr_grounded_head=qwr_grounded_head,
+        qwr_open_tail=qwr_open_tail,
+        mtl_model=combined_window_model,
+    )
+    add_hb_intent_tutorial!(plan; ports=[:input_port, :output_port])
+    (plan=plan, component=component)
+end
 
 # ╔═╡ fb51b586-34e7-5a06-a67a-24e6075a6051
-circuit_plan = example.plan
+circuit_plan = tutorial_circuit.plan
 
 # ╔═╡ 76c373da-ab0b-5c48-abff-73ecc89fa520
-engineering_graph = example.graph
+engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
 
 # ╔═╡ f8ffd151-ea2d-57ff-bedc-abdca4964e37
-compiled_circuit = example.compiled
+compiled_circuit = compile_to_josephson(circuit_plan)
 
 # ╔═╡ 2a9d094a-3d50-5816-b56b-bee289feadf1
-primitive_component = (readout_filter=example.readout_purcell, qwr=example.qwr, window=example.window)
+primitive_component = tutorial_circuit.component
 
 # ╔═╡ 69063dd9-6c63-5970-8923-08d18df48d76
 (
@@ -222,6 +412,7 @@ primitive_component = (readout_filter=example.readout_purcell, qwr=example.qwr, 
     filter_sections=length(primitive_component.readout_filter.filter_line.series_inductors),
     output_line_sections=length(primitive_component.readout_filter.output_line.series_inductors),
     qwr_sections=length(primitive_component.qwr.series_inductors),
+    selected_mtl_window_line=primitive_component.purcell_window_line.id,
     window_filter_sections=primitive_component.window.section_range1,
     window_qwr_sections=primitive_component.window.section_range2,
 )
@@ -251,7 +442,15 @@ The notebook keeps the solve boundary visible. `hb_problem` is inspectable befor
 """
 
 # ╔═╡ d734e4ce-5648-553d-9acb-660371400896
-hb_problem = example.hb_problem
+hb_problem = build_hb_problem(
+    compiled_circuit,
+    HBRunSpec(
+        frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
+        pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+        source_currents=Dict(:pump_in => Float64(pump_current)),
+        optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
+    ),
+)
 
 # ╔═╡ 2021cda9-02a3-53fd-ac3c-6e7431179766
 (
@@ -299,13 +498,26 @@ sanity
 
 # ╔═╡ 6b1ddff1-1ee0-59ac-8c69-071451b0158c
 begin
-    s_parameter_magnitude_figure(
+    s_parameter_db_magnitude_figure(
         result.frequencies_hz,
         [
             "S11" => s11,
             "S21" => s21,
         ];
         title="Integrated Readout S-Parameter Magnitudes",
+        config=figure_config,
+    )
+end |> wide_figure_cell
+
+# ╔═╡ 8a9544d5-f670-5797-b960-5f9dd848bc38
+begin
+    s_parameter_abs_magnitude_figure(
+        result.frequencies_hz,
+        [
+            "S11" => s11,
+            "S21" => s21,
+        ];
+        title="Integrated Readout S-Parameter Linear Magnitudes",
         config=figure_config,
     )
 end |> wide_figure_cell
@@ -368,5 +580,6 @@ end |> wide_figure_cell
 # ╠═1e6bafa2-fe43-5ccc-9c71-714512cb71e4
 # ╠═9b2aade8-f188-58cd-8b01-c53cf3e11922
 # ╠═6b1ddff1-1ee0-59ac-8c69-071451b0158c
+# ╠═8a9544d5-f670-5797-b960-5f9dd848bc38
 # ╠═ccc6f3d0-e693-5a9c-8a35-2e9fe1e1c51a
 # ╠═cccf082e-792f-520f-a003-08baa0590594

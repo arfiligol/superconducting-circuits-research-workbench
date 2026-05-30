@@ -54,7 +54,7 @@ This notebook owns the finite distributed coupling-window convention for a reado
 
 ## Purpose
 
-Use a real MTL window primitive, inspect the coupled-window component, preserve explicit Core compile and HB solve cells, and plot real two-port `S11` / `S21` traces in one magnitude figure.
+Use a real MTL window primitive, inspect the coupled-window component, preserve explicit Core compile and HB solve cells, and plot real two-port `S11` / `S21` traces in magnitude figures.
 """
 
 # ╔═╡ 70a08ed6-f4be-58f6-8d83-3639dc817402
@@ -75,15 +75,16 @@ md"""
 
 A quarter-wave resonator has a grounded or voltage-node end and an open or voltage-antinode end. In the ideal line model,
 
-$$
+```math
 f_{\lambda/4} \approx \frac{v_p}{4l}.
-$$
+```
 
-A finite MTL window couples distributed sections rather than inserting one lumped capacitor:
+A finite MTL window changes the coupled section's self terms and adds cross terms rather than inserting one lumped capacitor:
 
-$$
-C_{12,sec}=C'_{12}\Delta x, \qquad M_{12,sec}=L'_m\Delta x.
-$$
+```math
+C_{12,\mathrm{sec}} = -C'_{12,\mathrm{matrix}}\Delta x,\qquad
+M_{12,\mathrm{sec}} = L'_{12}\Delta x.
+```
 """
 
 # ╔═╡ c667696c-beb5-5b11-b7d8-4cadb6774d18
@@ -101,16 +102,16 @@ begin
     resonator_length_m = 5.28371e-3
     section_length_m = 0.75e-3
 
-    readout_l_per_m_h = 4.2e-7
-    readout_c_per_m_f = 1.7e-10
-    resonator_l_per_m_h = 4.2e-7
-    resonator_c_per_m_f = 1.7e-10
+    readout_l_per_m_h = 404.313e-9
+    readout_c_per_m_f = 179.86e-12
+    resonator_l_per_m_h = 404.313e-9
+    resonator_c_per_m_f = 179.86e-12
 
     window_start_readout_m = 2.25e-3
     window_start_resonator_m = 0.0
     window_length_m = 200e-6
-    c12_per_m_f = 8.09678e-11
-    lm_per_m_h = 19.08527e-8
+    l_matrix_per_m_h = [410.86374 19.08527; 19.08527 410.85454] .* 1e-9
+    c_matrix_per_m_f = [170.29805 -8.09678; -8.09678 170.29538] .* 1e-12
 
     port_resistance = 50.0
 
@@ -129,17 +130,7 @@ begin
 end
 
 # ╔═╡ 567fdfbc-ce0c-58fe-a0c0-884dfe084b2f
-window_model = MTLCoupledWindowSpec(
-    window_start_readout_m,
-    window_start_resonator_m,
-    window_length_m,
-    section_length_m,
-    c12_per_m_f,
-    lm_per_m_h,
-)
-
-# ╔═╡ 49d7184f-ff4b-5a08-96df-5b1f54f7d5fa
-let
+begin
     readout_model = RLGCSpec(
         length_m=readout_length_m,
         section_length_m=section_length_m,
@@ -152,55 +143,183 @@ let
         l_per_m_h=resonator_l_per_m_h,
         c_per_m_f=resonator_c_per_m_f,
     )
-    (
-        readout_sections=readout_model.n_sections,
-        resonator_sections=resonator_model.n_sections,
-        qwr_frequency_estimate_ghz=phase_velocity(resonator_model) / (4 * resonator_length_m) / 1e9,
-        mutual_k=window_model.lm_per_m_h / sqrt(readout_l_per_m_h * resonator_l_per_m_h),
+    window_model = MTLCoupledRLGCSpec(
+        start1_m=window_start_readout_m,
+        start2_m=window_start_resonator_m,
+        length_m=window_length_m,
+        section_length_m=section_length_m,
+        l_matrix_per_m_h=l_matrix_per_m_h,
+        c_matrix_per_m_f=c_matrix_per_m_f,
     )
 end
+
+# ╔═╡ 49d7184f-ff4b-5a08-96df-5b1f54f7d5fa
+(
+    readout_sections=readout_model.n_sections,
+    resonator_sections=resonator_model.n_sections,
+    qwr_frequency_estimate_ghz=phase_velocity(resonator_model) / (4 * resonator_length_m) / 1e9,
+    mutual_k=mutual_inductance_per_m_h(window_model) / sqrt(window_model.l_matrix_per_m_h[1, 1] * window_model.l_matrix_per_m_h[2, 2]),
+    c12_per_m_f=mutual_capacitance_per_m_f(window_model),
+)
 
 # ╔═╡ 6390bc28-0f63-5ba6-8443-041dec21f5d7
 md"""
 ## Primitive-Built Component And Core Authoring
 
 The coupled window is selected by distance from each ladder head. The readout line and QWR both include the window boundaries as ladder breakpoints, so Core can generate matching mutual-capacitance and mutual-inductance sections without silently rounding the physical length.
+
+`add_quarter_wave_resonator!` is the local primitive convention here: it builds the QWR ladder with a grounded head (`head_termination=:short`) and an open tail (`tail_termination=:open`), then the tutorial function applies the coupled-section overrides before declaring the MTL window.
 """
 
 # ╔═╡ c3dbbe99-e0d4-5dfe-bca2-b008a2e2e7e5
-example = build_readout_line_hanging_qwr_mtl_example(
-    readout_length_m=readout_length_m,
-    resonator_length_m=resonator_length_m,
-    section_length_m=section_length_m,
-    readout_l_per_m_h=readout_l_per_m_h,
-    readout_c_per_m_f=readout_c_per_m_f,
-    resonator_l_per_m_h=resonator_l_per_m_h,
-    resonator_c_per_m_f=resonator_c_per_m_f,
-    window_start_readout_m=window_start_readout_m,
-    window_start_resonator_m=window_start_resonator_m,
-    window_length_m=window_length_m,
-    c12_per_m_f=c12_per_m_f,
-    lm_per_m_h=lm_per_m_h,
-    port_resistance=port_resistance,
-    start_frequency=start_frequency,
-    stop_frequency=stop_frequency,
-    point_count=point_count,
-    pump_frequency=pump_frequency,
-    pump_current=pump_current,
-    optional_hb_kwargs=optional_hb_kwargs,
-)
+begin
+    function frequency_sweep_tutorial(start_frequency, stop_frequency, point_count)
+        point_count > 0 || throw(ArgumentError("point_count must be positive."))
+        point_count == 1 && return [Float64(start_frequency)]
+        return range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+    end
+
+    function external_two_port_tutorial!(plan; input, output, port_resistance)
+        external_port!(plan; id=:input_port, index=1, endpoint=input, resistance=port_resistance, role=:signal)
+        external_port!(plan; id=:output_port, index=2, endpoint=output, resistance=port_resistance, role=:readout)
+        return nothing
+    end
+
+    function add_hb_intent_tutorial!(plan; ports)
+        observables = Any[]
+        for output_port in ports
+            for source_port in ports
+                push!(
+                    observables,
+                    SParameterRequest(
+                        id=Symbol(:s, output_port, :_, source_port),
+                        outputmode=(0,),
+                        outputport=output_port,
+                        inputmode=(0,),
+                        inputport=source_port,
+                    ),
+                )
+            end
+        end
+
+        return hb_intent!(
+            plan;
+            pump_axes=[
+                PumpAxis(
+                    id=:pump,
+                    frequency_parameter=:pump_frequency,
+                ),
+            ],
+            source_slots=[
+                HBSourceSlot(
+                    id=:pump_in,
+                    role=:pump,
+                    port=first(ports),
+                    mode=(1,),
+                    current_parameter=:pump_current,
+                ),
+            ],
+            observables=observables,
+            default_solver_controls=HBSolverControls(
+                n_pump_harmonics=1,
+                n_modulation_harmonics=1,
+                returnS=true,
+                returnZ=true,
+                returnQE=true,
+                returnCM=true,
+                keyedarrays=false,
+            ),
+        )
+    end
+
+    function add_readout_hanging_qwr_mtl_tutorial!(
+        plan;
+        id,
+        input,
+        output,
+        qwr_grounded_head,
+        qwr_open_tail,
+        readout_spec::RLGCSpec,
+        resonator_spec::RLGCSpec,
+        mtl_model::MTLCoupledRLGCSpec,
+    )
+        readout_breakpoints = [mtl_model.start1_m, mtl_model.start1_m + mtl_model.length_m]
+        qwr_breakpoints = [mtl_model.start2_m, mtl_model.start2_m + mtl_model.length_m]
+        readout_line = build_lc_ladder_line!(
+            plan;
+            id=string(id, "_readout_line"),
+            head=input,
+            tail=output,
+            spec=readout_spec,
+            head_termination=:external,
+            tail_termination=:external,
+            breakpoints_m=readout_breakpoints,
+            section_overrides=[coupled_line_section_override(mtl_model, 1)],
+        )
+        qwr_component = add_quarter_wave_resonator!(
+            plan;
+            id=string(id, "_qwr"),
+            grounded_head=qwr_grounded_head,
+            open_tail=qwr_open_tail,
+            spec=resonator_spec,
+            breakpoints_m=qwr_breakpoints,
+            section_overrides=[coupled_line_section_override(mtl_model, 2)],
+        )
+        window = couple_transmission_window!(
+            plan;
+            id=string(id, "_readout_qwr_mtl_window"),
+            line1=readout_line,
+            line2=qwr_component.line,
+            start1=mtl_model.start1_m,
+            start2=mtl_model.start2_m,
+            length=mtl_model.length_m,
+            model=mtl_model,
+        )
+
+        return (
+            id=string(id),
+            readout_line=readout_line,
+            qwr=qwr_component.line,
+            qwr_component=qwr_component,
+            window=window,
+            window_model=mtl_model,
+        )
+    end
+
+    tutorial_circuit = let
+        plan = CircuitPlan("readout-line-hanging-qwr-mtl-tutorial")
+        input = external_node("input")
+        output = external_node("output")
+        qwr_grounded_head = external_node("qwr_grounded_head")
+        qwr_open_tail = external_node("qwr_open_tail")
+        external_two_port_tutorial!(plan; input=input, output=output, port_resistance=port_resistance)
+        component = add_readout_hanging_qwr_mtl_tutorial!(
+            plan;
+            id="readout_qwr",
+            input=input,
+            output=output,
+            qwr_grounded_head=qwr_grounded_head,
+            qwr_open_tail=qwr_open_tail,
+            readout_spec=readout_model,
+            resonator_spec=resonator_model,
+            mtl_model=window_model,
+        )
+        add_hb_intent_tutorial!(plan; ports=[:input_port, :output_port])
+        (plan=plan, component=component)
+    end
+end
 
 # ╔═╡ f1c0cab3-0945-54e8-86ec-dd0569c5b484
-circuit_plan = example.plan
+circuit_plan = tutorial_circuit.plan
 
 # ╔═╡ 0d63bc89-5809-51f9-9112-613b4608b662
-engineering_graph = example.graph
+engineering_graph = SuperconductingCircuitsCore.engineering_graph(circuit_plan)
 
 # ╔═╡ ed91e532-4f0c-5b4c-8ae9-b012ad943890
-compiled_circuit = example.compiled
+compiled_circuit = compile_to_josephson(circuit_plan)
 
 # ╔═╡ ed05445e-32b9-563f-8558-0ab03419f337
-primitive_component = (readout_line=example.readout_line, qwr=example.qwr, window=example.window)
+primitive_component = tutorial_circuit.component
 
 # ╔═╡ 48866a58-6a35-569a-9ccb-860a20623e05
 (
@@ -237,7 +356,15 @@ The notebook keeps the solve boundary visible. `hb_problem` is inspectable befor
 """
 
 # ╔═╡ 32326c3a-ca01-5c63-9b84-22e802880b17
-hb_problem = example.hb_problem
+hb_problem = build_hb_problem(
+    compiled_circuit,
+    HBRunSpec(
+        frequency_sweep=frequency_sweep_tutorial(start_frequency, stop_frequency, point_count),
+        pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+        source_currents=Dict(:pump_in => Float64(pump_current)),
+        optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
+    ),
+)
 
 # ╔═╡ 0c2d392a-d6e5-5044-9c31-0554ba670226
 (
@@ -285,13 +412,26 @@ sanity
 
 # ╔═╡ 9ce0e0f4-7283-5b11-9ea3-c12fa473410f
 begin
-    s_parameter_magnitude_figure(
+    s_parameter_db_magnitude_figure(
         result.frequencies_hz,
         [
             "S11" => s11,
             "S21" => s21,
         ];
         title="Readout + Hanging QWR S-Parameter Magnitudes",
+        config=figure_config,
+    )
+end |> wide_figure_cell
+
+# ╔═╡ 92fc7a97-1191-5f6f-8f14-1e5d30a42f9e
+begin
+    s_parameter_abs_magnitude_figure(
+        result.frequencies_hz,
+        [
+            "S11" => s11,
+            "S21" => s21,
+        ];
+        title="Readout + Hanging QWR S-Parameter Linear Magnitudes",
         config=figure_config,
     )
 end |> wide_figure_cell
@@ -353,5 +493,6 @@ end |> wide_figure_cell
 # ╠═58ce3425-5f20-5de6-b5ce-704f2c467767
 # ╠═281ae891-b531-5d1d-80a7-e43b917e2e39
 # ╠═9ce0e0f4-7283-5b11-9ea3-c12fa473410f
+# ╠═92fc7a97-1191-5f6f-8f14-1e5d30a42f9e
 # ╠═65b22a67-fcfd-50c3-880c-260e6aa999ca
 # ╠═fdde7f27-9497-599b-963a-f6a19dbd8baf
