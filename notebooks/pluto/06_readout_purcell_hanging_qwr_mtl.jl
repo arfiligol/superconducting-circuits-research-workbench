@@ -319,6 +319,7 @@ begin
 
     circuit_plan
 end
+
 # ╔═╡ 1a44259c-58e2-531c-8c6b-dca85d5d2f92
 md"""
 ## Inspect Core Representations
@@ -373,17 +374,19 @@ compiled_summary = (
 )
 
 # ╔═╡ fd1b0287-5c86-5450-9d0a-0b31bff3eb46
-frequency_sweep = point_count == 1 ? [Float64(start_frequency)] : range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+begin
+    frequency_sweep = point_count == 1 ? [Float64(start_frequency)] : range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
 
-hb_problem = build_hb_problem(
-    compiled_circuit,
-    HBRunSpec(
-        frequency_sweep=frequency_sweep,
-        pump_frequencies=Dict(:pump => Float64(pump_frequency)),
-        source_currents=Dict(:pump_in => Float64(pump_current)),
-        optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
-    ),
-)
+    hb_problem = build_hb_problem(
+        compiled_circuit,
+        HBRunSpec(
+            frequency_sweep=frequency_sweep,
+            pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+            source_currents=Dict(:pump_in => Float64(pump_current)),
+            optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
+        ),
+    )
+end
 
 # ╔═╡ 8ed5fe3a-b988-57a6-9f77-efe72a990e52
 output_request_report = validate_output_request_configuration(compiled_circuit, hb_problem)

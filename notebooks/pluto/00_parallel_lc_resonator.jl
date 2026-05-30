@@ -274,17 +274,19 @@ compiled_summary = (
 )
 
 # ╔═╡ 1a0328f5-f32d-5679-8851-11b3b2e17105
-frequency_sweep = point_count == 1 ? [Float64(start_frequency)] : range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
+begin
+    frequency_sweep = point_count == 1 ? [Float64(start_frequency)] : range(Float64(start_frequency), Float64(stop_frequency); length=Int(point_count))
 
-hb_problem = build_hb_problem(
-    compiled_circuit,
-    HBRunSpec(
-        frequency_sweep=frequency_sweep,
-        pump_frequencies=Dict(:pump => Float64(pump_frequency)),
-        source_currents=Dict(:pump_in => Float64(pump_current)),
-        optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
-    ),
-)
+    hb_problem = build_hb_problem(
+        compiled_circuit,
+        HBRunSpec(
+            frequency_sweep=frequency_sweep,
+            pump_frequencies=Dict(:pump => Float64(pump_frequency)),
+            source_currents=Dict(:pump_in => Float64(pump_current)),
+            optional_hb_kwargs=Dict{Symbol,Any}(optional_hb_kwargs),
+        ),
+    )
+end
 
 # ╔═╡ 3481f53c-8125-574b-b8b0-3cb7362d384a
 output_request_report = validate_output_request_configuration(compiled_circuit, hb_problem)
