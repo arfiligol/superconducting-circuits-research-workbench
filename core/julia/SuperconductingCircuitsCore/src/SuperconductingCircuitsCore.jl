@@ -28,6 +28,7 @@ include("diagnostics/diagnostics.jl")
 include("components/common.jl")
 include("components/coupled_window.jl")
 include("components/transmission_lines.jl")
+include("components/reusable_components.jl")
 include("examples/pluto_examples.jl")
 include("simulation/result_extractors.jl")
 include("simulation/hbsolve_runner.jl")
@@ -102,6 +103,7 @@ export ShuntCapacitor
 export ShuntInductor
 export SeriesInductor
 export SeriesResistor
+export JosephsonJunction
 export InductiveCoupling
 export MutualInductiveCoupling
 export CoupledWindowRelation
@@ -111,6 +113,7 @@ export shunt_capacitor!
 export shunt_inductor!
 export series_inductor!
 export series_resistor!
+export josephson_junction!
 export couple_inductive!
 export couple_window!
 
@@ -182,11 +185,17 @@ export diff_topology_keys
 export debug_bundle
 
 export RLGCSpec
+export AbstractTransmissionLineModel
 export CoupledWindowSpec
-export TransmissionLineSpec
 export TransmissionLineLadder
 export MTLCoupledWindowSpec
 export CoupledTransmissionWindow
+export ParallelLCResonator
+export ReflectiveJPA
+export HalfWaveResonator
+export QuarterWaveResonator
+export ReadoutLineWithPurcellFilter
+export ReadoutPurcellQWRMTL
 
 export phase_velocity
 export section_values
@@ -196,12 +205,20 @@ export couple_transmission_window!
 export node_at_distance
 export section_index_at_distance
 export section_range_from_window
+export add_parallel_lc_resonator!
+export add_reflective_jpa!
+export add_half_wave_resonator!
+export add_quarter_wave_resonator!
+export add_readout_line_with_purcell_filter!
+export add_readout_purcell_qwr_mtl!
 
-export build_lc_resonator_example
-export build_cpw_ladder_example
-export build_purcell_filter_mvp_example
-export build_long_readout_line_example
-export build_hanging_qwr_mtl_example
+export build_parallel_lc_resonator_example
+export build_reflective_jpa_capacitive_coupled_lc_example
+export build_floating_lc_xy_line_example
+export build_transmission_line_circuit_model_example
+export build_readout_line_purcell_filter_example
+export build_readout_line_hanging_qwr_mtl_example
+export build_readout_purcell_hanging_qwr_mtl_example
 
 export run_hbsolve
 export run_frequency_sweep

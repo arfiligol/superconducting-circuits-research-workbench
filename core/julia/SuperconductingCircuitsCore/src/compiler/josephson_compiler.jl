@@ -164,6 +164,11 @@ function _prepare_node_resolution!(ctx::_JosephsonCompileContext)
             _validate_endpoint_for_lumped_lowering(ctx.plan, relation.to)
             _ensure_endpoint!(ctx, relation.from)
             _ensure_endpoint!(ctx, relation.to)
+        elseif relation isa JosephsonJunction
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.from)
+            _validate_endpoint_for_lumped_lowering(ctx.plan, relation.to)
+            _ensure_endpoint!(ctx, relation.from)
+            _ensure_endpoint!(ctx, relation.to)
         elseif relation isa InductiveCoupling
             _validation_error("InductiveCoupling '$(relation.id)' is not lowerable by this Josephson compiler path.")
         elseif relation isa MutualInductiveCoupling
@@ -361,6 +366,17 @@ function _lower_relation!(ctx::_JosephsonCompileContext, relation::SeriesResisto
         node_a=_resolved_node(ctx, relation.from),
         node_b=_resolved_node(ctx, relation.to),
         resistance=relation.resistance,
+    )
+end
+
+function _lower_relation!(ctx::_JosephsonCompileContext, relation::JosephsonJunction)
+    return _emit_inductor_relation!(
+        ctx;
+        relation=relation,
+        row_name="Lj1_$(_sanitize_node_part(relation.id))",
+        node_a=_resolved_node(ctx, relation.from),
+        node_b=_resolved_node(ctx, relation.to),
+        inductance=relation.josephson_inductance,
     )
 end
 

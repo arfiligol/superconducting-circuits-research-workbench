@@ -1,6 +1,5 @@
 @testset "RLGCSpec validation" begin
-    invalid = RLGCSpec(length_m=-1.0, n_sections=2, l_per_m_h=1.0, c_per_m_f=1.0)
-    @test_throws FrameworkValidationError section_values(invalid)
+    @test_throws FrameworkValidationError RLGCSpec(length_m=-1.0, n_sections=2, l_per_m_h=1.0, c_per_m_f=1.0)
 end
 
 @testset "section_values correctness" begin
@@ -58,4 +57,3 @@ end
     @test length(circuit) == 12
     @test count(row -> startswith(row[1], "K_window"), circuit) == 2
 end
-

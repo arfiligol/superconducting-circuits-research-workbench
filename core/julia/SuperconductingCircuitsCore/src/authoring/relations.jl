@@ -41,6 +41,14 @@ struct SeriesResistor <: AbstractCircuitRelation
     parameters::Vector{ParameterMetadata}
 end
 
+struct JosephsonJunction <: AbstractCircuitRelation
+    id::String
+    from::AbstractNodeEndpoint
+    to::AbstractNodeEndpoint
+    josephson_inductance::Any
+    parameters::Vector{ParameterMetadata}
+end
+
 struct InductiveCoupling <: AbstractCircuitRelation
     id::String
     from::AbstractCircuitEndpoint
@@ -311,6 +319,51 @@ function series_resistor!(
         parameters=_engineering_relation_parameters(
             :resistance,
             resistance,
+            params;
+            schematic_kind=schematic_kind,
+        ),
+        source_location=source_location,
+    )
+    return relation
+end
+
+function josephson_junction!(
+    plan::CircuitPlan;
+    id,
+    from,
+    to=ground(),
+    josephson_inductance=nothing,
+    inductance=nothing,
+    parameters=ParameterMetadata[],
+    role=:josephson_junction,
+    label=nothing,
+    schematic_kind=:josephson_junction,
+    source_location=nothing,
+)
+    from isa AbstractNodeEndpoint && to isa AbstractNodeEndpoint ||
+        _validation_error("josephson_junction! requires NodeEndpoint <-> NodeEndpoint.")
+    if !isnothing(josephson_inductance) && !isnothing(inductance)
+        josephson_inductance == inductance ||
+            _validation_error("josephson_junction! received conflicting josephson_inductance and inductance values.")
+    end
+    value = isnothing(josephson_inductance) ? inductance : josephson_inductance
+    isnothing(value) && _validation_error("josephson_junction! requires josephson_inductance or inductance.")
+    params = _parameter_vector(parameters)
+    relation = JosephsonJunction(String(id), from, to, value, params)
+    push!(plan.relations, relation)
+    _register_relation_parameters!(plan, params)
+    record_engineering_relation!(
+        plan;
+        id=relation.id,
+        relation_type=:josephson_junction,
+        from=from,
+        to=to,
+        through=Symbol(relation.id),
+        role=role,
+        label=_engineering_label(label),
+        parameters=_engineering_relation_parameters(
+            :josephson_inductance,
+            value,
             params;
             schematic_kind=schematic_kind,
         ),

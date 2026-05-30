@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Plan-level relations, endpoint constraints, capacitive couplings, inductive couplings, shunts, and distributed windows.
-version: v1.5.0
-last_updated: 2026-05-29
+version: v1.6.0
+last_updated: 2026-05-30
 updated_by: codex
 ---
 
@@ -32,13 +32,14 @@ They are not immediate JosephsonCircuits.jl rows.
 | `shunt_inductor!` | convenience inductor placement from a node-resolving endpoint to implicit ground |
 | `series_inductor!` | inductor placement between two node-resolving endpoints |
 | `series_resistor!` | resistor placement between two node-resolving endpoints |
+| `josephson_junction!` | Josephson inductive branch placement between two node-resolving endpoints |
 | `couple_window!` | distributed span-to-span coupling intent |
 | `couple_transmission_window!` | `TransmissionLineLadder` coupled-window helper |
 | `couple_inductive!` | inductive, mutual, or flux-related coupling intent |
 
 ## EngineeringGraph Capture
 
-Physical relation operations record matching [`EngineeringGraph`](engineering-graph.md) relations while they update the Circuit Plan. Standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `series_inductor!`, `series_resistor!`, `couple_inductive!`, `couple_window!`, and `couple_transmission_window!` calls keep the solver-facing relation and human-facing semantic graph synchronized.
+Physical relation operations record matching [`EngineeringGraph`](engineering-graph.md) relations while they update the Circuit Plan. Standard `connect!`, `couple_capacitive!`, `shunt_capacitor!`, `shunt_inductor!`, `series_inductor!`, `series_resistor!`, `josephson_junction!`, `couple_inductive!`, `couple_window!`, and `couple_transmission_window!` calls keep the solver-facing relation and human-facing semantic graph synchronized.
 
 Users should not normally call `record_engineering_relation!` after those standard operations. Use manual relation recording only for extra semantic annotations, non-physical overlays, or metadata that is not already represented by the physical operation.
 
@@ -52,8 +53,9 @@ Users should not normally call `record_engineering_relation!` after those standa
 | `shunt_inductor!` | `NodeEndpoint` -> implicit `GroundEndpoint` |
 | `series_inductor!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `series_resistor!` | `NodeEndpoint` <-> `NodeEndpoint` |
+| `josephson_junction!` | `NodeEndpoint` <-> `NodeEndpoint` |
 | `couple_window!` | `LineSpanEndpoint` <-> `LineSpanEndpoint` |
-| `couple_transmission_window!` | `TransmissionLineLadder` <-> `TransmissionLineLadder`; aligned section windows |
+| `couple_transmission_window!` | `TransmissionLineLadder` <-> `TransmissionLineLadder`; generated-boundary section windows |
 | `couple_inductive!` | branch inductor references for lowerable mutual inductance, or line/loop endpoints for semantic flux intent |
 
 The compiler should fail early when a relation receives the wrong endpoint category.
@@ -73,6 +75,8 @@ couple_capacitive!(
 `shunt_inductor!(plan; id, at, inductance)` is the corresponding inductive termination from `at` to `ground()`.
 
 `series_inductor!(plan; id, from, to, inductance)` and `series_resistor!(plan; id, from, to, resistance)` are the minimal two-node lumped primitives for ladder examples. They lower to `L_...` and `R_...` JosephsonCircuits rows between the resolved nodes. They do not create ports or source semantics.
+
+`josephson_junction!(plan; id, from, to, josephson_inductance)` is the nonlinear inductive primitive for JosephsonCircuits lowering. It resolves the two endpoint nodes like a branch relation and lowers to an `Lj...` row whose value is the Josephson inductance binding.
 
 `InductiveTargetEndpoint` is the relation-side category for non-loop inductive targets. It is not a node-resolving endpoint.
 
@@ -122,6 +126,7 @@ Examples:
 | --- | --- | --- |
 | `couple_capacitive!` | capacitance | `NumericParameter` if endpoints are unchanged |
 | `couple_inductive!` | mutual inductance | `NumericParameter` if coupling topology is unchanged |
+| `josephson_junction!` | Josephson inductance | `NumericParameter` if endpoints are unchanged |
 | `line_tap(...)` | tap position | `StructuralParameter` |
 | `line_span(...)` | start / stop | `StructuralParameter` |
 | `couple_window!` | window length | `StructuralParameter` |

@@ -97,7 +97,7 @@ window = couple_transmission_window!(
 )
 ```
 
-An MTL coupled window is a finite distributed region between two transmission-line ladders. It is not a single `Cc`. The sectioned representation is driven by per-unit self and coupling values and lowers to primitive relations across the declared window.
+An MTL coupled window is a finite distributed region between two transmission-line ladders. It is not a single `Cc`. The sectioned representation is driven by the `RLGCSpec` self values on each line plus the distributed coupling values in the coupled-window model.
 
 For each coupled section, Julia Core keeps the original line sections and adds:
 
@@ -120,11 +120,12 @@ Coupled-window invariants are strict:
 | Constraint | Contract |
 | --- | --- |
 | Sections | every coupled segment must have explicit section parameters |
-| Alignment | `start1`, `start2`, and `length` must resolve to generated section boundaries |
-| Section length | both ladders and the coupled-window model must use compatible section geometry |
-| Self values | line self values must be explicit for the coupled region |
+| Boundaries | `start1`, `start2`, and `length` must resolve to generated section boundaries |
+| Section geometry | corresponding coupled sections must have matching physical length |
+| Self values | line self values come from each line's `RLGCSpec` |
+| Coupling values | `c12_per_m_f` and `lm_per_m_h` scale by the actual coupled-section length |
 
-No silent snapping or interpolation is allowed.
+No silent snapping or interpolation is allowed. Builders create semantic section boundaries at physical window starts and ends so the requested physical window is preserved.
 
 ## EngineeringGraph Relation
 
@@ -152,8 +153,8 @@ Physical generators convert physical parameters into primitive relations.
 
 | Generator | Output |
 | --- | --- |
-| `build_lc_ladder_line!` | `TransmissionLineLadder` with ordered nodes, series inductors, shunt capacitors, and terminations |
-| Quarter-wave resonator | ladder with open/coupled head and shorted/grounded tail |
+| `build_lc_ladder_line!` | `TransmissionLineLadder` from `RLGCSpec` with ordered nodes, series inductors, shunt capacitors, and terminations |
+| Quarter-wave resonator | ladder with grounded/coupled head and open tail |
 | Half-wave resonator | usually open-open or capacitively coupled at both ends |
 | Readout line + QWR | readout ladder, QWR ladder, and `couple_transmission_window!` |
 | Even/odd coupled-line specification | converted into per-unit mutual capacitance and inductance before ladder generation |

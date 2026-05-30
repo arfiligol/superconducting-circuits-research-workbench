@@ -73,6 +73,7 @@ function _relation_endpoints(relation::AbstractCircuitRelation)
     relation isa ShuntInductor && return AbstractCircuitEndpoint[relation.at, ground()]
     relation isa SeriesInductor && return AbstractCircuitEndpoint[relation.from, relation.to]
     relation isa SeriesResistor && return AbstractCircuitEndpoint[relation.from, relation.to]
+    relation isa JosephsonJunction && return AbstractCircuitEndpoint[relation.from, relation.to]
     relation isa InductiveCoupling && return AbstractCircuitEndpoint[relation.from, relation.to]
     relation isa MutualInductiveCoupling && return AbstractCircuitEndpoint[
         relation.inductor_a.from,

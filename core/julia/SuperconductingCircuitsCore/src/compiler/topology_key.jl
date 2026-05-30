@@ -23,6 +23,8 @@ function _relation_summary(relation::AbstractCircuitRelation)
         return (:series_inductor, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
     relation isa SeriesResistor &&
         return (:series_resistor, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
+    relation isa JosephsonJunction &&
+        return (:josephson_junction, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
     relation isa InductiveCoupling &&
         return (:inductive, relation.id, _endpoint_summary(relation.from), _endpoint_summary(relation.to))
     relation isa MutualInductiveCoupling &&

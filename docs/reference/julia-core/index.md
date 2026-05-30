@@ -63,9 +63,11 @@ Do not preserve outdated APIs as alternate support layers unless a new source-of
 
 Julia Core is the authoring and simulation kernel. It defines the contracts for components, endpoints, Circuit Plans, relations, validation, compiler lowering, compiled circuits, and simulation / sweep execution.
 
-Julia Core does not own a closed catalog of physical component families.
+Julia Core owns generic transmission-line / CPW modeling contracts such as `RLGCSpec`, ladder generation, coupling helpers, and the canonical reusable generators needed to express the notebook learning path without reimplementing Core conventions.
 
-Concrete components such as grounded LC resonators, floating LC resonators, quarter-wave resonators, readout lines, flux lines, SQUID-based elements, JPAs, SNAILs, and Purcell filters should live in user-space, lab-space, or project-space component libraries.
+Julia Core does not own a closed catalog of every lab-specific physical component family.
+
+Concrete components such as lab-specific SQUID arrays, SNAILs, process-specific Purcell filters, and device-family variants should live in user-space, lab-space, or project-space component libraries. Transmission-line-derived components such as readout CPW lines, quarter-wave resonators, and half-wave resonators should be built as semantic generators over the Core transmission-line model when they need Core coupling or ladder behavior.
 
 Component libraries depend on Julia Core. Julia Core must not depend on component libraries.
 

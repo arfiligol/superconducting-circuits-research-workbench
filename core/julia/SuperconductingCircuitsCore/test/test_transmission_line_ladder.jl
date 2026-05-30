@@ -1,5 +1,5 @@
-@testset "TransmissionLineSpec construction and LC ladder generation" begin
-    spec = TransmissionLineSpec(
+@testset "RLGCSpec construction and LC ladder generation" begin
+    spec = RLGCSpec(
         length_m=1.0mm,
         section_length_m=0.25mm,
         l_per_m_h=4.2e-7,
@@ -32,6 +32,8 @@
     @test length(ladder.nodes) == 5
     @test length(ladder.series_inductors) == 4
     @test length(ladder.shunt_capacitors) == 4
+    @test ladder.section_lengths_m == fill(0.25mm, 4)
+    @test ladder.section_boundaries_m ≈ [0.0, 0.25mm, 0.5mm, 0.75mm, 1.0mm]
     @test isempty(ladder.termination_relations)
     @test node_at_distance(ladder, 0.5mm) == ladder.nodes[3]
     @test section_index_at_distance(ladder, 0.5mm) == 3
@@ -45,8 +47,50 @@
     @test ("C_line_c_4", "ext_tail", "0", :C_line_c_4) in compiled.netlist
 end
 
+@testset "RLGCSpec derives section count from reference length" begin
+    spec = RLGCSpec(
+        length_m=5.28371mm,
+        section_length_m=0.75mm,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+    )
+
+    @test spec.n_sections == 8
+    @test spec.reference_section_length_m ≈ 0.75mm
+    @test spec.section_length_m ≈ 5.28371mm / 8
+
+    values = section_values(spec)
+    @test values.dx_m ≈ spec.section_length_m
+    @test values.l_h ≈ 4.2e-7 * spec.section_length_m
+    @test values.c_f ≈ 1.7e-10 * spec.section_length_m
+end
+
+@testset "Quarter-wave reusable builder uses grounded head and open tail" begin
+    spec = RLGCSpec(
+        length_m=1.5mm,
+        section_length_m=0.5mm,
+        l_per_m_h=4.2e-7,
+        c_per_m_f=1.7e-10,
+    )
+    plan = CircuitPlan("qwr-builder")
+    qwr = add_quarter_wave_resonator!(
+        plan;
+        id="qwr",
+        grounded_head=external_node("qwr_head"),
+        open_tail=external_node("qwr_tail"),
+        spec=spec,
+    )
+
+    @test qwr.line.head_termination == :short
+    @test qwr.line.tail_termination == :open
+    @test length(qwr.line.termination_relations) == 1
+    compiled = compile_to_josephson(plan)
+    @test compiled.node_map[qwr.line.head] == "0"
+    @test compiled.node_map[qwr.line.tail] != "0"
+end
+
 @testset "Transmission-line short termination maps terminal node to ground" begin
-    spec = TransmissionLineSpec(
+    spec = RLGCSpec(
         length_m=1.0mm,
         n_sections=2,
         l_per_m_h=4.2e-7,

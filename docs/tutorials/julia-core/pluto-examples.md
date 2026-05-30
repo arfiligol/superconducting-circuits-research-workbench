@@ -6,31 +6,32 @@ aliases:
 tags:
   - diataxis/tutorial
   - audience/user
+  - sot/true
   - topic/julia-core
   - topic/pluto
-status: incubating
+status: stable
 owner: docs-team
 audience: user
-scope: Pluto example workflow for Julia Core HB simulation intent, transmission-line ladders, coupling models, and real HBSolveResult plotting.
-version: v0.3.0
+scope: Seven-notebook Pluto learning path for Julia Core authoring, visualizer figures, circuit diagrams, and real HBSolveResult inspection.
+version: v0.4.0
 last_updated: 2026-05-30
 updated_by: codex
 ---
 
 # Pluto Examples
 
-Use these Pluto examples as the Julia Core learning path for harmonic-balance simulation intent, executable HB problem construction, and result-family inspection. The examples are notebook-first: Pluto calls Julia Core directly, while Backend task submission, persistence, publication, and display remain upper-layer responsibilities.
+Use these Pluto examples as the Julia Core learning path for circuit authoring, harmonic-balance simulation intent, executable HB problem construction, and result-family inspection. The notebooks are research-first: Pluto calls Julia Core directly, while Backend task submission, persistence, publication, and official TraceStore display remain upper-layer responsibilities.
 
 !!! info "Learning path"
-    The canonical learning-path notebooks for the coupling-model milestone are numbered `00` through `04` under `notebooks/pluto/`.
-    Supplemental notebooks must be named by their modeling convention, especially when they use point capacitive coupling instead of a finite MTL coupled window.
+    The canonical learning path is exactly seven notebooks, numbered `00` through `06`.
+    Each number has one notebook and one teaching responsibility.
 
 ## Workflow Contract
 
-Each notebook should keep the same inspectable path:
+Each notebook keeps the same inspectable path:
 
 ```text
-local component library or reusable plan builder
+local teaching fixture or reusable component-library builder
     -> CircuitPlan
     -> EngineeringGraph
     -> HBIntent
@@ -42,13 +43,55 @@ local component library or reusable plan builder
 
 Pluto is the direct Julia research cockpit. It can build, inspect, solve, and plot local research results. It should not submit Backend tasks or become the publication layer for official TraceStore data.
 
-## Plotting Policy
+## Learning Path
+
+| Notebook | Circuit diagram | Teaching responsibility | Main inspection surface |
+| --- | --- | --- | --- |
+| `00` Parallel LC resonator | ![Parallel LC resonator](../../assets/pluto-00-parallel-lc-resonator.svg) | Ground the reader in a one-port resonator, declared pump-off source slots, `HBProblemSpec`, and reflection output. | S11 magnitude/phase, Z11/Y11 real/imag, extracted QE/QEideal/CM records when requested |
+| `01` Reflective JPA, capacitively coupled LC | ![Reflective JPA capacitively coupled LC](../../assets/pluto-01-reflective-jpa-capacitive-coupled-lc.svg) | Show a reflective amplifier-style LC tank where the readout port couples through `C_c` and pump semantics stay explicit. | Port/source maps, pump-off versus pumped bindings, S/Z trace families |
+| `02` Floating LC with XY line | ![Floating LC with XY line](../../assets/pluto-02-floating-lc-xy-line.svg) | Teach floating-node conventions, XY drive coupling, endpoint naming, and component pins before compilation. | EngineeringGraph components, public pins, source-slot overlays, S/Z traces |
+| `03` Transmission-line circuit model | ![Transmission-line circuit model](../../assets/pluto-03-transmission-line-circuit-model.svg) | Introduce `RLGCSpec`, head/tail orientation, section indexing, generated ladder elements, and open/short terminations. | Ladder nodes, section values, compiled rows, S21/S11 and impedance traces |
+| `04` Readout line with Purcell filter | ![Readout line with Purcell filter](../../assets/pluto-04-readout-line-purcell-filter.svg) | Model a readout path through a point-capacitively coupled half-wave Purcell filter. | Filter endpoints, coupling capacitors, S21/S11, impedance traces |
+| `05` Readout line with hanging QWR MTL window | ![Readout line with hanging QWR MTL window](../../assets/pluto-05-readout-line-hanging-qwr-mtl.svg) | Replace point coupling with a finite distributed MTL coupled window between a readout line and a hanging quarter-wave resonator. | Coupled section ranges, C12/K12 rows, notch response, reflection |
+| `06` Readout, Purcell filter, and hanging QWR MTL window | ![Readout, Purcell filter, and hanging QWR MTL window](../../assets/pluto-06-readout-purcell-hanging-qwr-mtl.svg) | Combine the readout filter and distributed hanging-QWR model so readers inspect composition without changing construction paths. | End-to-end plan graph, combined S21/S11 behavior, requested output-family extraction |
+
+??? quote "Schemdraw Source Code"
+    ```python
+    # Source file: scripts/docs/generate_pluto_notebook_diagrams.py
+    outputs = [
+        ("pluto-00-parallel-lc-resonator.svg", draw_parallel_lc_resonator),
+        (
+            "pluto-01-reflective-jpa-capacitive-coupled-lc.svg",
+            draw_reflective_jpa_capacitive_coupled_lc,
+        ),
+        ("pluto-02-floating-lc-xy-line.svg", draw_floating_lc_xy_line),
+        ("pluto-03-transmission-line-circuit-model.svg", draw_transmission_line_circuit_model),
+        ("pluto-04-readout-line-purcell-filter.svg", draw_readout_line_purcell_filter),
+        ("pluto-05-readout-line-hanging-qwr-mtl.svg", draw_readout_line_hanging_qwr_mtl),
+        (
+            "pluto-06-readout-purcell-hanging-qwr-mtl.svg",
+            draw_readout_purcell_hanging_qwr_mtl,
+        ),
+    ]
+    ```
+
+## PlotlyJS And WideCell
 
 Pluto notebooks use `SuperconductingCircuitsVisualizer` to create `PlotlyJS.jl` static interactive figures. `Plots.jl` is outside the Pluto example plotting contract.
 
 Plot construction belongs to `SuperconductingCircuitsVisualizer`. Julia Core and Julia Runner do not depend on PlotlyJS; Core owns circuit authoring, compilation, `HBProblemSpec`, solver execution, and trace extraction, while Runner owns async task execution and staged result packages.
 
-Every figure must read from real `HBSolveResult` traces produced by `run_hb_problem(hb_problem)` or an equivalent Julia Core execution path. Figures must fail clearly when a requested trace family or label is absent; they must not substitute analytic, sample, or fabricated curves.
+Use `WideCell` for PlotlyJS figures, dense tables, and circuit previews that need horizontal room. `WideCell` is a Pluto presentation helper, not a computation contract; Julia Core, Julia Runner, and trace extraction APIs must stay independent of it.
+
+## Schemdraw And LaTeX
+
+Circuit diagrams for this learning path are Schemdraw-generated SVG files stored under `docs/assets/`. The diagrams are documentation assets and teaching aids; notebook acceptance depends on renderer-neutral `EngineeringGraph` and schematic-export data, not on a Python Schemdraw runtime inside Julia Core or Julia Runner.
+
+Use LaTeX for equations, resonance estimates, coupling definitions, and axis labels where mathematical notation improves clarity. Define symbols near their first use, keep units explicit, and keep formulas searchable as text instead of replacing them with image-only equations.
+
+## Real Trace Policy
+
+Every PlotlyJS figure must read from real `HBSolveResult` traces produced by `run_hb_problem(hb_problem)` or an equivalent Julia Core execution path. Figures must fail clearly when a requested trace family, port label, or mode label is absent; they must not substitute analytic, sample, or fabricated curves.
 
 ## Output Extraction Policy
 
@@ -67,21 +110,9 @@ This keeps solver availability, extraction, persistence, and display as separate
 
 Full extraction can grow large for multi-mode or multi-port simulations. Storage, artifact-writing, and reporting layers may choose not to persist every extracted trace, but that persistence policy sits outside Julia Core.
 
-## Notebook Set
-
-| Notebook | Goal | Main output |
-| --- | --- | --- |
-| `00_hb_simulation_intent_tutorial.jl` | Minimal grounded LC resonator / reflection workflow. | S11 magnitude/phase, Z11 real/imag |
-| `01_cpw_lc_ladder.jl` | CPW / transmission line as an LC ladder with head/tail and section conventions. | S21/S11 magnitude/phase, Z11/Z21 when available |
-| `02_readout_line_purcell_filter_point_coupled.jl` | Readout input/output capacitively coupled to a half-wave Purcell filter. | S21/S11 and impedance traces |
-| `03_long_readout_line_baseline.jl` | Long CPW readout-line baseline before adding a hanging QWR. | S21 phase delay, S11 mismatch, Z behavior |
-| `04_readout_line_hanging_qwr_mtl.jl` | Readout CPW + grounded quarter-wave resonator with a finite MTL coupled window. | S21 notch, S11 reflection, coupling-window inspection |
-
-Supplemental notebooks may remain useful, but their scope must be named honestly. For example, `04_coupling_sweep.jl` is a point-coupled readout-resonator sweep, not a finite-length MTL coupled-window model.
-
 ## Common Format
 
-Each numbered notebook should include these seven elements:
+Each numbered notebook includes these seven elements:
 
 | Requirement | Example surface |
 | --- | --- |
@@ -105,12 +136,26 @@ The coupling-model notebooks expand the seven elements into a complete tutorial 
 7. What does the real solver output show?
 ```
 
+## Component-Builder Teaching Policy
+
+Teach reusable circuit structure through component-library builders or explicitly local tutorial fixtures.
+
+| Rule | Meaning |
+| --- | --- |
+| Julia Core is the kernel | Core owns `CircuitPlan`, endpoints, relations, validation, compiler concepts, simulation helpers, analysis helpers, and canonical reusable generators that express Core modeling conventions. |
+| Component libraries own family variants | Lab-specific device families and process-specific variants are user-space, lab-space, or project-space components built on top of Core. |
+| Tutorial fixtures stay local | A notebook may define a small local fixture when it makes the Core path readable, but that fixture is not evidence that Julia Core ships a lab catalog. |
+| Builders return inspectable plans | A reusable builder exposes the plan, EngineeringGraph, compiler output, and HB problem needed for notebook inspection. The notebook owns the explicit `run_hb_problem(hb_problem)` call and trace extraction cells. |
+| No raw-row teaching path | Do not teach users to hand-author JosephsonCircuits rows as the primary workflow when a component, relation, ladder, or coupled-window helper owns the convention. |
+
+For transmission-line and coupled-window examples, use `RLGCSpec`, `build_lc_ladder_line!`, point coupling helpers, and `couple_transmission_window!` instead of copying ladder or MTL conventions into each notebook.
+
 ## Notebook Authoring Rules
 
 Keep each example small enough that a reader can inspect every boundary.
 
-1. Start with the current active Julia Core path, not legacy construction helpers.
-2. Keep component-library examples local to the notebook unless a real reusable component library exists.
+1. Start with the canonical Julia Core path, not legacy construction helpers.
+2. Keep tutorial fixtures local unless a real reusable component library owns the circuit family.
 3. Show validation and compiler output before solver output.
 4. Treat pump-off as a declared source slot with `current = 0.0`, not as a removed source.
 5. Request output families explicitly and inspect extraction results after solving.
@@ -118,6 +163,7 @@ Keep each example small enough that a reader can inspect every boundary.
 7. Teach physical conventions before code: ladder nodes, CPW head/tail, open/short terminations, coupling-window start distance, coupling length, and coupled-section parameters.
 8. Use Julia Core APIs for transmission-line ladders and MTL coupled windows. Do not hand-code those conventions in each notebook.
 9. Use `SuperconductingCircuitsVisualizer` for PlotlyJS figures. Do not reintroduce `Plots.jl` in Pluto examples.
+10. Use `WideCell` for wide figures and dense previews; keep ordinary explanatory cells at normal Pluto width.
 
 !!! tip "Acceptance gate"
     A notebook that claims to be executable should end with the real Julia Core solver/extraction path. For HB examples, the critical gate is `result = run_hb_problem(hb_problem)` followed by extraction of the requested output families.
@@ -125,6 +171,9 @@ Keep each example small enough that a reader can inspect every boundary.
 ## Related
 
 - [HB Simulation Intent](../../reference/julia-core/hb-simulation-intent.md)
+- [Circuit Plan](../../reference/julia-core/circuit-plan.md)
+- [Component Libraries](../../reference/julia-core/component-libraries.md)
+- [Engineering Graph](../../reference/julia-core/engineering-graph.md)
 - [Transmission Line Ladder](../../reference/julia-core/transmission-line-ladder.md)
 - [Coupling Models](../../reference/julia-core/coupling-models.md)
 - [Julia Visualizer PlotlyJS Figures](../../reference/julia-visualizer/plotlyjs-figures.md)

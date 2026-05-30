@@ -2,7 +2,7 @@
 aliases:
   - Transmission Line Ladder
   - CPW LC Ladder
-  - Julia Core TransmissionLineSpec
+  - Julia Core RLGCSpec
 tags:
   - diataxis/reference
   - audience/contributor
@@ -19,14 +19,14 @@ updated_by: codex
 
 # Transmission Line Ladder
 
-`TransmissionLineSpec` and `build_lc_ladder_line!` are the user-facing Julia Core contract for CPW / transmission-line LC ladders.
+`RLGCSpec` and `build_lc_ladder_line!` are the user-facing Julia Core contract for CPW / transmission-line LC ladders.
 
 They define orientation, sectioning, generated primitive relations, and boundary conditions so Pluto notebooks can teach the physics without reimplementing ladder conventions.
 
 ## Specification
 
 ```julia
-spec = TransmissionLineSpec(
+spec = RLGCSpec(
     length_m=6.0e-3,
     section_length_m=0.75e-3,
     l_per_m_h=4.2e-7,
@@ -41,13 +41,20 @@ Required fields:
 | Field | Meaning |
 | --- | --- |
 | `length_m` | physical line length |
-| `section_length_m` or `n_sections` | discretization contract |
+| `section_length_m` or `n_sections` | discretization reference / section-count contract |
 | `l_per_m_h` | series inductance per meter |
 | `c_per_m_f` | shunt capacitance to ground per meter |
 | `r_per_m_ohm` | optional series resistance per meter |
 | `g_per_m_s` | optional shunt conductance per meter |
 
-If `section_length_m` is provided, `length_m / section_length_m` must be an integer. Julia Core does not silently round partial sections.
+`length_m` is exact. When `section_length_m` is provided, Julia Core treats it as a reference or maximum section length:
+
+```julia
+n_sections = ceil(Int, length_m / section_length_m)
+actual_dx = length_m / n_sections
+```
+
+The generated ladder preserves the physical length and scales every section value from `actual_dx`. The requested `section_length_m` never moves the physical head, tail, or coupling-window boundary.
 
 ## Head / Tail Convention
 
@@ -79,7 +86,7 @@ This orientation is mandatory because coupled windows are specified by distance 
 
 ## Section Values
 
-For a section length `dx`:
+For an actual section length `dx`:
 
 ```julia
 L_section = l_per_m_h * dx
@@ -114,10 +121,11 @@ line.series_inductors
 line.shunt_capacitors
 line.head
 line.tail
-line.section_length_m
+line.section_lengths_m
+line.section_boundaries_m
 ```
 
-Use these helpers for aligned lookup:
+Use these helpers for generated-boundary lookup:
 
 ```julia
 node_at_distance(line, 1.5e-3)
@@ -125,7 +133,7 @@ section_index_at_distance(line, 1.5e-3)
 section_range_from_window(line, 2.25e-3, 1.5e-3)
 ```
 
-All distances are measured from the head. Non-aligned distances throw `FrameworkValidationError`.
+All distances are measured from the head. A distance must resolve to a generated section boundary. CPW and coupled-window builders therefore create section boundaries at physical endpoints and semantic window boundaries before generating primitive relations.
 
 ## Terminations
 
@@ -153,25 +161,25 @@ Julia Core skips the final shunt capacitor at a grounded tail so the compiled ne
 
 ### Quarter-Wave Resonator
 
-Use a ladder with an open or coupled head and a shorted tail:
+Use a ladder with a grounded/coupled head and an open tail:
 
 ```julia
 qwr = build_lc_ladder_line!(
     plan;
     id="qwr",
-    head=qwr_head,
-    tail=qwr_ground,
+    head=qwr_ground,
+    tail=qwr_open,
     spec=qwr_spec,
-    head_termination=:open,
-    tail_termination=:short,
+    head_termination=:short,
+    tail_termination=:open,
 )
 ```
 
 Physical convention:
 
 ```text
-One end is open or participates in coupling.
-One end is shorted / grounded.
+The head side is grounded and may participate in coupling.
+The tail side is open.
 ```
 
 ### Half-Wave Resonator
@@ -201,7 +209,7 @@ relation_type = :transmission_line_ladder
 from = head
 to = tail
 through = line id
-parameters = length, section_length, n_sections, per-unit values, terminations
+parameters = length, reference section length, actual section lengths, n_sections, per-unit values, terminations
 ```
 
 Primitive `series_inductor!`, `series_resistor!`, and `shunt_capacitor!` relations are also recorded, so notebooks can inspect both the physical generator and the compiled solver rows.
