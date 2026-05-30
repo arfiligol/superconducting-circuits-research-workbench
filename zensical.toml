@@ -189,6 +189,7 @@ nav = [
         { "Transmission Line Ladder" = "reference/julia-core/transmission-line-ladder.md" },
         { "Macro Authoring DSL" = "reference/julia-core/macro-authoring-dsl.md" },
         { "Engineering Graph" = "reference/julia-core/engineering-graph.md" },
+        { "Schematic Layout Intent" = "reference/julia-core/schematic-layout-intent.md" },
         { "Compiler" = "reference/julia-core/compiler.md" },
         { "Compiled Circuit" = "reference/julia-core/compiled-circuit.md" },
         { "HB Simulation Intent" = "reference/julia-core/hb-simulation-intent.md" },

@@ -10,113 +10,189 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Circuit Plan semantics and stored authoring data before JosephsonCircuits.jl compilation.
-version: v1.4.1
-last_updated: 2026-05-29
+scope: CircuitPlan semantics, owned authoring data, validation boundary, and solver handoff.
+version: v2.0.0
+last_updated: 2026-05-31
 updated_by: codex
 ---
 
 # Circuit Plan
 
-A `CircuitPlan` is the semantic source of truth before simulation. It stores what the user means to build, not the final JosephsonCircuits.jl representation.
+A `CircuitPlan` is one complete runnable circuit design point. It stores the concrete system the user intends to validate, compile, simulate, inspect, and export.
 
-`CircuitDraft` is a transitional implementation detail. The architecture contract is `CircuitPlan`, and implementation work should rename, remove, or replace old names when they conflict with this reference.
+Reusable component hierarchy is defined by `@circuit_component`. A plan instantiates components and relations into one system-level design. If a simulated system becomes useful as a reusable building block, refactor that design into a component template with explicit pins, taps, probes, and anchors.
 
-## Stored Data
+## Ownership
+
+A plan owns the concrete authoring state needed before solver lowering:
 
 | Plan data | Purpose |
 | --- | --- |
-| components | reusable primitive or composite components added to the design |
-| composite component hierarchy | subcomponent trees that remain inspectable until compilation |
-| public pins | user-facing named points exposed by components |
-| private internal nodes | component-owned implementation nodes that need compiler namespacing |
-| endpoints | pins, line taps, spans, ground, external nodes, and loop targets |
-| line taps | point attachments on distributed components |
-| line spans | distributed interval attachments and transforms |
-| node connections | endpoint aliasing and node merge intent |
-| capacitive couplings | plan-level capacitor placements between node-resolving endpoints |
-| inductive couplings | mutual or flux-related coupling intent |
-| distributed coupled windows | span-to-span distributed coupling intent |
-| shunt placements | convenience placements from a node-resolving endpoint to ground |
-| parameter metadata / sweep knobs | declared parameter roles, effective-role validation inputs, parameter owners, parameter bindings, high-level Plan Builder mappings, valid domains, units, and sweep-facing names |
-| engineering graph records | component display names, engineering roles, relation semantics, ports, groups, HB overlays, source provenance, and schematic export hints |
-| provenance | source, builder, and transform metadata needed for inspection and reproducibility |
+| instantiated components | concrete component instances used by this design point |
+| endpoints | external nodes, ground, pins, line taps, line spans, loop targets, probes, and anchors referenced by this plan |
+| primitive relations | capacitors, inductors, resistors, Josephson elements, connections, shunts, and couplings |
+| physical generator outputs | emitted ladder sections, resonator sections, coupled-window sections, and generated primitive relations |
+| ports | external simulation ports with index, endpoint, resistance, and semantic role |
+| parameter metadata | parameter names, units, roles, owners, sweep-facing names, and topology-key relevance |
+| EngineeringGraph records | human-facing components, groups, relations, roles, ports, HB overlays, and provenance |
+| SchematicLayoutIntent | renderer-neutral drawing intent such as tracks, spans, terminals, and labels |
+| SchematicExportSpec projection | renderer-neutral schematic export assembled from semantics and layout intent |
+| compiler-ready representation | validated authoring state that can lower to JosephsonCircuits.jl rows |
 
-A Circuit Plan should preserve parameter metadata from components, relations, and plan builders so the sweep engine can classify axes, build topology keys, and validate compile reuse.
+The plan remains the source of authoring semantics until compilation. The compiled netlist is a projection for the solver.
 
-## Parameter Metadata
+## Runnable System Boundary
 
-A CircuitPlan should preserve parameter metadata from:
+Each plan represents one runnable system:
 
 ```text
-- Component Libraries;
-- Relations / Couplings;
-- Plan Builders;
-- SweepSpec role assumptions.
+CircuitPlan
+  -> validate_authoring
+  -> validate_compile_ready
+  -> compile_to_josephson
+  -> build_hb_problem
+  -> run_hb_problem
 ```
 
-This metadata allows the sweep engine to:
+A notebook may build several plans for comparisons or sweeps. Each plan still owns one complete design point with concrete endpoints, concrete relations, concrete ports, and concrete HB intent.
 
-```text
-- classify axes;
-- compute topology keys;
-- group points by compile equivalence;
-- decide whether compiled circuits can be reused;
-- produce SweepExecutionPlan preflight reports;
-- preserve provenance in SweepResult.
-```
+Use `@circuit_component` for repeatable templates. Use `@circuit` or functional builder calls to instantiate a complete system.
+
+## Interface Discipline
+
+Component internals are private by default. The enclosing circuit may attach only to exposed interface points:
+
+| Interface | Electrical? | Use |
+| --- | --- | --- |
+| `pin(instance, :name)` | yes | normal public connection point |
+| `tap(instance, distance_from_head)` | yes | point on a distributed model |
+| `probe(instance, :name)` | yes | intentional measurement, debug, or coupling point |
+| `anchor(instance, :name)` | no | schematic, report, or layout reference point |
+
+An anchor is not an electrical endpoint. If a renderer reference point must also be connectable, expose the physical point as a pin, tap, or probe and use an anchor only for drawing metadata.
+
+## Terminations
+
+Line-like generators use explicit termination contracts:
+
+| Termination | Meaning |
+| --- | --- |
+| `:open` | terminal node exists, no ground connection is added, and no outside connection is required |
+| `:short` / `:grounded` | terminal node is connected to ground |
+| `:external` | terminal node is exposed as an enclosing-circuit interface |
+
+Validation must report an `:external` terminal that has no enclosing connection. Use `:open` when the intended boundary condition is an open end.
 
 ## EngineeringGraph Records
 
-A `CircuitPlan` should preserve enough authoring information to build an [`EngineeringGraph`](engineering-graph.md) without reading the compiled solver netlist.
+A plan preserves enough authoring information to build an [`EngineeringGraph`](engineering-graph.md) without reading solver rows.
 
 EngineeringGraph records include:
 
 ```text
 - component identity and display names;
 - reusable component type and engineering role;
-- named pins, ports, source slots, and observable requests;
-- relation verbs such as connect, couple, drive, observe, feeds, and terminates;
-- through components such as couplers or feed structures;
-- groups such as readout chain, pump network, and coupling network;
+- groups such as readout chain, pump network, coupling network, and measurement path;
+- relation verbs such as connect, couple, drive, observe, feed, and terminate;
+- through components such as couplers, feed structures, and distributed windows;
+- ports, source slots, observable requests, and HB overlays;
 - source-code or notebook provenance;
 - schematic export hints.
 ```
 
-The compiler may preserve links from compiled rows back to these records, but the engineering graph remains a plan-level semantic representation.
+Human-facing inspection uses the plan and graph. Solver-facing inspection uses compiled rows and compiled maps.
 
-## Not A Netlist
+## Schematic Data
 
-A Circuit Plan is not yet a JosephsonCircuits.jl netlist. It may contain hierarchy, aliases, symbolic endpoints, line transformations, validation state, and unresolved target-specific decisions.
+The plan may carry both engineering semantics and drawing intent:
 
-The compiler is responsible for turning the complete plan into target-specific rows and maps.
+```text
+CircuitPlan
+  -> EngineeringGraph
+  -> SchematicLayoutIntent
+  -> SchematicExportSpec
+```
 
-!!! tip "Practical rule"
-    Keep user intent in the plan as long as possible. Lower to JosephsonCircuits.jl only after validation has seen the whole circuit.
+Engineering semantics answer what the circuit is. Schematic layout intent answers how the circuit should be drawn. The compiler must depend on electrical topology and circuit parameters, not on drawing placement.
 
-The EngineeringGraph follows the same rule. Human visualization should use EngineeringGraph, not a reverse-engineered view of target rows.
+`SchematicExportSpec` is renderer-neutral. A downstream renderer may draw it with Schemdraw, a browser canvas, SVG, or another backend without changing the plan.
 
-## Why It Helps Pluto
+## HBIntent Boundary
 
-Pluto can inspect the plan before compilation:
+`HBIntent` is separate from topology and bound to a plan:
 
-- show component hierarchy;
-- expose public pins and endpoints;
-- drive sliders through parameters and sweep knobs;
-- inspect line taps and spans before line splitting;
-- display validation warnings close to the authoring cell.
+```text
+@circuit
+  -> topology, components, endpoints, relations, ports
 
-This keeps Pluto interactive without giving Pluto a separate construction path.
+@hbintent plan
+  -> pump axes, source slots, observable requests, solver defaults
+```
 
-Pluto tutorial notebooks may define a minimal local component to make an acceptance harness readable. That local component is allowed only as a tutorial or test fixture; it must not become evidence that Julia Core ships lab-specific component catalogs.
+HB declarations reference plan objects by ID, such as port IDs and pump-axis IDs. Validation resolves those references against the owning plan before compilation and before `HBProblemSpec` construction.
 
-## Why It Helps Runner Execution
+Example:
 
-The Julia Runner can receive deterministic task input, rebuild the same plan, validate it, compile it, simulate it, and stage output with provenance.
+```julia
+begin
+    plan = @circuit "one-port-lc" begin
+        drive = external_node("drive")
 
-Runner execution should call the same plan builders and compiler used by Pluto. The caller changes; the Core pipeline does not.
+        resonator = lc_resonator!(
+            id = :res,
+            signal = drive,
+            capacitance = C,
+            inductance = L,
+        )
 
-For HB execution, the product-aligned handoff is:
+        port(:drive_port) do
+            index = 1
+            endpoint = pin(resonator, :signal)
+            resistance = 50.0
+            role = :reflection
+        end
+    end
+
+    @hbintent plan begin
+        pump_axis(:pump; frequency_parameter = :pump_frequency)
+
+        source_slot(:pump_in) do
+            role = :pump
+            port = :drive_port
+            mode = (1,)
+            current_parameter = :pump_current
+        end
+
+        sparameter(:s11) do
+            outputmode = (0,)
+            outputport = :drive_port
+            inputmode = (0,)
+            inputport = :drive_port
+        end
+    end
+
+    plan
+end
+```
+
+Changing source current values is a runtime binding. Changing port declarations, pump axes, source-slot shape, or observable requests changes plan-bound simulation intent.
+
+## Compilation Handoff
+
+Compilation consumes a validated plan:
+
+```text
+CircuitPlan
+  -> endpoint resolution
+  -> relation lowering
+  -> physical generator lowering
+  -> HBIntent validation
+  -> JosephsonCompiledCircuit
+```
+
+The compiled circuit may preserve links back to plan records and EngineeringGraph IDs. Those links support diagnostics, traceability, and notebook inspection, but the compiled rows do not replace the plan as the authoring contract.
+
+For harmonic-balance execution, the product-aligned handoff is:
 
 ```text
 CircuitPlan
@@ -127,26 +203,26 @@ CircuitPlan
   -> run_hb_problem
 ```
 
-Low-level `run_hbsolve` may remain as a JosephsonCircuits-facing adapter, but it must not replace `HBProblemSpec` and `run_hb_problem` as the documented Core/Runner path.
+Runner code should bind runtime values to validated slots and execute `HBProblemSpec`. It must not invent circuit topology, port meanings, source slots, pump axes, or observable semantics after compilation.
 
 ## Plan-Level Transforms
 
-Plan-level transforms are recorded as semantic intent:
+Plan-level transforms are recorded as semantic intent before target lowering:
 
 ```julia
 connect!(plan, pin(a, :right), pin(b, :left))
 
-tap = line_tap(readout; line = :main, at_m = 2.0mm)
+tap = line_tap(readout; line = :main, at_m = 2.0e-3)
 
 shunt_capacitor!(
     plan;
-    id = "readout_shunt_c",
+    id = :readout_shunt_c,
     at = tap,
-    capacitance = 20.0fF,
+    capacitance = 20.0e-15,
 )
 ```
 
-During compilation, the compiler resolves endpoint aliases, inserts line-tap breakpoints, splits distributed lines, lowers lumped and distributed elements, and emits the target netlist plus maps.
+During compilation, the compiler resolves endpoint aliases, inserts line-tap breakpoints, splits distributed lines, lowers lumped and distributed elements, and emits solver rows plus traceability maps.
 
 ## Line References
 
@@ -155,8 +231,8 @@ During compilation, the compiler resolves endpoint aliases, inserts line-tap bre
 For components with multiple internal lines, select the line explicitly:
 
 ```julia
-line_tap(component; line = :main, at_m = 1.2mm)
-line_span(component; line = :main, from_m = 2.0mm, to_m = 2.5mm)
+line_tap(component; line = :main, at_m = 1.2e-3)
+line_span(component; line = :main, from_m = 2.0e-3, to_m = 2.5e-3)
 ```
 
 You can also resolve the line first:
@@ -164,8 +240,8 @@ You can also resolve the line first:
 ```julia
 main_line = line_ref(component, :main)
 
-line_tap(main_line; at_m = 1.2mm)
-line_span(main_line; from_m = 2.0mm, to_m = 2.5mm)
+line_tap(main_line; at_m = 1.2e-3)
+line_span(main_line; from_m = 2.0e-3, to_m = 2.5e-3)
 ```
 
-The compiler must reject an ambiguous line tap or span before target lowering.
+The compiler must reject ambiguous line taps and spans before solver lowering.

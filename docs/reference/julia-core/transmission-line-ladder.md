@@ -12,8 +12,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core transmission-line ladder conventions for CPW / RLGC modeling, head/tail orientation, section indexing, and open/short terminations.
-version: v1.6.0
-last_updated: 2026-05-30
+version: v1.6.1
+last_updated: 2026-05-31
 updated_by: codex
 ---
 
@@ -22,6 +22,8 @@ updated_by: codex
 `RLGCSpec` and `build_lc_ladder_line!` are the user-facing Julia Core contract for CPW / transmission-line LC ladders.
 
 They define orientation, sectioning, generated primitive relations, and boundary conditions so Pluto notebooks can teach the physics without reimplementing ladder conventions.
+
+The ladder contract is electrical. Human-facing placement such as top/bottom tracks, aligned coupled spans, and length labels belongs to [Schematic Layout Intent](schematic-layout-intent.md).
 
 ## Specification
 
@@ -141,9 +143,9 @@ All distances are measured from the head. A distance must resolve to a generated
 
 | Termination | Meaning |
 | --- | --- |
-| `:external` | no ground connection; usually connected to a port or another network |
-| `:open` | terminal node is not connected to ground |
+| `:open` | terminal node exists and is intentionally not connected to ground |
 | `:short` / `:grounded` / `:ground` | terminal node is connected to ground |
+| `:external` | terminal node is exposed as a system interface |
 
 An open end means:
 
@@ -156,6 +158,14 @@ A short / grounded end means:
 ```text
 The terminal node is connected to ground.
 ```
+
+An external end means:
+
+```text
+The terminal node is expected to connect to a port, another component, or another declared relation.
+```
+
+An unconnected `:external` terminal is a dangling external endpoint. It is not treated as an intentional `:open`; write `:open` when the physical boundary is open.
 
 Julia Core skips the final shunt capacitor at a grounded tail so the compiled netlist does not emit a capacitor from ground to ground.
 

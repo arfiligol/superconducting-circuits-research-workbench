@@ -12,8 +12,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Julia Core coupling taxonomy for point capacitive coupling, point mutual inductive coupling, distributed MTL coupled windows, and physical line generators.
-version: v1.6.0
-last_updated: 2026-05-30
+version: v1.6.1
+last_updated: 2026-05-31
 updated_by: codex
 ---
 
@@ -22,6 +22,8 @@ updated_by: codex
 Julia Core treats coupling as a domain model, not as ad hoc notebook code. A single capacitor can model point capacitive coupling, but it must not stand in for a finite-length CPW / MTL coupled window.
 
 The active contract has three levels.
+
+Electrical coupling semantics and schematic drawing intent are separate. Coupling helpers define which electrical objects couple; [Schematic Layout Intent](schematic-layout-intent.md) defines how coupled regions appear in renderer-neutral circuit diagrams.
 
 ## Level 1: Primitive Coupling Relation
 
@@ -167,6 +169,8 @@ readout_line sections 4:5 couple to qwr sections 1:2
 ```
 
 without reverse-engineering the compiled netlist.
+
+Schematic renderers consume the semantic window relation together with `SchematicLayoutIntent`. The renderer must not infer CPW / MTL drawing layout from flattened solver rows.
 
 ## Level 3: Physical Component / Model Generator
 

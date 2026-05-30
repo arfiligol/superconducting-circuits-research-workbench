@@ -13,8 +13,8 @@ status: stable
 owner: docs-team
 audience: user
 scope: Seven-notebook Pluto learning path for Julia Core authoring, visualizer figures, circuit diagrams, and real HBSolveResult inspection.
-version: v0.4.0
-last_updated: 2026-05-30
+version: v0.4.1
+last_updated: 2026-05-31
 updated_by: codex
 ---
 
@@ -34,6 +34,7 @@ Each notebook keeps the same inspectable path:
 local teaching fixture or reusable component-library builder
     -> CircuitPlan
     -> EngineeringGraph
+    -> SchematicLayoutIntent / SchematicExportSpec when the notebook previews circuit drawings
     -> HBIntent
     -> compile_to_josephson
     -> HBProblemSpec
@@ -117,7 +118,7 @@ Each numbered notebook includes these seven elements:
 | Requirement | Example surface |
 | --- | --- |
 | Understandable system code | Local component or local plan builder, not raw netlist rows only |
-| Julia Core authoring path | `@circuit`, `CircuitPlan`, Core relations, `EngineeringGraph` |
+| Julia Core authoring path | `@circuit`, `CircuitPlan`, Core relations, `EngineeringGraph`, `SchematicLayoutIntent` when a circuit preview is shown |
 | Compiled representation | `compiled.netlist`, `compiled.port_map`, `compiled.component_values` |
 | HB problem representation | `hb_problem.frequencies_hz`, `wp`, `sources`, `Nmodulationharmonics`, `Npumpharmonics` |
 | Real solver execution | `result = run_hb_problem(hb_problem)` or an equivalent helper that calls it |
@@ -154,7 +155,7 @@ For transmission-line and coupled-window examples, use `RLGCSpec`, `build_lc_lad
 
 Keep each example small enough that a reader can inspect every boundary.
 
-1. Start with the canonical Julia Core path, not legacy construction helpers.
+1. Start with the canonical Julia Core path, not older construction helpers.
 2. Keep tutorial fixtures local unless a real reusable component library owns the circuit family.
 3. Show validation and compiler output before solver output.
 4. Treat pump-off as a declared source slot with `current = 0.0`, not as a removed source.
@@ -174,6 +175,7 @@ Keep each example small enough that a reader can inspect every boundary.
 - [Circuit Plan](../../reference/julia-core/circuit-plan.md)
 - [Component Libraries](../../reference/julia-core/component-libraries.md)
 - [Engineering Graph](../../reference/julia-core/engineering-graph.md)
+- [Schematic Layout Intent](../../reference/julia-core/schematic-layout-intent.md)
 - [Transmission Line Ladder](../../reference/julia-core/transmission-line-ladder.md)
 - [Coupling Models](../../reference/julia-core/coupling-models.md)
 - [Julia Visualizer PlotlyJS Figures](../../reference/julia-visualizer/plotlyjs-figures.md)

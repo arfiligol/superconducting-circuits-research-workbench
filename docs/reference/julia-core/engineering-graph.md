@@ -2,7 +2,6 @@
 aliases:
   - EngineeringGraph
   - Engineering Graph
-  - SchematicExportSpec
 tags:
   - diataxis/reference
   - audience/contributor
@@ -11,17 +10,19 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Human-facing engineering semantic graph, visualization, and schematic export contract for Julia Core authoring.
-version: v1.1.0
-last_updated: 2026-05-29
+scope: Human-facing engineering semantic graph contract for Julia Core authoring.
+version: v1.2.0
+last_updated: 2026-05-31
 updated_by: codex
 ---
 
 # Engineering Graph
 
-`EngineeringGraph` is the human-facing semantic representation generated during `CircuitPlan` authoring. It is used for visualization, debugging, notebooks, reports, and schematic export.
+`EngineeringGraph` is the human-facing semantic representation generated during `CircuitPlan` authoring. It captures what the circuit is: components, ports, relations, hierarchy, roles, HB overlays, and provenance.
 
 It is not a solver netlist. It should not be reconstructed from JosephsonCircuits.jl rows.
+
+It is also not the drawing layout. [`SchematicLayoutIntent`](schematic-layout-intent.md) answers how the circuit should be drawn.
 
 ## Purpose
 
@@ -33,8 +34,12 @@ EngineeringGraph answers questions that users and reviewers ask before they care
 - Which port is signal, readout, pump, or DC bias?
 - Which source slot enters which port?
 - Which observable is being measured?
+- Which relation is a point coupling, a distributed coupled window, a drive, or an observation?
+- Which reusable component instance owns each public endpoint?
 
 The JosephsonCircuits netlist answers a different question: which solver rows connect which solver nodes.
+
+Schematic layout answers another question: which visual lane is above, which track is aligned with which other track, and where labels or terminals should appear. Keep these questions separate.
 
 ## Representation Pipeline
 
@@ -47,20 +52,20 @@ The JosephsonCircuits netlist answers a different question: which solver rows co
     -> JosephsonCircuits netlist
 ```
 
-Visualization and export use the semantic graph, not the lowered netlist:
+Schematic export uses the semantic graph plus drawing intent:
 
 ```text
 EngineeringGraph
-    -> Pluto engineering view
+    + SchematicLayoutIntent
     -> SchematicExportSpec
-    -> optional Schemdraw renderer
+    -> renderer
 ```
 
-Notebook views should keep this layer easy to inspect. Use Markdown, compact tables, callouts, DOT text, and renderer-neutral export previews before adding renderer-specific dependencies. A notebook that validates EngineeringGraph capture is still an acceptance harness even when it does not render a polished schematic.
+Notebook views should keep this layer easy to inspect. Use Markdown, compact tables, callouts, and renderer-neutral previews when the notebook is validating authoring semantics.
 
 ## EngineeringGraph Data Model
 
-The first target model should stay renderer-neutral and component-level.
+The model stays renderer-neutral and component-level.
 
 ### EngineeringComponent
 
@@ -83,7 +88,7 @@ EngineeringComponent(
 | `component_type` | reusable component type |
 | `role` | semantic role, e.g. `:resonator`, `:qubit`, `:coupler`, `:feedline`, `:filter` |
 | `parameters` | user-facing parameters with default units |
-| `pins` | named pins / anchors |
+| `pins` | named electrical pins exposed by the component |
 | `source_location` | macro provenance if available |
 
 ### EngineeringRelation
@@ -108,9 +113,10 @@ Examples:
 feedline.signal -> resonator.feed through CapacitiveCoupler
 resonator.end -> qubit.xy through CxyCoupler
 pump_port -> SQUIDArray through PumpLine
+readout_line sections 4:5 -> qwr sections 1:2 through MTL window
 ```
 
-Initial relation types:
+Relation types include:
 
 ```text
 :connect
@@ -120,6 +126,8 @@ Initial relation types:
 :contains
 :feeds
 :terminates
+:coupled_window
+:transmission_line_ladder
 ```
 
 ### EngineeringPort
@@ -144,7 +152,12 @@ Port roles include:
 :readout
 :dc_bias
 :mixed
+:probe
+:debug_probe
+:reflection
 ```
+
+Port roles are semantic metadata. A role such as `:probe` does not create a physical coupling element, remove a port termination, or apply post-processing. If the model needs a physical probe coupling, declare that coupling explicitly.
 
 ### EngineeringGroup
 
@@ -179,6 +192,32 @@ EngineeringHBIntentOverlay(
 ```
 
 The overlay should connect source slots and observables back to `EngineeringPort` and `EngineeringComponent` IDs.
+
+## Boundary With Layout Intent
+
+Engineering semantics and schematic layout intent are different layers.
+
+EngineeringGraph answers:
+
+```text
+What is this circuit?
+Which component couples to which component?
+Which line is a readout line?
+Which component is a QWR?
+Which relation is a coupled window?
+```
+
+SchematicLayoutIntent answers:
+
+```text
+How should this circuit be drawn?
+Which transmission line is on the top track?
+Which line is on the bottom track?
+Which segments are aligned?
+Where should ports, grounds, opens, and labels appear?
+```
+
+Solver compilation uses electrical topology and parameters. It does not use drawing layout.
 
 ## Macro Capture Rules
 
@@ -255,157 +294,25 @@ The same rule applies to standard `connect!`, `couple_capacitive!`, `shunt_capac
 
 This lets Runner adapters, generated code, and tests build the same semantic representation without macro syntax while keeping the solver model and human-facing graph synchronized.
 
-## Visualization Backends
+## Renderer-Neutral Export Boundary
 
-EngineeringGraph supports three visualization and export layers.
-
-### Pluto Engineering View
-
-Purpose:
+`EngineeringGraph` supplies the semantic half of `SchematicExportSpec`. The layout half comes from `SchematicLayoutIntent`.
 
 ```text
-Fast interactive visualization in Pluto Notebook.
+SchematicExportSpec
+    = EngineeringGraph
+    + SchematicLayoutIntent
+    + renderer-neutral hints
 ```
 
-Initial implementation:
+Renderers consume `SchematicExportSpec`. They do not define circuit semantics.
 
-```text
-- Markdown summaries and tables
-- direct `engineering_graph(plan)` inspection
-- DOT text preview
-```
-
-This view shows component-level structure and HB overlays before compilation.
-
-!!! tip "Notebook validation"
-    A tutorial notebook should prove that the graph records components, ports, source slots, observables, and provenance. It should not require Graphviz, Schemdraw, or another renderer to pass the core acceptance path.
-
-### Graph Export
-
-Purpose:
-
-```text
-General component graph export.
-```
-
-Target formats:
-
-```text
-- DOT
-- JSON
-- SVG if renderer is available
-```
-
-### Schemdraw Export
-
-Purpose:
-
-```text
-Generate Python Schemdraw-compatible schematic data.
-```
-
-The exported data should include enough hints for Python to decide drawing order and element types.
-
-Julia Core should not depend on Python Schemdraw. It should produce renderer-neutral data that a separate Python renderer can consume.
-
-Schemdraw export is an optional downstream rendering path. Julia Core and Pluto acceptance cells should remain valid when they only display `SchematicExportSpec` data or DOT text.
-
-## SchematicExportSpec
-
-`SchematicExportSpec` is the renderer-neutral schematic export shape:
-
-```julia
-SchematicExportSpec(
-    components,
-    relations,
-    ports,
-    groups,
-    layout_hints,
-    render_hints,
-)
-```
-
-### Component Mapping
-
-Each component entry should include:
-
-```text
-id
-label
-schematic_kind
-parameters
-pins
-role
-```
-
-Example:
-
-```json
-{
-  "id": "resonator",
-  "label": "lambda/4 Resonator",
-  "schematic_kind": "resonator",
-  "role": "readout_resonator",
-  "parameters": {
-    "length": { "value": 0.0051, "unit": "m" }
-  }
-}
-```
-
-### Relation Mapping
-
-Each relation entry should include:
-
-```text
-from
-to
-through
-schematic_kind
-label
-direction_hint
-```
-
-Example:
-
-```json
-{
-  "from": "feedline.output",
-  "to": "resonator.input",
-  "through": "Cc",
-  "schematic_kind": "capacitive_coupling",
-  "label": "Cc",
-  "direction_hint": "right"
-}
-```
-
-### Schemdraw Hints
-
-The export may include:
-
-```text
-schemdraw_element
-orientation
-label
-anchor
-direction
-length_hint
-```
-
-Example:
-
-```json
-{
-  "schemdraw_element": "Capacitor",
-  "label": "Cc",
-  "direction": "right"
-}
-```
-
-Do not hardcode every Schemdraw detail in Julia Core. Keep Schemdraw-specific data as hints.
+Schemdraw is one renderer for the export spec. Julia Core packages import no Python renderer packages and expose no Schemdraw-only circuit contract.
 
 ## Cross-Links
 
 - [Macro Authoring DSL](macro-authoring-dsl.md) captures source semantics for EngineeringGraph.
+- [Schematic Layout Intent](schematic-layout-intent.md) captures renderer-neutral drawing intent and defines `SchematicExportSpec`.
 - [Compiled Circuit](compiled-circuit.md) is the solver-facing output and should preserve links back to engineering semantics.
 - [HB Simulation Intent](hb-simulation-intent.md) overlays pump axes, source slots, and observables on ports and components.
 - [Runner-Safe API](runner-safe-api.md) calls the same authoring path and must not invent EngineeringGraph semantics from task payloads.
