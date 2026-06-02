@@ -1,98 +1,125 @@
-# Superconducting Circuits Tutorial
+# Superconducting Circuits Research Workbench
 
-This repository is a notebook-first and app-backed superconducting circuits workbench. The current source of truth is the `Notebook Interface + Electron Application Interface + Julia Runner Compute Plane` architecture.
+An open-source research and education workbench for superconducting quantum
+circuits, connecting circuit models, simulation notebooks, measurement-oriented
+data workflows, and reproducible analysis infrastructure.
 
-Python owns task lifecycle, metadata, publication, provenance, and TraceStore APIs. Julia owns simulation, sweeps, heavy analysis, and staged result package generation. Large numeric arrays move through local filesystem Zarr, not HTTP JSON.
+This repository is an **active research workbench**. It is research-platform
+first: the application, backend, Julia Runner, and TraceStore contracts are
+designed for reproducible superconducting-circuit analysis. It is also
+education-friendly by design: the documentation and Pluto notebooks give
+students and new researchers a concrete path into the physics, modeling, and
+simulation workflow.
 
-## Architecture
+## Why This Exists
 
-This repository has two execution tracks and one data-inspection track.
+Superconducting quantum circuits are still a fast-moving research area. A useful
+toolchain needs to do more than run a single simulation. It needs to help
+researchers connect:
 
-### Research Direct Track
+```text
+design -> simulation -> measurement -> comparison -> feedback
+```
+
+This project focuses on the analysis side of that loop. It brings together
+circuit definitions, Julia simulation workflows, S/Y/Z-oriented trace analysis,
+measurement and layout-simulation data, task execution, result publication, and
+provenance-aware data browsing.
+
+The goal is to make research artifacts easier to inspect, compare, reproduce,
+and carry from exploratory notebooks into app-backed workflows without changing
+the scientific meaning of the model.
+
+## Who This Is For
+
+- Researchers and quantum hardware teams working on superconducting-circuit
+  design, simulation, measurement analysis, and feedback workflows.
+- Students learning superconducting-circuit modeling, network response,
+  notebook-based simulation, and the path from circuit definition toward
+  quantum-circuit interpretation.
+- Scientific tooling developers building maintainable infrastructure around
+  notebooks, async compute runners, local data stores, and research provenance.
+
+## What the Project Provides
+
+| Area | Purpose |
+| --- | --- |
+| Educational docs and Pluto notebooks | Learn circuit construction, simulation experiments, sweep design, result inspection, and the physics/modeling path. |
+| Julia Core | Shared scientific authoring and simulation concepts used by Pluto notebooks and the Julia Runner. |
+| Application workbenches | Productized dataset, simulation, analysis, trace browsing, task monitoring, and result-view workflows. |
+| Python Backend | Task lifecycle, metadata, publication, provenance, TraceStore registration, and platform data APIs. |
+| Julia Runner | Async simulation, sweeps, post-processing, fitting, derived-parameter extraction, and staged result package generation. |
+| TraceStore | Local Zarr-backed numeric result management for published traces and analysis results. |
+
+## Architecture Snapshot
+
+The current source-of-truth architecture is:
+
+```text
+Notebook Interface + Electron Application Interface + Julia Runner Compute Plane
+```
+
+The main execution and inspection tracks are:
 
 ```text
 [Pluto Notebook]
     |
-    | using SuperconductingCircuitsCore
+    | direct Julia Core research execution
     v
 [Julia Core]
-    - reusable circuit construction
-    - direct JosephsonCircuits.jl simulation
-    - direct sweep / analysis prototyping
-    - local research plots and scratch outputs
 ```
 
-Pluto Notebook is the direct Julia Core research interface.
-Pluto Notebook is not a Backend task submitter in the platform architecture.
-
-### Product Async Track
-
 ```text
-[Electron Application / Simulation Workbench / Analysis Workbench / Python Notebook when submitting platform tasks]
+[Electron Application / Simulation Workbench / Analysis Workbench]
     |
-    | POST /tasks or domain-specific Backend API
+    | persisted task request
     v
 [Python Backend]
-    - validate dataset/design/session/request
-    - create persisted task row
-    - prepare local staging directory
     |
-    | POST /runner/v1/tasks/claim
+    | runner task envelope
     v
 [Julia Runner]
-    - execute Julia Core / analysis work
-    - write result.zarr + manifest.json under staging
-    - report manifest locator
     |
-    | POST /runner/v1/tasks/{id}/complete
+    | staged result.zarr + manifest.json
     v
 [Python Backend Publisher]
-    - validate manifest and Zarr layout
-    - publish into canonical TraceStore
-    - create trace metadata
     |
+    | validated publication
     v
-[Application Result Viewer / Raw Data Browser / Python Notebook]
+[TraceStore / ResultView / Raw Data Browser]
 ```
-
-Application Simulation Workbench and Analysis Workbench are productized surfaces in this track. Electron Application owns the productized workflow. Python Notebook can submit tasks through the same Backend contracts when it needs platform state. Pluto Notebook is not a task submitter.
-
-See [Product Async Contracts](docs/reference/architecture/product-async-contracts.md) for the `SimulationRequestV1`, `AnalysisRequestV1`, `RunnerTaskEnvelopeV1`, `RunnerResultManifestV1`, and `ResultView API` boundary.
-
-### Data / Platform Notebook Track
 
 ```text
 [Python Notebook]
     |
-    | direct read local Zarr / exported data / raw files / canonical TraceStore
+    | read-only local/exported/canonical data inspection
     v
-[Ad hoc analysis and inspection]
+[Ad hoc analysis]
 
 [Python Notebook]
     |
-    | Backend API for platform state, task submission, metadata, publication, provenance
+    | platform state changes and task submission
     v
-[Python Backend]
+[Python Backend APIs]
 ```
 
-Python Notebook is a programmable data-analysis and inspection surface. It may directly read local Zarr, exported data, raw files, and canonical TraceStore files for ad hoc analysis; any platform mutation, task creation, publication, metadata update, or result registration must go through the Python Backend.
-
-See [Simulation Interface Boundaries](docs/reference/architecture/simulation-interface-boundaries.md) for the source-of-truth split between Pluto, Python Notebook, Application Simulation/Analysis Workbenches, Backend, and Julia Runner.
-
-## Interface Responsibilities
+### Interface Responsibilities
 
 | Interface | Responsibility |
 | --- | --- |
-| Pluto Notebook | Direct Julia Core research computation |
-| Python Notebook | Programmable data-analysis and inspection surface |
-| Application Simulation Workbench | Productized simulation request builder, task monitor, and result viewer |
-| Application Analysis Workbench | Productized fitting, post-processing, comparison, and derived-parameter workflow |
-| Task / Execution Center | Cross-workbench execution history, Runner runtime status summary, task detail, and result handoff |
-| Raw Data Browser | Trace browsing and comparison |
-| Python Backend | Task lifecycle, metadata, publication, TraceStore APIs |
-| Julia Runner | Async compute execution and local Zarr staging |
+| Pluto Notebook | Direct Julia Core research computation, interactive inspection, and exploratory plots. |
+| Python Notebook | Programmable data-analysis and inspection surface; platform mutations go through Backend contracts. |
+| Application Simulation Workbench | Productized simulation request builder, task monitor, and result viewer. |
+| Application Analysis Workbench | Productized fitting, post-processing, comparison, and derived-parameter workflow. |
+| Task / Execution Center | Cross-workbench execution history, Runner runtime status summary, task detail, and result handoff. |
+| Raw Data Browser | Trace browsing, result lineage, and comparison. |
+| Python Backend | Task lifecycle, metadata, publication, provenance, and TraceStore APIs. |
+| Julia Runner | Async compute execution and local Zarr staging. |
 
-Application Simulation Workbench and Analysis Workbench remain mandatory as productized workflow surfaces; Pluto is not their replacement.
+Pluto is the direct research cockpit. It is not a backend task submitter in the
+platform architecture. Python notebooks may inspect local data directly, but any
+platform state change, task creation, publication, metadata update, or result
+registration must use Backend contracts.
 
 ## Repository Layout
 
@@ -110,16 +137,31 @@ notebooks/
 app/
   backend/
   frontend/
-    # Simulation Workbench, Analysis Workbench, Task / Execution Center, Raw Data Browser, Dataset UI
   desktop/
 scripts/
   dev/
 docs/
 ```
 
-## Local App
+## Getting Started
 
-Install the active workspaces first:
+### Learn Path
+
+Use this path if you want to understand superconducting-circuit modeling and run
+the notebook examples first.
+
+- Read the docs site: <https://arfiligol.github.io/superconducting-circuits-tutorial/>
+- Start with the Pluto notebooks under `notebooks/pluto/`.
+- Use the Julia Core reference when you need the current authoring and compiler
+  contracts: `docs/reference/julia-core/`.
+- Use the physics explanations when you need the S/Y/Z, equivalent-circuit, or
+  modeling context: `docs/explanation/physics/`.
+
+### Platform Path
+
+Use this path if you want to run the local app-backed research platform.
+
+Install the active workspaces:
 
 ```bash
 cd app/backend && uv sync
@@ -166,54 +208,42 @@ cd app/backend && uv run pytest tests/test_runner_api.py -q
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
 ```
 
-## Data Layout
-
-Local runtime data follows this contract:
-
-```text
-data/
-  metadata.db
-  trace_store/
-    datasets/<dataset_id>/designs/<design_id>/batches/<batch_id>.zarr/
-  artifacts/
-    tasks/<task_id>/manifest.json
-  staging/
-    tasks/<task_id>/manifest.json
-    tasks/<task_id>/result.zarr/
-```
-
-`data/staging/` is non-authoritative Runner workspace. `data/trace_store/` is the numeric authority after the Backend validates and publishes a Runner result.
-
-## Documentation
-
-The docs site uses Zensical:
-
-```bash
-./scripts/prepare_docs_locales.sh
-uv run --group dev zensical serve
-```
-
 Build the static docs with:
 
 ```bash
 ./scripts/build_docs_sites.sh
 ```
 
-## Current Boundaries
+## Development Status
 
-- Pluto Notebook is research direct execution.
-- Backend task submission is outside the Pluto role.
-- Python Notebook may directly read data files for analysis, but platform state changes must go through Backend contracts.
-- Python Notebook read-only file analysis is allowed without Backend APIs; platform state changes must use Backend contracts.
-- Application Simulation Workbench remains a first-class product surface.
-- Application Analysis Workbench remains a first-class product surface.
-- `/tasks` is the Task / Execution Center, not a queue-service product surface.
-- Local Mode is the managed local app runtime: frontend + Python Backend + Julia Runner. UI-only shell preview is a developer tool, not a product runtime mode.
-- No user-facing command-line workflow surface.
-- No retired Python UI runtime.
-- No separate local queue worker runtime.
-- No large ND arrays over HTTP/JSON.
-- No cross-language complex dtype reliance; complex traces are real/imag Zarr arrays.
+This repository should be read as an active research workbench, not a
+production-ready service or a released external-user platform.
+
+Current boundaries:
+
+- Research execution lives in Pluto notebooks and Julia Core.
+- Productized simulation and analysis tasks go through the Application, Python
+  Backend, and Julia Runner.
+- Python Backend owns task lifecycle, metadata, publication, provenance, and
+  TraceStore APIs.
+- Julia Runner owns async compute execution and staged result package
+  generation.
+- Large numeric arrays move through local filesystem Zarr, not HTTP JSON.
+- User-facing command workflows, retired Python UI runtimes, separate local
+  queue workers, and Python-in-process Julia execution are not active product
+  surfaces.
+
+## Contributing
+
+Contributions are welcome when they preserve the current architecture
+boundaries: scientific logic belongs in the core and runner layers, product
+state belongs in Backend contracts, and notebook workflows should either remain
+explicit research workflows or be promoted through the app-backed task and
+publication path.
+
+See `docs/how-to/contributing.md` and `docs/reference/guardrails/` before
+changing public contracts, architecture boundaries, documentation source of
+truth, or validation workflows.
 
 ## License
 
