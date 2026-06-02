@@ -1,34 +1,126 @@
 # Superconducting Circuits Research Workbench
 
+<p align="center">
+  <img src="docs/assets/readme-hero-orca-penguin.png" alt="Orca and Penguin exploring superconducting-circuit data" width="100%">
+</p>
+
+<p align="center">
+  <img alt="Status: active research workbench" src="https://img.shields.io/badge/status-active%20research%20workbench-2f855a">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="Interface: notebook first" src="https://img.shields.io/badge/interface-notebook%20first-6b46c1">
+  <img alt="Core: JosephsonCircuits.jl wrapper" src="https://img.shields.io/badge/core-JosephsonCircuits.jl%20wrapper-f97316">
+  <img alt="Docs: GitHub Pages" src="https://img.shields.io/badge/docs-GitHub%20Pages-0f766e">
+</p>
+
 An open-source research and education workbench for superconducting quantum
-circuits, connecting circuit models, simulation notebooks, measurement-oriented
-data workflows, and reproducible analysis infrastructure.
+circuits, built to help researchers and students experience why analyzing
+superconducting-circuit data is both useful and genuinely interesting.
 
-This repository is an **active research workbench**. It is research-platform
-first: the application, backend, Julia Runner, and TraceStore contracts are
-designed for reproducible superconducting-circuit analysis. It is also
-education-friendly by design: the documentation and Pluto notebooks give
-students and new researchers a concrete path into the physics, modeling, and
-simulation workflow.
+This project is **research-platform first** and **education-friendly by design**.
+The first interface is the notebook: a place to prototype circuit ideas, inspect
+solver behavior, explore analysis methods, and learn the physics. The app layer
+then gives those prototypes a stable path into repeatable lab workflows for
+measurement data, circuit-simulation data, analysis results, tasks, and
+provenance.
 
-## Why This Exists
+## Purpose
 
 Superconducting quantum circuits are still a fast-moving research area. A useful
-toolchain needs to do more than run a single simulation. It needs to help
-researchers connect:
+toolchain should not only run simulations. It should help people understand,
+compare, and reuse the data that comes out of design, simulation, measurement,
+and analysis.
 
-```text
-design -> simulation -> measurement -> comparison -> feedback
+This repository is built around that loop:
+
+```mermaid
+flowchart LR
+    Design["Circuit idea<br/>and semantic model"]
+    Prototype["Notebook prototype<br/>and solver experiment"]
+    Simulate["Circuit simulation<br/>and analysis"]
+    Measure["Measurement or<br/>layout-simulation data"]
+    Compare["Trace comparison<br/>and interpretation"]
+    Stabilize["App-backed workflow<br/>and provenance"]
+
+    Design --> Prototype --> Simulate --> Compare
+    Measure --> Compare
+    Compare --> Stabilize
+    Stabilize --> Design
 ```
 
-This project focuses on the analysis side of that loop. It brings together
-circuit definitions, Julia simulation workflows, S/Y/Z-oriented trace analysis,
-measurement and layout-simulation data, task execution, result publication, and
-provenance-aware data browsing.
+The core aim is to make superconducting-circuit data feel approachable,
+inspectable, and practically valuable: from a student reading an S/Y/Z response
+for the first time, to a researcher turning a notebook prototype into a
+repeatable lab workflow.
 
-The goal is to make research artifacts easier to inspect, compare, reproduce,
-and carry from exploratory notebooks into app-backed workflows without changing
-the scientific meaning of the model.
+## AI-Assisted, Physics-Validated
+
+This project welcomes heavy use of AI-assisted development and research tools.
+AI can help draft models, generate code, explore circuit variants, and summarize
+large result sets. It is not treated as an authority.
+
+Every AI-assisted result still has to be checked against physical understanding:
+units, topology, conservation expectations, solver configuration, observable
+families, trace shapes, and reproducible validation. The useful workflow is not
+"AI says so"; it is "AI proposes, physics and results validate."
+
+## Not a From-Scratch Circuit Simulator
+
+This project does **not** attempt to replace
+[JosephsonCircuits.jl](https://github.com/kpobrien/JosephsonCircuits.jl).
+Instead, it builds a semantic wrapper layer above JosephsonCircuits.jl.
+
+The wrapper layer focuses on:
+
+- reusable circuit components;
+- circuit-semantic assembly;
+- `Circuit Plan` authoring and validation;
+- compilation into a JosephsonCircuits.jl-compatible netlist for HB solving;
+- schematic-export data that can be rendered with Python Schemdraw or another
+  downstream renderer;
+- reusable notebook and runner workflows that keep circuit meaning explicit.
+
+The intended flow is:
+
+```mermaid
+flowchart TD
+    Components["Reusable Circuit Components"]
+    Plan["Circuit Plan"]
+    Compiler["Compiler"]
+    Netlist["HB Solver-ready<br/>JosephsonCircuits.jl netlist"]
+    Schematic["Schematic export data<br/>Schemdraw-ready"]
+    HB["JosephsonCircuits.jl<br/>HB Solver"]
+    Results["S/Y/Z and analysis results"]
+
+    Components --> Plan --> Compiler
+    Compiler --> Netlist --> HB --> Results
+    Compiler --> Schematic
+```
+
+JosephsonCircuits.jl remains the numerical simulation foundation. This project
+adds the circuit-semantic layer needed to make model construction, reuse,
+inspection, notebook prototyping, and app-backed execution easier to maintain.
+
+## Notebook First, App Backed
+
+The notebook layer is the first-class research interface. Researchers can move
+quickly: build a circuit idea, test a modeling assumption, run a parameter
+sweep, inspect plots, and refine the analysis without waiting for a productized
+workflow to exist.
+
+The application layer is where research prototypes become stable research
+infrastructure. It supports repeatable workflows for datasets, traces, tasks,
+simulation results, analysis results, publication, and provenance, so a lab can
+accumulate knowledge across design iterations instead of losing it inside
+one-off notebooks.
+
+| Layer | Role |
+| --- | --- |
+| Pluto notebooks | First research cockpit for rapid prototyping, simulation experiments, sweep design, and physics learning. |
+| Python notebooks | Programmable data inspection, local TraceStore investigation, and Backend API inspection when platform state matters. |
+| Julia Core | Circuit-semantic authoring, reusable components, Circuit Plans, compilation, simulation helpers, and analysis helpers. |
+| Electron application | Stable workbench for dataset management, simulation requests, analysis requests, task history, result views, and trace browsing. |
+| Python Backend | Task lifecycle, metadata, publication, provenance, TraceStore registration, and platform data APIs. |
+| Julia Runner | Async execution of Julia Core work and staged local Zarr result packages. |
 
 ## Who This Is For
 
@@ -39,17 +131,6 @@ the scientific meaning of the model.
   quantum-circuit interpretation.
 - Scientific tooling developers building maintainable infrastructure around
   notebooks, async compute runners, local data stores, and research provenance.
-
-## What the Project Provides
-
-| Area | Purpose |
-| --- | --- |
-| Educational docs and Pluto notebooks | Learn circuit construction, simulation experiments, sweep design, result inspection, and the physics/modeling path. |
-| Julia Core | Shared scientific authoring and simulation concepts used by Pluto notebooks and the Julia Runner. |
-| Application workbenches | Productized dataset, simulation, analysis, trace browsing, task monitoring, and result-view workflows. |
-| Python Backend | Task lifecycle, metadata, publication, provenance, TraceStore registration, and platform data APIs. |
-| Julia Runner | Async simulation, sweeps, post-processing, fitting, derived-parameter extraction, and staged result package generation. |
-| TraceStore | Local Zarr-backed numeric result management for published traces and analysis results. |
 
 ## Architecture Snapshot
 
@@ -102,19 +183,6 @@ The main execution and inspection tracks are:
     v
 [Python Backend APIs]
 ```
-
-### Interface Responsibilities
-
-| Interface | Responsibility |
-| --- | --- |
-| Pluto Notebook | Direct Julia Core research computation, interactive inspection, and exploratory plots. |
-| Python Notebook | Programmable data-analysis and inspection surface; platform mutations go through Backend contracts. |
-| Application Simulation Workbench | Productized simulation request builder, task monitor, and result viewer. |
-| Application Analysis Workbench | Productized fitting, post-processing, comparison, and derived-parameter workflow. |
-| Task / Execution Center | Cross-workbench execution history, Runner runtime status summary, task detail, and result handoff. |
-| Raw Data Browser | Trace browsing, result lineage, and comparison. |
-| Python Backend | Task lifecycle, metadata, publication, provenance, and TraceStore APIs. |
-| Julia Runner | Async compute execution and local Zarr staging. |
 
 Pluto is the direct research cockpit. It is not a backend task submitter in the
 platform architecture. Python notebooks may inspect local data directly, but any
