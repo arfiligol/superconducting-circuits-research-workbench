@@ -1,7 +1,7 @@
 ---
 aliases:
-- Data Flow
-- 數據流程
+  - Data Flow
+  - 數據流程
 tags:
   - diataxis/explanation
   - status/stable
@@ -11,63 +11,63 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: 分析管線的數據流程：Raw -> Dataset -> Analyzed
-version: v0.2.0
-last_updated: 2026-02-27
-updated_by: docs-team
+scope: Research Direct、Product Async 與 Data / Platform Notebook tracks 的資料流與 authority handoff
+version: v1.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Data Flow
 
-本專案使用「單一分析流程、雙輸出結果」的資料流：每次分析同時產生結構化結果與可視化。
-
-<div align="center">
+The platform has three data-flow tracks. Each track has a different authority boundary, so readers should identify the track before deciding where code or documentation belongs.
 
 ```mermaid
 flowchart TB
-    Raw["Raw Input (CSV/TXT/Simulator Export)"] -->|Ingest + Normalize| Dataset["Dataset (SQLite SoT)"]
-    Dataset -->|Run Analysis Method| Result["Structured Result (metrics/series/table)"]
-    Result -->|Render in same run| Viz["Visualization (Plot/Table/Card)"]
-    Result --> Persist["Save Result Artifact (optional)"]
-    Viz --> Persist
+    subgraph Research["Research Direct Track"]
+        Pluto["Pluto Notebook"] --> JuliaCore["Julia Core"]
+        JuliaCore --> ResearchOutput["Local research outputs"]
+    end
+
+    subgraph Product["Product Async Track"]
+        Workbench["Application Simulation Workbench"] --> BackendTask["Python Backend task"]
+        PySubmit["Python Notebook task submission"] --> BackendTask
+        BackendTask --> Runner["Julia Runner"]
+        Runner --> Staging["Local Zarr staging + manifest"]
+        Staging --> Publisher["Backend publication"]
+        Publisher --> TraceStore["TraceStore / Result View"]
+    end
+
+    subgraph Notebook["Data / Platform Notebook Track"]
+        PyNotebook["Python Notebook"] --> DirectRead["Direct local / exported / canonical data reads"]
+        PyNotebook --> BackendAPI["Backend API for metadata, task, publication, provenance"]
+    end
 ```
 
-</div>
+## Track Contracts
 
-## Pipeline Contracts
+| Track | Contract |
+| --- | --- |
+| Research Direct | Pluto may call Julia Core directly and create local research artifacts. These outputs are not canonical platform records. |
+| Product Async | Application Simulation Workbench and Python Notebook task submission use Backend contracts. Julia Runner writes staging packages; Backend validates and publishes. |
+| Data / Platform Notebook | Python Notebook may directly read files for ad hoc analysis. It must use Backend APIs for platform state changes. |
 
-### 1. Ingestion Contract
+## Authority Handoffs
 
-- 輸入來源可以異質（HFSS、VNA、其他模擬輸出）。
-- 進入分析前必須先轉為 Dataset Schema（SQLite）以統一欄位與單位。
+| Handoff | Rule |
+| --- | --- |
+| Application to Backend | submit a product request, not a Runner payload |
+| Backend to Runner | send a Backend-owned task envelope |
+| Runner to Backend | return only manifest locator, hash, status, progress, and error summaries |
+| Backend to TraceStore | validate staging result and create official metadata |
+| Python Notebook to data files | read-only analysis is allowed |
+| Python Notebook to platform state | use Backend contracts |
 
-### 2. Analysis Contract
+## Large Array Rule
 
-- 分析方法以 Dataset 為唯一輸入來源（Source of Truth）。
-- 每個分析方法回傳結構化結果（例如 metrics、series、table）。
-
-### 3. Visualization Contract
-
-- 視覺化不是獨立管線，而是分析結果的同次渲染。
-- UI: 以卡片直接呈現 Plot/Table/Metric。
-  CLI: 以終端摘要 + 圖檔/報表輸出呈現相同分析語意。
-
-### 4. Persistence Contract
-
-- 儲存資料集與儲存分析結果是兩個獨立動作。
-- 是否落盤不影響當次可視化顯示，但影響可追溯性與重現性。
-
-!!! warning "不要再做語意切割"
-    不論 UI 或 CLI，都不應把「先分析、再另外可視化」當成兩個不連動功能。
-    正確模型是：分析完成時，視覺化也已具備可展示資料。
-
-## Practical Mapping
-
-- UI 的 Characterization 頁面採 registry 驅動，每個 method 直接綁定配置、執行與結果渲染。
-- CLI 的 analysis 指令沿用同一分析語意，輸出通道改為終端與檔案。
+Large ND arrays do not move through HTTP JSON. Simulation and trace payloads live in local filesystem Zarr packages, with complex values stored as real/imag arrays.
 
 ## Related
 
-- [Raw Data Layout](../../../reference/data-formats/raw-data-layout.md) - 目錄結構
-- [Analysis Result](../../../reference/data-formats/analysis-result.md) - 分析輸出格式
-- [Preprocessing Rationale](preprocessing-rationale.md) - 為什麼需要中間層
+- [Product Async Contracts](../../../reference/architecture/product-async-contracts.md)
+- [Runner Result Manifest](../../../reference/architecture/runner-result-manifest.md)
+- [TraceStore Zarr](../../../reference/architecture/trace-store-zarr.md)

@@ -9,15 +9,15 @@ tags:
 status: stable
 owner: docs-team
 audience: user
-scope: WebUI Circuit Simulation 教學導航與路徑對照
-version: v0.1.0
-last_updated: 2026-03-05
+scope: Application task submission 與 Julia Runner simulation 教學導航
+version: v0.2.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
-# App Circuit Simulation
+# App Simulation Tasks
 
-本章整理 WebUI 中「Schema -> Simulation -> Post Processing」的操作教學入口。
+本章整理 Application 中「Schema -> Task -> Runner -> TraceStore」的操作教學入口。
 
 ## Topics
 
@@ -29,4 +29,5 @@ updated_by: codex
 ## Related
 
 - [Simulation Workflow](../simulation-workflow.md)
-- [Circuit Simulation UI Reference](../../reference/app/frontend/research-workflow/circuit-simulation.md)
+- [Application Interface](../../reference/app/application-interface.md)
+- [Julia Runner Compute Plane](../../reference/architecture/julia-runner-compute-plane.md)

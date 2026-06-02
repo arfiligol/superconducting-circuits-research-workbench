@@ -98,23 +98,13 @@ end
 println(results)
 ```
 
-## 使用 ili_plot 繪圖
+## 檢視結果
 
-專案提供 `ili_plot` 工具，簡化 PlotlyJS 繪圖：
+目前產品化檢視應透過 Application 的 Result Browser 或 notebook cockpit 完成。
+Application-triggered simulation 由 Julia Runner 產生 staging Zarr，再由 Backend publish 成正式 TraceStore。
 
-```julia
-include("src/julia/plotting.jl")
-
-# 收集所有 traces 後
-ili_plot(
-    traces,
-    "S11 Phase vs Frequency",
-    "Frequency (GHz)",
-    "Phase (deg)",
-    "Inductance"
-)
-```
+研究中的直接掃描可以在 Pluto notebook 中繪圖；不要依賴已移除的 root Julia helper。
 
 ## 下一步
 
-👉 [繪圖工具 ili_plot](../reference/utilities.md) — 詳細了解繪圖工具
+👉 [Notebook Interface](../reference/notebooks/index.md) — 了解研究 notebook 與 app task 的邊界

@@ -1,0 +1,10 @@
+{
+  "name": "qeca-parameter-response-vv",
+  "private": true,
+  "scripts": {
+    "build": "node build_parameter_response_vv.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}

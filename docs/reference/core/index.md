@@ -9,70 +9,47 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Core reference 索引，條列平台核心能力與 Python/Julia 邊界。
-version: v0.5.0
-last_updated: 2026-03-21
+scope: Core reference 索引，條列 Julia Core、Julia Visualizer、Julia Runner 與 Python contracts。
+version: v0.10.0
+last_updated: 2026-05-30
 updated_by: codex
 ---
 
 # Core Reference
 
-本區收錄平台核心能力的 reference surface，涵蓋 Python-owned canonical contracts、Python↔Julia bridge，以及 Julia-native simulation / plotting boundary。
+Core docs describe reusable contracts and compute libraries.
+Application session state, HTTP transport, UI state, and desktop lifecycle live outside this section.
 
-!!! info "How To Read Core Docs"
-    先讀 [Python Core](python-core.md) 了解 `sc_core` 與 Python adopter 的 canonical contracts，再讀 [Julia Wrapper](julia-wrapper.md) 看 Python↔Julia bridge，最後讀 [Julia Core](julia-core.md) 與 [Julia Plotting](julia-plotting.md) 查看 Julia-native execution 與 visualization surface。
+## Read Order
 
-!!! warning "Boundary"
-    `Core` 不等於整個 app。
-    session、HTTP transport、CLI presenter、UI state 都不屬於本區；本區只記錄核心計算、canonical contract 與 bridge boundary。
-
-!!! important "Canonical top-level core surface"
-    `core/` 是 canonical shared-core folder。
-    `src/worker/` 也只能視為 transition residue consumer，不是 core owner。
+1. [Julia Core Authoring](../julia-core/index.md) for Circuit Plan, endpoints, reusable components, compiler, and Runner-safe authoring architecture.
+2. [Julia Compute Boundary](julia-wrapper.md) for the Core/Runner split.
+3. [Julia Visualizer](../julia-visualizer/index.md) for Pluto-facing PlotlyJS figure contracts built from Julia Core results.
+4. [Python Core](python-core.md) for Python-owned canonical contracts.
+5. [Julia Package Surface](julia-core.md) for the concrete Julia package surfaces.
 
 ## Ownership Rules
 
 | Rule | Meaning |
 |---|---|
-| `sc_core` owns canonical Python contracts | backend、worker、CLI 都是 adopter，不是 owner |
-| App surfaces stay outside Core | HTTP schemas、session authority、frontend state 不屬於 Core |
-| Julia bridge is still Core-adjacent | Python↔Julia adapter 屬於 core runtime 邊界，但不等於整個 app owner |
+| Julia Core owns reusable compute logic | keep HTTP, task polling, and database publication out of Core |
+| Julia Runner owns async task execution | claim tasks, dispatch compute, write staging Zarr, write manifest, report complete/fail |
+| Python Backend owns publication | validate manifests, publish TraceStore data, create metadata and provenance records |
+| App surfaces stay outside Core | HTTP schemas, session authority, frontend state, and desktop supervision are app concerns |
 
 ## Page Map
 
-=== "Python-Owned Contracts"
-
-    | 頁面 | 核心聚焦 | Primary Code Surface |
-    |---|---|---|
-    | [Python Core](python-core.md) | `sc_core` 的 circuit-definition、tasking、execution、storage contracts，以及 Python adopters | canonical implementation evidence: `core/sc_core/`, `core/shared/`; `src/worker/` is transition residue consumer only |
-
-=== "Python ↔ Julia Bridge"
-
-    | 頁面 | 核心聚焦 | Primary Code Surface |
-    |---|---|---|
-    | [Julia Wrapper](julia-wrapper.md) | Python domain model 如何被編譯、驗證、送入 Julia runtime，再映射回 Python result | canonical `core/` bridge surface；implementation evidence: `core/simulation/application/run_simulation.py`, `core/simulation/infrastructure/julia_adapter.py`, `core/simulation/infrastructure/hbsolve.jl` |
-
-=== "Julia-Native Surface"
-
-    | 頁面 | 核心聚焦 | Primary Code Surface |
-    |---|---|---|
-    | [Julia Core](julia-core.md) | JosephsonCircuits-driven simulation runtime 與 direct Julia workflow boundary | canonical `core/` + Julia runtime surfaces；implementation evidence: `core/simulation/infrastructure/hbsolve.jl`, `src/julia/` |
-    | [Julia Plotting](julia-plotting.md) | Julia-owned plotting / visualization helpers | `src/julia/plotting.jl`, `src/julia/utils.jl` |
-
-## Ownership Map
-
-| 想回答的問題 | 應優先查看 |
-|---|---|
-| canonical circuit-definition / task / storage contract 由誰定義？ | [Python Core](python-core.md) |
-| Python application service 如何把 simulation config 送進 Julia？ | [Julia Wrapper](julia-wrapper.md) |
-| Julia runtime 目前真正負責哪些模擬能力？ | [Julia Core](julia-core.md) |
-| Julia plotting helper 與 figure contract 在哪裡？ | [Julia Plotting](julia-plotting.md) |
-
-!!! success "Coverage Rule"
-    若 CLI、backend 或 worker 引入新的核心計算或 contract helper，應能在本區找到對應 page；
-    找不到時，代表 Core reference 尚未完整。
+| Page | Focus | Primary code surface |
+|---|---|---|
+| [Python Core](python-core.md) | Python contracts and shared models | `core/`, `core/python/` |
+| [Julia Compute Boundary](julia-wrapper.md) | Julia Core and Julia Runner responsibility split | `core/julia/SuperconductingCircuitsCore/`, `core/julia/SuperconductingCircuitsRunner/` |
+| [Julia Core Authoring](../julia-core/index.md) | Circuit Plan source of truth, reusable components, endpoints, compiler output, Pluto and Runner shared API | `core/julia/SuperconductingCircuitsCore/`, `notebooks/pluto/` |
+| [Julia Visualizer](../julia-visualizer/index.md) | PlotlyJS figure construction for real `HBSolveResult` traces | `core/julia/SuperconductingCircuitsVisualizer/`, `notebooks/pluto/` |
+| [Julia Package Surface](julia-core.md) | Julia-native package boundary | `core/julia/` |
 
 ## Related
 
-- [Architecture / Canonical Contract Registry](../architecture/canonical-contract-registry.md)
-- [CLI Options](../cli/index.md)
+- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
+- [Julia Visualizer](../julia-visualizer/index.md)
+- [Runner Result Manifest](../architecture/runner-result-manifest.md)
+- [TraceStore Zarr](../architecture/trace-store-zarr.md)

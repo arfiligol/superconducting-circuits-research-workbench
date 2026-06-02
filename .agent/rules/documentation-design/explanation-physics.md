@@ -1,5 +1,5 @@
 ## Explanation Physics
-- **Architecture**: `docs/explanation/physics/` follows the A-J knowledge roadmap (A=Foundations, B=EM-to-Circuits, C=Superconductivity, D=Josephson, E=Quantum-Circuits, F=Building-Blocks, G/H/I=principles-only)
+- **Architecture**: `docs/explanation/physics/` follows the A-J knowledge map (A=Foundations, B=EM-to-Circuits, C=Superconductivity, D=Josephson, E=Quantum-Circuits, F=Building-Blocks, G/H/I=principles-only)
 - **Hierarchy**: L1 = domain directories (A-I groups), L2 = topic pages, L3 = optional sub-pages when L2 > 3000 words
 - **L1 creation rule**: only create an L1 directory + nav entry when it has at least one L2 page
 - **Content boundary**: Physics explains WHY/HOW-IT-WORKS only. Tool usage, CLI steps, workflows → How-to/Tutorials/Reference
@@ -8,4 +8,4 @@
 - **Opener**: each page starts from either a physics question OR a historical/community narrative — never a tool-operation question
 - **Per-page contract**: question, prerequisites mapping, physics core, engineering mapping, limits/approximations, cross-links
 - **Citations**: physics models and derivations MUST include APA references at bottom
-- **Overview**: `index.md` contains the full A-I roadmap; linked when content exists, plain text when planned
+- **Overview**: `index.md` links existing content only; do not add placeholder topics as product commitments

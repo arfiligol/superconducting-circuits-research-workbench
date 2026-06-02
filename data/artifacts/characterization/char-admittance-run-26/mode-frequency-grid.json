@@ -1,0 +1,273 @@
+{
+  "contract_version": "admittance_member_phase1_v1",
+  "input_axis_key": "L_jun",
+  "input_axis_label": "L_jun",
+  "input_axis_unit": "nH",
+  "input_axis_values": [
+    0.0,
+    5.0,
+    10.0,
+    15.0,
+    18.0,
+    20.0,
+    22.0,
+    24.0,
+    26.0,
+    28.0
+  ],
+  "members": [
+    {
+      "member_key": "layout_simulation:trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-readout-im-y11-csv_1",
+      "label": "layout simulation \u00b7 Y11 (imaginary)",
+      "trace_id": "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-readout-im-y11-csv_1",
+      "source_kind": "layout_simulation",
+      "trace_mode_group": "base",
+      "parameter": "Y11",
+      "representation": "imaginary",
+      "provenance_summary": "Layout simulation import \u00b7 PF6FQ_Q0_Readout_Im_Y11.csv \u00b7 im(Yt(Rectangle5_T1,Rectangle5_T1)) [] \u00b7 Y11 imaginary \u00b7 source: Layout Simulation import \u00b7 PF6FQ Q0 \u00b7 3 files \u00b7 PF6FQ_Q0_Readout_Im_Y11.csv"
+    },
+    {
+      "member_key": "layout_simulation:trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-and-readout-im-y11-csv_1",
+      "label": "layout simulation \u00b7 Y11 (imaginary)",
+      "trace_id": "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-and-readout-im-y11-csv_1",
+      "source_kind": "layout_simulation",
+      "trace_mode_group": "base",
+      "parameter": "Y11",
+      "representation": "imaginary",
+      "provenance_summary": "Layout simulation import \u00b7 PF6FQ_Q0_XY_and_Readout_Im_Y11.csv \u00b7 im(Yt(Rectangle5_T1,Rectangle5_T1)) [] \u00b7 Y11 imaginary \u00b7 source: Layout Simulation import \u00b7 PF6FQ Q0 \u00b7 3 files \u00b7 PF6FQ_Q0_XY_and_Readout_Im_Y11.csv"
+    },
+    {
+      "member_key": "layout_simulation:trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-im-y11-csv_1",
+      "label": "layout simulation \u00b7 Y11 (imaginary)",
+      "trace_id": "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-im-y11-csv_1",
+      "source_kind": "layout_simulation",
+      "trace_mode_group": "base",
+      "parameter": "Y11",
+      "representation": "imaginary",
+      "provenance_summary": "Layout simulation import \u00b7 PF6FQ_Q0_XY_Im_Y11.csv \u00b7 im(Yt(Rectangle5_T1,Rectangle5_T1)) [] \u00b7 Y11 imaginary \u00b7 source: Layout Simulation import \u00b7 PF6FQ Q0 \u00b7 3 files \u00b7 PF6FQ_Q0_XY_Im_Y11.csv"
+    }
+  ],
+  "frequency_grid_by_member": [
+    [
+      [
+        4.00016000640026,
+        5.9434377375095,
+        6.22584903396136,
+        null
+      ],
+      [
+        4.00016000640026,
+        5.94663786551462,
+        6.23464938597544,
+        6.23784951398056
+      ],
+      [
+        4.00016000640026,
+        6.23704948197928,
+        6.23944957798312,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        6.23304932197288,
+        6.236249449978,
+        7.19948797951918
+      ],
+      [
+        5.92823712948518,
+        6.15304612184487,
+        6.15544621784871,
+        7.19948797951918
+      ],
+      [
+        5.9474378975159,
+        6.23304932197288,
+        6.236249449978,
+        7.19948797951918
+      ],
+      [
+        5.9474378975159,
+        6.23304932197288,
+        6.236249449978,
+        7.19948797951918
+      ],
+      [
+        5.92823712948518,
+        6.15464618584743,
+        6.15704628185127,
+        7.19948797951918
+      ],
+      [
+        5.94663786551462,
+        6.2322492899716,
+        6.23464938597544,
+        7.19948797951918
+      ],
+      [
+        5.94663786551462,
+        6.23144925797032,
+        6.23464938597544,
+        7.19948797951918
+      ]
+    ],
+    [
+      [
+        4.00016000640026,
+        5.93863754550182,
+        6.19784791391656,
+        null
+      ],
+      [
+        4.00016000640026,
+        5.94023760950438,
+        6.2242489699588,
+        6.22904916196648
+      ],
+      [
+        4.00016000640026,
+        5.93703748149926,
+        6.22904916196648,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        6.22904916196648,
+        6.23304932197288,
+        7.19948797951918
+      ],
+      [
+        5.92583703348134,
+        6.13464538581543,
+        6.13784551382055,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        5.93623744949798,
+        6.23144925797032,
+        7.19948797951918
+      ],
+      [
+        5.9354374174967,
+        6.22664906596264,
+        6.2282491299652,
+        7.19948797951918
+      ],
+      [
+        5.92503700148006,
+        6.13464538581543,
+        6.13704548181927,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        7.19948797951918,
+        null,
+        null
+      ],
+      [
+        7.19948797951918,
+        null,
+        null,
+        null
+      ]
+    ],
+    [
+      [
+        4.00016000640026,
+        null
+      ],
+      [
+        4.00016000640026,
+        null
+      ],
+      [
+        4.00016000640026,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        7.19948797951918
+      ],
+      [
+        4.00016000640026,
+        7.19948797951918
+      ],
+      [
+        7.19948797951918,
+        null
+      ]
+    ]
+  ],
+  "residual_rms_by_member": [
+    [
+      0.0005556958959680097,
+      0.0003719517287179091,
+      0.0003751990909543746,
+      0.00037508323854009356,
+      0.0003631858429897072,
+      0.00037545728639296516,
+      0.0003758094350958566,
+      0.00036370241151331494,
+      0.00037568599429572286,
+      0.0003753244530530533
+    ],
+    [
+      0.0003988161927136214,
+      0.0005959808317115186,
+      0.0009757022871745032,
+      0.00035307423622084295,
+      0.00035416764220815554,
+      0.0018814838412654332,
+      0.0005243096014424612,
+      0.00040441020339079326,
+      1.7756063922077596e-05,
+      1.653060550605888e-05
+    ],
+    [
+      0.00031874577793176295,
+      3.9156353301398644e-05,
+      2.0933350380952026e-05,
+      1.4315934700064599e-05,
+      1.204468367747741e-05,
+      1.0894506861833532e-05,
+      9.947860843644318e-06,
+      9.156640502345494e-06,
+      8.479966312596742e-06,
+      7.899441548250059e-06
+    ]
+  ],
+  "fit_window_ghz": [
+    4.0,
+    7.2
+  ],
+  "masked_input_indices_by_member": [
+    [],
+    [],
+    []
+  ],
+  "diagnostics": [
+    {
+      "severity": "info",
+      "code": "fit_residual_rms_evaluated",
+      "message": "All persisted input positions stay within the configured residual tolerance.",
+      "blocking": false
+    }
+  ]
+}

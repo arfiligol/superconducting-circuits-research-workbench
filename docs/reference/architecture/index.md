@@ -10,46 +10,62 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: 架構層的 owner boundary、cross-layer registry 與 App/CLI/Core/Data Formats 對齊關係
-version: v0.6.0
-last_updated: 2026-03-14
-updated_by: team
+scope: Notebook Interface、Application Interface、Python Backend、Julia Runner 與 TraceStore 的 owner boundary
+version: v1.2.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Architecture Reference
 
-本區定義系統架構層真正需要保留的正式 SoT：owner boundary、cross-layer registry 與 alignment。
+本區定義目前平台的正式架構 SoT。
 
-!!! info "How To Read Architecture Docs"
-    若你要回答的是 page layout、app-shared semantics、backend surface、CLI usage 或 data payload 細節，先回到對應的 `App / CLI / Core / Data Formats` reference。
-    本區只處理 cross-layer ownership、registry 與 alignment。
+Current architecture:
 
-!!! warning "Architecture 不是 Implementation Notes"
-    若某一頁主要在描述資料格式、core package family、task runtime 細節或 app surface，它就不應留在 Architecture。
-    Architecture 只保留真正跨層的 owner / registry / parity 文件。
+```text
+Notebook Interface + Electron Application Interface + Julia Runner Compute Plane
+```
+
+Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electron App 是 productized data workbench。Pluto Notebook 是 research cockpit。
 
 ## Page Map
 
-| Page | Core focus | Main pairing |
-|---|---|---|
-| [Canonical Contract Registry](canonical-contract-registry.md) | cross-layer canonical contracts 與 owner registry | App, CLI, Core, Data Formats |
-| [Parity Matrix](parity-matrix.md) | App / CLI / Core / Data Formats 對齊狀態 | 全部 reference surfaces |
-
-## Related Layers
-
-| Layer | What it answers |
+| Page | Core focus |
 |---|---|
-| [App / Shared](../app/shared/index.md) | workspace collaboration、auth、runtime、audit 等 app-shared semantics |
-| [App / Frontend](../app/frontend/index.md) | 頁面與 shared shell 怎麼呈現 |
-| [App / Backend](../app/backend/index.md) | frontend 直接依賴哪些 backend surfaces |
-| [Core](../core/index.md) | installable core contracts、Python/Julia bridge 與 package boundaries |
-| [CLI Options](../cli/index.md) | standalone-first CLI 與 local runtime contract |
+| [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto direct research, Python Notebook data inspection, and Application Simulation/Analysis Workbench boundary |
+| [Product Async Contracts](product-async-contracts.md) | SimulationRequest、AnalysisRequest、RunnerTaskEnvelope、Runner manifest、ResultView API boundary |
+| [Julia Runner Compute Plane](julia-runner-compute-plane.md) | Runner process boundary、claim/execute/complete protocol |
+| [Runner Result Manifest](runner-result-manifest.md) | manifest schema、safe path rules、Zarr declaration |
+| [TraceStore Zarr](trace-store-zarr.md) | canonical local Zarr authority owned by Python Backend |
+| [Canonical Contract Registry](canonical-contract-registry.md) | cross-layer contracts and owners |
+
+## Current Boundaries
+
+| Boundary | Owner |
+|---|---|
+| task lifecycle, metadata, publication, provenance | Python Backend |
+| simulation, sweeps, post-processing, fitting, derived extraction | Julia Runner |
+| canonical numeric authority | Python Backend-managed TraceStore |
+| local staging package | Julia Runner writes, Backend validates |
+| app navigation and result browsing | Electron + Next.js App |
+| productized simulation request workflow | Application Simulation Workbench |
+| productized analysis/fitting workflow | Application Analysis Workbench |
+| direct exploratory execution | Pluto Notebook |
+
+## Removed Product Surfaces
+
+User-facing command workflows, retired Python UI runtimes, separate local queue workers, Python-in-process Julia simulation, and Schemdraw standalone workflow are not active product/runtime surfaces.
+
+Application Simulation Workbench and Analysis Workbench are active architecture. They submit persisted tasks through the Backend and never own heavy compute.
+
+If a historical document mentions one of those surfaces, the current architecture pages override it.
 
 ## Related
 
-* [App / Shared](../app/shared/index.md)
-* [App / Frontend](../app/frontend/index.md)
-* [App / Backend](../app/backend/index.md)
-* [CLI Options](../cli/index.md)
+* [Application Interface](../app/application-interface.md)
+* [Frontend Reference](../app/frontend/index.md)
+* [Simulation Interface Boundaries](simulation-interface-boundaries.md)
+* [Product Async Contracts](product-async-contracts.md)
+* [Backend Reference](../app/backend/index.md)
+* [Notebook Reference](../notebooks/index.md)
 * [Core Reference](../core/index.md)
-* [Data Formats](../data-formats/index.md)

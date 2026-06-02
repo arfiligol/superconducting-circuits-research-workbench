@@ -1,0 +1,62 @@
+name: Foundation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/foundation.yml"
+      - "package.json"
+      - "README.md"
+      - ".gitignore"
+      - "scripts/*.sh"
+      - "frontend/**"
+      - "backend/**"
+      - "desktop/**"
+  push:
+    paths:
+      - ".github/workflows/foundation.yml"
+      - "package.json"
+      - "README.md"
+      - ".gitignore"
+      - "scripts/*.sh"
+      - "frontend/**"
+      - "backend/**"
+      - "desktop/**"
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          mkdir -p .cache/npm/frontend .cache/npm/desktop
+          npm install --prefix frontend --cache "$PWD/.cache/npm/frontend"
+          (cd backend && uv sync)
+          npm install --prefix desktop --cache "$PWD/.cache/npm/desktop"
+
+      - name: Run checks
+        run: |
+          (cd backend && uv run pytest -q)
+          npm run test --prefix frontend
+          npm run lint --prefix desktop
+
+      - name: Build workspaces
+        run: |
+          npm run build --prefix frontend
+          npm run build --prefix desktop

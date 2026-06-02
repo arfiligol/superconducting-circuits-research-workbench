@@ -1,19 +1,20 @@
 ## CI Gates
 - Mandatory checks include:
-    - `npm run rewrite:install`
-    - `npm run rewrite:check`
-    - `npm run rewrite:build`
-    - backend startup smoke and `cd backend && uv run pytest`
-    - `npm run lint --prefix frontend`
-    - `npm run typecheck --prefix frontend`
-    - `npm run test --prefix frontend`
-    - `npm run build --prefix frontend`
-    - `npm run lint --prefix desktop`
-    - `npm run build --prefix desktop`
+    - backend startup smoke and `cd app/backend && uv run pytest`
+    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - `npm run lint --prefix app/frontend`
+    - `npm run typecheck --prefix app/frontend`
+    - `npm run test --prefix app/frontend`
+    - `npm run build --prefix app/frontend`
+    - `npm run lint --prefix app/desktop`
+    - `npm run build --prefix app/desktop`
     - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched
     - `./scripts/build_docs_sites.sh` when docs are touched
     - `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
 - `main` must not receive direct pushes.
+- Daily feature/docs/test integration targets `develop` by default.
+- `main` only receives verified release promotion from `develop`.
+- Branch roles, direct-develop policy, and optional worktree use are defined in `Branch & Worktree Flow`.
 - Guardrail source changes must keep `.agent/rules` in sync.
 - Benign `404` warnings from docs preview builds do not fail CI by themselves.
 - Any failing required check blocks merge.

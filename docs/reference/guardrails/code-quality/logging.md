@@ -8,15 +8,15 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "日誌記錄規範：分級、顏色、使用方式"
-version: v1.1.1
+scope: "日誌記錄規範：分級、使用方式、scripts 邊界"
+version: v2.0.0
 last_updated: 2026-03-25
 updated_by: codex
 ---
 
 # Logging Standards
 
-本專案使用 Python 標準 `logging` 模組搭配 **Rich** 進行彩色輸出。
+本專案的 Python runtime 使用標準 `logging` 模組。Rich 可用於開發端彩色輸出，但不得被升格成 user-facing command product surface。
 
 !!! info "Use this page for runtime logging"
     這頁管的是開發與執行期 logging，不是 app-level audit logging。需要 actor/action/resource 的治理記錄時，應看 `App > Shared / Audit Logging`。
@@ -28,14 +28,14 @@ updated_by: codex
 | --- | --- |
 | 哪裡可以 `print()`？ | `core/` 與 `scripts/` 的邊界 |
 | 什麼時候用 `info` / `warning` / `error`？ | 日誌等級表 |
-| CLI 如何顯示彩色 logging？ | `setup_logging` + `RichHandler` |
+| scripts 如何顯示開發端 logging？ | `setup_logging` + optional `RichHandler` |
 
 ## 原則
 
 1. **`core/` 層禁止 `print()`** - 只有 `scripts/` 層可以直接輸出
 2. **所有 `core/` 層使用 `logging`** - 讓呼叫者決定如何處理日誌
 3. **彩色分級** - 使用 Rich 的 Console 輸出
-4. **Rich 為標準日誌輸出** - CLI 必須使用 `RichHandler`
+4. **Rich 是開發端輸出選項** - scripts 可使用 `RichHandler`，但它不是 product CLI contract
 
 ## 日誌等級
 
@@ -75,7 +75,7 @@ updated_by: codex
             raise
     ```
 
-=== "在 `scripts/` 層 (CLI Entry Point)"
+=== "在 `scripts/` 層"
 
     ```python
     from core.shared.logging import setup_logging
@@ -86,7 +86,7 @@ updated_by: codex
         # 現在所有 core/ 層的 logging 會顯示彩色輸出
         result = process_data(path)
 
-        # CLI 層可以用 print() 做最終輸出
+        # scripts 層可以用 print() 做最終 developer-facing summary
         print(f"Result: {result}")
     ```
 
@@ -117,7 +117,7 @@ def setup_logging(level: str = "INFO") -> None:
 | `print(f"[OK] ...")` | `logger.info("...")` |
 
 ??? note "Why this page stays simple"
-    logging 規則故意保持薄層：先把 `print()` 邊界、level 語意、CLI handler 定清楚，再由各子系統決定具體欄位與 correlation data。
+    logging 規則故意保持薄層：先把 `print()` 邊界、level 語意、scripts handler 定清楚，再由各子系統決定具體欄位與 correlation data。
 
 ---
 
@@ -126,11 +126,11 @@ def setup_logging(level: str = "INFO") -> None:
 ```markdown
 ## Logging
 - **No `print()` in `core/`**: Use `logging` module only.
-- **`print()` allowed ONLY in `scripts/`**: For final CLI output.
+- **`print()` allowed ONLY in `scripts/`**: For final developer-facing helper output.
 - **Setup**:
     - Import: `import logging; logger = logging.getLogger(__name__)`
-    - Configure in CLI: `from core.shared.logging import setup_logging`
-    - **Handler**: Use `RichHandler` for colored output in CLI.
+    - Configure in scripts when useful: `from core.shared.logging import setup_logging`
+    - **Handler**: Use `RichHandler` only as developer-facing script output, not as a product CLI contract.
 - **Levels**:
     - `logger.debug()`: Development details.
     - `logger.info()`: Normal flow (e.g., "Processing file...").

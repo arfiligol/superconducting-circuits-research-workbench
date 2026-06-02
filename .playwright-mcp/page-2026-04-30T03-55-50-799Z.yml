@@ -1,0 +1,154 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - button "Toggle navigation menu" [ref=e5] [cursor=pointer]:
+          - img [ref=e6]
+        - generic [ref=e7]:
+          - generic [ref=e8]:
+            - paragraph [ref=e9]: SUPERCONDUCTING CIRCUITS
+            - generic [ref=e10]:
+              - generic [ref=e11]: Pipeline
+              - img [ref=e12]
+              - paragraph [ref=e14]: Data Ingestion
+          - generic [ref=e15]:
+            - button "Runtime Mode Local Mode" [ref=e16] [cursor=pointer]:
+              - generic [ref=e17]: Runtime Mode
+              - generic [ref=e18]: Local Mode
+            - button "Active Dataset No active dataset" [ref=e19] [cursor=pointer]:
+              - generic [ref=e20]: Active Dataset
+              - generic [ref=e21]: No active dataset
+            - button "Open global context panel" [ref=e22] [cursor=pointer]:
+              - img [ref=e24]
+              - generic [ref=e27]:
+                - generic [ref=e28]: Local Mode
+                - generic [ref=e29]: Local Space · No active dataset · Loading tasks...
+            - button "Open account panel" [ref=e30] [cursor=pointer]:
+              - img [ref=e32]
+              - generic [ref=e35]:
+                - generic [ref=e36]: Local Operator
+                - generic [ref=e37]: Local Space
+    - generic [ref=e38]:
+      - complementary [ref=e39]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - paragraph [ref=e44]: Workspace
+            - navigation [ref=e45]:
+              - link "Dashboard" [ref=e46] [cursor=pointer]:
+                - /url: /dashboard
+                - generic [ref=e47]:
+                  - img [ref=e49]
+                  - generic [ref=e55]: Dashboard
+              - link "Dataset" [ref=e56] [cursor=pointer]:
+                - /url: /dataset
+                - generic [ref=e57]:
+                  - img [ref=e59]
+                  - generic [ref=e64]: Dataset
+              - link "Tasks" [ref=e65] [cursor=pointer]:
+                - /url: /tasks
+                - generic [ref=e66]:
+                  - img [ref=e68]
+                  - generic [ref=e73]: Tasks
+          - generic [ref=e74]:
+            - paragraph [ref=e76]: Pipeline
+            - navigation [ref=e77]:
+              - link "Data Ingestion" [ref=e78] [cursor=pointer]:
+                - /url: /data-ingestion
+                - generic [ref=e79]:
+                  - img [ref=e81]
+                  - generic [ref=e85]: Data Ingestion
+              - link "Raw Data" [ref=e86] [cursor=pointer]:
+                - /url: /raw-data
+                - generic [ref=e87]:
+                  - img [ref=e89]
+                  - generic [ref=e94]: Raw Data
+              - link "Characterization" [ref=e95] [cursor=pointer]:
+                - /url: /characterization
+                - generic [ref=e96]:
+                  - img [ref=e98]
+                  - generic [ref=e104]: Characterization
+          - generic [ref=e105]:
+            - paragraph [ref=e107]: Circuit Simulation
+            - navigation [ref=e108]:
+              - link "Schemas" [ref=e109] [cursor=pointer]:
+                - /url: /schemas
+                - generic [ref=e110]:
+                  - img [ref=e112]
+                  - generic [ref=e116]: Schemas
+              - link "Schemdraw" [ref=e117] [cursor=pointer]:
+                - /url: /circuit-schemdraw
+                - generic [ref=e118]:
+                  - img [ref=e120]
+                  - generic [ref=e127]: Schemdraw
+              - link "Simulation" [ref=e128] [cursor=pointer]:
+                - /url: /circuit-simulation
+                - generic [ref=e129]:
+                  - img [ref=e131]
+                  - generic [ref=e135]: Simulation
+      - main [ref=e137]:
+        - generic [ref=e139]:
+          - generic [ref=e141]:
+            - generic [ref=e142]:
+              - paragraph [ref=e143]: Raw-Data Intake
+              - heading "Data Ingestion" [level=2] [ref=e144]
+              - paragraph [ref=e145]: Upload CSV files, review parsed results, and import them into the active dataset.
+            - generic [ref=e147]: Measurement
+          - generic [ref=e148]:
+            - generic [ref=e150]:
+              - heading "Upload-first intake" [level=3] [ref=e151]
+              - paragraph [ref=e152]: Choose the trace type, confirm the target dataset, upload one or more CSV files, and review validation before import.
+            - generic [ref=e154]:
+              - generic [ref=e155]:
+                - button "Measurement Import measured traces from CSV files into the active dataset. Selected" [pressed] [ref=e156] [cursor=pointer]:
+                  - generic [ref=e157]:
+                    - generic [ref=e158]:
+                      - paragraph [ref=e159]: Measurement
+                      - paragraph [ref=e160]: Import measured traces from CSV files into the active dataset.
+                    - generic [ref=e161]: Selected
+                - button "Layout Simulation Import EM or layout-solver traces from one or more CSV files. Choose" [ref=e162] [cursor=pointer]:
+                  - generic [ref=e163]:
+                    - generic [ref=e164]:
+                      - paragraph [ref=e165]: Layout Simulation
+                      - paragraph [ref=e166]: Import EM or layout-solver traces from one or more CSV files.
+                    - generic [ref=e167]: Choose
+              - generic [ref=e169]:
+                - img [ref=e171]
+                - generic [ref=e175]:
+                  - paragraph [ref=e176]: Target Dataset
+                  - paragraph [ref=e177]: No active dataset selected
+                  - paragraph [ref=e178]: Attach a dataset in the header before importing raw data.
+              - generic [ref=e179]:
+                - generic [ref=e180]:
+                  - generic [ref=e181]:
+                    - paragraph [ref=e182]: Target Design Scope
+                    - paragraph [ref=e183]: Choose an existing active scope or create a new one
+                    - paragraph [ref=e184]: Existing targets submit an explicit design_id. New-scope names are create defaults only.
+                  - generic [ref=e185]:
+                    - button "Use Existing" [ref=e186] [cursor=pointer]
+                    - button "Create New" [pressed] [ref=e187] [cursor=pointer]
+                - generic [ref=e189]:
+                  - text: New Target Design Scope Name
+                  - textbox "New Target Design Scope Name Filename-derived suggestions prefill this field, but they never select an existing scope implicitly." [ref=e190]:
+                    - /placeholder: PF6FQ Q0
+                  - paragraph [ref=e191]: Filename-derived suggestions prefill this field, but they never select an existing scope implicitly.
+              - generic [ref=e193]:
+                - generic [ref=e194]:
+                  - paragraph [ref=e195]: CSV Files
+                  - paragraph [ref=e196]: Choose CSV files
+                  - paragraph [ref=e197]: HFSS sweeps can use three columns such as L_jun [nH], Freq [GHz], and im(Yt(...)) [].
+                - button "Choose CSV files" [ref=e199] [cursor=pointer]:
+                  - img [ref=e200]
+                  - text: Choose CSV files
+                - button "Choose File" [ref=e203]
+              - generic [ref=e205]:
+                - img [ref=e207]
+                - generic [ref=e210]:
+                  - paragraph [ref=e212]: Validation & Preprocess
+                  - paragraph [ref=e213]: Upload CSV files to validate them against the fixed intake contract.
+              - generic [ref=e214]: Attach an active dataset in the shell before importing raw data.
+              - button "Import Measurement CSVs" [disabled] [ref=e215]:
+                - img [ref=e216]
+                - text: Import Measurement CSVs
+  - button "Open Next.js Dev Tools" [ref=e224] [cursor=pointer]:
+    - img [ref=e225]
+  - alert [ref=e228]

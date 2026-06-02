@@ -12,21 +12,54 @@
 - **Backend**:
     - FastAPI
     - Pydantic
-    - SQLModel / SQLAlchemy
-    - Rich-compatible logging
-- **CLI**:
-    - Typer
-    - must remain first-class, not a second-tier wrapper
-- **Scientific core**:
-    - JosephsonCircuits.jl via juliacall
-    - plotly + schemdraw for visualization output
+    - Pydantic Settings
+    - SQLAlchemy
+    - Alembic
+    - NumPy
+    - Zarr
+    - fsspec
+- **Julia Core**:
+    - `core/julia/SuperconductingCircuitsCore/`
+    - reusable circuit construction, simulation, sweep, and analysis library
+- **Julia Runner**:
+    - `core/julia/SuperconductingCircuitsRunner/`
+    - HTTP.jl
+    - JSON3.jl
+    - StructTypes.jl
+    - Zarr.jl
+    - DataFrames.jl
+- **Local runtime backbone**:
+    - frontend
+    - Python Backend
+    - Julia Runner
+    - no separate queue service
+    - Local Mode is not a shell-only product mode; UI-only shell previews are developer tools, not product runtime modes.
+- **Interface boundaries**:
+    - Pluto Notebook is the direct Julia Core research interface.
+    - Backend task submission is outside the Pluto Notebook role.
+    - Python Notebook is a programmable data-analysis and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts.
+    - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
+    - Application Simulation Workbench and Analysis Workbench are first-class and submit persisted async tasks through Python Backend and Julia Runner.
+    - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
+    - Julia Runner owns async compute execution and local Zarr staging.
+- **Scripts**:
+    - `scripts/dev/`
+    - `scripts/build/`
+    - `scripts/test/`
+    - `scripts/maintenance/`
+    - no active command-line product surface
+- **Topology**:
+    - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
+    - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
 - **Quality tools**:
     - Ruff
     - BasedPyright
     - pytest
     - Vitest / Playwright when frontend exists
 - **Storage direction**:
-    - metadata DB: SQLite now, PostgreSQL target
-    - numeric trace store: Zarr
-- New UI work should target Next.js, not NiceGUI.
-- Desktop packaging should use Electron around the frontend instead of reviving NiceGUI-native desktop assumptions.
+    - metadata DB: SQLite local, PostgreSQL target
+    - metadata DB schema versioning: Alembic
+    - Runner staging: local filesystem Zarr v2
+    - official TraceStore: Python Backend-managed Zarr
+- New UI work should target Next.js, not the legacy UI layer.
+- Desktop packaging should use Electron around frontend + Python Backend + Julia Runner.

@@ -4,12 +4,10 @@
 {% set is_en = config.theme.language == "en" %}
 {% set home_url = "" | url %}
 {% set about_url = "about/" | url %}
-{% set product_capabilities_url = "about/product-capabilities/" | url %}
 {% set docs_url = "how-to/" | url %}
 {% set p = page.url | d("", true) %}
 {% set is_home = (p == "") %}
-{% set is_product_capabilities = ("about/product-capabilities/" in p) %}
-{% set is_about = ("about/" in p) and (not is_product_capabilities) %}
+{% set is_about = ("about/" in p) %}
 <nav class="md-tabs sct-marketing-tabs" aria-label="Tabs" data-md-component="tabs">
   <div class="md-grid">
     <ul class="md-tabs__list">
@@ -18,9 +16,6 @@
       </li>
       <li class="md-tabs__item{% if is_about %} md-tabs__item--active{% endif %}">
         <a href="{{ about_url }}" class="md-tabs__link">{% if is_en %}About{% else %}介紹{% endif %}</a>
-      </li>
-      <li class="md-tabs__item{% if is_product_capabilities %} md-tabs__item--active{% endif %}">
-        <a href="{{ product_capabilities_url }}" class="md-tabs__link">{% if is_en %}Product Capabilities{% else %}產品能力{% endif %}</a>
       </li>
       <li class="md-tabs__item">
         <a href="{{ docs_url }}" class="md-tabs__link">{% if is_en %}Documentation{% else %}技術文件{% endif %}</a>

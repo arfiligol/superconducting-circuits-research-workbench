@@ -11,9 +11,9 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: Index for build, lint, test, and CI rules.
-version: v1.0.0
-last_updated: 2026-03-11
-updated_by: docs-team
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Execution & Verification
@@ -33,5 +33,5 @@ If the current scripts lag behind the target rules, that is a migration task, no
 ## Execution & Verification
 - This section defines the workspace baseline for build, lint, type-check, test, and CI.
 - When changing code, run the checks that are directly relevant to the touched area first.
-- The rewrite-branch target baseline spans frontend, backend, CLI, and docs.
+- The rewrite-branch target baseline spans app/frontend, app/backend, Julia Runner, desktop, and docs.
 ```

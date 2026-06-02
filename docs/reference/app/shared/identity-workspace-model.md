@@ -22,7 +22,7 @@ updated_by: codex
 
 !!! info "App-level ownership"
     這份文件回答的是 App collaboration model。
-    它同時服務 shared header、shared task queue、backend session surface 與 resource visibility。
+    它同時服務 shared header、shared task execution、backend session surface 與 resource visibility。
 
 !!! warning "Session owns active context"
     `Session` 是 active workspace、active dataset、user summary 與 capability exposure 的 canonical owner。
@@ -75,8 +75,8 @@ updated_by: codex
     |---|---|
     | Resources belong to one workspace | dataset / schema / task / result 只掛一個 `workspace_id` |
     | Role is workspace-scoped | 同一 user 在不同 workspace 可有不同 role |
-    | Visibility is backend-enforced | queue visibility 不能只靠前端過濾 |
-    | Cross-workspace sharing is explicit | 跨 workspace 應用 export/import 或 future publish/copy，不做多重掛載 |
+    | Visibility is backend-enforced | task visibility 不能只靠前端過濾 |
+    | Cross-workspace sharing is explicit | 跨 workspace 應用 export/import 或 publish/copy with lineage，不做多重掛載 |
 
 ## Active Context Ordering
 
@@ -90,7 +90,7 @@ updated_by: codex
 | page-local filters / selections | page-local UI state | 最低 |
 
 !!! warning "Runtime Mode Rebinds Everything Below It"
-    一旦 `Runtime Mode` 切換，`Active Workspace`、`Active Dataset`、queue visibility、attached task validity 與 capability summary 都必須重新驗證。
+    一旦 `Runtime Mode` 切換，`Active Workspace`、`Active Dataset`、task visibility、attached task validity 與 capability summary 都必須重新驗證。
 
 ## Relationship Model
 
@@ -105,7 +105,7 @@ flowchart LR
     Session --> Capabilities["Capability Flags"]
     Workspace --> TaskVisibility["Task Visibility"]
     Workspace --> ResourceScope["Resource Ownership"]
-    Capabilities --> Shell["Header / User Menu / Queue Controls"]
+    Capabilities --> Shell["Header / User Menu / Task Controls"]
 ```
 
 ## Mode Switch Sequence
@@ -114,9 +114,9 @@ flowchart LR
 |---|---|
 | 1. User picks mode | 從 app-level mode switcher 選 `local` 或 `online` |
 | 2. Frontend checks unsafe local state | dirty draft、attached task 或 destructive context 先要求確認 |
-| 3. Old session is invalidated | 舊 mode 的 user summary、workspace、dataset、queue cache 失效 |
+| 3. Old session is invalidated | 舊 mode 的 user summary、workspace、dataset、task cache 失效 |
 | 4. Backend establishes new mode session | local mode 建立 `Local Space` session；online mode 建立或要求新的 auth session，不保留先前 remote login |
-| 5. Shell context is rebuilt | Header、queue、page context 改用新 mode 的 session envelope |
+| 5. Shell context is rebuilt | Header、task execution、page context 改用新 mode 的 session envelope |
 
 ## Workspace Switch Sequence
 
@@ -126,9 +126,9 @@ flowchart LR
 | 2. Frontend checks unsafe local state | 若目前頁存在 dirty draft 或 destructive context change，先顯示確認 |
 | 3. Backend mutates session | active workspace 變更為新值 |
 | 4. Session rebinds active dataset | 依 dataset activation 規則決定 `preserved`、`rebound` 或 `cleared` |
-| 5. Queue visibility refreshes | Header queue 改為新 workspace 中可見的 tasks |
+| 5. Task visibility refreshes | Header task execution summary 改為新 workspace 中可見的 tasks |
 | 6. Attached task is revalidated | 若 task 不再可見，必須解除附著並提示 |
-| 7. Pages consume new shell context | Dashboard / Raw Data / Simulation / Characterization 看到同一組新 context |
+| 7. Pages consume new shell context | Dashboard / Raw Data / Simulation Workbench / Analysis Workbench 看到同一組新 context |
 
 ## Active Dataset Activation
 

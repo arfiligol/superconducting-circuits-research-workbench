@@ -1,10 +1,10 @@
 ## Logging
 - **No `print()` in `core/`**: Use `logging` module only.
-- **`print()` allowed ONLY in `scripts/`**: For final CLI output.
+- **`print()` allowed ONLY in `scripts/`**: For final developer-facing helper output.
 - **Setup**:
     - Import: `import logging; logger = logging.getLogger(__name__)`
-    - Configure in CLI: `from core.shared.logging import setup_logging`
-    - **Handler**: Use `RichHandler` for colored output in CLI.
+    - Configure in scripts when useful: `from core.shared.logging import setup_logging`
+    - **Handler**: Use `RichHandler` only as developer-facing script output, not as a product CLI contract.
 - **Levels**:
     - `logger.debug()`: Development details.
     - `logger.info()`: Normal flow (e.g., "Processing file...").

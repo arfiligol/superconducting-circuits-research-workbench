@@ -1,0 +1,30 @@
+{
+  "f01_ghz": 4.9960444,
+  "residual_rms": 3.314957670938282e-17,
+  "fit_window_ghz": [
+    3.0,
+    5.0
+  ],
+  "selected_trace_ids": [
+    "trace_task_484_y-dm-in-l-jun-10-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_0_z0_50",
+    "trace_task_484_y-dm-in-l-jun-11-052632-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_1_z0_50",
+    "trace_task_484_y-dm-in-l-jun-12-105263-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_2_z0_50",
+    "trace_task_484_y-dm-in-l-jun-13-157895-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_3_z0_50",
+    "trace_task_484_y-dm-in-l-jun-14-210526-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_4_z0_50",
+    "trace_task_484_y-dm-in-l-jun-15-263158-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_5_z0_50",
+    "trace_task_484_y-dm-in-l-jun-16-315789-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_6_z0_50",
+    "trace_task_484_y-dm-in-l-jun-17-368421-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_7_z0_50",
+    "trace_task_484_y-dm-in-l-jun-18-421053-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_8_z0_50",
+    "trace_task_484_y-dm-in-l-jun-19-473684-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_9_z0_50",
+    "trace_task_484_y-dm-in-l-jun-20-526316-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_10_z0_50",
+    "trace_task_484_y-dm-in-l-jun-21-578947-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_11_z0_50",
+    "trace_task_484_y-dm-in-l-jun-22-631579-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_12_z0_50",
+    "trace_task_484_y-dm-in-l-jun-23-684211-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_13_z0_50",
+    "trace_task_484_y-dm-in-l-jun-24-736842-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_14_z0_50",
+    "trace_task_484_y-dm-in-l-jun-25-789474-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_15_z0_50",
+    "trace_task_484_y-dm-in-l-jun-26-842105-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_16_z0_50",
+    "trace_task_484_y-dm-in-l-jun-27-894737-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_17_z0_50",
+    "trace_task_484_y-dm-in-l-jun-28-947368-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_18_z0_50",
+    "trace_task_484_y-dm-in-l-jun-30-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_19_z0_50"
+  ]
+}

@@ -11,9 +11,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Characterization analysis run、artifact-first result view、derived parameter 與 tagged metric persistence contract
-version: v1.0.0
-last_updated: 2026-03-14
+scope: Characterization analysis run、artifact-first result view、design-scope re-parenting、derived parameter 與 tagged metric persistence contract
+version: v1.1.0
+last_updated: 2026-04-30
 updated_by: codex
 title: Analysis Result
 ---
@@ -53,6 +53,8 @@ title: Analysis Result
 | `status` | required | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |
 | `input_trace_ids` | required | explicit selected trace ids |
 | `input_batch_ids` | optional | source batch refs |
+| `input_collection_payload` | optional | backend-derived characterization input collection snapshot |
+| `input_result_refs` | optional | upstream analysis result refs for pipeline-style downstream analyses |
 | `config_payload` | required | analysis configuration snapshot |
 | `artifact_manifest` | optional | result artifact summary |
 | `created_at` | required | creation time |
@@ -122,6 +124,17 @@ title: Analysis Result
 | Result inherits task visibility | result / artifact 不得比 source task 更公開 |
 | Run history is persisted | refresh 後必須能只靠 persisted rows 重建 |
 | No implicit rerun | artifact payload query 不得觸發 analysis 重跑 |
+| Merge re-parenting | DesignScope merge 可由 backend re-parent run / artifact / derived-parameter rows 到 target `design_id`；run/artifact identities 不因 re-parenting 改變 |
+
+## Design Scope Lifecycle Rules
+
+| Concern | Rule |
+| --- | --- |
+| Active target | new analysis runs must bind an active `DesignScope` in the active dataset |
+| Archived source scope | archived scopes may remain visible in run history, but are not normal new-run targets |
+| Merge behavior | backend-owned merge re-parents `AnalysisRunRecord`、`ResultArtifactRecord` 與 `DerivedParameterRecord` from source design scope to target design scope |
+| Source redirect | stale links using source `design_id` should resolve through the DesignScope redirect contract before result history is queried |
+| Artifact payload | result payload locators remain backend-owned; merge must not require frontend to parse or rewrite payload refs |
 
 ## Result View Contract
 
@@ -166,5 +179,5 @@ title: Analysis Result
 ## Related
 
 - [Dataset / Design / Trace Schema](dataset-record.md)
-- [Characterization](../app/frontend/research-workflow/characterization.md)
+- [Characterization](../app/frontend/removed-workflows/characterization.md)
 - [Characterization Results](../app/backend/characterization-results.md)

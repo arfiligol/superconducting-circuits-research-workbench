@@ -10,16 +10,16 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: current platform 的 frontend、backend、desktop、CLI、docs 與 repo-root orchestration 常用指令。
-version: v2.4.0
-last_updated: 2026-03-21
+scope: current platform 的 app、backend、Julia Runner、desktop、docs 與 repo-root orchestration 常用指令。
+version: v3.1.0
+last_updated: 2026-05-28
 updated_by: codex
 ---
 
 # Build Commands
 
 本文件列出 current platform 目前可用的 repo-root orchestration 與 workspace 指令。
-platform foundation 必須使用獨立於 legacy UI runtime 的 entrypoints。
+platform foundation 必須使用 `app/` layout、Python Backend、Julia Runner 與 local filesystem TraceStore，不再啟動 separate queue service 或 user-facing command workflow。
 
 !!! info "How to use this page"
     先決定你是在跑 `repo baseline`、單一 workspace、還是 docs build。
@@ -32,7 +32,7 @@ platform foundation 必須使用獨立於 legacy UI runtime 的 entrypoints。
 | 初次進 repo 或補齊基礎依賴 | `Current Baseline` |
 | 要啟動 repo 層級協調流程 | `Repo Root Orchestration` |
 | 只改單一 workspace | `Workspace Commands` |
-| 要驗證 queue-backed local worker topology | `Local Worker Runtime Runbook` |
+| 要驗證 Runner-backed local runtime topology | `Local Runner Runtime Runbook` |
 | 只改 docs / nav / frontmatter | `Docs` |
 
 ## Current Baseline
@@ -41,7 +41,12 @@ platform foundation 必須使用獨立於 legacy UI runtime 的 entrypoints。
 
 ```bash
 uv sync
-julia --project=. -e 'using Pkg; Pkg.instantiate()'
+cd app/backend && uv sync
+npm install --prefix app/frontend
+npm install --prefix app/desktop
+julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'
+julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'
 ./scripts/prepare_docs_locales.sh
 ```
 
@@ -50,11 +55,8 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 !!! info "Use these when you want repo-level orchestration"
 
 ```bash
-npm run platform:install
-npm run platform:check
-npm run platform:build
-npm run platform:dev
-npm run platform:stop
+npm run app:dev
+npm run app:stop
 ```
 
 ## Workspace Commands
@@ -62,61 +64,71 @@ npm run platform:stop
 === "Frontend"
 
     ```bash
-    npm install --prefix frontend
-    npm run dev --prefix frontend
-    npm run test --prefix frontend
-    npm run lint --prefix frontend
-    npm run typecheck --prefix frontend
-    npm run build --prefix frontend
+    npm install --prefix app/frontend
+    npm run dev --prefix app/frontend
+    npm run test --prefix app/frontend
+    npm run lint --prefix app/frontend
+    npm run typecheck --prefix app/frontend
+    npm run build --prefix app/frontend
     ```
 
 === "Backend"
 
     ```bash
-    cd backend && uv sync
-    cd backend && uv run pytest
-    cd backend && uv run uvicorn src.app.main:app --reload --port 8000
+    cd app/backend && uv sync
+    cd app/backend && uv run pytest
+    cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000
     ```
 
-    `backend/` workspace 必須能單獨完成這些命令，不可依賴 repo-root `uv sync` 先偷裝 shared-core 依賴。
+    `app/backend/` workspace 必須能單獨完成這些命令，不可依賴 repo-root `uv sync` 先偷裝 runtime 依賴。
 
 === "Desktop"
 
     ```bash
-    npm install --prefix desktop
-    npm run dev --prefix desktop
-    npm run lint --prefix desktop
-    npm run build --prefix desktop
+    npm install --prefix app/desktop
+    npm run dev --prefix app/desktop
+    npm run lint --prefix app/desktop
+    npm run build --prefix app/desktop
     ```
 
-=== "CLI"
+=== "Julia Core"
 
     ```bash
-    uv run sc --help
+    julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
     ```
 
-## Local Worker Runtime Runbook
+=== "Julia Visualizer"
 
-!!! important "Queue-backed local runtime is the verification baseline"
-    worker isolation 驗證的正式 baseline 不是 app-local thread execution。
-    你必須同時驗證 Redis、`sc-app`、`sc-worker-simulation`、`sc-worker-characterization` 是分離進程。
+    ```bash
+    julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
+    ```
+
+=== "Julia Runner"
+
+    ```bash
+    julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+    ```
+
+## Local Runner Runtime Runbook
+
+!!! important "Runner-backed local runtime is the verification baseline"
+    compute isolation 驗證的正式 baseline 不是 app-local thread execution。
+    你必須同時驗證 frontend、Python Backend、Julia Runner 是分離進程，且不需要 separate queue service。
 
 ### Bring-up
 
 | Step | Command / expectation |
 | --- | --- |
-| Redis requirement | 準備一個可連線的 local Redis，並設定 `SC_RQ_REDIS_URL`（preferred）或 `SC_REDIS_URL` |
-| app process | `uv run sc-app` |
-| simulation lane worker | `uv run sc-worker-simulation` |
-| characterization lane worker | `uv run sc-worker-characterization` |
-| optional repo helper | `npm run platform:dev` 或 `./scripts/platform_start.sh` 目前可協助拉起 frontend/backend shell，但不取代 Redis + worker bring-up |
+| frontend process | `npm run dev --prefix app/frontend` |
+| backend process | `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000` |
+| runner process | `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'` |
+| optional repo helper | `npm run app:dev` or `./scripts/dev/start_app.sh` starts frontend、backend、runner |
 
 !!! example "Minimal local runtime bring-up"
     ```bash
-    export SC_RQ_REDIS_URL=redis://127.0.0.1:6379/0
-    uv run sc-app
-    uv run sc-worker-simulation
-    uv run sc-worker-characterization
+    npm run dev --prefix app/frontend
+    cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000
+    julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'
     ```
 
 ### Verification
@@ -125,22 +137,23 @@ npm run platform:stop
 | --- | --- |
 | app health | `curl --fail http://127.0.0.1:8000/health` |
 | session bootstrap | `curl --fail http://127.0.0.1:8000/session` |
-| queue read model | `curl --fail 'http://127.0.0.1:8000/tasks?scope_filter=local&status_filter=active'` |
-| task submit path | 透過 app workflow 或 `/tasks` submit mutation 建立一筆 local task，確認 queue row 與 detail 都以 `task_id` 回應 |
-| worker summary | 驗證 queue response 的 `worker_summary[]` 同時回傳 simulation / characterization lane summary |
-| process separation | 使用 `lsof -ti tcp:8000`、`pgrep -f sc-worker-simulation`、`pgrep -f sc-worker-characterization` 或等價工具確認 app 與兩個 worker 不是同一個 PID |
+| task read model | `curl --fail 'http://127.0.0.1:8000/tasks?status_filter=active'` |
+| task submit path | 透過 app workflow 或 `/tasks` submit mutation 建立一筆 local task，確認 task row 與 detail 都以 `task_id` 回應 |
+| runner claim path | `POST /runner/v1/tasks/claim` can claim one queued task |
+| publication path | completing a real Runner task or publisher fixture validates staging Zarr, validates manifest, and publishes canonical TraceStore batch |
+| process separation | 使用 `lsof -ti tcp:8000`、frontend dev-server PID、runner PID 或等價工具確認 backend、frontend、runner 不是同一個 PID |
 
 ### Teardown
 
 | Concern | Command / expectation |
 | --- | --- |
-| repo helper processes | `npm run platform:stop` 或 `./scripts/platform_stop.sh`（目前只處理 frontend/backend helper processes） |
-| worker processes | 在各自 shell 中停止 `sc-worker-simulation`、`sc-worker-characterization`，或以 PID-aware tooling 關閉 |
-| Redis | 依本機 Redis 管理方式停止；repo 目前沒有代管 Redis 的 stop script |
+| repo helper processes | `npm run app:stop` 或 `./scripts/dev/stop_app.sh` |
+| runner process | 在 runner shell 中停止，或以 PID-aware tooling 關閉 |
+| separate queue service | 不屬於 current local runtime |
 
-!!! tip "Helper scripts are partial helpers"
-    `scripts/platform_start.sh`、`scripts/platform_stop.sh`、`scripts/platform_check.sh` 目前主要覆蓋 frontend/backend shell baseline。
-    若你要驗證 isolated worker topology，仍必須額外確認 Redis 與兩條 worker lanes。
+!!! tip "Helper scripts manage app processes only"
+    `scripts/dev/start_app.sh` 與 `scripts/dev/stop_app.sh` 管理 frontend、backend 與 runner。
+    Separate queue service 不再是本地 runtime prerequisite。
 
 ## Docs
 
@@ -164,34 +177,32 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 ```markdown
 ## Run / Build Commands
 - **Repo-root orchestration**:
-    - `npm run platform:install`
-    - `npm run platform:check`
-    - `npm run platform:build`
-    - `npm run platform:dev`
-    - `npm run platform:stop`
+    - `npm run app:dev`
+    - `npm run app:stop`
 - **Python install**: `uv sync`
-- **Julia install**: `julia --project=. -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Visualizer install**: `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
 - **Frontend**:
-    - `npm install --prefix frontend`
-    - `npm run dev --prefix frontend`
-    - `npm run test --prefix frontend`
-    - `npm run lint --prefix frontend`
-    - `npm run typecheck --prefix frontend`
-    - `npm run build --prefix frontend`
+    - `npm install --prefix app/frontend`
+    - `npm run dev --prefix app/frontend`
+    - `npm run test --prefix app/frontend`
+    - `npm run lint --prefix app/frontend`
+    - `npm run typecheck --prefix app/frontend`
+    - `npm run build --prefix app/frontend`
 - **Backend**:
-    - `cd backend && uv sync`
-    - `cd backend && uv run pytest`
-    - `export SC_RQ_REDIS_URL=redis://127.0.0.1:6379/0`
-    - `uv run sc-app`
-    - `uv run sc-worker-simulation`
-    - `uv run sc-worker-characterization`
-    - `cd backend && uv run uvicorn src.app.main:app --reload --port 8000` (`uvicorn` 只適用於 backend-only API debug，不是 isolated worker topology 驗證 baseline)
+    - `cd app/backend && uv sync`
+    - `cd app/backend && uv run pytest`
+    - `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000`
+- **Julia Visualizer**:
+    - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
+- **Julia Runner**:
+    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Desktop**:
-    - `npm install --prefix desktop`
-    - `npm run dev --prefix desktop`
-    - `npm run lint --prefix desktop`
-    - `npm run build --prefix desktop`
-- **CLI**: `uv run sc --help`
+    - `npm install --prefix app/desktop`
+    - `npm run dev --prefix app/desktop`
+    - `npm run lint --prefix app/desktop`
+    - `npm run build --prefix app/desktop`
 - **Docs**:
     - `uv run python scripts/check_docs_nav_routes.py --check-source`
     - `./scripts/prepare_docs_locales.sh`

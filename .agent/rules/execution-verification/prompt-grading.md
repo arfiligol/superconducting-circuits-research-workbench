@@ -1,25 +1,8 @@
-## Prompt Grading
-- Integrator MUST assign a Prompt Level before issuing any Contributor Prompt.
-- Prompt Levels:
-    - `L1 Fixup`: one bug / one contract mismatch / one runtime issue.
-    - `L2 Slice`: one coherent workflow or command/persistence slice.
-    - `L3 Milestone`: one clear milestone within a single workstream.
-    - `L4 Phase Push`: one phase-level push, only when contracts and gates are stable.
-- Default rule:
-    - choose the smallest level that can complete a meaningful delivery.
-- Escalation rule:
-    - if repeated small prompts are slowing down a stable workstream, escalate from `L1`/`L2` to `L2`/`L3`.
-- Safety rule:
-    - if shared boundaries are unstable or recent integration revealed major issues, downgrade prompt size.
-- Integrator sequencing rule:
-    - do not issue the next prompt for a workstream until the previous report has been reviewed, integrated, and verified.
-- Required prompt fields:
-    - Task ID / Topic
-    - Prompt Level
-    - Current State
-    - Goal
-    - Allowed Files
-    - Non-Goals
-    - Implementation Requirements
-    - Verification
-    - Handoff
+## Task Scope Sizing
+- Use L1/L2/L3/L4 as lightweight task-size guidance, not mandatory dispatch ceremony.
+- Choose the smallest level that completes a meaningful delivery.
+- Direct implementation is allowed when the request is clear and SoT is known.
+- Write a short plan only when it reduces risk or the user asks for one.
+- Dedicated branches/worktrees, `Allowed Area`, `Do Not Touch`, and subagent work lane assignments are optional tools.
+- Review outcomes against SoT, actual behavior, and validation results rather than prompt literalism.
+- For user-visible frontend changes, include browser-based verification with screenshot or equivalent visual evidence when practical.

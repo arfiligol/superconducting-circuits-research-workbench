@@ -8,11 +8,11 @@ tags:
   - audience/team
   - sot/true
   - topic/app-reference
-status: draft
+status: stable
 owner: docs-team
 audience: team
 scope: 同一個 App 的 Local Mode / Online Mode、frontend/backend mode pairing 與 mode-switch isolation contract
-version: v0.5.0
+version: v1.0.0
 last_updated: 2026-03-27
 updated_by: codex
 ---
@@ -28,7 +28,7 @@ updated_by: codex
 
 !!! warning "Mode Switch Must Rebind Shell Context"
     mode switch 不是單純換一個 label。
-    它必須重新繫結 session、workspace、dataset、queue visibility 與 user summary，避免 local / online 內容混用。
+    它必須重新繫結 session、workspace、dataset、task visibility 與 user summary，避免 local / online 內容混用。
 
 ## Mode Pairing
 
@@ -42,19 +42,23 @@ updated_by: codex
 
 | Mode | Required meaning |
 |---|---|
-| `local` | frontend 連到本機 backend；資料與 task runtime 都在本地；不需要 Authentication / Authorization；shell context 固定落在 `Local Space` |
+| `local` | managed local app runtime；frontend 連到本機 Python Backend，Backend 協調 Julia Runner；資料與 task runtime 都在本地；不需要 Authentication / Authorization；shell context 固定落在 `Local Space` |
 | `online` | frontend 連到遠端 server；需要 Authentication / Authorization；支援 workspace collaboration |
 
 ## Desktop Runtime Profile Overlay
 
 | Desktop runtime profile | Paired app mode | Required meaning |
 |---|---|---|
-| `local_managed` | `local` | desktop shell 管理本地 Redis、`sc-app` 與 worker sidecars；shell 自身不是 solver host |
+| `local_managed` | `local` | desktop shell 管理本地 frontend、Python Backend 與 Julia Runner；shell 自身不是 solver host |
 | `remote_server` | `online` | desktop shell 只連遠端 server target；不得啟動本地 heavy runtime 作為隱性依賴 |
 
 !!! info "Profile and mode are different terms"
     `local_managed` / `remote_server` 只用於 desktop packaging 與 runtime orchestration。
     正式 app mode vocabulary 仍是 `local` / `online`。
+
+!!! warning "No product local preview mode"
+    Local Mode 的產品 baseline 是 frontend + Python Backend + Julia Runner。
+    UI-only shell preview may exist for developer debugging, but it is not a product runtime mode and must not be documented as Local Mode behavior.
 
 ## Shared Product Rules
 
@@ -63,7 +67,7 @@ updated_by: codex
 | Same shell vocabulary | Header、Sidebar、workflow pages 盡量維持同一套 UI shell，而不是做兩套產品外觀 |
 | Same backend surface family | local 與 online 優先共用同一組 backend authority surfaces；差異主要在 auth、collaboration 與 connection target |
 | Mode-aware session | frontend 不自行拼湊 local / online state；session envelope 仍由 backend authority 擁有 |
-| No mixed context | 任何 mode switch 都必須清掉不再有效的 session / task / queue / dataset caches |
+| No mixed context | 任何 mode switch 都必須清掉不再有效的 session / task / dataset caches |
 
 ## Local Mode Baseline
 
@@ -75,7 +79,8 @@ updated_by: codex
 | Workspace model | 使用單一 implicit workspace `Local Space`，維持與 app shell 相容的 context shape |
 | Visibility model | persisted resource 使用 `local` scope，不分 `private` / `workspace` |
 | Data | 以本地 datasets、results、tasks、artifacts 為主 |
-| Queue | 顯示 local runtime tasks，不承擔 shared workspace visibility semantics |
+| Task Execution | 顯示 local runtime tasks，不承擔 shared workspace visibility semantics |
+| Runtime stack | desktop supervisor starts or reconnects to local frontend, Python Backend, and Julia Runner |
 | Collaboration | invitation、membership、shared task governance 不適用 |
 
 ## Online Mode Baseline
@@ -87,7 +92,7 @@ updated_by: codex
 | User identity | 使用 authenticated user summary |
 | Workspace model | multi-workspace membership + single active workspace |
 | Data | 以 remote server authority 為準 |
-| Queue | 顯示 active workspace 中可見的 shared tasks |
+| Task Execution | 顯示 active workspace 中可見的 shared tasks |
 | Collaboration | invite、join、leave、membership management 生效 |
 
 ## Session Shape Across Modes
@@ -110,11 +115,11 @@ updated_by: codex
 | Step | Required behavior |
 |---|---|
 | 1. User selects mode | 可從 app-level mode switcher 選 `Local Mode` 或 `Online Mode` |
-| 2. App freezes unsafe context | 若目前存在 dirty draft、attached task 或 destructive context，先要求確認 |
-| 3. Session is invalidated | 舊 mode 的 session envelope、capability cache、queue cache、attached task refs 與 remote auth continuity 全部失效 |
+| 2. App freezes unsafe context | 若目前存在 unsaved page changes、attached task 或 destructive context，先要求確認 |
+| 3. Session is invalidated | 舊 mode 的 session envelope、capability cache、task cache、attached task refs 與 remote auth continuity 全部失效 |
 | 4. New connection target is bound | local mode 指向本機 backend；online mode 指向 validated active server target |
 | 5. New session is established | local mode 直接回 local session；切到 online mode 時一律重建 online session，並重新進入 auth entry |
-| 6. Shell context is rebuilt | active workspace、dataset、queue 與 user summary 用新 mode 重新計算 |
+| 6. Shell context is rebuilt | active workspace、dataset、task visibility 與 user summary 用新 mode 重新計算 |
 
 !!! warning "Mode switch does not preserve remote login"
     使用者從 `Online Mode` 切到 `Local Mode`，再切回 `Online Mode` 時，不應自動恢復先前的遠端登入狀態。
@@ -151,7 +156,6 @@ updated_by: codex
 | `startup_behavior` | `restore_last_mode`、`always_local`、`always_online`、`ask_on_launch` |
 | `last_runtime_mode` | 最近一次成功建立的 `local` / `online` mode |
 | `last_online_target` | 最近一次成功使用的 online target summary |
-| `auto_start_local_runtime` | 進入 local desktop profile 時是否自動啟動本地 sidecars |
 
 | Rule | Required behavior |
 |---|---|
@@ -159,7 +163,7 @@ updated_by: codex
 | Restoring mode is allowed | desktop shell 可在啟動時依 `startup_behavior` 自動進入上次 mode |
 | Restore does not imply auth reuse | 回到 `online` mode 不等於無條件恢復先前 authenticated session |
 | Remote validation first | 若要 restore `online` mode，必須先驗證 target reachability / compatibility，再建立新的 online session shell |
-| Local shell first | restore `local` mode 時，desktop shell 應可先顯示，再由 supervisor 背景啟動本地 runtime |
+| Managed local restore | restore `local` mode 時，desktop supervisor starts or reconnects to local frontend, Python Backend, and Julia Runner |
 
 ## Server Target Summary Shape
 
@@ -189,7 +193,8 @@ updated_by: codex
 | `startup_behavior = restore_last_mode` and last mode = `online` | shell 先還原 target summary，再做 target validation；驗證成功後才建立 online session shell |
 | remembered online target invalid | 保持 shell 可互動，允許 Retry、改 target，或切回 `Local Mode` |
 | `startup_behavior = ask_on_launch` | shell 啟動後要求使用者選擇 `Local Mode` 或 `Online Mode` |
-| `auto_start_local_runtime = false` | shell 可先進入 local shell context，但本地 runtime 啟動需由使用者明確觸發 |
+
+When restoring Local Mode, the desktop supervisor starts or reconnects to the local frontend, Python Backend, and Julia Runner. If a component fails, the shell must show recoverable runtime status rather than silently entering a partial Local Mode.
 
 !!! tip "Connection target is parallel to Local Space"
     `Local Space` 解決的是 local mode 的 workspace shape。
@@ -234,24 +239,23 @@ updated_by: codex
 | Session cache | local / online 不得共用同一份 session cache |
 | Active dataset | 切 mode 後不得沿用舊 mode 的 dataset identity |
 | Attached task | 切 mode 後必須解除附著，除非新 mode 中仍能重新解析相同 persisted task |
-| Queue rows | local queue 與 online queue 不得混合顯示 |
+| Task rows | local task rows 與 online task rows 不得混合顯示 |
 | Error messaging | debug / auth / capability errors 必須對應目前 active mode，不得顯示另一個 mode 的殘留訊息 |
 
 ## Task Continuity Rules
 
 | Situation | Required behavior |
 |---|---|
-| switch from online to local | remote tasks 繼續在 server 端執行；app 只解除目前 online queue / attached-task context |
-| switch from local to online | local tasks 不被搬移到 server；online mode 重新建立自己的 queue context |
-| return to online mode | 重新抓取 remote queue 與 worker summary；必要時讓使用者重新 attach |
-| closing `sc-app` only in local mode | 若 local workers 仍在，task 應繼續執行；重開 app 後可透過 queue recovery / reattach 重新觀察 |
-| stopping the whole local runtime stack | 若 `sc-app` 與 local workers 一起停止，local tasks 才可能終止或進入 reconcile-required state |
-| app close in online mode | remote tasks 繼續由 server runtime 管理；重新打開 app 後再透過 queue recovery 取得狀態 |
+| switch from online to local | remote tasks 繼續在 server 端執行；app 只解除目前 online task / attached-task context |
+| switch from local to online | local tasks 不被搬移到 server；online mode 重新建立自己的 task context |
+| return to online mode | 重新抓取 remote task summary；必要時讓使用者重新 attach |
+| closing Electron shell only in local mode | 若 Python Backend 與 Julia Runner 仍在，task 可繼續由 runner lifecycle 收斂；重開 shell 後可重新觀察 |
+| stopping the whole local runtime stack | 若 frontend、Python Backend 與 Julia Runner 一起停止，local tasks 才可能終止或進入 reconcile-required state |
+| app close in online mode | remote tasks 繼續由 server runtime 管理；重新打開 app 後再透過 task recovery 取得狀態 |
 
-!!! info "Worker summary uses liveness vocabulary"
-    local / online task surfaces 若顯示 worker summary，應使用 `idle / running / draining / degraded / offline`。
-    這組詞回答的是 worker liveness，不是 task lifecycle。
-    `idle` 代表 worker alive and available；不得被 mode-aware shell 語意誤讀成 `offline`。
+!!! info "Runner runtime summary uses liveness vocabulary"
+    local / online task surfaces 若顯示 runner summary，應把 runner liveness 與 task lifecycle 分開。
+    `idle` 代表 runner alive and available；不得被 mode-aware shell 語意誤讀成 `offline`。
 
 ## Data Transition Rules
 

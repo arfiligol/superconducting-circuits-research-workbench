@@ -1,15 +1,10 @@
-## Contributor Reporting Format
-- Contributors MUST use `Contributor Report v1` structure for handoff.
-- Mandatory sections:
-    - Task info
-    - Commit hashes
-    - Changed files with reason
-    - Test commands and results
-    - API touched matrix
-    - Known risks
-- If Playwright is required:
-    - MUST include scenarios, evidence paths, and pass/fail result.
-- Reporting quality rules:
-    - Lead with conclusion, then evidence.
-    - Summarize logs; do not dump long raw logs.
-    - Explicitly separate completed work vs verified work vs items needing integrator decision.
+## Work Summary Formats
+- Ordinary work does not require committed plan artifacts, committed lane reports, or review merge reports.
+- Do not create new active `Plans/` artifacts.
+- Use concise final summaries with:
+    - changed surfaces
+    - validation commands/results
+    - residual risks or skipped checks
+    - concrete follow-up when needed
+- For broad work, use Summary / Validation / Risks / Notes in the final response or PR body.
+- Long-term decisions must be promoted to `docs/reference/**`.

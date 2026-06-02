@@ -12,9 +12,9 @@ status: draft
 owner: docs-team
 audience: team
 scope: app backend surfaces 共用的 success envelope、error envelope、error code family 與 frontend display contract
-version: v0.1.0
-last_updated: 2026-03-14
-updated_by: team
+version: v0.1.1
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Response & Error Contract
@@ -22,7 +22,7 @@ updated_by: team
 本頁定義 App backend surfaces 共用的回應 envelope 與 error code contract。frontend 應以本頁作為顯示與分流錯誤的共同基線。
 
 !!! info "Shared backend contract"
-    `Session & Workspace`、`Tasks & Execution`、`Circuit Definitions`、`Schemdraw Render`、`Characterization Results` 都應回到這份 shared envelope。
+    `Session & Workspace`、`Tasks & Execution`、`Circuit Definitions`、`Schemdraw Render`、`Analysis Results` 都應回到這份 shared envelope。
 
 !!! warning "Frontend keys off codes, not messages"
     前端 UI 不應靠訊息文字比對來決定顯示行為。
@@ -54,7 +54,7 @@ updated_by: team
 
 ## Collection Meta Baseline
 
-對 list / catalog / history / queue 類回應，`meta` 應優先採用 cursor-based collection meta。
+對 list / catalog / history / task execution 類回應，`meta` 應優先採用 cursor-based collection meta。
 
 | Field | Meaning |
 |---|---|
@@ -67,7 +67,7 @@ updated_by: team
 
 !!! tip "Cursor-based by default"
     App backend 的動態列表應優先採 cursor-based pagination，而不是 `page/page_size`。
-    這特別適用於 queue、run history、audit logs，以及會持續變動的 catalog / browse surfaces。
+    這特別適用於 task execution history、run history、audit logs，以及會持續變動的 catalog / browse surfaces。
 
 ## Error Envelope
 
@@ -123,7 +123,7 @@ updated_by: team
 | Tasks | `task_not_found`, `task_not_visible`, `task_submit_denied`, `task_not_cancellable`, `task_not_terminable`, `task_already_terminal`, `task_retry_denied` |
 | Definitions | `definition_not_found`, `definition_not_visible`, `definition_source_invalid`, `definition_conflict`, `definition_delete_blocked` |
 | Schemdraw | `schemdraw_relation_invalid`, `schemdraw_linked_schema_not_visible`, `schemdraw_syntax_error`, `schemdraw_runtime_error` |
-| Characterization | `analysis_not_available`, `trace_selection_invalid`, `artifact_not_found`, `tagging_conflict` |
+| Analysis Workbench | `analysis_not_available`, `trace_selection_invalid`, `artifact_not_found`, `tagging_conflict` |
 
 ## HTTP Status Mapping Baseline
 

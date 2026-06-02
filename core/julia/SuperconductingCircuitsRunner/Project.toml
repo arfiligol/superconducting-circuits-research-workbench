@@ -1,0 +1,27 @@
+name = "SuperconductingCircuitsRunner"
+uuid = "4c7c5b9a-4e91-4bc5-a3fb-9573d29c3f0c"
+authors = ["arfiligol"]
+version = "0.1.0"
+
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+SuperconductingCircuitsCore = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+Zarr = "0a941bbe-ad1d-11e8-39d9-ab76183a1d99"
+
+[sources]
+SuperconductingCircuitsCore = {path = "../SuperconductingCircuitsCore"}
+
+[compat]
+julia = "1.11"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

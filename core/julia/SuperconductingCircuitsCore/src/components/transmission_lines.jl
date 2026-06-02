@@ -1,0 +1,806 @@
+const RLGCPerMeterValues = NamedTuple{
+    (:l_per_m_h, :c_per_m_f, :r_per_m_ohm, :g_per_m_s),
+    Tuple{Float64,Float64,Float64,Float64},
+}
+
+struct TransmissionLineSectionOverride
+    start_m::Float64
+    length_m::Float64
+    values::RLGCPerMeterValues
+    tag::Symbol
+end
+
+function TransmissionLineSectionOverride(;
+    start_m,
+    length_m,
+    l_per_m_h,
+    c_per_m_f,
+    r_per_m_ohm=0.0,
+    g_per_m_s=0.0,
+    tag=:section_override,
+)
+    start_value = Float64(start_m)
+    length_value = Float64(length_m)
+    start_value >= 0 || _validation_error("section override start_m must be non-negative.")
+    length_value > 0 || _validation_error("section override length_m must be positive.")
+    return TransmissionLineSectionOverride(
+        start_value,
+        length_value,
+        _rlgc_per_m_values(
+            l_per_m_h=Float64(l_per_m_h),
+            c_per_m_f=Float64(c_per_m_f),
+            r_per_m_ohm=Float64(r_per_m_ohm),
+            g_per_m_s=Float64(g_per_m_s),
+        ),
+        Symbol(tag),
+    )
+end
+
+struct TransmissionLineLadder
+    id::String
+    spec::RLGCSpec
+    nodes::Vector{AbstractNodeEndpoint}
+    series_inductors::Vector{SeriesInductor}
+    series_resistors::Vector{SeriesResistor}
+    shunt_capacitors::Vector{ShuntCapacitor}
+    shunt_conductance_resistors::Vector{SeriesResistor}
+    head::AbstractNodeEndpoint
+    tail::AbstractNodeEndpoint
+    section_lengths_m::Vector{Float64}
+    section_boundaries_m::Vector{Float64}
+    section_rlgc_per_m::Vector{RLGCPerMeterValues}
+    section_length_m::Float64
+    head_termination::Symbol
+    tail_termination::Symbol
+    termination_relations::Vector{AbstractCircuitRelation}
+end
+
+struct MTLCoupledRLGCSpec
+    start1_m::Float64
+    start2_m::Float64
+    length_m::Float64
+    section_length_m::Float64
+    l_matrix_per_m_h::Matrix{Float64}
+    c_matrix_per_m_f::Matrix{Float64}
+
+    function MTLCoupledRLGCSpec(
+        start1_m::Float64,
+        start2_m::Float64,
+        length_m::Float64,
+        section_length_m::Float64,
+        l_matrix_per_m_h::Matrix{Float64},
+        c_matrix_per_m_f::Matrix{Float64},
+    )
+        spec = new(start1_m, start2_m, length_m, section_length_m, l_matrix_per_m_h, c_matrix_per_m_f)
+        _validate_mtl_coupled_rlgc_spec(spec)
+        return spec
+    end
+end
+
+struct CoupledTransmissionWindow
+    id::String
+    line1::TransmissionLineLadder
+    line2::TransmissionLineLadder
+    section_range1::UnitRange{Int}
+    section_range2::UnitRange{Int}
+    capacitive_couplings::Vector{CapacitiveCoupling}
+    inductive_couplings::Vector{MutualInductiveCoupling}
+    model::MTLCoupledRLGCSpec
+end
+
+const _LADDER_GROUNDED_TERMINATIONS = Set([:short, :ground, :grounded])
+const _LADDER_OPEN_TERMINATIONS = Set([:open])
+const _LADDER_EXTERNAL_TERMINATIONS = Set([:external])
+
+function _validate_ladder_termination(value)
+    termination = Symbol(value)
+    termination in _LADDER_OPEN_TERMINATIONS || termination in _LADDER_EXTERNAL_TERMINATIONS ||
+        termination in _LADDER_GROUNDED_TERMINATIONS ||
+        _validation_error("Unsupported transmission-line termination '$(value)'. Use :external, :open, :short, or :grounded.")
+    return termination
+end
+
+function _record_external_termination_requirement!(plan::CircuitPlan, id, side::Symbol, endpoint, termination::Symbol)
+    termination in _LADDER_EXTERNAL_TERMINATIONS || return nothing
+    requirements = get!(plan.metadata, :external_terminal_requirements) do
+        Any[]
+    end
+    requirements isa Vector ||
+        _validation_error("CircuitPlan metadata[:external_terminal_requirements] is reserved for transmission-line validation.")
+    push!(
+        requirements,
+        (
+            owner=String(id),
+            side=side,
+            endpoint=endpoint,
+        ),
+    )
+    return last(requirements)
+end
+
+function _ladder_internal_node(id::AbstractString, index::Int)
+    return external_node("$(id)_node_$(index)")
+end
+
+function _ladder_nodes(id::AbstractString, head::AbstractNodeEndpoint, tail::AbstractNodeEndpoint, n_sections::Int)
+    nodes = AbstractNodeEndpoint[head]
+    for index in 1:(n_sections - 1)
+        push!(nodes, _ladder_internal_node(id, index))
+    end
+    push!(nodes, tail)
+    return nodes
+end
+
+function _rlgc_per_m_values(; l_per_m_h, c_per_m_f, r_per_m_ohm=0.0, g_per_m_s=0.0)
+    l_value = Float64(l_per_m_h)
+    c_value = Float64(c_per_m_f)
+    r_value = Float64(r_per_m_ohm)
+    g_value = Float64(g_per_m_s)
+    l_value > 0 || _validation_error("l_per_m_h must be positive.")
+    c_value > 0 || _validation_error("c_per_m_f must be positive.")
+    r_value >= 0 || _validation_error("r_per_m_ohm must be non-negative.")
+    g_value >= 0 || _validation_error("g_per_m_s must be non-negative.")
+    return (
+        l_per_m_h=l_value,
+        c_per_m_f=c_value,
+        r_per_m_ohm=r_value,
+        g_per_m_s=g_value,
+    )
+end
+
+function _rlgc_per_m_values(spec::RLGCSpec)
+    return _rlgc_per_m_values(
+        l_per_m_h=spec.l_per_m_h,
+        c_per_m_f=spec.c_per_m_f,
+        r_per_m_ohm=spec.r_per_m_ohm,
+        g_per_m_s=spec.g_per_m_s,
+    )
+end
+
+function _section_values_for_dx(values::RLGCPerMeterValues, dx_m::Real)
+    dx = Float64(dx_m)
+    return (
+        dx_m=dx,
+        r_ohm=values.r_per_m_ohm * dx,
+        l_h=values.l_per_m_h * dx,
+        g_s=values.g_per_m_s * dx,
+        c_f=values.c_per_m_f * dx,
+    )
+end
+
+function _section_values_for_dx(spec::RLGCSpec, dx_m::Real)
+    return _section_values_for_dx(_rlgc_per_m_values(spec), dx_m)
+end
+
+function _normalize_section_overrides(section_overrides)
+    isnothing(section_overrides) && return TransmissionLineSectionOverride[]
+    overrides = section_overrides isa TransmissionLineSectionOverride ?
+        [section_overrides] :
+        collect(section_overrides)
+    return TransmissionLineSectionOverride[
+        override isa TransmissionLineSectionOverride ? override : TransmissionLineSectionOverride(; override...)
+        for override in overrides
+    ]
+end
+
+function _breakpoints_with_overrides(breakpoints_m, section_overrides::Vector{TransmissionLineSectionOverride})
+    points = isnothing(breakpoints_m) ? Any[] : collect(breakpoints_m)
+    for override in section_overrides
+        push!(points, override.start_m)
+        push!(points, override.start_m + override.length_m)
+    end
+    return points
+end
+
+function _normalized_breakpoints(length_m::Real, breakpoints_m)
+    length = Float64(length_m)
+    points = Float64[0.0, length]
+    if !isnothing(breakpoints_m)
+        for point in breakpoints_m
+            value = Float64(point)
+            value >= 0 || _validation_error("transmission-line breakpoint must be non-negative.")
+            value <= length || _validation_error("transmission-line breakpoint must be inside length_m.")
+            push!(points, value)
+        end
+    end
+    sort!(points)
+    unique_points = Float64[]
+    for point in points
+        if isempty(unique_points) || !isapprox(point, unique_points[end]; atol=1e-12, rtol=1e-9)
+            push!(unique_points, point)
+        end
+    end
+    first(unique_points) == 0.0 || _validation_error("transmission-line breakpoints must include the head boundary.")
+    isapprox(last(unique_points), length; atol=1e-12, rtol=1e-9) ||
+        _validation_error("transmission-line breakpoints must include the tail boundary.")
+    return unique_points
+end
+
+function _section_lengths_from_breakpoints(spec::RLGCSpec, breakpoints_m)
+    breakpoints = _normalized_breakpoints(spec.length_m, breakpoints_m)
+    if length(breakpoints) == 2
+        return fill(spec.section_length_m, spec.n_sections)
+    end
+
+    section_lengths = Float64[]
+    for index in 1:(length(breakpoints) - 1)
+        segment_length = breakpoints[index + 1] - breakpoints[index]
+        segment_length > 0 || continue
+        segment_count = _derived_section_count(segment_length, spec.reference_section_length_m)
+        append!(section_lengths, fill(segment_length / segment_count, segment_count))
+    end
+    !isempty(section_lengths) || _validation_error("transmission line must contain at least one section.")
+    return section_lengths
+end
+
+function _section_boundaries(section_lengths_m::Vector{Float64})
+    boundaries = Float64[0.0]
+    for dx in section_lengths_m
+        dx > 0 || _validation_error("section length must be positive.")
+        push!(boundaries, boundaries[end] + dx)
+    end
+    return boundaries
+end
+
+function _boundary_index_in_boundaries(boundaries::Vector{Float64}, distance_m::Real, label::AbstractString)
+    distance = Float64(distance_m)
+    for (index, boundary) in enumerate(boundaries)
+        if isapprox(distance, boundary; atol=1e-12, rtol=1e-9)
+            return index - 1
+        end
+    end
+    _validation_error("$(label) must resolve to a generated section boundary.")
+end
+
+function _section_rlgc_values(
+    spec::RLGCSpec,
+    section_boundaries_m::Vector{Float64},
+    overrides::Vector{TransmissionLineSectionOverride},
+)
+    section_count = length(section_boundaries_m) - 1
+    base_values = _rlgc_per_m_values(spec)
+    values = fill(base_values, section_count)
+    assigned = fill(false, section_count)
+
+    for override in overrides
+        override_end_m = override.start_m + override.length_m
+        override_end_m <= spec.length_m * (1 + 1e-9) ||
+            _validation_error("section override extends past length_m.")
+        start_boundary = _boundary_index_in_boundaries(section_boundaries_m, override.start_m, "section override start_m")
+        stop_boundary = _boundary_index_in_boundaries(section_boundaries_m, override_end_m, "section override end")
+        stop_boundary > start_boundary || _validation_error("section override must cover at least one section.")
+        for section in (start_boundary + 1):stop_boundary
+            assigned[section] && _validation_error("section overrides must not overlap.")
+            values[section] = override.values
+            assigned[section] = true
+        end
+    end
+
+    return values
+end
+
+function _ladder_spec_from_sections(spec::RLGCSpec, section_lengths_m::Vector{Float64})
+    return RLGCSpec(
+        length_m=spec.length_m,
+        section_length_m=spec.reference_section_length_m,
+        n_sections=length(section_lengths_m),
+        l_per_m_h=spec.l_per_m_h,
+        c_per_m_f=spec.c_per_m_f,
+        r_per_m_ohm=spec.r_per_m_ohm,
+        g_per_m_s=spec.g_per_m_s,
+    )
+end
+
+function _record_transmission_line_ladder!(plan::CircuitPlan, ladder::TransmissionLineLadder)
+    record_engineering_relation!(
+        plan;
+        id="$(ladder.id)_ladder",
+        relation_type=:transmission_line_ladder,
+        from=ladder.head,
+        to=ladder.tail,
+        through=Symbol(ladder.id),
+        role=:transmission_line_ladder,
+        label=ladder.id,
+        parameters=Dict{Symbol,Any}(
+            :length_m => ladder.spec.length_m,
+            :reference_section_length_m => ladder.spec.reference_section_length_m,
+            :section_length_m => ladder.section_length_m,
+            :section_lengths_m => ladder.section_lengths_m,
+            :section_boundaries_m => ladder.section_boundaries_m,
+            :section_rlgc_per_m => ladder.section_rlgc_per_m,
+            :n_sections => ladder.spec.n_sections,
+            :l_per_m_h => ladder.spec.l_per_m_h,
+            :c_per_m_f => ladder.spec.c_per_m_f,
+            :r_per_m_ohm => ladder.spec.r_per_m_ohm,
+            :g_per_m_s => ladder.spec.g_per_m_s,
+            :head_termination => ladder.head_termination,
+            :tail_termination => ladder.tail_termination,
+        ),
+    )
+end
+
+function _store_ladder!(plan::CircuitPlan, ladder::TransmissionLineLadder)
+    ladders = get!(plan.metadata, :transmission_line_ladders) do
+        Dict{Symbol,TransmissionLineLadder}()
+    end
+    ladders isa Dict{Symbol,TransmissionLineLadder} ||
+        _validation_error("CircuitPlan metadata[:transmission_line_ladders] is reserved for TransmissionLineLadder records.")
+    key = Symbol(ladder.id)
+    haskey(ladders, key) && _validation_error("Duplicate transmission-line ladder id '$(ladder.id)'.")
+    ladders[key] = ladder
+    return ladder
+end
+
+function _grounded_termination_relation!(plan::CircuitPlan, id, endpoint, side::Symbol, termination::Symbol)
+    termination in _LADDER_GROUNDED_TERMINATIONS || return nothing
+    return connect!(
+        plan,
+        endpoint,
+        ground();
+        role=Symbol(side, :_termination),
+        label="$(id) $(side) $(termination)",
+        schematic_kind=:short_to_ground,
+    )
+end
+
+function build_lc_ladder_line!(
+    plan::CircuitPlan;
+    id,
+    head,
+    tail,
+    spec::RLGCSpec,
+    head_termination=:external,
+    tail_termination=:open,
+    breakpoints_m=nothing,
+    section_overrides=nothing,
+)
+    head isa AbstractNodeEndpoint && tail isa AbstractNodeEndpoint ||
+        _validation_error("build_lc_ladder_line! requires node-resolving head and tail endpoints.")
+    head_term = _validate_ladder_termination(head_termination)
+    tail_term = _validate_ladder_termination(tail_termination)
+    overrides = _normalize_section_overrides(section_overrides)
+    section_lengths_m = _section_lengths_from_breakpoints(spec, _breakpoints_with_overrides(breakpoints_m, overrides))
+    ladder_spec = _ladder_spec_from_sections(spec, section_lengths_m)
+    section_boundaries_m = _section_boundaries(section_lengths_m)
+    isapprox(section_boundaries_m[end], spec.length_m; atol=1e-12, rtol=1e-9) ||
+        _validation_error("generated section boundaries must end at length_m.")
+    section_rlgc_per_m = _section_rlgc_values(spec, section_boundaries_m, overrides)
+    nodes = _ladder_nodes(string(id), head, tail, ladder_spec.n_sections)
+    series_inductors = SeriesInductor[]
+    series_resistors = SeriesResistor[]
+    shunt_capacitors = ShuntCapacitor[]
+    shunt_conductance_resistors = SeriesResistor[]
+    termination_relations = AbstractCircuitRelation[]
+
+    head_short = _grounded_termination_relation!(plan, id, head, :head, head_term)
+    !isnothing(head_short) && push!(termination_relations, head_short)
+    _record_external_termination_requirement!(plan, id, :head, head, head_term)
+
+    for section in 1:ladder_spec.n_sections
+        values = _section_values_for_dx(section_rlgc_per_m[section], section_lengths_m[section])
+        from_node = nodes[section]
+        to_node = nodes[section + 1]
+        if values.r_ohm > 0
+            mid_node = external_node("$(id)_section_$(section)_series_mid")
+            resistor = series_resistor!(
+                plan;
+                id="$(id)_r_$(section)",
+                from=from_node,
+                to=mid_node,
+                resistance=values.r_ohm,
+                role=:transmission_line_series_resistance,
+                label="$(id) R$(section)",
+            )
+            push!(series_resistors, resistor)
+            from_node = mid_node
+        end
+
+        inductor = series_inductor!(
+            plan;
+            id="$(id)_l_$(section)",
+            from=from_node,
+            to=to_node,
+            inductance=values.l_h,
+            role=:transmission_line_series_inductance,
+            label="$(id) L$(section)",
+        )
+            push!(series_inductors, inductor)
+
+        terminal_is_grounded_tail = section == ladder_spec.n_sections && tail_term in _LADDER_GROUNDED_TERMINATIONS
+        if !terminal_is_grounded_tail
+            capacitor = shunt_capacitor!(
+                plan;
+                id="$(id)_c_$(section)",
+                at=to_node,
+                capacitance=values.c_f,
+                role=:transmission_line_shunt_capacitance,
+                label="$(id) C$(section)",
+            )
+            push!(shunt_capacitors, capacitor)
+        end
+
+        if values.g_s > 0 && !terminal_is_grounded_tail
+            conductance = series_resistor!(
+                plan;
+                id="$(id)_g_$(section)",
+                from=to_node,
+                to=ground(),
+                resistance=1 / values.g_s,
+                role=:transmission_line_shunt_conductance,
+                label="$(id) G$(section)",
+            )
+            push!(shunt_conductance_resistors, conductance)
+        end
+    end
+
+    tail_short = _grounded_termination_relation!(plan, id, tail, :tail, tail_term)
+    !isnothing(tail_short) && push!(termination_relations, tail_short)
+    _record_external_termination_requirement!(plan, id, :tail, tail, tail_term)
+
+    ladder = TransmissionLineLadder(
+        string(id),
+        ladder_spec,
+        nodes,
+        series_inductors,
+        series_resistors,
+        shunt_capacitors,
+        shunt_conductance_resistors,
+        head,
+        tail,
+        section_lengths_m,
+        section_boundaries_m,
+        section_rlgc_per_m,
+        ladder_spec.section_length_m,
+        head_term,
+        tail_term,
+        termination_relations,
+    )
+    _record_transmission_line_ladder!(plan, ladder)
+    return _store_ladder!(plan, ladder)
+end
+
+function transmission_line!(plan::CircuitPlan; kwargs...)
+    return build_lc_ladder_line!(plan; kwargs...)
+end
+
+function _boundary_index_at_distance(ladder::TransmissionLineLadder, distance_m::Real, label::AbstractString)
+    distance = Float64(distance_m)
+    distance >= 0 || _validation_error("$(label) must be non-negative.")
+    for (index, boundary) in enumerate(ladder.section_boundaries_m)
+        if isapprox(distance, boundary; atol=1e-12, rtol=1e-9)
+            return index - 1
+        end
+    end
+    _validation_error("$(label) must resolve to a generated section boundary on transmission line '$(ladder.id)'.")
+end
+
+function node_at_distance(ladder::TransmissionLineLadder, distance_m::Real)
+    node_index = _boundary_index_at_distance(ladder, distance_m, "distance from head")
+    0 <= node_index <= ladder.spec.n_sections ||
+        _validation_error("distance from head is outside transmission line '$(ladder.id)'.")
+    return ladder.nodes[node_index + 1]
+end
+
+function section_index_at_distance(ladder::TransmissionLineLadder, distance_m::Real)
+    section_start_index = _boundary_index_at_distance(ladder, distance_m, "distance from head")
+    0 <= section_start_index < ladder.spec.n_sections ||
+        _validation_error("distance from head must identify a section start inside transmission line '$(ladder.id)'.")
+    return section_start_index + 1
+end
+
+function section_range_from_window(ladder::TransmissionLineLadder, start_m::Real, length_m::Real)
+    length = Float64(length_m)
+    length > 0 || _validation_error("coupling window length must be positive.")
+    start_section = section_index_at_distance(ladder, start_m)
+    stop_boundary = _boundary_index_at_distance(ladder, Float64(start_m) + length, "coupling window end")
+    stop_section = stop_boundary
+    stop_section >= start_section || _validation_error("coupling window must cover at least one section.")
+    stop_section <= ladder.spec.n_sections ||
+        _validation_error("coupling window extends past transmission line '$(ladder.id)'.")
+    return start_section:stop_section
+end
+
+function _float_2x2_matrix(value, name::AbstractString)
+    matrix = Float64.(value)
+    size(matrix) == (2, 2) || _validation_error("$(name) must be a 2x2 matrix.")
+    return Matrix{Float64}(matrix)
+end
+
+function MTLCoupledRLGCSpec(
+    start1_m::Real,
+    start2_m::Real,
+    length_m::Real,
+    section_length_m::Real,
+    l_matrix_per_m_h,
+    c_matrix_per_m_f,
+)
+    spec = MTLCoupledRLGCSpec(
+        Float64(start1_m),
+        Float64(start2_m),
+        Float64(length_m),
+        Float64(section_length_m),
+        _float_2x2_matrix(l_matrix_per_m_h, "l_matrix_per_m_h"),
+        _float_2x2_matrix(c_matrix_per_m_f, "c_matrix_per_m_f"),
+    )
+    _validate_mtl_coupled_rlgc_spec(spec)
+    return spec
+end
+
+function _matrix_from_even_odd_modes(;
+    z_even_ohm,
+    z_odd_ohm,
+    phase_velocity_even_m_per_s,
+    phase_velocity_odd_m_per_s,
+)
+    z_even = Float64(z_even_ohm)
+    z_odd = Float64(z_odd_ohm)
+    v_even = Float64(phase_velocity_even_m_per_s)
+    v_odd = Float64(phase_velocity_odd_m_per_s)
+    z_even > 0 || _validation_error("z_even_ohm must be positive.")
+    z_odd > 0 || _validation_error("z_odd_ohm must be positive.")
+    v_even > 0 || _validation_error("phase_velocity_even_m_per_s must be positive.")
+    v_odd > 0 || _validation_error("phase_velocity_odd_m_per_s must be positive.")
+
+    l_even = z_even / v_even
+    l_odd = z_odd / v_odd
+    c_even = 1 / (z_even * v_even)
+    c_odd = 1 / (z_odd * v_odd)
+    return (
+        l_matrix_per_m_h=[
+            (l_even + l_odd)/2 (l_even - l_odd)/2
+            (l_even - l_odd)/2 (l_even + l_odd)/2
+        ],
+        c_matrix_per_m_f=[
+            (c_even + c_odd)/2 (c_even - c_odd)/2
+            (c_even - c_odd)/2 (c_even + c_odd)/2
+        ],
+    )
+end
+
+function MTLCoupledRLGCSpec(;
+    start1=nothing,
+    start1_m=nothing,
+    start2=nothing,
+    start2_m=nothing,
+    length=nothing,
+    length_m=nothing,
+    section_length=nothing,
+    section_length_m=nothing,
+    l_matrix_per_m_h=nothing,
+    c_matrix_per_m_f=nothing,
+    z_even_ohm=nothing,
+    z_odd_ohm=nothing,
+    phase_velocity_even_m_per_s=nothing,
+    phase_velocity_odd_m_per_s=nothing,
+)
+    selected_start1 = something(_selected_keyword(start1_m, start1, "start1"), 0.0)
+    selected_start2 = something(_selected_keyword(start2_m, start2, "start2"), 0.0)
+    selected_length = _selected_keyword(length_m, length, "length")
+    selected_section_length = _selected_keyword(section_length_m, section_length, "section_length")
+
+    any(isnothing, (selected_length, selected_section_length)) &&
+        _validation_error("MTLCoupledRLGCSpec requires length and section_length.")
+
+    has_matrix_input = !isnothing(l_matrix_per_m_h) || !isnothing(c_matrix_per_m_f)
+    has_even_odd_input = !isnothing(z_even_ohm) || !isnothing(z_odd_ohm) ||
+        !isnothing(phase_velocity_even_m_per_s) || !isnothing(phase_velocity_odd_m_per_s)
+    has_matrix_input && has_even_odd_input &&
+        _validation_error("MTLCoupledRLGCSpec accepts either matrix input or even/odd input, not both.")
+
+    if has_matrix_input
+        any(isnothing, (l_matrix_per_m_h, c_matrix_per_m_f)) &&
+            _validation_error("MTLCoupledRLGCSpec matrix input requires l_matrix_per_m_h and c_matrix_per_m_f.")
+        return MTLCoupledRLGCSpec(
+            selected_start1,
+            selected_start2,
+            selected_length,
+            selected_section_length,
+            l_matrix_per_m_h,
+            c_matrix_per_m_f,
+        )
+    end
+
+    has_even_odd_input || _validation_error("MTLCoupledRLGCSpec requires matrix input or even/odd mode input.")
+    any(isnothing, (z_even_ohm, z_odd_ohm, phase_velocity_even_m_per_s, phase_velocity_odd_m_per_s)) &&
+        _validation_error("Even/odd MTLCoupledRLGCSpec input requires z_even_ohm, z_odd_ohm, phase_velocity_even_m_per_s, and phase_velocity_odd_m_per_s.")
+    matrices = _matrix_from_even_odd_modes(
+        z_even_ohm=z_even_ohm,
+        z_odd_ohm=z_odd_ohm,
+        phase_velocity_even_m_per_s=phase_velocity_even_m_per_s,
+        phase_velocity_odd_m_per_s=phase_velocity_odd_m_per_s,
+    )
+    return MTLCoupledRLGCSpec(
+        selected_start1,
+        selected_start2,
+        selected_length,
+        selected_section_length,
+        matrices.l_matrix_per_m_h,
+        matrices.c_matrix_per_m_f,
+    )
+end
+
+function _validate_symmetric_positive_matrix(matrix::Matrix{Float64}, name::AbstractString)
+    size(matrix) == (2, 2) || _validation_error("$(name) must be a 2x2 matrix.")
+    isapprox(matrix[1, 2], matrix[2, 1]; atol=1e-18, rtol=1e-9) ||
+        _validation_error("$(name) must be symmetric.")
+    matrix[1, 1] > 0 || _validation_error("$(name)[1,1] must be positive.")
+    matrix[2, 2] > 0 || _validation_error("$(name)[2,2] must be positive.")
+    matrix[1, 1] * matrix[2, 2] - matrix[1, 2] * matrix[2, 1] > 0 ||
+        _validation_error("$(name) must be positive definite.")
+    return nothing
+end
+
+function _validate_mtl_coupled_rlgc_spec(spec::MTLCoupledRLGCSpec)
+    spec.start1_m >= 0 || _validation_error("start1_m must be non-negative.")
+    spec.start2_m >= 0 || _validation_error("start2_m must be non-negative.")
+    spec.length_m > 0 || _validation_error("length_m must be positive.")
+    spec.section_length_m > 0 || _validation_error("section_length_m must be positive.")
+    _validate_symmetric_positive_matrix(spec.l_matrix_per_m_h, "l_matrix_per_m_h")
+    _validate_symmetric_positive_matrix(spec.c_matrix_per_m_f, "c_matrix_per_m_f")
+    spec.c_matrix_per_m_f[1, 2] <= 0 ||
+        _validation_error("c_matrix_per_m_f off-diagonal entries must be non-positive; Core converts -C[1,2] to physical C12.")
+    return nothing
+end
+
+function _select_window_value(argument_value, model_value, name::AbstractString)
+    if isnothing(argument_value)
+        return model_value
+    end
+    selected = Float64(argument_value)
+    isapprox(selected, model_value; atol=1e-12, rtol=1e-9) ||
+        _validation_error("couple_transmission_window! $(name) conflicts with MTLCoupledRLGCSpec.")
+    return selected
+end
+
+function mutual_capacitance_per_m_f(model::MTLCoupledRLGCSpec)
+    return -model.c_matrix_per_m_f[1, 2]
+end
+
+function mutual_inductance_per_m_h(model::MTLCoupledRLGCSpec)
+    return model.l_matrix_per_m_h[1, 2]
+end
+
+function coupled_line_section_override(model::MTLCoupledRLGCSpec, line_index::Integer)
+    index = Int(line_index)
+    index in (1, 2) || _validation_error("coupled line index must be 1 or 2.")
+    start_m = index == 1 ? model.start1_m : model.start2_m
+    return TransmissionLineSectionOverride(
+        start_m=start_m,
+        length_m=model.length_m,
+        l_per_m_h=model.l_matrix_per_m_h[index, index],
+        c_per_m_f=model.c_matrix_per_m_f[index, index],
+        tag=Symbol(:mtl_coupled_line_, index),
+    )
+end
+
+function _section_values_match_model(values::RLGCPerMeterValues, model::MTLCoupledRLGCSpec, line_index::Int)
+    return isapprox(values.l_per_m_h, model.l_matrix_per_m_h[line_index, line_index]; atol=1e-18, rtol=1e-9) &&
+        isapprox(values.c_per_m_f, model.c_matrix_per_m_f[line_index, line_index]; atol=1e-18, rtol=1e-9)
+end
+
+function _validate_window_line_model(
+    line1::TransmissionLineLadder,
+    line2::TransmissionLineLadder,
+    model::MTLCoupledRLGCSpec,
+    range1::UnitRange{Int},
+    range2::UnitRange{Int},
+)
+    for (section1, section2) in zip(range1, range2)
+        _section_values_match_model(line1.section_rlgc_per_m[section1], model, 1) ||
+            _validation_error("line1 coupled sections must be built with MTLCoupledRLGCSpec line-1 self RLGC values.")
+        _section_values_match_model(line2.section_rlgc_per_m[section2], model, 2) ||
+            _validation_error("line2 coupled sections must be built with MTLCoupledRLGCSpec line-2 self RLGC values.")
+    end
+end
+
+function couple_transmission_window!(
+    plan::CircuitPlan;
+    id,
+    line1,
+    line2,
+    start1=nothing,
+    start2=nothing,
+    length=nothing,
+    model::MTLCoupledRLGCSpec,
+)
+    line1 isa TransmissionLineLadder && line2 isa TransmissionLineLadder ||
+        _validation_error("couple_transmission_window! requires TransmissionLineLadder line1 and line2.")
+    _validate_mtl_coupled_rlgc_spec(model)
+
+    start1_m = _select_window_value(start1, model.start1_m, "start1")
+    start2_m = _select_window_value(start2, model.start2_m, "start2")
+    length_m = _select_window_value(length, model.length_m, "length")
+    range1 = section_range_from_window(line1, start1_m, length_m)
+    range2 = section_range_from_window(line2, start2_m, length_m)
+    Base.length(range1) == Base.length(range2) ||
+        _validation_error("Coupled section ranges must have the same section count.")
+    _validate_window_line_model(line1, line2, model, range1, range2)
+
+    capacitive_couplings = CapacitiveCoupling[]
+    inductive_couplings = MutualInductiveCoupling[]
+
+    for (offset, (section1, section2)) in enumerate(zip(range1, range2))
+        dx1 = line1.section_lengths_m[section1]
+        dx2 = line2.section_lengths_m[section2]
+        isapprox(dx1, dx2; atol=1e-12, rtol=1e-9) ||
+            _validation_error("Coupled section lengths must match between transmission lines.")
+        dx1 <= model.section_length_m * (1 + 1e-9) ||
+            _validation_error("Coupled section length exceeds MTLCoupledRLGCSpec section_length_m reference.")
+        c12 = mutual_capacitance_per_m_f(model) * dx1
+        lm = mutual_inductance_per_m_h(model) * dx1
+        if c12 > 0
+            push!(
+                capacitive_couplings,
+                couple_capacitive!(
+                    plan;
+                    id="$(id)_c12_$(offset)",
+                    from=line1.nodes[section1 + 1],
+                    to=line2.nodes[section2 + 1],
+                    capacitance=c12,
+                    role=:coupled_window_mutual_capacitance,
+                    label="$(id) C12 $(offset)",
+                ),
+            )
+        end
+        push!(
+            inductive_couplings,
+            couple_inductive!(
+                plan;
+                id="$(id)_m12_$(offset)",
+                inductor_a=line1.series_inductors[section1],
+                inductor_b=line2.series_inductors[section2],
+                mutual_inductance=lm,
+                role=:coupled_window_mutual_inductance,
+                label="$(id) M12 $(offset)",
+            ),
+        )
+    end
+
+    window = CoupledTransmissionWindow(
+        string(id),
+        line1,
+        line2,
+        range1,
+        range2,
+        capacitive_couplings,
+        inductive_couplings,
+        model,
+    )
+
+    record_engineering_relation!(
+        plan;
+        id=id,
+        relation_type=:coupled_window,
+        from=(line=line1.id, sections=range1),
+        to=(line=line2.id, sections=range2),
+        through=model,
+        role=:coupled_window,
+        label=string(id),
+        parameters=Dict{Symbol,Any}(
+            :start1_m => start1_m,
+            :start2_m => start2_m,
+            :length_m => length_m,
+            :section_count => Base.length(range1),
+            :reference_section_length_m => model.section_length_m,
+            :section_lengths_m => line1.section_lengths_m[range1],
+            :c12_per_m_f => mutual_capacitance_per_m_f(model),
+            :lm_per_m_h => mutual_inductance_per_m_h(model),
+            :l_matrix_per_m_h => model.l_matrix_per_m_h,
+            :c_matrix_per_m_f => model.c_matrix_per_m_f,
+            :l1_per_m_h => model.l_matrix_per_m_h[1, 1],
+            :l2_per_m_h => model.l_matrix_per_m_h[2, 2],
+            :c1g_per_m_f => model.c_matrix_per_m_f[1, 1],
+            :c2g_per_m_f => model.c_matrix_per_m_f[2, 2],
+        ),
+    )
+
+    windows = get!(plan.metadata, :coupled_transmission_windows) do
+        Dict{Symbol,CoupledTransmissionWindow}()
+    end
+    windows isa Dict{Symbol,CoupledTransmissionWindow} ||
+        _validation_error("CircuitPlan metadata[:coupled_transmission_windows] is reserved for CoupledTransmissionWindow records.")
+    key = Symbol(window.id)
+    haskey(windows, key) && _validation_error("Duplicate coupled transmission window id '$(window.id)'.")
+    windows[key] = window
+    return window
+end

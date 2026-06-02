@@ -21,7 +21,7 @@ rules:
     load: always
     activation_mode: always_on
     triggers: ["project basics", "project goal", "scope", "workspace"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "desktop/**", "core/**", "legacy/**", "src/**", "docs/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "docs/**"]
 
   - id: project-overview
     file: project-basics/project-overview.md
@@ -30,7 +30,7 @@ rules:
     activation_mode: model_decision
     description: Apply when the task affects product scope or platform direction.
     triggers: ["mission", "scope", "platform", "migration", "product"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "desktop/**", "core/**", "legacy/**", "src/**", "docs/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "docs/**"]
 
   - id: tech-stack
     file: project-basics/tech-stack.md
@@ -38,8 +38,8 @@ rules:
     load: when_touched
     activation_mode: model_decision
     description: Apply when changing frameworks, dependencies, or tooling.
-    triggers: ["tech stack", "dependency", "dependencies", "framework", "tooling", "next.js", "fastapi", "cli", "electron", "desktop"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "desktop/**", "core/**", "legacy/**", "src/**", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "uv.lock"]
+    triggers: ["tech stack", "dependency", "dependencies", "framework", "tooling", "next.js", "fastapi", "runner", "julia", "electron", "desktop"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "uv.lock"]
 
   - id: folder-structure
     file: project-basics/folder-structure.md
@@ -48,7 +48,7 @@ rules:
     activation_mode: model_decision
     description: Apply when changing repo layout or module boundaries.
     triggers: ["folder structure", "directory", "layout", "path", "rename", "move"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "desktop/**", "core/**", "legacy/**", "src/**", "tests/**", "docs/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "tests/**", "docs/**"]
 
   - id: code-quality-index
     file: code-quality/index.md
@@ -57,7 +57,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks discuss architecture or maintainability.
     triggers: ["code quality", "quality", "architecture", "maintainability"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**"]
 
   - id: code-style
     file: code-quality/code-style.md
@@ -66,7 +66,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks discuss style, naming, or implementation patterns.
     triggers: ["style", "naming", "refactor", "clean code"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**"]
 
   - id: type-checking
     file: code-quality/type-checking.md
@@ -75,7 +75,7 @@ rules:
     activation_mode: model_decision
     description: Apply when touching Python or TypeScript types.
     triggers: ["type", "typecheck", "basedpyright", "typescript", "strict mode"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**"]
 
   - id: design-patterns
     file: code-quality/design-patterns.md
@@ -84,16 +84,16 @@ rules:
     activation_mode: model_decision
     description: Apply when changing service boundaries or DI patterns.
     triggers: ["design pattern", "dependency injection", "service layer", "repository", "use case"]
-    touched_paths: ["backend/**", "cli/**", "core/**"]
+    touched_paths: ["app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**"]
 
   - id: script-authoring
     file: code-quality/script-authoring.md
     tier: standard
     load: when_touched
     activation_mode: model_decision
-    description: Apply when adding or changing CLI commands.
-    triggers: ["cli", "command", "typer", "script"]
-    touched_paths: ["cli/**", "src/scripts/**"]
+    description: Apply when adding or changing dev/build/test/maintenance scripts or removing legacy command surfaces.
+    triggers: ["script", "scripts", "command workflow", "maintenance"]
+    touched_paths: ["scripts/**"]
 
   - id: execution-index
     file: execution-verification/index.md
@@ -101,7 +101,7 @@ rules:
     load: always
     activation_mode: always_on
     triggers: ["build", "run", "test", "ci", "lint", "format"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**", "docs/**", ".github/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "scripts/**", "core/**", "legacy/**", "src/**", "docs/**", ".github/**"]
 
   - id: build-commands
     file: execution-verification/build-commands.md
@@ -110,7 +110,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve install, run, or build workflows.
     triggers: ["build", "run", "serve", "install", "dev server"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "desktop/**", "docs/**", "pyproject.toml", "package.json"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "docs/**", "pyproject.toml", "package.json"]
 
   - id: linting
     file: execution-verification/linting.md
@@ -119,7 +119,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve linting, formatting, or type-check tooling.
     triggers: ["lint", "format", "ruff", "biome", "eslint", "prettier", "typecheck", "pre-commit"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**", ".pre-commit-config.yaml", "pyproject.toml"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", ".pre-commit-config.yaml", "pyproject.toml"]
 
   - id: testing
     file: execution-verification/testing.md
@@ -128,7 +128,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve unit, integration, E2E, or docs verification.
     triggers: ["test", "pytest", "vitest", "playwright", "e2e"]
-    touched_paths: ["frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**", "tests/**", "docs/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**", "docs/**"]
 
   - id: ci-gates
     file: execution-verification/ci-gates.md
@@ -137,43 +137,43 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks affect CI workflows or merge gates.
     triggers: ["ci", "github actions", "workflow", "pipeline", "gate"]
-    touched_paths: [".github/**", ".github/workflows/**", "frontend/**", "backend/**", "cli/**", "desktop/**", "docs/**"]
+    touched_paths: [".github/**", ".github/workflows/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "docs/**"]
 
   - id: branch-worktree-flow
     file: execution-verification/branch-and-worktree-flow.md
     tier: critical
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve branch roles, worktree isolation, merge authority, or bounded autonomous write roots.
-    triggers: ["branch", "branches", "worktree", "git flow", "merge authority", "develop", "main", "sandbox agent", "example agent"]
-    touched_paths: ["docs/**", "frontend/**", "backend/**", "cli/**", "core/**", "desktop/**", "legacy/**", "src/**", ".github/**"]
+    description: Apply when tasks involve branch roles, direct-develop updates, optional worktree isolation, or release promotion.
+    triggers: ["branch", "branches", "worktree", "git flow", "develop", "main", "direct develop", "fast iteration"]
+    touched_paths: ["docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "app/desktop/**", "desktop/**", "legacy/**", "src/**", ".github/**"]
 
   - id: multi-agent-collaboration
     file: execution-verification/multi-agent-collaboration.md
     tier: critical
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve agent roles, planning, handoff, review, or multi-agent delivery flow.
-    triggers: ["agent", "agents", "planning", "review", "implementation", "test agent", "handoff", "collaboration", "multi-agent"]
-    touched_paths: ["docs/reference/guardrails/**", "docs/**", "frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**", "tests/**"]
+    description: Apply when tasks involve Codex subagents, work lanes, coordination, review, or integrated delivery flow.
+    triggers: ["subagent", "subagents", "work lane", "work lanes", "agent", "agents", "planning", "review", "handoff", "collaboration", "multi-agent"]
+    touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
   - id: contributor-reporting
     file: execution-verification/contributor-reporting.md
     tier: standard
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks require planning artifacts, delivery reports, or review merge summaries.
-    triggers: ["report", "handoff", "delivery report", "plan artifact", "merge report"]
-    touched_paths: ["docs/reference/guardrails/**", "docs/**", "frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**", "tests/**"]
+    description: Apply when tasks require final summaries, risk reporting, PR body notes, or handoff context.
+    triggers: ["report", "handoff", "summary", "risk", "PR body", "final report"]
+    touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
   - id: prompt-grading
     file: execution-verification/prompt-grading.md
     tier: standard
     load: on_demand
     activation_mode: model_decision
-    description: Apply when tasks involve prompt sizing, work slicing, or planning/review task decomposition.
-    triggers: ["prompt", "slice", "milestone", "phase push", "task decomposition", "planning"]
-    touched_paths: ["docs/reference/guardrails/**", "docs/**", "frontend/**", "backend/**", "cli/**", "core/**", "legacy/**", "src/**", "tests/**"]
+    description: Apply when tasks involve scope sizing, work slicing, short planning, or verification depth.
+    triggers: ["prompt", "scope", "slice", "milestone", "phase push", "task decomposition", "planning"]
+    touched_paths: ["docs/reference/guardrails/**", "docs/**", "app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "core/**", "legacy/**", "src/**", "tests/**"]
 
   - id: ui-ux-index
     file: ui-ux-quality/index.md
@@ -182,7 +182,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve frontend UI/UX or design-system decisions.
     triggers: ["ui", "ux", "design system", "frontend", "electron", "desktop"]
-    touched_paths: ["frontend/**", "desktop/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "app/desktop/**", "desktop/**"]
 
   - id: ui-ux-theming
     file: ui-ux-quality/theming.md
@@ -191,7 +191,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve theming, semantic tokens, or dark mode.
     triggers: ["theme", "css", "tailwind", "color", "dark mode"]
-    touched_paths: ["frontend/**", "docs/stylesheets/**"]
+    touched_paths: ["app/frontend/**", "frontend/**", "docs/stylesheets/**"]
 
   - id: ui-ux-components
     file: ui-ux-quality/component-guidelines.md
@@ -200,7 +200,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve component selection, dialogs, forms, or tables.
     triggers: ["component", "table", "dialog", "form", "radix", "shadcn"]
-    touched_paths: ["frontend/**"]
+    touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: ui-ux-layouts
     file: ui-ux-quality/layout-patterns.md
@@ -209,7 +209,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve App Router layouts or responsive structure.
     triggers: ["layout", "shell", "responsive", "master detail"]
-    touched_paths: ["frontend/**"]
+    touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: ui-ux-state
     file: ui-ux-quality/state-management.md
@@ -218,7 +218,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve server/client state, forms, or mutations.
     triggers: ["state", "swr", "react hook form", "mutation", "context"]
-    touched_paths: ["frontend/**"]
+    touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: ui-ux-accessibility
     file: ui-ux-quality/accessibility.md
@@ -227,7 +227,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks involve accessibility, keyboard flow, or ARIA.
     triggers: ["a11y", "accessibility", "aria", "keyboard", "contrast"]
-    touched_paths: ["frontend/**"]
+    touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: ui-ux-routing
     file: ui-ux-quality/routing.md
@@ -236,7 +236,7 @@ rules:
     activation_mode: model_decision
     description: Apply when tasks affect Next.js routes or layout boundaries.
     triggers: ["route", "routing", "app router", "dynamic route"]
-    touched_paths: ["frontend/**"]
+    touched_paths: ["app/frontend/**", "frontend/**"]
 
   - id: documentation-standards
     file: documentation-design/standards.md
@@ -254,6 +254,15 @@ rules:
     activation_mode: model_decision
     description: Apply when editing documentation style, tone, or visual presentation rules.
     triggers: ["docs", "documentation", "style", "admonition", "tabs", "mermaid"]
+    touched_paths: ["docs/**", "zensical.toml"]
+
+  - id: documentation-zensical-native-style
+    file: documentation-design/zensical-native-style.md
+    tier: standard
+    load: when_touched
+    activation_mode: model_decision
+    description: Apply when writing or restructuring Zensical-native technical documentation.
+    triggers: ["docs", "documentation", "zensical", "style", "native docs", "writing"]
     touched_paths: ["docs/**", "zensical.toml"]
 
   - id: documentation-information-layout

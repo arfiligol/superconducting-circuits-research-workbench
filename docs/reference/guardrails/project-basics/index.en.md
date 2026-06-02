@@ -10,15 +10,15 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Index for the rewrite branch mission, stack direction, and folder structure.
-version: v1.0.0
-last_updated: 2026-03-11
-updated_by: docs-team
+scope: Index for the platform mission, stack direction, and folder structure.
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # Project Basics
 
-This section defines the current branch fundamentals: product scope, technical direction, and repository structure.
+This section defines the platform fundamentals: product scope, technical direction, and repository structure.
 Any change that affects workspace-wide development direction should update these documents first.
 
 - [Project Overview](./project-overview.en.md)
@@ -29,8 +29,8 @@ Any change that affects workspace-wide development direction should update these
 
 ```markdown
 ## Project Basics
-- Project Basics defines the rewrite branch mission, scope, stack, and structure.
+- Project Basics defines the platform mission, scope, stack, and structure.
 - Any change that affects workspace-wide collaboration or architecture must update this section first.
-- The current UI direction is Next.js, the API direction is FastAPI, and CLI support remains mandatory.
-- Existing NiceGUI code is migration legacy and must not be the default landing zone for new features.
+- The current UI direction is Next.js, the API direction is FastAPI, the compute plane is Julia Runner, and Notebook is the research cockpit.
+- Legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia runtime are not product contracts and must not be the default landing zone for new features.
 ```

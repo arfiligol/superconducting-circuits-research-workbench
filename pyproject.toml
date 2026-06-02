@@ -4,57 +4,20 @@ version = "0.1.0"
 description = "Superconducting Circuit Simulation and Analysis Platform"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "ipython>=9.7.0",
-    "juliacall>=0.9.31",
-    "lmfit>=1.3.1",
-    "matplotlib>=3.10.7",
-    "numpy>=2.3.5",
-    "pandas>=2.3.3",
-    "pandas-stubs>=2.3.3.251201",
-    "plotly>=5.22.0",
-    "nicegui>=2.0",
-    "pydantic>=2.12.5",
-    "rich>=14.3.1",
-    "schemdraw>=0.22",
-    "scikit-rf>=1.10.0",
-    "scipy>=1.16.3",
-    "rq>=2.6.0",
-    "sc-cli",
-    "sc-core",
-    "superconducting-circuits-backend",
-    "sqlmodel>=0.0.31",
-    "typer>=0.12.0",
-    "zarr>=3.1.3",
-    "httpx>=0.28.1",
-    "bs4>=0.0.2",
-    "lxml>=6.0.2",
-]
-
-[project.scripts]
-sc-app = "src.app.infrastructure.worker_runtime.entrypoints:run_uvicorn_app"
-sc-worker-simulation = "src.app.infrastructure.worker_runtime.entrypoints:run_simulation_worker"
-sc-worker-characterization = "src.app.infrastructure.worker_runtime.entrypoints:run_characterization_worker"
-sc-legacy-nicegui = "legacy.legacy_nicegui_archived.main:start"
+dependencies = []
 
 [tool.uv]
-package = true
+package = false
 
 [tool.uv.sources]
-sc-cli = { path = "cli", editable = true }
 sc-core = { path = "core", editable = true }
-superconducting-circuits-backend = { path = "backend", editable = true }
-
-[tool.setuptools.packages.find]
-where = ["src", "."]
-include = ["scripts*", "legacy*"]
 
 [tool.basedpyright]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
-include = ["src", "core", "legacy", "cli/src", "cli/tests"]
+include = ["app/backend/src", "core", "core/python", "scripts"]
 exclude = ["**/__pycache__", ".venv", "data"]
-extraPaths = ["src", "core", "legacy", "cli/src", "backend"]
+extraPaths = ["app/backend", "core", "core/python"]
 # Basic presence checks only, as requested
 reportMissingParameterType = "warning"
 reportUnknownParameterType = "none" # Allow unknown types from 3rd party libs
@@ -62,7 +25,7 @@ reportUnknownParameterType = "none" # Allow unknown types from 3rd party libs
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "core", "legacy", "scripts", "cli/src", "cli/tests"]
+src = ["app/backend/src", "core", "core/python", "scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -80,7 +43,7 @@ ignore = [
     "N802", # Function name should be lowercase (Physics: T_c, I_c)
     "N803", # Argument name should be lowercase (Physics: L_jun, C_pF)
     "N806", # Variable in function should be lowercase (Physics: L_tot)
-    "N813", # Camelcase imported as lowercase (juliacall Main as jl)
+    "N813", # Camelcase imported as lowercase in scientific adapters
     "N816", # Variable in global scope mixedCase (Physics units: nH, pF)
 ]
 
@@ -88,14 +51,9 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 
-[build-system]
-requires = ["setuptools>=69", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [dependency-groups]
 dev = [
     "basedpyright>=1.37.1",
-    "fakeredis>=2.32.1",
     "playwright>=1.58.0",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",

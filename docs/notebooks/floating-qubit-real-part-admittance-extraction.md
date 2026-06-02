@@ -37,7 +37,7 @@ updated_by: team
 
 本頁完全採用下列文件定義，不自行發明新語意：
 
-- [Circuit Simulation Reference（Post Processing / CT / Kron / PTC）](../reference/app/frontend/research-workflow/circuit-simulation/)
+- [Julia Runner Compute Plane](../reference/architecture/julia-runner-compute-plane/)
 - [Schur Complement 與 Kron Reduction（Explanation）](../explanation/physics/schur-complement-kron-reduction/)
 - [Analysis Result Data Format（HFSS comparable 欄位語意）](../reference/data-formats/analysis-result/)
 - [Physics Symbol Glossary（符號對照）](../explanation/physics/symbol-glossary/)
@@ -157,7 +157,7 @@ Y_red = Y_bb - Y_bi * Y_ii^{-1} * Y_ib
 
 參考：
 
-- [Circuit Simulation Reference](../reference/app/frontend/research-workflow/circuit-simulation/)
+- [Julia Runner Compute Plane](../reference/architecture/julia-runner-compute-plane/)
 - [Analysis Result 欄位語意（`hfss_comparable` / reason）](../reference/data-formats/analysis-result/)
 
 ---

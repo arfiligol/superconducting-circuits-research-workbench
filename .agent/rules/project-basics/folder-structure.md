@@ -1,14 +1,29 @@
 ## Folder Structure
-- **Frontend** work goes to `frontend/`.
-- **Desktop shell** work goes to `desktop/`.
-- **Backend** work goes to `backend/`.
-- **CLI** work goes to `cli/`.
-- **Shared scientific logic** goes to `src/core/`.
-- **Docs and guardrails** go to `docs/`.
-- Existing `src/app/` NiceGUI code is legacy and should only receive migration-support fixes.
+- **Frontend** work goes to `app/frontend/`.
+- **Desktop shell** work goes to `app/desktop/`.
+- **Backend** work goes to `app/backend/`.
+- **Julia Core** work goes to `core/julia/SuperconductingCircuitsCore/`.
+- **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
+- **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
+- **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
+- **Pluto notebooks** may directly use `SuperconductingCircuitsCore`.
+- **Python notebooks** are programmable data-analysis and inspection surfaces; they may directly read data files, but platform state changes must go through Backend contracts.
+- **Application Simulation Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
+- **Application Analysis Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
+- **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
+- **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
+- **Root worker runtime folder** must not be recreated as a runtime surface.
+- **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
+- **Plans** is retired as an active repo surface; do not create new committed plan prompts or lane handoffs.
+- **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
+- Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces.
 - Dependency direction:
     - frontend depends on API contracts, not backend internals
-    - desktop depends on frontend outputs and secure IPC, not business logic ownership
-    - backend API layer depends inward on services/domain
-    - CLI reuses shared services/core instead of duplicating workflow logic
-    - `src/core/` must stay framework-agnostic
+    - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
+    - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
+    - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
+    - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
+    - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
+    - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
+    - Julia Core must stay framework-agnostic
+    - scripts are helpers, not user-facing workflow contracts

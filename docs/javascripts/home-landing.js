@@ -15,9 +15,9 @@
   const tabs = document.querySelector(".md-tabs");
 
   const layers = [
-    { amplitude: 24, speed: 0.0009, offset: 0.28, color: "rgba(112, 245, 255, 0.9)" },
-    { amplitude: 18, speed: 0.0012, offset: 0.46, color: "rgba(126, 190, 255, 0.75)" },
-    { amplitude: 14, speed: 0.0016, offset: 0.64, color: "rgba(174, 150, 255, 0.6)" },
+    { height: 24, speed: 0.0009, offset: 0.28, color: "rgba(112, 245, 255, 0.9)" },
+    { height: 18, speed: 0.0012, offset: 0.46, color: "rgba(126, 190, 255, 0.75)" },
+    { height: 14, speed: 0.0016, offset: 0.64, color: "rgba(174, 150, 255, 0.6)" },
   ];
 
   const resize = () => {
@@ -42,8 +42,8 @@
       const envelope = 0.5 + 0.5 * Math.sin((ratio - 0.5) * Math.PI);
       const y =
         height * layer.offset +
-        Math.sin(ratio * 9.4 + t * layer.speed + phaseShift) * layer.amplitude * envelope +
-        Math.cos(ratio * 4.8 + t * layer.speed * 0.6 - phaseShift) * (layer.amplitude * 0.4);
+        Math.sin(ratio * 9.4 + t * layer.speed + phaseShift) * layer.height * envelope +
+        Math.cos(ratio * 4.8 + t * layer.speed * 0.6 - phaseShift) * (layer.height * 0.4);
       if (i === 0) {
         ctx.moveTo(x, y);
       } else {

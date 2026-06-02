@@ -155,6 +155,6 @@ graph LR
 *   [Schema Editor](schema-editor.md)
 *   [Header](../shared-shell/header.md)
 *   [Sidebar](../shared-shell/sidebar.md)
-*   [Circuit Simulation](../research-workflow/circuit-simulation.md)
+*   [Circuit Simulation](../simulation-workbench/circuit-simulation.md)
 *   [Backend: Circuit Definitions](../../backend/circuit-definitions.md)
 *   [Record Format: Circuit Netlist](../../data-formats/circuit-netlist.md)

@@ -52,7 +52,7 @@ updated_by: team
 | 描述現在式 | 不寫歷史背景、舊版行為、遷移故事；只寫本頁當前正式規格 |
 | 先寫穩定結構 | 先固定頁面目的、區塊順序、互動流程，再寫細節 |
 | 人機共讀 | 人類能快速掃描，AI Agent 能穩定抽取欄位 |
-| 少講實作，多講契約 | 不先寫 React / NiceGUI / hook / service 類名；先寫 UI contract |
+| 少講實作，多講契約 | 不先寫 framework / hook / service 類名；先寫 UI contract |
 | 一頁一格式 | 所有 page reference 採同一套骨架，降低理解成本 |
 
 !!! important "Reference 邊界"
@@ -299,7 +299,7 @@ Page Reference Spec 可以吸收其他來源整理出的頁面觀測資料，例
 - 舊版行為
 - migration 故事
 - React hook 名稱
-- NiceGUI / Next.js component 實作細節
+- framework component 實作細節
 - repository / service 類名
 - CSS pixel 級細節
 - 暫時性 workaround
@@ -469,6 +469,6 @@ Page
   8. Acceptance Checklist
 - **Optional sections**: `Related Contracts`、`Runtime Notes` 只在需要時加入
 - **Focus**: 先寫 page purpose、layout、components、state、flows、acceptance；不要先寫框架細節
-- **Do not include**: React/NiceGUI 實作細節、repository/service 類名、pixel 級 CSS、歷史背景
+- **Do not include**: framework 實作細節、repository/service 類名、pixel 級 CSS、歷史背景
 - **Naming**: 新頁面優先使用 `docs/reference/app/frontend/pages/<route-name>.md`，並與 sidebar IA 對齊
 ```

@@ -8,9 +8,9 @@ status: stable
 owner: docs-team
 audience: team
 scope: 目標導向的操作指南索引
-version: v1.1.0
-last_updated: 2026-01-31
-updated_by: docs-team
+version: v1.2.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
 # How-to Guides
@@ -37,11 +37,14 @@ updated_by: docs-team
 - [Manage Tags](manage-db/tags.md)
 - [Reorder IDs](manage-db/reorder-record-ids.md)
 
-### [CLI Usage](cli/index.md)
-CLI 指令總覽與常見任務索引。
-
 ### [Simulation](simulation/index.md)
-執行電路模擬 (Python/Julia)。
+透過 Pluto direct execution 或 Application/Backend → Julia Runner async task 執行電路模擬。
+
+### [Pluto](pluto/authoring-workflow.md)
+使用 Julia Core 和選定的 Component Library 進行互動式 authoring、preflight 與 explicit batch sweep。
+
+- [Authoring Workflow](pluto/authoring-workflow.md)
+- [Parameter Sweep Workflow](pluto/parameter-sweep-workflow.md)
 
 ### [Contributing](contributing.md)
 專案貢獻流程與規範。

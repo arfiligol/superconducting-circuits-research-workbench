@@ -124,7 +124,7 @@ updated_by: codex
 | Sharing mode | Allowed | Meaning |
 |---|---|---|
 | Export / Import | ✅ | 用於跨 workspace、對外分享、封存 |
-| Publish / Copy with lineage | ✅ future | 建立新資源，保留 lineage |
+| Publish / Copy with lineage | ✅ | 建立新資源，保留 lineage |
 | Multi-workspace mutable object | ❌ | 不允許 |
 
 ## Required Audit Hooks

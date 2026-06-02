@@ -43,7 +43,7 @@ updated_by: codex
 | Auth state | 使用者目前是 `local_bypass`、`authenticated`、`anonymous` 還是 `degraded` session |
 | Connection target | 目前 active online target 的摘要，或 `null` |
 | User summary | Header user icon / menu 所需 display data |
-| Workspace identity | active workspace、membership role、default queue scope |
+| Workspace identity | active workspace、membership role、default task scope |
 | Workspace membership list | user 可切換的 workspaces 與 roles |
 | Active dataset | shell-level global dataset context |
 | Capability flags | frontend 與 shared task-management 可直接使用的 permission summary |
@@ -68,7 +68,7 @@ backend session surface 至少必須提供：
 | `workspace.slug` | workspace route / slug summary |
 | `workspace.name` | workspace display name |
 | `workspace.role` | `owner` / `member` / `viewer` |
-| `workspace.default_task_scope` | queue default visibility scope |
+| `workspace.default_task_scope` | task default visibility scope |
 | `workspace.allowed_actions` | workspace-scoped mutation availability summary |
 | `active_dataset.id` / `name` | global dataset context |
 | `active_dataset.visibility_scope` | `local`, `private`, `workspace` 之一 |
@@ -82,7 +82,7 @@ backend session surface 至少必須提供：
 | Local mode returns implicit session | backend 直接提供 local user / `Local Space` / capability summary |
 | Online mode may require auth | 若尚未登入，session surface 回 `auth_required` 或 anonymous/degraded state |
 | Mode switch is session mutation | 不是單純 frontend config toggle |
-| Mode switch clears stale shell context | 舊 mode 的 dataset、queue、attached task refs 不得殘留 |
+| Mode switch clears stale shell context | 舊 mode 的 dataset、task list、attached task refs 不得殘留 |
 | Mode switch drops remote auth continuity | 從 online 切到 local 再切回 online，不保留舊的 remote authenticated session |
 
 ## Authorization Resolution Rules
@@ -102,7 +102,7 @@ backend session surface 至少必須提供：
 | Session exposes memberships | Header 要能列出使用者可切換的 workspaces |
 | Switch mutates session | active workspace switch 是 session mutation，不是純 frontend state |
 | Dataset rebinding is required | workspace 切換後，active dataset 必須重新驗證或重選 |
-| Queue rebinding is required | workspace 切換後，queue visibility 與 allowed actions 必須同步更新 |
+| Task rebinding is required | workspace 切換後，task visibility 與 allowed actions 必須同步更新 |
 
 ## Mutation Surfaces
 
@@ -495,9 +495,9 @@ backend session surface 至少必須提供：
 | `can_invite_members` | 顯示 invite entry point |
 | `can_remove_members` | 顯示 member removal action |
 | `can_transfer_workspace_owner` | 顯示 owner transfer action |
-| `can_submit_tasks` | 決定 Simulation / Characterization 是否可送出 task |
-| `can_cancel_local_tasks` / `can_terminate_local_tasks` / `can_retry_local_tasks` | local mode queue row actions |
-| `can_manage_workspace_tasks` | 決定 Header queue 是否顯示 `Cancel` / `Terminate` / `Retry` |
+| `can_submit_tasks` | 決定 Simulation Workbench / Analysis Workbench 是否可送出 task |
+| `can_cancel_local_tasks` / `can_terminate_local_tasks` / `can_retry_local_tasks` | local mode task row actions |
+| `can_manage_workspace_tasks` | 決定 Header task execution summary 是否顯示 `Cancel` / `Terminate` / `Retry` |
 | `can_manage_definitions` | 決定 `Schemas` / `Schema Editor` 是否可建立、儲存、刪除 |
 | `can_publish_definitions` | 決定 online publish controls 是否可顯示 |
 | `can_manage_datasets` | 決定 `Dashboard` metadata editing 是否可寫入 |
@@ -508,7 +508,7 @@ backend session surface 至少必須提供：
 | Rule | Meaning |
 | --- | --- |
 | Dataset switch is global | active dataset 一旦切換，所有 page consumers 應看到同一版本 |
-| Mode switch is stronger than workspace switch | 切 mode 之後，workspace / dataset / queue / user summary 都必須以新 mode 重建 |
+| Mode switch is stronger than workspace switch | 切 mode 之後，workspace / dataset / task list / user summary 都必須以新 mode 重建 |
 | Role is workspace-scoped | shell 與 pages 看到的 action availability 必須依 workspace role 決定 |
 | Capability beats guessing | frontend page 不得自己推斷是否可 submit / manage / delete |
 | Session survives refresh | refresh 後必須能重建 user summary、workspace role 與 active dataset |
@@ -520,7 +520,7 @@ backend session surface 至少必須提供：
 | [Header](../frontend/shared-shell/header.md) | 顯示 active workspace、active dataset 與 user menu |
 | [Sidebar](../frontend/shared-shell/sidebar.md) | 需要知道 shell-level context propagation |
 | [Dashboard](../frontend/workspace/dashboard.md) | dataset metadata editing 依賴 capability flags |
-| [Task Management](../frontend/shared-workflow/task-management.md) | queue visibility 與 row actions 依賴 workspace role / capability |
+| [Task Management](../frontend/shared-workflow/task-management.md) | task visibility 與 row actions 依賴 workspace role / capability |
 
 ## Related
 

@@ -217,7 +217,7 @@ Live Preview 顯示值時，必須先用 topology 第 4 欄解析 component，�
 | --- | --- |
 | [Circuit Definitions](/Users/arfiligol/Github/superconducting-circuits-tutorial/docs/reference/app/backend/circuit-definitions.md) | persisted source / validation / preview authority |
 | [Schema Editor](/Users/arfiligol/Github/superconducting-circuits-tutorial/docs/reference/app/frontend/definition/schema-editor.md) | source editing、auto-format、hint table、persisted preview |
-| [Circuit Simulation](/Users/arfiligol/Github/superconducting-circuits-tutorial/docs/reference/app/frontend/research-workflow/circuit-simulation.md) | canonical definition selection、expanded preview、setup binding |
+| [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md) | canonical definition selection、task payload binding、staging result publication |
 
 ## Code Reference Map
 
@@ -230,11 +230,11 @@ Live Preview 顯示值時，必須先用 topology 第 4 欄解析 component，�
 release 前至少確認：
 
 1. Data Format 規格與 parser 規則一致（`P*` / `K*` / ground token）
-2. Schema Editor Expanded Preview 與 Simulation Netlist Configuration 使用同一 expansion pipeline
+2. Schema Editor Expanded Preview 與 Runner task payload 使用同一 expansion pipeline
 3. DB 僅保存 source-form，不保存 expanded-form
 4. error message 可對應到本頁規範條目，不依賴隱式舊相容路徑
 
 ## Related
 
-- [Simulation Python API](../../how-to/simulation/python-api.md)
+- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
 - [Data Formats Overview](index.md)

@@ -1,0 +1,44 @@
+{
+  "contract_version": "admittance_member_phase1_v1",
+  "input_axis_key": "L_jun",
+  "input_axis_unit": "nH",
+  "member_count": 3,
+  "members": [
+    {
+      "member_key": "layout_simulation:trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-readout-im-y11-csv_1",
+      "trace_id": "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-readout-im-y11-csv_1",
+      "source_kind": "layout_simulation",
+      "parameter": "Y11",
+      "representation": "imaginary"
+    },
+    {
+      "member_key": "layout_simulation:trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-and-readout-im-y11-csv_1",
+      "trace_id": "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-and-readout-im-y11-csv_1",
+      "source_kind": "layout_simulation",
+      "parameter": "Y11",
+      "representation": "imaginary"
+    },
+    {
+      "member_key": "layout_simulation:trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-im-y11-csv_1",
+      "trace_id": "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-im-y11-csv_1",
+      "source_kind": "layout_simulation",
+      "parameter": "Y11",
+      "representation": "imaginary"
+    }
+  ],
+  "mode_capacity": 4,
+  "masked_input_indices_by_member": [
+    [],
+    [],
+    []
+  ],
+  "fit_window_ghz": [
+    4.0,
+    7.2
+  ],
+  "selected_trace_ids": [
+    "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-readout-im-y11-csv_1",
+    "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-and-readout-im-y11-csv_1",
+    "trace_layout-simulation_y11_layout-simulation-import-pf6fq-q0-3-files-pf6fq-q0-xy-im-y11-csv_1"
+  ]
+}

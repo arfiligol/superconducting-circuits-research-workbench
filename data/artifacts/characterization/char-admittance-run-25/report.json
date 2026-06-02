@@ -1,0 +1,35 @@
+{
+  "contract_version": "admittance_member_phase1_v1",
+  "input_axis_key": "selected_scope",
+  "input_axis_unit": null,
+  "member_count": 2,
+  "members": [
+    {
+      "member_key": "circuit_simulation:trace_task_484_y-dm-in-l-jun-13-157895-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_3_z0_50",
+      "trace_id": "trace_task_484_y-dm-in-l-jun-13-157895-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_3_z0_50",
+      "source_kind": "circuit_simulation",
+      "parameter": "Y_{dm, in} \u00b7 L_jun = 13.157895 nH",
+      "representation": "imaginary"
+    },
+    {
+      "member_key": "circuit_simulation:trace_task_484_y-dm-in-l-jun-18-421053-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_8_z0_50",
+      "trace_id": "trace_task_484_y-dm-in-l-jun-18-421053-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_8_z0_50",
+      "source_kind": "circuit_simulation",
+      "parameter": "Y_{dm, in} \u00b7 L_jun = 18.421053 nH",
+      "representation": "imaginary"
+    }
+  ],
+  "mode_capacity": 2,
+  "masked_input_indices_by_member": [
+    [],
+    []
+  ],
+  "fit_window_ghz": [
+    5.8,
+    7.2
+  ],
+  "selected_trace_ids": [
+    "trace_task_484_y-dm-in-l-jun-13-157895-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_3_z0_50",
+    "trace_task_484_y-dm-in-l-jun-18-421053-nh_y_matrix_ptc_o1_i1_mode_0_mode_0_sweep_8_z0_50"
+  ]
+}

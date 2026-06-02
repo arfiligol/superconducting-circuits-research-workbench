@@ -1,0 +1,12 @@
+## Branch & Worktree Flow
+- `main` is the release branch; do not use it for daily development.
+- `develop` is the active development branch.
+- Direct updates on `develop` are allowed when the working tree stays coherent and touched-area checks are run.
+- Branches and isolated worktrees are optional risk-management tools, not mandatory ceremony.
+- Use a task branch/worktree when the change is risky, broad, parallel, review-heavy, or blocked by unrelated dirty files.
+- Always inspect `git status --short` before editing.
+- Preserve unrelated dirty work; do not stage, revert, or overwrite it unless the user explicitly asks.
+- Codex may use subagents internally, but repo rules no longer gate `develop` updates by role.
+- Promotion path is:
+    - direct update or task branch -> `develop`
+    - verified release promotion -> `main`

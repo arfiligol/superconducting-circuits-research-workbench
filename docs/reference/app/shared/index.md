@@ -21,7 +21,7 @@ updated_by: codex
 本區收錄 Frontend 與 Backend 共同依賴的 App-level shared model。
 
 !!! info "What belongs here"
-    若一份文件同時在回答 shell context、workspace collaboration、task queue visibility、runtime governance 或 audit trail，
+    若一份文件同時在回答 shell context、workspace collaboration、task execution visibility、runtime governance 或 audit trail，
     但又不屬於單一 frontend page 或單一 backend surface，它就應該放在這裡。
 
 !!! warning "Not Core, Not CLI"
@@ -62,14 +62,14 @@ updated_by: codex
     |---|---|
     | [Identity & Workspace Model](identity-workspace-model.md) | user、session、active workspace、active dataset 的最小模型 |
     | [Resource Ownership & Visibility](resource-ownership-and-visibility.md) | dataset / schema / task / result 的 workspace ownership 與 sharing rules |
-    | [Authentication & Authorization](authentication-and-authorization.md) | workspace membership、capabilities、queue permissions |
+    | [Authentication & Authorization](authentication-and-authorization.md) | workspace membership、capabilities、task execution permissions |
     | [Outbound Email Delivery](outbound-email-delivery.md) | workspace invitation 的 SMTP baseline 與 mail delivery contract |
 
 === "Execution Runtime"
 
     | Page | Core focus |
     |---|---|
-    | [Task Runtime & Processors](task-runtime-and-processors.md) | worker / processor status、task state machine、cancel / terminate、local runtime topology |
+    | [Task Runtime & Processors](task-runtime-and-processors.md) | Runner / processor status、task state machine、cancel / terminate、local runtime topology |
 
 === "Governance / Observability"
 

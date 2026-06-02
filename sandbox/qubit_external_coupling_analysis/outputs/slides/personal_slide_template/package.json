@@ -1,0 +1,10 @@
+{
+  "name": "qeca-personal-slide-template",
+  "private": true,
+  "scripts": {
+    "build": "node build_personal_slide_template.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}

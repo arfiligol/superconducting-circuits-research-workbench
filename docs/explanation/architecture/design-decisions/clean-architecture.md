@@ -112,8 +112,8 @@ Clean Architecture 在這個專案的作用，就是把這三種錯誤隔開。
 
 - 頁面邊界：
   [Schema Editor](../../../reference/app/frontend/definition/schema-editor.md)、
-  [Circuit Simulation](../../../reference/app/frontend/research-workflow/circuit-simulation.md)、
-  [Characterization](../../../reference/app/frontend/research-workflow/characterization.md)
+  [Application Interface](../../../reference/app/application-interface.md)、
+  [Task Management](../../../reference/app/frontend/shared-workflow/task-management.md)
 - 資料 authority 與 provenance：
   [Data Storage](../data-storage.md)、
   [Dataset Record Schema](../../../reference/data-formats/dataset-record.md)、

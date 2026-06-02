@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: dataset-first metadata DB query strategy and TraceStore slice-read strategy
-version: v3.0.0
-last_updated: 2026-03-14
+scope: dataset-first metadata DB query strategy, DesignScope lifecycle lookup and TraceStore slice-read strategy
+version: v3.1.0
+last_updated: 2026-04-30
 updated_by: codex
 ---
 
@@ -32,7 +32,9 @@ updated_by: codex
 | --- | --- | --- |
 | `list_visible_datasets(workspace_id, query=...)` | Header dataset switcher / dashboard selector | `workspace_id`, `visibility_scope`, `updated_at` |
 | `get_dataset_profile(dataset_id)` | Dashboard profile read | `dataset_id` |
-| `list_design_scopes(dataset_id, query=...)` | Raw Data / Characterization design selector | `dataset_id`, `name`, `updated_at` |
+| `list_design_scopes(dataset_id, query=...)` | Raw Data / Characterization design selector | `dataset_id`, `lifecycle_state`, `name`, `updated_at` |
+| `resolve_design_scope(dataset_id, design_id)` | stale deep-link / archived redirect handling | `dataset_id`, `design_id`, `lifecycle_state`, `redirect_design_id` |
+| `list_target_design_scopes(dataset_id, query=...)` | Data Ingestion / Simulation publication target selector | `dataset_id`, `lifecycle_state=active`, `name`, `source_coverage` |
 | `count_traces(dataset_id, design_id)` | design scope summary | `dataset_id`, `design_id` |
 | `list_trace_index_page(dataset_id, design_id, query=...)` | Raw Data / Characterization / compare trace selection | `dataset_id`, `design_id`, `family`, `parameter`, `representation`, `source_kind`, `stage_kind` |
 | `list_distinct_trace_index(dataset_id, design_id, ...)` | trace compatibility / UI filter options | `dataset_id`, `design_id`, `family`, `parameter`, `representation` |
@@ -58,13 +60,14 @@ updated_by: codex
 優先索引候選：
 
 1. `dataset_records(workspace_id, visibility_scope, lifecycle_state, updated_at)`
-2. `design_scopes(dataset_id, name, updated_at)`
-3. `trace_records(dataset_id, design_id, family, parameter, representation)`
-4. `trace_batch_records(dataset_id, design_id, source_kind, stage_kind, created_at)`
-5. `trace_batch_trace_links(trace_batch_id, trace_record_id)`
-6. `analysis_run_records(dataset_id, design_id, analysis_id, created_at)`
-7. `result_artifacts(analysis_run_id, category, trace_mode_group)`
-8. `derived_parameter_records(dataset_id, design_id, analysis_run_id, name)`
+2. `design_scopes(dataset_id, lifecycle_state, name, updated_at)`
+3. `design_scopes(dataset_id, redirect_design_id)`
+4. `trace_records(dataset_id, design_id, family, parameter, representation)`
+5. `trace_batch_records(dataset_id, design_id, source_kind, stage_kind, created_at)`
+6. `trace_batch_trace_links(trace_batch_id, trace_record_id)`
+7. `analysis_run_records(dataset_id, design_id, analysis_id, created_at)`
+8. `result_artifacts(analysis_run_id, category, trace_mode_group)`
+9. `derived_parameter_records(dataset_id, design_id, analysis_run_id, name)`
 
 ## Required Join Discipline
 
@@ -73,6 +76,18 @@ updated_by: codex
 | Dataset first | 先以 `dataset_id` 確認 app shell context |
 | Design second | 再以 `design_id` 決定 page-local analytical scope |
 | Trace third | trace / batch / run 查詢不得跳過 dataset boundary 直接只用 `design_id` |
+| Lifecycle resolution before heavy query | 使用 `design_id` 進入 trace / batch / run query 前，必須先解析 design scope 是否 active、archived redirect 或 deleted tombstone |
+
+## Design Scope Lifecycle Query Strategy
+
+| Concern | Rule |
+| --- | --- |
+| Default selectors | Data Ingestion、Simulation publication、Raw Data normal browse 與 Characterization normal selector 只列 `active` scopes |
+| Archived visibility | archived scopes 可在 history / stale-link / admin-like context 顯示，但不得成為 normal target |
+| Redirect lookup | stale `design_id` deep link 應先查 `redirect_design_id`，再回傳 target summary 或 archived-state explanation |
+| Merge re-parenting | merge 必須更新 metadata DB 中所有 design-scoped rows 的 `design_id`，並刷新 / invalidate materialized summaries |
+| TraceStore path | query strategy 不依賴 TraceStore physical path 中的 design segment；`store_ref` 由 backend 持有且不由 query consumer parse |
+| Target scope create | create-new target scope 先建立 active `DesignScope` row，再寫入 imported / published records |
 
 ## TraceStore Read Strategy
 
@@ -131,6 +146,7 @@ Simulation / Post-Processing / Characterization UI 常見路徑：
 2. dataset / design / trace 的 query path 先在 metadata DB 完成篩選
 3. UI compare / Characterization path 只讀必要 slices，不做整體 full-read
 4. post-processed sweep 與 raw sweep 都能對齊同一套 trace-first query model
+5. design scope merge 後，舊 `design_id` deep link 可解析為 archived redirect，且 target scope summary / trace browse 已反映 re-parented rows
 
 ## Related
 

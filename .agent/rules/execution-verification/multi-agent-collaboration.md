@@ -1,32 +1,17 @@
-## Multiple Agent Collaboration
-- **Single Integrator (Mandatory)**:
-    - One delivery line/PR MUST have exactly one Integrator Agent at a time.
-    - Only Integrator may perform final integration (cherry-pick/conflict resolution/merge prep).
-    - Integrator MUST carry accepted contributor changes back to the delivery branch used by the user.
-    - The default delivery branch is `main`; if the user is actively working on another explicit branch, integrate back to that branch instead.
-    - Integrator MUST define the task split, prompt structure, `Allowed Files`, and acceptance criteria for each round.
-    - Integrator MUST treat prompt design as part of the integration job, not as an optional extra.
-- **Fixed Agent Pool**:
-    - The contributor pool is restricted to exactly four contributor identities:
-        - Frontend Contributor Agent
-        - Backend Contributor Agent
-        - Core Contributor Agent
-        - CLI Contributor Agent
-    - Integration Agent is the only integrator identity.
-    - Do not invent temporary contributor role names without updating this source-of-truth first.
-    - Exact file boundaries are still defined per task by the Integrator.
-- **Contributor Boundaries**:
-    - Contributors MUST edit only assigned files (`Allowed Files`).
-    - If required changes exceed scope, stop and hand off to Integrator.
-- **Preflight**:
-    - Before editing, run `git status --porcelain`.
-    - If unrelated dirty changes exist, do not proceed blindly; report and wait.
-- **Isolation**:
-    - MUST use one `git worktree` + one branch per agent/task.
-    - Do not let multiple agents co-edit the same dirty worktree.
-- **Handoff Required**:
-    - Provide commit hashes, changed files, test results, and known risks.
-    - Dirty worktree changes without a committed handoff are not a complete contributor deliverable.
-- **Never**:
-    - Never revert/overwrite others' unintegrated work.
-    - Never use destructive git cleanup on shared work.
+## Codex Subagent Coordination
+- The main thread owns goal definition, SoT loading, lane selection, integration, conflict resolution, validation, and final reporting.
+- Subagent work lanes are optional delegation scopes, not permanent ownership teams or fixed named agent roles.
+- Use subagents only when they reduce real coordination cost.
+- Recommended lanes are:
+    - Julia Core + Pluto Research
+    - Product Async Contracts
+    - Backend + Runner Integration
+    - Application Workbench
+    - Python Notebook / Data Inspection
+    - Docs / SoT Consistency
+- Subagents must stay inside assigned folder structure and owner-boundary rules, avoid redefining architecture, and report findings/changes/risks back to the main thread.
+- Cross-lane conflicts are resolved by the main thread against the relevant SoT.
+- Do not create new active `Plans/` coordination artifacts or committed lane handoffs.
+- Direct `develop` updates are allowed when the working tree stays coherent and touched-area checks are run.
+- Long-term decisions belong in `docs/reference/**`, not temporary planning files.
+- Final reports should summarize changed surfaces, validation, risks, and any skipped checks.

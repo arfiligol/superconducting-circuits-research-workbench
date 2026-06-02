@@ -26,11 +26,11 @@ updated_by: codex
 
 !!! info "Page Frame"
     本頁負責 canonical source 編輯、`Format` / `Save` / `Delete`、persisted validation preview、normalized output 與 schema authoring hints。
-    schema list browse、simulation execution、characterization analysis 與 schemdraw render 不屬於本頁責任。
+    schema list browse、simulation execution、analysis execution 與 schemdraw render 不屬於本頁責任。
 
 !!! tip "Shared Shell"
     本頁位於 shared [Header](../shared-shell/header.md) / [Sidebar](../shared-shell/sidebar.md) shell 中。
-    page body 可顯示 active schema 與 dirty state，但不得接管 global dataset、task queue 或 user menu。
+    page body 可顯示 active schema 與 dirty state，但不得接管 global dataset、task execution 或 user menu。
 
 ## Schema Identity Contract
 

@@ -40,13 +40,9 @@ nav = [
       { "Manage Tags" = "how-to/manage-db/tags.md" },
       { "Reorder IDs" = "how-to/manage-db/reorder-record-ids.md" },
     ] },
-    { "CLI" = [
-      { "Overview" = "how-to/cli/index.md" },
-    ] },
     { "Contributing" = [
       { "Workflow" = "how-to/contributing.md" },
       { "Circuit Diagrams" = "how-to/contributing/circuit-diagrams.md" },
-      { "CLI Docs Automation" = "how-to/contributing/cli-docs-automation.md" },
       { "Extending" = [
         { "Overview" = "how-to/extend/index.md" },
         { "Add Data Source" = "how-to/extend/add-data-source.md" },
@@ -55,12 +51,18 @@ nav = [
     ] },
     { "Simulation" = [
       { "Overview" = "how-to/simulation/index.md" },
-      { "Python API" = "how-to/simulation/python-api.md" },
       { "Native Julia" = "how-to/simulation/native-julia.md" },
+    ] },
+    { "Pluto" = [
+      { "Authoring Workflow" = "how-to/pluto/authoring-workflow.md" },
+      { "Parameter Sweep Workflow" = "how-to/pluto/parameter-sweep-workflow.md" },
     ] },
   ] },
   { "Tutorials" = [
     { "Overview" = "tutorials/index.md" },
+    { "Julia Core" = [
+      { "Pluto Examples" = "tutorials/julia-core/pluto-examples.md" },
+    ] },
     { "App Circuit Simulation" = [
       { "Overview" = "tutorials/app-circuit-simulation/index.md" },
       { "Circuit Netlist Getting Started" = "tutorials/schematic-netlist-getting-started.md" },
@@ -91,7 +93,6 @@ nav = [
       { "Overview" = "explanation/architecture/index.md" },
       { "Clean Architecture" = "explanation/architecture/design-decisions/clean-architecture.md" },
       { "Data Storage" = "explanation/architecture/data-storage.md" },
-      { "Trace Platform Plan" = "explanation/architecture/trace-platform-implementation-plan.md" },
       { "Pipeline" = [
         { "Overview" = "explanation/architecture/pipeline/index.md" },
         { "Data Flow" = "explanation/architecture/pipeline/data-flow.md" },
@@ -109,10 +110,21 @@ nav = [
   { "Reference" = [
     { "Architecture" = [
       { "Overview" = "reference/architecture/index.md" },
+      { "Simulation Interface Boundaries" = "reference/architecture/simulation-interface-boundaries.md" },
+      { "Product Async Contracts" = "reference/architecture/product-async-contracts.md" },
+      { "Julia Runner Compute Plane" = "reference/architecture/julia-runner-compute-plane.md" },
+      { "Runner Result Manifest" = "reference/architecture/runner-result-manifest.md" },
+      { "TraceStore Zarr" = "reference/architecture/trace-store-zarr.md" },
       { "Canonical Contract Registry" = "reference/architecture/canonical-contract-registry.md" },
-      { "Parity Matrix" = "reference/architecture/parity-matrix.md" },
+    ] },
+    { "Agent Skills" = [
+      { "Overview" = "reference/agent-skills/index.md" },
+      { "Work Lane Orchestration" = "reference/agent-skills/work-lane-orchestration.md" },
+      { "Write Pluto Notebook" = "reference/agent-skills/write-pluto-notebook.md" },
     ] },
     { "App" = [
+      { "Application Interface" = "reference/app/application-interface.md" },
+      { "Application Authoring Map" = "reference/app/application-authoring.md" },
       { "Shared" = [
         { "Overview" = "reference/app/shared/index.md" },
         { "Runtime Modes" = "reference/app/shared/runtime-modes.md" },
@@ -135,6 +147,10 @@ nav = [
         { "Shared Workflow" = [
           { "Task Management" = "reference/app/frontend/shared-workflow/task-management.md" },
         ] },
+        { "Product Workbenches" = [
+          { "Circuit Simulation Workbench" = "reference/app/frontend/simulation-workbench/circuit-simulation.md" },
+          { "Analysis Workbench" = "reference/app/frontend/analysis-workbench/analysis-workbench.md" },
+        ] },
         { "Workspace" = [
           { "Dashboard" = "reference/app/frontend/workspace/dashboard.md" },
           { "Dataset" = "reference/app/frontend/workspace/dataset.md" },
@@ -146,11 +162,6 @@ nav = [
           { "Schemas" = "reference/app/frontend/definition/schemas.md" },
           { "Schema Editor" = "reference/app/frontend/definition/schema-editor.md" },
         ] },
-        { "Research Workflow" = [
-          { "Schemdraw" = "reference/app/frontend/research-workflow/schemdraw.md" },
-          { "Circuit Simulation" = "reference/app/frontend/research-workflow/circuit-simulation.md" },
-          { "Characterization" = "reference/app/frontend/research-workflow/characterization.md" },
-        ] },
       ] },
       { "Backend" = [
         { "Overview" = "reference/app/backend/index.md" },
@@ -158,30 +169,41 @@ nav = [
         { "Circuit Definitions" = "reference/app/backend/circuit-definitions.md" },
         { "Tasks & Execution" = "reference/app/backend/tasks-execution.md" },
         { "Audit Logs" = "reference/app/backend/audit-logs.md" },
-        { "Schemdraw Render" = "reference/app/backend/schemdraw-render.md" },
-        { "Characterization Results" = "reference/app/backend/characterization-results.md" },
         { "Datasets & Results" = "reference/app/backend/datasets-results.md" },
+        { "ResultView API" = "reference/app/backend/result-view-api.md" },
       ] },
-    ] },
-    { "CLI Options" = [
-      { "Overview" = "reference/cli/index.md" },
-      { "Standalone Runtime" = "reference/cli/standalone-runtime.md" },
-      { "Local / App Interchange" = "reference/cli/local-app-interchange.md" },
-      { "sc core" = "reference/cli/sc-core.md" },
-      { "sc session" = "reference/cli/sc-session.md" },
-      { "sc datasets" = "reference/cli/sc-datasets.md" },
-      { "sc tasks" = "reference/cli/sc-tasks.md" },
-      { "sc events" = "reference/cli/sc-events.md" },
-      { "sc results" = "reference/cli/sc-results.md" },
-      { "sc characterization" = "reference/cli/sc-characterization.md" },
-      { "sc ops" = "reference/cli/sc-ops.md" },
     ] },
     { "Core" = [
       { "Overview" = "reference/core/index.md" },
       { "Python Core" = "reference/core/python-core.md" },
-      { "Julia Wrapper" = "reference/core/julia-wrapper.md" },
-      { "Julia Core" = "reference/core/julia-core.md" },
-      { "Julia Plotting" = "reference/core/julia-plotting.md" },
+      { "Julia Compute Boundary" = "reference/core/julia-wrapper.md" },
+      { "Julia Core" = [
+        { "Overview" = "reference/julia-core/index.md" },
+        { "Authoring Model" = "reference/julia-core/authoring-model.md" },
+        { "Circuit Plan" = "reference/julia-core/circuit-plan.md" },
+        { "Components and Composition" = "reference/julia-core/components-and-composition.md" },
+        { "Component Libraries" = "reference/julia-core/component-libraries.md" },
+        { "Endpoints" = "reference/julia-core/endpoints.md" },
+        { "Relations and Couplings" = "reference/julia-core/relations-and-couplings.md" },
+        { "Coupling Models" = "reference/julia-core/coupling-models.md" },
+        { "Transmission Line Ladder" = "reference/julia-core/transmission-line-ladder.md" },
+        { "Macro Authoring DSL" = "reference/julia-core/macro-authoring-dsl.md" },
+        { "Engineering Graph" = "reference/julia-core/engineering-graph.md" },
+        { "Schematic Layout Intent" = "reference/julia-core/schematic-layout-intent.md" },
+        { "Compiler" = "reference/julia-core/compiler.md" },
+        { "Compiled Circuit" = "reference/julia-core/compiled-circuit.md" },
+        { "HB Simulation Intent" = "reference/julia-core/hb-simulation-intent.md" },
+        { "JosephsonCircuits hbsolve Controls" = "reference/julia-core/josephsoncircuits-hbsolve-controls.md" },
+        { "Parameter Sweeps" = "reference/julia-core/parameter-sweeps.md" },
+        { "Validation" = "reference/julia-core/validation.md" },
+        { "Debugging and Diagnostics" = "reference/julia-core/debugging-and-diagnostics.md" },
+        { "Runner-Safe API" = "reference/julia-core/runner-safe-api.md" },
+      ] },
+      { "Julia Visualizer" = [
+        { "Overview" = "reference/julia-visualizer/index.md" },
+        { "PlotlyJS Figures" = "reference/julia-visualizer/plotlyjs-figures.md" },
+      ] },
+      { "Julia Package Surface" = "reference/core/julia-core.md" },
     ] },
     { "Data Formats" = [
       { "Overview" = "reference/data-formats/index.md" },
@@ -207,10 +229,9 @@ nav = [
         { "Commit Standards" = "reference/guardrails/execution-verification/commit-standards.md" },
         { "Branch & Worktree Flow" = "reference/guardrails/execution-verification/branch-and-worktree-flow.md" },
         { "CI Gates" = "reference/guardrails/execution-verification/ci-gates.md" },
-        { "Phase Gates" = "reference/guardrails/execution-verification/phase-gates.md" },
-        { "Prompt Grading" = "reference/guardrails/execution-verification/prompt-grading.md" },
-        { "Multiple Agent Collaboration" = "reference/guardrails/execution-verification/multi-agent-collaboration.md" },
-        { "Agent Handoff Formats" = "reference/guardrails/execution-verification/contributor-reporting.md" },
+        { "Task Scope Sizing" = "reference/guardrails/execution-verification/prompt-grading.md" },
+        { "Codex Subagent Coordination" = "reference/guardrails/execution-verification/multi-agent-collaboration.md" },
+        { "Work Summary Formats" = "reference/guardrails/execution-verification/contributor-reporting.md" },
       ] },
       { "Code Quality" = [
         { "Code Style" = "reference/guardrails/code-quality/code-style.md" },
@@ -224,6 +245,7 @@ nav = [
       { "Documentation Design" = [
         { "Overview" = "reference/guardrails/documentation-design/documentation.md" },
         { "Standards" = "reference/guardrails/documentation-design/standards.md" },
+        { "Zensical Native Style" = "reference/guardrails/documentation-design/zensical-native-style.md" },
         { "Style" = [
           { "Macro Style / Information Layout" = "reference/guardrails/documentation-design/information-layout.md" },
           { "Micro Style / Writing & Visual Elements" = "reference/guardrails/documentation-design/style.md" },
@@ -233,7 +255,6 @@ nav = [
           { "Page Reference Specs" = "reference/guardrails/documentation-design/page-reference-specs.md" },
           { "Explanation Physics" = "reference/guardrails/documentation-design/explanation-physics.md" },
           { "Circuit Diagrams" = "how-to/contributing/circuit-diagrams.md" },
-          { "CLI Docs Automation" = "how-to/contributing/cli-docs-automation.md" },
         ] },
       ] },
       { "UI/UX Quality" = [
@@ -245,8 +266,10 @@ nav = [
     ] },
     { "Contributors" = "reference/contributors.md" },
   ] },
-  { "Notebooks" = [
-    { "Floating Qubit Study" = "notebooks/floating-qubit-study.md" },
+    { "Notebooks" = [
+      { "Overview" = "reference/notebooks/index.md" },
+      { "Python Notebook Authoring" = "reference/notebooks/python-authoring.md" },
+      { "Floating Qubit Study" = "notebooks/floating-qubit-study.md" },
     { "Floating Qubit Real-Part Admittance Extraction" = "notebooks/floating-qubit-real-part-admittance-extraction.md" },
     { "S-Parameter Resonance Fit Theory" = "notebooks/s-parameter-resonance-fit-theory.md" },
     { "Macroscopic Wavefunction" = "notebooks/macroscopic-wavefunction.md" },
@@ -263,6 +286,7 @@ language = "zh-TW"
 features = [
   "content.code.copy",
   "content.code.annotate",
+  "navigation.indexes",
   "navigation.tabs",
   "navigation.top",
   "search.highlight",

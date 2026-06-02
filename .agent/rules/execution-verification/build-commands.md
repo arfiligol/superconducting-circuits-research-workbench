@@ -1,29 +1,28 @@
 ## Run / Build Commands
-- **Rewrite root orchestration**:
-    - `npm run rewrite:install`
-    - `npm run rewrite:check`
-    - `npm run rewrite:build`
-    - `npm run rewrite:dev`
-    - `npm run rewrite:stop`
+- **Repo-root orchestration**:
+    - `npm run app:dev`
+    - `npm run app:stop`
 - **Python install**: `uv sync`
-- **Julia install**: `julia --project=. -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
 - **Frontend**:
-    - `npm install --prefix frontend`
-    - `npm run dev --prefix frontend`
-    - `npm run test --prefix frontend`
-    - `npm run lint --prefix frontend`
-    - `npm run typecheck --prefix frontend`
-    - `npm run build --prefix frontend`
+    - `npm install --prefix app/frontend`
+    - `npm run dev --prefix app/frontend`
+    - `npm run test --prefix app/frontend`
+    - `npm run lint --prefix app/frontend`
+    - `npm run typecheck --prefix app/frontend`
+    - `npm run build --prefix app/frontend`
 - **Backend**:
-    - `cd backend && uv sync`
-    - `cd backend && uv run pytest`
-    - `cd backend && uv run uvicorn src.app.main:app --reload --port 8000`
+    - `cd app/backend && uv sync`
+    - `cd app/backend && uv run pytest`
+    - `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000`
+- **Julia Runner**:
+    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
 - **Desktop**:
-    - `npm install --prefix desktop`
-    - `npm run dev --prefix desktop`
-    - `npm run lint --prefix desktop`
-    - `npm run build --prefix desktop`
-- **CLI**: `uv run sc --help`
+    - `npm install --prefix app/desktop`
+    - `npm run dev --prefix app/desktop`
+    - `npm run lint --prefix app/desktop`
+    - `npm run build --prefix app/desktop`
 - **Docs**:
     - `uv run python scripts/check_docs_nav_routes.py --check-source`
     - `./scripts/prepare_docs_locales.sh`

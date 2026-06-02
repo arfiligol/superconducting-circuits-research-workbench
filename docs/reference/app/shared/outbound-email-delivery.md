@@ -45,7 +45,6 @@ updated_by: team
 | Delivery mode | server-side send |
 | Required for production invite flow | yes |
 | Local fallback | manual invite link copy |
-| Password recovery mail | deferred，尚未納入正式 coverage |
 
 ## SMTP Configuration Baseline
 

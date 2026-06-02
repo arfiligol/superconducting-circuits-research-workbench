@@ -1,0 +1,22 @@
+{
+  "rows": [
+    {
+      "parameter": "lowest_observed_frequency_ghz",
+      "label": "Lowest observed frequency",
+      "value": 4.00016000640026,
+      "unit": "GHz"
+    },
+    {
+      "parameter": "highest_observed_frequency_ghz",
+      "label": "Highest observed frequency",
+      "value": 7.19948797951918,
+      "unit": "GHz"
+    },
+    {
+      "parameter": "residual_rms_max",
+      "label": "Max residual RMS",
+      "value": 0.0018814838412654332,
+      "unit": "S"
+    }
+  ]
+}

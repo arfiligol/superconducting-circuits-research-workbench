@@ -4,6 +4,12 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+/* Hide sidebar status badges while preserving status frontmatter for docs tooling. */
+.md-nav .md-status,
+.md-sidebar .md-status {
+    display: none !important;
+}
+
 /* 移除 Zensical 預設 Hero 可能帶有的生硬邊框 */
 .zen-hero {
     border: none !important;
@@ -503,45 +509,6 @@ body {
 .sc-capability-table td:nth-child(4),
 .sc-capability-table th:nth-child(4) {
     min-width: 8rem;
-}
-
-.sc-status-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 1.85rem;
-    padding: 0.2rem 0.68rem;
-    border-radius: 999px;
-    font-size: 0.76rem;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    border: 1px solid transparent;
-    white-space: nowrap;
-}
-
-.sc-status-pill--available {
-    color: #0d6b43;
-    background: rgba(46, 204, 113, 0.12);
-    border-color: rgba(46, 204, 113, 0.22);
-}
-
-.sc-status-pill--partial {
-    color: #8a5a00;
-    background: rgba(255, 196, 80, 0.16);
-    border-color: rgba(255, 196, 80, 0.28);
-}
-
-.sc-status-pill--scaffolded {
-    color: #155a96;
-    background: rgba(81, 161, 255, 0.14);
-    border-color: rgba(81, 161, 255, 0.26);
-}
-
-.sc-status-pill--candidate {
-    color: #6f3da4;
-    background: rgba(157, 80, 187, 0.14);
-    border-color: rgba(157, 80, 187, 0.24);
 }
 
 .sc-marketing-section--cta {

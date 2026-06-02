@@ -8,21 +8,25 @@ tags:
 status: draft
 owner: team
 audience: user
-scope: plotting utilities 的補充入口；正式內容移至 Core / Julia Plotting。
-version: v0.2.0
-last_updated: 2026-03-13
-updated_by: team
+scope: utilities 的補充入口；正式 compute 與 plotting workflow 目前由 notebooks / runner docs 承接。
+version: v0.3.0
+last_updated: 2026-05-28
+updated_by: codex
 ---
 
-# Plotting Utilities
+# Utilities
 
-本頁是 plotting utilities 的補充入口。
+本頁是 utility-oriented workflows 的補充入口。
 
-正式的 plotting reference 內容已移至 [Core / Julia Plotting](core/julia-plotting.md)。
+舊的 root Julia plotting helpers 已從 active code surface 移除。新的可視化 workflow 應從 app result browser、Pluto notebooks，或 Python notebook inspection 開始。
 
-!!! info "Moved page"
-    這頁只保留導引功能，不再承載正式 plotting contract。若你要找 canonical plotting reference，請直接進入 `Core / Julia Plotting`。
+!!! info "Current routing"
+    App-facing result visualization lives in the Application Interface.
+    Research visualization belongs in notebooks.
+    Staged numeric output belongs to the Julia Runner manifest + TraceStore contracts.
 
-## Moved
+## Current References
 
-- [Julia Plotting](core/julia-plotting.md)
+- [Application Interface](app/application-interface.md)
+- [Notebook Interface](notebooks/index.md)
+- [TraceStore Zarr](architecture/trace-store-zarr.md)
