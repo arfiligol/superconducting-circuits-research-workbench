@@ -10,15 +10,16 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: current platform 的 Notebook/Application/Julia Runner 技術選型與工具規範。
-version: v3.4.0
-last_updated: 2026-05-28
+scope: current platform 的 Public Site、Notebook/Application/Julia Runner 技術選型與工具規範。
+version: v3.5.0
+last_updated: 2026-06-04
 updated_by: codex
 ---
 
 # Tech Stack
 
-本 branch 的目標技術棧是 **Next.js + FastAPI + Electron + Julia Core + Julia Runner + local filesystem Zarr**。
+本 branch 的目標技術棧是 **Astro public site + Next.js application + FastAPI + Electron + Julia Core + Julia Runner + local filesystem Zarr**。
+Astro public site owns the public introduction pages; Zensical owns technical docs under `/docs/`.
 Python Backend 是 control/data plane；Julia Runner 是 compute plane；Notebook 是 explicit research execution environment。
 
 !!! info "How to use this page"
@@ -30,32 +31,39 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 
 | Surface | Required interpretation |
 | --- | --- |
+| `site/` | Astro + Tailwind v4 public introduction site |
 | `app/backend/` | canonical Python Backend control/data plane |
 | `app/frontend/` | canonical Next.js application surface |
 | `app/desktop/` | canonical Electron shell surface |
 | `core/julia/SuperconductingCircuitsCore/` | docs-defined Julia Core Authoring model, simulation helpers, and analysis helpers |
 | `core/julia/SuperconductingCircuitsVisualizer/` | Julia PlotlyJS figure construction for Pluto and report figures |
 | `core/julia/SuperconductingCircuitsRunner/` | async Julia compute runner |
+| `core/julia/SuperconductingCircuitsAnalysisBridge/` | Pluto-friendly Julia wrapper around Python analysis through PythonCall |
+| `core/analysis/` | installable Python analysis package for fitting, S/Y/Z transforms, and mode extraction |
 | `core/python/sc_data_contracts/` | optional shared Python schemas/contracts |
 | `notebooks/pluto/` | Julia research cockpit |
 | `notebooks/python/` | programmable data analysis, file inspection, Backend API inspection, migration, emergency analysis |
 | `scripts/` | dev/build/test/maintenance helpers only |
 
 !!! warning "Root `src/` is not the canonical umbrella"
-    package-internal `src/` 可以存在於各 top-level surface 內部，
-    但 root-level `src/` 不是 canonical topology 的主要容器。
+    Python editable packages use direct layout in this repo, not package-internal `src/`.
+    Frontend/JULIA package source directories may still use their ecosystem conventions,
+    but root-level `src/` is not a canonical topology container.
     root-level runtime or app code must not be recreated there.
 
 ## Stack Map
 
 | layer | baseline |
 | --- | --- |
+| Public site | Astro static site + Tailwind CSS v4 |
 | Frontend | Next.js App Router + React 19 + TypeScript |
 | Backend | FastAPI + Pydantic + SQLAlchemy/Alembic + NumPy + Zarr |
+| Python analysis | uv workspace package under `core/analysis/` |
 | Compute runner | Julia + HTTP.jl + JSON3.jl + StructTypes.jl + Zarr.jl |
 | Local runtime | frontend + Python Backend + Julia Runner |
 | Scientific core | Julia package under `core/julia/SuperconductingCircuitsCore/` |
 | Scientific visualization | Julia package under `core/julia/SuperconductingCircuitsVisualizer/` |
+| Scientific analysis bridge | Julia package under `core/julia/SuperconductingCircuitsAnalysisBridge/` |
 | Desktop shell | Electron |
 
 ## Interface Boundary Rules
@@ -112,6 +120,7 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 | 工具 | 用途 |
 | --- | --- |
 | `Next.js` (App Router) | frontend framework |
+| `Astro` | public introduction site framework |
 | `React 19` | UI runtime |
 | `TypeScript` | frontend language |
 | `Tailwind CSS v4` | styling |
@@ -136,6 +145,14 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 | `DataFrames.jl` | tabular summaries when needed |
 
 ## Module Direction
+
+### Public Site
+
+- Astro public site lives under `site/`
+- Public introduction pages, product positioning, audience framing, visual storytelling, and public entry CTAs belong to `site/`
+- Public site builds as static output and mounts Zensical technical docs at `/docs/`
+- Public site must not import application internals or become an app runtime surface
+- PDF / Typst / deck outputs are not part of the default public-site build unless a separate explicit publishing script is added
 
 ### Frontend
 
@@ -167,7 +184,7 @@ Notebook-specific Python dependencies belong in `notebooks/python/pyproject.toml
 ### Local Runtime Backbone
 
 - frontend process: `npm run dev --prefix app/frontend`
-- backend process: `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000`
+- backend process: `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000`
 - runner process: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'`
 - task claiming is DB-backed through the Python Backend runner API
 - local staging uses filesystem Zarr under `data/staging/tasks/<task_id>/`
@@ -249,22 +266,35 @@ The following changes require a new SoT decision before implementation:
 
 ## Dependency Management
 
-- Python: `pyproject.toml` + `uv.lock`
+- Python: root `pyproject.toml` uv workspace + root `uv.lock`
+- Public site: `site/package.json` + lockfile
 - Frontend: `app/frontend/package.json` + lockfile
 - Desktop: `app/desktop/package.json` + lockfile
 - Julia Core: `core/julia/SuperconductingCircuitsCore/Project.toml`
 - Julia Runner: `core/julia/SuperconductingCircuitsRunner/Project.toml`
+- Julia Analysis Bridge: `core/julia/SuperconductingCircuitsAnalysisBridge/Project.toml`
 
 ### Python Workspace Ownership
 
 - Python Backend package root is `app/backend/`
+- Python analysis package root is `core/analysis/`
+- root `.venv` and root `uv.lock` are the single Python dependency authority
+- `sc-core` remains the installable package for `sc_core`, `core.shared`, and `core.simulation`
 - Python notebook dependencies belong to `notebooks/python/`
-- root `pyproject.toml` is a lightweight workspace/dev project or can cease being an installable application package
+- root `pyproject.toml` is a non-installable uv workspace orchestrator
+- backend-local virtualenvs and backend-local lockfiles are not canonical runtime surfaces
 
 ## Agent Rule { #agent-rule }
 
 ```markdown
 ## Tech Stack
+- **Public site**:
+    - `site/`
+    - Astro
+    - Tailwind CSS v4
+    - static output
+    - mounts Zensical technical docs at `/docs/`
+    - does not import application internals or own app runtime behavior
 - **Frontend**:
     - Next.js App Router
     - React 19
@@ -317,7 +347,9 @@ The following changes require a new SoT decision before implementation:
     - `scripts/maintenance/`
     - no active command-line product surface
 - **Topology**:
-    - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
+    - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/analysis/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
+    - `site/` is the Astro + Tailwind v4 public introduction site
+    - `docs/` is the Zensical technical documentation source mounted at `/docs/`
     - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
 - **Quality tools**:
     - Ruff
@@ -330,5 +362,6 @@ The following changes require a new SoT decision before implementation:
     - Runner staging: local filesystem Zarr v2
     - official TraceStore: Python Backend-managed Zarr
 - New UI work should target Next.js, not the legacy UI layer.
+- New public introduction page work should target Astro under `site/`, not Zensical docs templates.
 - Desktop packaging should use Electron around frontend + Python Backend + Julia Runner.
 ```

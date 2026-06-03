@@ -1,11 +1,16 @@
 ## CI Gates
 - Mandatory checks include:
-    - backend startup smoke and `cd app/backend && uv run pytest`
+    - backend startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
     - `npm run lint --prefix app/frontend`
     - `npm run typecheck --prefix app/frontend`
     - `npm run test --prefix app/frontend`
     - `npm run build --prefix app/frontend`
+    - `npm run check --prefix site` when public site is touched
+    - `npm run build --prefix site` when public site is touched
+    - `./scripts/build/build_public_site.sh` when public site, docs mount, or deployment artifact is touched
     - `npm run lint --prefix app/desktop`
     - `npm run build --prefix app/desktop`
     - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched

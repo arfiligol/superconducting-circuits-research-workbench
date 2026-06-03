@@ -1,0 +1,149 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const docsHref = `${base}/docs/`;
+const aboutHref = `${base}/about/`;
+const heroImage = `${base}/assets/readme-hero-orca-penguin.png`;
+
+const workflowCards = [
+  {
+    title: "Design-to-simulation loop",
+    meta: "Circuit intent, solver evidence, reviewable assumptions",
+    tags: ["Circuit definition", "FEM", "Parameter sweep"],
+    bullets: [
+      ["Keep intent visible:", "connect target quantities, circuit definitions, layout-level models, and solver outputs without losing the original research question."],
+      ["Make iteration inspectable:", "turn simulation results into artifacts that can be checked, compared, and reused in the next design pass."],
+    ],
+  },
+  {
+    title: "Measurement and comparison loop",
+    meta: "Trace ingestion, matrix views, provenance-aware results",
+    tags: ["S / Y / Z", "TraceStore", "Comparison"],
+    bullets: [
+      ["Use one analysis language:", "bring simulation and measurement back to network-response views before deciding whether model assumptions still hold."],
+      ["Preserve provenance:", "keep datasets, traces, derived results, and feedback decisions tied to the evidence that produced them."],
+    ],
+  },
+  {
+    title: "Notebook-to-app workflow",
+    meta: "Research exploration first, application hardening second",
+    tags: ["Pluto", "Python", "Electron app"],
+    bullets: [
+      ["Prototype where physics is easiest to inspect:", "use notebooks for derivations, parameter studies, and validation before moving stable flows into the app."],
+      ["Harden only stable loops:", "promote repeated workflows into backend tasks, Julia runner surfaces, and documented commands when the contract is clear."],
+    ],
+  },
+  {
+    title: "Docs-first research infrastructure",
+    meta: "Technical docs under /docs, public story at the root",
+    tags: ["Zensical", "Astro", "Guardrails"],
+    bullets: [
+      ["Separate the surfaces:", "the public root introduces the project; Zensical remains the technical source for how-to, tutorials, explanation, and reference."],
+      ["Keep decisions auditable:", "guardrails, command contracts, and route checks stay close to the implementation so agent work remains reviewable."],
+    ],
+  },
+];
+---
+
+<BaseLayout>
+  <section class="hero">
+    <div class="hero__inner site-shell">
+      <div class="hero__content">
+        <p class="hero__label">SUPERCONDUCTING CIRCUITS</p>
+        <h1>Research Workbench</h1>
+        <p class="hero__role">Notebook-first tooling for simulation, measurement analysis, and feedback loops.</p>
+        <p class="hero__summary">
+          這個 repo 聚焦 fabrication 之外的研究鏈：從 design intent、solver output、measurement trace 到 comparison evidence，
+          把超導電路研究中容易散落的步驟整理成可檢查、可重複、可交接的工作流。
+        </p>
+        <div class="hero__links" aria-label="Project links">
+          <a href={docsHref}>Technical documentation</a>
+          <a href={aboutHref}>Project scope</a>
+          <a href="https://github.com/arfiligol/superconducting-circuits-research-workbench">GitHub repository</a>
+        </div>
+      </div>
+      <div class="hero__media-wrap" aria-hidden="true">
+        <img class="hero__media" src={heroImage} alt="" loading="eager" />
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <section class="content-band" id="profile">
+      <div class="section-heading">
+        <h2>Project Profile</h2>
+      </div>
+      <div class="profile-grid">
+        <div class="copy-stack">
+          <p>
+            Superconducting Circuits Research Workbench is a research tooling repo, not a broad product pitch.
+            Its job is to make physics assumptions, simulation evidence, measurement data, and automation contracts easier to inspect together.
+          </p>
+          <p>
+            The platform starts from notebooks because early research questions are usually rough and changing.
+            When a loop becomes stable, the implementation can move into application surfaces, backend tasks, Julia compute boundaries, and durable result storage.
+          </p>
+          <p>
+            The public site now acts as a quiet introduction page. The technical documentation remains under <strong>/docs/</strong>, where tutorials,
+            how-to guides, explanations, references, and guardrails belong.
+          </p>
+        </div>
+        <aside class="summary-panel" aria-labelledby="summary-title">
+          <h3 id="summary-title">Working Boundary</h3>
+          <p>Focus: design intent, simulation outputs, measurement traces, comparison, feedback, and reproducible research operations.</p>
+          <p>Out of scope: fabrication integration, generic photonics workflow claims, and marketing pages that duplicate technical docs.</p>
+          <p>Source split: Astro for the public introduction; Zensical for technical docs mounted at /docs/.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="content-band content-band--tight" id="workflows">
+      <div class="section-heading">
+        <h2>Selected Workflows</h2>
+      </div>
+      <div class="project-stack">
+        {workflowCards.map((card) => (
+          <article class="project-card">
+            <div class="project-card__top">
+              <div>
+                <h3>{card.title}</h3>
+                <p class="project-card__meta">{card.meta}</p>
+              </div>
+              <ul class="project-tags" aria-label={`${card.title} themes`}>
+                {card.tags.map((tag) => <li>{tag}</li>)}
+              </ul>
+            </div>
+            <ul>
+              {card.bullets.map(([lead, body]) => (
+                <li><strong>{lead}</strong> {body}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="content-band content-band--tight">
+      <div class="section-heading">
+        <h2>Site Split</h2>
+      </div>
+      <div class="scope-grid">
+        <article class="scope-card">
+          <h3>Public root</h3>
+          <p>
+            The Astro site at <strong>/</strong> introduces the repo, its scope, and the path into the docs.
+            It should stay compact, readable, and close to the actual research platform.
+          </p>
+        </article>
+        <article class="scope-card">
+          <h3>Technical docs</h3>
+          <p>
+            Zensical remains mounted at <strong>/docs/</strong> for how-to guides, tutorials, explanation, reference pages,
+            guardrails, and route-checked documentation.
+          </p>
+        </article>
+      </div>
+    </section>
+  </main>
+</BaseLayout>

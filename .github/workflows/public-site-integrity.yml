@@ -1,21 +1,28 @@
-name: Deploy Public Site to GitHub Pages
+name: Public Site Integrity
 
 on:
+  pull_request:
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "zensical.toml"
+      - "scripts/build/build_public_site.sh"
+      - "scripts/build_docs_sites.sh"
+      - ".github/workflows/public-site-integrity.yml"
+      - ".github/workflows/deploy-docs.yml"
   push:
     branches: [main]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "zensical.toml"
+      - "scripts/build/build_public_site.sh"
+      - "scripts/build_docs_sites.sh"
+      - ".github/workflows/public-site-integrity.yml"
+      - ".github/workflows/deploy-docs.yml"
 
 jobs:
-  build:
+  public-site:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,19 +45,3 @@ jobs:
 
       - name: Build public site
         run: ./scripts/build/build_public_site.sh
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site/dist/
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

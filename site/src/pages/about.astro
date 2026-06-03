@@ -1,0 +1,77 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const docsHref = `${base}/docs/`;
+
+const boundaries = [
+  {
+    title: "In scope",
+    body: "Research workflow support around circuit definitions, simulations, measurement traces, comparison evidence, notebooks, app-backed tasks, and documentation contracts.",
+  },
+  {
+    title: "Out of scope",
+    body: "Fabrication integration, lab operations branding, broad platform claims, and generic photonics workflows that do not preserve superconducting-circuit physics assumptions.",
+  },
+  {
+    title: "Docs role",
+    body: "Zensical is the technical documentation site. It should describe final architecture, tutorials, reference material, and guardrails rather than carry marketing layouts.",
+  },
+  {
+    title: "Public site role",
+    body: "Astro owns the compact public introduction: what the repo is, what workflows it supports, and where a reader should enter the technical docs.",
+  },
+];
+---
+
+<BaseLayout title="Scope | Superconducting Circuits Research Workbench">
+  <main>
+    <section class="content-band">
+      <div class="section-heading">
+        <h2>Project Scope</h2>
+      </div>
+      <div class="profile-grid">
+        <div class="copy-stack">
+          <p>
+            This repo should read like a research workbench, not a general landing page.
+            The central concern is the loop from design intent to simulation evidence, measurement comparison, and feedback decisions.
+          </p>
+          <p>
+            The technical docs can be deep and precise. The public site should stay narrow: introduce the platform, state its boundary,
+            and send readers to the right Zensical docs section.
+          </p>
+        </div>
+        <aside class="summary-panel" aria-labelledby="about-summary-title">
+          <h3 id="about-summary-title">URL Contract</h3>
+          <p><strong>/</strong> and <strong>/about/</strong> are Astro introduction routes.</p>
+          <p><strong>/docs/</strong> is the Zensical technical documentation entry.</p>
+          <p>Both surfaces build into one deployable static artifact.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="content-band content-band--tight">
+      <div class="section-heading">
+        <h2>Boundaries</h2>
+      </div>
+      <div class="scope-grid">
+        {boundaries.map((item) => (
+          <article class="scope-card">
+            <h3>{item.title}</h3>
+            <p>{item.body}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="content-band content-band--tight">
+      <article class="education-card">
+        <h3>Where to continue</h3>
+        <p>The technical documentation is the maintained source for usage, architecture, route checks, and contributor guardrails.</p>
+        <ul>
+          <li><a href={docsHref}>Open the technical docs at /docs/</a></li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</BaseLayout>

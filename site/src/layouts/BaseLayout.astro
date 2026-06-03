@@ -1,0 +1,65 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Superconducting Circuits Research Workbench",
+  description = "A notebook-first research workbench for superconducting circuit simulation, measurement analysis, and reproducible feedback loops.",
+} = Astro.props;
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const docsHref = `${base}/docs/`;
+const aboutHref = `${base}/about/`;
+const homeHref = `${base}/`;
+const canonicalPath = Astro.url.pathname.endsWith("/") ? Astro.url.pathname : `${Astro.url.pathname}/`;
+const canonicalUrl = new URL(canonicalPath, Astro.site).toString();
+---
+
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="icon" href={`${base}/favicon.svg`} type="image/svg+xml" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <div class="site-header__inner site-shell">
+          <a class="brand" href={homeHref} aria-label="Superconducting Circuits Research Workbench">
+            <span class="brand-mark">SC</span>
+            <span class="brand-text">
+              <span class="brand-title">Research Workbench</span>
+              <span class="brand-subtitle">Superconducting Circuits</span>
+            </span>
+          </a>
+          <nav class="primary-nav" aria-label="Primary">
+            <a href={`${homeHref}#profile`}>Profile</a>
+            <a href={`${homeHref}#workflows`}>Workflows</a>
+            <a href={aboutHref}>Scope</a>
+          </nav>
+          <div class="header-actions">
+            <a class="icon-button" href="https://github.com/arfiligol/superconducting-circuits-research-workbench">GitHub</a>
+            <a class="button button--primary" href={docsHref}>Docs</a>
+          </div>
+        </div>
+      </header>
+      <slot />
+      <footer class="site-footer">
+        <span>Superconducting Circuits Research Workbench</span>
+        <span>·</span>
+        <a href={docsHref}>Technical docs</a>
+        <span>·</span>
+        <a href="https://github.com/arfiligol/superconducting-circuits-research-workbench">GitHub</a>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -10,16 +10,17 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 current platform 的 app/core/notebooks/scripts/docs canonical surfaces、direct-develop iteration 與 migration residue 邊界。
-version: v4.4.0
-last_updated: 2026-05-28
+scope: 定義 current platform 的 site/app/core/notebooks/scripts/docs canonical surfaces、direct-develop iteration 與 migration residue 邊界。
+version: v4.5.0
+last_updated: 2026-06-04
 updated_by: codex
 ---
 
 # Folder Structure
 
-本 branch 的 canonical target layout 以 `app/`、`core/`、`notebooks/`、`scripts/`、`docs/` 作為正式架構邊界。
-`app/backend/`、`app/frontend/`、`app/desktop/`、`core/julia/`、`core/python/` 是目前應被人類與 AI Agent 直接辨識的主要開發對象。
+本 branch 的 canonical target layout 以 `site/`、`app/`、`core/`、`notebooks/`、`scripts/`、`docs/` 作為正式架構邊界。
+`site/` 是 Astro public introduction site；`docs/` 是 Zensical technical docs source。
+`app/backend/`、`app/frontend/`、`app/desktop/`、`core/julia/`、`core/analysis/`、`core/python/` 是目前應被人類與 AI Agent 直接辨識的主要開發對象。
 
 root-level `backend/`、`frontend/`、`desktop/`、`cli/` 與 `src/` 不再是 active surfaces。
 若未來又看到這些 root-level 位置出現可執行 code，應先視為 architecture regression。
@@ -32,7 +33,8 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 ## Target Layout
 
 ```text
-superconducting-circuits-tutorial/
+superconducting-circuits-research-workbench/
+├── site/                      # Astro public introduction site
 ├── app/
 │   ├── backend/               # Python Backend control/data plane
 │   ├── frontend/              # Next.js data workbench
@@ -41,13 +43,17 @@ superconducting-circuits-tutorial/
 │   ├── julia/
 │   │   ├── SuperconductingCircuitsCore/
 │   │   ├── SuperconductingCircuitsVisualizer/
-│   │   └── SuperconductingCircuitsRunner/
+│   │   ├── SuperconductingCircuitsRunner/
+│   │   └── SuperconductingCircuitsAnalysisBridge/
+│   ├── analysis/
+│   │   └── superconducting_circuits_analysis/
 │   └── python/
 │       └── sc_data_contracts/
+│           └── sc_data_contracts/
 ├── notebooks/
 │   ├── pluto/
 │   └── python/
-├── docs/                      # zh-TW docs, guardrails, and docs staging tree
+├── docs/                      # Zensical technical docs, guardrails, and docs staging tree
 ├── data/                      # raw / processed / trace-store / local DB
 ├── openapi.json               # committed OpenAPI snapshot for contract sync
 └── scripts/
@@ -59,13 +65,16 @@ superconducting-circuits-tutorial/
 
 !!! important "Top-level folders are the architecture boundaries"
     這份 target layout 故意不把 root `backend/`、`frontend/`、`desktop/`、`cli/` 或 `src/` 畫成 canonical surfaces。
-    package-internal `src/` 可以存在於 `app/backend/`、`app/frontend/`、`app/desktop/` 之內，
-    但 root-level package surfaces 不再是未來架構的正式收納模型。
+    Python editable packages use direct layout in this repo: `app/backend/app_backend/`,
+    `core/analysis/superconducting_circuits_analysis/`, and
+    `core/python/sc_data_contracts/sc_data_contracts/`.
+    Do not reintroduce Python package-internal `src/` directories unless the SoT is explicitly changed.
 
 ## Placement Rules
 
 | 如果要改 | 應放位置 |
 | --- | --- |
+| Public introduction page, product positioning, marketing/static landing content | `site/` |
 | Next.js page, layout, component | `app/frontend/` |
 | Application Simulation Workbench UI | `app/frontend/` |
 | Application Analysis Workbench UI | `app/frontend/` |
@@ -76,6 +85,8 @@ superconducting-circuits-tutorial/
 | Julia PlotlyJS visualization helpers | `core/julia/SuperconductingCircuitsVisualizer/` |
 | Julia async compute runner | `core/julia/SuperconductingCircuitsRunner/` |
 | Julia Runner task execution | `core/julia/SuperconductingCircuitsRunner/` |
+| Julia Pluto/Python analysis bridge | `core/julia/SuperconductingCircuitsAnalysisBridge/` |
+| Python analysis algorithms / fitting / matrix transforms | `core/analysis/` |
 | Python data contract schemas if needed | `core/python/sc_data_contracts/` |
 | Pluto notebook | `notebooks/pluto/` |
 | Direct research notebook | `notebooks/pluto/` |
@@ -148,8 +159,10 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 7. `core/julia/SuperconductingCircuitsRunner/` depends on Julia Core and Backend Runner protocol, and does not own formal metadata DB
 8. `core/julia/SuperconductingCircuitsVisualizer/` may depend on PlotlyJS and Julia numeric traces, but Julia Core and Julia Runner must not depend on PlotlyJS
 9. `core/julia/SuperconductingCircuitsCore/` does not depend on FastAPI, Next.js, Electron, Python Backend internals, or PlotlyJS
-10. `scripts/` 不得成為 user-facing command-line product surface
-11. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
+10. `core/julia/SuperconductingCircuitsAnalysisBridge/` may depend on PythonCall and `core/analysis/`, but does not implement fitting algorithms
+11. `core/analysis/` may own Python analysis algorithms and schemas, but must not import FastAPI routes or frontend DTOs
+12. `scripts/` 不得成為 user-facing command-line product surface
+13. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
 
 ??? note "Why the full tree is still shown"
     這頁保留完整 target layout，是因為 folder boundary 本身就是 reference contract。其餘 guardrails 不需要都像這樣展開。
@@ -159,11 +172,14 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 ```markdown
 ## Folder Structure
 - **Frontend** work goes to `app/frontend/`.
+- **Public introduction site** work goes to `site/`.
 - **Desktop shell** work goes to `app/desktop/`.
 - **Backend** work goes to `app/backend/`.
 - **Julia Core** work goes to `core/julia/SuperconductingCircuitsCore/`.
 - **Julia Visualizer** work goes to `core/julia/SuperconductingCircuitsVisualizer/`.
 - **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
+- **Julia Analysis Bridge** work goes to `core/julia/SuperconductingCircuitsAnalysisBridge/`.
+- **Python analysis** work goes to `core/analysis/`.
 - **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
 - **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
 - **Pluto notebooks** may directly use `SuperconductingCircuitsCore`.
@@ -174,6 +190,7 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 - **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
 - **Root worker runtime folder** must not be recreated as a runtime surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
+- **Zensical docs** are technical docs mounted under `/docs/`; public introduction pages belong to `site/`.
 - **Plans** is retired as an active repo surface; do not create new committed plan prompts or lane handoffs.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
 - Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces.
@@ -183,9 +200,12 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
     - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
     - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
     - Julia Visualizer may depend on PlotlyJS and Julia numeric traces; Julia Core and Julia Runner must not depend on PlotlyJS
+    - Julia Analysis Bridge may depend on PythonCall and Python analysis; Julia Core must not depend on PythonCall
+    - Python analysis may own fitting and matrix algorithms; Backend must not execute heavy analysis compute in process
     - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
     - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
     - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
     - Julia Core must stay framework-agnostic
+    - public site is a static introduction surface and must not import app/backend internals
     - scripts are helpers, not user-facing workflow contracts
 ```

@@ -6,6 +6,8 @@ __pycache__/
 # Distribution / Packaging
 .Python
 build/
+!scripts/build/
+!scripts/build/*.sh
 develop-eggs/
 dist/
 downloads/
@@ -97,6 +99,9 @@ Thumbs.db
 # Exception for documentation assets (if you want to strictly track doc images)
 !docs/assets/*.png
 !docs/assets/*.svg
+!site/public/favicon.svg
+!site/public/assets/*.png
+!site/public/assets/*.svg
 
 # Sandbox - Track source, ignore disposable outputs
 sandbox/**/*.csv

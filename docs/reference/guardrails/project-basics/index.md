@@ -11,8 +11,8 @@ status: stable
 owner: docs-team
 audience: contributor
 scope: 定義平台專案目標、技術方向、結構與單一真理順序索引。
-version: v2.0.0
-last_updated: 2026-05-28
+version: v2.1.0
+last_updated: 2026-06-04
 updated_by: codex
 ---
 
@@ -45,7 +45,7 @@ updated_by: codex
 ## Project Basics
 - Project Basics 定義 platform 的使命、範疇、技術棧與結構。
 - 任何影響整體協作與架構一致性的變更，必須先更新本區。
-- 目前 UI 方向為 Next.js，API 方向為 FastAPI，compute plane 方向為 Julia Runner，Notebook 是研究 cockpit。
+- 目前 public introduction site 方向為 Astro；product app UI 方向為 Next.js，API 方向為 FastAPI，compute plane 方向為 Julia Runner，Notebook 是研究 cockpit。
 - backend 的責任邊界與內部藍圖由 `backend-architecture.md` 定義。
 - 舊的 command workflow、retired Python UI runtime、separate queue worker runtime 與 Python in-process Julia runtime 不屬於產品 contract，不應再成為新功能的預設落點。
 ```

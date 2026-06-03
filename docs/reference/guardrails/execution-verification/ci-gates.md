@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: develop 日常整合與 main release promotion 的 PR 品質門檻，含 app layout、Julia Runner、desktop shell 與 docs route validation。
-version: v3.1.0
-last_updated: 2026-05-27
+scope: develop 日常整合與 main release promotion 的 PR 品質門檻，含 public site、app layout、Julia Runner、desktop shell 與 docs route validation。
+version: v3.2.0
+last_updated: 2026-06-04
 updated_by: codex
 ---
 
@@ -29,6 +29,7 @@ updated_by: codex
 | touched area | 至少要過的 gate |
 | --- | --- |
 | foundation workspaces | backend pytest + frontend test/build + desktop lint/build + Julia Runner test |
+| public site | Astro check/build + combined public artifact build |
 | backend | startup smoke + backend pytest |
 | frontend | lint + typecheck + test + build |
 | desktop | lint + build |
@@ -38,16 +39,23 @@ updated_by: codex
 
 === "Foundation Workspaces"
 
-    - install：`cd app/backend && uv sync`、`npm install --prefix app/frontend`、`npm install --prefix app/desktop`
-    - check：`cd app/backend && uv run pytest`、`npm run test --prefix app/frontend`、`npm run lint --prefix app/desktop`、`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - install：`uv sync --all-packages`、`npm install --prefix app/frontend`、`npm install --prefix app/desktop`
+    - check：`uv run --package superconducting-circuits-backend pytest app/backend/tests -q`、`uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`、`npm run test --prefix app/frontend`、`npm run lint --prefix app/desktop`、`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`、`JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
     - build：`npm run build --prefix app/frontend`、`npm run build --prefix app/desktop`
 
 === "Backend / Frontend / Desktop"
 
-    - backend foundation：startup smoke 與 `cd app/backend && uv run pytest`
+    - backend foundation：startup smoke 與 `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
     - frontend：`npm run lint --prefix app/frontend`、`npm run typecheck --prefix app/frontend`、`npm run test --prefix app/frontend`、`npm run build --prefix app/frontend`
     - desktop：`npm run lint --prefix app/desktop`、`npm run build --prefix app/desktop`
     - Julia Runner：`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - Julia Analysis Bridge：`JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+
+=== "Public Site"
+
+    - site：`npm run check --prefix site`、`npm run build --prefix site`
+    - combined artifact：`./scripts/build/build_public_site.sh`
+    - deployment artifact must upload `site/dist/`, not raw `docs/site/`
 
 === "Docs / Review"
 
@@ -75,12 +83,17 @@ updated_by: codex
 ```markdown
 ## CI Gates
 - Mandatory checks include:
-    - backend startup smoke and `cd app/backend && uv run pytest`
+    - backend startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
     - `npm run lint --prefix app/frontend`
     - `npm run typecheck --prefix app/frontend`
     - `npm run test --prefix app/frontend`
     - `npm run build --prefix app/frontend`
+    - `npm run check --prefix site` when public site is touched
+    - `npm run build --prefix site` when public site is touched
+    - `./scripts/build/build_public_site.sh` when public site, docs mount, or deployment artifact is touched
     - `npm run lint --prefix app/desktop`
     - `npm run build --prefix app/desktop`
     - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched

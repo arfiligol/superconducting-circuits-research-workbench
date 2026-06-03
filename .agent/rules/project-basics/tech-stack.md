@@ -1,4 +1,11 @@
 ## Tech Stack
+- **Public site**:
+    - `site/`
+    - Astro
+    - Tailwind CSS v4
+    - static output
+    - mounts Zensical technical docs at `/docs/`
+    - does not import application internals or own app runtime behavior
 - **Frontend**:
     - Next.js App Router
     - React 19
@@ -20,9 +27,11 @@
     - fsspec
 - **Julia Core**:
     - `core/julia/SuperconductingCircuitsCore/`
-    - reusable circuit construction, simulation, sweep, and analysis library
+    - docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers
 - **Julia Runner**:
     - `core/julia/SuperconductingCircuitsRunner/`
+    - calls Julia Core for deterministic task execution
+    - Runner adapters must not create a separate circuit construction path or preserve outdated Core APIs as fallback paths
     - HTTP.jl
     - JSON3.jl
     - StructTypes.jl
@@ -49,7 +58,9 @@
     - `scripts/maintenance/`
     - no active command-line product surface
 - **Topology**:
-    - canonical architecture boundaries are `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
+    - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/analysis/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
+    - `site/` is the Astro + Tailwind v4 public introduction site
+    - `docs/` is the Zensical technical documentation source mounted at `/docs/`
     - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
 - **Quality tools**:
     - Ruff
@@ -62,4 +73,5 @@
     - Runner staging: local filesystem Zarr v2
     - official TraceStore: Python Backend-managed Zarr
 - New UI work should target Next.js, not the legacy UI layer.
+- New public introduction page work should target Astro under `site/`, not Zensical docs templates.
 - Desktop packaging should use Electron around frontend + Python Backend + Julia Runner.

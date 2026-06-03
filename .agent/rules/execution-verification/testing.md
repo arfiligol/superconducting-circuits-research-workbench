@@ -1,16 +1,25 @@
 ## Testing Commands
 - **Foundation workspace check**:
-    - `cd app/backend && uv run pytest`
+    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
     - `npm run test --prefix app/frontend`
     - `npm run lint --prefix app/desktop`
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Backend/core tests**:
-    - `cd app/backend && uv run pytest`
+    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
     - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
+    - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.
+- **Public site checks**:
+    - `npm run check --prefix site`
+    - `npm run build --prefix site`
+    - `./scripts/build/build_public_site.sh`
 - **Desktop foundation checks**:
     - `npm run lint --prefix app/desktop`
     - `npm run build --prefix app/desktop`
