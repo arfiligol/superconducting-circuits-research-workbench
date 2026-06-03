@@ -45,6 +45,55 @@ Simulation / Analysis
 
 Pluto should not use a separate construction path, and it should not submit Backend tasks as its normal authoring role.
 
+## Package Setup
+
+Use one of the two setup modes below. The mode depends on where the notebook lives.
+
+### User-Written Notebooks
+
+For notebooks you create outside this repository, first register the local Julia packages and Revise in the Julia default environment used by Pluto:
+
+```bash
+npm run julia:dev-install
+```
+
+After that, keep the first notebook cell tied to the same Julia default environment and load Revise before the local packages:
+
+```julia
+import Pkg
+Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io=devnull)
+
+using Revise
+using SuperconductingCircuitsCore
+```
+
+Add plotting and presentation packages only when that notebook needs them:
+
+```julia
+using PlutoUI
+using SuperconductingCircuitsVisualizer
+```
+
+Do not copy repo-relative `Pkg.develop(path=joinpath(@__DIR__, "..", "..", "core", ...))` cells into notebooks outside the repository. That pattern is valid only while the notebook remains under `notebooks/pluto/`, where `@__DIR__/../..` resolves to the repository root.
+
+User-written notebooks should not depend on repo-relative `includes/` files. Reusable scientific helpers belong in `SuperconductingCircuitsCore`, and reusable plotting helpers belong in `SuperconductingCircuitsVisualizer`.
+
+### Repository Notebooks
+
+Checked-in examples under `notebooks/pluto/` use the same local-dev package convention:
+
+```julia
+import Pkg
+Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io=devnull)
+
+using Revise
+using PlutoUI
+using SuperconductingCircuitsCore
+using SuperconductingCircuitsVisualizer
+```
+
+The explicit `Pkg.activate(...)` call tells Pluto not to use its automatic per-notebook package manager for local dev packages. These notebooks may still include repo-local helper files from `notebooks/pluto/includes/`. Those helpers are notebook support code, not package installation bootstrap.
+
 ## Cell Layout
 
 Use a layout that makes each boundary inspectable:

@@ -12,22 +12,10 @@ using InteractiveUtils
 # ╔═╡ 3d128bb8-1bcf-57bb-a996-eb9d4cbe06e5
 begin
     import Pkg
+    Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io=devnull)
+
+    using Revise
     using PlutoUI
-
-    core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
-    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
-    core_project_file = normpath(joinpath(core_project, "Project.toml"))
-    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
-    active_project_file = normpath(something(Base.active_project(), ""))
-
-    if active_project_file != core_project_file && active_project_file != visualizer_project_file
-        Pkg.develop(path=core_project)
-        Pkg.develop(path=visualizer_project)
-    else
-        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
-        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
-    end
-
     using SuperconductingCircuitsCore
     using SuperconductingCircuitsVisualizer
 
@@ -220,6 +208,7 @@ begin
 
     circuit_plan
 end
+
 # ╔═╡ c4a819ae-cd12-5994-bad2-c2375369e34b
 md"""
 ## Inspect Core Representations

@@ -39,19 +39,47 @@ Python notebooks may analyze local Zarr, exported data, CSV/raw files, and canon
 | Authoring architecture SoT | `docs/reference/julia-core/` |
 | Pluto workflow docs | `docs/how-to/pluto/` |
 
-Use from Julia REPL or Pluto:
+Use from a user-written Pluto notebook after local dev installation:
 
 ```julia
-using Pkg
-Pkg.activate("core/julia/SuperconductingCircuitsCore")
+import Pkg
+Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io=devnull)
 
+using Revise
 using SuperconductingCircuitsCore
+```
+
+Run the local dev installation from the repository root when Pluto or REPL sessions should resolve this checkout through the Julia default environment:
+
+```bash
+npm run julia:dev-install
+```
+
+`SuperconductingCircuitsVisualizer` remains a separate package. Import it only for PlotlyJS figure construction:
+
+```julia
+using SuperconductingCircuitsVisualizer
+```
+
+For a Julia REPL session:
+
+```bash
+julia --startup-file=no --project=@v1.12
+```
+
+```julia
+using Revise
+using SuperconductingCircuitsCore
+using SuperconductingCircuitsVisualizer
+pathof(SuperconductingCircuitsCore)
+pathof(SuperconductingCircuitsVisualizer)
 ```
 
 Run tests:
 
 ```bash
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
 ```
 
 ## Notebook Roles

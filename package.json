@@ -4,6 +4,7 @@
   "scripts": {
     "app:dev": "./scripts/dev/start_app.sh",
     "app:stop": "./scripts/dev/stop_app.sh",
+    "julia:dev-install": "julia --startup-file=no --project=@v1.12 scripts/dev/install_julia_dev_packages.jl",
     "julia:test": "julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()' && julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'",
     "visualizer:test": "julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'",
     "runner:test": "julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'",

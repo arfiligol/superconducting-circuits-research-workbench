@@ -12,22 +12,10 @@ using InteractiveUtils
 # ╔═╡ 593a76d0-37a6-53ac-b6c6-ab63781461bc
 begin
     import Pkg
+    Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io=devnull)
+
+    using Revise
     using PlutoUI
-
-    core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
-    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
-    core_project_file = normpath(joinpath(core_project, "Project.toml"))
-    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
-    active_project_file = normpath(something(Base.active_project(), ""))
-
-    if active_project_file != core_project_file && active_project_file != visualizer_project_file
-        Pkg.develop(path=core_project)
-        Pkg.develop(path=visualizer_project)
-    else
-        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
-        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
-    end
-
     using SuperconductingCircuitsCore
     using SuperconductingCircuitsVisualizer
 
@@ -76,25 +64,25 @@ This notebook keeps the complete topology visible in `@circuit` so the selected 
 
 # ╔═╡ 607cd7d5-0e85-5614-96ea-72d7f63028b5
 begin
-    input_line_length_m = 2.0e-3
-    filter_length_m = 6.0e-3
-    output_line_length_m = 2.0e-3
-    qwr_length_m = 3.0e-3
-    section_length_m = 0.75e-3
+    input_line_length_m = 4.0e-3
+    filter_length_m = 9.502316932065809e-3
+    output_line_length_m = 4.0e-3
+    qwr_length_m = 5354.614040778226e-6
+    section_length_m = 10.0e-6
     l_per_m_h = 404.313e-9
     c_per_m_f = 179.86e-12
-    input_coupling_f = 2.0e-15
-    output_coupling_f = 2.0e-15
+    input_coupling_f = 41.32e-15
+    output_coupling_f = 126.0e-15
 
-    window_start_filter_m = 2.25e-3
+    window_start_filter_m = 9.502316932065809e-3 / 2
     window_start_qwr_m = 0.0
-    window_length_m = 1.5e-3
+    window_length_m = 200.0e-6
     l_matrix_per_m_h = [410.86374 19.08527; 19.08527 410.85454] .* 1e-9
     c_matrix_per_m_f = [170.29805 -8.09678; -8.09678 170.29538] .* 1e-12
     port_resistance = 50.0
 
-    start_frequency = 6.0e9
-    stop_frequency = 12.0e9
+    start_frequency = 2.0e9
+    stop_frequency = 8.0e9
     point_count = 1000
 
     pump_frequency = 14.0e9
@@ -119,13 +107,44 @@ begin
     )
 end
 
+# ╔═╡ 5a68d827-2f77-5f94-9119-b65c6eb94811
+begin
+    speed_of_light_m_per_s = 299_792_458.0
+    phase_velocity_m_per_s = 1 / sqrt(l_per_m_h * c_per_m_f)
+    effective_permittivity = (speed_of_light_m_per_s / phase_velocity_m_per_s)^2
+    qwr_pozar_frequency_hz = phase_velocity_m_per_s / (4 * qwr_length_m)
+    qwr_pozar_frequency_ghz = qwr_pozar_frequency_hz / 1e9
+    filter_half_wave_estimate_hz = phase_velocity_m_per_s / (2 * filter_length_m)
+    filter_half_wave_estimate_ghz = filter_half_wave_estimate_hz / 1e9
+    frequency_step_mhz = (stop_frequency - start_frequency) / (point_count - 1) / 1e6
+    minimum_reference_frequency_hz = min(qwr_pozar_frequency_hz, filter_half_wave_estimate_hz)
+    maximum_reference_frequency_hz = max(qwr_pozar_frequency_hz, filter_half_wave_estimate_hz)
+    sweep_range_covers_pozar_estimates = start_frequency <= minimum_reference_frequency_hz && maximum_reference_frequency_hz <= stop_frequency
+end
+
 # ╔═╡ 49a2a3c8-5286-516b-88f2-a8052fdc8881
 parameter_table = [
     (name="input/filter/output", value=(input_line_length_m, filter_length_m, output_line_length_m), unit="m", meaning="three CPW lengths"),
     (name="QWR", value=qwr_length_m, unit="m", meaning="grounded-head/open-tail resonator"),
     (name="Cc", value=(input_coupling_f, output_coupling_f), unit="F", meaning="localized readout/filter coupling"),
     (name="MTL window", value=(window_start_filter_m, window_start_qwr_m, window_length_m), unit="m", meaning="middle-line window selection"),
+    (name="Pozar QWR estimate", value=qwr_pozar_frequency_ghz, unit="GHz", meaning="isolated lossless quarter-wave estimate"),
+    (name="Pozar filter estimate", value=filter_half_wave_estimate_ghz, unit="GHz", meaning="isolated lossless half-wave estimate"),
+    (name="explicit sweep", value=(start_frequency / 1e9, stop_frequency / 1e9, frequency_step_mhz), unit="GHz, GHz, MHz", meaning="user-selected HB sweep"),
 ]
+
+# ╔═╡ cf0f0d9d-3012-5b2f-a965-f50b0e781a5a
+if sweep_range_covers_pozar_estimates
+    md"""
+    !!! info "Pozar estimates"
+        The table above lists isolated transmission-line estimates for the QWR and the half-wave filter. The HB sweep range is still set explicitly by `start_frequency` and `stop_frequency` in the parameter cell.
+    """
+else
+    md"""
+    !!! warning "Pozar estimate outside sweep"
+        At least one isolated transmission-line estimate is outside the explicit sweep range. Update `start_frequency` and `stop_frequency` if that feature should be included.
+    """
+end
 
 # ╔═╡ 88393f37-7c0f-5e1e-863e-b3fa7b9ddfe0
 begin
@@ -433,7 +452,9 @@ end |> wide_figure_cell
 # ╟─9432e8aa-9a78-51fa-b794-c42182810335
 # ╠═607cd7d5-0e85-5614-96ea-72d7f63028b5
 # ╠═08d0a9f3-7f6b-5e92-980f-d5ed4e09e471
+# ╠═5a68d827-2f77-5f94-9119-b65c6eb94811
 # ╠═49a2a3c8-5286-516b-88f2-a8052fdc8881
+# ╟─cf0f0d9d-3012-5b2f-a965-f50b0e781a5a
 # ╠═88393f37-7c0f-5e1e-863e-b3fa7b9ddfe0
 # ╟─1a44259c-58e2-531c-8c6b-dca85d5d2f92
 # ╠═246fb14e-c17b-5ea6-b6e0-35f432f0b7b1

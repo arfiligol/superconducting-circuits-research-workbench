@@ -12,22 +12,10 @@ using InteractiveUtils
 # ╔═╡ 13c5bd32-cbbb-5d78-b539-5215862bf55f
 begin
     import Pkg
+    Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io=devnull)
+
+    using Revise
     using PlutoUI
-
-    core_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsCore"))
-    visualizer_project = normpath(joinpath(@__DIR__, "..", "..", "core", "julia", "SuperconductingCircuitsVisualizer"))
-    core_project_file = normpath(joinpath(core_project, "Project.toml"))
-    visualizer_project_file = normpath(joinpath(visualizer_project, "Project.toml"))
-    active_project_file = normpath(something(Base.active_project(), ""))
-
-    if active_project_file != core_project_file && active_project_file != visualizer_project_file
-        Pkg.develop(path=core_project)
-        Pkg.develop(path=visualizer_project)
-    else
-        core_project in LOAD_PATH || pushfirst!(LOAD_PATH, core_project)
-        visualizer_project in LOAD_PATH || pushfirst!(LOAD_PATH, visualizer_project)
-    end
-
     using SuperconductingCircuitsCore
     using SuperconductingCircuitsVisualizer
 
@@ -40,7 +28,7 @@ begin
     )
 
     include(joinpath(@__DIR__, "includes", "hb_example_helpers.jl"))
-    using .HBExampleHelpers: zero_mode_s, zero_mode_z
+    using .HBExampleHelpers: db20, zero_mode_s, zero_mode_z
 end
 
 # ╔═╡ e21e8421-183a-5b9d-8d13-ee7d8ea6ebd0
@@ -71,6 +59,24 @@ md"""
 
 The uncoupled sections use the single-line RLGC baseline. Inside the coupled window, each line uses the coupled self terms from `MTLCoupledRLGCSpec`, and the window generator adds cross capacitance and mutual inductance relations.
 
+Following the transmission-line convention used in Pozar's *Microwave Engineering*, first estimate the isolated quarter-wave frequency before reading the distributed simulation. For an ideal lossless line with phase velocity `v_p` and physical length `\ell`,
+
+```math
+v_p = \frac{c_0}{\sqrt{\epsilon_{\mathrm{eff}}}},
+\qquad
+f_{\lambda/4} = \frac{v_p}{4\ell}.
+```
+
+For an RLGC line with negligible `R'` and `G'`, the same phase velocity is
+
+```math
+v_p = \frac{1}{\sqrt{L'C'}},
+\qquad
+\epsilon_{\mathrm{eff}} = \left(\frac{c_0}{v_p}\right)^2.
+```
+
+This is an isolated-resonator estimate. The simulated notch is loaded by the through readout line, the finite MTL coupling window, and the distributed ladder discretization.
+
 For each coupled section,
 
 ```math
@@ -82,23 +88,23 @@ M_{12,\mathrm{sec}} = L'_m\Delta x.
 # ╔═╡ 10bffd4c-ab29-5687-83f3-d838361a516b
 begin
     readout_length_m = 6.0e-3
-    resonator_length_m = 3.0e-3
-    section_length_m = 0.75e-3
-    readout_l_per_m_h = 404.313e-9
-    readout_c_per_m_f = 179.86e-12
-    resonator_l_per_m_h = 404.313e-9
-    resonator_c_per_m_f = 179.86e-12
+    resonator_length_m = 5.28371e-3
+    section_length_m = 10.0e-6
+    readout_l_per_m_h = 409.73174e-9
+    readout_c_per_m_f = 164.48779e-12
+    resonator_l_per_m_h = 409.73174e-9
+    resonator_c_per_m_f = 164.48779e-12
 
     window_start_readout_m = 2.25e-3
     window_start_resonator_m = 0.0
-    window_length_m = 1.5e-3
-    l_matrix_per_m_h = [410.86374 19.08527; 19.08527 410.85454] .* 1e-9
-    c_matrix_per_m_f = [170.29805 -8.09678; -8.09678 170.29538] .* 1e-12
+    window_length_m = 200.0e-6
+    l_matrix_per_m_h = [414.15487 36.58878; 36.58878 414.16764] .* 1e-9
+    c_matrix_per_m_f = [163.95741 -14.83887; -14.83887 163.94730] .* 1e-12
     port_resistance = 50.0
 
-    start_frequency = 6.0e9
-    stop_frequency = 12.0e9
-    point_count = 1000
+    start_frequency = 5.754e9
+    stop_frequency = 5.757e9
+    point_count = 3000
 
     pump_frequency = 14.0e9
     pump_current = 0.0
@@ -108,8 +114,18 @@ end
 
 # ╔═╡ 9a4971cb-87fa-5155-82c8-acb1630b0c05
 begin
-    readout_spec = RLGCSpec(length_m=readout_length_m, section_length_m=section_length_m, l_per_m_h=readout_l_per_m_h, c_per_m_f=readout_c_per_m_f)
-    qwr_spec = RLGCSpec(length_m=resonator_length_m, section_length_m=section_length_m, l_per_m_h=resonator_l_per_m_h, c_per_m_f=resonator_c_per_m_f)
+    readout_spec = RLGCSpec(
+        length_m=readout_length_m,
+        section_length_m=section_length_m,
+        l_per_m_h=readout_l_per_m_h,
+        c_per_m_f=readout_c_per_m_f
+    )
+    qwr_spec = RLGCSpec(
+        length_m=resonator_length_m,
+        section_length_m=section_length_m,
+        l_per_m_h=resonator_l_per_m_h,
+        c_per_m_f=resonator_c_per_m_f
+    )
     mtl_model = MTLCoupledRLGCSpec(
         start1_m=window_start_readout_m,
         start2_m=window_start_resonator_m,
@@ -120,13 +136,39 @@ begin
     )
 end
 
+# ╔═╡ 2c36bd83-3f4f-50fc-8b68-bff6b3cab80d
+begin
+    speed_of_light_m_per_s = 299_792_458.0
+    phase_velocity_m_per_s = 1 / sqrt(resonator_l_per_m_h * resonator_c_per_m_f)
+    effective_permittivity = (speed_of_light_m_per_s / phase_velocity_m_per_s)^2
+    qwr_pozar_frequency_hz = phase_velocity_m_per_s / (4 * resonator_length_m)
+    qwr_pozar_frequency_ghz = qwr_pozar_frequency_hz / 1e9
+    frequency_step_mhz = (stop_frequency - start_frequency) / (point_count - 1) / 1e6
+    sweep_range_covers_pozar_estimate = start_frequency <= qwr_pozar_frequency_hz && qwr_pozar_frequency_hz <= stop_frequency
+end
+
 # ╔═╡ a15bfe4e-0d12-5033-86c9-53fbd5cbac53
 parameter_table = [
     (name="readout length", value=readout_length_m, unit="m", meaning="through CPW length"),
     (name="QWR length", value=resonator_length_m, unit="m", meaning="grounded-head/open-tail resonator length"),
     (name="window start", value=(window_start_readout_m, window_start_resonator_m), unit="m", meaning="distance from each head"),
     (name="window length", value=window_length_m, unit="m", meaning="finite MTL span"),
+    (name="Pozar QWR estimate", value=qwr_pozar_frequency_ghz, unit="GHz", meaning="isolated lossless quarter-wave estimate"),
+    (name="explicit sweep", value=(start_frequency / 1e9, stop_frequency / 1e9, frequency_step_mhz), unit="GHz, GHz, MHz", meaning="user-selected HB sweep"),
 ]
+
+# ╔═╡ f0e81442-9fc2-59aa-8792-b52990e871f0
+if sweep_range_covers_pozar_estimate
+    md"""
+    !!! info "Pozar estimate"
+        The table above lists the isolated quarter-wave estimate from Pozar-style transmission-line theory. The HB sweep range is still set explicitly by `start_frequency` and `stop_frequency` in the parameter cell.
+    """
+else
+    md"""
+    !!! warning "Pozar estimate outside sweep"
+        The isolated quarter-wave estimate is outside the explicit sweep range. Update `start_frequency` and `stop_frequency` if this notch should be included.
+    """
+end
 
 # ╔═╡ e53543ab-a42d-501d-bb90-22487840e775
 begin
@@ -382,11 +424,30 @@ begin
     s21 = zero_mode_s(result, 2, 1)
 end
 
+# ╔═╡ 6e2fd612-65b3-58a4-bbd5-8c6c9fb4ad61
+begin
+    s21_db = db20(s21)
+    simulated_notch_db, simulated_notch_index = findmin(s21_db)
+    simulated_notch_frequency_hz = result.frequencies_hz[simulated_notch_index]
+    simulated_notch_frequency_ghz = simulated_notch_frequency_hz / 1e9
+    frequency_delta_mhz = (simulated_notch_frequency_hz - qwr_pozar_frequency_hz) / 1e6
+    relative_frequency_delta_percent = 100 * (simulated_notch_frequency_hz - qwr_pozar_frequency_hz) / qwr_pozar_frequency_hz
+end
+
+# ╔═╡ 8b9d54f7-0b4a-5571-bb76-bccff71037dd
+frequency_comparison_table = [
+    (quantity="Pozar isolated QWR estimate", value=qwr_pozar_frequency_ghz, unit="GHz", note="vp / 4l from RLGC phase velocity"),
+    (quantity="Simulated S21 notch", value=simulated_notch_frequency_ghz, unit="GHz", note="minimum S21 dB from real HBSolveResult"),
+    (quantity="Frequency difference", value=frequency_delta_mhz, unit="MHz", note="simulated notch minus Pozar estimate"),
+    (quantity="Relative difference", value=relative_frequency_delta_percent, unit="%", note="loaded by finite MTL window and through-line environment"),
+]
+
 # ╔═╡ 1a1c1a7f-97e2-5ecc-a032-ab06222b603c
 sanity = (
     point_count_matches=length(result.frequencies_hz) == point_count,
     has_coupled_span=haskey(layout.coupled_spans, :readout_qwr_window_span),
     finite_s21=all(isfinite, real.(s21)) && all(isfinite, imag.(s21)),
+    finite_notch_frequency=isfinite(simulated_notch_frequency_hz),
     hb_intent_ok=!has_errors(hb_validation_report),
 )
 
@@ -412,7 +473,9 @@ end |> wide_figure_cell
 # ╟─179049e6-be96-5cd9-9af8-1841572bc7c0
 # ╠═10bffd4c-ab29-5687-83f3-d838361a516b
 # ╠═9a4971cb-87fa-5155-82c8-acb1630b0c05
+# ╠═2c36bd83-3f4f-50fc-8b68-bff6b3cab80d
 # ╠═a15bfe4e-0d12-5033-86c9-53fbd5cbac53
+# ╟─f0e81442-9fc2-59aa-8792-b52990e871f0
 # ╠═e53543ab-a42d-501d-bb90-22487840e775
 # ╟─5c3f32ae-2a36-5ce0-af2a-b9b4dd676608
 # ╠═c83c8e19-5e5c-506e-83e2-3bdef3176de6
@@ -429,6 +492,8 @@ end |> wide_figure_cell
 # ╠═108ae9d7-f1c8-5af9-b1d7-8f99c1544a65
 # ╠═52250c2e-558d-5839-b1f9-4f621178fae3
 # ╠═88d882a0-9c93-541a-bd80-a97a454bd08f
+# ╠═6e2fd612-65b3-58a4-bbd5-8c6c9fb4ad61
+# ╠═8b9d54f7-0b4a-5571-bb76-bccff71037dd
 # ╠═1a1c1a7f-97e2-5ecc-a032-ab06222b603c
 # ╠═4e9b8adf-b250-55d1-8ec0-1584153ac0ac
 # ╠═5d53874b-0361-5d42-b1a0-c067a7ee7baa
