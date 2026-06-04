@@ -1,12 +1,15 @@
 import pytest
+from app_backend.domain.audit import AuditRecord
+from app_backend.infrastructure.audit_store import create_audit_engine
+from app_backend.infrastructure.persistence.database import create_metadata_engine
+from app_backend.infrastructure.rewrite_catalog_repository import (
+    LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+)
+from app_backend.infrastructure.runtime import get_task_audit_repository, reset_runtime_state
+from app_backend.main import app
+from app_backend.settings import get_settings
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect
-from src.app.domain.audit import AuditRecord
-from src.app.infrastructure.audit_store import create_audit_engine
-from src.app.infrastructure.persistence.database import create_metadata_engine
-from src.app.infrastructure.runtime import get_task_audit_repository, reset_runtime_state
-from src.app.main import app
-from src.app.settings import get_settings
 
 client = TestClient(app)
 
@@ -51,26 +54,44 @@ def enter_online_owner_session() -> None:
     _login()
 
 
-def _characterization_task_payload() -> dict[str, object]:
+def _simulation_task_payload() -> dict[str, object]:
     return {
-        "kind": "characterization",
-        "characterization_setup": {
-            "design_id": "design_flux_scan_a",
-            "analysis_id": "admittance_extraction",
-            "selected_trace_ids": [
-                "trace_flux_a_measurement",
-                "trace_flux_a_layout",
-            ],
-            "analysis_config": {
-                "fit_window": [5.7, 5.9],
-                "residual_tolerance": 0.01,
+        "kind": "simulation",
+        "definition_id": LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+        "simulation_setup": {
+            "frequency_sweep": {
+                "start_ghz": 4.0,
+                "stop_ghz": 6.0,
+                "point_count": 5,
+                "spacing": "linear",
             },
+            "parameter_sweeps": [],
+            "solver": {
+                "solver_family": "josephson_circuits",
+                "max_iterations": 1,
+                "convergence_tolerance": 1e-6,
+                "harmonic_balance": {
+                    "enabled": True,
+                    "harmonic_count": 1,
+                    "oversample_factor": 1,
+                },
+            },
+            "sources": [
+                {
+                    "source_id": "drive-port-a",
+                    "kind": "port_drive",
+                    "target": "port_1",
+                    "amplitude": -35.0,
+                    "frequency_ghz": 5.0,
+                    "phase_deg": 0.0,
+                }
+            ],
         },
     }
 
 
 def test_audit_list_returns_workspace_scoped_rows_and_meta() -> None:
-    client.post("/tasks", json=_characterization_task_payload())
+    client.post("/tasks", json=_simulation_task_payload())
     client.post("/tasks/301/cancel")
 
     response = client.get("/audit-logs?limit=10")
@@ -94,7 +115,7 @@ def test_audit_list_returns_workspace_scoped_rows_and_meta() -> None:
 
 
 def test_audit_list_supports_filters_and_cursor_navigation() -> None:
-    client.post("/tasks", json=_characterization_task_payload())
+    client.post("/tasks", json=_simulation_task_payload())
     client.post("/tasks/301/cancel")
     client.post("/tasks/301/terminate")
 
@@ -155,7 +176,7 @@ def test_audit_detail_returns_redacted_payload() -> None:
 
 
 def test_audit_export_summary_returns_read_surface() -> None:
-    client.post("/tasks", json=_characterization_task_payload())
+    client.post("/tasks", json=_simulation_task_payload())
 
     response = client.get("/audit-logs/export-summary?action_kind=task.submitted")
 
@@ -193,7 +214,7 @@ def test_audit_query_denies_member_without_governance_permission() -> None:
 
 
 def test_audit_query_denies_cross_workspace_access_for_non_admin() -> None:
-    client.post("/tasks", json=_characterization_task_payload())
+    client.post("/tasks", json=_simulation_task_payload())
 
     response = client.get("/audit-logs?workspace_id=ws-modeling")
 
@@ -219,7 +240,7 @@ def test_audit_query_rejects_invalid_cursor_combination() -> None:
 
 
 def test_audit_store_uses_separate_sqlite_database() -> None:
-    client.post("/tasks", json=_characterization_task_payload())
+    client.post("/tasks", json=_simulation_task_payload())
 
     metadata_tables = inspect(
         create_metadata_engine(get_settings().database_path)

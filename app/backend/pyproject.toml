@@ -25,13 +25,13 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = [".", "../.."]
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["app_backend", "tests"]
 
 [tool.ruff.lint]
 select = [
@@ -53,18 +53,18 @@ indent-style = "space"
 [tool.basedpyright]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
-include = ["src", "tests"]
+include = ["app_backend", "tests"]
 reportMissingTypeStubs = "none"
 
 [tool.uv.sources]
-sc-core = { path = "../../core", editable = true }
+sc-core = { workspace = true }
 
 [tool.setuptools]
 package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*"]
+include = ["app_backend*"]
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]

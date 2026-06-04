@@ -52,7 +52,7 @@ Python Backend 的目標不是單純 CRUD API，也不是 heavy simulation runti
 ## Target Internal Structure
 
 ```text
-app/backend/src/app/
+app/backend/app_backend/
 ├── api/
 │   ├── router.py
 │   ├── routers/

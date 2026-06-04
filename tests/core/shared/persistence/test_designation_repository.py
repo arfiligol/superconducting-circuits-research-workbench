@@ -1,7 +1,5 @@
 """Tests for designation and derived-parameter repository helpers."""
 
-from sqlmodel import Session, SQLModel, create_engine
-
 from core.shared.persistence.models import (
     DerivedParameter,
     DesignRecord,
@@ -9,6 +7,7 @@ from core.shared.persistence.models import (
     ParameterDesignation,
 )
 from core.shared.persistence.unit_of_work import SqliteUnitOfWork
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _memory_session() -> Session:

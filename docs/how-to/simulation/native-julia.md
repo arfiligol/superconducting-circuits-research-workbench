@@ -35,7 +35,7 @@ updated_by: codex
 ### 使用專案 Julia 環境
 
 ```bash
-cd superconducting-circuits-tutorial
+cd superconducting-circuits-research-workbench
 julia --project=core/julia/SuperconductingCircuitsCore
 ```
 

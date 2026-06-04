@@ -2,7 +2,6 @@
 
 from collections.abc import Sequence
 from copy import deepcopy
-from datetime import datetime
 from typing import Any, cast
 
 from sc_core.storage import (

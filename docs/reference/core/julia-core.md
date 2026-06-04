@@ -17,7 +17,7 @@ updated_by: codex
 
 # Julia Core
 
-本頁記錄 Julia-native simulation / analysis runtime 的目前邊界，以及 repo 內正式存在的 Julia package surfaces。
+本頁記錄 Julia-native simulation / visualization / analysis bridge runtime 的目前邊界，以及 repo 內正式存在的 Julia package surfaces。
 
 For the reusable Circuit Plan authoring architecture, use [Julia Core Authoring](../julia-core/index.md). For PlotlyJS figure contracts, use [Julia Visualizer](../julia-visualizer/index.md). This page records package placement and package-level ownership.
 
@@ -29,11 +29,13 @@ For concrete component families, use project-space or lab-space component librar
     1. `core/julia/SuperconductingCircuitsCore/`
     2. `core/julia/SuperconductingCircuitsVisualizer/`
     3. `core/julia/SuperconductingCircuitsRunner/`
+    4. `core/julia/SuperconductingCircuitsAnalysisBridge/`
 
 !!! warning "Ownership Boundary"
     Julia Core owns reusable compute logic.
     Julia Visualizer owns Pluto-facing PlotlyJS figures from real `HBSolveResult` traces.
     Julia Runner owns asynchronous compute execution and staged result packages.
+    Julia Analysis Bridge owns Pluto-friendly PythonCall wrappers around `core/analysis`.
     Python Backend still owns task lifecycle, canonical TraceStore publication, and provenance records.
 
 ## Surface Map
@@ -62,6 +64,13 @@ For concrete component families, use project-space or lab-space component librar
     | `data/staging/tasks/<task_id>/result.zarr/` | temporary local Zarr package written by the runner |
     | `data/staging/tasks/<task_id>/manifest.json` | runner result manifest validated by the backend publisher |
 
+=== "Julia Analysis Bridge"
+
+    | Surface | Role |
+    |---|---|
+    | `core/julia/SuperconductingCircuitsAnalysisBridge/` | PythonCall wrapper that exposes Pluto-friendly analysis functions backed by `superconducting_circuits_analysis` |
+    | root `.venv` | Python runtime selected through `JULIA_PYTHONCALL_EXE` or package-relative defaults |
+
 ## Current Repository Files
 
 | File | What it means in the current design |
@@ -69,6 +78,7 @@ For concrete component families, use project-space or lab-space component librar
 | `core/julia/SuperconductingCircuitsCore/Project.toml` | Julia Core package environment |
 | `core/julia/SuperconductingCircuitsVisualizer/Project.toml` | Julia Visualizer package environment |
 | `core/julia/SuperconductingCircuitsRunner/Project.toml` | Julia Runner package environment |
+| `core/julia/SuperconductingCircuitsAnalysisBridge/Project.toml` | Julia Analysis Bridge package environment |
 | `core/julia/SuperconductingCircuitsRunner/src/staging/zarr_writer.jl` | local filesystem Zarr v2 staging writer |
 
 ## Consumer Pairing

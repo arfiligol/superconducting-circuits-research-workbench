@@ -1,8 +1,10 @@
 import pytest
+from app_backend.infrastructure.rewrite_catalog_repository import (
+    LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+)
+from app_backend.infrastructure.runtime import reset_runtime_state
+from app_backend.main import app
 from fastapi.testclient import TestClient
-from src.app.infrastructure.rewrite_catalog_repository import LOCAL_SPACE_RESONATOR_DEFINITION_ID
-from src.app.infrastructure.runtime import reset_runtime_state
-from src.app.main import app
 
 client = TestClient(app)
 
@@ -125,9 +127,10 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     created_definition_id = created_detail["definition_id"]
     assert created_payload["data"]["operation"] == "created"
     assert created_detail["name"] == "RewriteDefinitionAuthoringFixture"
-    assert created_detail["source_text"] == _sample_definition_source(
-        "rewrite_definition_authoring_fixture"
-    ).rstrip()
+    assert (
+        created_detail["source_text"]
+        == _sample_definition_source("rewrite_definition_authoring_fixture").rstrip()
+    )
     assert "rewrite_definition_authoring_fixture" in created_detail["normalized_output"]
     assert len(created_detail["preview_artifacts"]) >= 1
 
@@ -151,9 +154,10 @@ def test_definition_authoring_catalog_to_editor_save_update_round_trip() -> None
     updated_detail = updated_payload["data"]["definition"]
     assert updated_payload["data"]["operation"] == "updated"
     assert updated_detail["name"] == "RewriteDefinitionAuthoringFixtureV2"
-    assert updated_detail["source_text"] == _sample_definition_source(
-        "rewrite_definition_authoring_fixture_v2"
-    ).rstrip()
+    assert (
+        updated_detail["source_text"]
+        == _sample_definition_source("rewrite_definition_authoring_fixture_v2").rstrip()
+    )
     assert "rewrite_definition_authoring_fixture_v2" in updated_detail["normalized_output"]
     assert updated_detail["validation_summary"]["status"] in {"valid", "warning", "invalid"}
     assert updated_detail["preview_artifacts"] == created_detail["preview_artifacts"]

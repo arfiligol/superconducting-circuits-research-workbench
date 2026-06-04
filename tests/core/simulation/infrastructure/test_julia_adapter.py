@@ -1,7 +1,6 @@
 """Tests for Julia adapter validation and error mapping."""
 
 import pytest
-
 from core.simulation.domain.circuit import (
     DriveSourceConfig,
     FrequencyRange,

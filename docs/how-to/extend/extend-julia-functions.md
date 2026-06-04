@@ -99,7 +99,7 @@ Fixture writers must stay inside tests and must not become Runner task kinds.
 
 ```bash
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
-cd app/backend && uv run pytest tests/test_runner_api.py
+uv run --package superconducting-circuits-backend pytest app/backend/tests/test_runner_api.py -q
 ```
 
 ## Notes

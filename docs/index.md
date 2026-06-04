@@ -1,45 +1,43 @@
 ---
 aliases:
-  - "Superconducting Circuits: Simulation & Analysis"
-  - "超導量子電路平台"
+  - Technical Documentation
+  - 技術文件
 tags:
   - diataxis/reference
   - audience/user
   - sot/true
-  - topic/project-overview
+  - topic/documentation
 status: stable
-owner: team
+owner: docs-team
 audience: user
-scope: "超導量子電路平台首頁與任務導覽"
-version: v1.1.3
-last_updated: 2026-02-11
-updated_by: team
-title: Home
-template: home.html
+scope: "Zensical 技術文件入口：Tutorials、How-to、Explanation、Reference 與 Notebooks"
+version: v2.0.0
+last_updated: 2026-06-04
+updated_by: codex
+title: 技術文件
 ---
 
-<div class="sc-hero-wrapper">
-<div class="quantum-canvas">
-<div class="wave p-1"></div>
-<div class="wave p-2"></div>
-<div class="wave p-3"></div>
-</div>
+# 技術文件
 
-<div class="sc-hero-content">
-<div class="sc-badge">Open Source Research Framework</div>
+這裡是 Superconducting Circuits Research Workbench 的技術文件入口。公開介紹頁由 Astro 站負責；Zensical 文件站只保留 Tutorials、How-to、Explanation、Reference 與 notebook authoring / inspection 類內容。
 
-<h1 class="sc-title">
-SC Physics, <span class="gradient-text">Decoded.</span>
-</h1>
+## 入口
 
-<p class="sc-subtitle">
-<span class="savior-highlight">Paper & Research Savior.</span><br>
-銜接物理本質與工程實作，為超導電路研究者打造的模擬與設計指南。
-</p>
+| 區域 | 用途 |
+| --- | --- |
+| [Tutorials](tutorials/index.md) | 跟著完整流程理解 circuit definition、simulation 與分析工作流 |
+| [How-to Guides](how-to/index.md) | 解決特定操作問題，例如資料匯入、模擬、Pluto authoring 與管理資料 |
+| [Explanation](explanation/index.md) | 釐清物理、架構與設計取捨 |
+| [Reference](reference/index.md) | 查找架構契約、資料格式、app/backend/frontend、Julia Core 與 guardrails |
+| [Notebooks](reference/notebooks/index.md) | 確認 Pluto / Python notebook 的研究與檢查邊界 |
 
-<div class="sc-cta-group">
-<a href="how-to/" class="btn-primary">探索文件</a>
-<a href="tutorials/" class="btn-secondary">查看 Demo</a>
-</div>
-</div>
-</div>
+## 公開站分工
+
+| URL | Owner | Role |
+| --- | --- | --- |
+| `/` | Astro site | 介紹頁、產品定位、受眾與主要入口 |
+| `/about/` | Astro site | 平台定位、研究閉環與邊界 |
+| `/docs/` | Zensical docs | 技術文件與 Source of Truth |
+
+!!! info "維護邊界"
+    若內容是介紹頁視覺敘事、受眾定位或公開 landing page，放在 `site/`。若內容是技術契約、工作流、reference 或 guardrails，放在 `docs/` 並同步 `zensical.toml` nav。

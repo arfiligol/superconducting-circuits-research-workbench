@@ -1,13 +1,21 @@
 {
-  "name": "superconducting-circuits-tutorial-root",
+  "name": "superconducting-circuits-research-workbench-root",
   "private": true,
   "scripts": {
     "app:dev": "./scripts/dev/start_app.sh",
     "app:stop": "./scripts/dev/stop_app.sh",
-    "julia:test": "julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()' && julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'",
+    "site:dev": "npm run dev --prefix site",
+    "site:build": "npm run build --prefix site",
+    "site:check": "npm run check --prefix site",
+    "public-site:build": "./scripts/build/build_public_site.sh",
+    "docs:build": "./scripts/build_docs_sites.sh",
+    "julia:dev-install": "julia --startup-file=no --project=@v1.12 scripts/dev/install_julia_dev_packages.jl",
+    "julia:test": "julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()' && julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()' && julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()' && JULIA_PYTHONCALL_EXE=\"$PWD/.venv/bin/python\" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'",
     "visualizer:test": "julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'",
     "runner:test": "julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'",
     "frontend:typecheck": "npm run typecheck --prefix app/frontend",
-    "backend:test": "cd app/backend && uv run pytest"
+    "analysis:test": "uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q",
+    "backend:test": "uv run --package superconducting-circuits-backend pytest app/backend/tests -q",
+    "bridge:test": "JULIA_PYTHONCALL_EXE=\"$PWD/.venv/bin/python\" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'"
   }
 }

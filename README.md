@@ -206,6 +206,7 @@ app/
   backend/
   frontend/
   desktop/
+site/
 scripts/
   dev/
 docs/
@@ -218,7 +219,8 @@ docs/
 Use this path if you want to understand superconducting-circuit modeling and run
 the notebook examples first.
 
-- Read the docs site: <https://arfiligol.github.io/superconducting-circuits-tutorial/>
+- Read the public site: <https://arfiligol.github.io/superconducting-circuits-research-workbench/>
+- Read the technical docs: <https://arfiligol.github.io/superconducting-circuits-research-workbench/docs/>
 - Start with the Pluto notebooks under `notebooks/pluto/`.
 - Use the Julia Core reference when you need the current authoring and compiler
   contracts: `docs/reference/julia-core/`.
@@ -232,7 +234,7 @@ Use this path if you want to run the local app-backed research platform.
 Install the active workspaces:
 
 ```bash
-cd app/backend && uv sync
+uv sync --all-packages
 npm install --prefix app/frontend
 npm install --prefix app/desktop
 ```
@@ -272,7 +274,7 @@ npm run build --prefix app/desktop
 Use targeted tests while iterating:
 
 ```bash
-cd app/backend && uv run pytest tests/test_runner_api.py -q
+uv run --package superconducting-circuits-backend pytest app/backend/tests/test_runner_api.py -q
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
 ```
 
@@ -282,6 +284,13 @@ Build the static docs with:
 ./scripts/build_docs_sites.sh
 ```
 
+Build the combined public site artifact with Astro at `/` and Zensical docs at
+`/docs/`:
+
+```bash
+./scripts/build/build_public_site.sh
+```
+
 ## Development Status
 
 This repository should be read as an active research workbench, not a
@@ -289,6 +298,9 @@ production-ready service or a released external-user platform.
 
 Current boundaries:
 
+- Public introduction pages live in the Astro site under `site/`.
+- Technical documentation lives in Zensical docs under `docs/` and is mounted at
+  `/docs/` in the public artifact.
 - Research execution lives in Pluto notebooks and Julia Core.
 - Productized simulation and analysis tasks go through the Application, Python
   Backend, and Julia Runner.

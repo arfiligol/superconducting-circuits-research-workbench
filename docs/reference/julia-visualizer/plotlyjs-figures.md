@@ -95,6 +95,7 @@ The visualizer owns these figure concerns:
 | Notebook display | `display_width_px` and `display_height_px` set the figure layout size shown in Pluto. |
 | PNG download | `download_width_px`, `download_height_px`, `download_scale`, `download_format`, and `download_filename` configure the Plotly modebar image export. |
 | Axis ranges | `x_range_ghz` and `y_range` constrain the visible range. A helper call may override either range for one figure. |
+| Axis types | `x_axis_type` and `y_axis_type` accept `:linear` or `:log`. A helper call may override either type for one figure. |
 | Font scaling | `font_scale` scales the thesis-style size ratios for title, axis title, tick labels, and legend. |
 | Figure styling | Margins, grid visibility, legend position, line width, marker size, colors, text color, and background are config-driven. |
 
@@ -111,10 +112,16 @@ figure_config = PlotlyFigureConfig(
     font_scale = 1.15,
     x_range_ghz = (4.0, 5.0),
     y_range = (-60.0, 2.0),
+    x_axis_type = :linear,
+    y_axis_type = :linear,
 )
 ```
 
 Use `plotly_display_config(config)` when a caller needs the raw PlotlyJS `PlotConfig` for modebar behavior.
+
+Axis ranges are specified in displayed data units. For log axes, `x_range_ghz = (1.0, 100.0)` and `y_range = (1e-3, 1e3)` are accepted as positive displayed values and converted to Plotly's base-10 log range internally. A log-axis range containing `0` or negative values raises `ArgumentError`.
+
+Log axes preserve the supplied trace values. If a plotted trace contains `0` or negative values on a log axis, the helper emits a warning with the axis, affected trace names, and non-positive point count; Plotly then omits those points from the log view.
 
 ## Public Plot Families
 
@@ -127,6 +134,9 @@ The package provides PlotlyJS figures for the result families used by the Pluto 
 | `s_parameter_phase_figure` | Frequency vector and named complex S traces; plots phase with `unit = :deg` or `unit = :rad`. |
 | `unwrap_phase_trace` | Complex traces or wrapped phase values; returns an explicit unwrapped phase trace before plotting. |
 | `z_trace_figure` | Frequency vector and named complex Z traces; expands each trace into real and imaginary curves. |
+| `z_parameter_real_figure` | Frequency vector and named complex Z traces; plots `real(Zij)` while preserving labels such as `Z11` and `Z21`. |
+| `z_parameter_imaginary_figure` | Frequency vector and named complex Z traces; plots `imag(Zij)` while preserving labels such as `Z11` and `Z21`. |
+| `z_parameter_abs_imaginary_figure` | Frequency vector and named complex Z traces; plots `abs(imag(Zij))` while preserving labels such as `Z11` and `Z21`. |
 | `y_trace_figure` | Frequency vector and named complex Y traces; expands each trace into real and imaginary curves. |
 | `multi_curve_figure` | Frequency vector and caller-transformed named numeric curves. |
 
@@ -152,6 +162,21 @@ z_trace_figure(
     ["Z11" => z11, "Z21" => z21];
     title = "Input And Transfer Impedance",
     config = figure_config,
+)
+
+z_parameter_imaginary_figure(
+    result.frequencies_hz,
+    ["Z11" => z11, "Z21" => z21, "Z12" => z12, "Z22" => z22];
+    title = "Imaginary Part Of Impedance Matrix",
+    config = figure_config,
+)
+
+z_parameter_abs_imaginary_figure(
+    result.frequencies_hz,
+    ["Z11" => z11, "Z21" => z21, "Z12" => z12, "Z22" => z22];
+    title = "Absolute Imaginary Part Of Impedance Matrix",
+    config = figure_config,
+    y_axis_type = :log,
 )
 
 y_trace_figure(

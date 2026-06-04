@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import zarr
-
 from core.shared.persistence.models import DataRecord
 from core.shared.persistence.trace_store import (
     TRACE_STORE_SCHEMA_VERSION,

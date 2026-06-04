@@ -21,6 +21,8 @@ Direct Pluto execution is allowed. Application-triggered execution must still go
 
 Backend task submission is outside the Pluto notebook role. If Pluto outputs should become official platform data, use an explicit import/publication path.
 
+Pluto may use `SuperconductingCircuitsAnalysisBridge` for explicit research-kernel calls into the shared Python analysis package. The bridge is a notebook/research execution surface; it does not make the Python Backend an inline fitting or matrix-analysis worker.
+
 ## Python
 
 Python notebooks are for:
@@ -40,6 +42,8 @@ Python notebooks are not required to use Backend APIs for read-only ad hoc file 
 Python notebooks should not become a second scientific compute authority. They must not directly mutate the metadata DB, directly publish or overwrite canonical TraceStore records, define a separate simulation request schema, or use JuliaCall / Julia Core as the normal simulation compute path.
 
 If a Python notebook needs heavier analysis dependencies for inspection or emergency work, use `notebooks/python/pyproject.toml` rather than adding them to `app/backend`.
+
+Reusable Python analysis code belongs in `core/analysis/` as the `superconducting_circuits_analysis` package. Python notebooks can import that package from the root uv workspace, while writes to platform state still go through Backend contracts.
 
 See [Python Notebook Authoring](python-authoring.md) for helper boundaries such as `open_trace_zarr_readonly()`, `submit_simulation_request()`, `submit_analysis_request()`, and forbidden direct publication helpers.
 

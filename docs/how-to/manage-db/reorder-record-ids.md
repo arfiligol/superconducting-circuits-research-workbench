@@ -29,7 +29,7 @@ For local development reset:
 
 ```bash
 rm -f data/metadata.db
-cd app/backend && uv run pytest
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
 ```
 
 ## Notes / Warnings

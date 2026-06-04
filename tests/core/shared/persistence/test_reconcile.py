@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
-
-from sqlmodel import Session, SQLModel, create_engine
 
 import core.shared.persistence.reconcile as reconcile_module
 from core.shared.persistence.models import DesignRecord, TraceBatchRecord, utc_now
 from core.shared.persistence.reconcile import reconcile_stale_tasks_and_batches
 from core.shared.persistence.unit_of_work import SqliteUnitOfWork
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _memory_session() -> Session:

@@ -1,4 +1,4 @@
-name: Deploy Zensical Docs to GitHub Pages
+name: Deploy Public Site to GitHub Pages
 
 on:
   push:
@@ -23,16 +23,26 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: uv sync --group dev --frozen
 
-      - name: Build docs sites
-        run: ./scripts/build_docs_sites.sh
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        run: npm ci --prefix site
+
+      - name: Build public site
+        run: ./scripts/build/build_public_site.sh
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/site/
+          path: site/dist/
 
   deploy:
     needs: build

@@ -1,11 +1,11 @@
 import pytest
-from pydantic import SecretStr
-from src.app.infrastructure.secret_management import (
+from app_backend.infrastructure.secret_management import (
     SecretConfigurationError,
     validate_secret_management_baseline,
 )
-from src.app.main import create_application
-from src.app.settings import AppSettings
+from app_backend.main import create_application
+from app_backend.settings import AppSettings
+from pydantic import SecretStr
 
 
 def test_secret_management_allows_development_placeholders() -> None:

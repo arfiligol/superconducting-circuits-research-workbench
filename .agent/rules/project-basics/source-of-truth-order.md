@@ -10,6 +10,6 @@
 - Treat implementation and old behavior as evidence, not automatic canonical truth.
 - If owner docs and consumer docs conflict, prefer the owner docs unless the user explicitly changes the spec.
 - If Julia Core / Runner and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
-- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as retired surfaces with no authority over product boundaries.
+- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as retired surfaces with no authority over product boundaries; current architecture-level surfaces include `core/analysis/`.
 - Record intentional product-contract exceptions in the owner docs and canonical contract registry.
 - Legacy fallback is not a product contract unless an owner SoT explicitly requires it.

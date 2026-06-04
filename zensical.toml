@@ -1,12 +1,10 @@
 [project]
 site_name = "超導量子電路平台"
-site_url = "https://arfiligol.github.io/superconducting-circuits-tutorial/"
+site_url = "https://arfiligol.github.io/superconducting-circuits-research-workbench/docs/"
 docs_dir = "docs/docs_zhtw"
 site_dir = "docs/site"
-repo_url = "https://github.com/arfiligol/superconducting-circuits-tutorial"
-repo_name = "arfiligol/superconducting-circuits-tutorial"
 copyright = """
-© 2026 Superconducting Quantum Circuits Platform · <a href="https://github.com/arfiligol/superconducting-circuits-tutorial">Source</a> · <a href="https://github.com/arfiligol/superconducting-circuits-tutorial/issues">Issues</a> · <a href="https://arfiligol.github.io/superconducting-circuits-tutorial/reference/contributors/">Contributors</a><br>
+© 2026 Superconducting Quantum Circuits Platform · <a href="https://github.com/arfiligol/superconducting-circuits-research-workbench">Source</a> · <a href="https://github.com/arfiligol/superconducting-circuits-research-workbench/issues">Issues</a> · <a href="https://arfiligol.github.io/superconducting-circuits-research-workbench/docs/reference/contributors/">Contributors</a><br>
 Built with <a href="https://zensical.org/" target="_blank" rel="noopener">Zensical</a>
 """
 extra_css = [
@@ -15,8 +13,6 @@ extra_css = [
 extra_javascript = [
   "javascripts/md-route-redirect.js",
   "javascripts/mathjax.js",
-  "javascripts/language-switcher.js",
-  "https://polyfill.io/v3/polyfill.min.js?features=es6",
   "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
 ]
 nav = [
@@ -281,7 +277,6 @@ nav = [
 ]
 
 [project.theme]
-custom_dir = "docs/overrides"
 language = "zh-TW"
 features = [
   "content.code.copy",
@@ -326,10 +321,6 @@ icon = "lucide/moon-star"
 name = "Switch to system preference"
 
 [project.extra]
-alternate = [
-  { "name" = "繁體中文", "link" = "https://arfiligol.github.io/superconducting-circuits-tutorial/", "lang" = "zh-TW" },
-  { "name" = "English", "link" = "https://arfiligol.github.io/superconducting-circuits-tutorial/en/", "lang" = "en" },
-]
 social = [
   { "icon" = "fontawesome/brands/github", "link" = "https://github.com/arfiligol" },
 ]

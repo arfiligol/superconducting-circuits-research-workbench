@@ -6,20 +6,24 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from sc_core.tasking import (
+    TERMINAL_TASK_STATES,
     LaneName,
     TaskControlAction,
     TaskControlDecision,
     TaskControlOutcome,
     TaskControlRuntimeProjection,
     TaskDispatchRecord,
-    TaskDispatchStatus as TaskExecutionHistoryDispatchStatus,
     TaskRetryLineage,
     TaskRuntimeState,
-    TaskSubmissionSource as TaskExecutionHistorySubmissionSource,
-    TERMINAL_TASK_STATES,
     WorkerTaskName,
     is_terminal_task_state,
     sanitize_processor_runtime_metadata,
+)
+from sc_core.tasking import (
+    TaskDispatchStatus as TaskExecutionHistoryDispatchStatus,
+)
+from sc_core.tasking import (
+    TaskSubmissionSource as TaskExecutionHistorySubmissionSource,
 )
 
 ExecutionPhase = Literal[
@@ -1107,9 +1111,7 @@ def normalize_task_history_event_metadata(
     elif event_type in {"task_cancel_requested", "task_terminate_requested"}:
         action = "cancel" if event_type == "task_cancel_requested" else "terminate"
         requested_state = (
-            "cancellation_requested"
-            if action == "cancel"
-            else "termination_requested"
+            "cancellation_requested" if action == "cancel" else "termination_requested"
         )
         _normalize_history_field(
             normalized,
@@ -1130,7 +1132,10 @@ def normalize_task_history_event_metadata(
         if inferred_phase is not None and "control_phase" not in normalized:
             normalized["control_phase"] = inferred_phase
             normalized_fields.append("control_phase")
-        if normalized.get("task_status") in {"cancelled", "terminated"} and "terminal_state" not in normalized:
+        if (
+            normalized.get("task_status") in {"cancelled", "terminated"}
+            and "terminal_state" not in normalized
+        ):
             normalized["terminal_state"] = normalized["task_status"]
             normalized_fields.append("terminal_state")
         if "control_phase" not in normalized:

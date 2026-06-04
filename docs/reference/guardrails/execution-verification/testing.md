@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: current platform 的 app/backend、app/frontend、Julia Runner、desktop 與 docs 測試規範。
-version: v3.1.0
-last_updated: 2026-05-27
+scope: current platform 的 public site、app/backend、app/frontend、Julia Runner、desktop 與 docs 測試規範。
+version: v3.2.0
+last_updated: 2026-06-04
 updated_by: codex
 ---
 
@@ -29,7 +29,9 @@ updated_by: codex
 | Area | Minimum baseline |
 | --- | --- |
 | Foundation workspace | backend pytest + frontend unit + desktop lint + runner tests |
-| Backend | `cd app/backend && uv run pytest` |
+| Public site | Astro check/build + combined public artifact build |
+| Backend | `uv run --package superconducting-circuits-backend pytest app/backend/tests -q` |
+| Python analysis | `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q` |
 | Julia Core / Visualizer / Runner | `Pkg.test()` per Julia package |
 | Frontend | unit tests，必要時 E2E |
 | Desktop foundation | lint + build |
@@ -38,17 +40,19 @@ updated_by: codex
 ## Foundation Workspace Check
 
 ```bash
-cd app/backend && uv run pytest
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
+uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q
 npm run test --prefix app/frontend
 npm run lint --prefix app/desktop
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
 ```
 
 ## Backend
 
 ```bash
-cd app/backend && uv run pytest
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
 ```
 
 Backend tests for Runner publication must cover create task, claim task, heartbeat/progress, complete with small staging Zarr manifest, canonical TraceStore publication, TraceRecord creation, trace slice read, invalid manifest rejection, and path traversal rejection.
@@ -84,6 +88,16 @@ foundation workflow 目前只要求 deterministic unit tests。
     若交付內容改動 shell、layout、header/sidebar behavior、dialog/drawer interaction、auth entry、或其他明顯 user-visible workflow，
     Review 不得只看 code diff 或 unit test。
     必須至少使用 Playwright 走一次實際流程，並透過 screenshot 或等價視覺證據檢查 UI 是否跑掉。
+
+## Public Site
+
+```bash
+npm run check --prefix site
+npm run build --prefix site
+./scripts/build/build_public_site.sh
+```
+
+Public site review should verify `/`, `/about/`, and `/docs/` in the combined artifact when the route contract or visible layout changes.
 
 ## Desktop Foundation
 
@@ -125,18 +139,26 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 ```markdown
 ## Testing Commands
 - **Foundation workspace check**:
-    - `cd app/backend && uv run pytest`
+    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
     - `npm run test --prefix app/frontend`
     - `npm run lint --prefix app/desktop`
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Backend/core tests**:
-    - `cd app/backend && uv run pytest`
+    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
     - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
     - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.
+- **Public site checks**:
+    - `npm run check --prefix site`
+    - `npm run build --prefix site`
+    - `./scripts/build/build_public_site.sh`
 - **Desktop foundation checks**:
     - `npm run lint --prefix app/desktop`
     - `npm run build --prefix app/desktop`

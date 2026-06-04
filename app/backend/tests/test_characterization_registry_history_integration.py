@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from fastapi.testclient import TestClient
-from src.app.domain.datasets import (
+from app_backend.domain.datasets import (
     CharacterizationAnalysisRegistryRow,
     CharacterizationAnalysisTraceCompatibility,
 )
-from src.app.infrastructure.runtime import get_catalog_repository, reset_runtime_state
-from src.app.main import app
+from app_backend.infrastructure.runtime import get_catalog_repository, reset_runtime_state
+from app_backend.main import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -62,9 +62,7 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
             "trace_flux_a_layout",
         ],
     }
-    rows_by_id = {
-        row["analysis_id"]: row for row in payload["data"]["rows"]
-    }
+    rows_by_id = {row["analysis_id"]: row for row in payload["data"]["rows"]}
     assert rows_by_id["admittance_extraction"] == {
         "analysis_id": "admittance_extraction",
         "label": "Admittance Resonance Extraction",
@@ -86,6 +84,28 @@ def test_characterization_analysis_registry_returns_summary_rows_and_trace_filte
         "required_upstream_analysis_ids"
     ] == ["admittance_extraction"]
     assert payload["data"]["data_collection_review"]["readiness_state"] == "ready"
+
+    submit_response = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "dataset_id": "fluxonium-2025-031",
+            "characterization_setup": {
+                "design_id": "design_flux_scan_a",
+                "analysis_id": "admittance_extraction",
+                "selected_trace_ids": ["trace_flux_a_measurement"],
+                "analysis_config": {
+                    "fit_window": [5.7, 5.9],
+                    "residual_tolerance": 0.1,
+                },
+            },
+        },
+    )
+    assert submit_response.status_code == 201
+    submitted_task = submit_response.json()["data"]["task"]
+    assert submitted_task["task_kind"] == "characterization"
+    assert submitted_task["lane"] == "characterization"
+    assert submitted_task["worker_task_name"] == "characterization_run_task"
 
 
 def test_characterization_registry_ignores_incomplete_legacy_row_sources(
@@ -197,7 +217,7 @@ def test_characterization_registry_fallback_does_not_overclaim_selected_scope(
     ]
 
 
-def test_characterization_registry_fallback_marks_unsupported_analysis_unavailable(
+def test_characterization_registry_fallback_preserves_legacy_readiness_without_runtime_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository = get_catalog_repository()
@@ -231,8 +251,7 @@ def test_characterization_registry_fallback_marks_unsupported_analysis_unavailab
     )
 
     response = client.get(
-        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
-        "characterization-analysis-registry"
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/characterization-analysis-registry"
     )
 
     assert response.status_code == 200
@@ -240,40 +259,19 @@ def test_characterization_registry_fallback_marks_unsupported_analysis_unavailab
         {
             "analysis_id": "sideband_comparison",
             "label": "Sideband Comparison",
-            "availability_state": "unavailable",
+            "availability_state": "available",
             "required_config_fields": ["comparison_window"],
             "trace_compatibility": {
                 "matched_trace_count": 1,
                 "selected_trace_count": 0,
                 "recommended_trace_modes": ["sideband"],
-                "summary": (
-                    "Legacy trace coverage suggests sideband comparison may be "
-                    "relevant, but the current runtime does not yet support "
-                    "executing this analysis."
-                ),
+                "summary": "legacy sideband row overclaimed local run support",
             },
             "prerequisite_state": "ready",
             "upstream_result_requirement": None,
             "downstream_unlock_analysis_ids": [],
         }
     ]
-
-    submit_response = client.post(
-        "/tasks",
-        json={
-            "kind": "characterization",
-            "dataset_id": "fluxonium-2025-031",
-            "characterization_setup": {
-                "design_id": "design_flux_scan_a",
-                "analysis_id": "sideband_comparison",
-                "selected_trace_ids": ["trace_flux_a_phase"],
-                "analysis_config": {"comparison_window": [5.7, 5.9]},
-            },
-        },
-    )
-
-    assert submit_response.status_code == 409
-    assert submit_response.json()["error"]["code"] == "characterization_analysis_unsupported"
 
 
 def test_characterization_run_history_supports_analysis_filter_and_cursor_meta() -> None:
@@ -364,8 +362,7 @@ def test_characterization_registry_rejects_invisible_dataset() -> None:
     assert switch_response.status_code == 200
 
     response = client.get(
-        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/"
-        "characterization-analysis-registry"
+        "/datasets/fluxonium-2025-031/designs/design_flux_scan_a/characterization-analysis-registry"
     )
 
     assert response.status_code == 403

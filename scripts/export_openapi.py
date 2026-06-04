@@ -2,16 +2,13 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(repo_root))
-    sys.path.insert(0, str(repo_root / "app" / "backend"))
 
-    from src.app.tooling.openapi_snapshot import export_openapi_snapshot
+    from app_backend.tooling.openapi_snapshot import export_openapi_snapshot
 
     parser = argparse.ArgumentParser(description="Export the backend OpenAPI snapshot.")
     parser.add_argument(

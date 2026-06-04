@@ -10,9 +10,9 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: current platform 的 app、backend、Julia Runner、desktop、docs 與 repo-root orchestration 常用指令。
-version: v3.1.0
-last_updated: 2026-05-28
+scope: current platform 的 public site、app、backend、Julia Runner、desktop、docs 與 repo-root orchestration 常用指令。
+version: v3.2.0
+last_updated: 2026-06-04
 updated_by: codex
 ---
 
@@ -33,6 +33,7 @@ platform foundation 必須使用 `app/` layout、Python Backend、Julia Runner �
 | 要啟動 repo 層級協調流程 | `Repo Root Orchestration` |
 | 只改單一 workspace | `Workspace Commands` |
 | 要驗證 Runner-backed local runtime topology | `Local Runner Runtime Runbook` |
+| 只改公開介紹站或 public artifact | `Public Site` |
 | 只改 docs / nav / frontmatter | `Docs` |
 
 ## Current Baseline
@@ -40,13 +41,14 @@ platform foundation 必須使用 `app/` layout、Python Backend、Julia Runner �
 !!! tip "Run this first on a fresh checkout"
 
 ```bash
-uv sync
-cd app/backend && uv sync
+uv sync --all-packages
+npm install --prefix site
 npm install --prefix app/frontend
 npm install --prefix app/desktop
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'
+JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'
 ./scripts/prepare_docs_locales.sh
 ```
 
@@ -60,6 +62,16 @@ npm run app:stop
 ```
 
 ## Workspace Commands
+
+=== "Public Site"
+
+    ```bash
+    npm install --prefix site
+    npm run dev --prefix site
+    npm run check --prefix site
+    npm run build --prefix site
+    ./scripts/build/build_public_site.sh
+    ```
 
 === "Frontend"
 
@@ -75,12 +87,12 @@ npm run app:stop
 === "Backend"
 
     ```bash
-    cd app/backend && uv sync
-    cd app/backend && uv run pytest
-    cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000
+    uv sync --all-packages
+    uv run --package superconducting-circuits-backend pytest app/backend/tests -q
+    uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000
     ```
 
-    `app/backend/` workspace 必須能單獨完成這些命令，不可依賴 repo-root `uv sync` 先偷裝 runtime 依賴。
+    Python backend commands use the root uv workspace and root `.venv`.
 
 === "Desktop"
 
@@ -109,6 +121,12 @@ npm run app:stop
     julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
     ```
 
+=== "Julia Analysis Bridge"
+
+    ```bash
+    JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
+    ```
+
 ## Local Runner Runtime Runbook
 
 !!! important "Runner-backed local runtime is the verification baseline"
@@ -120,14 +138,14 @@ npm run app:stop
 | Step | Command / expectation |
 | --- | --- |
 | frontend process | `npm run dev --prefix app/frontend` |
-| backend process | `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000` |
+| backend process | `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000` |
 | runner process | `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'` |
 | optional repo helper | `npm run app:dev` or `./scripts/dev/start_app.sh` starts frontend、backend、runner |
 
 !!! example "Minimal local runtime bring-up"
     ```bash
     npm run dev --prefix app/frontend
-    cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000
+    uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000
     julia --project=core/julia/SuperconductingCircuitsRunner -e 'using SuperconductingCircuitsRunner; run_polling_runner(backend_url="http://127.0.0.1:8000")'
     ```
 
@@ -179,10 +197,17 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 - **Repo-root orchestration**:
     - `npm run app:dev`
     - `npm run app:stop`
-- **Python install**: `uv sync`
+- **Python install**: `uv sync --all-packages`
+- **Public site**:
+    - `npm install --prefix site`
+    - `npm run dev --prefix site`
+    - `npm run check --prefix site`
+    - `npm run build --prefix site`
+    - `./scripts/build/build_public_site.sh`
 - **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Visualizer install**: `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Analysis Bridge install**: `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'`
 - **Frontend**:
     - `npm install --prefix app/frontend`
     - `npm run dev --prefix app/frontend`
@@ -191,13 +216,14 @@ uv run python scripts/check_docs_nav_routes.py --check-built
     - `npm run typecheck --prefix app/frontend`
     - `npm run build --prefix app/frontend`
 - **Backend**:
-    - `cd app/backend && uv sync`
-    - `cd app/backend && uv run pytest`
-    - `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000`
+    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+    - `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000`
 - **Julia Visualizer**:
     - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
 - **Julia Runner**:
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+- **Julia Analysis Bridge**:
+    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Desktop**:
     - `npm install --prefix app/desktop`
     - `npm run dev --prefix app/desktop`
@@ -209,4 +235,6 @@ uv run python scripts/check_docs_nav_routes.py --check-built
     - `uv run --group dev zensical build -f zensical.toml`
     - `./scripts/build_docs_sites.sh`
     - `uv run python scripts/check_docs_nav_routes.py --check-built`
+- **Public artifact**:
+    - `./scripts/build/build_public_site.sh` builds Astro at `/` and embeds Zensical docs at `/docs/`.
 ```

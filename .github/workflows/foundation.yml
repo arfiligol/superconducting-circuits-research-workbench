@@ -8,9 +8,9 @@ on:
       - "README.md"
       - ".gitignore"
       - "scripts/*.sh"
-      - "frontend/**"
-      - "backend/**"
-      - "desktop/**"
+      - "app/frontend/**"
+      - "app/backend/**"
+      - "app/desktop/**"
   push:
     paths:
       - ".github/workflows/foundation.yml"
@@ -18,9 +18,9 @@ on:
       - "README.md"
       - ".gitignore"
       - "scripts/*.sh"
-      - "frontend/**"
-      - "backend/**"
-      - "desktop/**"
+      - "app/frontend/**"
+      - "app/backend/**"
+      - "app/desktop/**"
 
 jobs:
   foundation:
@@ -46,17 +46,17 @@ jobs:
       - name: Install dependencies
         run: |
           mkdir -p .cache/npm/frontend .cache/npm/desktop
-          npm install --prefix frontend --cache "$PWD/.cache/npm/frontend"
-          (cd backend && uv sync)
-          npm install --prefix desktop --cache "$PWD/.cache/npm/desktop"
+          npm install --prefix app/frontend --cache "$PWD/.cache/npm/frontend"
+          (cd app/backend && uv sync)
+          npm install --prefix app/desktop --cache "$PWD/.cache/npm/desktop"
 
       - name: Run checks
         run: |
-          (cd backend && uv run pytest -q)
-          npm run test --prefix frontend
-          npm run lint --prefix desktop
+          (cd app/backend && uv run pytest -q)
+          npm run test --prefix app/frontend
+          npm run lint --prefix app/desktop
 
       - name: Build workspaces
         run: |
-          npm run build --prefix frontend
-          npm run build --prefix desktop
+          npm run build --prefix app/frontend
+          npm run build --prefix app/desktop

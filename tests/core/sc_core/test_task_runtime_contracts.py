@@ -404,9 +404,12 @@ def test_execution_timestamp_helpers_normalize_naive_and_offset_inputs_to_utc() 
         tzinfo=UTC,
     )
     assert canonicalize_execution_timestamp("2026-03-16T12:00:00Z") == "2026-03-16T12:00:00+00:00"
-    assert canonicalize_execution_timestamp(
-        datetime(2026, 3, 16, 12, 0, tzinfo=timezone(timedelta(hours=8)))
-    ) == "2026-03-16T04:00:00+00:00"
+    assert (
+        canonicalize_execution_timestamp(
+            datetime(2026, 3, 16, 12, 0, tzinfo=timezone(timedelta(hours=8)))
+        )
+        == "2026-03-16T04:00:00+00:00"
+    )
 
     context = build_task_execution_history_context(
         task_status="running",

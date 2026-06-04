@@ -17,9 +17,11 @@ updated_by: codex
 
 # Julia Compute Boundary
 
-Julia compute now has two active packages:
+Julia compute now has four active packages:
 Julia Core holds the docs-defined authoring model, Circuit Plan, compiler concepts, parameter sweep architecture, compile policies, executor interfaces, simulation helpers, sweep helpers, and analysis logic.
+Julia Visualizer owns PlotlyJS figure construction.
 Julia Runner wraps that logic as asynchronous task execution and writes local staging artifacts.
+Julia Analysis Bridge wraps Python analysis through PythonCall for explicit Pluto research sessions.
 
 Concrete component libraries are dependencies selected by the caller, notebook, or Runner task environment. They are not part of the Julia Core Kernel contract.
 
@@ -28,12 +30,19 @@ Concrete component libraries are dependencies selected by the caller, notebook, 
 | Package | Path | Responsibility |
 |---|---|---|
 | SuperconductingCircuitsCore | `core/julia/SuperconductingCircuitsCore/` | docs-defined authoring model, Circuit Plan, compiler concepts, parameter sweep architecture, compile policies, executor interfaces, simulation helpers, sweep engine, analysis helpers |
+| SuperconductingCircuitsVisualizer | `core/julia/SuperconductingCircuitsVisualizer/` | PlotlyJS figure helpers for Pluto/report visualization |
 | SuperconductingCircuitsRunner | `core/julia/SuperconductingCircuitsRunner/` | backend polling, task dispatch, local Zarr staging writer, manifest generation, complete/fail reporting |
+| SuperconductingCircuitsAnalysisBridge | `core/julia/SuperconductingCircuitsAnalysisBridge/` | PythonCall wrapper around `superconducting_circuits_analysis` for Pluto-friendly fitting and analysis calls |
 
 ## Boundary
 
 Python Backend does not run heavy simulation in-process.
+Python Backend does not run heavy analysis in-process.
 It creates tasks, validates runner output, publishes official TraceStore data, and records provenance.
+
+SuperconductingCircuitsCore must not depend on PythonCall or PlotlyJS.
+SuperconductingCircuitsVisualizer must not own fitting algorithms.
+SuperconductingCircuitsAnalysisBridge may depend on PythonCall and `core/analysis`.
 
 Julia Runner does not write formal metadata tables.
 It writes:

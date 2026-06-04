@@ -1,9 +1,13 @@
 ## Folder Structure
 - **Frontend** work goes to `app/frontend/`.
+- **Public introduction site** work goes to `site/`.
 - **Desktop shell** work goes to `app/desktop/`.
 - **Backend** work goes to `app/backend/`.
 - **Julia Core** work goes to `core/julia/SuperconductingCircuitsCore/`.
+- **Julia Visualizer** work goes to `core/julia/SuperconductingCircuitsVisualizer/`.
 - **Julia Runner** work goes to `core/julia/SuperconductingCircuitsRunner/`.
+- **Julia Analysis Bridge** work goes to `core/julia/SuperconductingCircuitsAnalysisBridge/`.
+- **Python analysis** work goes to `core/analysis/`.
 - **Python contracts** go to `core/python/sc_data_contracts/` only if needed.
 - **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
 - **Pluto notebooks** may directly use `SuperconductingCircuitsCore`.
@@ -14,6 +18,7 @@
 - **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
 - **Root worker runtime folder** must not be recreated as a runtime surface.
 - **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
+- **Zensical docs** are technical docs mounted under `/docs/`; public introduction pages belong to `site/`.
 - **Plans** is retired as an active repo surface; do not create new committed plan prompts or lane handoffs.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
 - Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces.
@@ -22,8 +27,12 @@
     - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
     - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
     - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
+    - Julia Visualizer may depend on PlotlyJS and Julia numeric traces; Julia Core and Julia Runner must not depend on PlotlyJS
+    - Julia Analysis Bridge may depend on PythonCall and Python analysis; Julia Core must not depend on PythonCall
+    - Python analysis may own fitting and matrix algorithms; Backend must not execute heavy analysis compute in process
     - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
     - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
     - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
     - Julia Core must stay framework-agnostic
+    - public site is a static introduction surface and must not import app/backend internals
     - scripts are helpers, not user-facing workflow contracts

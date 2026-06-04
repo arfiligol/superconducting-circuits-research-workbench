@@ -9,10 +9,45 @@ function trace_fields(plot, index::Integer)
     return getfield(plot.data[index], :fields)
 end
 
+function trace_count(plot)
+    return length(plot.data)
+end
+
+@testset "fit overlay figure" begin
+    fig = fit_overlay_figure(
+        [4.0e9, 4.5e9, 5.0e9],
+        [0.1, 0.3, 0.2],
+        [0.12, 0.28, 0.21];
+        title="Fit overlay",
+    )
+    @test trace_count(fig) == 2
+    @test trace_fields(fig, 1)[:name] == "measured"
+    @test trace_fields(fig, 2)[:name] == "fit"
+    @test trace_fields(fig, 1)[:x] == [4.0, 4.5, 5.0]
+    @test layout_fields(fig)[:yaxis][:title][:text] == "Response"
+
+    log_fig = fit_overlay_figure(
+        [1.0e9, 10.0e9, 100.0e9],
+        [1.0, 10.0, 100.0],
+        [1.2, 9.5, 90.0];
+        title="Log fit overlay",
+        x_axis_type=:log,
+        y_axis_type=:log,
+        x_range_ghz=(1.0, 100.0),
+        y_range=(1.0, 100.0),
+    )
+    @test layout_fields(log_fig)[:xaxis][:type] == "log"
+    @test layout_fields(log_fig)[:yaxis][:type] == "log"
+    @test layout_fields(log_fig)[:xaxis][:range] ≈ [0.0, 2.0]
+    @test layout_fields(log_fig)[:yaxis][:range] ≈ [0.0, 2.0]
+end
+
 @testset "PlotlyFigureConfig" begin
     config = PlotlyFigureConfig()
     @test config.display_width_px == 1200
     @test config.display_height_px == 780
+    @test config.x_axis_type == :linear
+    @test config.y_axis_type == :linear
 
     custom = PlotlyFigureConfig(
         download_width_px=1800,
@@ -40,12 +75,70 @@ end
     fields = getfield(layout, :fields)
     @test fields[:width] == 1200
     @test fields[:height] == 780
+    @test fields[:xaxis][:type] == "linear"
+    @test fields[:yaxis][:type] == "linear"
     @test fields[:xaxis][:range] == [4.0, 5.0]
     @test fields[:yaxis][:range] == [0.0, 1.0]
     @test fields[:title][:font][:size] == 45
     @test fields[:xaxis][:title][:font][:size] == 39
     @test fields[:xaxis][:tickfont][:size] == 32
     @test fields[:legend][:font][:size] == 30
+end
+
+@testset "log axis support" begin
+    log_config = PlotlyFigureConfig(
+        x_axis_type=:log,
+        y_axis_type=:log,
+        x_range_ghz=(1.0, 100.0),
+        y_range=(1.0e-3, 1.0e3),
+    )
+    layout = default_layout(
+        title="Log Layout",
+        xaxis_title="Frequency (GHz)",
+        yaxis_title="Magnitude",
+        config=log_config,
+    )
+    fields = getfield(layout, :fields)
+    @test fields[:xaxis][:type] == "log"
+    @test fields[:yaxis][:type] == "log"
+    @test fields[:xaxis][:range] ≈ [0.0, 2.0]
+    @test fields[:yaxis][:range] ≈ [-3.0, 3.0]
+
+    override = multi_curve_figure(
+        [1.0e9, 10.0e9],
+        ["positive" => [1.0, 100.0]];
+        title="Override",
+        yaxis_title="Value",
+        config=PlotlyFigureConfig(y_axis_type=:linear),
+        y_axis_type=:log,
+        y_range=(1.0, 100.0),
+    )
+    @test layout_fields(override)[:yaxis][:type] == "log"
+    @test layout_fields(override)[:yaxis][:range] ≈ [0.0, 2.0]
+
+    @test_throws ArgumentError default_layout(
+        title="Bad Range",
+        xaxis_title="Frequency (GHz)",
+        yaxis_title="Magnitude",
+        y_axis_type=:log,
+        y_range=(0.0, 1.0),
+    )
+    @test_throws ArgumentError default_layout(
+        title="Bad Type",
+        xaxis_title="Frequency (GHz)",
+        yaxis_title="Magnitude",
+        x_axis_type=:sqrt,
+    )
+
+    warning_figure = @test_logs (:warn, r"Log axis received non-positive data") multi_curve_figure(
+        [1.0e9, 2.0e9, 3.0e9],
+        ["signed" => [-1.0, 0.0, 1.0]];
+        title="Warning",
+        yaxis_title="Value",
+        y_axis_type=:log,
+    )
+    @test trace_fields(warning_figure, 1)[:y] == [-1.0, 0.0, 1.0]
+    @test layout_fields(warning_figure)[:yaxis][:type] == "log"
 end
 
 @testset "S-parameter figures" begin
@@ -58,7 +151,7 @@ end
         title="S magnitude",
         y_range=(-40.0, 1.0),
     )
-    @test length(db_magnitude.data) == 1
+    @test trace_count(db_magnitude) == 1
     @test trace_fields(db_magnitude, 1)[:name] == "S11"
     @test trace_fields(db_magnitude, 1)[:y] ≈ [0.0, -6.020599913279624, 0.0]
     @test layout_fields(db_magnitude)[:yaxis][:title][:text] == "Magnitude (dB)"
@@ -70,7 +163,7 @@ end
         title="S abs",
         y_range=(0.0, 1.0),
     )
-    @test length(abs_magnitude.data) == 1
+    @test trace_count(abs_magnitude) == 1
     @test trace_fields(abs_magnitude, 1)[:name] == "S11"
     @test trace_fields(abs_magnitude, 1)[:y] ≈ [1.0, 0.5, 1.0]
     @test layout_fields(abs_magnitude)[:yaxis][:title][:text] == "|Magnitude|"
@@ -102,15 +195,33 @@ end
     y11 = ComplexF64[0.02 - 0.001im, 0.018 + 0.002im]
 
     zfig = z_trace_figure(frequencies, ["Z11" => z11]; title="Z")
-    @test length(zfig.data) == 2
+    @test trace_count(zfig) == 2
     @test trace_fields(zfig, 1)[:name] == "real(Z11)"
     @test trace_fields(zfig, 1)[:y] == [50.0, 55.0]
     @test trace_fields(zfig, 2)[:name] == "imag(Z11)"
     @test trace_fields(zfig, 2)[:y] == [1.0, -2.0]
     @test layout_fields(zfig)[:yaxis][:title][:text] == "Impedance (ohm)"
 
+    real_zfig = z_parameter_real_figure(frequencies, ["Z11" => z11]; title="Re Z")
+    @test trace_count(real_zfig) == 1
+    @test trace_fields(real_zfig, 1)[:name] == "Z11"
+    @test trace_fields(real_zfig, 1)[:y] == [50.0, 55.0]
+    @test layout_fields(real_zfig)[:yaxis][:title][:text] == "Re(Z) (ohm)"
+
+    imaginary_zfig = z_parameter_imaginary_figure(frequencies, ["Z11" => z11]; title="Im Z")
+    @test trace_count(imaginary_zfig) == 1
+    @test trace_fields(imaginary_zfig, 1)[:name] == "Z11"
+    @test trace_fields(imaginary_zfig, 1)[:y] == [1.0, -2.0]
+    @test layout_fields(imaginary_zfig)[:yaxis][:title][:text] == "Im(Z) (ohm)"
+
+    abs_imaginary_zfig = z_parameter_abs_imaginary_figure(frequencies, ["Z11" => z11]; title="Abs Im Z")
+    @test trace_count(abs_imaginary_zfig) == 1
+    @test trace_fields(abs_imaginary_zfig, 1)[:name] == "Z11"
+    @test trace_fields(abs_imaginary_zfig, 1)[:y] == [1.0, 2.0]
+    @test layout_fields(abs_imaginary_zfig)[:yaxis][:title][:text] == "|Im(Z)| (ohm)"
+
     yfig = y_trace_figure(frequencies, ["Y11" => y11]; title="Y")
-    @test length(yfig.data) == 2
+    @test trace_count(yfig) == 2
     @test trace_fields(yfig, 1)[:name] == "real(Y11)"
     @test trace_fields(yfig, 2)[:name] == "imag(Y11)"
     @test layout_fields(yfig)[:yaxis][:title][:text] == "Admittance (S)"

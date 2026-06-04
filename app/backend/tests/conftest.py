@@ -3,8 +3,8 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from src.app.infrastructure.durable_runtime_seed import seed_durable_runtime_state
-from src.app.infrastructure.runtime import get_task_audit_repository, reset_runtime_state
+from app_backend.infrastructure.durable_runtime_seed import seed_durable_runtime_state
+from app_backend.infrastructure.runtime import get_task_audit_repository, reset_runtime_state
 
 
 @pytest.fixture(autouse=True)

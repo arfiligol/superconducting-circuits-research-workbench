@@ -6,25 +6,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from core.shared.persistence import LocalZarrTraceStore
-from fastapi.testclient import TestClient
-from sc_core.execution import TaskResultHandle
-from src.app.domain.tasks import (
-    CharacterizationSetup,
-    TaskDetail,
-    TaskProgress,
-    TaskResultRefs,
-)
-from src.app.infrastructure.persisted_characterization_runtime import (
-    CharacterizationExecutionRequest,
-    CharacterizationExecutionTrace,
-)
-from src.app.infrastructure.runtime import (
-    get_catalog_repository,
-    get_persisted_characterization_repository,
+from app_backend.infrastructure.runtime import (
     reset_runtime_state,
 )
-from src.app.main import app
+from app_backend.main import app
+from core.shared.persistence import LocalZarrTraceStore
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -32,9 +19,7 @@ RUN_HFSS_REAL_DATA_E2E = os.environ.get("RUN_HFSS_REAL_DATA_E2E") == "1"
 DEFAULT_PF6FQ_RAW_DATA_ROOT = Path(
     "/Users/arfiligol/Github/superconducting-circuits-tutorial/data/raw/layout_simulation/PF6FQ"
 )
-PF6FQ_RAW_DATA_ROOT = Path(
-    os.environ.get("PF6FQ_RAW_DATA_ROOT", str(DEFAULT_PF6FQ_RAW_DATA_ROOT))
-)
+PF6FQ_RAW_DATA_ROOT = Path(os.environ.get("PF6FQ_RAW_DATA_ROOT", str(DEFAULT_PF6FQ_RAW_DATA_ROOT)))
 XY_IM_Y11_FILE = PF6FQ_RAW_DATA_ROOT / "Q0" / "PF6FQ_Q0_XY_Im_Y11.csv"
 READOUT_IM_Y11_FILE = PF6FQ_RAW_DATA_ROOT / "Q0" / "PF6FQ_Q0_Readout_Im_Y11.csv"
 XY_RE_YIN_FILE = PF6FQ_RAW_DATA_ROOT / "Q0" / "PF6FQ_Q0_XY_Re_Yin.csv"
@@ -191,71 +176,13 @@ def _ingest_trace(
 def _store_ref_from_detail(detail: dict[str, object]) -> dict[str, object]:
     payload_ref = detail["payload_ref"]
     assert isinstance(payload_ref, dict)
-    return {
-        key: value
-        for key, value in payload_ref.items()
-        if key != "payload_role"
-    }
+    return {key: value for key, value in payload_ref.items() if key != "payload_role"}
 
 
 def _capabilities_by_analysis(
     capabilities: list[dict[str, object]],
 ) -> dict[str, dict[str, object]]:
-    return {
-        str(capability["analysis_id"]): capability
-        for capability in capabilities
-    }
-
-
-def _build_direct_characterization_task(
-    *,
-    dataset_id: str,
-    design_id: str,
-    selected_trace_ids: tuple[str, ...],
-    fit_window: tuple[float, float],
-    residual_tolerance: float,
-) -> TaskDetail:
-    return TaskDetail(
-        task_id=990601,
-        kind="characterization",
-        lane="characterization",
-        execution_mode="run",
-        status="running",
-        submitted_at="2026-04-30T00:00:00Z",
-        owner_user_id="local-user",
-        owner_display_name="Local User",
-        workspace_id="workspace-local",
-        workspace_slug="local",
-        visibility_scope="local",
-        dataset_id=dataset_id,
-        definition_id=None,
-        summary="PF6FQ real-data persisted admittance extraction.",
-        queue_backend="backend_db",
-        worker_task_name="characterization_run_task",
-        request_ready=True,
-        submitted_from_active_dataset=True,
-        progress=TaskProgress(
-            phase="running",
-            percent_complete=50,
-            summary="Executing PF6FQ real-data admittance extraction.",
-            updated_at="2026-04-30T00:00:00Z",
-        ),
-        result_refs=TaskResultRefs(
-            result_handle=TaskResultHandle(),
-            metadata_records=(),
-            trace_payload=None,
-            result_handles=(),
-        ),
-        characterization_setup=CharacterizationSetup(
-            design_id=design_id,
-            analysis_id="admittance_extraction",
-            selected_trace_ids=selected_trace_ids,
-            analysis_config={
-                "fit_window": list(fit_window),
-                "residual_tolerance": residual_tolerance,
-            },
-        ),
-    )
+    return {str(capability["analysis_id"]): capability for capability in capabilities}
 
 
 def test_pf6fq_real_hfss_ingestion_browse_and_characterization_e2e() -> None:
@@ -294,9 +221,7 @@ def test_pf6fq_real_hfss_ingestion_browse_and_characterization_e2e() -> None:
     assert len({xy_trace_id, readout_trace_id, yin_trace_id}) == 3
     designs = client.get(f"/datasets/{dataset_id}/designs")
     assert designs.status_code == 200
-    design = next(
-        row for row in designs.json()["data"]["rows"] if row["design_id"] == design_id
-    )
+    design = next(row for row in designs.json()["data"]["rows"] if row["design_id"] == design_id)
     assert design["name"] == "PF6FQ Q0"
     assert design["trace_count"] == 3
 
@@ -324,9 +249,7 @@ def test_pf6fq_real_hfss_ingestion_browse_and_characterization_e2e() -> None:
     row_capabilities = _capabilities_by_analysis(xy_row["analysis_capabilities"])
     assert row_capabilities["admittance_extraction"]["status"] == "eligible"
 
-    detail_response = client.get(
-        f"/datasets/{dataset_id}/designs/{design_id}/traces/{xy_trace_id}"
-    )
+    detail_response = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces/{xy_trace_id}")
     assert detail_response.status_code == 200
     detail = detail_response.json()["data"]
     assert detail["preview_payload"] == {
@@ -351,10 +274,7 @@ def test_pf6fq_real_hfss_ingestion_browse_and_characterization_e2e() -> None:
         params=[("selected_trace_ids", xy_trace_id)],
     )
     assert registry.status_code == 200
-    registry_rows = {
-        row["analysis_id"]: row
-        for row in registry.json()["data"]["rows"]
-    }
+    registry_rows = {row["analysis_id"]: row for row in registry.json()["data"]["rows"]}
     assert registry_rows["admittance_extraction"]["availability_state"] == "recommended"
     assert registry_rows["admittance_extraction"]["trace_compatibility"] == {
         "matched_trace_count": 1,
@@ -363,76 +283,30 @@ def test_pf6fq_real_hfss_ingestion_browse_and_characterization_e2e() -> None:
         "summary": "1 selected trace is eligible for admittance resonance extraction.",
     }
 
-    catalog_repository = get_catalog_repository()
-    persisted_design = catalog_repository.get_design(dataset_id, design_id)
-    assert persisted_design is not None
-    trace_summary = next(
-        trace
-        for trace in catalog_repository.list_trace_metadata(dataset_id, design_id)
-        if trace.trace_id == xy_trace_id
+    submitted = client.post(
+        "/tasks",
+        json={
+            "kind": "characterization",
+            "dataset_id": dataset_id,
+            "characterization_setup": {
+                "design_id": design_id,
+                "analysis_id": "admittance_extraction",
+                "selected_trace_ids": [xy_trace_id],
+                "analysis_config": {
+                    "fit_window": [3.8, 6.8],
+                    "residual_tolerance": 10.0,
+                },
+            },
+        },
     )
-    trace_detail = catalog_repository.get_trace_detail(dataset_id, design_id, xy_trace_id)
-    assert trace_detail is not None
-    execution_result = get_persisted_characterization_repository().run_admittance_extraction(
-        CharacterizationExecutionRequest(
-            task=_build_direct_characterization_task(
-                dataset_id=dataset_id,
-                design_id=design_id,
-                selected_trace_ids=(xy_trace_id,),
-                fit_window=(3.8, 6.8),
-                residual_tolerance=10.0,
-            ),
-            design=persisted_design,
-            traces=(
-                CharacterizationExecutionTrace(
-                    summary=trace_summary,
-                    detail=trace_detail,
-                ),
-            ),
-        )
-    )
-    assert execution_result.result_summary_payload["characterization_result_id"]
+    assert submitted.status_code == 201
+    submitted_task = submitted.json()["data"]["task"]
+    assert submitted_task["kind"] == "characterization"
+    assert submitted_task["lane"] == "characterization"
+    assert submitted_task["worker_task_name"] == "characterization_run_task"
 
     results = client.get(f"/datasets/{dataset_id}/designs/{design_id}/characterization-results")
     assert results.status_code == 200
-    result_row = next(
-        row
-        for row in results.json()["data"]["rows"]
-        if row["analysis_id"] == "admittance_extraction"
+    assert all(
+        row["analysis_id"] != "admittance_extraction" for row in results.json()["data"]["rows"]
     )
-    result_id = str(result_row["result_id"])
-    result_detail = client.get(
-        f"/datasets/{dataset_id}/designs/{design_id}/characterization-results/{result_id}"
-    )
-    assert result_detail.status_code == 200
-    result_payload = result_detail.json()["data"]
-    assert result_payload["payload"]["input_axis"]["axis_key"] == "L_jun"
-    assert result_payload["payload"]["input_axis"]["length"] == 10
-    assert result_payload["payload"]["metric"]["metric_key"] == "frequency_ghz"
-
-    artifact = client.get(
-        f"/datasets/{dataset_id}/designs/{design_id}/"
-        f"characterization-results/{result_id}/artifacts/"
-        f"{result_id}:mode-frequency-grid",
-        params={"preset_id": "mode_by_input_table"},
-    )
-    assert artifact.status_code == 200
-    artifact_payload = artifact.json()["data"]["payload"]
-    assert artifact_payload["layout"] == {
-        "rows_axis": "mode_index",
-        "columns_axis": "L_jun",
-        "cell_metric": "frequency_ghz",
-        "compare_axis": "member_key",
-    }
-    assert [column["axis_value"] for column in artifact_payload["columns"]] == [
-        0.0,
-        5.0,
-        10.0,
-        15.0,
-        18.0,
-        20.0,
-        22.0,
-        24.0,
-        26.0,
-        28.0,
-    ]

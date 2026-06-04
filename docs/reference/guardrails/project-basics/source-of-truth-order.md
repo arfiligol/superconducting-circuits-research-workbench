@@ -87,7 +87,7 @@ updated_by: codex
 - **Julia Core / Runner beats adapters**：
   若 Julia Core / Runner contract 與 adapter 行為衝突，先修 adapter；只有在 contract 本身不完整時才修 core/runner 與其文件。
 - **Current app/core/notebooks boundaries beat old root layout**：
-  `app/backend/`、`app/frontend/`、`app/desktop/`、`core/julia/`、`core/python/`、`notebooks/` 才是 architecture-level surfaces。
+  `app/backend/`、`app/frontend/`、`app/desktop/`、`core/julia/`、`core/analysis/`、`core/python/`、`notebooks/` 才是 architecture-level surfaces。
   root `backend/`、`frontend/`、`desktop/`、`cli/` 或 `src/` 若仍有內容，只能視為 retired residue，不可反向推導 canonical topology。
 - **Do not silently revise docs to match code**：
   發現 implementation 與 reference 不一致時，不可直接改文件湊合程式碼，除非使用者明確確認規格要變。
@@ -121,7 +121,7 @@ updated_by: codex
 - Treat implementation and old behavior as evidence, not automatic canonical truth.
 - If owner docs and consumer docs conflict, prefer the owner docs unless the user explicitly changes the spec.
 - If Julia Core / Runner and adapters conflict, fix the adapter first unless the canonical contract is incomplete.
-- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as retired surfaces with no authority over product boundaries.
+- Treat root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` residues as retired surfaces with no authority over product boundaries; current architecture-level surfaces include `core/analysis/`.
 - Record intentional product-contract exceptions in the owner docs and canonical contract registry.
 - Legacy fallback is not a product contract unless an owner SoT explicitly requires it.
 ```

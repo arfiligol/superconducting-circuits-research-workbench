@@ -2,9 +2,17 @@
 - **Repo-root orchestration**:
     - `npm run app:dev`
     - `npm run app:stop`
-- **Python install**: `uv sync`
+- **Python install**: `uv sync --all-packages`
+- **Public site**:
+    - `npm install --prefix site`
+    - `npm run dev --prefix site`
+    - `npm run check --prefix site`
+    - `npm run build --prefix site`
+    - `./scripts/build/build_public_site.sh`
 - **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Visualizer install**: `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
+- **Julia Analysis Bridge install**: `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'`
 - **Frontend**:
     - `npm install --prefix app/frontend`
     - `npm run dev --prefix app/frontend`
@@ -13,11 +21,14 @@
     - `npm run typecheck --prefix app/frontend`
     - `npm run build --prefix app/frontend`
 - **Backend**:
-    - `cd app/backend && uv sync`
-    - `cd app/backend && uv run pytest`
-    - `cd app/backend && uv run uvicorn src.app.main:app --reload --port 8000`
+    - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+    - `uv run --package superconducting-circuits-backend uvicorn app_backend.main:app --reload --port 8000`
+- **Julia Visualizer**:
+    - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
 - **Julia Runner**:
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+- **Julia Analysis Bridge**:
+    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Desktop**:
     - `npm install --prefix app/desktop`
     - `npm run dev --prefix app/desktop`
@@ -29,3 +40,5 @@
     - `uv run --group dev zensical build -f zensical.toml`
     - `./scripts/build_docs_sites.sh`
     - `uv run python scripts/check_docs_nav_routes.py --check-built`
+- **Public artifact**:
+    - `./scripts/build/build_public_site.sh` builds Astro at `/` and embeds Zensical docs at `/docs/`.

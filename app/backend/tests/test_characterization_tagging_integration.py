@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
+from app_backend.infrastructure.runtime import reset_runtime_state
+from app_backend.main import app
 from fastapi.testclient import TestClient
-from src.app.infrastructure.runtime import reset_runtime_state
-from src.app.main import app
 
 client = TestClient(app)
 

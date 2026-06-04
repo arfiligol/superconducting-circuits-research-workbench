@@ -5,8 +5,8 @@ architecture. Physical table names remain legacy-shaped until a dedicated
 schema migration workstream lands.
 """
 
-from datetime import UTC, datetime
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Optional
 
@@ -88,8 +88,8 @@ def _resolve_scope_ids(
         used_legacy_design_fallback=used_legacy_design_fallback,
     )
     if mutate_record:
-        setattr(record, "dataset_id", scope_ids.dataset_id)
-        setattr(record, "design_id", scope_ids.design_id)
+        record.dataset_id = scope_ids.dataset_id
+        record.design_id = scope_ids.design_id
     return scope_ids
 
 

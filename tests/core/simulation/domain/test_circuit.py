@@ -1,7 +1,6 @@
 """Tests for simulation domain models."""
 
 import pytest
-
 from core.simulation.domain.circuit import (
     SimulationResult,
     expand_circuit_definition,

@@ -54,11 +54,11 @@ from sc_core.tasking.runtime import (
 )
 
 __all__ = [
+    "REDACTED_RUNTIME_METADATA_VALUE",
+    "RETRYABLE_TASK_STATES",
     "TASKING_CONTRACT_VERSION",
     "TASK_RUNTIME_CONTRACT_VERSION",
     "TERMINAL_TASK_STATES",
-    "RETRYABLE_TASK_STATES",
-    "REDACTED_RUNTIME_METADATA_VALUE",
     "LaneName",
     "LaneProcessorSummary",
     "ProcessorHeartbeat",

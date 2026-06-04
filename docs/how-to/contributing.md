@@ -53,14 +53,14 @@ updated_by: codex
 2.  **Clone 您的 Fork**：
     將 `<YOUR_USERNAME>` 替換為您的 GitHub 帳號：
     ```bash
-    git clone https://github.com/<YOUR_USERNAME>/superconducting-circuits-tutorial.git
-    cd superconducting-circuits-tutorial
+    git clone https://github.com/<YOUR_USERNAME>/superconducting-circuits-research-workbench.git
+    cd superconducting-circuits-research-workbench
     ```
 
 3.  **同步依賴 (Sync dependencies)**：
     這會自動建立 `.venv` 虛擬環境並安裝所有套件（包含開發工具）。
     ```bash
-    uv sync
+    uv sync --all-packages
     ```
 
 4.  **啟動虛擬環境**：

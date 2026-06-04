@@ -36,23 +36,76 @@ npm --version
 From the repository root:
 
 ```bash
-uv sync
-cd app/backend && uv sync
+uv sync --all-packages
 npm ci --prefix app/frontend
 npm ci --prefix app/desktop
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'
+JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'
 ```
+
+## Install Local Julia Packages For Pluto And REPL
+
+If you want new Julia or Pluto sessions to use the local packages directly, register Core, Visualizer, and Revise in the Julia default environment that Pluto uses:
+
+```bash
+npm run julia:dev-install
+```
+
+For Julia REPL work, start the same environment and load Revise before the local packages:
+
+```bash
+julia --startup-file=no --project=@v1.12
+```
+
+```julia
+using Revise
+using SuperconductingCircuitsCore
+using SuperconductingCircuitsVisualizer
+pathof(SuperconductingCircuitsCore)
+pathof(SuperconductingCircuitsVisualizer)
+```
+
+Start Pluto from that same environment:
+
+```julia
+using Pluto
+Pluto.run()
+```
+
+After that, a notebook can start with:
+
+```julia
+import Pkg
+Pkg.activate(joinpath(first(DEPOT_PATH), "environments", "v1.12"); io=devnull)
+
+using Revise
+using SuperconductingCircuitsCore
+```
+
+Add `using PlutoUI` and `using SuperconductingCircuitsVisualizer` only when the notebook needs Pluto UI helpers or PlotlyJS figures. The `Pkg.activate(...)` line disables Pluto's automatic per-notebook package manager for this local dev workflow.
+
+If you launch Julia or Pluto with a custom environment, run the same install script against that environment, for example:
+
+```bash
+julia --startup-file=no --project=/path/to/env scripts/dev/install_julia_dev_packages.jl
+```
+
+Then replace the notebook activation path with that custom environment path.
 
 ## Validate
 
 Run the retained checks:
 
 ```bash
-cd app/backend && uv run pytest
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
 npm run typecheck --prefix app/frontend
+julia --startup-file=no --project=@v1.12 -e 'using Revise; using SuperconductingCircuitsCore; using SuperconductingCircuitsVisualizer; using SuperconductingCircuitsAnalysisBridge; println(pathof(SuperconductingCircuitsCore)); println(pathof(SuperconductingCircuitsVisualizer)); println(pathof(SuperconductingCircuitsAnalysisBridge))'
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
 ```
 
 ## Start The Local App

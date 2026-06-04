@@ -1,15 +1,15 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import select
-from src.app.infrastructure.persistence.database import create_metadata_session_factory
-from src.app.infrastructure.persistence.models import RewriteAuthAccountRecord
-from src.app.infrastructure.runtime import (
+from app_backend.infrastructure.persistence.database import create_metadata_session_factory
+from app_backend.infrastructure.persistence.models import RewriteAuthAccountRecord
+from app_backend.infrastructure.runtime import (
     get_task_audit_repository,
     get_workspace_collaboration_service,
     reset_runtime_state,
 )
-from src.app.main import app
-from src.app.settings import get_settings
+from app_backend.main import app
+from app_backend.settings import get_settings
+from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 client = TestClient(app)
 

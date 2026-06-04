@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
+from app_backend.infrastructure.runtime import reset_runtime_state
+from app_backend.main import app
 from core.shared.persistence import LocalZarrTraceStore
 from fastapi.testclient import TestClient
-from src.app.infrastructure.runtime import reset_runtime_state
-from src.app.main import app
 
 client = TestClient(app)
 
@@ -30,10 +30,7 @@ def reset_app_state() -> None:
 def _capabilities_by_analysis(
     capabilities: list[dict[str, object]],
 ) -> dict[str, dict[str, object]]:
-    return {
-        str(capability["analysis_id"]): capability
-        for capability in capabilities
-    }
+    return {str(capability["analysis_id"]): capability for capability in capabilities}
 
 
 def test_hfss_nd_grid_ingestion_persists_trace_store_and_is_characterization_eligible() -> None:
@@ -107,9 +104,7 @@ def test_hfss_nd_grid_ingestion_persists_trace_store_and_is_characterization_eli
     row_capabilities = _capabilities_by_analysis(trace_row["analysis_capabilities"])
     assert row_capabilities["admittance_extraction"]["status"] == "eligible"
 
-    trace_detail = client.get(
-        f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}"
-    )
+    trace_detail = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}")
     assert trace_detail.status_code == 200
     detail = trace_detail.json()["data"]
     assert detail["axes"] == [
@@ -129,9 +124,7 @@ def test_hfss_nd_grid_ingestion_persists_trace_store_and_is_characterization_eli
     ]
 
     store_ref = {
-        key: value
-        for key, value in detail["payload_ref"].items()
-        if key != "payload_role"
+        key: value for key, value in detail["payload_ref"].items() if key != "payload_role"
     }
     values = LocalZarrTraceStore().read_trace_slice(store_ref, selection=())
     np.testing.assert_allclose(values.real, np.zeros((3, 2)))
@@ -153,10 +146,7 @@ def test_hfss_nd_grid_ingestion_persists_trace_store_and_is_characterization_eli
         params=[("selected_trace_ids", trace_id)],
     )
     assert registry.status_code == 200
-    rows_by_id = {
-        row["analysis_id"]: row
-        for row in registry.json()["data"]["rows"]
-    }
+    rows_by_id = {row["analysis_id"]: row for row in registry.json()["data"]["rows"]}
     assert rows_by_id["admittance_extraction"]["availability_state"] == "recommended"
     assert rows_by_id["admittance_extraction"]["trace_compatibility"] == {
         "matched_trace_count": 1,

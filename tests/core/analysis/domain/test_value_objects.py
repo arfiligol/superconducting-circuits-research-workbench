@@ -1,6 +1,6 @@
 """Domain value-object tests for trace metadata normalization."""
 
-from core.analysis.domain import ModeGroup, ParameterKey, TraceKind
+from superconducting_circuits_analysis.domain import ModeGroup, ParameterKey, TraceKind
 
 
 def test_trace_kind_normalizes_known_aliases_to_canonical_values() -> None:

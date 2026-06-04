@@ -1,5 +1,5 @@
 [project]
-name = "superconducting-circuits-tutorial"
+name = "superconducting-circuits-research-workbench"
 version = "0.1.0"
 description = "Superconducting Circuit Simulation and Analysis Platform"
 readme = "README.md"
@@ -9,15 +9,34 @@ dependencies = []
 [tool.uv]
 package = false
 
-[tool.uv.sources]
-sc-core = { path = "core", editable = true }
+[tool.uv.workspace]
+members = [
+    "core/sc_core",
+    "core/python/sc_data_contracts",
+    "core/analysis",
+    "app/backend",
+    "notebooks/python",
+]
 
 [tool.basedpyright]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
-include = ["app/backend/src", "core", "core/python", "scripts"]
+include = [
+    "app/backend/app_backend",
+    "core/analysis",
+    "core/python",
+    "core/sc_core",
+    "core/shared",
+    "core/simulation",
+    "scripts",
+]
 exclude = ["**/__pycache__", ".venv", "data"]
-extraPaths = ["app/backend", "core", "core/python"]
+extraPaths = [
+    "app/backend",
+    "core/analysis",
+    "core",
+    "core/python",
+]
 # Basic presence checks only, as requested
 reportMissingParameterType = "warning"
 reportUnknownParameterType = "none" # Allow unknown types from 3rd party libs
@@ -25,7 +44,15 @@ reportUnknownParameterType = "none" # Allow unknown types from 3rd party libs
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["app/backend/src", "core", "core/python", "scripts"]
+src = [
+    "app/backend/app_backend",
+    "core/analysis",
+    "core/python",
+    "core/sc_core",
+    "core/shared",
+    "core/simulation",
+    "scripts",
+]
 
 [tool.ruff.lint]
 select = [

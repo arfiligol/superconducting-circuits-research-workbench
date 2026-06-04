@@ -1,4 +1,4 @@
-from src.app.infrastructure.durable_runtime_seed import rebuild_durable_runtime_state
+from app_backend.infrastructure.durable_runtime_seed import rebuild_durable_runtime_state
 
 
 def main() -> None:
