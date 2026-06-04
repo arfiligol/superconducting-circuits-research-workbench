@@ -132,6 +132,7 @@ data/database.db
 data/database.db-*
 data/trace_store/
 data/**/*.zarr/
+app/backend/data/test-runtime/
 # Keep gitkeep or README if they exist to guard structure, but ignore files
 # data/*
 # !data/.gitkeep

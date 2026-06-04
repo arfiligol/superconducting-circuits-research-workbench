@@ -3,8 +3,8 @@ name: Contract Sync Verification
 on:
   pull_request:
     paths:
-      - "backend/**"
-      - "frontend/**"
+      - "app/backend/**"
+      - "app/frontend/**"
       - "scripts/sync_api_types.sh"
       - "scripts/verify_contract_sync.sh"
       - "openapi.json"
@@ -13,8 +13,8 @@ on:
     branches:
       - main
     paths:
-      - "backend/**"
-      - "frontend/**"
+      - "app/backend/**"
+      - "app/frontend/**"
       - "scripts/sync_api_types.sh"
       - "scripts/verify_contract_sync.sh"
       - "openapi.json"
@@ -37,7 +37,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
-        run: cd backend && uv sync
+        run: cd app/backend && uv sync
 
       - name: Verify Contract Sync
         run: ./scripts/verify_contract_sync.sh
