@@ -147,6 +147,7 @@ app/backend/**/*.egg-info/
 core/python/**/*.egg-info/
 
 # Local Playwright runtime outputs/logs
+.playwright-mcp/
 output/
 output/playwright/
 .next/
