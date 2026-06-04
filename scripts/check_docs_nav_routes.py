@@ -104,9 +104,7 @@ def main() -> int:
         "--config",
         action="append",
         dest="configs",
-        help=(
-            "Config file to validate (repeatable). Defaults to zensical.toml."
-        ),
+        help=("Config file to validate (repeatable). Defaults to zensical.toml."),
     )
     parser.add_argument(
         "--check-source",

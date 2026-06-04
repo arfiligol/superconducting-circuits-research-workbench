@@ -36,13 +36,13 @@ npm --version
 From the repository root:
 
 ```bash
-uv sync
-cd app/backend && uv sync
+uv sync --all-packages
 npm ci --prefix app/frontend
 npm ci --prefix app/desktop
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'
+JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'
 ```
 
 ## Install Local Julia Packages For Pluto And REPL
@@ -99,12 +99,13 @@ Then replace the notebook activation path with that custom environment path.
 Run the retained checks:
 
 ```bash
-cd app/backend && uv run pytest
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
 npm run typecheck --prefix app/frontend
-julia --startup-file=no --project=@v1.12 -e 'using Revise; using SuperconductingCircuitsCore; using SuperconductingCircuitsVisualizer; println(pathof(SuperconductingCircuitsCore)); println(pathof(SuperconductingCircuitsVisualizer))'
+julia --startup-file=no --project=@v1.12 -e 'using Revise; using SuperconductingCircuitsCore; using SuperconductingCircuitsVisualizer; using SuperconductingCircuitsAnalysisBridge; println(pathof(SuperconductingCircuitsCore)); println(pathof(SuperconductingCircuitsVisualizer)); println(pathof(SuperconductingCircuitsAnalysisBridge))'
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
 ```
 
 ## Start The Local App

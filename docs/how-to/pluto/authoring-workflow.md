@@ -74,6 +74,12 @@ using PlutoUI
 using SuperconductingCircuitsVisualizer
 ```
 
+Add the Python analysis bridge only when a notebook needs the shared Python analysis package through PythonCall:
+
+```julia
+using SuperconductingCircuitsAnalysisBridge
+```
+
 Do not copy repo-relative `Pkg.develop(path=joinpath(@__DIR__, "..", "..", "core", ...))` cells into notebooks outside the repository. That pattern is valid only while the notebook remains under `notebooks/pluto/`, where `@__DIR__/../..` resolves to the repository root.
 
 User-written notebooks should not depend on repo-relative `includes/` files. Reusable scientific helpers belong in `SuperconductingCircuitsCore`, and reusable plotting helpers belong in `SuperconductingCircuitsVisualizer`.
@@ -90,6 +96,8 @@ using Revise
 using PlutoUI
 using SuperconductingCircuitsCore
 using SuperconductingCircuitsVisualizer
+# Use only in notebooks that call Python analysis:
+# using SuperconductingCircuitsAnalysisBridge
 ```
 
 The explicit `Pkg.activate(...)` call tells Pluto not to use its automatic per-notebook package manager for local dev packages. These notebooks may still include repo-local helper files from `notebooks/pluto/includes/`. Those helpers are notebook support code, not package installation bootstrap.

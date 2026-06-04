@@ -134,7 +134,7 @@ Python Backend 是 control/data plane；Julia Runner 是 compute plane；TraceSt
 ```bash
 uv run ruff format .
 uv run ruff check .
-uv run basedpyright src
+uv run basedpyright app/backend/app_backend core/analysis core/python core/sc_core core/shared core/simulation scripts
 uv run pytest
 ./scripts/prepare_docs_locales.sh
 ./scripts/build_docs_sites.sh

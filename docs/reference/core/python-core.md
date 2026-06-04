@@ -17,12 +17,13 @@ updated_by: codex
 
 # Python Core
 
-本頁記錄 Python-owned core surface：`sc_core` 的 canonical contracts，以及 Python Backend 如何在 persistence、task lifecycle、storage reference 中消費這些 contracts。
+本頁記錄 Python-owned core surfaces：`sc_core` 的 canonical contracts、`superconducting_circuits_analysis` 的 analysis package，以及 Python Backend 如何在 persistence、task lifecycle、storage reference 中消費這些 contracts。
 
 !!! info "Owned Surface"
-    Python core 的 canonical owner 是 installable `sc_core` package。
-    canonical folder 是 top-level `core/`。
-    `core/shared/` 與 `core/sc_core/` 是目前的 implementation location；
+    Python contract core 的 canonical owner 是 installable `sc_core` package。
+    Python analysis 的 canonical owner 是 installable `superconducting-circuits-analysis` distribution。
+    `core/shared/`、`core/sc_core/` 與 `core/simulation/` 由 `sc-core` 發佈；
+    `core/analysis/superconducting_circuits_analysis/` 是 analysis package implementation location；
     app/backend adapters 是 adopter，不是 contract owner。
 
 !!! warning "Do Not Move Ownership"
@@ -55,14 +56,22 @@ updated_by: codex
     |---|---|---|
     | `sc_core.storage` | trace / result handles、trace-store locator、payload lifecycle、version markers | `StorageRecordHandle`, `TraceBatchHandle`, `TraceStoreLocator`, `TraceStorePayloadLifecycle`, `TraceStoreVersionMarkers`, `TraceResultLinkage` |
 
+=== "Analysis"
+
+    | Surface | Focus | Primary exports |
+    |---|---|---|
+    | `superconducting_circuits_analysis.application.analysis` | fitting, mode extraction, matrix-oriented analysis helpers | Y11 fitting, SQUID mode fitting, admittance mode extraction |
+    | `superconducting_circuits_analysis.domain` | analysis value objects and schemas | trace records, fitting schemas, analysis result shapes |
+
 ## Python Adopters
 
 | Adopter Surface | Role | Why it is not the owner |
 |---|---|---|
 | `core/shared/persistence/repositories/` | persisted rows 映射到 canonical objects | repository 實作是 adapter；canonical shape 由 `sc_core` 決定；不得反向定義 `core/` topology |
 | `core/shared/persistence/trace_store.py` | TraceStore backend binding | backend binding 與 runtime config 不等於 storage contract owner |
-| `app/backend/src/app/infrastructure/persistence/` | app backend persistence adapter | backend adapter consumes contracts; it does not redefine them |
-| `app/backend/src/app/services/` | task lifecycle and publication services | service layer orchestrates contracts; compute remains in Julia Runner |
+| `app/backend/app_backend/infrastructure/persistence/` | app backend persistence adapter | backend adapter consumes contracts; it does not redefine them |
+| `app/backend/app_backend/services/` | task lifecycle and publication services | service layer orchestrates contracts; compute remains in Julia Runner |
+| `core/julia/SuperconductingCircuitsAnalysisBridge/` | Pluto-friendly analysis wrapper | Bridge calls Python analysis through PythonCall; it does not own algorithms |
 
 ## Consumer Pairing
 
@@ -70,6 +79,7 @@ updated_by: codex
 |---|---|
 | Backend task / dataset / definition adapters | `circuit_definitions`, `execution`, `storage` |
 | Backend runner API / publisher | `tasking`, `execution`, `storage` |
+| Pluto Analysis Bridge | `superconducting_circuits_analysis` |
 
 ## Ownership Boundary
 

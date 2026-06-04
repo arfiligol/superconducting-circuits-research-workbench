@@ -83,7 +83,7 @@ trace = scatter(x=freqs, y=phase_deg, mode="lines", name="S11 Phase")
 plot(trace)
 ```
 
-👉 [下載完整程式碼](https://github.com/arfiligol/superconducting-circuits-tutorial/blob/main/examples/01_simple_lc/lc_resonator.jl)
+👉 [下載完整程式碼](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/examples/01_simple_lc/lc_resonator.jl)
 
 ## 參數探索
 
