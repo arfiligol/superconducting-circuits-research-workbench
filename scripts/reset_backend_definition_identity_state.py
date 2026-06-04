@@ -2,25 +2,20 @@
 from __future__ import annotations
 
 import shutil
-import sys
-from pathlib import Path
 
 
 def main() -> int:
-    repo_root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(repo_root / "backend"))
-
-    from core.shared.persistence.trace_store import get_trace_store_path
-    from src.app.infrastructure.audit_store import (
+    from app_backend.infrastructure.audit_store import (
         bootstrap_audit_store,
         resolve_audit_database_path,
     )
-    from src.app.infrastructure.persistence.database import (
+    from app_backend.infrastructure.persistence.database import (
         bootstrap_metadata_schema,
         resolve_metadata_database_path,
     )
-    from src.app.infrastructure.runtime import reset_runtime_state
-    from src.app.settings import get_settings
+    from app_backend.infrastructure.runtime import reset_runtime_state
+    from app_backend.settings import get_settings
+    from core.shared.persistence.trace_store import get_trace_store_path
 
     reset_runtime_state()
     settings = get_settings()

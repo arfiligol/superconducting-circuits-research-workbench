@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 import core.simulation.application.run_simulation as run_sim_app
+import pytest
 from core.simulation.domain.circuit import (
     FrequencyRange,
     SimulationConfig,

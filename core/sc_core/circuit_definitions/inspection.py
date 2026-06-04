@@ -292,7 +292,7 @@ def _inspect_parameters(
             code="PARAMETER_NAME_REQUIRED",
             message="Parameter rows must define a non-empty 'name'.",
             source="parameters",
-            path=path + ("name",),
+            path=(*path, "name"),
             diagnostics=diagnostics,
         )
         unit = _normalize_required_string(
@@ -300,7 +300,7 @@ def _inspect_parameters(
             code="PARAMETER_UNIT_REQUIRED",
             message=f"Parameter '{name or index}' must define a non-empty 'unit'.",
             source="parameters",
-            path=path + ("unit",),
+            path=(*path, "unit"),
             diagnostics=diagnostics,
         )
         default = _coerce_float(
@@ -308,7 +308,7 @@ def _inspect_parameters(
             code="PARAMETER_DEFAULT_INVALID",
             message=f"Parameter '{name or index}' default must be numeric.",
             source="parameters",
-            path=path + ("default",),
+            path=(*path, "default"),
             diagnostics=diagnostics,
         )
         if name is None or unit is None or default is None:
@@ -320,7 +320,7 @@ def _inspect_parameters(
                     code="DUPLICATE_PARAMETER_NAME",
                     message=f"Duplicate parameter name '{name}'.",
                     source="parameters",
-                    path=path + ("name",),
+                    path=(*path, "name"),
                 )
             )
             continue
@@ -378,7 +378,7 @@ def _inspect_components(
             code="COMPONENT_NAME_REQUIRED",
             message="Component rows must define a non-empty 'name'.",
             source="components",
-            path=path + ("name",),
+            path=(*path, "name"),
             diagnostics=diagnostics,
         )
         unit = _normalize_required_string(
@@ -386,7 +386,7 @@ def _inspect_components(
             code="COMPONENT_UNIT_REQUIRED",
             message=f"Component '{name or index}' must define a non-empty 'unit'.",
             source="components",
-            path=path + ("unit",),
+            path=(*path, "unit"),
             diagnostics=diagnostics,
         )
         has_default = "default" in row
@@ -414,7 +414,7 @@ def _inspect_components(
                     code="DUPLICATE_COMPONENT_NAME",
                     message=f"Duplicate component name '{name}'.",
                     source="components",
-                    path=path + ("name",),
+                    path=(*path, "name"),
                 )
             )
             continue
@@ -427,7 +427,7 @@ def _inspect_components(
                 code="COMPONENT_DEFAULT_INVALID",
                 message=f"Component '{name}' default must be numeric.",
                 source="components",
-                path=path + ("default",),
+                path=(*path, "default"),
                 diagnostics=diagnostics,
             )
         else:
@@ -436,13 +436,15 @@ def _inspect_components(
                 code="COMPONENT_VALUE_REF_INVALID",
                 message=f"Component '{name}' value_ref must be a non-empty string.",
                 source="components",
-                path=path + ("value_ref",),
+                path=(*path, "value_ref"),
                 diagnostics=diagnostics,
             )
         if (has_default and default is None) or (has_value_ref and value_ref is None):
             continue
         seen_names.add(name)
-        components.append(_ComponentSpec(name=name, unit=unit, default=default, value_ref=value_ref))
+        components.append(
+            _ComponentSpec(name=name, unit=unit, default=default, value_ref=value_ref)
+        )
     return components
 
 
@@ -507,7 +509,7 @@ def _inspect_topology(
             code="TOPOLOGY_NAME_REQUIRED",
             message="topology rows must define a non-empty element name.",
             source="topology",
-            path=path + (0,),
+            path=(*path, 0),
             diagnostics=diagnostics,
         )
         if name is None:
@@ -519,11 +521,11 @@ def _inspect_topology(
                     code="DUPLICATE_TOPOLOGY_ELEMENT_NAME",
                     message=f"Duplicate topology element name '{name}'.",
                     source="topology",
-                    path=path + (0,),
+                    path=(*path, 0),
                 )
             )
             continue
-        kind = _infer_element_kind(name, diagnostics, path=path + (0,))
+        kind = _infer_element_kind(name, diagnostics, path=(*path, 0))
         if kind is None:
             continue
 
@@ -533,7 +535,7 @@ def _inspect_topology(
                 code="MUTUAL_COUPLING_FIRST_REFERENCE_INVALID",
                 message=f"Mutual coupling '{name}' must reference an inductor element name.",
                 source="topology",
-                path=path + (1,),
+                path=(*path, 1),
                 diagnostics=diagnostics,
             )
             second_ref = _normalize_required_string(
@@ -541,7 +543,7 @@ def _inspect_topology(
                 code="MUTUAL_COUPLING_SECOND_REFERENCE_INVALID",
                 message=f"Mutual coupling '{name}' must reference an inductor element name.",
                 source="topology",
-                path=path + (2,),
+                path=(*path, 2),
                 diagnostics=diagnostics,
             )
             component_ref = _normalize_required_string(
@@ -549,7 +551,7 @@ def _inspect_topology(
                 code="MUTUAL_COUPLING_COMPONENT_REFERENCE_INVALID",
                 message=f"Mutual coupling '{name}' must reference a component name.",
                 source="topology",
-                path=path + (3,),
+                path=(*path, 3),
                 diagnostics=diagnostics,
             )
             if first_ref is None or second_ref is None or component_ref is None:
@@ -566,21 +568,21 @@ def _inspect_topology(
             )
             continue
 
-        node1 = _normalize_node_token(row[1], diagnostics, path=path + (1,))
-        node2 = _normalize_node_token(row[2], diagnostics, path=path + (2,))
+        node1 = _normalize_node_token(row[1], diagnostics, path=(*path, 1))
+        node2 = _normalize_node_token(row[2], diagnostics, path=(*path, 2))
         if node1 is None or node2 is None:
             continue
 
         value_ref: str | int | None
         if kind == "port":
-            value_ref = _normalize_port_index(row[3], diagnostics, path=path + (3,), row_name=name)
+            value_ref = _normalize_port_index(row[3], diagnostics, path=(*path, 3), row_name=name)
         else:
             value_ref = _normalize_required_string(
                 row[3],
                 code="TOPOLOGY_COMPONENT_REFERENCE_INVALID",
                 message=f"Topology row '{name}' must reference a component name.",
                 source="topology",
-                path=path + (3,),
+                path=(*path, 3),
                 diagnostics=diagnostics,
             )
         if value_ref is None:

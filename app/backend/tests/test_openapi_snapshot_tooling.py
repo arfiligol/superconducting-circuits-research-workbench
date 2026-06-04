@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.app.tooling.openapi_snapshot import (
+from app_backend.tooling.openapi_snapshot import (
     check_openapi_snapshot_drift,
     export_openapi_snapshot,
 )

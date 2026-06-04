@@ -5,11 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from time import perf_counter
 
-from sqlmodel import Session, SQLModel, create_engine
-
 from core.shared.persistence.models import DesignRecord, TraceRecord
 from core.shared.persistence.repositories.data_record_repository import TraceRepository
 from core.shared.persistence.repositories.query_objects import TraceIndexPageQuery
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _memory_session() -> Session:

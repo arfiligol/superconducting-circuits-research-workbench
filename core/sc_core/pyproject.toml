@@ -1,0 +1,41 @@
+[project]
+name = "sc-core"
+version = "0.1.0"
+description = "Shared framework-agnostic core utilities for superconducting circuits workflows."
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.3.5",
+    "pydantic>=2.12.5",
+    "rich>=14.3.1",
+    "schemdraw>=0.21",
+    "sqlalchemy>=2.0.44",
+    "sqlmodel>=0.0.31",
+    "zarr>=3.1.3",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = [
+    "sc_core",
+    "sc_core.circuit_definitions",
+    "sc_core.execution",
+    "sc_core.storage",
+    "sc_core.tasking",
+    "core",
+    "core.shared",
+    "core.shared.persistence",
+    "core.shared.persistence.repositories",
+    "core.shared.utils",
+    "core.shared.visualization",
+    "core.simulation",
+    "core.simulation.application",
+    "core.simulation.domain",
+    "core.simulation.infrastructure",
+]
+
+[tool.setuptools.package-dir]
+sc_core = "."
+core = ".."

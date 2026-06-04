@@ -312,7 +312,7 @@ export class DesktopRuntimeSupervisor {
         "--project",
         paths.backendDir,
         "uvicorn",
-        "src.app.main:app",
+        "app_backend.main:app",
         "--host",
         LOCALHOST,
         "--port",

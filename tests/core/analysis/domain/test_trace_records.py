@@ -1,6 +1,6 @@
 """Tests for canonical trace-record naming helpers."""
 
-from core.analysis.domain.trace_records import (
+from superconducting_circuits_analysis.domain.trace_records import (
     normalize_trace_record,
     trace_record_dataset_id,
     trace_record_design_id,

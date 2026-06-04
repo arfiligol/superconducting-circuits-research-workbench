@@ -3,10 +3,10 @@ from __future__ import annotations
 from logging.config import fileConfig
 
 from alembic import context
+from app_backend.infrastructure.persistence.database import build_sqlite_database_url
+from app_backend.infrastructure.persistence.models import RewriteMetadataBase
+from app_backend.settings import AppSettings
 from sqlalchemy import engine_from_config, pool
-from src.app.infrastructure.persistence.database import build_sqlite_database_url
-from src.app.infrastructure.persistence.models import RewriteMetadataBase
-from src.app.settings import AppSettings
 
 config = context.config
 

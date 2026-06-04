@@ -12,6 +12,7 @@ from core.shared.persistence.reconcile import ReconcileSummary, reconcile_stale_
 
 logger = logging.getLogger(__name__)
 
+
 def default_stale_timeout_seconds() -> int:
     """Return the safe startup reconcile timeout from environment."""
     raw_value = os.getenv("SC_TASK_STALE_TIMEOUT_SECONDS", "300").strip()

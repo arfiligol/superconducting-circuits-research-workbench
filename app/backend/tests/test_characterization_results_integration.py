@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import pytest
+from app_backend.infrastructure.runtime import reset_runtime_state
+from app_backend.main import app
 from fastapi.testclient import TestClient
-from src.app.infrastructure.runtime import reset_runtime_state
-from src.app.main import app
 
 client = TestClient(app)
 
@@ -152,8 +152,7 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
             "severity": "info",
             "code": "fit_residual_rms_evaluated",
             "message": (
-                "All persisted input positions stay within the configured residual "
-                "tolerance."
+                "All persisted input positions stay within the configured residual tolerance."
             ),
             "blocking": False,
         },
@@ -165,7 +164,7 @@ def test_get_characterization_result_returns_detail_only_payload() -> None:
                 "persisted result surface."
             ),
             "blocking": False,
-        }
+        },
     ]
     artifact_refs = payload["data"]["artifact_refs"]
     assert [artifact["artifact_id"] for artifact in artifact_refs] == [

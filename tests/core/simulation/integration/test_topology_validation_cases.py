@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from core.simulation.application.run_simulation import run_simulation
 from core.simulation.domain.circuit import (
     DriveSourceConfig,

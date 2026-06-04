@@ -69,8 +69,7 @@ def _ensure_legacy_sqlite_compat_columns(engine: Engine) -> None:
                 "ALTER TABLE result_bundle_records ADD COLUMN parent_batch_id INTEGER"
             ),
             "role": (
-                "ALTER TABLE result_bundle_records ADD COLUMN role VARCHAR "
-                "DEFAULT 'cache' NOT NULL"
+                "ALTER TABLE result_bundle_records ADD COLUMN role VARCHAR DEFAULT 'cache' NOT NULL"
             ),
             "status": (
                 "ALTER TABLE result_bundle_records ADD COLUMN status VARCHAR "
@@ -82,9 +81,7 @@ def _ensure_legacy_sqlite_compat_columns(engine: Engine) -> None:
             "simulation_setup_hash": (
                 "ALTER TABLE result_bundle_records ADD COLUMN simulation_setup_hash VARCHAR"
             ),
-            "completed_at": (
-                "ALTER TABLE result_bundle_records ADD COLUMN completed_at DATETIME"
-            ),
+            "completed_at": ("ALTER TABLE result_bundle_records ADD COLUMN completed_at DATETIME"),
         },
     }
     with engine.begin() as connection:

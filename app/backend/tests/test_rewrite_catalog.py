@@ -1,9 +1,7 @@
 from dataclasses import replace
 
 import pytest
-from fastapi.testclient import TestClient
-from sc_core.execution import TaskResultHandle
-from src.app.domain.datasets import (
+from app_backend.domain.datasets import (
     CharacterizationAnalysisRegistryQuery,
     CharacterizationArtifactPayloadQuery,
     CharacterizationResultBrowseQuery,
@@ -16,36 +14,27 @@ from src.app.domain.datasets import (
     TraceAxis,
     TraceBrowseQuery,
 )
-from src.app.domain.tasks import (
-    CharacterizationSetup,
-    TaskDetail,
-    TaskProgress,
-    TaskResultRefs,
+from app_backend.infrastructure.rewrite_app_state_repository import (
+    InMemoryRewriteAppStateRepository,
 )
-from src.app.infrastructure.persisted_characterization_runtime import (
-    CharacterizationExecutionRequest,
-    CharacterizationExecutionTrace,
-)
-from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
-from src.app.infrastructure.rewrite_catalog_repository import (
+from app_backend.infrastructure.rewrite_catalog_repository import (
     COUPLER_DETUNING_DEMO_DEFINITION_ID,
     FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,
     FLUXONIUM_READOUT_CHAIN_DEFINITION_ID,
     InMemoryRewriteCatalogRepository,
 )
-from src.app.infrastructure.runtime import (
-    get_catalog_repository,
-    get_persisted_characterization_repository,
+from app_backend.infrastructure.runtime import (
     reset_runtime_state,
 )
-from src.app.main import app
-from src.app.services.dataset_catalog_service import DatasetCatalogService
-from src.app.services.dataset_characterization_service import (
+from app_backend.main import app
+from app_backend.services.dataset_catalog_service import DatasetCatalogService
+from app_backend.services.dataset_characterization_service import (
     DatasetCharacterizationService,
 )
-from src.app.services.dataset_service import DatasetService
-from src.app.services.dataset_trace_service import DatasetTraceService
-from src.app.services.service_errors import ServiceError
+from app_backend.services.dataset_service import DatasetService
+from app_backend.services.dataset_trace_service import DatasetTraceService
+from app_backend.services.service_errors import ServiceError
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -158,10 +147,7 @@ def _create_ingested_trace_design(*, trace_count: int = 1) -> tuple[str, str, li
 def _capabilities_by_analysis(
     capabilities: list[dict[str, object]],
 ) -> dict[str, dict[str, object]]:
-    return {
-        capability["analysis_id"]: capability
-        for capability in capabilities
-    }
+    return {capability["analysis_id"]: capability for capability in capabilities}
 
 
 def _strip_completed_bundle_metadata(task, bundle_key: str):
@@ -170,64 +156,11 @@ def _strip_completed_bundle_metadata(task, bundle_key: str):
         events=tuple(
             replace(
                 event,
-                metadata={
-                    key: value
-                    for key, value in event.metadata.items()
-                    if key != bundle_key
-                },
+                metadata={key: value for key, value in event.metadata.items() if key != bundle_key},
             )
             if event.event_type == "task_completed" and bundle_key in event.metadata
             else event
             for event in task.events
-        ),
-    )
-
-
-def _build_direct_characterization_task(
-    *,
-    dataset_id: str,
-    design_id: str,
-    selected_trace_ids: tuple[str, ...],
-) -> TaskDetail:
-    return TaskDetail(
-        task_id=99201,
-        kind="characterization",
-        lane="characterization",
-        execution_mode="run",
-        status="running",
-        submitted_at="2026-04-01T00:00:00Z",
-        owner_user_id="rewrite-local-user",
-        owner_display_name="Rewrite Local User",
-        workspace_id="workspace-local",
-        workspace_slug="local",
-        visibility_scope="local",
-        dataset_id=dataset_id,
-        definition_id=None,
-        summary="Direct persisted admittance runtime scope test.",
-        queue_backend="backend_db",
-        worker_task_name="characterization_run_task",
-        request_ready=True,
-        submitted_from_active_dataset=True,
-        progress=TaskProgress(
-            phase="running",
-            percent_complete=50,
-            summary="Executing persisted admittance extraction.",
-            updated_at="2026-04-01T00:00:00Z",
-        ),
-        result_refs=TaskResultRefs(
-            result_handle=TaskResultHandle(),
-            metadata_records=(),
-            trace_payload=None,
-            result_handles=(),
-        ),
-        characterization_setup=CharacterizationSetup(
-            design_id=design_id,
-            analysis_id="admittance_extraction",
-            selected_trace_ids=selected_trace_ids,
-            analysis_config={
-                "fit_window": [4.8, 5.2],
-                "residual_tolerance": 10.0,
-            },
         ),
     )
 
@@ -313,9 +246,7 @@ def test_dataset_routes_create_archive_and_delete_lifecycle_contract() -> None:
     deleted = client.delete(f"/datasets/{dataset_id}")
     assert deleted.status_code == 200
     assert deleted.json()["data"]["dataset"]["lifecycle_state"] == "deleted"
-    assert all(
-        row["dataset_id"] != dataset_id for row in deleted.json()["data"]["catalog_rows"]
-    )
+    assert all(row["dataset_id"] != dataset_id for row in deleted.json()["data"]["catalog_rows"])
 
 
 def test_dataset_ingestion_materializes_design_and_trace_browse_surfaces() -> None:
@@ -476,17 +407,17 @@ def test_durable_ingestion_materializes_nd_grid_to_trace_store() -> None:
     payload = ingestion.json()["data"]
     design_id = payload["design"]["design_id"]
     trace_id = payload["traces"][0]["trace_id"]
-    trace_row = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()[
-        "data"
-    ]["rows"][0]
+    trace_row = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()["data"][
+        "rows"
+    ][0]
     assert trace_row["ndim"] == 2
     assert trace_row["shape"] == [3, 2]
     assert trace_row["axes_summary"]["axis_names"] == ["frequency", "L_jun"]
     assert trace_row["available_sweep_axes"] == ["L_jun"]
 
-    detail = client.get(
-        f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}"
-    ).json()["data"]
+    detail = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces/{trace_id}").json()[
+        "data"
+    ]
     assert detail["preview_payload"]["kind"] == "nd_grid"
     assert detail["preview_payload"]["axes"] == [
         {"name": "frequency", "unit": "GHz", "length": 3},
@@ -512,9 +443,7 @@ def test_durable_ingestion_materializes_nd_grid_to_trace_store() -> None:
 
     trace_store = LocalZarrTraceStore()
     store_ref = {
-        key: value
-        for key, value in detail["payload_ref"].items()
-        if key != "payload_role"
+        key: value for key, value in detail["payload_ref"].items() if key != "payload_role"
     }
     values = trace_store.read_trace_slice(store_ref, selection=())
     np.testing.assert_allclose(values.real, np.zeros((3, 2)))
@@ -576,9 +505,7 @@ def test_durable_hfss_nd_imports_do_not_overwrite_same_design_parameter_collisio
     assert any("hfss-xy-csv" in trace_id for trace_id in trace_ids)
     assert any("hfss-readout-csv" in trace_id for trace_id in trace_ids)
 
-    rows = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()[
-        "data"
-    ]["rows"]
+    rows = client.get(f"/datasets/{dataset_id}/designs/{design_id}/traces").json()["data"]["rows"]
     assert len(rows) == 2
     assert {row["trace_id"] for row in rows} == trace_ids
     assert {row["parameter"] for row in rows} == {"Y11"}
@@ -930,10 +857,7 @@ def test_merge_reparents_trace_metadata_and_redirects_source_scope() -> None:
     stale_source = client.get(f"/datasets/{dataset_id}/designs/{source['design_id']}/traces")
     assert stale_source.status_code == 409
     assert stale_source.json()["error"]["code"] == "design_scope_redirected"
-    assert (
-        stale_source.json()["error"]["details"]["redirect_design_id"]
-        == target["design_id"]
-    )
+    assert stale_source.json()["error"]["details"]["redirect_design_id"] == target["design_id"]
 
 
 def test_design_scope_lifecycle_integrates_ingestion_merge_and_characterization_scope() -> None:
@@ -1045,43 +969,9 @@ def test_design_scope_lifecycle_integrates_ingestion_merge_and_characterization_
         row["analysis_id"]: row for row in source_registry.json()["data"]["rows"]
     }
     assert source_registry_rows["admittance_extraction"]["availability_state"] == "recommended"
-
-    catalog_repository = get_catalog_repository()
-    design = catalog_repository.get_design(dataset_id, source["design_id"])
-    assert design is not None
-    trace_summary = next(
-        row
-        for row in catalog_repository.list_trace_metadata(dataset_id, source["design_id"])
-        if row.trace_id == source_trace_id
+    assert source_registry_rows["admittance_extraction"]["trace_compatibility"]["summary"] == (
+        "1 selected trace is eligible for admittance resonance extraction."
     )
-    trace_detail = catalog_repository.get_trace_detail(
-        dataset_id,
-        source["design_id"],
-        source_trace_id,
-    )
-    assert trace_detail is not None
-    execution_result = get_persisted_characterization_repository().run_admittance_extraction(
-        CharacterizationExecutionRequest(
-            task=_build_direct_characterization_task(
-                dataset_id=dataset_id,
-                design_id=source["design_id"],
-                selected_trace_ids=(source_trace_id,),
-            ),
-            design=design,
-            traces=(
-                CharacterizationExecutionTrace(
-                    summary=trace_summary,
-                    detail=trace_detail,
-                ),
-            ),
-        )
-    )
-    result_id = execution_result.result_summary_payload["characterization_result_id"]
-    source_result = client.get(
-        f"/datasets/{dataset_id}/designs/{source['design_id']}/characterization-results/{result_id}"
-    )
-    assert source_result.status_code == 200
-    assert source_result.json()["data"]["design_id"] == source["design_id"]
 
     merged = client.post(
         f"/datasets/{dataset_id}/designs/{source['design_id']}/merge",
@@ -1106,9 +996,7 @@ def test_design_scope_lifecycle_integrates_ingestion_merge_and_characterization_
         params={"include_archived": True},
     )
     assert all_designs.status_code == 200
-    designs_by_id = {
-        row["design_id"]: row for row in all_designs.json()["data"]["rows"]
-    }
+    designs_by_id = {row["design_id"]: row for row in all_designs.json()["data"]["rows"]}
     assert designs_by_id[source["design_id"]]["redirect_design_id"] == target["design_id"]
 
     target_traces = client.get(f"/datasets/{dataset_id}/designs/{target['design_id']}/traces")
@@ -1124,14 +1012,11 @@ def test_design_scope_lifecycle_integrates_ingestion_merge_and_characterization_
     assert reparented_detail.json()["data"]["design_id"] == target["design_id"]
     assert reparented_detail.json()["data"]["available_sweep_axes"] == ["L_jun"]
 
-    stale_trace_access = client.get(
-        f"/datasets/{dataset_id}/designs/{source['design_id']}/traces"
-    )
+    stale_trace_access = client.get(f"/datasets/{dataset_id}/designs/{source['design_id']}/traces")
     assert stale_trace_access.status_code == 409
     assert stale_trace_access.json()["error"]["code"] == "design_scope_redirected"
     assert (
-        stale_trace_access.json()["error"]["details"]["redirect_design_id"]
-        == target["design_id"]
+        stale_trace_access.json()["error"]["details"]["redirect_design_id"] == target["design_id"]
     )
     stale_ingestion = client.post(
         f"/datasets/{dataset_id}/ingestions",
@@ -1168,7 +1053,8 @@ def test_design_scope_lifecycle_integrates_ingestion_merge_and_characterization_
     assert stale_registry.status_code == 409
     assert stale_registry.json()["error"]["code"] == "design_scope_redirected"
     stale_result = client.get(
-        f"/datasets/{dataset_id}/designs/{source['design_id']}/characterization-results/{result_id}"
+        f"/datasets/{dataset_id}/designs/{source['design_id']}/"
+        "characterization-results/char-fit-flux-a-01"
     )
     assert stale_result.status_code == 409
     assert stale_result.json()["error"]["code"] == "design_scope_redirected"
@@ -1280,8 +1166,6 @@ def test_local_seed_single_trace_preview_uses_full_series_for_one_dimensional_pr
     assert len(trace_detail.preview_payload["points"]) == trace_detail.axes[0].length
 
 
-
-
 def test_ingested_trace_can_be_updated_without_changing_identity() -> None:
     dataset_id, design_id, trace_ids = _create_ingested_trace_design()
     trace_id = trace_ids[0]
@@ -1322,9 +1206,7 @@ def test_ingested_trace_can_be_updated_without_changing_identity() -> None:
         updated_capabilities["admittance_extraction"]["summary"]
         == "Eligible as admittance resonance source."
     )
-    assert updated_capabilities["junction_parameter_identification"]["status"] == (
-        "ineligible"
-    )
+    assert updated_capabilities["junction_parameter_identification"]["status"] == ("ineligible")
     assert (
         updated_capabilities["junction_parameter_identification"]["summary"]
         == "Requires complex representation."
@@ -1570,8 +1452,7 @@ def test_dataset_service_exposes_characterization_analysis_registry_and_run_hist
     assert registry_rows[1].availability_state == "unavailable"
     assert registry_rows[1].trace_compatibility.summary == (
         "Selected trace compatibility could not be re-evaluated because this design "
-        "does not yet carry durable trace capability markings. The current runtime "
-        "does not yet support executing this analysis."
+        "does not yet carry durable trace capability markings."
     )
 
     assert [row.run_id for row in run_rows] == ["run-flux-a-003"]

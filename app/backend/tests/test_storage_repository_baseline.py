@@ -4,20 +4,20 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import select
-from src.app.infrastructure.persistence import (
+from app_backend.infrastructure.persistence import (
     RewriteResultHandleRecord,
     RewriteTracePayloadRecord,
     SqliteRewriteStorageMetadataRepository,
     build_sqlite_database_url,
     create_metadata_session_factory,
 )
-from src.app.infrastructure.storage_reference_factory import (
+from app_backend.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
     build_result_handle_ref,
     build_result_provenance_ref,
     build_trace_payload_ref,
 )
+from sqlalchemy import select
 
 
 def test_sqlite_storage_metadata_repository_round_trips_storage_entities(
@@ -74,11 +74,14 @@ def test_sqlite_storage_metadata_repository_round_trips_storage_entities(
     assert repository.save_storage_record(dataset_record) == dataset_record
     assert repository.get_storage_record(dataset_record.record_id) == dataset_record
 
-    assert repository.save_trace_payload(
-        dataset_record,
-        trace_payload,
-        writer_version="rewrite-backend.v0",
-    ) == trace_payload
+    assert (
+        repository.save_trace_payload(
+            dataset_record,
+            trace_payload,
+            writer_version="rewrite-backend.v0",
+        )
+        == trace_payload
+    )
     assert repository.get_trace_payload(trace_payload.store_key) == trace_payload
     assert repository.get_trace_payload_for_owner_record(dataset_record.record_id) == trace_payload
 

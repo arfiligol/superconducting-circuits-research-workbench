@@ -65,9 +65,7 @@ class TraceResultLinkage:
 
     def to_result_handle(self) -> TaskResultHandle:
         return TaskResultHandle(
-            trace_batch_id=(
-                self.trace_batch.record_id if self.trace_batch is not None else None
-            ),
+            trace_batch_id=(self.trace_batch.record_id if self.trace_batch is not None else None),
             analysis_run_id=(
                 self.analysis_run.record_id if self.analysis_run is not None else None
             ),

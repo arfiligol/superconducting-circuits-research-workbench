@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from core.simulation.application.post_processing import (
     apply_coordinate_transform,
     apply_shunt_termination_compensation,

@@ -5,17 +5,17 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sc_core.tasking import resolve_worker_task_route
-from sqlalchemy import delete
-from src.app.domain.tasks import TaskCreateDraft
-from src.app.infrastructure.persistence import (
+from app_backend.domain.tasks import TaskCreateDraft
+from app_backend.infrastructure.persistence import (
     RewriteTaskDispatchRecord,
     RewriteTaskEventRecord,
     SqliteRewriteTaskSnapshotRepository,
     build_sqlite_database_url,
     create_metadata_session_factory,
 )
-from src.app.infrastructure.task_seed_data import build_seed_tasks
+from app_backend.infrastructure.task_seed_data import build_seed_tasks
+from sc_core.tasking import resolve_worker_task_route
+from sqlalchemy import delete
 
 
 def test_sqlite_task_snapshot_repository_round_trips_task_rows(tmp_path: Path) -> None:
@@ -115,9 +115,7 @@ def test_sqlite_task_snapshot_repository_round_trips_task_rows(tmp_path: Path) -
         session.execute(
             delete(RewriteTaskDispatchRecord).where(RewriteTaskDispatchRecord.task_id == 304)
         )
-        session.execute(
-            delete(RewriteTaskEventRecord).where(RewriteTaskEventRecord.task_id == 304)
-        )
+        session.execute(delete(RewriteTaskEventRecord).where(RewriteTaskEventRecord.task_id == 304))
         session.commit()
 
     backfilled_dispatch = repository.get_task(304)

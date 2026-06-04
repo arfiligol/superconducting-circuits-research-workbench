@@ -1,7 +1,5 @@
 """Repository contract tests for page-orchestration critical APIs."""
 
-from sqlmodel import Session, SQLModel, create_engine
-
 from core.shared.persistence.models import DesignRecord
 from core.shared.persistence.repositories import (
     AnalysisRunPersistenceContract,
@@ -21,6 +19,7 @@ from core.shared.persistence.repositories import (
     UserPersistenceContract,
 )
 from core.shared.persistence.unit_of_work import SqliteUnitOfWork
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _memory_session() -> Session:

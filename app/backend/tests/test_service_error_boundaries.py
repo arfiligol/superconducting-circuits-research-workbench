@@ -1,34 +1,36 @@
 import pytest
-from fastapi import HTTPException
-from src.app.domain.datasets import CharacterizationTaggingRequest
-from src.app.domain.tasks import TaskSubmissionDraft
-from src.app.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
-from src.app.infrastructure.rewrite_app_state_repository import InMemoryRewriteAppStateRepository
-from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
-from src.app.infrastructure.session_jwt_transport import SessionJwtTransport
-from src.app.services.authorization_service import AuthorizationService
-from src.app.services.circuit_definition_service import CircuitDefinitionService
-from src.app.services.dataset_catalog_service import DatasetCatalogService
-from src.app.services.dataset_characterization_service import (
+from app_backend.domain.datasets import CharacterizationTaggingRequest
+from app_backend.domain.tasks import TaskSubmissionDraft
+from app_backend.infrastructure.casbin_authorization import CasbinAuthorizationAdapter
+from app_backend.infrastructure.rewrite_app_state_repository import (
+    InMemoryRewriteAppStateRepository,
+)
+from app_backend.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
+from app_backend.infrastructure.session_jwt_transport import SessionJwtTransport
+from app_backend.services.authorization_service import AuthorizationService
+from app_backend.services.circuit_definition_service import CircuitDefinitionService
+from app_backend.services.dataset_catalog_service import DatasetCatalogService
+from app_backend.services.dataset_characterization_service import (
     DatasetCharacterizationService,
 )
-from src.app.services.dataset_service import DatasetService
-from src.app.services.dataset_trace_service import DatasetTraceService
-from src.app.services.result_trace_publication_service import (
+from app_backend.services.dataset_service import DatasetService
+from app_backend.services.dataset_trace_service import DatasetTraceService
+from app_backend.services.result_trace_publication_service import (
     ResultTracePublicationService,
 )
-from src.app.services.service_errors import ServiceError
-from src.app.services.session_mutation_service import SessionMutationService
-from src.app.services.session_projection_service import SessionProjectionService
-from src.app.services.session_service import SessionService
-from src.app.services.simulation_result_publication_service import (
+from app_backend.services.service_errors import ServiceError
+from app_backend.services.session_mutation_service import SessionMutationService
+from app_backend.services.session_projection_service import SessionProjectionService
+from app_backend.services.session_service import SessionService
+from app_backend.services.simulation_result_publication_service import (
     SimulationResultPublicationService,
 )
-from src.app.services.task_control_service import TaskControlService
-from src.app.services.task_mutation_service import TaskMutationService
-from src.app.services.task_publication_service import TaskPublicationService
-from src.app.services.task_service import TaskService
-from src.app.services.task_submission_service import TaskSubmissionService
+from app_backend.services.task_control_service import TaskControlService
+from app_backend.services.task_mutation_service import TaskMutationService
+from app_backend.services.task_publication_service import TaskPublicationService
+from app_backend.services.task_service import TaskService
+from app_backend.services.task_submission_service import TaskSubmissionService
+from fastapi import HTTPException
 
 
 def _enter_online_owner_session(repository: InMemoryRewriteAppStateRepository) -> None:

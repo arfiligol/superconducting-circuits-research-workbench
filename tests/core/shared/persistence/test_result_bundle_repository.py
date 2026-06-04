@@ -2,8 +2,6 @@
 
 from datetime import UTC
 
-from sqlmodel import Session, SQLModel, create_engine
-
 from core.shared.persistence.models import (
     AnalysisRunRecord,
     CircuitRecord,
@@ -41,6 +39,7 @@ from core.shared.persistence.repositories.result_bundle_repository import (
 from core.shared.persistence.repositories.result_bundle_repository import (
     TraceBatchRepository as ResultBundleRepository,
 )
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _memory_session() -> Session:
@@ -297,7 +296,9 @@ def test_result_bundle_snapshot_reads_reject_missing_explicit_design_scope() -> 
             try:
                 loader(legacy_batch.id)
             except ValueError as exc:
-                assert str(exc) == "Explicit design_id is required for canonical persistence writes."
+                assert (
+                    str(exc) == "Explicit design_id is required for canonical persistence writes."
+                )
             else:
                 raise AssertionError("Expected snapshot read path to reject legacy scope fallback.")
 

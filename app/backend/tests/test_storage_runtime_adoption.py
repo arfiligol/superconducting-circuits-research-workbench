@@ -2,25 +2,26 @@ from dataclasses import replace
 from datetime import datetime
 
 import pytest
-from sc_core.execution import TaskExecutionResult, TaskResultHandle
-from sqlalchemy import update
-from src.app.api.schemas.tasks import TaskDispatchResponse, TaskEventResponse
-from src.app.domain.datasets import DatasetCreateDraft
-from src.app.domain.tasks import (
-    CharacterizationSetup,
+from app_backend.api.schemas.tasks import TaskDispatchResponse, TaskEventResponse
+from app_backend.domain.datasets import DatasetCreateDraft
+from app_backend.domain.tasks import (
+    SimulationSetup,
     TaskEventHistoryQuery,
     TaskLifecycleUpdate,
     TaskListQuery,
     TaskResultRefs,
     TaskSubmissionDraft,
 )
-from src.app.infrastructure.durable_runtime_seed import rebuild_durable_runtime_state
-from src.app.infrastructure.persistence import (
+from app_backend.infrastructure.durable_runtime_seed import rebuild_durable_runtime_state
+from app_backend.infrastructure.persistence import (
     RewriteTaskDispatchRecord,
     RewriteTaskEventRecord,
     create_metadata_session_factory,
 )
-from src.app.infrastructure.runtime import (
+from app_backend.infrastructure.rewrite_catalog_repository import (
+    LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+)
+from app_backend.infrastructure.runtime import (
     get_app_state_repository,
     get_catalog_repository,
     get_storage_metadata_repository,
@@ -31,14 +32,16 @@ from src.app.infrastructure.runtime import (
     get_task_snapshot_repository,
     reset_runtime_state,
 )
-from src.app.infrastructure.storage_reference_factory import (
+from app_backend.infrastructure.storage_reference_factory import (
     build_metadata_record_ref,
     build_result_handle_ref,
     build_result_provenance_ref,
     build_trace_payload_ref,
 )
-from src.app.services.service_errors import ServiceError
-from src.app.settings import get_settings
+from app_backend.services.service_errors import ServiceError
+from app_backend.settings import get_settings
+from sc_core.execution import TaskExecutionResult, TaskResultHandle
+from sqlalchemy import update
 
 
 def _enter_online_owner_session() -> None:
@@ -64,20 +67,51 @@ def enter_online_runtime() -> None:
     _reset_runtime_state_online()
 
 
-def _characterization_setup() -> CharacterizationSetup:
-    return CharacterizationSetup.from_mapping(
+def _simulation_setup() -> SimulationSetup:
+    return SimulationSetup.from_mapping(
         {
-            "design_id": "design_flux_scan_a",
-            "analysis_id": "admittance_extraction",
-            "selected_trace_ids": [
-                "trace_flux_a_measurement",
-                "trace_flux_a_layout",
-            ],
-            "analysis_config": {
-                "fit_window": [5.7, 5.9],
-                "residual_tolerance": 0.01,
+            "frequency_sweep": {
+                "start_ghz": 4.0,
+                "stop_ghz": 6.0,
+                "point_count": 5,
+                "spacing": "linear",
             },
+            "parameter_sweeps": [],
+            "solver": {
+                "solver_family": "josephson_circuits",
+                "max_iterations": 1,
+                "convergence_tolerance": 1e-6,
+                "harmonic_balance": {
+                    "enabled": True,
+                    "harmonic_count": 1,
+                    "oversample_factor": 1,
+                },
+            },
+            "sources": [
+                {
+                    "source_id": "drive-port-a",
+                    "kind": "port_drive",
+                    "target": "port_1",
+                    "amplitude": -35.0,
+                    "frequency_ghz": 5.0,
+                    "phase_deg": 0.0,
+                }
+            ],
         }
+    )
+
+
+def _simulation_task_draft(
+    *,
+    dataset_id: str | None = None,
+    summary: str | None = None,
+) -> TaskSubmissionDraft:
+    return TaskSubmissionDraft(
+        kind="simulation",
+        dataset_id=dataset_id,
+        definition_id=LOCAL_SPACE_RESONATOR_DEFINITION_ID,
+        summary=summary,
+        simulation_setup=_simulation_setup(),
     )
 
 
@@ -101,40 +135,26 @@ def test_task_schema_models_accept_documented_dispatch_and_event_family() -> Non
 def test_runtime_task_submission_persists_pending_result_metadata() -> None:
     service = get_task_service()
 
-    task = service.submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary=None,
-            characterization_setup=_characterization_setup(),
-        )
-    )
+    task = service.submit_task(_simulation_task_draft())
     storage_repository = get_storage_metadata_repository()
 
-    assert storage_repository.get_storage_record("result_handle:pending:306") == (
-        task.result_refs.metadata_records[0]
+    assert (
+        storage_repository.get_storage_record("result_handle:pending:306")
+        == (task.result_refs.metadata_records[0])
     )
-    assert storage_repository.get_result_handle("task-result:306:primary") == (
-        task.result_refs.result_handles[0]
+    assert (
+        storage_repository.get_result_handle("task-result:306:primary")
+        == (task.result_refs.result_handles[0])
     )
     assert task.dispatch is not None
     assert task.dispatch.status == "accepted"
-    assert task.dispatch.dispatch_key == "dispatch:306:characterization_run_task"
+    assert task.dispatch.dispatch_key == "dispatch:306:simulation_probe_task"
     assert [event.event_type for event in task.events] == ["task_submitted"]
-    assert task.events[0].metadata["dispatch_key"] == "dispatch:306:characterization_run_task"
+    assert task.events[0].metadata["dispatch_key"] == "dispatch:306:simulation_probe_task"
 
 
 def test_task_service_submit_preserves_explicit_dataset_dispatch_source_across_reset() -> None:
-    task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id="fluxonium-2025-031",
-            definition_id=None,
-            summary=None,
-            characterization_setup=_characterization_setup(),
-        )
-    )
+    task = get_task_service().submit_task(_simulation_task_draft(dataset_id="fluxonium-2025-031"))
 
     assert task.dispatch is not None
     assert task.dispatch.submission_source == "explicit_dataset"
@@ -154,14 +174,16 @@ def test_runtime_bootstrap_persists_seeded_trace_payload_and_materialized_handle
     task = service.get_task(303)
 
     assert task.result_refs.trace_payload is not None
-    assert storage_repository.get_storage_record("trace_batch:88") == (
-        task.result_refs.metadata_records[0]
+    assert (
+        storage_repository.get_storage_record("trace_batch:88")
+        == (task.result_refs.metadata_records[0])
     )
     assert storage_repository.get_trace_payload(task.result_refs.trace_payload.store_key) == (
         task.result_refs.trace_payload
     )
-    assert storage_repository.get_result_handle("result:fluxonium-2025-031:fit-summary") == (
-        task.result_refs.result_handles[0]
+    assert (
+        storage_repository.get_result_handle("result:fluxonium-2025-031:fit-summary")
+        == (task.result_refs.result_handles[0])
     )
 
 
@@ -304,15 +326,7 @@ def test_task_service_history_view_coheres_detail_dispatch_and_events() -> None:
 
 
 def test_task_service_lifecycle_update_persists_running_state_across_reset() -> None:
-    submitted_task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary=None,
-            characterization_setup=_characterization_setup(),
-        )
-    )
+    submitted_task = get_task_service().submit_task(_simulation_task_draft())
 
     updated_task = get_task_service().update_task_lifecycle(
         TaskLifecycleUpdate(
@@ -361,9 +375,7 @@ def test_task_service_lifecycle_update_persists_running_state_across_reset() -> 
     assert history.task.dispatch is not None
     assert history.latest_event.metadata["dispatch_key"] == history.task.dispatch.dispatch_key
 
-    repository_history = get_task_repository().get_task_history_view(
-        submitted_task.task_id
-    )
+    repository_history = get_task_repository().get_task_history_view(submitted_task.task_id)
     assert repository_history is not None
     assert repository_history.latest_event is not None
     assert repository_history.latest_event.event_type == "task_running"
@@ -371,13 +383,7 @@ def test_task_service_lifecycle_update_persists_running_state_across_reset() -> 
 
 def test_execution_runtime_persists_start_heartbeat_and_completion_across_reset() -> None:
     submitted_task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary="Execution runtime characterization proof.",
-            characterization_setup=_characterization_setup(),
-        )
+        _simulation_task_draft(summary="Execution runtime simulation proof.")
     )
     runtime = get_task_execution_runtime()
 
@@ -390,9 +396,9 @@ def test_execution_runtime_persists_start_heartbeat_and_completion_across_reset(
     heartbeat_task = runtime.heartbeat_task(
         submitted_task.task_id,
         recorded_at=datetime(2026, 3, 12, 12, 5, 0),
-        summary="Characterization worker is sweeping the next resonance window.",
+        summary="Simulation worker is sweeping the next resonance window.",
         percent_complete=60,
-        stage_label="characterization_run_task",
+        stage_label="simulation_run_task",
         current_step=3,
         total_steps=5,
     )
@@ -477,7 +483,7 @@ def test_execution_runtime_persists_start_heartbeat_and_completion_across_reset(
     assert reloaded_task.status == "completed"
     assert reloaded_task.dispatch is not None
     assert reloaded_task.dispatch.status == "completed"
-    assert reloaded_task.progress.summary == "Characterization task completed."
+    assert reloaded_task.progress.summary == "Simulation task completed."
     assert reloaded_task.result_refs.trace_batch_id == submitted_task.task_id
     assert reloaded_task.result_refs.result_handles[0].status == "materialized"
     assert [event.event_type for event in reloaded_task.events] == [
@@ -494,15 +500,7 @@ def test_execution_runtime_persists_start_heartbeat_and_completion_across_reset(
 
 
 def test_execution_runtime_reconcile_marks_running_task_failed_with_safe_metadata() -> None:
-    submitted_task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary=None,
-            characterization_setup=_characterization_setup(),
-        )
-    )
+    submitted_task = get_task_service().submit_task(_simulation_task_draft())
     runtime = get_task_execution_runtime()
     runtime.start_task(
         submitted_task.task_id,
@@ -545,15 +543,7 @@ def test_execution_runtime_reconcile_marks_running_task_failed_with_safe_metadat
 
 
 def test_service_read_reconciles_stale_dispatch_snapshot_to_task_lifecycle() -> None:
-    submitted_task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary=None,
-            characterization_setup=_characterization_setup(),
-        )
-    )
+    submitted_task = get_task_service().submit_task(_simulation_task_draft())
     get_task_service().update_task_lifecycle(
         TaskLifecycleUpdate(
             task_id=submitted_task.task_id,
@@ -617,15 +607,7 @@ def test_task_service_event_history_redacts_sensitive_metadata_fields() -> None:
 
 
 def test_task_service_lifecycle_update_persists_completed_result_refs_across_reset() -> None:
-    submitted_task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary=None,
-            characterization_setup=_characterization_setup(),
-        )
-    )
+    submitted_task = get_task_service().submit_task(_simulation_task_draft())
     trace_batch_record = build_metadata_record_ref(
         "trace_batch",
         f"trace_batch:{submitted_task.task_id}",
@@ -712,7 +694,7 @@ def test_task_service_lifecycle_update_persists_completed_result_refs_across_res
     ]
     assert reloaded_task.dispatch is not None
     assert reloaded_task.dispatch.dispatch_key == (
-        f"dispatch:{submitted_task.task_id}:characterization_run_task"
+            f"dispatch:{submitted_task.task_id}:simulation_probe_task"
     )
     assert reloaded_task.dispatch.status == "completed"
     assert reloaded_task.dispatch.submission_source == "active_dataset"
@@ -728,15 +710,7 @@ def test_task_service_lifecycle_update_persists_completed_result_refs_across_res
 
 
 def test_task_service_lifecycle_update_rejects_invalid_completed_progress() -> None:
-    submitted_task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary=None,
-            characterization_setup=_characterization_setup(),
-        )
-    )
+    submitted_task = get_task_service().submit_task(_simulation_task_draft())
 
     with pytest.raises(ServiceError) as exc_info:
         get_task_service().update_task_lifecycle(
@@ -753,15 +727,7 @@ def test_task_service_lifecycle_update_rejects_invalid_completed_progress() -> N
 
 
 def test_runtime_reset_keeps_submitted_task_row_and_storage_refs() -> None:
-    submitted_task = get_task_service().submit_task(
-        TaskSubmissionDraft(
-            kind="characterization",
-            dataset_id=None,
-            definition_id=None,
-            summary=None,
-            characterization_setup=_characterization_setup(),
-        )
-    )
+    submitted_task = get_task_service().submit_task(_simulation_task_draft())
 
     _reset_runtime_state_online()
 
@@ -776,8 +742,7 @@ def test_runtime_reset_keeps_submitted_task_row_and_storage_refs() -> None:
     assert get_task_repository().get_task(submitted_task.task_id) is not None
 
 
-def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_cancelled_state(
-) -> None:
+def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_cancelled_state():
     service = get_task_service()
     runtime = get_task_execution_runtime()
 
@@ -795,13 +760,9 @@ def test_execution_runtime_consumes_cancellation_request_and_persists_terminal_c
     assert cancelling_task.status == "cancelling"
     assert cancelling_task.control_state == "cancellation_requested"
     acknowledge_event = next(
-        event
-        for event in cancelling_task.events
-        if event.event_type == "task_cancel_acknowledged"
+        event for event in cancelling_task.events if event.event_type == "task_cancel_acknowledged"
     )
-    assert acknowledge_event.metadata["audit_action"] == (
-        "worker.task_cancellation_acknowledged"
-    )
+    assert acknowledge_event.metadata["audit_action"] == ("worker.task_cancellation_acknowledged")
 
     queue = service.get_queue_view(TaskListQuery(limit=20))
     assert queue.worker_summary == ()
@@ -867,9 +828,7 @@ def test_execution_runtime_consumes_termination_request_and_persists_terminated_
         for event in acknowledged_task.events
         if event.event_type == "task_terminate_acknowledged"
     )
-    assert acknowledge_event.metadata["audit_action"] == (
-        "worker.task_termination_acknowledged"
-    )
+    assert acknowledge_event.metadata["audit_action"] == ("worker.task_termination_acknowledged")
 
     queue = service.get_queue_view(TaskListQuery(limit=20))
     assert queue.worker_summary == ()

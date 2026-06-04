@@ -1,5 +1,5 @@
-from src.app.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
-from src.app.services.trace_collection_service import TraceCollectionService
+from app_backend.infrastructure.rewrite_catalog_repository import InMemoryRewriteCatalogRepository
+from app_backend.services.trace_collection_service import TraceCollectionService
 
 
 class _StubAxisValueLoader:
@@ -15,8 +15,7 @@ class _StubAxisValueLoader:
         return tuple(float(index) for index in range(detail.axes[0].length))
 
 
-def test_trace_collection_service_uses_injected_axis_loader_and_omits_dense_shared_axis_values(
-) -> None:
+def test_trace_collection_service_uses_injected_axis_loader_and_omits_dense_shared_axis_values():
     repository = InMemoryRewriteCatalogRepository()
     loader = _StubAxisValueLoader()
     service = TraceCollectionService(axis_value_loader=loader)
@@ -31,9 +30,7 @@ def test_trace_collection_service_uses_injected_axis_loader_and_omits_dense_shar
         "trace_local_flux_preview",
     )
 
-    payload = service.derive_input_collection_payload_from_trace_details(
-        (measurement, preview)
-    )
+    payload = service.derive_input_collection_payload_from_trace_details((measurement, preview))
 
     assert payload is not None
     assert loader.calls == [

@@ -3,11 +3,11 @@ import json
 import struct
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-from src.app.infrastructure.rewrite_catalog_repository import (
+from app_backend.infrastructure.rewrite_catalog_repository import (
     LOCAL_SPACE_RESONATOR_DEFINITION_ID,
 )
-from src.app.main import app
+from app_backend.main import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 

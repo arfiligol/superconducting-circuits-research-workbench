@@ -60,8 +60,7 @@ def test_init_db_upgrades_legacy_result_bundle_schema_with_design_scope_columns(
 
         with sqlite3.connect(db_path) as connection:
             columns = {
-                row[1]
-                for row in connection.execute("PRAGMA table_info(result_bundle_records)")
+                row[1] for row in connection.execute("PRAGMA table_info(result_bundle_records)")
             }
     finally:
         database.get_engine.cache_clear()

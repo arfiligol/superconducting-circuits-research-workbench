@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-
-from sc_core.execution import build_execution_event_log
-from sqlmodel import Session, SQLModel, create_engine
+from datetime import UTC, timedelta
 
 from core.shared.persistence.models import DesignRecord, TraceBatchRecord, utc_now
 from core.shared.persistence.repositories.audit_log_repository import AuditLogRepository
 from core.shared.persistence.repositories.task_repository import TaskRepository
 from core.shared.persistence.repositories.user_repository import UserRepository
+from sc_core.execution import build_execution_event_log
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _memory_session() -> Session:

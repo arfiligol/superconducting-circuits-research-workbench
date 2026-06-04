@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.app.domain.admittance_result_contract import (
+from app_backend.domain.admittance_result_contract import (
     AdmittanceResultMember,
     AdmittanceResultSurface,
     admittance_grid_artifact_id,
@@ -8,7 +8,7 @@ from src.app.domain.admittance_result_contract import (
     build_admittance_identify_surface,
     query_admittance_artifact_payload,
 )
-from src.app.domain.datasets import (
+from app_backend.domain.datasets import (
     CharacterizationAppliedTag,
     CharacterizationArtifactPayloadQuery,
     CharacterizationDiagnostic,

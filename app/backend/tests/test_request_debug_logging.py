@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import logging
 
-from src.app.infrastructure.request_debug import (
+from app_backend.infrastructure.request_debug import (
     RequestDebugFormatter,
     bind_request_debug_context,
     reset_request_debug_context,

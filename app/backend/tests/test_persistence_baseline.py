@@ -5,13 +5,11 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect, select, text
-from sqlalchemy.orm import Session
-from src.app.infrastructure.persistence.database import (
+from app_backend.infrastructure.persistence.database import (
     bootstrap_metadata_schema,
     build_sqlite_database_url,
 )
-from src.app.infrastructure.persistence.models import (
+from app_backend.infrastructure.persistence.models import (
     RewriteCircuitDefinitionRecord,
     RewriteDatasetDesignRecord,
     RewritePublishedSimulationResultRecord,
@@ -23,13 +21,15 @@ from src.app.infrastructure.persistence.models import (
     RewriteTaskRecord,
     RewriteTracePayloadRecord,
 )
-from src.app.infrastructure.storage_reference_factory import (
+from app_backend.infrastructure.storage_reference_factory import (
     REWRITE_TRACE_SCHEMA_VERSION,
     build_metadata_record_ref,
     build_result_handle_ref,
     build_result_provenance_ref,
     build_trace_payload_ref,
 )
+from sqlalchemy import inspect, select, text
+from sqlalchemy.orm import Session
 
 _UUID_V4_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -511,8 +511,7 @@ def test_bootstrap_metadata_schema_migrates_legacy_numeric_definition_ids_to_uui
         for column in inspector.get_columns("rewrite_circuit_definitions")
     }
     task_columns = {
-        column["name"]: column["type"]
-        for column in inspector.get_columns("rewrite_task_records")
+        column["name"]: column["type"] for column in inspector.get_columns("rewrite_task_records")
     }
     assert "CHAR" in str(definition_columns["definition_id"]).upper()
     assert "CHAR" in str(definition_columns["lineage_parent_id"]).upper()

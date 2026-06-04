@@ -1,8 +1,8 @@
 """Framework-agnostic helpers for canonical circuit-definition handling."""
 
 from sc_core.circuit_definitions.inspection import (
-    CircuitDefinitionDiagnostic,
     DEFAULT_PREVIEW_ARTIFACTS,
+    CircuitDefinitionDiagnostic,
     CircuitDefinitionInspection,
     CircuitDefinitionInspectionSummary,
     DiagnosticSeverity,
@@ -13,8 +13,8 @@ from sc_core.circuit_definitions.inspection import (
 )
 
 __all__ = [
-    "CircuitDefinitionDiagnostic",
     "DEFAULT_PREVIEW_ARTIFACTS",
+    "CircuitDefinitionDiagnostic",
     "CircuitDefinitionInspection",
     "CircuitDefinitionInspectionSummary",
     "DiagnosticSeverity",
