@@ -5,6 +5,7 @@ using PlotlyJS
 export PlotlyFigureConfig,
     default_layout,
     frequency_ghz,
+    fit_overlay_figure,
     multi_curve_figure,
     plotly_display_config,
     s_parameter_abs_magnitude_figure,
@@ -12,6 +13,9 @@ export PlotlyFigureConfig,
     s_parameter_phase_figure,
     unwrap_phase_trace,
     y_trace_figure,
+    z_parameter_abs_imaginary_figure,
+    z_parameter_imaginary_figure,
+    z_parameter_real_figure,
     z_trace_figure
 
 const DEFAULT_FONT_FAMILY = "Arial, Helvetica, sans-serif"
@@ -53,6 +57,8 @@ Base.@kwdef struct PlotlyFigureConfig
     show_y_grid::Bool = true
     x_range_ghz::Any = nothing
     y_range::Any = nothing
+    x_axis_type::Symbol = :linear
+    y_axis_type::Symbol = :linear
     text_color::String = "#111827"
     grid_color::String = "#E5E7EB"
     axis_line_color::String = "#111827"
@@ -87,8 +93,24 @@ function _range_vector(value, name::AbstractString)
     return [lower, upper]
 end
 
-function _effective_range(call_range, config_range, name::AbstractString)
-    return _range_vector(isnothing(call_range) ? config_range : call_range, name)
+function _axis_type_value(value, name::AbstractString)
+    value isa Symbol || throw(ArgumentError("$(name) must be :linear or :log."))
+    value in (:linear, :log) || throw(ArgumentError("$(name) must be :linear or :log."))
+    return value
+end
+
+function _effective_axis_type(call_axis_type, config_axis_type::Symbol, name::AbstractString)
+    return _axis_type_value(isnothing(call_axis_type) ? config_axis_type : call_axis_type, name)
+end
+
+function _effective_range(call_range, config_range, name::AbstractString, axis_type::Symbol)
+    range = _range_vector(isnothing(call_range) ? config_range : call_range, name)
+    isnothing(range) && return nothing
+    if axis_type == :log
+        all(>(0), range) || throw(ArgumentError("$(name) must be positive when axis type is :log."))
+        return log10.(range)
+    end
+    return range
 end
 
 function _font(config::PlotlyFigureConfig, size::Integer)
@@ -99,13 +121,15 @@ function _font(config::PlotlyFigureConfig, size::Integer)
     )
 end
 
-function _axis_kwargs(config::PlotlyFigureConfig; title, showgrid::Bool, range=nothing)
+function _axis_kwargs(config::PlotlyFigureConfig; title, showgrid::Bool, range=nothing, axis_type::Symbol=:linear)
+    axis_type = _axis_type_value(axis_type, "axis_type")
     axis = Dict{Symbol,Any}(
         :title => Dict(
             :text => title,
             :font => _font(config, config.axis_title_font_size_px),
             :standoff => config.axis_title_standoff_px,
         ),
+        :type => string(axis_type),
         :tickfont => _font(config, config.tick_font_size_px),
         :showgrid => showgrid,
         :gridcolor => config.grid_color,
@@ -131,11 +155,15 @@ function default_layout(;
     config::PlotlyFigureConfig=PlotlyFigureConfig(),
     x_range_ghz=nothing,
     y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
 )
     display_width = _optional_positive_integer(config.display_width_px, "display_width_px")
     display_height = _optional_positive_integer(config.display_height_px, "display_height_px")
-    x_range = _effective_range(x_range_ghz, config.x_range_ghz, "x_range_ghz")
-    y_axis_range = _effective_range(y_range, config.y_range, "y_range")
+    x_axis_type_value = _effective_axis_type(x_axis_type, config.x_axis_type, "x_axis_type")
+    y_axis_type_value = _effective_axis_type(y_axis_type, config.y_axis_type, "y_axis_type")
+    x_range = _effective_range(x_range_ghz, config.x_range_ghz, "x_range_ghz", x_axis_type_value)
+    y_axis_range = _effective_range(y_range, config.y_range, "y_range", y_axis_type_value)
 
     layout = Dict{Symbol,Any}(
         :title => Dict(
@@ -144,8 +172,8 @@ function default_layout(;
             :xanchor => "left",
             :font => _font(config, config.title_font_size_px),
         ),
-        :xaxis => _axis_kwargs(config; title=xaxis_title, showgrid=config.show_x_grid, range=x_range),
-        :yaxis => _axis_kwargs(config; title=yaxis_title, showgrid=config.show_y_grid, range=y_axis_range),
+        :xaxis => _axis_kwargs(config; title=xaxis_title, showgrid=config.show_x_grid, range=x_range, axis_type=x_axis_type_value),
+        :yaxis => _axis_kwargs(config; title=yaxis_title, showgrid=config.show_y_grid, range=y_axis_range, axis_type=y_axis_type_value),
         :font => _font(config, config.tick_font_size_px),
         :legend => Dict(
             :orientation => config.legend_orientation,
@@ -216,6 +244,30 @@ function _line_trace(x, y, name::AbstractString, index::Integer, config::PlotlyF
     )
 end
 
+function _nonpositive_count(values)
+    return count(value -> value <= 0, Float64.(collect(values)))
+end
+
+function _warn_for_log_axis_nonpositive(axis_name::Symbol, axis_type::Symbol, named_values)
+    axis_type == :log || return nothing
+    affected = Pair{String,Int}[]
+    for pair in _named_pairs(named_values)
+        count = _nonpositive_count(_trace_values(pair))
+        count > 0 && push!(affected, _trace_name(pair) => count)
+    end
+    isempty(affected) && return nothing
+
+    trace_names = join(first.(affected), ", ")
+    nonpositive_count = sum(last.(affected))
+    @warn(
+        "Log axis received non-positive data; Plotly will omit those points.",
+        axis = axis_name,
+        trace_names = trace_names,
+        nonpositive_count = nonpositive_count,
+    )
+    return nothing
+end
+
 function multi_curve_figure(
     frequencies_hz,
     curves;
@@ -226,9 +278,16 @@ function multi_curve_figure(
     config::PlotlyFigureConfig=PlotlyFigureConfig(),
     x_range_ghz=nothing,
     y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
 )
     x = frequency_ghz(frequencies_hz)
     curve_pairs = _named_pairs(curves)
+    x_axis_type_value = _effective_axis_type(x_axis_type, config.x_axis_type, "x_axis_type")
+    y_axis_type_value = _effective_axis_type(y_axis_type, config.y_axis_type, "y_axis_type")
+    _warn_for_log_axis_nonpositive(:x, x_axis_type_value, [_trace_name(pair) => x for pair in curve_pairs])
+    _warn_for_log_axis_nonpositive(:y, y_axis_type_value, [_trace_name(pair) => _trace_values(pair) for pair in curve_pairs])
+
     traces = [
         _line_trace(x, _trace_values(pair), _trace_name(pair), index, config; mode=mode)
         for (index, pair) in enumerate(curve_pairs)
@@ -243,6 +302,8 @@ function multi_curve_figure(
             config=config,
             x_range_ghz=x_range_ghz,
             y_range=y_range,
+            x_axis_type=x_axis_type_value,
+            y_axis_type=y_axis_type_value,
         );
         config=plotly_display_config(config),
     )
@@ -259,6 +320,8 @@ function s_parameter_abs_magnitude_figure(
     config::PlotlyFigureConfig=PlotlyFigureConfig(),
     x_range_ghz=nothing,
     y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
 )
     curves = [_trace_name(pair) => abs.(_trace_values(pair)) for pair in _named_pairs(named_traces)]
     return multi_curve_figure(
@@ -269,6 +332,8 @@ function s_parameter_abs_magnitude_figure(
         config=config,
         x_range_ghz=x_range_ghz,
         y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
     )
 end
 
@@ -279,6 +344,8 @@ function s_parameter_db_magnitude_figure(
     config::PlotlyFigureConfig=PlotlyFigureConfig(),
     x_range_ghz=nothing,
     y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
 )
     curves = [_trace_name(pair) => _db20(_trace_values(pair)) for pair in _named_pairs(named_traces)]
     return multi_curve_figure(
@@ -289,6 +356,8 @@ function s_parameter_db_magnitude_figure(
         config=config,
         x_range_ghz=x_range_ghz,
         y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
     )
 end
 
@@ -307,6 +376,8 @@ function s_parameter_phase_figure(
     config::PlotlyFigureConfig=PlotlyFigureConfig(),
     x_range_ghz=nothing,
     y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
 )
     curves = [_trace_name(pair) => _phase_values(_trace_values(pair), unit) for pair in _named_pairs(named_traces)]
     yaxis_title = unit == :rad ? "Phase (rad)" : unit == :deg ? "Phase (deg)" : throw(ArgumentError("phase unit must be :deg or :rad."))
@@ -318,6 +389,8 @@ function s_parameter_phase_figure(
         config=config,
         x_range_ghz=x_range_ghz,
         y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
     )
 end
 
@@ -372,6 +445,35 @@ function _complex_component_curves(named_traces, prefix::AbstractString)
     return curves
 end
 
+function _complex_component_figure(
+    frequencies_hz,
+    named_traces,
+    transform;
+    title,
+    yaxis_title,
+    config::PlotlyFigureConfig=PlotlyFigureConfig(),
+    x_range_ghz=nothing,
+    y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
+)
+    curves = [
+        _trace_name(pair) => Float64.(transform.(_trace_values(pair)))
+        for pair in _named_pairs(named_traces)
+    ]
+    return multi_curve_figure(
+        frequencies_hz,
+        curves;
+        title=title,
+        yaxis_title=yaxis_title,
+        config=config,
+        x_range_ghz=x_range_ghz,
+        y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
+    )
+end
+
 function z_trace_figure(
     frequencies_hz,
     named_z_traces;
@@ -379,6 +481,8 @@ function z_trace_figure(
     config::PlotlyFigureConfig=PlotlyFigureConfig(),
     x_range_ghz=nothing,
     y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
 )
     return multi_curve_figure(
         frequencies_hz,
@@ -388,6 +492,80 @@ function z_trace_figure(
         config=config,
         x_range_ghz=x_range_ghz,
         y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
+    )
+end
+
+function z_parameter_real_figure(
+    frequencies_hz,
+    named_z_traces;
+    title,
+    config::PlotlyFigureConfig=PlotlyFigureConfig(),
+    x_range_ghz=nothing,
+    y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
+)
+    return _complex_component_figure(
+        frequencies_hz,
+        named_z_traces,
+        real;
+        title=title,
+        yaxis_title="Re(Z) (ohm)",
+        config=config,
+        x_range_ghz=x_range_ghz,
+        y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
+    )
+end
+
+function z_parameter_imaginary_figure(
+    frequencies_hz,
+    named_z_traces;
+    title,
+    config::PlotlyFigureConfig=PlotlyFigureConfig(),
+    x_range_ghz=nothing,
+    y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
+)
+    return _complex_component_figure(
+        frequencies_hz,
+        named_z_traces,
+        imag;
+        title=title,
+        yaxis_title="Im(Z) (ohm)",
+        config=config,
+        x_range_ghz=x_range_ghz,
+        y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
+    )
+end
+
+function z_parameter_abs_imaginary_figure(
+    frequencies_hz,
+    named_z_traces;
+    title,
+    config::PlotlyFigureConfig=PlotlyFigureConfig(),
+    x_range_ghz=nothing,
+    y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
+)
+    return _complex_component_figure(
+        frequencies_hz,
+        named_z_traces,
+        z -> abs(imag(z));
+        title=title,
+        yaxis_title="|Im(Z)| (ohm)",
+        config=config,
+        x_range_ghz=x_range_ghz,
+        y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
     )
 end
 
@@ -398,6 +576,8 @@ function y_trace_figure(
     config::PlotlyFigureConfig=PlotlyFigureConfig(),
     x_range_ghz=nothing,
     y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
 )
     return multi_curve_figure(
         frequencies_hz,
@@ -407,7 +587,73 @@ function y_trace_figure(
         config=config,
         x_range_ghz=x_range_ghz,
         y_range=y_range,
+        x_axis_type=x_axis_type,
+        y_axis_type=y_axis_type,
     )
+end
+
+function _real_values(values, name::AbstractString)
+    collected = collect(values)
+    return try
+        Float64.(collected)
+    catch
+        throw(ArgumentError("$(name) must contain real numeric values."))
+    end
+end
+
+function fit_overlay_figure(
+    x_values,
+    measured_values,
+    fitted_values;
+    title,
+    xaxis_title="Frequency (GHz)",
+    yaxis_title="Response",
+    x_unit::Symbol=:hz,
+    measured_name="measured",
+    fitted_name="fit",
+    config::PlotlyFigureConfig=PlotlyFigureConfig(),
+    x_range_ghz=nothing,
+    y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
+)
+    x = x_unit == :hz ? frequency_ghz(x_values) : Float64.(collect(x_values))
+    measured = _real_values(measured_values, "measured_values")
+    fitted = _real_values(fitted_values, "fitted_values")
+    length(x) == length(measured) || throw(ArgumentError("measured_values length must match x_values length."))
+    length(x) == length(fitted) || throw(ArgumentError("fitted_values length must match x_values length."))
+    x_axis_type_value = _effective_axis_type(x_axis_type, config.x_axis_type, "x_axis_type")
+    y_axis_type_value = _effective_axis_type(y_axis_type, config.y_axis_type, "y_axis_type")
+    _warn_for_log_axis_nonpositive(:x, x_axis_type_value, [measured_name => x, fitted_name => x])
+    _warn_for_log_axis_nonpositive(:y, y_axis_type_value, [measured_name => measured, fitted_name => fitted])
+
+    traces = [
+        scatter(
+            x=x,
+            y=measured,
+            mode="markers",
+            name=measured_name,
+            marker=attr(color=_trace_color(config, 1), size=config.marker_size_px),
+        ),
+        scatter(
+            x=x,
+            y=fitted,
+            mode="lines",
+            name=fitted_name,
+            line=attr(color=_trace_color(config, 2), width=config.line_width_px),
+        ),
+    ]
+    layout = default_layout(
+        title=title,
+        xaxis_title=xaxis_title,
+        yaxis_title=yaxis_title,
+        config=config,
+        x_range_ghz=x_range_ghz,
+        y_range=y_range,
+        x_axis_type=x_axis_type_value,
+        y_axis_type=y_axis_type_value,
+    )
+    return Plot(traces, layout; config=plotly_display_config(config))
 end
 
 end

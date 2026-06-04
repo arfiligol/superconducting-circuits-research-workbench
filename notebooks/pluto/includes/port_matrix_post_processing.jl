@@ -8,6 +8,7 @@ export PortMatrixStack,
     zero_mode_z_matrix_stack,
     zero_mode_y_matrix_stack,
     apply_port_termination_compensation,
+    invert_port_matrix_stack,
     common_differential_transform,
     apply_coordinate_transform,
     kron_reduce
@@ -130,7 +131,16 @@ function apply_port_termination_compensation(stack::PortMatrixStack; resistance_
         labels=stack.labels,
         frequencies_hz=stack.frequencies_hz,
         values=values,
-        source_kind=stack.source_kind,
+        source_kind=Symbol("ptc_", string(stack.source_kind)),
+    )
+end
+
+function invert_port_matrix_stack(stack::PortMatrixStack; source_kind=:matrix_inverse)
+    return PortMatrixStack(
+        labels=stack.labels,
+        frequencies_hz=stack.frequencies_hz,
+        values=_invert_stack(stack.values, "$(stack.source_kind) inversion"),
+        source_kind=source_kind,
     )
 end
 

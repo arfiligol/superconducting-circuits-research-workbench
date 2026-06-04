@@ -13,6 +13,10 @@ const LOCAL_PACKAGES = [
         name = "SuperconductingCircuitsVisualizer",
         path = joinpath(REPO_ROOT, "core", "julia", "SuperconductingCircuitsVisualizer"),
     ),
+    (
+        name = "SuperconductingCircuitsAnalysisBridge",
+        path = joinpath(REPO_ROOT, "core", "julia", "SuperconductingCircuitsAnalysisBridge"),
+    ),
 ]
 const LOCAL_PACKAGE_PROJECT_FILES = Set(
     normpath(joinpath(package.path, "Project.toml")) for package in LOCAL_PACKAGES
@@ -54,8 +58,10 @@ Pkg.precompile()
 @eval using Revise
 @eval using SuperconductingCircuitsCore
 @eval using SuperconductingCircuitsVisualizer
+@eval using SuperconductingCircuitsAnalysisBridge
 
 println("Installed package paths:")
 println("  Revise => ", pathof(Revise))
 println("  SuperconductingCircuitsCore => ", pathof(SuperconductingCircuitsCore))
 println("  SuperconductingCircuitsVisualizer => ", pathof(SuperconductingCircuitsVisualizer))
+println("  SuperconductingCircuitsAnalysisBridge => ", pathof(SuperconductingCircuitsAnalysisBridge))
