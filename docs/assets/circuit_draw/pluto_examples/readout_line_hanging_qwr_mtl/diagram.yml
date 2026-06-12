@@ -1,0 +1,34 @@
+schema_version: 1
+diagram_id: pluto.readout_line_hanging_qwr_mtl
+title: Readout line with hanging QWR MTL window
+source_path: docs/assets/circuit_draw/pluto_examples/readout_line_hanging_qwr_mtl/draw.py
+outputs:
+  light:
+    svg: docs/assets/circuit_draw/pluto_examples/readout_line_hanging_qwr_mtl/diagram.light.svg
+    png: docs/assets/circuit_draw/pluto_examples/readout_line_hanging_qwr_mtl/diagram.light.png
+  dark:
+    svg: docs/assets/circuit_draw/pluto_examples/readout_line_hanging_qwr_mtl/diagram.dark.svg
+    png: docs/assets/circuit_draw/pluto_examples/readout_line_hanging_qwr_mtl/diagram.dark.png
+owning_docs:
+  - docs/workflows/pluto/pluto-examples.mdx
+  - notebooks/pluto/05_readout_line_hanging_qwr_mtl.jl
+julia_core_semantics:
+  docs:
+    - docs/reference/julia-core/circuit-plan.md
+    - docs/reference/julia-core/coupling-models.mdx
+    - docs/reference/julia-core/schematic-layout-intent.md
+    - docs/reference/julia-core/transmission-line-ladder.md
+  source_refs:
+    - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
+    - core/julia/SuperconductingCircuitsCore/src/components/coupled_window.jl
+    - core/julia/SuperconductingCircuitsCore/src/components/transmission_lines.jl
+physical_model_refs:
+  - docs/reference/julia-core/coupling-models.mdx
+  - docs/reference/julia-core/transmission-line-ladder.md
+implementation_refs:
+  - notebooks/pluto/05_readout_line_hanging_qwr_mtl.jl
+review:
+  status: accepted
+  verified_by: docs-team
+  verified_at: "2026-06-12"
+  notes: Migrated current stable docs asset; not a machine-verification contract.

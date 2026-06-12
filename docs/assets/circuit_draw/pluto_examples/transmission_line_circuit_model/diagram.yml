@@ -1,0 +1,31 @@
+schema_version: 1
+diagram_id: pluto.transmission_line_circuit_model
+title: Transmission-line circuit model
+source_path: docs/assets/circuit_draw/pluto_examples/transmission_line_circuit_model/draw.py
+outputs:
+  light:
+    svg: docs/assets/circuit_draw/pluto_examples/transmission_line_circuit_model/diagram.light.svg
+    png: docs/assets/circuit_draw/pluto_examples/transmission_line_circuit_model/diagram.light.png
+  dark:
+    svg: docs/assets/circuit_draw/pluto_examples/transmission_line_circuit_model/diagram.dark.svg
+    png: docs/assets/circuit_draw/pluto_examples/transmission_line_circuit_model/diagram.dark.png
+owning_docs:
+  - docs/workflows/pluto/pluto-examples.mdx
+  - notebooks/pluto/03_transmission_line_circuit_model.jl
+julia_core_semantics:
+  docs:
+    - docs/reference/julia-core/circuit-plan.md
+    - docs/reference/julia-core/transmission-line-ladder.md
+    - docs/reference/julia-core/schematic-layout-intent.md
+  source_refs:
+    - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
+    - core/julia/SuperconductingCircuitsCore/src/components/transmission_lines.jl
+physical_model_refs:
+  - docs/reference/julia-core/transmission-line-ladder.md
+implementation_refs:
+  - notebooks/pluto/03_transmission_line_circuit_model.jl
+review:
+  status: accepted
+  verified_by: docs-team
+  verified_at: "2026-06-12"
+  notes: Migrated current stable docs asset; not a machine-verification contract.

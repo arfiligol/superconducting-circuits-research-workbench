@@ -1,0 +1,30 @@
+schema_version: 1
+diagram_id: pluto.readout_line_purcell_filter
+title: Readout line with Purcell filter
+source_path: docs/assets/circuit_draw/pluto_examples/readout_line_purcell_filter/draw.py
+outputs:
+  light:
+    svg: docs/assets/circuit_draw/pluto_examples/readout_line_purcell_filter/diagram.light.svg
+    png: docs/assets/circuit_draw/pluto_examples/readout_line_purcell_filter/diagram.light.png
+  dark:
+    svg: docs/assets/circuit_draw/pluto_examples/readout_line_purcell_filter/diagram.dark.svg
+    png: docs/assets/circuit_draw/pluto_examples/readout_line_purcell_filter/diagram.dark.png
+owning_docs:
+  - docs/workflows/pluto/pluto-examples.mdx
+  - notebooks/pluto/04_readout_line_purcell_filter.jl
+julia_core_semantics:
+  docs:
+    - docs/reference/julia-core/circuit-plan.md
+    - docs/reference/julia-core/transmission-line-ladder.md
+    - docs/reference/julia-core/relations-and-couplings.md
+  source_refs:
+    - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
+physical_model_refs:
+  - docs/reference/julia-core/transmission-line-ladder.md
+implementation_refs:
+  - notebooks/pluto/04_readout_line_purcell_filter.jl
+review:
+  status: accepted
+  verified_by: docs-team
+  verified_at: "2026-06-12"
+  notes: Migrated current stable docs asset; not a machine-verification contract.

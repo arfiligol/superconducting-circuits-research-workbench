@@ -2,7 +2,7 @@
 # v1.0.1
 
 #> [frontmatter]
-#> title = "00 Parallel LC Resonator"
+#> title = "00 Grounded LC Resonator"
 #> tags = ["julia-core", "pluto", "hb", "parallel-lc"]
 #> description = "Macro DSL tutorial for a one-port parallel LC resonator and real HB admittance traces."
 
@@ -36,7 +36,7 @@ TableOfContents()
 
 # ╔═╡ 7b464e61-ff9e-5113-b753-aeefd1116a04
 md"""
-# 00 Parallel LC Resonator
+# 00 Grounded LC Resonator
 
 This notebook studies a one-port parallel LC resonator. A 50 ohm port drives one node, and the capacitor and inductor are both shunted from that node to ground.
 
@@ -47,13 +47,13 @@ The authoring path is the Core SoT flow: define a reusable component, instantiat
 md"""
 ## Owns
 
-- Parallel LC resonator physics.
+- Grounded LC resonator physics.
 - Admittance interpretation of a one-port resonator.
 - Minimal pump-off HB workflow using `@circuit_component`, `@circuit`, and `@hbintent`.
 """
 
 # ╔═╡ 9b7f1ff5-8378-5874-893c-896642fedd35
-LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-00-parallel-lc-resonator.svg"))
+LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "circuit_draw", "pluto_examples", "grounded_lc_resonator", "diagram.light.svg"))
 
 # ╔═╡ ccd34d3a-7df7-5497-bd1d-0f35522f00f6
 md"""
@@ -308,7 +308,7 @@ begin
     y_trace_figure(
         result.frequencies_hz,
         ["Y11" => y11];
-        title="Parallel LC Input Admittance",
+        title="Grounded LC Input Admittance",
         config=figure_config,
     )
 end |> wide_figure_cell

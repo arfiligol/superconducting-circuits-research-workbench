@@ -13,6 +13,7 @@ package = false
 members = [
     "core/sc_core",
     "core/python/sc_data_contracts",
+    "core/python/schemdraw_circuit_library",
     "core/analysis",
     "app/backend",
     "notebooks/python",
@@ -36,6 +37,8 @@ extraPaths = [
     "core/analysis",
     "core",
     "core/python",
+    "core/python/sc_data_contracts",
+    "core/python/schemdraw_circuit_library",
 ]
 # Basic presence checks only, as requested
 reportMissingParameterType = "warning"
@@ -81,9 +84,17 @@ indent-style = "space"
 [dependency-groups]
 dev = [
     "basedpyright>=1.37.1",
+    "docs-site",
     "playwright>=1.58.0",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
+    "pyyaml>=6.0.3",
     "ruff>=0.14.13",
-    "zensical>=0.0.21",
+    "schemdraw-circuit-library",
+    "sphinx>=9.1.0",
+    "furo>=2025.12.19",
 ]
+
+[tool.uv.sources]
+docs-site = { path = "scripts/build/docs_site_cli", editable = true }
+schemdraw-circuit-library = { workspace = true }

@@ -1,0 +1,30 @@
+schema_version: 1
+diagram_id: pluto.grounded_lc_resonator
+title: Grounded LC resonator
+source_path: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/draw.py
+outputs:
+  light:
+    svg: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.light.svg
+    png: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.light.png
+  dark:
+    svg: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.dark.svg
+    png: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.dark.png
+owning_docs:
+  - docs/workflows/pluto/pluto-examples.mdx
+  - notebooks/pluto/00_parallel_lc_resonator.jl
+julia_core_semantics:
+  docs:
+    - docs/reference/julia-core/circuit-plan.md
+    - docs/reference/julia-core/engineering-graph.md
+    - docs/reference/julia-core/schematic-layout-intent.md
+  source_refs:
+    - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
+physical_model_refs:
+  - docs/workflows/pluto/pluto-examples.mdx
+implementation_refs:
+  - notebooks/pluto/00_parallel_lc_resonator.jl
+review:
+  status: accepted
+  verified_by: docs-team
+  verified_at: "2026-06-12"
+  notes: Migrated current stable docs asset; not a machine-verification contract.

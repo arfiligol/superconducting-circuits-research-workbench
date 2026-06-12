@@ -1,0 +1,18 @@
+schema_version: 1
+diagrams:
+  - diagram_id: pluto.grounded_lc_resonator
+    manifest: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.yml
+  - diagram_id: pluto.reflective_jpa_capacitive_coupled_lc
+    manifest: docs/assets/circuit_draw/pluto_examples/reflective_jpa_capacitive_coupled_lc/diagram.yml
+  - diagram_id: pluto.floating_lc_xy_line
+    manifest: docs/assets/circuit_draw/pluto_examples/floating_lc_xy_line/diagram.yml
+  - diagram_id: pluto.transmission_line_circuit_model
+    manifest: docs/assets/circuit_draw/pluto_examples/transmission_line_circuit_model/diagram.yml
+  - diagram_id: pluto.readout_line_purcell_filter
+    manifest: docs/assets/circuit_draw/pluto_examples/readout_line_purcell_filter/diagram.yml
+  - diagram_id: pluto.readout_line_hanging_qwr_mtl
+    manifest: docs/assets/circuit_draw/pluto_examples/readout_line_hanging_qwr_mtl/diagram.yml
+  - diagram_id: pluto.readout_purcell_hanging_qwr_mtl
+    manifest: docs/assets/circuit_draw/pluto_examples/readout_purcell_hanging_qwr_mtl/diagram.yml
+  - diagram_id: physics.coupled_line_ladder_section
+    manifest: docs/assets/circuit_draw/physics/coupled_line_ladder_section/diagram.yml

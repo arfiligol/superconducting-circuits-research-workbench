@@ -1,0 +1,29 @@
+schema_version: 1
+diagram_id: physics.coupled_line_ladder_section
+title: Coupled-line ladder section
+source_path: docs/assets/circuit_draw/physics/coupled_line_ladder_section/draw.py
+outputs:
+  light:
+    svg: docs/assets/circuit_draw/physics/coupled_line_ladder_section/diagram.light.svg
+    png: docs/assets/circuit_draw/physics/coupled_line_ladder_section/diagram.light.png
+  dark:
+    svg: docs/assets/circuit_draw/physics/coupled_line_ladder_section/diagram.dark.svg
+    png: docs/assets/circuit_draw/physics/coupled_line_ladder_section/diagram.dark.png
+owning_docs:
+  - docs/concepts/physics/coupled-transmission-lines-even-odd-maxwell-mutual.mdx
+julia_core_semantics:
+  docs:
+    - docs/reference/julia-core/coupling-models.mdx
+    - docs/reference/julia-core/transmission-line-ladder.md
+  source_refs:
+    - core/julia/SuperconductingCircuitsCore/src/components/coupled_window.jl
+    - core/julia/SuperconductingCircuitsCore/src/components/transmission_lines.jl
+physical_model_refs:
+  - docs/concepts/physics/coupled-transmission-lines-even-odd-maxwell-mutual.mdx
+implementation_refs:
+  - core/julia/SuperconductingCircuitsCore/src/components/coupled_window.jl
+review:
+  status: draft
+  verified_by: null
+  verified_at: null
+  notes: Draft concept diagram; do not treat as machine-verification evidence.
