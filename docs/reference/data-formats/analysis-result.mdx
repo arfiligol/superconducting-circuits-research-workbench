@@ -1,0 +1,200 @@
+---
+aliases:
+  - Analysis Result Schema
+  - Analysis Artifact Schema
+  - 分析結果格式
+tags:
+  - diataxis/reference
+  - audience/team
+  - sot/true
+  - topic/data-format
+status: stable
+owner: docs-team
+audience: team
+scope: Characterization analysis run、artifact-first result view、design-scope re-parenting、derived parameter 與 tagged metric persistence contract
+version: v1.1.0
+last_updated: 2026-04-30
+updated_by: codex
+title: Analysis Result
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Analysis Result
+
+本頁定義 Characterization 與其他 trace-consuming analysis 的 persisted result contract。
+
+<Aside type="note" title="Artifact-first result view">
+
+frontend result view 應依賴 `artifact_manifest` 與 `artifact payload`。
+page 不得直接解析 scalar rows 拼裝出自己的結果視圖規則。
+
+</Aside>
+
+<Aside type="caution" title="Run is not enough">
+
+analysis run 完成不代表一定已有可展示結果。
+`AnalysisRunRecord.status=completed` 與 `artifact_manifest` 必須分開判斷。
+
+</Aside>
+
+## Canonical Objects
+
+| Object | Meaning |
+| --- | --- |
+| `AnalysisRunRecord` | 一次 trace-consuming analysis run 的 persisted identity |
+| `ResultArtifactRecord` | result view 可切換的 table / plot / text / summary artifact |
+| `DerivedParameterRecord` | 從 run 萃取出的命名物理量與 tagged metrics 基礎資料 |
+
+## AnalysisRunRecord
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | required | run identity |
+| `dataset_id` | required | parent dataset |
+| `design_id` | required | parent design scope |
+| `workspace_id` | required | owning workspace |
+| `owner_user_id` | required | owner identity |
+| `visibility_scope` | required | inherited `local` / `private` / `workspace` |
+| `lifecycle_state` | required | `active`, `archived`, `deleted` |
+| `analysis_id` | required | registry analysis id |
+| `status` | required | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |
+| `input_trace_ids` | required | explicit selected trace ids |
+| `input_batch_ids` | optional | source batch refs |
+| `input_collection_payload` | optional | backend-derived characterization input collection snapshot |
+| `input_result_refs` | optional | upstream analysis result refs for pipeline-style downstream analyses |
+| `config_payload` | required | analysis configuration snapshot |
+| `artifact_manifest` | optional | result artifact summary |
+| `created_at` | required | creation time |
+| `completed_at` | optional | terminal time |
+
+<Aside type="caution" title="Trace-first authority">
+
+analysis availability 與 re-entry 都必須由 `input_trace_ids` 與 compatible traces 驅動。
+dataset profile 只提供提示，不是唯一 gate。
+
+</Aside>
+
+## ResultArtifactRecord
+
+`ResultArtifactRecord` 是 Result View 的正式切換單位。
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | required | artifact identity |
+| `analysis_run_id` | required | parent run |
+| `dataset_id` | required | parent dataset |
+| `design_id` | required | parent design scope |
+| `category` | required | `resonance`, `fit_table`, `plot`, `summary` 等 |
+| `view_kind` | required | `table`, `plot`, `text`, `json` |
+| `title` | required | display title |
+| `trace_mode_group` | optional | `base`, `sideband`, `all` |
+| `query_spec` | optional | artifact payload query baseline |
+| `payload_ref` | required | payload locator or handle |
+
+### Artifact manifest minimum fields
+
+```json
+[
+  {
+    "artifact_id": "artifact_mode_vs_lq",
+    "category": "resonance",
+    "view_kind": "table",
+    "title": "Mode vs L_q",
+    "trace_mode_group": "base"
+  }
+]
+```
+
+## DerivedParameterRecord
+
+`DerivedParameterRecord` 是分析輸出的 canonical scalar layer。
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | required | parameter identity |
+| `dataset_id` | required | parent dataset |
+| `design_id` | required | parent design scope |
+| `analysis_run_id` | required | source run |
+| `name` | required | parameter name |
+| `value` | required | scalar value |
+| `unit` | optional | unit |
+| `extra.trace_mode_group` | optional | `base`, `sideband`, `all` |
+| `extra.method` | optional | source method / fit model |
+| `extra.lineage` | optional | redaction-safe provenance payload |
+
+<Aside type="caution" title="Tagged metrics resolve from derived parameters">
+
+Dashboard 的 `Tagged Core Metrics` 讀取必須透過 backend resolution contract，
+不可由 UI 或 CLI 直接拼接 derived parameter rows。
+
+</Aside>
+
+## Provenance Rules
+
+| Rule | Meaning |
+| --- | --- |
+| Dataset and design are both required | result 必須同時能回溯到 dataset 與 dataset-local design scope |
+| Result inherits task visibility | result / artifact 不得比 source task 更公開 |
+| Run history is persisted | refresh 後必須能只靠 persisted rows 重建 |
+| No implicit rerun | artifact payload query 不得觸發 analysis 重跑 |
+| Merge re-parenting | DesignScope merge 可由 backend re-parent run / artifact / derived-parameter rows 到 target `design_id`；run/artifact identities 不因 re-parenting 改變 |
+
+## Design Scope Lifecycle Rules
+
+| Concern | Rule |
+| --- | --- |
+| Active target | new analysis runs must bind an active `DesignScope` in the active dataset |
+| Archived source scope | archived scopes may remain visible in run history, but are not normal new-run targets |
+| Merge behavior | backend-owned merge re-parents `AnalysisRunRecord`、`ResultArtifactRecord` 與 `DerivedParameterRecord` from source design scope to target design scope |
+| Source redirect | stale links using source `design_id` should resolve through the DesignScope redirect contract before result history is queried |
+| Artifact payload | result payload locators remain backend-owned; merge must not require frontend to parse or rewrite payload refs |
+
+## Result View Contract
+
+| Concern | Required behavior |
+| --- | --- |
+| Category filter | 依 `artifact.category` 驅動 |
+| Table / Plot toggle | 依 `artifact.view_kind` 與 payload capability 決定 |
+| Trace Mode Filter | 依 `trace_mode_group` 驅動，而非前端自行推論 |
+| Empty completed run | 必須回傳顯式 empty diagnostics，不得靜默顯示空白 |
+
+## JSON Example
+
+<Aside type="note" title="Analysis run with artifact manifest">
+
+```json
+{
+  "id": "run_20",
+  "dataset_id": "ds_xy_001",
+  "design_id": "design_flux_scan_a",
+  "workspace_id": "ws_lab_a",
+  "owner_user_id": "user_12",
+  "visibility_scope": "workspace",
+  "lifecycle_state": "active",
+  "analysis_id": "admittance_extraction",
+  "status": "completed",
+  "input_trace_ids": ["trace_101"],
+  "config_payload": {
+    "selected_trace_ids": ["trace_101"],
+    "selected_trace_mode_group": "base"
+  },
+  "artifact_manifest": [
+    {
+      "artifact_id": "artifact_mode_vs_lq",
+      "category": "resonance",
+      "view_kind": "table",
+      "title": "Mode vs L_q",
+      "trace_mode_group": "base"
+    }
+  ]
+}
+```
+
+</Aside>
+
+## Related
+
+- [Dataset / Design / Trace Schema](dataset-record.mdx)
+- [Characterization](../../app/frontend/removed-workflows/characterization.md)
+- [Characterization Results](../../app/backend/characterization-results.mdx)

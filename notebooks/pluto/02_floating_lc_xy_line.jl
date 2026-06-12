@@ -57,7 +57,7 @@ md"""
 """
 
 # ╔═╡ 8d7c8662-893f-5808-8b36-c33c37ab49b9
-LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-02-floating-lc-xy-line.svg"))
+LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "circuit_draw", "pluto_examples", "floating_lc_xy_line", "diagram.light.svg"))
 
 # ╔═╡ 7caa12c4-973b-50a0-a872-d378f92808f5
 md"""

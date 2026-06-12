@@ -51,7 +51,7 @@ md"""
 """
 
 # ╔═╡ df021fa3-6aca-5b66-955f-3cb6e18578b0
-LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-03-transmission-line-circuit-model.svg"))
+LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "circuit_draw", "pluto_examples", "transmission_line_circuit_model", "diagram.light.svg"))
 
 # ╔═╡ a37a8240-3c52-5896-8e35-085e425b1918
 md"""

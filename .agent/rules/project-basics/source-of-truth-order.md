@@ -1,10 +1,10 @@
 ## Source of Truth Order
 - Resolve conflicts by concern owner first:
-    - app collaboration/session/auth/workspace/task runtime/audit/error -> `docs/reference/app/shared/*` + `docs/reference/app/backend/*`
+    - app collaboration/session/auth/workspace/task runtime/audit/error -> `docs/app/shared/*` + `docs/app/backend/*`
     - persisted payload/schema fields -> `docs/reference/data-formats/*`
     - Julia Core authoring invariants -> `docs/reference/julia-core/*`
     - Julia Core / Runner runtime boundary and package invariants -> `docs/reference/core/*`
-    - page behavior/layout -> `docs/reference/app/frontend/**/*`
+    - page behavior/layout -> `docs/app/frontend/**/*`
     - notebook workflow behavior -> `docs/reference/notebooks/*`
 - Use `docs/reference/architecture/*` only as owner-boundary and canonical contract registry guidance, not as the primary owner when owner docs already exist.
 - Treat implementation and old behavior as evidence, not automatic canonical truth.

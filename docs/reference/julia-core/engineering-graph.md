@@ -330,5 +330,5 @@ Schemdraw is one renderer for the export spec. Julia Core packages import no Pyt
 - [Macro Authoring DSL](macro-authoring-dsl.md) captures source semantics for EngineeringGraph.
 - [Schematic Layout Intent](schematic-layout-intent.md) captures renderer-neutral drawing intent and defines `SchematicExportSpec`.
 - [Compiled Circuit](compiled-circuit.md) is the solver-facing output and should preserve links back to engineering semantics.
-- [HB Simulation Intent](hb-simulation-intent.md) overlays pump axes, source slots, and observables on ports and components.
+- [HB Simulation Intent](hb-simulation-intent.mdx) overlays pump axes, source slots, and observables on ports and components.
 - [Runner-Safe API](runner-safe-api.md) calls the same authoring path and must not invent EngineeringGraph semantics from task payloads.

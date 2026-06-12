@@ -8,3 +8,5 @@
 - Theme switching must not trigger avoidable state loss.
 - Light mode should prefer a clean white base or warmer neutral base over a cool blue-gray wash.
 - Preserve restrained accent fills and icon accents, but do not tint the whole dashboard as if it were a diagnostics shell.
+- Starlight docs palettes are `research-mint`, `tech-slate`, `nordic-calm`, and `coffee-terminal`; keep `research-mint` available as the current mint/teal baseline.
+- Docs palette switching must be separate from light/dark/system mode, persisted without resetting page state, and implemented through semantic tokens before mapping to Starlight variables.

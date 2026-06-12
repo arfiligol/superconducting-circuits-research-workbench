@@ -22,35 +22,20 @@ export PUBLIC_SITE_URL
 export PUBLIC_BASE_PATH
 
 npm run build --prefix site
+uv run python scripts/check_docs_nav_routes.py --check-built
+./scripts/build/build_api_docs.sh
 
-DOCS_SITE_URL="$(uv run python - "${PUBLIC_SITE_URL}" "${PUBLIC_BASE_PATH}" <<'PY'
-import sys
+API_DEST="site/dist/api"
+rm -rf "${API_DEST}"
+mkdir -p "${API_DEST}/python" "${API_DEST}/julia"
+rsync -a --delete build/api-reference/python/html/ "${API_DEST}/python/"
+rsync -a --delete build/api-reference/julia/html/ "${API_DEST}/julia/"
+cat > "${API_DEST}/versions.js" <<'EOF'
+var DOC_VERSIONS = [
+];
+EOF
+cat > "${API_DEST}/julia/siteinfo.js" <<'EOF'
+var DOCUMENTER_VERSION_SELECTOR_DISABLED = true;
+EOF
 
-site_url = sys.argv[1].rstrip("/")
-base = sys.argv[2].strip("/")
-path = "/".join(part for part in (base, "docs") if part)
-print(f"{site_url}/{path}/" if path else f"{site_url}/docs/")
-PY
-)"
-
-DOCS_SITE_URL="${DOCS_SITE_URL}" ./scripts/build_docs_sites.sh
-
-DOCS_DEST="site/dist/docs"
-rm -rf "${DOCS_DEST}"
-mkdir -p "${DOCS_DEST}"
-
-EXCLUDED_PREFIX="$(uv run python - "${DOCS_SITE_URL}" <<'PY'
-from urllib.parse import urlparse
-import sys
-
-parts = [part for part in urlparse(sys.argv[1]).path.strip("/").split("/") if part]
-print(parts[0] if parts else "")
-PY
-)"
-
-RSYNC_EXCLUDES=()
-if [ -n "${EXCLUDED_PREFIX}" ]; then
-  RSYNC_EXCLUDES+=(--exclude "${EXCLUDED_PREFIX}/")
-fi
-
-rsync -a --delete "${RSYNC_EXCLUDES[@]}" docs/site/ "${DOCS_DEST}/"
+uv run python scripts/build/check_api_reference_links.py

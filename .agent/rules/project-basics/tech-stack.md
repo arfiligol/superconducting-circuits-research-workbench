@@ -2,9 +2,13 @@
 - **Public site**:
     - `site/`
     - Astro
-    - Tailwind CSS v4
+    - Starlight for `/docs/`
+    - reader/task-first docs IA with curated manual top/two-level sidebar groups
+    - custom CSS for the public introduction pages
     - static output
-    - mounts Zensical technical docs at `/docs/`
+    - mounts Starlight technical docs at `/docs/`
+    - mounts Sphinx Python API reference at `/api/python/`
+    - mounts Documenter.jl Julia API reference at `/api/julia/`
     - does not import application internals or own app runtime behavior
 - **Frontend**:
     - Next.js App Router
@@ -46,7 +50,7 @@
 - **Interface boundaries**:
     - Pluto Notebook is the direct Julia Core research interface.
     - Backend task submission is outside the Pluto Notebook role.
-    - Python Notebook is a programmable data-analysis and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts.
+    - Python Notebook is a Product App prototyping and platform-inspection surface; it may directly read data files, but platform state changes must go through Backend contracts.
     - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
     - Application Simulation Workbench and Analysis Workbench are first-class and submit persisted async tasks through Python Backend and Julia Runner.
     - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
@@ -59,13 +63,21 @@
     - no active command-line product surface
 - **Topology**:
     - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/analysis/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
-    - `site/` is the Astro + Tailwind v4 public introduction site
-    - `docs/` is the Zensical technical documentation source mounted at `/docs/`
+    - `site/` is the Astro public introduction site and Starlight docs host
+    - `docs/` is the Astro + Starlight technical documentation source mounted at `/docs/`
+    - `docs/app/` owns Product App documentation and app shared/frontend/backend contracts
+    - `docs/start/` is notebook-first and should lead with Pluto research setup
+    - `docs/workflows/` and `docs/concepts/` are research-core lanes and must not expose Product App implementation workflows
+    - `docs/app/archive/` preserves legacy App-specific workflow/design notes as inert reference
+    - `docs/api-reference/` is generated API reference source for Sphinx and Documenter.jl
+    - generated API reference deploys as sibling static sites under `/api/python/` and `/api/julia/`
     - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
 - **Quality tools**:
     - Ruff
     - BasedPyright
     - pytest
+    - Sphinx
+    - Documenter.jl
     - Vitest / Playwright when frontend exists
 - **Storage direction**:
     - metadata DB: SQLite local, PostgreSQL target
@@ -73,5 +85,5 @@
     - Runner staging: local filesystem Zarr v2
     - official TraceStore: Python Backend-managed Zarr
 - New UI work should target Next.js, not the legacy UI layer.
-- New public introduction page work should target Astro under `site/`, not Zensical docs templates.
+- New public introduction page work should target Astro under `site/`, not Starlight docs templates.
 - Desktop packaging should use Electron around frontend + Python Backend + Julia Runner.

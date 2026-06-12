@@ -9,6 +9,8 @@ import os
 import re
 
 DOCS_DIR = "docs"
+MARKUP_EXTENSIONS = (".md", ".mdx")
+EXCLUDED_DIRS = {"api-reference", "site"}
 
 
 def get_title_from_content(content):
@@ -21,17 +23,17 @@ def get_title_from_content(content):
 
 
 def infer_diataxis_type(file_path):
-    """Infer diataxis type from directory path."""
-    if "/tutorials/" in file_path:
+    """Infer Diataxis metadata from the reader/task-first docs path."""
+    if "/start/" in file_path:
         return "diataxis/tutorial"
-    elif "/how-to/" in file_path:
+    elif "/workflows/" in file_path:
         return "diataxis/how-to"
     elif "/reference/" in file_path:
         return "diataxis/reference"
-    elif "/explanation/" in file_path:
+    elif "/concepts/" in file_path:
         return "diataxis/explanation"
-    elif "/notebooks/" in file_path:
-        return "diataxis/reference"  # Notebooks are reference material
+    elif "/contribute/" in file_path:
+        return "diataxis/how-to"
     return "diataxis/reference"  # Default
 
 
@@ -49,13 +51,13 @@ def infer_topic(file_path):
         return "topic/data-format"
     elif "/guardrails/" in file_path:
         return "topic/governance"
-    elif "/getting-started/" in file_path:
+    elif "/start/" in file_path:
         return "topic/getting-started"
     elif "/preprocess/" in file_path:
         return "topic/preprocessing"
     elif "/contributing/" in file_path:
         return "topic/contributing"
-    elif "/extend/" in file_path:
+    elif "/extending/" in file_path:
         return "topic/extension"
     elif "/architecture/" in file_path:
         return "topic/architecture"
@@ -129,9 +131,14 @@ def main():
     fixed_count = 0
     skipped_count = 0
 
-    for root, _, files in os.walk(DOCS_DIR):
+    for root, dirs, files in os.walk(DOCS_DIR):
+        dirs[:] = [
+            directory
+            for directory in dirs
+            if directory not in EXCLUDED_DIRS and not directory.startswith("docs_")
+        ]
         for file in files:
-            if file.endswith(".md"):
+            if file.endswith(MARKUP_EXTENSIONS):
                 file_path = os.path.join(root, file)
 
                 success, _message = fix_frontmatter_in_file(file_path)

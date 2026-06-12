@@ -17,14 +17,14 @@ updated_by: codex
 
 # Julia Scientific Core
 
-Julia Core is the canonical scientific library for the docs-defined authoring model, compiler concepts, JosephsonCircuits.jl simulation wrappers, parameter sweep interfaces, and analysis primitives.
+Julia Core is the canonical scientific library for the docs-defined authoring model, compiler concepts, JosephsonCircuits.jl simulation wrappers, parameter sweep interfaces, and Julia-native trace extraction helpers.
 
 Both execution tracks use the same Julia Core APIs:
 
 - Pluto notebooks call Julia Core directly for research-grade exploration.
 - Julia Runner calls Julia Core while executing persisted Backend tasks for product workflows.
 
-The Python Backend, Electron Application, and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or simulation analysis owned by Julia Core.
+The Python Backend, Electron Application, and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or simulation analysis owned by Julia Core. Declared Python fitting algorithms, such as complex S21 notch/transmission fitting and S21 vector fitting, belong to `core/analysis` and can be reached from Pluto through Julia Analysis Bridge.
 
 Python notebooks may analyze local Zarr, exported data, CSV/raw files, and canonical TraceStore files directly. That read-only analysis role does not make them Julia Core simulation owners or platform publication authorities.
 
@@ -37,7 +37,7 @@ Python notebooks may analyze local Zarr, exported data, CSV/raw files, and canon
 | Low-level line specs and tuple-netlist helpers | `src/components/` |
 | Simulation and current sweep helpers | `src/simulation/` |
 | Authoring architecture SoT | `docs/reference/julia-core/` |
-| Pluto workflow docs | `docs/how-to/pluto/` |
+| Pluto workflow docs | `docs/workflows/pluto/` |
 
 Use from a user-written Pluto notebook after local dev installation:
 
@@ -86,8 +86,8 @@ julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.
 
 Pluto is still the direct Julia Core research surface, but the old sandbox notebooks that demonstrated the retired draft/finalize flow have been removed. Use the Pluto how-to pages for the target authoring and sweep workflow:
 
-- [Pluto Authoring Workflow](../../how-to/pluto/authoring-workflow.md)
-- [Pluto Parameter Sweep Workflow](../../how-to/pluto/parameter-sweep-workflow.md)
+- [Pluto Authoring Workflow](../../workflows/pluto/authoring-workflow.mdx)
+- [Pluto Parameter Sweep Workflow](../../workflows/pluto/parameter-sweep-workflow.mdx)
 
 ## Research Direct Track
 
@@ -133,8 +133,9 @@ Python notebooks may submit Backend tasks through this product async path when t
 | Delayed lowering stays required | Author a high-level Circuit Plan first; call the compiler only at the end. Do not patch already-flat JosephsonCircuits rows in place. |
 | Pluto is direct research execution | Pluto may call Julia Core directly and inspect intermediate local data. Pluto is not a Backend task submitter. |
 | Runner is product execution | Julia Runner calls Julia Core from Backend task envelopes and writes staging packages for Backend publication. |
-| Python/backend does not own lowering | Python Backend validates requests and publishes results; it does not reimplement construction, lowering, sweep, fitting, or analysis logic. |
-| Python Notebook is read/inspect only for files | Python notebooks may analyze data files directly, but do not own Julia Core simulation, lowering, fitting, platform publication, or metadata mutation authority. |
+| Python Backend does not own lowering | Python Backend validates requests and publishes results; it does not reimplement construction, lowering, sweep, or Julia-owned simulation logic. |
+| Python analysis owns declared fitting algorithms | `core/analysis` owns reusable Python fitting algorithms such as complex S21 notch/transmission fitting and S21 vector fitting. |
+| Python Notebook is read/inspect only for files | Python notebooks may analyze data files directly, but do not own Julia Core simulation, lowering, platform publication, or metadata mutation authority. |
 
 ## JosephsonCircuits Validation
 
@@ -156,8 +157,8 @@ Julia Core returns scientific results to its caller. Storage authority belongs o
 ## Related
 
 - [Core Reference](index.md)
-- [Julia Core Authoring](../julia-core/index.md)
-- [Julia Core](julia-core.md)
+- [Julia Core Authoring](../julia-core/index.mdx)
+- [Julia Core](julia-core.mdx)
 - [Julia Wrapper](julia-wrapper.md)
 - [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
 - [Simulation Interface Boundaries](../architecture/simulation-interface-boundaries.md)

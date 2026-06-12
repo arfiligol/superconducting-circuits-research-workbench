@@ -1,0 +1,74 @@
+---
+aliases:
+  - Product App
+  - Application Docs
+  - App Documentation
+tags:
+  - diataxis/reference
+  - audience/team
+  - sot/true
+  - topic/app-reference
+status: stable
+owner: docs-team
+audience: team
+scope: Product App documentation entry for application contracts, frontend/backend/shared surfaces, and Python Notebook prototyping boundaries.
+version: v1.0.0
+last_updated: 2026-06-12
+updated_by: codex
+title: Product App
+description: Productized application contracts for the future workbench, kept separate from the notebook-first research path.
+sidebar:
+  label: Overview
+  order: 10
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+Product App 文件描述產品化 workbench：Frontend、Backend、Desktop shell、task lifecycle、ResultView 與 shared app semantics。它不是 Start Here 的主線；研究與 prototype 先從 Pluto Notebook 開始。
+
+<Aside type="note" title="Notebook-first boundary">
+  Pluto Notebook 是直接研究 cockpit。Python Notebook 是 Product App 的前哨驗證面，用來檢查資料、Backend API、task/result contract 與未來 App 需要的互動；Python Analysis Core 則是可重用 analysis library，可能被 Pluto 透過 Analysis Bridge 呼叫。
+</Aside>
+
+<CardGrid>
+  <LinkCard
+    title="Application Interface"
+    href="./application-interface/"
+    description="確認產品化 App 的主要 surface、task execution model 與 inactive surfaces。"
+  />
+  <LinkCard
+    title="Application Authoring Map"
+    href="./application-authoring/"
+    description="實作 App 或 Python Notebook product surfaces 前的閱讀順序與 build order。"
+  />
+  <LinkCard
+    title="Prototype To Product"
+    href="./prototype-to-product/"
+    description="從 notebook prototype 收斂到 product contracts、runtime surfaces 與 App implementation。"
+  />
+  <LinkCard
+    title="Architecture"
+    href="./architecture/"
+    description="Product App architecture、pipeline、storage、runtime supervision 與 design decisions。"
+  />
+  <LinkCard
+    title="Shared Contracts"
+    href="./shared/"
+    description="runtime modes、identity、auth、task runtime、observability 與 audit semantics。"
+  />
+  <LinkCard
+    title="Backend"
+    href="./backend/"
+    description="Python Backend 的 task lifecycle、TraceStore publication、ResultView 與 app-facing authority。"
+  />
+  <LinkCard
+    title="Frontend"
+    href="./frontend/"
+    description="Next.js / Electron application page contracts, workbench surfaces, shell, and result browsing。"
+  />
+  <LinkCard
+    title="Archive"
+    href="./archive/"
+    description="保留舊 App-specific workflow 與 design notes 作為 reference，不作為目前主線教學。"
+  />
+</CardGrid>

@@ -11,15 +11,17 @@ tags:
 status: stable
 owner: docs-team
 audience: contributor
-scope: Python notebook helper boundaries for data inspection, Backend API usage, and product task submission.
-version: v1.0.0
-last_updated: 2026-05-28
+scope: Python notebook helper boundaries for App prototyping, data inspection, Backend API usage, and product task submission.
+version: v1.1.0
+last_updated: 2026-06-12
 updated_by: codex
 ---
 
 # Python Notebook Authoring
 
-Python notebooks are programmable data-analysis and platform-inspection surfaces. They may directly read local/exported/canonical data files for read-only analysis, and they must use Backend APIs when changing platform state.
+Python notebooks are Product App prototyping and platform-inspection surfaces. They may directly read local/exported/canonical data files for read-only analysis, and they must use Backend APIs when changing platform state.
+
+They are not Python Analysis Core. Reusable fitting, preprocessing, matrix analysis, and result schemas belong in `superconducting_circuits_analysis`; Python Notebook uses those contracts to validate future App behavior.
 
 ## Allowed Helpers
 
@@ -48,10 +50,12 @@ Python notebooks are programmable data-analysis and platform-inspection surfaces
 - Python Notebook dependencies belong in `notebooks/python/`, not `app/backend/`.
 - Python Notebook may read canonical TraceStore files for analysis, but those reads do not create official metadata, provenance, or result records.
 - Any notebook write that should become platform state must go through Backend import, publication, task, or result contracts.
+- Python Notebook may prototype Product App assumptions, but stable contracts must move to Product App docs and implementation surfaces.
 
 ## Related
 
 * [Notebook Interface](index.md)
+* [Prototype To Product](../../app/prototype-to-product/index.md)
 * [Simulation Interface Boundaries](../architecture/simulation-interface-boundaries.md)
 * [Product Async Contracts](../architecture/product-async-contracts.md)
-* [ResultView API](../app/backend/result-view-api.md)
+* [ResultView API](../../app/backend/result-view-api.md)

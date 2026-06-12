@@ -94,9 +94,7 @@ def _check_draw_imports(path: Path) -> list[str]:
             if call_name == "circuit_drawing":
                 uses_circuit_drawing = True
             if call_name in {"push", "pop"}:
-                failures.append(
-                    f"{path.relative_to(ROOT)} uses {call_name}(); use drawing.hold()."
-                )
+                failures.append(f"{path.relative_to(ROOT)} uses {call_name}(); use drawing.hold().")
         elif isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Add):
             failures.append(
                 f"{path.relative_to(ROOT)} uses += element placement; use the "
@@ -143,9 +141,7 @@ def _manifest_outputs(
         for output_format in FORMATS:
             output_path = theme_outputs.get(output_format)
             if not isinstance(output_path, str):
-                failures.append(
-                    f"{manifest_rel} needs outputs.{theme}.{output_format} string."
-                )
+                failures.append(f"{manifest_rel} needs outputs.{theme}.{output_format} string.")
                 continue
             output_paths[theme][output_format] = output_path
     return output_paths, failures
@@ -179,16 +175,13 @@ def _check_manifest(manifest_path: Path, expected_diagram_id: str) -> list[str]:
             output_paths[theme][output_format] = output_path
             if not output_path.exists():
                 failures.append(
-                    f"outputs.{theme}.{output_format} path does not exist: "
-                    f"{output_path_value}"
+                    f"outputs.{theme}.{output_format} path does not exist: {output_path_value}"
                 )
             expected_name = f"diagram.{theme}.{output_format}"
             if output_path.name != expected_name:
                 failures.append(f"{output_path_value} must be named {expected_name}.")
             if CIRCUIT_DRAW_DIR not in output_path.parents:
-                failures.append(
-                    f"{output_path_value} must live under docs/assets/circuit_draw."
-                )
+                failures.append(f"{output_path_value} must live under docs/assets/circuit_draw.")
 
     if source_path.exists():
         failures.extend(_check_draw_imports(source_path))

@@ -1,0 +1,65 @@
+---
+aliases:
+  - Technical Documentation
+  - 技術文件
+tags:
+  - diataxis/reference
+  - audience/user
+  - sot/true
+  - topic/documentation
+status: stable
+owner: docs-team
+audience: user
+scope: "Astro + Starlight reader/task-first technical documentation entry."
+version: v3.0.0
+last_updated: 2026-06-12
+updated_by: codex
+title: 技術文件
+description: Start from the task you want to complete, the concept you need to understand, or the contract you need to verify.
+sidebar:
+  label: Docs Home
+  order: 0
+---
+
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+這裡是 Superconducting Circuits Research Workbench 的技術文件入口。先選擇你現在的意圖：從 notebook 開始研究、完成工作、理解模型、查合約、查看 Product App，或維護專案。
+
+<CardGrid>
+  <LinkCard
+    title="Start Here"
+    href="./start/"
+    description="安裝研究環境、跑第一個 Pluto Notebook，並知道如何接到 Python Analysis Core。"
+  />
+  <LinkCard
+    title="Workflows"
+    href="./workflows/"
+    description="Pluto research、circuit authoring、analysis、prototype productization、資料匯入與管理。"
+  />
+  <LinkCard
+    title="Concepts"
+    href="./concepts/"
+    description="物理、reusable circuit system、平台架構、pipeline 與設計決策。"
+  />
+  <LinkCard
+    title="Product App"
+    href="./app/"
+    description="未來產品化 workbench 的 frontend、backend、shared contracts 與 App prototyping 線路。"
+  />
+  <LinkCard
+    title="Reference"
+    href="./reference/"
+    description="查找 architecture、core、Julia、data format、notebook 與 API contracts。"
+  />
+  <LinkCard
+    title="Contribute & Govern"
+    href="./contribute/"
+    description="貢獻流程、agent skills、guardrails 與 contributors registry。"
+  />
+</CardGrid>
+
+<Aside type="note" title="API Reference">
+  Generated API reference 是 sibling site，不是 Starlight 內容樹：
+  <a href="../api/python/">Python Sphinx API</a> 與
+  <a href="../api/julia/">Julia Documenter.jl API</a>。
+</Aside>

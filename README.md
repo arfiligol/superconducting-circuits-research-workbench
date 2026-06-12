@@ -224,8 +224,8 @@ the notebook examples first.
 - Start with the Pluto notebooks under `notebooks/pluto/`.
 - Use the Julia Core reference when you need the current authoring and compiler
   contracts: `docs/reference/julia-core/`.
-- Use the physics explanations when you need the S/Y/Z, equivalent-circuit, or
-  modeling context: `docs/explanation/physics/`.
+- Use the physics concepts when you need the S/Y/Z, equivalent-circuit, or
+  modeling context: `docs/concepts/physics/`.
 
 ### Platform Path
 
@@ -284,11 +284,17 @@ Build the static docs with:
 ./scripts/build_docs_sites.sh
 ```
 
-Build the combined public site artifact with Astro at `/` and Zensical docs at
-`/docs/`:
+Build the combined public site artifact with Astro at `/` and Starlight docs at
+`/docs/`, plus generated API reference at `/api/python/` and `/api/julia/`:
 
 ```bash
 ./scripts/build/build_public_site.sh
+```
+
+Preview the combined artifact locally with:
+
+```bash
+uv run docs-site serve --build
 ```
 
 ## Development Status
@@ -299,7 +305,7 @@ production-ready service or a released external-user platform.
 Current boundaries:
 
 - Public introduction pages live in the Astro site under `site/`.
-- Technical documentation lives in Zensical docs under `docs/` and is mounted at
+- Technical documentation lives in Starlight docs under `docs/` and is mounted at
   `/docs/` in the public artifact.
 - Research execution lives in Pluto notebooks and Julia Core.
 - Productized simulation and analysis tasks go through the Application, Python
@@ -321,7 +327,7 @@ state belongs in Backend contracts, and notebook workflows should either remain
 explicit research workflows or be promoted through the app-backed task and
 publication path.
 
-See `docs/how-to/contributing.md` and `docs/reference/guardrails/` before
+See `docs/contribute/contributing/` and `docs/reference/guardrails/` before
 changing public contracts, architecture boundaries, documentation source of
 truth, or validation workflows.
 

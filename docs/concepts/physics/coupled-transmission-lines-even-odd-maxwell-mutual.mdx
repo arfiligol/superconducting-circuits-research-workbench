@@ -266,7 +266,7 @@ T^T C_maxwell T = diag(Cg, Cg + 2Cm)
 
 所以 even / odd 模態本質上就是把對稱 coupled pair 對角化。
 
-這也是 `maxwell_to_even_odd` 看起來那麼簡潔的真正原因：  
+這也是 `maxwell_to_even_odd` 看起來那麼簡潔的真正原因：
 它不是神奇公式，而是**對稱雙線的 2×2 模態分解**。
 
 ## 三個函式各自該怎麼用
@@ -482,7 +482,7 @@ end
 ("C_AB_1", a1, b1, Cm)
 ```
 
-這就是為什麼我前面說：  
+這就是為什麼我前面說：
 **要寫 distributed coupled-line section，最實用的入口往往是 `even_odd_to_mutual`。**
 
 ## 為什麼這個 builder 是合理的
@@ -496,7 +496,7 @@ end
 3. **可離散、可收斂**
    - `N` 越大，對 distributed section 的近似越好
 
-這跟把 coupled line 硬塞成「某個神祕的 lumped coupler」不同。  
+這跟把 coupled line 硬塞成「某個神祕的 lumped coupler」不同。
 你保留了：
 
 - 長度

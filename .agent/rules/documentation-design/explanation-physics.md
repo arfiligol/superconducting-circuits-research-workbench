@@ -1,8 +1,8 @@
-## Explanation Physics
-- **Architecture**: `docs/explanation/physics/` follows the A-J knowledge map (A=Foundations, B=EM-to-Circuits, C=Superconductivity, D=Josephson, E=Quantum-Circuits, F=Building-Blocks, G/H/I=principles-only)
+## Physics Concepts
+- **Architecture**: `docs/concepts/physics/` follows the A-J knowledge map (A=Foundations, B=EM-to-Circuits, C=Superconductivity, D=Josephson, E=Quantum-Circuits, F=Building-Blocks, G/H/I=principles-only)
 - **Hierarchy**: L1 = domain directories (A-I groups), L2 = topic pages, L3 = optional sub-pages when L2 > 3000 words
 - **L1 creation rule**: only create an L1 directory + nav entry when it has at least one L2 page
-- **Content boundary**: Physics explains WHY/HOW-IT-WORKS only. Tool usage, CLI steps, workflows → How-to/Tutorials/Reference
+- **Content boundary**: Physics explains WHY/HOW-IT-WORKS only. Tool usage, CLI steps, and workflows go to Workflows or Reference.
 - **Node types**: each page declares node_type in tags (principle/model/method/device). Dependencies flow: Principle → Model → Device/Method
 - **Positioning**: must be both a full learning backbone and reusable concept nodes
 - **Opener**: each page starts from either a physics question OR a historical/community narrative — never a tool-operation question

@@ -1,0 +1,175 @@
+---
+aliases:
+  - Work Lane Orchestration Skill
+  - 協作編排 Skill
+  - 工作泳道編排 Skill
+tags:
+  - diataxis/reference
+  - audience/contributor
+  - sot/true
+  - topic/governance
+status: draft
+owner: docs-team
+audience: contributor
+scope: architecture-guided multi-subagent workflow 的跨工具 Skill template
+version: v0.1.0
+last_updated: 2026-05-28
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Work Lane Orchestration
+
+`work-lane-orchestration` 是給 coding agent 使用的協作編排 Skill。它讓一個主 thread 依照目標 repo 的 SoT 切分 optional subagent work lanes，並由主 thread 統整 patch、驗收與 final report。
+
+這份 template 必須保持跨專案可用。它不定義本 repo 的固定 lane，不指定 Codex-only 安裝路徑，也不把 Claude Code、Gemini 或其他工具的本機格式當成唯一標準。
+
+<Aside type="caution" title="Do not hardcode this repo">
+
+這個 Skill 的核心是動態讀取目標 repo 的 SoT。同步到任何 agent 之後，都不能把本專案目前的 folder structure、lane names 或 commands 寫死成通用規則。
+
+</Aside>
+
+## Sync Steps
+
+1. 建立該 agent 原生支援的 reusable instruction、skill、command 或 context entry。
+2. 使用 `work-lane-orchestration` 作為 canonical name。
+3. 保留 frontmatter 或等價 metadata 中的 trigger description。
+4. 將下方 `SKILL.md` template 的正文同步到該 agent 的 skill body。
+5. 若該工具不支援 skill metadata，至少要保留 `name`、trigger description 與 `Hard Blocks`。
+
+## Canonical Template
+
+將以下內容同步成目標 agent 的原生 skill。
+
+````markdown
+---
+name: work-lane-orchestration
+description: Use when Codex needs to coordinate an architecture-guided coding workflow with a main thread and optional subagents/work lanes, especially for multi-surface features, repo-level planning, lane delegation, integration review, SoT consistency, or when the user asks for orchestration, subagent work lanes, multi-agent development, vertical slices, or cross-boundary validation. This skill enforces dynamic repository context loading and must hard-block if the target project does not define the necessary source-of-truth, ownership, commands, or validation rules.
+---
+
+# Work Lane Orchestration
+
+Use this skill to turn one coding thread into a controlled, architecture-guided workflow. The main thread owns source-of-truth loading, lane selection, integration, conflict resolution, final validation, and reporting. Subagents, when available, are temporary work lanes for bounded investigation, implementation, test, or documentation tasks.
+
+This skill must stay cross-project. Do not hardcode lane names, folder ownership, commands, architecture contracts, or validation gates from any one repository.
+
+## Operating Rule
+
+Before planning or delegating work, load the target repository's rules and source-of-truth. Prefer project files over general assumptions.
+
+Common discovery targets, in priority order when present:
+
+- Explicit user-provided instructions for the current workspace.
+- Root instruction files such as `AGENTS.md`, `CLAUDE.md`, or equivalent tool context files.
+- Installed workspace rules such as `.agent/rules/`.
+- Guardrail catalogs and rule files such as `docs/reference/guardrails/_agent_catalog.yml`, `docs/reference/guardrails/`, or equivalent.
+- Architecture, folder-structure, ownership, contract registry, run/build/test, CI, and docs rules under the repository's documented source-of-truth tree.
+
+Load only the documents relevant to the current task, but do not skip required baseline rules named by the repository.
+
+## Hard Blocks
+
+Stop and report a hard block before implementation or subagent delegation when any required project context is missing or contradictory.
+
+Hard-block conditions include:
+
+- No authoritative project goal or product scope.
+- No stack summary or active runtime surface definition.
+- No folder structure, ownership, or boundary rules for the surfaces the task may touch.
+- No run/build/lint/format/test commands for touched areas.
+- No CI or merge-gate expectations when the work affects releasable code, docs, or automation.
+- No documentation rules when the task changes docs or source-of-truth.
+- No source-of-truth conflict resolution rule when loaded docs disagree.
+- No project-defined work-lane taxonomy, and the task requires subagent lane delegation.
+
+When blocked, do not invent rules as facts. State exactly which missing rule prevents safe progress and ask the user to define or approve recording it in the project's source-of-truth.
+
+## Main Thread Workflow
+
+1. Load repository instructions and selected source-of-truth.
+2. Identify the current vertical slice: goal, touched surfaces, contracts, expected outputs, and validation depth.
+3. Decide whether subagents reduce real coordination cost. Use them only for bounded, separable work.
+4. Select work lanes from the project's own documents. If no lanes are defined, either work in the main thread or hard-block if delegation is necessary.
+5. Give each subagent one narrow task, explicit allowed surfaces, relevant source-of-truth links, expected output, and forbidden assumptions.
+6. Integrate results in the main thread. Resolve cross-lane conflicts against the loaded source-of-truth, not against whichever patch arrived first.
+7. Run or account for touched-area validation.
+8. Deliver one coherent final report: changed surfaces, validation, risks, skipped checks, and follow-up only when concrete.
+
+## Lane Selection
+
+A work lane is a temporary delegation scope, not a permanent owner or fixed agent identity.
+
+Only use lane names, folder scopes, and responsibilities that the target repository defines. If the repository defines lanes through guardrails or architecture docs, reuse those names exactly. If it defines only ownership boundaries, derive a minimal lane plan from those boundaries and label it as derived from the loaded source-of-truth.
+
+Do not:
+
+- create fixed "Agent A / Agent B" role families;
+- let subagents redefine product architecture, schemas, or ownership;
+- split one end-to-end feature into independent competing workflows;
+- create committed planning artifacts unless the repository's source-of-truth requires them.
+
+## Subagent Prompt Shape
+
+When subagents are available, prompt them with task-local context only:
+
+~~~text
+Use the repository source-of-truth listed below.
+
+Goal:
+<one bounded investigation / implementation / verification task>
+
+Allowed surfaces:
+<paths or contracts from repo docs>
+
+Must follow:
+<specific loaded rules>
+
+Do not:
+<cross-boundary actions, schema invention, architecture redefinition>
+
+Return:
+- findings or diff summary
+- files/surfaces touched
+- validation run and result
+- risks or unresolved conflicts
+~~~
+
+Keep subagent work disposable. The main thread owns final decisions, patch integration, and user-visible reporting.
+
+## Conflict Handling
+
+When documents, code, or subagent findings disagree:
+
+1. Apply the repository's conflict-resolution rule.
+2. Prefer the documented owner source-of-truth over consumers and old implementation behavior, unless the user explicitly changes the spec.
+3. If no owner or conflict rule exists, hard-block instead of guessing.
+4. Record intentional architecture or contract changes only in the project's designated source-of-truth.
+
+## Validation
+
+Use the repository's own commands and gates. Choose the smallest verification set that covers the touched surfaces, then broaden when the work crosses contracts, runtime boundaries, persistence, security, release gates, or user-facing flows.
+
+If a required command cannot be run, report why, what evidence remains, and what risk is left.
+````
+
+## Verification
+
+同步後，agent 應該用一個低風險任務 dry run：
+
+```text
+Use work-lane-orchestration to inspect this repository's source-of-truth and report whether enough rules exist to safely coordinate a multi-surface feature. Do not edit files.
+```
+
+成功訊號：
+
+- agent 先讀 workspace rules，而不是直接產生 lane plan；
+- agent 能指出 task-relevant SoT；
+- agent 不自創 repo-specific lane taxonomy；
+- agent 在缺少必要 rule 時會 hard-block。
+
+## Related
+
+- [Agent Skill Library](index.mdx)
+- [Codex Subagent Coordination](../guardrails/execution-verification/multi-agent-collaboration.mdx)

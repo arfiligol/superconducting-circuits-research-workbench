@@ -11,6 +11,8 @@
     - `npm run check --prefix site` when public site is touched
     - `npm run build --prefix site` when public site is touched
     - `./scripts/build/build_public_site.sh` when public site, docs mount, or deployment artifact is touched
+    - `./scripts/build/build_api_docs.sh` when API reference docs, Python core package exports/docstrings, or Julia package exports/docstrings are touched
+    - `uv run python scripts/build/check_api_reference_links.py` after public artifact builds that touch API reference links
     - `npm run lint --prefix app/desktop`
     - `npm run build --prefix app/desktop`
     - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched
@@ -21,5 +23,5 @@
 - `main` only receives verified release promotion from `develop`.
 - Branch roles, direct-develop policy, and optional worktree use are defined in `Branch & Worktree Flow`.
 - Guardrail source changes must keep `.agent/rules` in sync.
-- Benign `404` warnings from docs preview builds do not fail CI by themselves.
+- Starlight dev preview warnings do not fail CI by themselves; failing build, route, or API reference integrity checks block merge.
 - Any failing required check blocks merge.

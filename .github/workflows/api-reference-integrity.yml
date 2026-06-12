@@ -1,0 +1,74 @@
+name: API Reference Integrity
+
+on:
+  pull_request:
+    paths:
+      - "docs/api-reference/**"
+      - "docs/reference/api/**"
+      - "docs/reference/guardrails/documentation-design/api-reference.md"
+      - ".agent/rules/documentation-design/api-reference.md"
+      - "scripts/build/build_api_docs.sh"
+      - "scripts/build/check_api_reference_links.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "package.json"
+      - "site/package.json"
+      - "site/package-lock.json"
+      - "site/astro.config.mjs"
+      - "site/src/content.config.ts"
+      - "core/sc_core/**"
+      - "core/analysis/**"
+      - "core/python/sc_data_contracts/**"
+      - "core/julia/**"
+      - ".github/workflows/api-reference-integrity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/api-reference/**"
+      - "docs/reference/api/**"
+      - "docs/reference/guardrails/documentation-design/api-reference.md"
+      - ".agent/rules/documentation-design/api-reference.md"
+      - "scripts/build/build_api_docs.sh"
+      - "scripts/build/check_api_reference_links.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "package.json"
+      - "site/package.json"
+      - "site/package-lock.json"
+      - "site/astro.config.mjs"
+      - "site/src/content.config.ts"
+      - "core/sc_core/**"
+      - "core/analysis/**"
+      - "core/python/sc_data_contracts/**"
+      - "core/julia/**"
+      - ".github/workflows/api-reference-integrity.yml"
+
+jobs:
+  api-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Python dependencies
+        run: uv sync --all-packages --group dev --frozen
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        run: npm ci --prefix site
+
+      - name: Build public artifact with API reference sites
+        run: ./scripts/build/build_public_site.sh

@@ -1,0 +1,35 @@
+---
+aliases:
+  - Workflows
+  - 工作流程
+tags:
+  - diataxis/how-to
+  - audience/user
+  - topic/workflows
+status: stable
+owner: docs-team
+audience: user
+scope: "Reader/task-first workflow map for Pluto research, Julia Core authoring/simulation, Python analysis, notebooks, research data, and extension tasks."
+version: v2.0.0
+last_updated: 2026-06-12
+updated_by: codex
+title: Workflows
+description: Choose this section when you want to complete a task.
+sidebar:
+  label: Overview
+  order: 10
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+這一區回答「我要怎麼做」。第一入口是 notebook research；這裡只放研究、Julia Core、Pluto、Python Analysis Core 與 Python Notebook 工作流。
+
+<CardGrid>
+  <LinkCard title="Pluto Research" href="./pluto/" description="使用 Pluto authoring、sweep 與 numbered example notebooks。" />
+  <LinkCard title="Julia Core Circuit Authoring" href="./circuit-authoring/" description="建立 reusable circuit components、netlist 與 repeat sections。" />
+  <LinkCard title="Julia Core Simulation" href="./simulation/" description="直接使用 Julia Core / JosephsonCircuits.jl 做研究模擬。" />
+  <LinkCard title="Python Analysis Core" href="./analysis-fitting/" description="使用 Python Analysis Core 與 Analysis Bridge 做 fitting / derived analysis。" />
+  <LinkCard title="Python Notebooks" href="./python-notebooks/" description="用 Python notebook 做檔案檢查、analysis sketch 與報告素材整理。" />
+  <LinkCard title="Research Data & Evidence" href="./research-data/" description="整理 HFSS 匯出、notebook inputs、figures 與可重現證據。" />
+  <LinkCard title="Extending Research Tools" href="./research-tools/" description="擴充 Julia Core、Analysis Bridge 或研究 helper。" />
+</CardGrid>

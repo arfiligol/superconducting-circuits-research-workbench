@@ -18,10 +18,10 @@ updated_by: codex
 # Julia Compute Boundary
 
 Julia compute now has four active packages:
-Julia Core holds the docs-defined authoring model, Circuit Plan, compiler concepts, parameter sweep architecture, compile policies, executor interfaces, simulation helpers, sweep helpers, and analysis logic.
+Julia Core holds the docs-defined authoring model, Circuit Plan, compiler concepts, parameter sweep architecture, compile policies, executor interfaces, simulation helpers, sweep helpers, and Julia-native trace extraction helpers.
 Julia Visualizer owns PlotlyJS figure construction.
 Julia Runner wraps that logic as asynchronous task execution and writes local staging artifacts.
-Julia Analysis Bridge wraps Python analysis through PythonCall for explicit Pluto research sessions.
+Julia Analysis Bridge wraps Python-owned fitting and analysis through PythonCall for explicit Pluto research sessions.
 
 Concrete component libraries are dependencies selected by the caller, notebook, or Runner task environment. They are not part of the Julia Core Kernel contract.
 
@@ -29,10 +29,10 @@ Concrete component libraries are dependencies selected by the caller, notebook, 
 
 | Package | Path | Responsibility |
 |---|---|---|
-| SuperconductingCircuitsCore | `core/julia/SuperconductingCircuitsCore/` | docs-defined authoring model, Circuit Plan, compiler concepts, parameter sweep architecture, compile policies, executor interfaces, simulation helpers, sweep engine, analysis helpers |
+| SuperconductingCircuitsCore | `core/julia/SuperconductingCircuitsCore/` | docs-defined authoring model, Circuit Plan, compiler concepts, parameter sweep architecture, compile policies, executor interfaces, simulation helpers, sweep engine, and Julia-native trace extraction helpers |
 | SuperconductingCircuitsVisualizer | `core/julia/SuperconductingCircuitsVisualizer/` | PlotlyJS figure helpers for Pluto/report visualization |
 | SuperconductingCircuitsRunner | `core/julia/SuperconductingCircuitsRunner/` | backend polling, task dispatch, local Zarr staging writer, manifest generation, complete/fail reporting |
-| SuperconductingCircuitsAnalysisBridge | `core/julia/SuperconductingCircuitsAnalysisBridge/` | PythonCall wrapper around `superconducting_circuits_analysis` for Pluto-friendly fitting and analysis calls |
+| SuperconductingCircuitsAnalysisBridge | `core/julia/SuperconductingCircuitsAnalysisBridge/` | PythonCall wrapper around `superconducting_circuits_analysis` for Pluto-friendly fitting and analysis calls, including S21 notch/transmission/vector fitting |
 
 ## Boundary
 

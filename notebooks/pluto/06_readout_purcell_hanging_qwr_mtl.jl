@@ -51,7 +51,7 @@ md"""
 """
 
 # ╔═╡ f72f6f2e-1de1-58f5-8e40-180cdb235d49
-LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-06-readout-purcell-hanging-qwr-mtl.svg"))
+LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "circuit_draw", "pluto_examples", "readout_purcell_hanging_qwr_mtl", "diagram.light.svg"))
 
 # ╔═╡ 9432e8aa-9a78-51fa-b794-c42182810335
 md"""

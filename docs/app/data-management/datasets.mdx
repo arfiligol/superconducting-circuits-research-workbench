@@ -1,0 +1,52 @@
+---
+aliases:
+  - "Manage Datasets"
+  - "Dataset 管理"
+tags:
+  - diataxis/how-to
+  - audience/user
+  - sot/true
+  - topic/database
+status: stable
+owner: team
+audience: user
+scope: "如何查詢與管理 Dataset"
+version: v2.0.0
+last_updated: 2026-05-28
+updated_by: codex
+sidebar:
+  label: Datasets
+  order: 20
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Managing Datasets
+
+Use the Application Interface for routine dataset management.
+Use Python Backend APIs or maintenance scripts for scripted changes.
+
+## Usage
+
+1. Open the Electron App.
+2. Go to `Dataset`.
+3. Search or filter the dataset list.
+4. Open a dataset to inspect design scopes, traces, tags, and provenance.
+5. Use `Raw Data` for trace previews.
+
+## Deletion
+
+Dataset deletion affects metadata and TraceStore references.
+Keep deletion behind explicit backend validation and tests.
+
+<Aside type="danger" title="Destructive operation">
+
+Do not add ad hoc deletion scripts that bypass backend services.
+The backend must preserve provenance guarantees and avoid orphaning TraceStore data.
+
+</Aside>
+
+## Related
+
+- [Application Interface](../application-interface.md)
+- [TraceStore Zarr](../../reference/architecture/trace-store-zarr.md)

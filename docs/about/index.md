@@ -9,9 +9,9 @@ tags:
 status: deprecated
 owner: docs-team
 audience: user
-scope: 舊 Zensical 介紹頁路徑的靜態轉址。
-version: v1.0.0
-last_updated: 2026-06-04
+scope: 舊技術文件介紹頁路徑的靜態轉址。
+version: v1.0.1
+last_updated: 2026-06-12
 updated_by: codex
 title: 介紹頁已搬移
 ---

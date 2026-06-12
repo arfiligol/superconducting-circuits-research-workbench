@@ -1,0 +1,83 @@
+---
+aliases:
+  - Script Authoring
+  - Scripts 規範
+tags:
+  - diataxis/reference
+  - audience/contributor
+  - sot/true
+  - topic/code-quality
+status: stable
+owner: docs-team
+audience: contributor
+scope: dev/build/test/maintenance scripts 的放置位置、責任邊界與文件規範。
+version: v2.2.0
+last_updated: 2026-06-11
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Script Authoring
+
+User-facing command-line workflow 已從本專案的 active product surface 移除。
+`scripts/` 只保留 dev/build/test/maintenance helpers，不再承載使用者工作流 contract。
+
+<Aside type="note" title="Use this page for helper boundary decisions">
+
+這頁回答 helper script 應放哪裡、script 本身該負責什麼，以及 legacy command/script 只應保留到什麼程度。
+
+</Aside>
+
+## Placement Map
+
+| 如果要做 | 應放位置 |
+| --- | --- |
+| dev server / local runtime helper | `scripts/dev/` |
+| build helper | `scripts/build/` |
+| test / verification helper | `scripts/test/` |
+| maintenance / migration helper | `scripts/maintenance/` |
+| 正式 user workflow | Application、Notebook、Backend API、或 Julia Runner task；不是 script |
+| 真正業務邏輯 | app backend service、Julia Core、Julia Runner，或 framework-neutral contract package |
+
+## Placement
+
+- 不新增 active product command package、Typer command 或 user-facing command docs
+- dev-only wrapper entrypoint 只能用來轉送到 `scripts/dev/`、`scripts/build/`、`scripts/test/` 或 `scripts/maintenance/` helper，不可承載產品 workflow contract
+- 不新增 legacy root script workflow
+- helper script 必須放進 `scripts/dev/`、`scripts/build/`、`scripts/test/` 或 `scripts/maintenance/`
+- migration 期間若仍需保留舊入口，只能作為 inert archive 或短期 removal bridge
+
+## Structure
+
+- shell helpers should be small, composable, and explicit about required working directory
+- scripts may orchestrate existing commands but must not own domain workflow logic
+- script names use `kebab-case` or existing repo naming conventions when already established
+- scripts must fail fast on unrecoverable setup/runtime errors
+
+<Aside type="caution" title="Do not duplicate workflow logic">
+
+Script 可以組裝開發、建置或測試流程，但不能把 API handler、backend service、Julia Runner 或 notebook 內部的業務流程整段複製過來。
+
+</Aside>
+
+## Rules
+
+- 不可新增 user-facing command-line product surface
+- 不可把 dev-only wrapper command 擴張成產品 workflow CLI
+- 不可把 scripts 寫成正式 workflow contract
+- 不可把 API handler 的內部邏輯整段複製到 scripts
+- scripts 必須有明確 exit behavior
+- scripts 只能服務 dev/build/test/maintenance
+
+## Agent Rule
+```markdown
+## Script Authoring
+- User-facing command-line workflow is no longer an active product surface.
+- Do not add new Typer commands, product command package entrypoints, or user-facing command docs.
+- Dev-only wrapper entrypoints may only dispatch to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/` helpers.
+- Keep only `scripts/` helpers for dev/build/test/maintenance.
+- Put helpers under `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
+- Scripts may orchestrate commands but must not own business workflow logic.
+- Real workflow logic must live in app backend services, Julia Core, Julia Runner, or explicit contract packages.
+```

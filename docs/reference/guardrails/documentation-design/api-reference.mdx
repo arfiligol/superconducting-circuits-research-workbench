@@ -1,0 +1,82 @@
+---
+aliases:
+  - API Reference Guardrail
+  - Sphinx and Documenter API Reference
+tags:
+  - diataxis/reference
+  - audience/team
+  - sot/true
+  - topic/documentation
+  - topic/api-reference
+status: stable
+owner: docs-team
+audience: team
+scope: Generated API reference ownership, docstring style, and Sphinx/Documenter.jl build rules.
+version: v1.1.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# API Reference
+
+本頁定義 generated API reference 的文件邊界。Astro + Starlight 保留 high-level Source of Truth、架構契約、工作流與 guardrails；Sphinx 與 Documenter.jl 只負責從 package docstrings 產生可查找的 API reference。
+
+## Site Ownership
+
+| Site | Tool | Owner boundary |
+| --- | --- | --- |
+| `/docs/` | Astro + Starlight | high-level docs, Source of Truth, architecture contracts, tutorials, how-to, explanation, guardrails |
+| `/api/python/` | Sphinx | Python package API reference for `sc_core`, `superconducting_circuits_analysis`, `sc_data_contracts` |
+| `/api/julia/` | Documenter.jl | Julia package API reference for Core, Visualizer, Runner, and Analysis Bridge |
+
+<Aside type="caution" title="Backend internals are not Python public API">
+
+`app_backend` remains an application adapter. Document backend HTTP contracts through Starlight owner docs and OpenAPI snapshots, not Sphinx package API pages.
+
+</Aside>
+
+## Python Docstrings
+
+Use Google-style docstrings that Sphinx Napoleon can parse.
+
+- Put type information in Python annotations when practical.
+- Keep docstrings present-tense and contract-focused.
+- Include units, coordinate systems, shapes, and physics semantics when they prevent misuse.
+- Use `Args`, `Returns`, and `Raises` only when they add useful information beyond the signature.
+- Do not include history, migration narratives, compatibility storytelling, or deprecated runtime explanations.
+
+## Julia Docstrings
+
+Use Documenter-compatible Markdown docstrings immediately before exported public definitions.
+
+- Start with the callable signature or type name when that improves scanning.
+- Lead with one concise purpose sentence.
+- Use `# Arguments`, `# Keywords`, `# Returns`, `# Throws`, and `# Examples` only when useful.
+- Keep exported names documented or deliberately remove them from the public export list.
+- Do not document private helper internals as public API unless the owner docs explicitly promote them.
+
+## Build Boundary
+
+- API docs source lives under `docs/api-reference/`.
+- Sphinx output builds to `build/api-reference/python/html` and is copied into `site/dist/api/python/`.
+- Documenter.jl output builds to `build/api-reference/julia/html` and is copied into `site/dist/api/julia/`.
+- Starlight staging is generated under `site/src/content/docs/docs/` and must not contain API docs source.
+- Generated API sites must link back to `/docs/` and to each other.
+
+---
+
+## Agent Rule
+```markdown
+## API Reference
+- Astro + Starlight owns high-level docs and Source-of-Truth narrative at `/docs/`.
+- Sphinx owns Python package API reference at `/api/python/` for `sc_core`, `superconducting_circuits_analysis`, and `sc_data_contracts`.
+- Documenter.jl owns Julia package API reference at `/api/julia/` for `SuperconductingCircuitsCore`, `SuperconductingCircuitsVisualizer`, `SuperconductingCircuitsRunner`, and `SuperconductingCircuitsAnalysisBridge`.
+- Do not expose `app_backend` internals as public Sphinx API; backend HTTP contracts belong in Starlight owner docs and OpenAPI.
+- Python docstrings use Google style parsed by Sphinx Napoleon, type hints in signatures, clear units/physics semantics, and no history or migration narrative.
+- Julia docstrings use Documenter-compatible Markdown before exported public definitions; exported names must be documented or deliberately unexported.
+- API docs source lives under `docs/api-reference/`; generated output goes through `build/api-reference/` and deploys under `site/dist/api/`.
+- `site/src/content/docs/docs/` is generated Starlight staging and must not be edited or used as API docs source.
+- Generated API sites must link back to `/docs/` and cross-link Python and Julia API sites.
+```

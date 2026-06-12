@@ -9,6 +9,7 @@
     - `npm run check --prefix site`
     - `npm run build --prefix site`
     - `./scripts/build/build_public_site.sh`
+    - `uv run docs-site serve`
 - **Julia Core install**: `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Visualizer install**: `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'`
 - **Julia Runner install**: `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.instantiate()'`
@@ -36,9 +37,16 @@
     - `npm run build --prefix app/desktop`
 - **Docs**:
     - `uv run python scripts/check_docs_nav_routes.py --check-source`
-    - `./scripts/prepare_docs_locales.sh`
-    - `uv run --group dev zensical build -f zensical.toml`
+    - `uv run python scripts/check_docs_app_quarantine.py`
+    - `npm run check --prefix site`
+    - `npm run build --prefix site`
     - `./scripts/build_docs_sites.sh`
     - `uv run python scripts/check_docs_nav_routes.py --check-built`
+- **API reference**:
+    - `uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
+    - `julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
+    - `./scripts/build/build_api_docs.sh`
+    - `uv run python scripts/build/check_api_reference_links.py`
 - **Public artifact**:
-    - `./scripts/build/build_public_site.sh` builds Astro at `/` and embeds Zensical docs at `/docs/`.
+    - `./scripts/build/build_public_site.sh` builds Astro at `/`, embeds Starlight docs at `/docs/`, and embeds generated API reference at `/api/python/` and `/api/julia/`.
+    - `uv run docs-site serve` serves the built `site/dist` artifact locally; add `--build` to rebuild before serving.

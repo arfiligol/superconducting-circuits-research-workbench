@@ -1,0 +1,40 @@
+---
+aliases:
+  - Start Here
+  - 入門
+tags:
+  - diataxis/tutorial
+  - audience/user
+  - topic/getting-started
+status: stable
+owner: docs-team
+audience: user
+scope: "Shortest notebook-first onboarding path for installing, running Pluto, and finding API reference."
+version: v2.0.0
+last_updated: 2026-06-12
+updated_by: codex
+title: Start Here
+description: The shortest path from a fresh checkout to a working Pluto research notebook and the right research lane.
+sidebar:
+  label: Overview
+  order: 10
+---
+
+import { CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+
+先把研究入口跑起來，再依任務進入 Workflows、Concepts 或 Reference。
+
+<Steps>
+  1. 安裝 Python / Julia research environment，包含 Pluto 可用的本地 Julia packages 與 Analysis Bridge。
+  2. 跑通第一個 Pluto Notebook，確認 Julia Core、Visualizer 與 real solver path 可用。
+  3. 理解 prototype path：Pluto research、Julia Core、Python Analysis Core、Python Notebook 各自負責什麼。
+  4. 需要 package symbol 時，跳到 generated API reference。
+</Steps>
+
+<CardGrid>
+  <LinkCard title="Installation" href="./installation/" description="建立 notebook-first research environment，並準備 Python Analysis Bridge。" />
+  <LinkCard title="First Pluto Notebook" href="./first-pluto-notebook/" description="用 00 LC resonator notebook 確認 Pluto research surface 可以工作。" />
+  <LinkCard title="Prototype Path" href="./prototype-path/" description="理解 Pluto prototype 如何收斂到 reusable Julia / Python research code。" />
+  <LinkCard title="Pluto Research" href="../workflows/pluto/" description="進入 Pluto authoring、sweep 與 example notebooks。" />
+  <LinkCard title="API Reference" href="../reference/api/" description="進入 Sphinx Python API 與 Documenter.jl Julia API。" />
+</CardGrid>

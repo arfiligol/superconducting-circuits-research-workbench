@@ -74,9 +74,7 @@ def _manifest_outputs(manifest: dict[str, Any]) -> dict[str, dict[str, str]]:
         for output_format in FORMATS:
             output_path = theme_outputs.get(output_format)
             if not isinstance(output_path, str):
-                raise ValueError(
-                    f"Diagram manifest needs outputs.{theme}.{output_format} string."
-                )
+                raise ValueError(f"Diagram manifest needs outputs.{theme}.{output_format} string.")
             output_paths[theme][output_format] = output_path
     return output_paths
 
@@ -195,9 +193,7 @@ def run(*, check: bool, diagram_ids: set[str] | None) -> int:
                     output_path = ROOT / output_path_value
                     if check:
                         render_target = (
-                            temp_dir
-                            / entry["diagram_id"]
-                            / f"diagram.{theme}.{output_format}"
+                            temp_dir / entry["diagram_id"] / f"diagram.{theme}.{output_format}"
                         )
                     else:
                         render_target = output_path

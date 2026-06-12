@@ -1,0 +1,16 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+SuperconductingCircuitsAnalysisBridge = "92185de4-8e44-403d-9c5a-d0d760517f8a"
+SuperconductingCircuitsCore = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
+SuperconductingCircuitsRunner = "4c7c5b9a-4e91-4bc5-a3fb-9573d29c3f0c"
+SuperconductingCircuitsVisualizer = "213aad8c-4206-41d4-b482-dfa65fc8d1da"
+
+[sources]
+SuperconductingCircuitsAnalysisBridge = {path = "../../../core/julia/SuperconductingCircuitsAnalysisBridge"}
+SuperconductingCircuitsCore = {path = "../../../core/julia/SuperconductingCircuitsCore"}
+SuperconductingCircuitsRunner = {path = "../../../core/julia/SuperconductingCircuitsRunner"}
+SuperconductingCircuitsVisualizer = {path = "../../../core/julia/SuperconductingCircuitsVisualizer"}
+
+[compat]
+Documenter = "1"
+julia = "1.11"

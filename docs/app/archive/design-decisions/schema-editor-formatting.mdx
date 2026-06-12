@@ -1,0 +1,66 @@
+---
+aliases:
+  - Schema Editor Formatting
+  - Schema Editor 格式化策略
+tags:
+  - diataxis/explanation
+  - audience/team
+  - topic/architecture
+  - topic/visualization
+  - topic/ui
+status: stable
+owner: docs-team
+audience: team
+scope: Schema Editor 格式化能力的設計決策與邊界（Explanation）
+version: v0.2.0
+last_updated: 2026-03-06
+updated_by: codex
+sidebar:
+  label: Schema Editor Formatting
+  order: 50
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Schema Editor Formatting
+
+本頁只回答「為什麼要有格式化能力、為何定義成這樣」。
+具體欄位、按鈕行為與錯誤契約已移到 Reference。
+
+## Decision Context
+
+Schema Editor 採 source-form 作為唯一 SoT，使用者會頻繁編修 netlist。
+如果沒有可重複、可預測的格式化能力，後續 review/除錯成本會快速上升。
+
+## Why This Is an Architecture Decision
+
+- 這不是單純 UI 細節，會影響 source-form 可讀性與錯誤定位效率
+- 會影響 Schema Editor 與 Simulation 的 pipeline 心智一致性
+- 會影響多人協作時對 netlist 變更的 diff 品質
+
+## Design Boundaries
+
+1. `Format` 只能改 source text 排版，不改展開語意
+2. 失敗時保留原文，不能破壞編輯中的 source
+3. 格式化流程必須和 editor state 模型一致，避免雙狀態分歧
+4. `/schemas/{id}` 與 `/simulation` 看到的 expanded netlist 必須來自同一條 parse/validate/expand pipeline
+
+## Non-Goals
+
+- 不在 Schema Editor 內做完整 IDE/LSP 功能
+- 不把格式化器設計成語意 migration 工具（不做舊格式自動升級）
+
+## Where the Formal Contract Lives
+
+<Aside type="caution" title="Reference SoT">
+
+欄位與行為契約請看：
+[Schema Editor UI Reference](../../frontend/definition/schema-editor.mdx)
+
+</Aside>
+
+## Related
+
+- [Schema Editor UI Reference](../../frontend/definition/schema-editor.mdx)
+- [Circuit Netlist Schema](../../../reference/data-formats/circuit-netlist.mdx)
+- [Julia Runner Compute Plane](../../../reference/architecture/julia-runner-compute-plane.md)

@@ -1,0 +1,31 @@
+---
+aliases:
+  - Concepts
+  - 概念
+tags:
+  - diataxis/explanation
+  - audience/team
+  - topic/concepts
+status: stable
+owner: docs-team
+audience: team
+scope: "Concept map for physics, circuit authoring model, and research stack boundaries."
+version: v1.0.0
+last_updated: 2026-06-12
+updated_by: codex
+title: Concepts
+description: Choose this section when you need to understand the model behind the workflows and contracts.
+sidebar:
+  label: Overview
+  order: 10
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+這一區回答「為什麼」。它聚焦物理概念、Julia Core / Pluto 的研究模型，以及 Python analysis 的研究邊界；正式 contract 仍以 Reference owner pages 為準。
+
+<CardGrid>
+  <LinkCard title="Physics" href="./physics/" description="超導量子電路、SQUID、transmission line 與 resonance fitting 背後的物理。" />
+  <LinkCard title="Circuit Authoring Model" href="./circuit-authoring-model/" description="reusable components、systems、CircuitPlan 與 compiler mental model。" />
+  <LinkCard title="Research Stack" href="./research-stack/" description="Pluto、Julia Core、Visualizer、Analysis Bridge、Python Analysis Core 與 Python Notebook 的責任切分。" />
+</CardGrid>

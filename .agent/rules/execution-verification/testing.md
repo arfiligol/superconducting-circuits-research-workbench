@@ -25,9 +25,15 @@
     - `npm run build --prefix app/desktop`
 - **Docs checks**:
     - `uv run python scripts/check_docs_nav_routes.py --check-source`
-    - `./scripts/prepare_docs_locales.sh`
-    - `uv run --group dev zensical build -f zensical.toml`
+    - `uv run python scripts/check_docs_app_quarantine.py`
+    - `npm run check --prefix site`
+    - `npm run build --prefix site`
     - `./scripts/build_docs_sites.sh`
     - `uv run python scripts/check_docs_nav_routes.py --check-built`
+- **API reference checks**:
+    - `uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
+    - `julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
+    - `./scripts/build/build_api_docs.sh`
+    - `uv run python scripts/build/check_api_reference_links.py` after `./scripts/build/build_public_site.sh`
 - Add tests for critical workflows instead of relying on manual verification only.
 - Use canonical directory routes for docs route checks instead of source `.md` paths.

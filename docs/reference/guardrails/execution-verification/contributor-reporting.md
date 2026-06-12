@@ -67,9 +67,9 @@ Use one of these instead:
 
 ## Related
 
-- [Codex Subagent Coordination](./multi-agent-collaboration.md)
-- [Branch & Worktree Flow](./branch-and-worktree-flow.md)
-- [Commit Standards](./commit-standards.md)
+- [Codex Subagent Coordination](multi-agent-collaboration.mdx)
+- [Branch & Worktree Flow](branch-and-worktree-flow.mdx)
+- [Commit Standards](commit-standards.mdx)
 
 ## Agent Rule { #agent-rule }
 

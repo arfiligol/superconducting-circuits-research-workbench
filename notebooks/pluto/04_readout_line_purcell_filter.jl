@@ -51,7 +51,7 @@ md"""
 """
 
 # ╔═╡ 588383a1-2b78-5f7e-97ea-ab6787a9315b
-LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "pluto-04-readout-line-purcell-filter.svg"))
+LocalResource(joinpath(@__DIR__, "..", "..", "docs", "assets", "circuit_draw", "pluto_examples", "readout_line_purcell_filter", "diagram.light.svg"))
 
 # ╔═╡ c383c879-7a2d-571c-8efd-0db460a7462e
 md"""

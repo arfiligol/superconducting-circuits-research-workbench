@@ -17,8 +17,14 @@
 - **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
 - **Archived legacy UI / command workflow / old runtime residue** should be deleted from active package discovery or moved to `docs/archive/` as inert text.
 - **Root worker runtime folder** must not be recreated as a runtime surface.
-- **Docs and guardrails** go to `docs/`; `docs/docs_zhtw/` is generated staging, not a primary edit source.
-- **Zensical docs** are technical docs mounted under `/docs/`; public introduction pages belong to `site/`.
+- **Docs and guardrails** go to `docs/`; `site/src/content/docs/docs/` is generated Starlight staging, not a primary edit source.
+- **Starlight docs** are reader/task-first technical docs mounted under `/docs/`; public introduction pages belong to `site/`.
+- **Starlight source layout** uses `docs/start/`, `docs/workflows/`, `docs/concepts/`, `docs/app/`, `docs/reference/`, and `docs/contribute/`; Diataxis stays in metadata, not top-level directories.
+- **Start Here** is notebook-first and should lead with Pluto research setup, not Product App setup.
+- **Workflows and Concepts** are research-core lanes for physics, Pluto, Julia Core, Python Analysis Core, Python Notebook, research data/evidence, reusable authoring model, and research stack boundaries.
+- **Product App docs** go to `docs/app/`; do not bury active app contracts under `docs/reference/app/`, `docs/start/`, `docs/workflows/`, or `docs/concepts/`.
+- **Legacy App-specific tutorials** go to `docs/app/archive/` with an explicit legacy-reference notice.
+- **Generated API reference source** goes to `docs/api-reference/`; Sphinx output deploys to `/api/python/` and Documenter.jl output deploys to `/api/julia/`.
 - **Plans** is retired as an active repo surface; do not create new committed plan prompts or lane handoffs.
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
 - Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces.

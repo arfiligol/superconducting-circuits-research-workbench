@@ -7,7 +7,6 @@ dependencies = [
     "numpy>=2.3.5",
     "pydantic>=2.12.5",
     "rich>=14.3.1",
-    "schemdraw>=0.21",
     "sqlalchemy>=2.0.44",
     "sqlmodel>=0.0.31",
     "zarr>=3.1.3",

@@ -1,0 +1,81 @@
+---
+aliases:
+  - "Fitting SQUID Parameters"
+  - "SQUID 參數擬合"
+tags:
+  - diataxis/how-to
+  - audience/user
+  - sot/true
+  - topic/analysis
+status: stable
+owner: team
+audience: user
+scope: "如何從 Admittance 數據擬合 SQUID 電路參數 (Ls, C)"
+version: v1.1.0
+last_updated: 2026-01-31
+updated_by: team
+sidebar:
+  label: SQUID Fitting
+  order: 30
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Fitting SQUID Models
+
+本指南說明 LC-SQUID fitting 在研究路徑中的執行邊界。
+Reusable fitting belongs to Python Analysis Core; exploratory setup belongs in Pluto or Python notebooks.
+
+<Aside type="note" title="前置條件">
+
+- 已準備 HFSS admittance 或 notebook-produced trace data。
+- 已確認頻率軸、單位、port 定義與目標 resonance 區間。
+
+</Aside>
+
+---
+
+## 選擇擬合策略
+
+根據您的電路設計與數據特性，選擇合適的擬合模式：
+
+| 模式 | 適用情境 | Input |
+|------|----------|------------|
+| **Standard (With Ls)** | 一般情況，需同時決定 $L_s$ 與 $C$ | `mode = "standard"` |
+| **Fixed Capacitance** | 已知量測或設計的準確電容值，僅需優化 $L_s$ | `fixed_capacitance` |
+| **Ideal LC (No Ls)** | 忽略系列電感，僅擬合純 LC 共振 (較少用) | `mode = "ideal_lc"` |
+
+---
+
+## 操作步驟
+
+Use a Pluto notebook when you need direct exploration or model iteration.
+The notebook may call Julia Core directly and inspect intermediate arrays.
+
+Use a Python notebook when the input is already in Python-native arrays, CSV exports, or tables.
+Move shared model fitting code into Python Analysis Core when it is used by more than one notebook.
+
+<Aside type="note" title="Fitting execution boundary">
+
+LC-SQUID fitting belongs to either direct research execution in Pluto or reusable Python Analysis Core code.
+Keep notebook-only glue out of package code; keep reusable fitting functions covered by package tests.
+
+</Aside>
+
+---
+
+## 結果檢視
+
+擬合完成後，研究結果應記錄：
+
+1. source trace path or notebook cell provenance
+2. fitting mode and fixed parameters
+3. fitted values and uncertainty/error metrics
+4. plots or tables used in the analysis report
+
+---
+
+## 相關參考
+
+- [Tutorial: End-to-End Fitting](end-to-end-squid-fitting.mdx)
+- [Python Core](../../reference/core/python-core.mdx)

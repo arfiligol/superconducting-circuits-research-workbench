@@ -1,0 +1,183 @@
+---
+aliases:
+  - Pluto Parameter Sweep Workflow
+  - Pluto Sweep Preflight
+tags:
+  - diataxis/how-to
+  - status/stable
+  - topic/julia-core
+  - topic/pluto
+status: stable
+owner: docs-team
+audience: user
+scope: Pluto workflow for Julia Core SweepSpec preflight, explicit batch sweep execution, and SweepResult inspection.
+version: v1.1.0
+last_updated: 2026-05-28
+updated_by: codex
+sidebar:
+  label: Parameter Sweep Workflow
+  order: 30
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Pluto Parameter Sweep Workflow
+
+Use Julia Core and a selected Component Library to build, inspect, preflight, and run a parameter sweep from Pluto without hiding compile behavior from the user.
+
+## Goal
+
+Use a Pluto notebook to:
+
+- build one inspectable `CircuitPlan`;
+- confirm parameter metadata and role declarations;
+- compile and run one safe single-point path;
+- define a `SweepSpec`;
+- inspect `preflight_sweep` before launching expensive work;
+- explicitly run `run_parameter_sweep`;
+- inspect `SweepResult` provenance and performance.
+
+## Cell Layout
+
+Use this cell order for a Pluto-friendly sweep notebook:
+
+1. Load Julia Core and component libraries.
+2. Define units and parameters.
+3. Define or import `build_plan(params)`.
+4. Build one plan.
+5. Inspect plan and parameter metadata.
+6. Compile one plan.
+7. Run one single-point frequency sweep.
+8. Define `SweepSpec`.
+9. Run `preflight_sweep`.
+10. Explicitly launch `run_parameter_sweep`.
+11. Inspect `SweepResult`.
+
+## Reactive Single-Point Exploration
+
+Reactive single-point exploration is safe to recompute from widgets and sliders because it builds, compiles, and simulates one point.
+
+```julia
+using SuperconductingCircuitsCore
+using MyLabComponents
+
+params = (
+    qwr_length_mm = 5.0,
+    coupling_fF = 3.0,
+    flux_phi0 = 0.1,
+)
+
+plan = build_plan(params)
+validate_authoring(plan)
+
+```
+
+<Aside type="note" title="Target inspection helpers">
+
+The helper names in this page are the Pluto-facing inspection API contract.
+
+</Aside>
+
+```julia
+inspect_plan(plan)
+inspect_parameters(plan)
+
+compiled = compile_to_josephson(plan)
+result = run_frequency_sweep(compiled, freqs)
+```
+
+This path is appropriate for quick design iteration and plots that update with one selected parameter point.
+
+## Explicit Batch Sweep
+
+Batch sweeps should use a `SweepSpec`, a compile policy, and an executor.
+
+```julia
+sweep = SweepSpec(
+    axes = (
+        qwr_length_mm = StructuralAxis([4.8, 5.0, 5.2]),
+        coupling_fF = NumericAxis(range(1.0, 10.0, length = 50)),
+        flux_phi0 = NumericAxis(range(-0.5, 0.5, length = 101)),
+    ),
+    compile_policy = CompileByTopologyKey(),
+    executor = ThreadedExecutor(),
+)
+```
+
+Use `CompileByTopologyKey` when a sweep may contain structural and numeric axes. Use `ThreadedExecutor` when sweep points are independent and you want local Julia hardware utilization.
+
+## Sweep Preflight
+
+Run preflight before launching the batch:
+
+```julia
+preflight = preflight_sweep(build_plan, sweep)
+inspect_sweep_preflight(preflight)
+```
+
+The preflight should show:
+
+```text
+estimated_compiles
+estimated_simulations
+topology_groups
+executor
+acceleration backend
+```
+
+It should also show declared roles, declaration sources, effective roles, compile groups, and warnings or classification errors.
+
+## Debugging From Pluto
+
+Use diagnostics before editing a notebook or component library when sweep behavior is unclear:
+
+```julia
+diagnose_plan(plan)
+diagnose_compile(plan)
+
+preflight = preflight_sweep(build_plan, sweep)
+diagnose_sweep(build_plan, sweep)
+
+debug_bundle(plan; compiled = compiled, preflight = preflight, result = result)
+```
+
+`diagnose_sweep` should report axis roles, topology groups, estimated compiles, estimated simulations, executor, classification warnings, and preflight failures. `debug_bundle` keeps the plan, compile, preflight, and result context together for Pluto inspection.
+
+## Avoid Accidental Large Sweeps
+
+Large batch sweeps should not run only because a slider changed.
+
+Use widgets for single-point exploration. Put `run_parameter_sweep` behind an explicit user action or an intentionally evaluated cell.
+
+```julia
+result = run_parameter_sweep(build_plan, sweep)
+```
+
+## Inspecting Performance
+
+Inspect the plan before running and the result after running:
+
+```julia
+inspect_sweep_preflight(preflight)
+result = run_parameter_sweep(build_plan, sweep)
+summarize_sweep_result(result)
+```
+
+Confirm these fields when performance matters:
+
+```text
+estimated_compiles
+estimated_simulations
+topology_groups
+executor
+acceleration backend
+```
+
+`SweepResult` should preserve the `SweepExecutionPlan`, per-point status, compile status, simulation status, warnings, and provenance.
+
+## Related
+
+- [Julia Core Parameter Sweeps](../../reference/julia-core/parameter-sweeps.mdx)
+- [Julia Core Authoring Model](../../reference/julia-core/authoring-model.mdx)
+- [Component Libraries](../../reference/julia-core/component-libraries.md)
+- [Debugging and Diagnostics](../../reference/julia-core/debugging-and-diagnostics.md)

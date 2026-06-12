@@ -1,0 +1,123 @@
+---
+aliases:
+  - "Documentation Design"
+  - "文件設計規範"
+tags:
+  - diataxis/reference
+  - audience/team
+  - sot/true
+  - topic/documentation
+status: stable
+owner: docs-team
+audience: team
+scope: "文件設計規範索引：Standards / Starlight Native Style / API Reference / Macro Style / Micro Style / Maintenance / Domain Extensions"
+version: v2.2.0
+last_updated: 2026-06-12
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Documentation Design
+
+文件設計規範索引，確保文件的一致性與可維護性（對齊本專案 `Astro + Starlight zh-TW Build` 架構）。
+
+<Aside type="note" title="How to read this section">
+
+先看 `Standards` 與 `Macro/Micro Style` 建立共通語法，再看 `Maintenance` 與 `Domain Extensions`。這頁是 documentation design 的入口，不是把每份子規範再重寫一次。
+
+</Aside>
+
+## Page Map
+
+| 先讀什麼 | 目的 |
+| --- | --- |
+| Standards | 定義文件分類、frontmatter、核心邊界 |
+| Macro Style / Information Layout | 決定頁面編排、資訊分層、overview/index 節奏 |
+| Starlight Native Style | 決定 repo-local Starlight 文件節奏與呈現方式 |
+| API Reference | 定義 Sphinx / Documenter.jl generated API reference 與 docstring 規範 |
+| Micro Style / Writing & Visual Elements | 決定語氣、段落、official Starlight visual components 等元件使用 |
+| Maintenance | 定義來源樹、更新流程、build/check |
+| Domain Extensions | 對特定類型文件補更多專用寫法 |
+
+## 快速參考
+
+| 規範 | 說明 | Agent Rule |
+|------|------|------------|
+| [Standards](standards.mdx) | Diataxis + Frontmatter + 核心規則 | [#agent-rule](standards.mdx#agent-rule) |
+| [Starlight Native Style](starlight-native-style.mdx) | 專案內 Starlight-native 寫作節奏與呈現方式 | [#agent-rule](starlight-native-style.mdx#agent-rule) |
+| [API Reference](api-reference.mdx) | Sphinx / Documenter.jl generated API reference 與 docstring 規範 | [#agent-rule](api-reference.mdx#agent-rule) |
+| [Macro Style / Information Layout](information-layout.mdx) | 頁面資訊分層、視覺節奏、overview/index 編排 | [#agent-rule](information-layout.mdx#agent-rule) |
+| [Micro Style / Writing & Visual Elements](style.mdx) | 語氣、段落寫法與 Starlight components / Mermaid 等元件使用 | [#agent-rule](style.mdx#agent-rule) |
+| [Maintenance](maintenance.mdx) | 單語來源樹 + Frontmatter 更新 + Starlight build / route checks | [#agent-rule](maintenance.mdx#agent-rule) |
+| [Physics Concepts](explanation-physics.mdx) | Concepts/Physics 教學定位、章節骨架與跨文件引用規則 | [#agent-rule](explanation-physics.mdx#agent-rule) |
+| [Page Reference Specs](page-reference-specs.mdx) | App frontend pages 技術文件的固定骨架、命名與驗收規則 | [#agent-rule](page-reference-specs.mdx#agent-rule) |
+
+## 層級分工
+
+| 規範 | 負責什麼 | 不負責什麼 |
+|------|----------|------------|
+| Standards | 文件分類、metadata、核心約束 | 頁面編排、語氣細節 |
+| Starlight Native Style | 目前契約優先、happy path、examples、Starlight-native 呈現節奏 | Diataxis 邊界、build 維護流程 |
+| API Reference | generated API docs ownership、docstring style、Sphinx/Documenter build boundary | high-level architecture narrative |
+| Macro Style / Information Layout | 宏觀頁面編排、overview/index 規則、閱讀節奏 | 用字選擇、元件語法細節 |
+| Micro Style / Writing & Visual Elements | 語氣、段落寫法、Starlight components / Mermaid 等元件使用 | Diataxis 邊界、build 維護流程 |
+| Maintenance | 單語來源樹、frontmatter 更新、build/check 流程 | 文件內容本身的結構設計 |
+| Page Reference Specs | App frontend page 規格的固定骨架與驗收方式 | 其他類型文件的通用編排 |
+
+<Aside type="tip" title="Read order">
+
+若你只想快速把一頁寫對，通常的順序是 `Standards -> Starlight Native Style -> Macro Style -> Micro Style -> 該領域的 extension page`。
+
+</Aside>
+
+## Domain Extensions
+
+這一層收錄和特定文件領域強相關的補充規範。它們不是 `Documentation Design` 的基礎規則，但會在特定內容類型中提供更細的寫法。
+
+| 規範 | 用途 |
+|------|------|
+| [Page Reference Specs](page-reference-specs.mdx) | App frontend pages 的固定骨架、命名與驗收方式 |
+| [API Reference](api-reference.mdx) | Python/Julia generated API reference 與 docstring style |
+| [Physics Concepts](explanation-physics.mdx) | Physics concepts 的敘事骨架、引用與邊界 |
+| [Circuit Diagrams](../../../contribute/contributing/circuit-diagrams.mdx) | Schemdraw → SVG 的圖表寫作與輸出流程 |
+
+## 正式術語
+
+本專案在文件層的站點架構，正式名稱為：
+
+- `Astro + Starlight zh-TW Build`
+
+此術語代表：
+
+- 使用 Astro + Starlight 渲染 `/docs/`
+- public artifact 由 `site/` build，輸出到 `site/dist/`
+- 編輯來源為 `docs/`，建置前產生 ignored staging tree：`site/src/content/docs/docs/`
+- generated API reference 以 sibling sites 部署到 `/api/python/` 與 `/api/julia/`
+- 不再維護英文站點與 `.en.md` 對應頁
+
+## Related
+
+- 視覺圖表：
+  - [Circuit Diagram Guide](../../../contribute/contributing/circuit-diagrams.mdx)（Schemdraw → SVG）
+- App page specs：
+  - [Page Reference Specs](page-reference-specs.mdx)
+- Generated API reference：
+  - [API Reference](api-reference.mdx)
+
+---
+
+## Agent Rule
+```markdown
+## Documentation Design
+- **Standards**: Diataxis + Frontmatter/Tags + 核心規則（見 `standards.md`）
+- **Starlight Native Style**: 目前契約優先、happy path、examples、Starlight-native 呈現節奏（見 `starlight-native-style.md`）
+- **API Reference**: generated API docs ownership、docstring style、Sphinx/Documenter build boundary（見 `api-reference.md`）
+- **Macro Style / Information Layout**: 宏觀頁面編排、視覺節奏、overview/index 規則（見 `information-layout.md`）
+- **Micro Style / Writing & Visual Elements**: 語氣、段落寫法與視覺元素使用（見 `style.md`）
+- **Maintenance**: 單語來源樹 + Frontmatter 更新 + Starlight build / route checks（見 `maintenance.md`）
+- **Physics Concepts**: 教學定位、章節骨架、跨文件引用規範（見 `explanation-physics.md`）
+- **Page Reference Specs**: App frontend page 技術文件的固定骨架、命名、引用與驗收規範（見 `page-reference-specs.md`）
+- **Architecture Term**: 本專案文件架構的正式名稱是 `Astro + Starlight zh-TW Build`
+- 詳細規範請以各子文件為準。
+```

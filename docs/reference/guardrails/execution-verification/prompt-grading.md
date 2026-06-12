@@ -70,9 +70,9 @@ Do not judge success by whether an internal prompt structure was followed exactl
 
 ## Related
 
-- [Codex Subagent Coordination](./multi-agent-collaboration.md)
-- [Branch & Worktree Flow](./branch-and-worktree-flow.md)
-- [Testing](./testing.md)
+- [Codex Subagent Coordination](multi-agent-collaboration.mdx)
+- [Branch & Worktree Flow](branch-and-worktree-flow.mdx)
+- [Testing](testing.mdx)
 
 ## Agent Rule { #agent-rule }
 

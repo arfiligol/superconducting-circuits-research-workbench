@@ -1,0 +1,103 @@
+---
+import { Icon } from "@astrojs/starlight/components";
+
+const { dir, pagination } = Astro.locals.starlightRoute;
+const { prev, next } = pagination;
+const isRtl = dir === "rtl";
+---
+
+<nav class="docs-pagination print:hidden" dir={dir} aria-label="Page navigation">
+  {
+    prev && (
+      <a class="docs-pagination__link" href={prev.href} rel="prev">
+        <Icon name={isRtl ? "right-arrow" : "left-arrow"} size="1.15rem" />
+        <span class="docs-pagination__text">
+          <span class="docs-pagination__eyebrow">{Astro.locals.t("page.previousLink")}</span>
+          <span class="docs-pagination__title">{prev.label}</span>
+        </span>
+      </a>
+    )
+  }
+  {
+    next && (
+      <a class="docs-pagination__link docs-pagination__link--next" href={next.href} rel="next">
+        <span class="docs-pagination__text">
+          <span class="docs-pagination__eyebrow">{Astro.locals.t("page.nextLink")}</span>
+          <span class="docs-pagination__title">{next.label}</span>
+        </span>
+        <Icon name={isRtl ? "left-arrow" : "right-arrow"} size="1.15rem" />
+      </a>
+    )
+  }
+</nav>
+
+<style>
+  .docs-pagination {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 3rem;
+  }
+
+  .docs-pagination__link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 5.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    padding: 0.875rem 1rem;
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+    background: color-mix(in srgb, var(--sl-color-bg) 92%, var(--sl-color-gray-6));
+  }
+
+  .docs-pagination__link:hover {
+    border-color: var(--sl-color-accent-high);
+    color: var(--sl-color-text-accent);
+    background: color-mix(in srgb, var(--sl-color-bg) 78%, var(--sl-color-accent-low));
+  }
+
+  .docs-pagination__link:focus-visible {
+    outline: 2px solid var(--sl-color-accent-high);
+    outline-offset: 3px;
+  }
+
+  .docs-pagination__link--next {
+    justify-content: flex-end;
+    text-align: end;
+  }
+
+  .docs-pagination__text {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .docs-pagination__eyebrow {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+
+  .docs-pagination__title {
+    color: var(--docs-text);
+    font-size: var(--sl-text-lg);
+    font-weight: 650;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .docs-pagination svg {
+    flex: 0 0 auto;
+  }
+
+  @media (max-width: 42rem) {
+    .docs-pagination {
+      grid-template-columns: 1fr;
+    }
+
+    .docs-pagination__link {
+      min-height: 4.75rem;
+    }
+  }
+</style>

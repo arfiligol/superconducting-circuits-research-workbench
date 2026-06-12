@@ -103,7 +103,7 @@ Runner must reject:
 
 Runner must not create a default S11 observable, create default ports, create source slots from task payloads, or convert ambiguous drive-magnitude fields into physical current.
 
-Circuit-family forbidden-frequency validation is a planned target with no recorded implementation date as of 2026-05-29. When that validation exists, the Runner should treat those failures as Core validation errors rather than task orchestration errors.
+Circuit-family forbidden-frequency validation is a Julia Core validation concern. Runner treats those failures as Core validation errors rather than task orchestration errors.
 
 ## Output Request Boundary
 

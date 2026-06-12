@@ -139,6 +139,8 @@ The package provides PlotlyJS figures for the result families used by the Pluto 
 | `z_parameter_abs_imaginary_figure` | Frequency vector and named complex Z traces; plots `abs(imag(Zij))` while preserving labels such as `Z11` and `Z21`. |
 | `y_trace_figure` | Frequency vector and named complex Y traces; expands each trace into real and imaginary curves. |
 | `multi_curve_figure` | Frequency vector and caller-transformed named numeric curves. |
+| `fit_overlay_figure` | Caller-provided x values, measured values, and fitted values; renders measured markers plus a fit line. |
+| `parameter_scatter_figure` | Caller-provided point sets for parameter-space or result-summary scatter plots. |
 
 The phase figure helper does not silently unwrap phase. If a notebook wants a continuous phase trace, the notebook calls `unwrap_phase_trace` first and then plots the returned values with `multi_curve_figure`.
 
@@ -153,6 +155,24 @@ multi_curve_figure(
     config = figure_config,
 )
 ```
+
+Fitting overlays receive numeric series that have already been computed by an
+analysis owner such as `core/analysis` through Julia Analysis Bridge:
+
+```julia
+fit_overlay_figure(
+    fit_result["fit_curve"]["frequency_hz"],
+    abs.(s21_window),
+    abs.(fit_result["fit_curve"]["s21_real"] .+ im .* fit_result["fit_curve"]["s21_imag"]);
+    title = "S21 Notch Fit",
+    yaxis_title = "|S21|",
+    config = figure_config,
+)
+```
+
+Parameter-space figures receive caller-shaped point sets. The visualizer owns
+marker rendering, labels, axes, and export configuration; it does not assign
+physical roles or score candidate designs.
 
 Z/Y helpers receive complex traces and own only the mechanical real/imaginary split:
 
@@ -209,8 +229,8 @@ A correct visualizer-backed notebook has these observable properties:
 
 ## Related
 
-- [Julia Visualizer](index.md)
-- [Julia Core](../julia-core/index.md)
-- [HB Simulation Intent](../julia-core/hb-simulation-intent.md)
+- [Julia Visualizer](index.mdx)
+- [Julia Core](../julia-core/index.mdx)
+- [HB Simulation Intent](../julia-core/hb-simulation-intent.mdx)
 - [Runner-Safe API](../julia-core/runner-safe-api.md)
-- [Pluto Examples](../../tutorials/julia-core/pluto-examples.md)
+- [Pluto Examples](../../workflows/pluto/pluto-examples.mdx)

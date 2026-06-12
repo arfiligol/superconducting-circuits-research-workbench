@@ -18,4 +18,4 @@
 - **Optional sections**: `Related Contracts`、`Runtime Notes` 只在需要時加入
 - **Focus**: 先寫 page purpose、layout、components、state、flows、acceptance；不要先寫框架細節
 - **Do not include**: framework 實作細節、repository/service 類名、pixel 級 CSS、歷史背景
-- **Naming**: 新頁面優先使用 `docs/reference/app/frontend/pages/<route-name>.md`，並與 sidebar IA 對齊
+- **Naming**: 新頁面優先使用 `docs/app/frontend/pages/<route-name>.md`，並與 Product App sidebar IA 對齊

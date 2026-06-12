@@ -4,17 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "cd .. && uv run python scripts/build/prepare_starlight_docs.py",
     "dev": "astro dev",
+    "prebuild": "cd .. && uv run python scripts/build/prepare_starlight_docs.py",
     "build": "astro build",
     "preview": "astro preview",
+    "precheck": "cd .. && uv run python scripts/build/prepare_starlight_docs.py",
     "check": "astro check"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.5",
-    "@tailwindcss/vite": "^4.1.17",
-    "astro": "^5.16.3",
-    "tailwindcss": "^4.1.17",
+    "@astrojs/check": "^0.9.9",
+    "@astrojs/starlight": "^0.40.0",
+    "astro": "^6.4.6",
+    "katex": "^0.17.0",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0",
     "typescript": "^5.9.3"
-  },
-  "devDependencies": {}
+  }
 }

@@ -1,0 +1,47 @@
+---
+aliases:
+  - "重排 Record IDs"
+  - "Reorder Record IDs"
+tags:
+  - diataxis/how-to
+  - status/stable
+  - topic/database
+status: deprecated
+owner: docs-team
+audience: user
+scope: "Record ID 重排政策"
+version: v0.2.0
+last_updated: 2026-05-28
+updated_by: codex
+sidebar:
+  label: Reorder Record IDs
+  order: 40
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# 重排 Record IDs
+
+Record IDs are persisted metadata identifiers.
+Do not reorder them as a routine workflow.
+
+## Current policy
+
+Use stable IDs and add display-order fields when the UI needs a sorted view.
+If a development database must be reset, recreate the local metadata DB instead of rewriting identifiers in place.
+
+For local development reset:
+
+```bash
+rm -f data/metadata.db
+uv run --package superconducting-circuits-backend pytest app/backend/tests -q
+```
+
+## Notes / Warnings
+
+<Aside type="caution" title="不可重複 ID">
+
+ID rewrite tools can break provenance and TraceStore references.
+Do not reintroduce an active `auto-reorder` CLI command.
+
+</Aside>

@@ -31,16 +31,20 @@ jobs:
       - name: Sync root documentation environment
         run: uv sync --group dev
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        run: npm ci --prefix site
+
       - name: Validate docs source routes
         run: uv run python scripts/check_docs_nav_routes.py --check-source
 
-      - name: Prepare locale trees
-        run: ./scripts/prepare_docs_locales.sh
-
-      - name: Build zh-TW docs
-        run: uv run --group dev zensical build -f zensical.toml
-
-      - name: Build static docs site
+      - name: Build Starlight docs site
         run: ./scripts/build_docs_sites.sh
 
       - name: Validate built docs routes
