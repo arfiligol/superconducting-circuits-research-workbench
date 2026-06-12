@@ -83,11 +83,16 @@ struct CoupledTransmissionWindow
     line2::TransmissionLineLadder
     section_range1::UnitRange{Int}
     section_range2::UnitRange{Int}
+    coupling_orientation::Symbol
+    section_pairs::Vector{Tuple{Int,Int}}
+    capacitive_boundary_records::Vector{NamedTuple}
+    inductive_orientation_sign::Int
     capacitive_couplings::Vector{CapacitiveCoupling}
     inductive_couplings::Vector{MutualInductiveCoupling}
     model::MTLCoupledRLGCSpec
 end
 
+const _COUPLING_WINDOW_ORIENTATIONS = Set([:same_direction, :opposite_direction])
 const _LADDER_GROUNDED_TERMINATIONS = Set([:short, :ground, :grounded])
 const _LADDER_OPEN_TERMINATIONS = Set([:open])
 const _LADDER_EXTERNAL_TERMINATIONS = Set([:external])
@@ -291,6 +296,29 @@ function _ladder_spec_from_sections(spec::RLGCSpec, section_lengths_m::Vector{Fl
     )
 end
 
+function _ladder_node_index(ladder::TransmissionLineLadder, endpoint::AbstractNodeEndpoint)
+    index = findfirst(node -> node == endpoint, ladder.nodes)
+    isnothing(index) && _validation_error("Transmission-line shunt endpoint is not part of ladder '$(ladder.id)'.")
+    return index
+end
+
+function _ladder_node_shunt_capacitance_f(ladder::TransmissionLineLadder)
+    values = zeros(Float64, length(ladder.nodes))
+    for capacitor in ladder.shunt_capacitors
+        values[_ladder_node_index(ladder, capacitor.at)] += Float64(capacitor.capacitance)
+    end
+    return values
+end
+
+function _ladder_node_shunt_conductance_s(ladder::TransmissionLineLadder)
+    values = zeros(Float64, length(ladder.nodes))
+    for resistor in ladder.shunt_conductance_resistors
+        node = resistor.from == ground() ? resistor.to : resistor.from
+        values[_ladder_node_index(ladder, node)] += 1 / Float64(resistor.resistance)
+    end
+    return values
+end
+
 function _record_transmission_line_ladder!(plan::CircuitPlan, ladder::TransmissionLineLadder)
     record_engineering_relation!(
         plan;
@@ -309,6 +337,10 @@ function _record_transmission_line_ladder!(plan::CircuitPlan, ladder::Transmissi
             :section_boundaries_m => ladder.section_boundaries_m,
             :section_rlgc_per_m => ladder.section_rlgc_per_m,
             :n_sections => ladder.spec.n_sections,
+            :section_model => :pi,
+            :node_shunt_positions_m => ladder.section_boundaries_m,
+            :node_shunt_capacitance_f => _ladder_node_shunt_capacitance_f(ladder),
+            :node_shunt_conductance_s => _ladder_node_shunt_conductance_s(ladder),
             :l_per_m_h => ladder.spec.l_per_m_h,
             :c_per_m_f => ladder.spec.c_per_m_f,
             :r_per_m_ohm => ladder.spec.r_per_m_ohm,
@@ -343,6 +375,16 @@ function _grounded_termination_relation!(plan::CircuitPlan, id, endpoint, side::
     )
 end
 
+function _ladder_boundary_is_grounded(
+    node_index::Int,
+    node_count::Int,
+    head_termination::Symbol,
+    tail_termination::Symbol,
+)
+    return (node_index == 1 && head_termination in _LADDER_GROUNDED_TERMINATIONS) ||
+        (node_index == node_count && tail_termination in _LADDER_GROUNDED_TERMINATIONS)
+end
+
 function build_lc_ladder_line!(
     plan::CircuitPlan;
     id,
@@ -371,13 +413,23 @@ function build_lc_ladder_line!(
     shunt_capacitors = ShuntCapacitor[]
     shunt_conductance_resistors = SeriesResistor[]
     termination_relations = AbstractCircuitRelation[]
+    section_values = [
+        _section_values_for_dx(section_rlgc_per_m[section], section_lengths_m[section])
+        for section in 1:ladder_spec.n_sections
+    ]
+    node_shunt_capacitance_f = zeros(Float64, ladder_spec.n_sections + 1)
+    node_shunt_conductance_s = zeros(Float64, ladder_spec.n_sections + 1)
 
     head_short = _grounded_termination_relation!(plan, id, head, :head, head_term)
     !isnothing(head_short) && push!(termination_relations, head_short)
     _record_external_termination_requirement!(plan, id, :head, head, head_term)
 
     for section in 1:ladder_spec.n_sections
-        values = _section_values_for_dx(section_rlgc_per_m[section], section_lengths_m[section])
+        values = section_values[section]
+        node_shunt_capacitance_f[section] += values.c_f / 2
+        node_shunt_capacitance_f[section + 1] += values.c_f / 2
+        node_shunt_conductance_s[section] += values.g_s / 2
+        node_shunt_conductance_s[section + 1] += values.g_s / 2
         from_node = nodes[section]
         to_node = nodes[section + 1]
         if values.r_ohm > 0
@@ -404,32 +456,37 @@ function build_lc_ladder_line!(
             role=:transmission_line_series_inductance,
             label="$(id) L$(section)",
         )
-            push!(series_inductors, inductor)
+        push!(series_inductors, inductor)
+    end
 
-        terminal_is_grounded_tail = section == ladder_spec.n_sections && tail_term in _LADDER_GROUNDED_TERMINATIONS
-        if !terminal_is_grounded_tail
+    for (node_index, node) in enumerate(nodes)
+        _ladder_boundary_is_grounded(node_index, length(nodes), head_term, tail_term) && continue
+        boundary_index = node_index - 1
+        capacitance = node_shunt_capacitance_f[node_index]
+        if capacitance > 0
             capacitor = shunt_capacitor!(
                 plan;
-                id="$(id)_c_$(section)",
-                at=to_node,
-                capacitance=values.c_f,
+                id="$(id)_c_node_$(boundary_index)",
+                at=node,
+                capacitance=capacitance,
                 role=:transmission_line_shunt_capacitance,
-                label="$(id) C$(section)",
+                label="$(id) C node $(boundary_index)",
             )
             push!(shunt_capacitors, capacitor)
         end
 
-        if values.g_s > 0 && !terminal_is_grounded_tail
-            conductance = series_resistor!(
+        conductance_s = node_shunt_conductance_s[node_index]
+        if conductance_s > 0
+            conductance_resistor = series_resistor!(
                 plan;
-                id="$(id)_g_$(section)",
-                from=to_node,
+                id="$(id)_g_node_$(boundary_index)",
+                from=node,
                 to=ground(),
-                resistance=1 / values.g_s,
+                resistance=1 / conductance_s,
                 role=:transmission_line_shunt_conductance,
-                label="$(id) G$(section)",
+                label="$(id) G node $(boundary_index)",
             )
-            push!(shunt_conductance_resistors, conductance)
+            push!(shunt_conductance_resistors, conductance_resistor)
         end
     end
 
@@ -693,6 +750,80 @@ function _validate_window_line_model(
     end
 end
 
+function _normalize_coupling_orientation(value)
+    orientation = Symbol(value)
+    orientation in _COUPLING_WINDOW_ORIENTATIONS ||
+        _validation_error("coupling_orientation must be :same_direction or :opposite_direction.")
+    return orientation
+end
+
+function _coupled_window_section_pairs(range1::UnitRange{Int}, range2::UnitRange{Int}, orientation::Symbol)
+    sections1 = collect(range1)
+    sections2 = collect(range2)
+    orientation == :opposite_direction && reverse!(sections2)
+    return collect(zip(sections1, sections2))
+end
+
+function _coupled_window_inductive_orientation_sign(orientation::Symbol)
+    return orientation == :opposite_direction ? -1 : 1
+end
+
+function _coupled_window_boundary_node_pair(
+    line1::TransmissionLineLadder,
+    line2::TransmissionLineLadder,
+    section1::Int,
+    section2::Int,
+    orientation::Symbol,
+    boundary_side::Symbol,
+)
+    if boundary_side == :start
+        node1 = line1.nodes[section1]
+        node2 = orientation == :opposite_direction ? line2.nodes[section2 + 1] : line2.nodes[section2]
+    elseif boundary_side == :stop
+        node1 = line1.nodes[section1 + 1]
+        node2 = orientation == :opposite_direction ? line2.nodes[section2] : line2.nodes[section2 + 1]
+    else
+        _validation_error("coupled-window capacitive boundary side must be :start or :stop.")
+    end
+    return (node1, node2)
+end
+
+function _coupled_window_capacitive_boundary_record(
+    section_pair::Tuple{Int,Int},
+    boundary_side::Symbol,
+    node_pair::Tuple{AbstractNodeEndpoint,AbstractNodeEndpoint},
+    capacitance::Float64,
+)
+    return (
+        section_pair=section_pair,
+        boundary_side=boundary_side,
+        node_pair=node_pair,
+        capacitance=capacitance,
+    )
+end
+
+function _node_endpoint_metadata(endpoint::ExternalNodeEndpoint)
+    return endpoint.name
+end
+
+function _node_endpoint_metadata(endpoint::GroundEndpoint)
+    return "0"
+end
+
+function _node_endpoint_metadata(endpoint::AbstractNodeEndpoint)
+    return repr(endpoint)
+end
+
+function _capacitive_boundary_record_metadata(record::NamedTuple)
+    return (
+        section_pair=record.section_pair,
+        boundary_side=record.boundary_side,
+        from=_node_endpoint_metadata(record.node_pair[1]),
+        to=_node_endpoint_metadata(record.node_pair[2]),
+        capacitance=record.capacitance,
+    )
+end
+
 function couple_transmission_window!(
     plan::CircuitPlan;
     id,
@@ -702,10 +833,12 @@ function couple_transmission_window!(
     start2=nothing,
     length=nothing,
     model::MTLCoupledRLGCSpec,
+    coupling_orientation=:same_direction,
 )
     line1 isa TransmissionLineLadder && line2 isa TransmissionLineLadder ||
         _validation_error("couple_transmission_window! requires TransmissionLineLadder line1 and line2.")
     _validate_mtl_coupled_rlgc_spec(model)
+    orientation = _normalize_coupling_orientation(coupling_orientation)
 
     start1_m = _select_window_value(start1, model.start1_m, "start1")
     start2_m = _select_window_value(start2, model.start2_m, "start2")
@@ -716,10 +849,13 @@ function couple_transmission_window!(
         _validation_error("Coupled section ranges must have the same section count.")
     _validate_window_line_model(line1, line2, model, range1, range2)
 
+    section_pairs = _coupled_window_section_pairs(range1, range2, orientation)
+    inductive_orientation_sign = _coupled_window_inductive_orientation_sign(orientation)
+    capacitive_boundary_records = NamedTuple[]
     capacitive_couplings = CapacitiveCoupling[]
     inductive_couplings = MutualInductiveCoupling[]
 
-    for (offset, (section1, section2)) in enumerate(zip(range1, range2))
+    for (offset, (section1, section2)) in enumerate(section_pairs)
         dx1 = line1.section_lengths_m[section1]
         dx2 = line2.section_lengths_m[section2]
         isapprox(dx1, dx2; atol=1e-12, rtol=1e-9) ||
@@ -728,19 +864,35 @@ function couple_transmission_window!(
             _validation_error("Coupled section length exceeds MTLCoupledRLGCSpec section_length_m reference.")
         c12 = mutual_capacitance_per_m_f(model) * dx1
         lm = mutual_inductance_per_m_h(model) * dx1
-        if c12 > 0
-            push!(
-                capacitive_couplings,
-                couple_capacitive!(
-                    plan;
-                    id="$(id)_c12_$(offset)",
-                    from=line1.nodes[section1 + 1],
-                    to=line2.nodes[section2 + 1],
-                    capacitance=c12,
-                    role=:coupled_window_mutual_capacitance,
-                    label="$(id) C12 $(offset)",
-                ),
+        signed_lm = inductive_orientation_sign * lm
+        half_c12 = c12 / 2
+        for boundary_side in (:start, :stop)
+            node_pair = _coupled_window_boundary_node_pair(
+                line1,
+                line2,
+                section1,
+                section2,
+                orientation,
+                boundary_side,
             )
+            push!(
+                capacitive_boundary_records,
+                _coupled_window_capacitive_boundary_record((section1, section2), boundary_side, node_pair, half_c12),
+            )
+            if half_c12 > 0
+                push!(
+                    capacitive_couplings,
+                    couple_capacitive!(
+                        plan;
+                        id="$(id)_c12_$(offset)_$(boundary_side)",
+                        from=node_pair[1],
+                        to=node_pair[2],
+                        capacitance=half_c12,
+                        role=:coupled_window_mutual_capacitance,
+                        label="$(id) C12 $(offset) $(boundary_side)",
+                    ),
+                )
+            end
         end
         push!(
             inductive_couplings,
@@ -749,7 +901,7 @@ function couple_transmission_window!(
                 id="$(id)_m12_$(offset)",
                 inductor_a=line1.series_inductors[section1],
                 inductor_b=line2.series_inductors[section2],
-                mutual_inductance=lm,
+                mutual_inductance=signed_lm,
                 role=:coupled_window_mutual_inductance,
                 label="$(id) M12 $(offset)",
             ),
@@ -762,6 +914,10 @@ function couple_transmission_window!(
         line2,
         range1,
         range2,
+        orientation,
+        section_pairs,
+        capacitive_boundary_records,
+        inductive_orientation_sign,
         capacitive_couplings,
         inductive_couplings,
         model,
@@ -783,6 +939,10 @@ function couple_transmission_window!(
             :section_count => Base.length(range1),
             :reference_section_length_m => model.section_length_m,
             :section_lengths_m => line1.section_lengths_m[range1],
+            :coupling_orientation => orientation,
+            :section_pairs => section_pairs,
+            :capacitive_boundary_records => map(_capacitive_boundary_record_metadata, capacitive_boundary_records),
+            :inductive_orientation_sign => inductive_orientation_sign,
             :c12_per_m_f => mutual_capacitance_per_m_f(model),
             :lm_per_m_h => mutual_inductance_per_m_h(model),
             :l_matrix_per_m_h => model.l_matrix_per_m_h,

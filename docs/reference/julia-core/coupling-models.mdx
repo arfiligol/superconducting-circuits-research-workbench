@@ -17,6 +17,8 @@ last_updated: 2026-05-31
 updated_by: codex
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 # Coupling Models
 
 Julia Core treats coupling as a domain model, not as ad hoc notebook code. A single capacitor can model point capacitive coupling, but it must not stand in for a finite-length CPW / MTL coupled window.
@@ -79,8 +81,11 @@ M = k * sqrt(L1 * L2)
 
 Compiler lowering emits a JosephsonCircuits `K_...` row between the two generated inductor rows.
 
-!!! warning "Endpoint inductive coupling"
-    The older endpoint-style `couple_inductive!(from=..., to=...)` still records flux / loop intent, but it is not the MTL branch-coupling path. Use `inductor_a` / `inductor_b` for lowerable mutual inductance between ladder sections.
+<Aside type="caution" title="Endpoint inductive coupling">
+
+The older endpoint-style `couple_inductive!(from=..., to=...)` still records flux / loop intent, but it is not the MTL branch-coupling path. Use `inductor_a` / `inductor_b` for lowerable mutual inductance between ladder sections.
+
+</Aside>
 
 ## Level 2: Structured Coupling Helper
 
@@ -101,21 +106,23 @@ window = couple_transmission_window!(
 
 An MTL coupled window is a finite distributed region between two transmission-line ladders. It is not a single `Cc`. The sectioned representation is driven by the uncoupled `RLGCSpec` outside the window and by coupled-section per-unit-length matrices inside the window.
 
-For each coupled section, Julia Core emits self terms from the coupled-section matrices and cross terms between the two generated sections:
+For each coupled section, Julia Core emits self terms from the coupled-section matrices and cross terms between the two generated sections. Transmission-line ladders use a canonical pi-section discretization: series `L/R` are section-centered branches, while self `C/G` are split across the left and right section boundary nodes.
 
 ```text
 Line 1:
   series L11
-  shunt C11
+  shunt C11/2 at each section boundary
 
 Line 2:
   series L22
-  shunt C22
+  shunt C22/2 at each section boundary
 
 Between lines:
-  physical C12 from the capacitance matrix off-diagonal
-  M12 / K from the inductance matrix off-diagonal
+  physical C12/2 between paired boundary nodes
+  M12 / K between paired section-centered inductors
 ```
+
+Open or externally connected endpoints keep their endpoint half-shunt. Grounded endpoints omit the local ground-to-ground half-shunt.
 
 The canonical matrix form is:
 
@@ -150,6 +157,17 @@ Coupled-window invariants are strict:
 
 No silent snapping or interpolation is allowed. Builders create semantic section boundaries at physical window starts and ends so the requested physical window is preserved.
 
+### Spatial Coupling Orientation
+
+`couple_transmission_window!` accepts a `coupling_orientation` keyword with two values:
+
+| Orientation | Capacitive boundary pairing | Inductive convention |
+| --- | --- | --- |
+| `:same_direction` | `(line1[s], line2[s])` and `(line1[s+1], line2[s+1])` | positive mutual branch orientation |
+| `:opposite_direction` | `(line1[s], line2[s+1])` and `(line1[s+1], line2[s])` | negative mutual branch orientation |
+
+The RLGC physical matrix does not change with orientation. `C_matrix_F_per_m` keeps the Maxwell convention where the off-diagonal entry is non-positive and Core uses `-C[1,2]` as the positive physical mutual capacitance per meter. `L_matrix_H_per_m` keeps the positive physical mutual inductance; opposite orientation is represented by the branch current-reference sign in the lowered mutual inductive relation.
+
 ## EngineeringGraph Relation
 
 `couple_transmission_window!` records primitive C12 and M12 relations and a semantic window relation:
@@ -159,13 +177,16 @@ relation_type = :coupled_window
 from = (line = "readout_line", sections = i:j)
 to = (line = "qwr", sections = k:l)
 through = MTLCoupledRLGCSpec(...)
-parameters = start distances, length, section count, per-unit matrix values
+parameters = start distances, length, section count, section model, orientation, boundary records, per-unit matrix values
 ```
 
 This lets notebooks show statements such as:
 
 ```text
 readout_line sections 4:5 couple to qwr sections 1:2
+section_model = :pi
+coupling_orientation = :same_direction
+capacitive_boundary_records = start/stop node pair records
 ```
 
 without reverse-engineering the compiled netlist.
