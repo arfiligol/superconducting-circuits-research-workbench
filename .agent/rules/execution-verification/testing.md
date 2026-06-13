@@ -5,14 +5,15 @@
   - `npm run test --prefix app/frontend`
   - `npm run lint --prefix app/desktop`
   - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-  - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Backend/core tests**:
   - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
   - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
   - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
   - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
   - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-  - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- `SuperconductingCircuitsAnalysisBridge` tests are repo-local and require root `uv sync --all-packages`; the test bootstrap selects root `.venv` unless `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` overrides it.
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.

@@ -88,7 +88,7 @@ Product publication and provenance ownership stay outside Julia packages.
 | Surface | Role |
 |---|---|
 | `core/julia/SuperconductingCircuitsAnalysisBridge/` | PythonCall wrapper that exposes Pluto-friendly analysis functions backed by `superconducting_circuits_analysis`, including S21 notch/transmission/vector fitting |
-| root `.venv` | Python runtime selected through `JULIA_PYTHONCALL_EXE` or package-relative defaults |
+| root `.venv` | Repo-local Python runtime selected by Analysis Bridge test/bootstrap defaults; `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` may override it for non-standard checkouts |
 
 </TabItem>
 

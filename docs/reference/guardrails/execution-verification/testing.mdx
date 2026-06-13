@@ -37,7 +37,7 @@ This page answers "What is the minimum to run", not the complete test design its
 | Public site | Astro check/build + combined public artifact build |
 | Backend | `uv run --package superconducting-circuits-backend pytest app/backend/tests -q` |
 | Python analysis | `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q` |
-| Julia Core / Visualizer / Runner | `Pkg.test()` per Julia package |
+| Julia Core / Visualizer / Runner / Analysis Bridge | `Pkg.test()` per Julia package |
 | Frontend | unit tests, E2E when necessary |
 | Desktop foundation | lint + build |
 | Docs | source check + build + built-route check |
@@ -51,8 +51,10 @@ npm run test --prefix app/frontend
 npm run lint --prefix app/desktop
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
-JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
 ```
+
+`SuperconductingCircuitsAnalysisBridge` is a repo-local bridge to the root Python analysis package. Run `uv sync --all-packages` first; its test bootstrap selects the repo `.venv` automatically. Use `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` only when testing from a non-standard checkout or Python environment.
 
 ## Backend
 
@@ -62,12 +64,13 @@ uv run --package superconducting-circuits-backend pytest app/backend/tests -q
 
 Backend tests for Runner publication must cover create task, claim task, heartbeat/progress, complete with small staging Zarr manifest, canonical TraceStore publication, TraceRecord creation, trace slice read, invalid manifest rejection, and path traversal rejection.
 
-## Julia Core / Visualizer / Runner
+## Julia Core / Visualizer / Runner / Analysis Bridge
 
 ```bash
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'
+julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
 ```
 
 Runner tests must cover JSON task contract parsing, manifest generation, local Zarr write with small real/imag fixture data, manifest path/shape validation helpers, unsupported task failure, and real task dispatch boundaries.
@@ -170,14 +173,15 @@ Only add integration / E2E when the user-visible workflow actually spans multipl
   - `npm run test --prefix app/frontend`
   - `npm run lint --prefix app/desktop`
   - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-  - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - **Backend/core tests**:
   - `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
   - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
   - `julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'`
   - `julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'`
   - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-  - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- `SuperconductingCircuitsAnalysisBridge` tests are repo-local and require root `uv sync --all-packages`; the test bootstrap selects root `.venv` unless `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` overrides it.
 - **Frontend unit tests**: `npm run test --prefix app/frontend`
 - **Frontend E2E tests**: `npm run test:e2e --prefix app/frontend`
 - For user-visible frontend changes, use Playwright-based smoke verification and screenshot or equivalent visual evidence when practical.

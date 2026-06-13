@@ -1,3 +1,31 @@
+function repo_root_for_analysis_bridge_tests()
+    if haskey(ENV, "SC_WORKBENCH_ROOT")
+        return normpath(expanduser(ENV["SC_WORKBENCH_ROOT"]))
+    end
+    return normpath(joinpath(@__DIR__, "..", "..", "..", ".."))
+end
+
+function repo_python_for_analysis_bridge_tests(root::AbstractString)
+    if Sys.iswindows()
+        return joinpath(root, ".venv", "Scripts", "python.exe")
+    end
+    return joinpath(root, ".venv", "bin", "python")
+end
+
+if !haskey(ENV, "JULIA_PYTHONCALL_EXE")
+    repo_python = repo_python_for_analysis_bridge_tests(repo_root_for_analysis_bridge_tests())
+    isfile(repo_python) || error(
+        "SuperconductingCircuitsAnalysisBridge tests require the repo Python " *
+        "environment. Run `uv sync --all-packages` first, or set " *
+        "`SC_WORKBENCH_ROOT` / `JULIA_PYTHONCALL_EXE` explicitly.",
+    )
+    ENV["JULIA_PYTHONCALL_EXE"] = repo_python
+end
+
+if !haskey(ENV, "JULIA_CONDAPKG_BACKEND")
+    ENV["JULIA_CONDAPKG_BACKEND"] = "Null"
+end
+
 using SuperconductingCircuitsAnalysisBridge
 using Test
 

@@ -19,6 +19,9 @@ function _default_python_executable()
     else
         root = _REPO_ROOT
     end
+    if Sys.iswindows()
+        return joinpath(root, ".venv", "Scripts", "python.exe")
+    end
     return joinpath(root, ".venv", "bin", "python")
 end
 

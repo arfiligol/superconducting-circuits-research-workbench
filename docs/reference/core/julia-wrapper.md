@@ -42,6 +42,7 @@ They create tasks, validate runner output, publish official result data, and rec
 SuperconductingCircuitsCore must not depend on PythonCall or PlotlyJS.
 SuperconductingCircuitsVisualizer must not own fitting algorithms.
 SuperconductingCircuitsAnalysisBridge may depend on PythonCall and `core/python/analysis/superconducting_circuits_analysis`.
+It is currently a repo-local bridge: after `uv sync --all-packages`, package tests select the root `.venv` automatically. `SC_WORKBENCH_ROOT` or `JULIA_PYTHONCALL_EXE` are override hooks, not the normal repo test path.
 
 Julia Runner does not write formal metadata tables.
 It writes:

@@ -48,7 +48,7 @@ First find the corresponding gate according to the touched area, and then confir
 
 
 - install:`uv sync --all-packages`, `npm install --prefix app/frontend`, `npm install --prefix app/desktop`
-- check:`uv run --package superconducting-circuits-backend pytest app/backend/tests -q`, `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`, `npm run test --prefix app/frontend`, `npm run lint --prefix app/desktop`, `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`, `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- check:`uv run --package superconducting-circuits-backend pytest app/backend/tests -q`, `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`, `npm run test --prefix app/frontend`, `npm run lint --prefix app/desktop`, `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`, `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - build:`npm run build --prefix app/frontend`, `npm run build --prefix app/desktop`
 
 </TabItem>
@@ -60,7 +60,7 @@ First find the corresponding gate according to the touched area, and then confir
 - frontend:`npm run lint --prefix app/frontend`, `npm run typecheck --prefix app/frontend`, `npm run test --prefix app/frontend`, `npm run build --prefix app/frontend`
 - desktop:`npm run lint --prefix app/desktop`, `npm run build --prefix app/desktop`
 - Julia Runner:`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-- Julia Analysis Bridge:`JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- Julia Analysis Bridge:`julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 
 </TabItem>
 
@@ -119,7 +119,7 @@ Any failing required check directly blocks the merge; don't use "this time it lo
   - backend startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
   - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
   - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-  - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
   - `npm run lint --prefix app/frontend`
   - `npm run typecheck --prefix app/frontend`
   - `npm run test --prefix app/frontend`

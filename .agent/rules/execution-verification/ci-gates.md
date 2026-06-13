@@ -3,7 +3,7 @@
   - backend startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
   - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
   - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-  - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
   - `npm run lint --prefix app/frontend`
   - `npm run typecheck --prefix app/frontend`
   - `npm run test --prefix app/frontend`
