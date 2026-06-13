@@ -272,7 +272,7 @@ rules:
     activation_mode: model_decision
     description: Apply when changing generated API reference docs, docstrings, Sphinx, Documenter.jl, or API docs deployment.
     triggers: ["api reference", "sphinx", "documenter", "documenter.jl", "docstring", "docs string", "autodoc", "autosummary"]
-    touched_paths: ["docs/api-reference/**", "docs/reference/api/**", "docs/reference/guardrails/documentation-design/api-reference.md", "core/sc_core/**", "core/analysis/**", "core/python/sc_data_contracts/**", "core/julia/**", "scripts/build/build_api_docs.sh", "scripts/build/check_api_reference_links.py", ".github/workflows/api-reference-integrity.yml"]
+    touched_paths: ["docs/api-reference/**", "docs/reference/api/**", "docs/reference/guardrails/documentation-design/api-reference.mdx", "core/python/analysis/**", "core/python/circuit_libraries/**", "core/julia/**", "scripts/build/build_api_docs.sh", "scripts/build/check_api_reference_links.py", ".github/workflows/api-reference-integrity.yml"]
 
   - id: documentation-information-layout
     file: documentation-design/information-layout.mdx

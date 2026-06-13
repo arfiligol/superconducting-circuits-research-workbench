@@ -4,9 +4,8 @@ import json
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sc_core.tasking import evaluate_task_control_action
-
 from app_backend.domain.audit import AuditRecord
+from app_backend.domain.runtime_contracts.tasking import evaluate_task_control_action
 from app_backend.domain.session import SessionState
 from app_backend.domain.tasks import (
     CharacterizationSetup,

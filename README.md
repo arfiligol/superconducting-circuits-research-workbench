@@ -198,7 +198,8 @@ core/
     SuperconductingCircuitsVisualizer/
     SuperconductingCircuitsRunner/
   python/
-    sc_data_contracts/
+    analysis/superconducting_circuits_analysis/
+    circuit_libraries/schemdraw_circuit_library/
 notebooks/
   pluto/
   python/
@@ -206,6 +207,8 @@ app/
   backend/
   frontend/
   desktop/
+archived
+  README.md
 site/
 scripts/
   dev/

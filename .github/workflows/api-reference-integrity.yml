@@ -5,7 +5,7 @@ on:
     paths:
       - "docs/api-reference/**"
       - "docs/reference/api/**"
-      - "docs/reference/guardrails/documentation-design/api-reference.md"
+      - "docs/reference/guardrails/documentation-design/api-reference.mdx"
       - ".agent/rules/documentation-design/api-reference.md"
       - "scripts/build/build_api_docs.sh"
       - "scripts/build/check_api_reference_links.py"
@@ -16,9 +16,8 @@ on:
       - "site/package-lock.json"
       - "site/astro.config.mjs"
       - "site/src/content.config.ts"
-      - "core/sc_core/**"
-      - "core/analysis/**"
-      - "core/python/sc_data_contracts/**"
+      - "core/python/analysis/superconducting_circuits_analysis/**"
+      - "core/python/circuit_libraries/schemdraw_circuit_library/**"
       - "core/julia/**"
       - ".github/workflows/api-reference-integrity.yml"
   push:
@@ -26,7 +25,7 @@ on:
     paths:
       - "docs/api-reference/**"
       - "docs/reference/api/**"
-      - "docs/reference/guardrails/documentation-design/api-reference.md"
+      - "docs/reference/guardrails/documentation-design/api-reference.mdx"
       - ".agent/rules/documentation-design/api-reference.md"
       - "scripts/build/build_api_docs.sh"
       - "scripts/build/check_api_reference_links.py"
@@ -37,9 +36,8 @@ on:
       - "site/package-lock.json"
       - "site/astro.config.mjs"
       - "site/src/content.config.ts"
-      - "core/sc_core/**"
-      - "core/analysis/**"
-      - "core/python/sc_data_contracts/**"
+      - "core/python/analysis/superconducting_circuits_analysis/**"
+      - "core/python/circuit_libraries/schemdraw_circuit_library/**"
       - "core/julia/**"
       - ".github/workflows/api-reference-integrity.yml"
 

@@ -278,7 +278,7 @@ CircuitPlan
 ```
 
 Schemdraw belongs on the renderer side of this boundary. It consumes exported schematic data and emits a drawing artifact. It does not define component interfaces, coupling semantics, HB intent, or solver lowering.
-Reusable Python Schemdraw visual components live in `core/python/schemdraw_circuit_library/`; they map renderer-neutral component records or render hints to drawings without becoming a second circuit model.
+Reusable Python Schemdraw visual components live in `core/python/circuit_libraries/schemdraw_circuit_library/`; they map renderer-neutral component records or render hints to drawings without becoming a second circuit model.
 
 ## Cross-Links
 

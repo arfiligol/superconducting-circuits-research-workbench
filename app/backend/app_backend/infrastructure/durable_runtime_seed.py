@@ -50,12 +50,11 @@ class DurableRuntimeResetResult:
 
 
 def reset_durable_runtime_state() -> DurableRuntimeResetResult:
-    from core.shared.persistence.trace_store import get_trace_store_path
-
     from app_backend.infrastructure.audit_store import (
         bootstrap_audit_store,
         resolve_audit_database_path,
     )
+    from app_backend.infrastructure.local_store.trace_store import get_trace_store_path
     from app_backend.infrastructure.persistence.database import (
         bootstrap_metadata_schema,
         resolve_metadata_database_path,

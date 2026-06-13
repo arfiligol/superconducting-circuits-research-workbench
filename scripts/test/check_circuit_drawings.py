@@ -22,7 +22,6 @@ FORBIDDEN_IMPORT_ROOTS = {
     "julia",
     "juliacall",
     "JuliaCall",
-    "sc_core",
 }
 
 

@@ -1694,7 +1694,7 @@ def _editable_numeric_payload_from_preview_payload(
     if isinstance(points, list):
         rows = []
         for point in points:
-            if isinstance(point, (list, tuple)) and len(point) >= 2:
+            if isinstance(point, list | tuple) and len(point) >= 2:
                 rows.append({axis.name: point[0], "value": point[1]})
         return {
             "kind": "series_table",
@@ -2367,13 +2367,15 @@ class _CircuitInspectionResult:
 
 
 def _load_circuit_domain() -> tuple[Any, Any, Any, Any, type[Exception]]:
-    from core.simulation.domain.circuit import (
+    from app_backend.domain.legacy_circuit_definition_netlist.circuit import (
         expand_circuit_definition,
         format_circuit_definition,
         format_expanded_circuit_definition,
         parse_circuit_definition_source,
     )
-    from core.simulation.domain.validators import CircuitValidationError
+    from app_backend.domain.legacy_circuit_definition_netlist.validators import (
+        CircuitValidationError,
+    )
 
     return (
         parse_circuit_definition_source,

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from app_backend.domain.runtime_contracts.tasking import resolve_worker_task_route
 from app_backend.domain.tasks import TaskCreateDraft
 from app_backend.infrastructure.persistence import (
     RewriteTaskDispatchRecord,
@@ -14,7 +15,6 @@ from app_backend.infrastructure.persistence import (
     create_metadata_session_factory,
 )
 from app_backend.infrastructure.task_seed_data import build_seed_tasks
-from sc_core.tasking import resolve_worker_task_route
 from sqlalchemy import delete
 
 

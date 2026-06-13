@@ -24,7 +24,7 @@ Both execution tracks use the same Julia Core APIs:
 - Pluto notebooks call Julia Core directly for research-grade exploration.
 - Julia Runner calls Julia Core while executing persisted Backend tasks for product workflows.
 
-The Python Backend, Electron Application, and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or simulation analysis owned by Julia Core. Declared Python fitting algorithms, such as complex S21 notch/transmission fitting and S21 vector fitting, belong to `core/analysis` and can be reached from Pluto through Julia Analysis Bridge.
+The Python Backend, Electron Application, and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or simulation analysis owned by Julia Core. Declared Python fitting algorithms, such as complex S21 notch/transmission fitting and S21 vector fitting, belong to `core/python/analysis/superconducting_circuits_analysis` and can be reached from Pluto through Julia Analysis Bridge.
 
 Python notebooks may analyze local Zarr, exported data, CSV/raw files, and canonical TraceStore files directly. That read-only analysis role does not make them Julia Core simulation owners or platform publication authorities.
 
@@ -134,7 +134,7 @@ Python notebooks may submit Backend tasks through this product async path when t
 | Pluto is direct research execution | Pluto may call Julia Core directly and inspect intermediate local data. Pluto is not a Backend task submitter. |
 | Runner is product execution | Julia Runner calls Julia Core from Backend task envelopes and writes staging packages for Backend publication. |
 | Python Backend does not own lowering | Python Backend validates requests and publishes results; it does not reimplement construction, lowering, sweep, or Julia-owned simulation logic. |
-| Python analysis owns declared fitting algorithms | `core/analysis` owns reusable Python fitting algorithms such as complex S21 notch/transmission fitting and S21 vector fitting. |
+| Python analysis owns declared fitting algorithms | `core/python/analysis/superconducting_circuits_analysis` owns reusable Python fitting algorithms such as complex S21 notch/transmission fitting and S21 vector fitting. |
 | Python Notebook is read/inspect only for files | Python notebooks may analyze data files directly, but do not own Julia Core simulation, lowering, platform publication, or metadata mutation authority. |
 
 ## JosephsonCircuits Validation

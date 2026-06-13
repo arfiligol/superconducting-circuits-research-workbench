@@ -24,7 +24,7 @@ updated_by: codex
 
 | Site | Owner | Scope |
 | --- | --- | --- |
-| [Python API Reference](../../../api/python/) | Sphinx | `sc_core`、`superconducting_circuits_analysis`、`sc_data_contracts` |
+| [Python API Reference](../../../api/python/) | Sphinx | `superconducting_circuits_analysis`、`schemdraw_circuit_library` |
 | [Julia API Reference](../../../api/julia/) | Documenter.jl | `SuperconductingCircuitsCore`、`SuperconductingCircuitsVisualizer`、`SuperconductingCircuitsRunner`、`SuperconductingCircuitsAnalysisBridge` |
 
 ## Boundary

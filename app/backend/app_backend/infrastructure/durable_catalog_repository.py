@@ -2144,7 +2144,7 @@ def _sample_trace_store_nd_preview(
     )
     frequency_axis = axes[frequency_axis_index]
     try:
-        from core.shared.persistence import LocalZarrTraceStore, get_trace_store_path
+        from app_backend.infrastructure.local_store import LocalZarrTraceStore, get_trace_store_path
 
         trace_store = LocalZarrTraceStore(root_path=get_trace_store_path())
         store_ref = _trace_payload_ref_to_store_ref(payload_ref)

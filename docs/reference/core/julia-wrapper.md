@@ -42,7 +42,7 @@ It creates tasks, validates runner output, publishes official TraceStore data, a
 
 SuperconductingCircuitsCore must not depend on PythonCall or PlotlyJS.
 SuperconductingCircuitsVisualizer must not own fitting algorithms.
-SuperconductingCircuitsAnalysisBridge may depend on PythonCall and `core/analysis`.
+SuperconductingCircuitsAnalysisBridge may depend on PythonCall and `core/python/analysis/superconducting_circuits_analysis`.
 
 Julia Runner does not write formal metadata tables.
 It writes:

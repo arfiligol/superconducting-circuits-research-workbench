@@ -114,7 +114,7 @@ Run the focused notebook / analysis checks:
 julia --startup-file=no --project=@v1.12 -e 'using Revise; using SuperconductingCircuitsCore; using SuperconductingCircuitsVisualizer; using SuperconductingCircuitsAnalysisBridge; println(pathof(SuperconductingCircuitsCore)); println(pathof(SuperconductingCircuitsVisualizer)); println(pathof(SuperconductingCircuitsAnalysisBridge))'
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
-uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q
+uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q
 JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
 ```
 

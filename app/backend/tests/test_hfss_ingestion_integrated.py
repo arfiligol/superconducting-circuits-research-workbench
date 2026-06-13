@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
+from app_backend.infrastructure.local_store import LocalZarrTraceStore
 from app_backend.infrastructure.runtime import reset_runtime_state
 from app_backend.main import app
-from core.shared.persistence import LocalZarrTraceStore
 from fastapi.testclient import TestClient
 
 client = TestClient(app)

@@ -5,9 +5,8 @@ from typing import cast
 
 import matplotlib
 import schemdraw
-from schemdraw_circuit_library.theme import Theme
-
 from schemdraw_circuit_library import GroundedLCResonator, theme_color
+from schemdraw_circuit_library.theme import Theme
 
 matplotlib.use("Agg")
 

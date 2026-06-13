@@ -164,7 +164,7 @@ Data Ingestion and Simulation publication both require an explicit target scope 
 | Concern | Rule |
 | --- | --- |
 | Dataset boundary | source and target must share the same `dataset_id` |
-| Scope state | source and target must be usable active scopes before merge; archived/deleted scopes are not normal merge targets |
+| Scope state | source and target must be usable active scopes before merge; archiveddeleted scopes are not normal merge targets |
 | Re-parented objects | backend must re-parent trace metadata, trace batches, trace-batch links, analysis runs, result artifacts, derived parameters, design assets, readiness summaries and design-scoped read models |
 | Source scope after merge | source scope becomes `archived` with `redirect_design_id` pointing to target |
 | Target scope after merge | target keeps its `design_id`; source coverage, trace counts, compare readiness, collection projections, analysis readiness and tagged metric summaries must be refreshed or invalidated |

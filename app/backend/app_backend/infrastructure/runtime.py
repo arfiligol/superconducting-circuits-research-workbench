@@ -2,8 +2,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 
-from sc_core.tasking import ProcessorHeartbeat
-
+from app_backend.domain.runtime_contracts.tasking import ProcessorHeartbeat
 from app_backend.domain.tasks import WorkerLaneSummary
 from app_backend.infrastructure.app_state_repository import AppStateRepository
 from app_backend.infrastructure.audit_store import (

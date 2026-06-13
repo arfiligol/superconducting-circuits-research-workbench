@@ -153,7 +153,7 @@ trace list、design browse、analysis readiness、filter suggestion path 不得�
 <Aside type="note" title="Metadata write flow">
 
 ```python
-from core.shared.persistence import get_unit_of_work
+from app_backend.infrastructure.local_store import get_unit_of_work
 
 with get_unit_of_work() as uow:
     design = uow.designs.get_by_name("PF6FQ_Q0")

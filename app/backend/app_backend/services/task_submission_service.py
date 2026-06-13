@@ -4,8 +4,6 @@ import json
 from collections.abc import Sequence
 from typing import Protocol
 
-from sc_core.tasking import resolve_worker_task_route
-
 from app_backend.domain.audit import AuditRecord
 from app_backend.domain.characterization_analysis import (
     evaluate_characterization_analysis_scope,
@@ -19,6 +17,7 @@ from app_backend.domain.datasets import (
     TraceDetail,
     TraceMetadataSummary,
 )
+from app_backend.domain.runtime_contracts.tasking import resolve_worker_task_route
 from app_backend.domain.session import SessionState
 from app_backend.domain.tasks import (
     CharacterizationSetup,

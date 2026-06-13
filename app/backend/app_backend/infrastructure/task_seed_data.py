@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from sc_core.execution import TaskResultHandle
-
+from app_backend.domain.runtime_contracts.execution import TaskResultHandle
 from app_backend.domain.tasks import TaskDetail, TaskProgress, TaskResultRefs
 from app_backend.infrastructure.catalog_seed_data import (
     FLOATING_QUBIT_WITH_XY_LINE_DEFINITION_ID,

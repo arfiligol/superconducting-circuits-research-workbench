@@ -4,6 +4,7 @@ from datetime import datetime
 import pytest
 from app_backend.api.schemas.tasks import TaskDispatchResponse, TaskEventResponse
 from app_backend.domain.datasets import DatasetCreateDraft
+from app_backend.domain.runtime_contracts.execution import TaskExecutionResult, TaskResultHandle
 from app_backend.domain.tasks import (
     SimulationSetup,
     TaskEventHistoryQuery,
@@ -40,7 +41,6 @@ from app_backend.infrastructure.storage_reference_factory import (
 )
 from app_backend.services.service_errors import ServiceError
 from app_backend.settings import get_settings
-from sc_core.execution import TaskExecutionResult, TaskResultHandle
 from sqlalchemy import update
 
 
@@ -694,7 +694,7 @@ def test_task_service_lifecycle_update_persists_completed_result_refs_across_res
     ]
     assert reloaded_task.dispatch is not None
     assert reloaded_task.dispatch.dispatch_key == (
-            f"dispatch:{submitted_task.task_id}:simulation_probe_task"
+        f"dispatch:{submitted_task.task_id}:simulation_probe_task"
     )
     assert reloaded_task.dispatch.status == "completed"
     assert reloaded_task.dispatch.submission_source == "active_dataset"

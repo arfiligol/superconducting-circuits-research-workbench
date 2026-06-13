@@ -49,8 +49,8 @@ docs/assets/circuit_draw/
 
 `draw.py` must define `build_drawing(theme="light")` and return a
 `schemdraw.Drawing`.
-It must not import Backend modules, Julia modules, `core/simulation`, or legacy
-Python circuit visualizers.
+It must not import Backend modules, Julia modules, archived simulation runtimes,
+or legacy Python circuit visualizers.
 Diagram sources use Schemdraw's documented context-manager and chained-method
 style through `_lib.style.circuit_drawing(...)`. Do not place elements with
 `d += ...` in new diagram sources, and use `with drawing.hold():` instead of
@@ -141,7 +141,7 @@ dependencies for documentation drawing.
 ## Circuit Diagrams
 - Schemdraw circuit diagrams are docs assets under `docs/assets/circuit_draw/`.
 - Each diagram has `draw.py`, `diagram.yml`, committed `diagram.light.svg`, committed `diagram.dark.svg`, committed `diagram.light.png`, and committed `diagram.dark.png`.
-- `draw.py` must define `build_drawing(theme="light")`, use `_lib.style.circuit_drawing(...)`, and must not import Backend, Julia, `core/simulation`, or legacy Python circuit visualizer modules.
+- `draw.py` must define `build_drawing(theme="light")`, use `_lib.style.circuit_drawing(...)`, and must not import Backend, Julia, archived simulation runtimes, or legacy Python circuit visualizer modules.
 - Write Schemdraw sources with context-manager placement and chained element methods; do not use `d += ...` placement or `push()` / `pop()` branch pairs.
 - Register diagrams in `docs/assets/circuit_draw/registry.yml`.
 - Render with `uv run python scripts/build/render_circuit_drawings.py`.

@@ -45,9 +45,8 @@ See [Simulation Interface Boundaries](../../architecture/simulation-interface-bo
 | `core/julia/SuperconductingCircuitsVisualizer/` | Julia PlotlyJS figure construction for Pluto and report figures |
 | `core/julia/SuperconductingCircuitsRunner/` | async Julia compute runner |
 | `core/julia/SuperconductingCircuitsAnalysisBridge/` | Pluto-friendly Julia wrapper around Python analysis through PythonCall |
-| `core/analysis/` | installable Python analysis package for fitting, S/Y/Z transforms, and mode extraction |
-| `core/python/sc_data_contracts/` | optional shared Python schemas/contracts |
-| `core/python/schemdraw_circuit_library/` | Python Schemdraw renderer-side reusable circuit visual components |
+| `core/python/analysis/superconducting_circuits_analysis/` | installable Python analysis package for fitting, S/Y/Z transforms, and mode extraction |
+| `core/python/circuit_libraries/schemdraw_circuit_library/` | Python Schemdraw renderer-side reusable circuit visual components |
 | `notebooks/pluto/` | Julia research cockpit |
 | `notebooks/python/` | programmable data analysis, file inspection, Backend API inspection, migration, emergency analysis |
 | `scripts/` | dev/build/test/maintenance helpers only |
@@ -68,8 +67,8 @@ root-level runtime or app code must not be recreated there.
 | Public site | Astro static site + Starlight docs + custom CSS |
 | Frontend | Next.js App Router + React 19 + TypeScript |
 | Backend | FastAPI + Pydantic + SQLAlchemy/Alembic + NumPy + Zarr |
-| Python analysis | uv workspace package under `core/analysis/` |
-| Python Schemdraw circuit renderer | uv workspace package under `core/python/schemdraw_circuit_library/` |
+| Python analysis | uv workspace package under `core/python/analysis/superconducting_circuits_analysis/` |
+| Python Schemdraw circuit renderer | uv workspace package under `core/python/circuit_libraries/schemdraw_circuit_library/` |
 | Compute runner | Julia + HTTP.jl + JSON3.jl + StructTypes.jl + Zarr.jl |
 | Local runtime | frontend + Python Backend + Julia Runner |
 | Scientific core | Julia package under `core/julia/SuperconductingCircuitsCore/` |
@@ -302,9 +301,11 @@ The following changes require a new SoT decision before implementation:
 ### Python Workspace Ownership
 
 - Python Backend package root is `app/backend/`
-- Python analysis package root is `core/analysis/`
+- Python analysis package root is `core/python/analysis/superconducting_circuits_analysis/`
+- Python Schemdraw circuit library package root is `core/python/circuit_libraries/schemdraw_circuit_library/`
+- App Backend runtime contracts live under `app/backend/app_backend/domain/runtime_contracts/`
 - root `.venv` and root `uv.lock` are the single Python dependency authority
-- `sc-core` remains the installable package for `sc_core`, `core.shared`, and `core.simulation`
+- backend-local persistence, circuit-definition inspection, and preview helpers belong to `app/backend/`
 - Python notebook dependencies belong to `notebooks/python/`
 - root `pyproject.toml` is a non-installable uv workspace orchestrator
 - backend-local virtualenvs and backend-local lockfiles are not canonical runtime surfaces
@@ -375,8 +376,9 @@ The following changes require a new SoT decision before implementation:
     - `scripts/maintenance/`
     - no active command-line product surface
 - **Topology**:
-    - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/analysis/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
-    - `core/python/schemdraw_circuit_library/` owns Python Schemdraw visual components that consume renderer-neutral schematic data; it must not define solver semantics or become an App/Backend runtime dependency
+    - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/analysis/`, `core/python/circuit_libraries/`, `notebooks/`, `scripts/`, and `docs/`
+    - `core/python/circuit_libraries/schemdraw_circuit_library/` owns Python Schemdraw visual components that consume renderer-neutral schematic data; it must not define solver semantics or become an App/Backend runtime dependency
+    - `app/backend/app_backend/domain/runtime_contracts/` owns App Backend tasking, execution, and storage runtime contracts; it must stay framework-agnostic and not import FastAPI, SQLAlchemy, repositories, file I/O, or runner process code
     - `site/` is the Astro public introduction site and Starlight docs host
     - `docs/` is the Astro + Starlight technical documentation source mounted at `/docs/`
     - `docs/app/` owns Product App documentation and app shared/frontend/backend contracts

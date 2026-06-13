@@ -224,7 +224,7 @@ def _parse_mapping_literal(value: object) -> Mapping[str, object] | None:
 
 
 def _extract_topology_port_indices(topology: object) -> tuple[int, ...]:
-    if not isinstance(topology, Sequence) or isinstance(topology, (str, bytes)):
+    if not isinstance(topology, Sequence) or isinstance(topology, str | bytes):
         return ()
 
     indices: set[int] = set()
@@ -236,7 +236,7 @@ def _extract_topology_port_indices(topology: object) -> tuple[int, ...]:
 
 
 def _extract_port_index_from_topology_row(row: object) -> int | None:
-    if not isinstance(row, Sequence) or isinstance(row, (str, bytes)) or len(row) < 4:
+    if not isinstance(row, Sequence) or isinstance(row, str | bytes) or len(row) < 4:
         return None
     element_name = row[0]
     if not isinstance(element_name, str):

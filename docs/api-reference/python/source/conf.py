@@ -7,9 +7,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
 for relative_path in (
-    "core/sc_core",
-    "core/analysis",
-    "core/python/sc_data_contracts",
+    "core/python/analysis/superconducting_circuits_analysis",
+    "core/python/circuit_libraries/schemdraw_circuit_library",
 ):
     sys.path.insert(0, str(REPO_ROOT / relative_path))
 

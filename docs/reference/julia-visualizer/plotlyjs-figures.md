@@ -157,7 +157,7 @@ multi_curve_figure(
 ```
 
 Fitting overlays receive numeric series that have already been computed by an
-analysis owner such as `core/analysis` through Julia Analysis Bridge:
+analysis owner such as `core/python/analysis/superconducting_circuits_analysis` through Julia Analysis Bridge:
 
 ```julia
 fit_overlay_figure(

@@ -48,7 +48,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 
 - install：`uv sync --all-packages`、`npm install --prefix app/frontend`、`npm install --prefix app/desktop`
-- check：`uv run --package superconducting-circuits-backend pytest app/backend/tests -q`、`uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`、`npm run test --prefix app/frontend`、`npm run lint --prefix app/desktop`、`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`、`JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- check：`uv run --package superconducting-circuits-backend pytest app/backend/tests -q`、`uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`、`npm run test --prefix app/frontend`、`npm run lint --prefix app/desktop`、`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`、`JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 - build：`npm run build --prefix app/frontend`、`npm run build --prefix app/desktop`
 
 </TabItem>
@@ -117,7 +117,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 ## CI Gates
 - Mandatory checks include:
     - backend startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
-    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q`
+    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
     - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
     - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
     - `npm run lint --prefix app/frontend`

@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import cast
 
-from sc_core.tasking import TaskExecutionMode, WorkerTaskName
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from app_backend.domain.runtime_contracts.tasking import TaskExecutionMode, WorkerTaskName
 from app_backend.domain.tasks import (
     TaskCreateDraft,
     TaskDetail,
@@ -551,7 +551,7 @@ def _to_task_detail(
 
 
 def _empty_result_refs() -> TaskResultRefs:
-    from sc_core.execution import TaskResultHandle
+    from app_backend.domain.runtime_contracts.execution import TaskResultHandle
 
     return TaskResultRefs(
         result_handle=TaskResultHandle(),

@@ -9,9 +9,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Python core 能力、共享 contract 與 backend-facing reference surface。
-version: v0.6.0
-last_updated: 2026-05-28
+scope: Python core analysis package and renderer-side Schemdraw visual library.
+version: v0.7.0
+last_updated: 2026-06-13
 updated_by: codex
 ---
 
@@ -19,68 +19,30 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Python Core
 
-本頁記錄 Python-owned core surfaces：`sc_core` 的 canonical contracts、`superconducting_circuits_analysis` 的 analysis package，以及 Python Backend 如何在 persistence、task lifecycle、storage reference 中消費這些 contracts。
+本頁記錄 active Python-owned core surfaces：`superconducting_circuits_analysis` 的 analysis package，以及 `schemdraw_circuit_library` 的 renderer-side reusable circuit visual components。
 
-<Aside type="note" title="Owned Surface">
+<Aside type="note" title="Owned Surfaces">
 
-Python contract core 的 canonical owner 是 installable `sc_core` package。
-Python analysis 的 canonical owner 是 installable `superconducting-circuits-analysis` distribution。
-`core/shared/`、`core/sc_core/` 與 `core/simulation/` 由 `sc-core` 發佈；
-`superconducting_circuits_analysis` 承載 Python-owned analysis contracts；
-app/backend adapters 是 adopter，不是 contract owner。
+`core/python/analysis/superconducting_circuits_analysis/` owns installable Python analysis algorithms.
+`core/python/circuit_libraries/schemdraw_circuit_library/` owns reusable Schemdraw visual components.
+`app/backend/app_backend/domain/runtime_contracts/` owns App Backend tasking, execution, and storage runtime contracts.
 
 </Aside>
 
 <Aside type="caution" title="Do Not Move Ownership">
 
-HTTP schema、ORM / repository implementation、Electron runtime concerns 不得寫成 `Python Core` 的 owner 範圍。
-這些屬於 adapter 或 app layer。
+HTTP schema、ORM / repository implementation、Circuit Definition Editor preview behavior、Electron runtime concerns、Backend task runtime contracts 不得寫成 `Python Core` 的 owner 範圍。
+這些屬於 App Backend、adapter 或 app layer。
 
 </Aside>
 
-## Owned Contract Families
+## Owned Package Families
 
 <Tabs>
-<TabItem label="Circuit Definitions">
-
-
-| Surface | Focus | Contract responsibility |
-|---|---|---|
-| `sc_core.circuit_definitions` | canonical source inspection、validation、preview artifact naming | circuit-definition source inspection, validation notices, and preview artifact naming semantics |
-
-</TabItem>
-
-<TabItem label="Tasking">
-
-
-| Surface | Focus | Contract responsibility |
-|---|---|---|
-| `sc_core.tasking` | task submission kind、lane naming、dispatch routing metadata | task route resolution, worker dispatch planning, and enqueue metadata semantics |
-
-</TabItem>
-
-<TabItem label="Execution">
-
-
-| Surface | Focus | Contract responsibility |
-|---|---|---|
-| `sc_core.execution` | task creation、lifecycle mutation、execution operation、history / audit payload | task creation, lifecycle transition, result-handle, and audit payload semantics |
-
-</TabItem>
-
-<TabItem label="Storage">
-
-
-| Surface | Focus | Contract responsibility |
-|---|---|---|
-| `sc_core.storage` | trace / result handles、trace-store locator、payload lifecycle、version markers | trace/result handles, TraceStore locators, payload lifecycle, version markers, and result linkage semantics |
-
-</TabItem>
-
 <TabItem label="Analysis">
 
 
-| Surface | Focus | Contract responsibility |
+| Surface | Focus | Responsibility |
 |---|---|---|
 | `superconducting_circuits_analysis.application.analysis` | fitting, mode extraction, matrix-oriented analysis helpers | S-parameter notch/transmission/vector fitting, Y11 and SQUID-oriented fitting, and admittance mode extraction contracts |
 | `superconducting_circuits_analysis.domain` | analysis value objects and schemas | trace records, fitting result semantics, and JSON-friendly analysis result shapes |
@@ -92,35 +54,48 @@ without depending on notebook-local CSV files or application DTOs.
 
 </TabItem>
 
+<TabItem label="Schemdraw">
+
+
+| Surface | Focus | Responsibility |
+|---|---|---|
+| `schemdraw_circuit_library.components.lumped` | lumped visual component families | ElementCompound-based resonators and related lumped reusable visuals |
+| `schemdraw_circuit_library.components.transmission_lines` | transmission-line visual component families | pi sections, ladder visuals, and reducible chain drawings |
+| `schemdraw_circuit_library.components.couplers` | coupling visual component families | renderer-side coupling motifs and reusable coupler components |
+| `schemdraw_circuit_library.theme` | visual theme source of truth | light/dark stroke and text color selection without topology changes |
+| `schemdraw_circuit_library.rendering` | render helpers | light/dark SVG/PNG variant rendering from one composition function |
+
+Schemdraw components consume renderer-neutral data and Julia Core export hints.
+They do not define circuit semantics, solver behavior, or reusable component topology.
+Stable reusable components are exported through the package root; internal family modules
+may hold work-in-progress visual families until their API is stable.
+
+</TabItem>
+
 </Tabs>
 
-## Python Adopters
+## App Backend Runtime Contracts
 
-| Adopter Surface | Role | Why it is not the owner |
+| Surface | Role | Why it is not Python Core |
 |---|---|---|
-| `core/shared/persistence/repositories/` | persisted rows 映射到 canonical objects | repository 實作是 adapter；canonical shape 由 `sc_core` 決定；不得反向定義 `core/` topology |
-| `core/shared/persistence/trace_store.py` | TraceStore backend binding | backend binding 與 runtime config 不等於 storage contract owner |
-| `app/backend/app_backend/infrastructure/persistence/` | app backend persistence adapter | backend adapter consumes contracts; it does not redefine them |
-| `app/backend/app_backend/services/` | task lifecycle and publication services | service layer orchestrates contracts; compute remains in Julia Runner |
-| `core/julia/SuperconductingCircuitsAnalysisBridge/` | Pluto-friendly analysis wrapper | Bridge calls Python analysis through PythonCall; it does not own algorithms |
+| `app_backend.domain.runtime_contracts.tasking` | task submission kind、lane naming、dispatch routing metadata | App Backend owns product task lifecycle and Runner protocol coordination |
+| `app_backend.domain.runtime_contracts.execution` | task creation、lifecycle mutation、execution operation、history / audit payload | execution records are App task-runtime contracts |
+| `app_backend.domain.runtime_contracts.storage` | trace / result handles、TraceStore locator、payload lifecycle、version markers | storage publication is App Backend infrastructure and domain behavior |
+
+Runtime contracts remain framework-agnostic inside the backend domain: no FastAPI, SQLAlchemy, file I/O, repository imports, or runner process code.
 
 ## Consumer Pairing
 
-| Consumer | 主要依賴的 Python core family |
+| Consumer | 主要依賴 |
 |---|---|
-| Backend task / dataset / definition adapters | `circuit_definitions`, `execution`, `storage` |
-| Backend runner API / publisher | `tasking`, `execution`, `storage` |
+| Backend task / dataset adapters | `app_backend.domain.runtime_contracts.execution`, `app_backend.domain.runtime_contracts.storage` |
+| Backend runner API / publisher | `app_backend.domain.runtime_contracts.tasking`, `execution`, `storage` |
+| Backend Circuit Definition Editor feature | App-local inspection and legacy netlist helpers |
 | Pluto Analysis Bridge | `superconducting_circuits_analysis` |
-
-## Ownership Boundary
-
-| Concern | SoT |
-|---|---|
-| ownership boundary | [Core Reference](index.md) |
-| canonical contract ownership | [Canonical Contract Registry](../architecture/canonical-contract-registry.mdx) |
-| task lifecycle semantics | [App / Backend / Tasks & Execution](../../app/backend/tasks-execution.md) |
+| Docs schematic renderer | `schemdraw_circuit_library` |
 
 ## Related
 
 - [Core Reference](index.md)
 - [Julia Wrapper](julia-wrapper.md)
+- [App / Backend / Tasks & Execution](../../app/backend/tasks-execution.md)

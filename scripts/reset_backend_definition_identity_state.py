@@ -9,13 +9,13 @@ def main() -> int:
         bootstrap_audit_store,
         resolve_audit_database_path,
     )
+    from app_backend.infrastructure.local_store.trace_store import get_trace_store_path
     from app_backend.infrastructure.persistence.database import (
         bootstrap_metadata_schema,
         resolve_metadata_database_path,
     )
     from app_backend.infrastructure.runtime import reset_runtime_state
     from app_backend.settings import get_settings
-    from core.shared.persistence.trace_store import get_trace_store_path
 
     reset_runtime_state()
     settings = get_settings()

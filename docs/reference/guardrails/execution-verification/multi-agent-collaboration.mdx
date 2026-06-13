@@ -59,7 +59,7 @@ Use these lanes as optional delegation scopes. They describe where a subagent ma
 | Lane | Typical surfaces | Responsibilities |
 | --- | --- | --- |
 | Julia Core + Pluto Research | `core/julia/SuperconductingCircuitsCore/`, `notebooks/pluto/` | Julia Core APIs, Pluto direct research workflow, JosephsonCircuits.jl validation, component/circuit prototypes, research sweep and analysis prototypes |
-| Product Async Contracts | `docs/reference/architecture/`, `core/python/sc_data_contracts/`, Backend API contracts | simulation request contracts, runner task envelopes, runner result manifest, result-view API, OpenAPI alignment |
+| Product Async Contracts | `docs/reference/architecture/`, `app/backend/app_backend/domain/runtime_contracts/`, `app/backend/`, Backend API contracts | simulation request contracts, runner task envelopes, runner result manifest, result-view API, OpenAPI alignment |
 | Backend + Runner Integration | `app/backend/`, `core/julia/SuperconductingCircuitsRunner/`, `data/staging/`, `data/trace_store/` | task lifecycle, runner claim/heartbeat/progress/cancellation/complete/fail, task dispatch, Zarr staging, manifest validation, Backend publication |
 | Application Workbench | `app/frontend/`, `app/desktop/` | Simulation Workbench UI, task submission UI, task status/result viewer, Raw Data Browser integration, Electron runtime shell |
 | Python Notebook / Data Inspection | `notebooks/python/`, notebook reference docs | programmable data analysis, direct local/exported/canonical data reads, Backend API use for platform state, migration/debug/emergency analysis |

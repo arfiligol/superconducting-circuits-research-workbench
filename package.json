@@ -17,7 +17,7 @@
     "visualizer:test": "julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'",
     "runner:test": "julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'",
     "frontend:typecheck": "npm run typecheck --prefix app/frontend",
-    "analysis:test": "uv run --package superconducting-circuits-analysis pytest tests/core/analysis tests/core/shared -q",
+    "analysis:test": "uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q",
     "backend:test": "uv run --package superconducting-circuits-backend pytest app/backend/tests -q",
     "bridge:test": "JULIA_PYTHONCALL_EXE=\"$PWD/.venv/bin/python\" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'"
   }

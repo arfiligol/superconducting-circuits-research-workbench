@@ -11,10 +11,8 @@ package = false
 
 [tool.uv.workspace]
 members = [
-    "core/sc_core",
-    "core/python/sc_data_contracts",
-    "core/python/schemdraw_circuit_library",
-    "core/analysis",
+    "core/python/analysis/superconducting_circuits_analysis",
+    "core/python/circuit_libraries/schemdraw_circuit_library",
     "app/backend",
     "notebooks/python",
 ]
@@ -24,21 +22,15 @@ typeCheckingMode = "basic"
 pythonVersion = "3.12"
 include = [
     "app/backend/app_backend",
-    "core/analysis",
     "core/python",
-    "core/sc_core",
-    "core/shared",
-    "core/simulation",
     "scripts",
 ]
-exclude = ["**/__pycache__", ".venv", "data"]
+exclude = ["**/__pycache__", ".venv", "archived", "data"]
 extraPaths = [
     "app/backend",
-    "core/analysis",
-    "core",
     "core/python",
-    "core/python/sc_data_contracts",
-    "core/python/schemdraw_circuit_library",
+    "core/python/analysis/superconducting_circuits_analysis",
+    "core/python/circuit_libraries/schemdraw_circuit_library",
 ]
 # Basic presence checks only, as requested
 reportMissingParameterType = "warning"
@@ -49,13 +41,10 @@ line-length = 100
 target-version = "py312"
 src = [
     "app/backend/app_backend",
-    "core/analysis",
     "core/python",
-    "core/sc_core",
-    "core/shared",
-    "core/simulation",
     "scripts",
 ]
+exclude = ["archived"]
 
 [tool.ruff.lint]
 select = [
@@ -80,6 +69,9 @@ ignore = [
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pytest.ini_options]
+norecursedirs = ["archived", ".venv", "node_modules", "docs/site", "docs/docs_zhtw"]
 
 [dependency-groups]
 dev = [
