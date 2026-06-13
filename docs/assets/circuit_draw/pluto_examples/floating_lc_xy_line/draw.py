@@ -1,31 +1,22 @@
 from __future__ import annotations
 
 import schemdraw
-import schemdraw.elements as elm
 from _lib.style import Theme, circuit_drawing
+from schemdraw_circuit_library import FloatingLCXYResonator
 
 
 def build_drawing(theme: Theme = "light") -> schemdraw.Drawing:
-    with circuit_drawing(theme=theme) as drawing:
-        elm.Dot(open=True).label("XY", loc="left")
-        elm.Line().right(0.8)
-        elm.Capacitor().right().label("$C_{xy}$")
-        plus_node = elm.Dot().label("+", loc="top")
-
-        with drawing.hold():
-            drawing.move_from(plus_node.center)
-            elm.Inductor().down(2.0).label("$L_q$", loc="left")
-            minus_node = elm.Dot().label("-", loc="bottom")
-
-        with drawing.hold():
-            drawing.move_from(plus_node.center)
-            elm.Line().right(1.2)
-            elm.Capacitor().down().toy(minus_node.center).label("$C_q$", loc="right")
-            elm.Line().to(minus_node.center)
-
-        with drawing.hold():
-            drawing.move_from(minus_node.center)
-            elm.Line().right(0.7)
-            elm.Dot(open=True).label("$q_-$", loc="right")
+    unit_length = 2.35
+    with circuit_drawing(theme=theme, unit=unit_length, fontsize=11) as drawing:
+        drawing.add(
+            FloatingLCXYResonator(
+                component_id="floating_xy",
+                unit_length=unit_length,
+                theme=theme,
+                pad1_label=r"$P_1$",
+                pad2_label=r"$P_2$",
+                xy_label=r"$XY$",
+            )
+        )
 
     return drawing

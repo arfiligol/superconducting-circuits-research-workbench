@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import schemdraw
 from _lib.style import Theme, circuit_drawing
-
 from schemdraw_circuit_library import GroundedLCResonator
 
 

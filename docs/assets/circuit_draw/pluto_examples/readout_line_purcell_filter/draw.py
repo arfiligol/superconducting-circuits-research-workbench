@@ -1,36 +1,23 @@
 from __future__ import annotations
 
 import schemdraw
-import schemdraw.elements as elm
-from _lib.style import Theme, circuit_drawing, shunt_capacitor
+from _lib.style import Theme, circuit_drawing
+from schemdraw_circuit_library import PointCoupledReadoutPurcell
 
 
 def build_drawing(theme: Theme = "light") -> schemdraw.Drawing:
-    with circuit_drawing(theme=theme, unit=1.65) as drawing:
-        elm.Dot(open=True).label("readout in", loc="left")
-        elm.Line().right(0.8)
-        elm.Capacitor().right().label("$C_{in}$")
-        first_filter_node = elm.Dot()
-        shunt_capacitor(
-            drawing,
-            first_filter_node.center,
-            "$C_{f1}$",
-            length=1.25,
-            loc="left",
+    unit_length = 1.85
+    with circuit_drawing(theme=theme, unit=unit_length, fontsize=10) as drawing:
+        drawing.add(
+            PointCoupledReadoutPurcell(
+                component_id="readout_filter",
+                unit_length=unit_length,
+                theme=theme,
+                input_line_label=None,
+                output_line_label=None,
+                left_port_label=r"$P_1$",
+                right_port_label=r"$P_2$",
+            )
         )
-
-        elm.Line().right(0.35)
-        elm.Inductor().right().label("$L_{f1}$", loc="top")
-        middle_filter_node = elm.Dot()
-        shunt_capacitor(drawing, middle_filter_node.center, "$C_{f2}$", length=1.25)
-
-        elm.Line().right(0.35)
-        elm.Inductor().right().label("$L_{f2}$", loc="top")
-        last_filter_node = elm.Dot()
-        shunt_capacitor(drawing, last_filter_node.center, "$C_{f3}$", length=1.25)
-
-        elm.Capacitor().right().label("$C_{out}$")
-        elm.Line().right(0.8)
-        elm.Dot(open=True).label("readout out", loc="right")
 
     return drawing
