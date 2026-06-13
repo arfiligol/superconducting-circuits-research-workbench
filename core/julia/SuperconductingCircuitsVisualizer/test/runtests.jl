@@ -42,6 +42,39 @@ end
     @test layout_fields(log_fig)[:yaxis][:range] ≈ [0.0, 2.0]
 end
 
+@testset "parameter scatter figure" begin
+    fig = parameter_scatter_figure(
+        [
+            "candidates" => (
+                x=[-100.0, 50.0],
+                y=[20.0, -30.0],
+                marker_color=[0.4, 0.2],
+                colorbar_title="score",
+                showscale=true,
+            ),
+            "Baseline layout spec" => (
+                x=[0.0],
+                y=[0.0],
+                marker_color="#111827",
+                marker_symbol="star",
+                marker_size=18,
+            ),
+        ];
+        title="Parameter space",
+        xaxis_title="Δ readout length (um)",
+        yaxis_title="Δ filter length (um)",
+    )
+
+    @test trace_count(fig) == 2
+    @test trace_fields(fig, 1)[:name] == "candidates"
+    @test trace_fields(fig, 1)[:mode] == "markers"
+    @test trace_fields(fig, 1)[:marker][:showscale]
+    @test trace_fields(fig, 2)[:name] == "Baseline layout spec"
+    @test trace_fields(fig, 2)[:marker][:symbol] == "star"
+    @test trace_fields(fig, 2)[:marker][:size] == 18
+    @test layout_fields(fig)[:xaxis][:title][:text] == "Δ readout length (um)"
+end
+
 @testset "PlotlyFigureConfig" begin
     config = PlotlyFigureConfig()
     @test config.display_width_px == 1200

@@ -3,7 +3,10 @@ module SuperconductingCircuitsAnalysisBridge
 export BridgeStatus,
     analysis_bridge_status,
     extract_admittance_modes,
+    fit_notch_s21,
     fit_squid_modes,
+    fit_transmission_s21,
+    fit_vector_s21,
     fit_y11_response,
     python_executable
 
@@ -76,7 +79,7 @@ function analysis_bridge_status()
 end
 
 function _py_to_julia(value)
-    pyisnone(value) && return nothing
+    PythonCall.pyis(value, PythonCall.pybuiltins.None) && return nothing
     return pyconvert(Any, value)
 end
 
@@ -88,6 +91,85 @@ end
 function _python_table(table_or_path)
     table_or_path isa AbstractString && return _dataframe_from_path(table_or_path)
     return table_or_path
+end
+
+function _real_vector(values, name::AbstractString)
+    converted = Float64.(collect(values))
+    all(isfinite, converted) || error("$(name) must contain only finite values.")
+    return converted
+end
+
+function _complex_parts(values, name::AbstractString)
+    converted = collect(values)
+    real_values = Float64.(real.(converted))
+    imag_values = Float64.(imag.(converted))
+    all(isfinite, real_values) || error("real($(name)) must contain only finite values.")
+    all(isfinite, imag_values) || error("imag($(name)) must contain only finite values.")
+    return real_values, imag_values
+end
+
+function _optional_float_pair(values, name::AbstractString)
+    isnothing(values) && return nothing
+    converted = Float64.(collect(values))
+    length(converted) == 2 || error("$(name) must contain exactly two values.")
+    all(isfinite, converted) || error("$(name) must contain only finite values.")
+    converted[1] < converted[2] || error("$(name) lower bound must be less than upper bound.")
+    return converted
+end
+
+function _s21_fitting_module()
+    return _py_module("superconducting_circuits_analysis.application.analysis.fitting.s_parameters")
+end
+
+function fit_notch_s21(frequencies_hz, s21; initial_guess=nothing, fit_window_hz=nothing)
+    mod = _s21_fitting_module()
+    frequencies = _real_vector(frequencies_hz, "frequencies_hz")
+    real_values, imag_values = _complex_parts(s21, "s21")
+    result = mod.fit_complex_s21_notch(
+        frequencies,
+        real_values,
+        imag_values;
+        initial_guess=initial_guess,
+        fit_window_hz=_optional_float_pair(fit_window_hz, "fit_window_hz"),
+    )
+    return _py_to_julia(result)
+end
+
+function fit_transmission_s21(frequencies_hz, s21; initial_guess=nothing, fit_window_hz=nothing)
+    mod = _s21_fitting_module()
+    frequencies = _real_vector(frequencies_hz, "frequencies_hz")
+    real_values, imag_values = _complex_parts(s21, "s21")
+    result = mod.fit_complex_s21_transmission(
+        frequencies,
+        real_values,
+        imag_values;
+        initial_guess=initial_guess,
+        fit_window_hz=_optional_float_pair(fit_window_hz, "fit_window_hz"),
+    )
+    return _py_to_julia(result)
+end
+
+function fit_vector_s21(
+    frequencies_hz,
+    s21;
+    n_resonators,
+    bg_poles=2,
+    min_q=2.0,
+    restrict_to_input_span=true,
+)
+    mod = _s21_fitting_module()
+    frequencies = _real_vector(frequencies_hz, "frequencies_hz")
+    real_values, imag_values = _complex_parts(s21, "s21")
+    result = mod.fit_complex_s21_vector(
+        frequencies,
+        real_values,
+        imag_values;
+        n_resonators=n_resonators,
+        bg_poles=bg_poles,
+        min_q=min_q,
+        restrict_to_input_span=restrict_to_input_span,
+    )
+    return _py_to_julia(result)
 end
 
 function extract_admittance_modes(table_or_path)

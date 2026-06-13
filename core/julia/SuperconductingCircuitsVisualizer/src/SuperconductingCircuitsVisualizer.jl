@@ -7,6 +7,7 @@ export PlotlyFigureConfig,
     frequency_ghz,
     fit_overlay_figure,
     multi_curve_figure,
+    parameter_scatter_figure,
     plotly_display_config,
     s_parameter_abs_magnitude_figure,
     s_parameter_db_magnitude_figure,
@@ -244,6 +245,48 @@ function _line_trace(x, y, name::AbstractString, index::Integer, config::PlotlyF
     )
 end
 
+function _point_set_field(point_set, field::Symbol, default)
+    hasproperty(point_set, field) && return getproperty(point_set, field)
+    point_set isa AbstractDict && haskey(point_set, field) && return point_set[field]
+    point_set isa AbstractDict && haskey(point_set, string(field)) && return point_set[string(field)]
+    return default
+end
+
+function _point_set_trace(point_set, name::AbstractString, index::Integer, config::PlotlyFigureConfig)
+    x = _real_values(_point_set_field(point_set, :x, nothing), "$(name).x")
+    y = _real_values(_point_set_field(point_set, :y, nothing), "$(name).y")
+    length(x) == length(y) || throw(ArgumentError("Point set '$(name)' x/y lengths must match."))
+
+    marker_color = _point_set_field(point_set, :marker_color, _trace_color(config, index))
+    marker_size = _point_set_field(point_set, :marker_size, config.marker_size_px)
+    marker_symbol = _point_set_field(point_set, :marker_symbol, "circle")
+    colorbar_title = _point_set_field(point_set, :colorbar_title, nothing)
+    showscale = _point_set_field(point_set, :showscale, false)
+    text = _point_set_field(point_set, :text, nothing)
+
+    marker_fields = Dict{Symbol,Any}(
+        :color => marker_color,
+        :size => marker_size,
+        :symbol => marker_symbol,
+        :showscale => showscale,
+    )
+    if showscale
+        marker_fields[:colorscale] = _point_set_field(point_set, :colorscale, "Viridis")
+        !isnothing(colorbar_title) && (marker_fields[:colorbar] = attr(title=colorbar_title))
+    end
+    marker = attr(; marker_fields...)
+
+    trace_fields = Dict{Symbol,Any}(
+        :x => x,
+        :y => y,
+        :mode => _point_set_field(point_set, :mode, "markers"),
+        :name => name,
+        :marker => marker,
+    )
+    !isnothing(text) && (trace_fields[:text] = collect(text))
+    return scatter(; trace_fields...)
+end
+
 function _nonpositive_count(values)
     return count(value -> value <= 0, Float64.(collect(values)))
 end
@@ -301,6 +344,53 @@ function multi_curve_figure(
             yaxis_title=yaxis_title,
             config=config,
             x_range_ghz=x_range_ghz,
+            y_range=y_range,
+            x_axis_type=x_axis_type_value,
+            y_axis_type=y_axis_type_value,
+        );
+        config=plotly_display_config(config),
+    )
+end
+
+function parameter_scatter_figure(
+    point_sets;
+    title,
+    xaxis_title,
+    yaxis_title,
+    config::PlotlyFigureConfig=PlotlyFigureConfig(),
+    x_range=nothing,
+    y_range=nothing,
+    x_axis_type=nothing,
+    y_axis_type=nothing,
+)
+    pairs = _named_pairs(point_sets)
+    x_axis_type_value = _effective_axis_type(x_axis_type, config.x_axis_type, "x_axis_type")
+    y_axis_type_value = _effective_axis_type(y_axis_type, config.y_axis_type, "y_axis_type")
+
+    _warn_for_log_axis_nonpositive(
+        :x,
+        x_axis_type_value,
+        [_trace_name(pair) => _point_set_field(last(pair), :x, Float64[]) for pair in pairs],
+    )
+    _warn_for_log_axis_nonpositive(
+        :y,
+        y_axis_type_value,
+        [_trace_name(pair) => _point_set_field(last(pair), :y, Float64[]) for pair in pairs],
+    )
+
+    traces = [
+        _point_set_trace(last(pair), _trace_name(pair), index, config)
+        for (index, pair) in enumerate(pairs)
+    ]
+
+    return Plot(
+        traces,
+        default_layout(
+            title=title,
+            xaxis_title=xaxis_title,
+            yaxis_title=yaxis_title,
+            config=config,
+            x_range_ghz=x_range,
             y_range=y_range,
             x_axis_type=x_axis_type_value,
             y_axis_type=y_axis_type_value,
