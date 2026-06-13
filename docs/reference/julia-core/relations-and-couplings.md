@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Julia Core Relations
-  - Relations and Couplings
+ - Julia Core Relations
+ - Relations and Couplings
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -64,11 +64,11 @@ The compiler should fail early when a relation receives the wrong endpoint categ
 
 ```julia
 couple_capacitive!(
-    plan;
-    id = id,
-    from = at,
-    to = ground(),
-    capacitance = capacitance,
+  plan;
+  id = id,
+  from = at,
+  to = ground(),
+  capacitance = capacitance,
 )
 ```
 
@@ -87,15 +87,15 @@ couple_capacitive!(
 Multi-line components must select a line explicitly:
 
 ```julia
-line_tap(component; line = :main, at_m = 1.2mm)
-line_span(component; line = :main, from_m = 2.0mm, to_m = 2.5mm)
+line_tap(component; line =:main, at_m = 1.2mm)
+line_span(component; line =:main, from_m = 2.0mm, to_m = 2.5mm)
 ```
 
 Or use a resolved line reference:
 
 ```julia
-line_tap(line_ref(component, :main); at_m = 1.2mm)
-line_span(line_ref(component, :main); from_m = 2.0mm, to_m = 2.5mm)
+line_tap(line_ref(component,:main); at_m = 1.2mm)
+line_span(line_ref(component,:main); from_m = 2.0mm, to_m = 2.5mm)
 ```
 
 The compiler must reject an ambiguous line tap or ambiguous line span before target lowering.
@@ -138,11 +138,11 @@ Relation-owned metadata should be stored in the CircuitPlan so `preflight_sweep`
 
 ```julia
 couple_capacitive!(
-    plan;
-    id = "lc_to_qwr",
-    from = pin(lc, :signal),
-    to = line_tap(qwr; line = :main, at_m = 1.2mm),
-    capacitance = 3.0fF,
+  plan;
+  id = "lc_to_qwr",
+  from = pin(lc,:signal),
+  to = line_tap(qwr; line =:main, at_m = 1.2mm),
+  capacitance = 3.0fF,
 )
 ```
 
@@ -152,11 +152,11 @@ The tap is a node endpoint on a distributed component. The compiler decides how 
 
 ```julia
 couple_inductive!(
-    plan;
-    id = "flux_to_squid",
-    from = line_tap(flux_line; line = :main, at_m = 2.0mm),
-    to = squid_loop(lc),
-    mutual_inductance = 3.0pH,
+  plan;
+  id = "flux_to_squid",
+  from = line_tap(flux_line; line =:main, at_m = 2.0mm),
+  to = squid_loop(lc),
+  mutual_inductance = 3.0pH,
 )
 ```
 
@@ -165,8 +165,8 @@ The SQUID loop is a loop endpoint. The relation is flux or mutual-coupling inten
 ## Floating LC In Series
 
 ```julia
-connect!(plan, pin(left_line, :right), pin(flc, :plus))
-connect!(plan, pin(flc, :minus), pin(right_line, :left))
+connect!(plan, pin(left_line,:right), pin(flc,:plus))
+connect!(plan, pin(flc,:minus), pin(right_line,:left))
 ```
 
 The plan records endpoint aliasing. During compilation, the compiler resolves node names and private component namespaces.
@@ -175,14 +175,14 @@ The plan records endpoint aliasing. During compilation, the compiler resolves no
 
 ```julia
 window = couple_transmission_window!(
-    plan;
-    id = "qwr_a_qwr_b_window",
-    line1 = qwr_a_ladder,
-    line2 = qwr_b_ladder,
-    start1 = 2.0e-3,
-    start2 = 2.0e-3,
-    length = 0.5e-3,
-    model = MTLCoupledRLGCSpec(...),
+  plan;
+  id = "qwr_a_qwr_b_window",
+  line1 = qwr_a_ladder,
+  line2 = qwr_b_ladder,
+  start1 = 2.0e-3,
+  start2 = 2.0e-3,
+  length = 0.5e-3,
+  model = MTLCoupledRLGCSpec(...),
 )
 ```
 
@@ -193,21 +193,21 @@ This expresses a fixed-length coupled region between two generated ladder models
 ## QWR To Readout Line With Shunt
 
 ```julia
-tap = line_tap(readout; line = :main, at_m = 2.0mm)
+tap = line_tap(readout; line =:main, at_m = 2.0mm)
 
 couple_capacitive!(
-    plan;
-    id = "qwr_to_readout",
-    from = pin(qwr, :feed),
-    to = tap,
-    capacitance = 6.0fF,
+  plan;
+  id = "qwr_to_readout",
+  from = pin(qwr,:feed),
+  to = tap,
+  capacitance = 6.0fF,
 )
 
 shunt_capacitor!(
-    plan;
-    id = "readout_shunt_c",
-    at = tap,
-    capacitance = 20.0fF,
+  plan;
+  id = "readout_shunt_c",
+  at = tap,
+  capacitance = 20.0fF,
 )
 ```
 

@@ -1,11 +1,11 @@
 ---
 title: "Retired Analysis Route Alias"
 aliases:
-  - "Retired analysis route alias"
+ - "Retired analysis route alias"
 tags:
-  - diataxis/reference
-  - audience/team
-  - topic/removed-surface
+ - diataxis/reference
+ - audience/team
+ - topic/removed-surface
 status: archived
 owner: docs-team
 audience: team
@@ -24,5 +24,5 @@ The underlying product need remains active as Analysis Workbench: fitting, post-
 ## Related
 
 * [Application Interface](../../application-interface.md)
-* [Julia Runner Compute Plane](../../../reference/architecture/julia-runner-compute-plane.md)
+* [Julia Runner Compute Plane](../../architecture/contracts/julia-runner-compute-plane.md)
 * [Task Management](../shared-workflow/task-management.md)

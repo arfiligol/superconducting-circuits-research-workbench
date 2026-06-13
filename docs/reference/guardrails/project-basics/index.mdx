@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Project Basics
-  - 專案基礎規範
+ - Project Basics
+ - Basic project specifications
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/project-basics
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/project-basics
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義平台專案目標、技術方向、結構與單一真理順序索引。
+scope: Define platform project goals, technical direction, structure and single order of truth index.
 version: v2.1.0
 last_updated: 2026-06-04
 updated_by: codex
@@ -20,13 +20,13 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Project Basics
 
-本區定義平台的基礎共識：產品範疇、技術選型與 repo 結構。
-任何會影響整體開發方向的修改，都應先更新這些文件。
+This area defines the basic consensus of the platform: product scope, technology selection and repo structure.
+Any changes that affect the overall development direction should be preceded by updating these files.
 
 <Aside type="note" title="What this section owns">
 
-`Project Basics` 定義整個 workspace 的共同前提。
-如果問題在問「我們到底在做什麼、用什麼做、檔案應該放哪、衝突時誰說了算」，答案都應該先從這裡找。
+`Project Basics` defines the common premise of the entire workspace.
+If the question is asking "What exactly are we doing, what are we using, where should the files be placed, and who has the final say in case of conflicts?", the answer should be found here first.
 
 </Aside>
 
@@ -34,25 +34,25 @@ import { Aside } from '@astrojs/starlight/components';
 
 | Page | Read this when | Core question |
 | --- | --- | --- |
-| [Project Overview](project-overview.mdx) | 你要確認產品邊界、主要 workflows、重寫方向 | 這個平台到底要做什麼？ |
-| [Tech Stack](tech-stack.mdx) | 你要確認 framework、dependency 或 runtime baseline | 我們正式採用哪些技術？ |
-| [Folder Structure](folder-structure.mdx) | 你要新增檔案、搬動模組、重整目錄 | 這種變更應該落在哪裡？ |
-| [Backend Architecture](backend-architecture.mdx) | 你要改 API / services / persistence / facade 邊界 | backend 應如何分層？ |
-| [Source of Truth Order](source-of-truth-order.mdx) | 你遇到 docs、backend、frontend、Runner、Notebook 說法衝突 | 衝突時誰說了算？ |
+| [Project Overview](project-overview.mdx) | You need to confirm product boundaries, main workflows, and rewriting direction | What exactly is this platform going to do? |
+| [Tech Stack](tech-stack.mdx) | Do you want to confirm the framework, dependency or runtime baseline | What technologies do we officially adopt? |
+| [Folder Structure](folder-structure.mdx) | You want to add files, move modules, and reorganize directories | Where should these changes be made? |
+| [Backend Architecture](backend-architecture.mdx) | You want to change the API / services / persistence / facade boundary | How should the backend be layered? |
+| [Source of Truth Order](source-of-truth-order.mdx) | You encounter a conflict in docs, backend, frontend, Runner, Notebook | Who has the final say in a conflict? |
 
 <Aside type="tip" title="Read order">
 
-先看 `Project Overview`，再看 `Tech Stack` 與 `Folder Structure`。
-若任務直接碰到 contract 衝突或 owner boundary，再補看 `Source of Truth Order` 與 `Backend Architecture`。
+Let’s look at `Project Overview` first, then `Tech Stack` and `Folder Structure`.
+If the task directly encounters a contract conflict or owner boundary, look at `Source of Truth Order` and `Backend Architecture`.
 
 </Aside>
 
 ## Agent Rule
 ```markdown
 ## Project Basics
-- Project Basics 定義 platform 的使命、範疇、技術棧與結構。
-- 任何影響整體協作與架構一致性的變更，必須先更新本區。
-- 目前 public introduction site 方向為 Astro；product app UI 方向為 Next.js，API 方向為 FastAPI，compute plane 方向為 Julia Runner，Notebook 是研究 cockpit。
-- backend 的責任邊界與內部藍圖由 `backend-architecture.md` 定義。
-- 舊的 command workflow、retired Python UI runtime、separate queue worker runtime 與 Python in-process Julia runtime 不屬於產品 contract，不應再成為新功能的預設落點。
+- Project Basics defines the mission, scope, technology stack and structure of the platform.
+- Any changes that affect overall collaboration and architectural consistency must first update this area.
+- The current public introduction site direction is Astro; the product app UI direction is Next.js, the API direction is FastAPI, the compute plane direction is Julia Runner, and the Notebook is a research cockpit.
+- The backend's responsibility boundaries and internal blueprint are defined by `backend-architecture.md`.
+- The old command workflow, retired Python UI runtime, separate queue worker runtime and Python in-process Julia runtime are not part of the product contract and should no longer be the default landing point for new features.
 ```

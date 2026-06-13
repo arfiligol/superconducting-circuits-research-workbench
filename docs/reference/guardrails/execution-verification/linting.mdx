@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Linting & Formatting
-  - Lint 與格式化
+ - Linting & Formatting
+ - Lint and formatting
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/execution
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/execution
 status: stable
 owner: docs-team
 audience: contributor
-scope: rewrite branch 的 Python、frontend、desktop 與 Julia lint / format / type-check 規範。
+scope: Python, frontend, desktop and Julia lint/format/type-check specs for rewrite branch.
 version: v3.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -22,7 +22,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 <Aside type="note" title="How to use this page">
 
-這頁只回答格式化、lint、type-check 的日常執行方式。需要測試層級或 merge gate 時，分別看 `Testing` 與 `CI Gates`。
+This page only answers the daily implementation methods of formatting, lint, and type-check. When you need to test the hierarchy or merge gate, see `Testing` and `CI Gates` respectively.
 
 </Aside>
 
@@ -31,7 +31,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 - Python: Ruff + BasedPyright
 - Frontend/Desktop: project-local lint / format / typecheck commands
 - Julia: package-local tests and formatter when configured
-- Repo gate: pre-commit（若 hook 已設置）
+- Repo gate: pre-commit (if hook is set)
 
 ## Command Map
 
@@ -83,15 +83,15 @@ julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test
 
 ## Policy
 
-| 規則 | 說明 |
+| Rules | Description |
 | --- | --- |
-| touched files 不接受新增 lint error | 不可把既有噪音當成新增問題的遮羞布 |
-| 型別錯誤優先修正 | 不以忽略規則掩蓋結構問題 |
-| frontend 未建立前維持 Python/docs baseline | 建立後即納入常規 gate |
+| touched files do not accept new lint errors | Do not use existing noise as a fig leaf for new problems |
+| Prioritize type error correction | Don’t hide structural problems with ignore rules |
+| Frontend maintains the Python/docs baseline before it is created | It will be included in the regular gate after it is created |
 
 <Aside type="tip" title="Good default">
 
-小範圍改動至少應先跑 touched area 對應的 format、lint 與 type-check；不要把整個 repo gate 留到 commit 前才第一次發現問題。
+For small-scale changes, at least the format, lint and type-check corresponding to the touched area should be run first; do not leave the entire repo gate until the problem is discovered for the first time before committing.
 
 </Aside>
 

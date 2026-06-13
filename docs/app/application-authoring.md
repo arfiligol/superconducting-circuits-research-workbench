@@ -1,13 +1,13 @@
 ---
 title: "Application Authoring Map"
 aliases:
-  - App Authoring Map
-  - Application Build Order
+ - App Authoring Map
+ - Application Build Order
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: contributor
@@ -26,21 +26,21 @@ Use this map before implementing Application or Python Notebook product surfaces
 1. `README.md`
 2. [Folder Structure](../reference/guardrails/project-basics/folder-structure.mdx)
 3. [Tech Stack](../reference/guardrails/project-basics/tech-stack.mdx)
-4. [Simulation Interface Boundaries](../reference/architecture/simulation-interface-boundaries.md)
-5. [Product Async Contracts](../reference/architecture/product-async-contracts.md)
+4. [Simulation Interface Boundaries](./architecture/contracts/simulation-interface-boundaries.md)
+5. [Product Async Contracts](./architecture/contracts/product-async-contracts.md)
 6. [Application Interface](application-interface.md)
 7. [Frontend Reference](frontend/index.md)
 8. [Backend Reference](backend/index.md)
 9. [Tasks & Execution](backend/tasks-execution.md)
 10. [Datasets & Results](backend/datasets-results.mdx)
 11. [ResultView API](backend/result-view-api.md)
-12. [Python Notebook Authoring](../reference/notebooks/python-authoring.md)
+12. [Python Notebook Authoring](./prototype-to-product/python-notebook-authoring.md)
 13. Surface-specific frontend docs:
-    - [Circuit Simulation Workbench](frontend/simulation-workbench/circuit-simulation.md)
-    - [Analysis Workbench](frontend/analysis-workbench/analysis-workbench.md)
-    - [Tasks](frontend/workspace/tasks.mdx)
-    - [Raw Data Browser](frontend/workspace/raw-data-browser.mdx)
-    - [Dataset](frontend/workspace/dataset.mdx)
+  - [Circuit Simulation Workbench](frontend/simulation-workbench/circuit-simulation.md)
+  - [Analysis Workbench](frontend/analysis-workbench/analysis-workbench.md)
+  - [Tasks](frontend/workspace/tasks.mdx)
+  - [Raw Data Browser](frontend/workspace/raw-data-browser.mdx)
+  - [Dataset](frontend/workspace/dataset.mdx)
 
 ## Build Order
 
@@ -72,12 +72,12 @@ When a feature crosses multiple surfaces, implement it as a vertical slice throu
 
 ```text
 Application / Python Notebook
-    -> Backend product request
-    -> persisted Task
-    -> Julia Runner
-    -> local Zarr staging
-    -> Backend publication
-    -> ResultView / TraceStore
+  -> Backend product request
+  -> persisted Task
+  -> Julia Runner
+  -> local Zarr staging
+  -> Backend publication
+  -> ResultView / TraceStore
 ```
 
 Do not bypass the slice by making the frontend, Electron main process, Python Backend request thread, or Python Notebook own compute or publication authority.
@@ -85,6 +85,6 @@ Do not bypass the slice by making the frontend, Electron main process, Python Ba
 ## Related
 
 * [Application Interface](application-interface.md)
-* [Product Async Contracts](../reference/architecture/product-async-contracts.md)
+* [Product Async Contracts](./architecture/contracts/product-async-contracts.md)
 * [ResultView API](backend/result-view-api.md)
 * [Notebook Interface](../reference/notebooks/index.md)

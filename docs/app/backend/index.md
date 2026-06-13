@@ -1,11 +1,11 @@
 ---
 aliases:
-  - Backend App Reference
+ - Backend App Reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: team
@@ -48,4 +48,4 @@ The backend must not run JosephsonCircuits through an in-process Julia bridge as
 
 * [Application Interface](../application-interface.md)
 * [Frontend Reference](../frontend/index.md)
-* [Julia Runner Compute Plane](../../reference/architecture/julia-runner-compute-plane.md)
+* [Julia Runner Compute Plane](../architecture/contracts/julia-runner-compute-plane.md)

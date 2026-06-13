@@ -1,16 +1,16 @@
 ---
 aliases:
-  - UI/UX Quality
-  - UI/UX 規範
+ - UI/UX Quality
+ - UI/UX specifications
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/ui-ux
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
 status: stable
 owner: docs-team
 audience: contributor
-scope: Next.js frontend 與 Electron desktop shell 的 UI/UX 品質規範索引。
+scope: Index of UI/UX quality specifications for Next.js frontend and Electron desktop shell.
 version: v2.3.0
 last_updated: 2026-03-15
 updated_by: codex
@@ -20,50 +20,50 @@ import { Aside } from '@astrojs/starlight/components';
 
 # UI/UX Quality
 
-本區描述 rewrite branch 中 frontend 的 UI/UX 規範。
-這些規則的目的，是讓 Data Browser、Editor、Simulation、Characterization 等功能在資料密集情境下仍可維持一致且可維護的介面。
-若以 Electron 包裝 desktop app，視覺與互動規則仍以這套 frontend 規範為主，不另起一套桌面 UI 語言。
+This area describes the UI/UX specifications of the frontend in the rewrite branch.
+The purpose of these rules is to allow functions such as Data Browser, Editor, Simulation, and Characterization to maintain consistent and maintainable interfaces in data-intensive scenarios.
+If a desktop app is packaged in Electron, the visual and interaction rules will still be based on this set of frontend specifications, and there will be no need to create a new desktop UI language.
 
 <Aside type="note" title="Use this section for frontend decisions">
 
-這裡負責 Next.js frontend 與 Electron shell 的互動品質，不負責 backend authority 或 page business contract。
-若問題在問 layout、state、form、theme、routing、a11y，先從這裡開始。
+This is responsible for the interaction quality between Next.js frontend and Electron shell, and is not responsible for backend authority or page business contract.
+If the question is about layout, state, form, theme, routing, a11y, start here.
 
 </Aside>
 
 <Aside type="caution" title="No browser-default product UI">
 
-使用者可見的產品互動 surface，不可直接退化成 browser 預設外觀。
-正式 app UI 必須經過我們的 component system 或 feature wrapper 呈現；若平台原生控制不可避免，也必須包在我們自己的 trigger、label、error state 與 surrounding layout 內。
+The user-visible product interaction surface cannot directly degrade to the browser's default appearance.
+The formal app UI must be presented through our component system or feature wrapper; if platform native control is unavoidable, it must also be wrapped in our own trigger, label, error state, and surrounding layout.
 
 </Aside>
 
 ## Frontend Stack
 
-| 層級 | 工具 | 說明 |
+| Hierarchy | Tools | Description |
 | --- | --- | --- |
-| Framework | Next.js App Router | route groups、nested layouts、server/client 組合 |
-| Components | Radix UI + shadcn/ui | 可組合且具 a11y 基礎的元件 |
+| Framework | Next.js App Router | Route groups, nested layouts, server/client composition |
+| Components | Radix UI + shadcn/ui | Composable and a11y-based components |
 | Theme | next-themes | light / dark / system |
-| Styling | Tailwind CSS v4 + semantic tokens | 佈局與語意化樣式 |
-| Server State | SWR | cache、revalidation、loading states |
-| Form State | React Hook Form + Zod | validation 與提交 |
+| Styling | Tailwind CSS v4 + semantic tokens | Layout and semantic styles |
+| Server State | SWR |cache, revalidation, loading states|
+| Form State | React Hook Form + Zod | validation and submission |
 
 ## Page Map
 
 | Page | Read this when | Primary concern |
 | --- | --- | --- |
-| [Theming](theming.mdx) | 你在改 color tokens、dark mode、theme switch | visual tokens and theme rules |
-| [Component Guidelines](component-guidelines.mdx) | 你在選元件、設計 dialog/form/table | component semantics |
-| [Layout Patterns](layout-patterns.mdx) | 你在改 shell、master-detail、responsive layout | screen structure |
-| [State Management](state-management.mdx) | 你在改 SWR、form state、mutations | client/server state behavior |
-| [Accessibility](accessibility.mdx) | 你在處理 keyboard flow、aria、contrast | accessibility baseline |
-| [Routing](routing.mdx) | 你在改 route structure、nested layouts、context-carrying route behavior | navigation and route boundaries |
+| [Theming](theming.mdx) |You are changing color tokens, dark mode, theme switch| visual tokens and theme rules |
+| [Component Guidelines](component-guidelines.mdx) | You are selecting components and designs dialog/form/table | component semantics |
+| [Layout Patterns](layout-patterns.mdx) | You are changing shell, master-detail, responsive layout | screen structure |
+| [State Management](state-management.mdx) |You are changing SWR, form state, mutations| client/server state behavior |
+| [Accessibility](accessibility.mdx) | You are dealing with keyboard flow, aria, contrast | accessibility baseline |
+| [Routing](routing.mdx) |You are changing route structure, nested layouts, context-carrying route behavior| navigation and route boundaries |
 
 <Aside type="tip" title="Read order">
 
-先用 `Layout Patterns` 決定頁面骨架，再看 `State Management` 與 `Component Guidelines`。
-`Theming` 與 `Accessibility` 應跟著每一個 UI surface 一起驗收，不是最後補上的 polish。
+First use `Layout Patterns` to determine the page skeleton, and then look at `State Management` and `Component Guidelines`.
+`Theming` and `Accessibility` should be accepted together with each UI surface, not the polish added at the end.
 
 </Aside>
 

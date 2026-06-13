@@ -1,13 +1,13 @@
 ---
 title: "Python Notebook Authoring"
 aliases:
-  - Python Notebook Helpers
-  - Python Notebook Surface Rules
+ - Python Notebook Helpers
+ - Python Notebook Surface Rules
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/notebooks
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/notebooks
 status: stable
 owner: docs-team
 audience: contributor
@@ -56,6 +56,6 @@ They are not Python Analysis Core. Reusable fitting, preprocessing, matrix analy
 
 * [Notebook Interface](index.md)
 * [Prototype To Product](../../app/prototype-to-product/index.md)
-* [Simulation Interface Boundaries](../architecture/simulation-interface-boundaries.md)
-* [Product Async Contracts](../architecture/product-async-contracts.md)
+* [Simulation Interface Boundaries](../architecture/contracts/simulation-interface-boundaries.md)
+* [Product Async Contracts](../architecture/contracts/product-async-contracts.md)
 * [ResultView API](../../app/backend/result-view-api.md)

@@ -1,13 +1,13 @@
 ---
 title: "ResultView API"
 aliases:
-  - Backend ResultView API
-  - Result View API
+ - Backend ResultView API
+ - Result View API
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: team
@@ -40,36 +40,36 @@ Endpoint names are contract families. Exact route names may evolve only through 
 
 ```json
 {
-  "task_id": "task_001",
-  "status": "completed",
-  "publication_status": "published",
-  "dataset_id": "ds_001",
-  "design_id": "design_001",
-  "result_handles": [
+ "task_id": "task_001",
+ "status": "completed",
+ "publication_status": "published",
+ "dataset_id": "ds_001",
+ "design_id": "design_001",
+ "result_handles": [
+  {
+   "result_id": "result_001",
+   "kind": "trace_batch",
+   "label": "Frequency sweep result",
+   "default_view": "magnitude_db"
+  }
+ ],
+ "available_traces": [
+  {
+   "trace_id": "batch_001:S11",
+   "family": "s_matrix",
+   "parameter": "S11",
+   "representation": "complex",
+   "shape": [401],
+   "axes_summary": [
     {
-      "result_id": "result_001",
-      "kind": "trace_batch",
-      "label": "Frequency sweep result",
-      "default_view": "magnitude_db"
+     "name": "frequency",
+     "unit": "Hz",
+     "length": 401
     }
-  ],
-  "available_traces": [
-    {
-      "trace_id": "batch_001:S11",
-      "family": "s_matrix",
-      "parameter": "S11",
-      "representation": "complex",
-      "shape": [401],
-      "axes_summary": [
-        {
-          "name": "frequency",
-          "unit": "Hz",
-          "length": 401
-        }
-      ],
-      "available_views": ["magnitude_db", "phase", "real_imag"]
-    }
-  ]
+   ],
+   "available_views": ["magnitude_db", "phase", "real_imag"]
+  }
+ ]
 }
 ```
 
@@ -97,19 +97,19 @@ Canonical JSON shape:
 
 ```json
 {
-  "view": "magnitude_db",
-  "trace_id": "batch_001:S11",
-  "result_id": "result_001",
-  "axes": {
-    "frequency": {
-      "mode": "all"
-    },
-    "bias": {
-      "mode": "index",
-      "value": 2
-    }
+ "view": "magnitude_db",
+ "trace_id": "batch_001:S11",
+ "result_id": "result_001",
+ "axes": {
+  "frequency": {
+   "mode": "all"
   },
-  "max_points": 2000
+  "bias": {
+   "mode": "index",
+   "value": 2
+  }
+ },
+ "max_points": 2000
 }
 ```
 
@@ -179,7 +179,7 @@ If a requested arbitrary ND slice, view, or axis selector is not supported, the 
 
 ## Related
 
-* [Product Async Contracts](../../reference/architecture/product-async-contracts.md)
+* [Product Async Contracts](../architecture/contracts/product-async-contracts.md)
 * [Tasks & Execution](tasks-execution.md)
 * [Datasets & Results](datasets-results.mdx)
-* [TraceStore Zarr](../../reference/architecture/trace-store-zarr.md)
+* [TraceStore Zarr](../architecture/contracts/trace-store-zarr.md)

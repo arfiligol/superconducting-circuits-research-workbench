@@ -1,23 +1,23 @@
 ---
 aliases:
-  - Preprocessing Rationale
-  - 前處理設計理由
+ - Preprocessing Rationale
+ - Reasons for pre-treatment design
 tags:
-  - diataxis/explanation
-  - status/stable
-  - topic/architecture
-  - topic/pipeline
-  - audience/team
+ - diataxis/explanation
+ - status/stable
+ - topic/architecture
+ - topic/pipeline
+ - audience/team
 status: stable
 owner: docs-team
 audience: team
-scope: 為什麼 ingestion、normalization、Runner staging 與 Backend publication 必須分層
+scope: Why ingestion, normalization, Runner staging and Backend publication must be layered
 version: v1.0.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Preprocessing Rationale
-  order: 30
+ label: Preprocessing Rationale
+ order: 30
 ---
 
 # Preprocessing Rationale
@@ -55,4 +55,4 @@ Official platform state requires Backend publication because the Backend is the 
 
 - [Data Flow](data-flow.md)
 - [Datasets & Results](../../backend/datasets-results.mdx)
-- [TraceStore Zarr](../../../reference/architecture/trace-store-zarr.md)
+- [TraceStore Zarr](../contracts/trace-store-zarr.md)

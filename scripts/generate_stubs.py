@@ -1,13 +1,10 @@
-"""
-Legacy English stub generator.
-
-English docs are no longer maintained in this repository.
-"""
+"""Legacy stub generator for the old bilingual docs layout."""
 
 
 def main():
     raise SystemExit(
-        "English documentation stubs are deprecated. This repository now maintains zh-TW docs only."
+        "Language-specific documentation stubs are deprecated. "
+        "Editable docs source is English-only under docs/."
     )
 
 

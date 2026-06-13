@@ -1,12 +1,12 @@
 ---
 aliases:
-  - API Reference
-  - Generated API Reference
+ - API Reference
+ - Generated API Reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/api-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/api-reference
 status: stable
 owner: docs-team
 audience: team
@@ -18,14 +18,14 @@ updated_by: codex
 
 # API Reference
 
-本頁是 generated API reference 的入口。Astro + Starlight 維持 high-level Source of Truth、架構契約與工作流說明；Sphinx 與 Documenter.jl 負責從 package docstrings 產生可查找的 API reference。
+This page is the entry point to the generated API reference. Astro + Starlight maintains the high-level Source of Truth, architectural contracts, and workflow specifications; Sphinx and Documenter.jl are responsible for generating searchable API references from package docstrings.
 
 ## Reference Sites
 
 | Site | Owner | Scope |
 | --- | --- | --- |
-| [Python API Reference](../../../api/python/) | Sphinx | `superconducting_circuits_analysis`、`schemdraw_circuit_library` |
-| [Julia API Reference](../../../api/julia/) | Documenter.jl | `SuperconductingCircuitsCore`、`SuperconductingCircuitsVisualizer`、`SuperconductingCircuitsRunner`、`SuperconductingCircuitsAnalysisBridge` |
+| [Python API Reference](../../../api/python/) | Sphinx |`superconducting_circuits_analysis`, `schemdraw_circuit_library`|
+| [Julia API Reference](../../../api/julia/) | Documenter.jl |`SuperconductingCircuitsCore`, `SuperconductingCircuitsVisualizer`, `SuperconductingCircuitsRunner`, `SuperconductingCircuitsAnalysisBridge`|
 
 ## Boundary
 

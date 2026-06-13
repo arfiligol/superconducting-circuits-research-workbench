@@ -1,16 +1,16 @@
 ---
 aliases:
-  - "Documentation Maintenance"
-  - "文件維護"
+ - "Documentation Maintenance"
+ - "File maintenance"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/documentation
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
 status: stable
 owner: docs-team
 audience: team
-scope: "文件維護規範：Astro + Starlight docs source/API docs source/暫存樹邊界、版本與 Frontmatter 更新、build 檢查"
+scope: "File maintenance specifications: Astro + Starlight docs source/API docs source/staging tree boundaries, version and Frontmatter updates, build checks"
 version: v2.1.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -20,7 +20,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Documentation Maintenance
 
-本文件定義文件維護流程。`docs/` 是 high-level technical docs 的唯一編輯來源；Astro + Starlight 負責把它建成 `/docs/`；Sphinx 與 Documenter.jl 負責 sibling API reference sites。
+This document defines the file maintenance process. `docs/` is the sole editorial source of high-level technical docs; Astro + Starlight are responsible for building it into `/docs/`; Sphinx and Documenter.jl are responsible for sibling API reference sites.
 
 ## Source Tree Map
 
@@ -37,17 +37,17 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 | `build/api-reference/` | generated API docs output before public artifact copy |
 | `site/dist/api/` | deployed API docs artifact path |
 
-<Aside type="caution" title="維護規則">
+<Aside type="caution" title="maintenance rules">
 
-- 日常編輯一律在 `docs/` 進行。
-- `docs/start/`、`docs/workflows/`、`docs/concepts/`、`docs/reference/`、`docs/contribute/` 是 active Starlight source layout。
-- 禁止直接修改 `site/src/content/docs/docs/`，因為它會由 `scripts/build/prepare_starlight_docs.py` 覆蓋。
-- API reference source 放在 `docs/api-reference/`，不得放進 Starlight staging。
-- 新增、刪除或移動頁面後，必須跑 route validation 和 Starlight build。
+- Daily editing will be done at `docs/`.
+- `docs/start/`, `docs/workflows/`, `docs/concepts/`, `docs/reference/`, `docs/contribute/` is active Starlight source layout.
+- Direct modification of `site/src/content/docs/docs/` is prohibited as it will be overwritten by `scripts/build/prepare_starlight_docs.py`.
+- API reference source is placed in `docs/api-reference/` and must not be placed in Starlight staging.
+- After adding, deleting or moving pages, you must run route validation and Starlight build.
 
 </Aside>
 
-## Frontmatter 更新
+## Frontmatter Update
 
 | Change type | Minimum update |
 | --- | --- |
@@ -55,29 +55,30 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 | rule/page scope changed | `version` minor or major bump |
 | typo / formatting only | patch bump |
 
-內容有改動時，至少更新：
+When the content changes, at least update:
 
 - `last_updated`: `YYYY-MM-DD`
-- `updated_by`: `team` 或 `team/person`
+- `updated_by`: `team` or `team/person`
 
-## Astro + Starlight zh-TW Build
+## Astro + Starlight English Docs Build
 
-本專案目前的正式文件架構名稱為：
+The current official document structure name of this project is:
 
-- `Astro + Starlight zh-TW Build`
+- `Astro + Starlight English Docs Build`
 
-其技術特徵為：
+Its technical characteristics are:
 
-- 主來源樹為 `docs/`
-- Astro + Starlight 在 `site/` 內建置 `/docs/`
-- `scripts/build/prepare_starlight_docs.py` 產生 Starlight staging
-- generated API reference 以 sibling sites 部署到 `/api/python/` 與 `/api/julia/`
-- public artifact 由 `site/dist/` 發布
+- The main source tree is `docs/`
+- Editable docs source is English-only.
+- Astro + Starlight built into `site/` `/docs/`
+- `scripts/build/prepare_starlight_docs.py` generates Starlight staging
+- generated API reference deployed to sibling sites `/api/python/` and `/api/julia/`
+- public artifact released by `site/dist/`
 
-## 檢查流程
+## Check process
 
 <Tabs>
-<TabItem label="本地預覽">
+<TabItem label="local preview">
 
 
 ```bash
@@ -86,11 +87,12 @@ uv run docs-site serve --build
 
 </TabItem>
 
-<TabItem label="建置檢查">
+<TabItem label="Build inspection">
 
 
 ```bash
 uv run python scripts/check_docs_nav_routes.py --check-source
+uv run python scripts/check_docs_language.py
 ./scripts/build_docs_sites.sh
 uv run python scripts/check_docs_nav_routes.py --check-built
 
@@ -102,11 +104,11 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 
 </Tabs>
 
-<Aside type="tip" title="常見問題">
+<Aside type="tip" title="FAQ">
 
-- 若頁面更新後仍 404，先確認 `./scripts/build_docs_sites.sh` 是否重新產生 Starlight staging。
-- 若 Starlight build 失敗，先看 `site/src/content/docs/docs/` 中對應 staging file，再回 `docs/` 修 source。
-- 若 API reference 連結失效，跑完整 `./scripts/build/build_public_site.sh`，確認 `/docs/`、`/api/python/`、`/api/julia/` 同時存在。
+- If the page is still 404 after updating, first confirm whether `./scripts/build_docs_sites.sh` regenerates Starlight staging.
+- If Starlight build fails, first look at the corresponding staging file in `site/src/content/docs/docs/`, and then go back to `docs/` to repair the source.
+- If the API reference link fails, run the complete `./scripts/build/build_public_site.sh` and confirm that `/docs/`, `/api/python/`, and `/api/julia/` exist at the same time.
 
 </Aside>
 
@@ -120,8 +122,9 @@ uv run python scripts/check_docs_nav_routes.py --check-built
 - **Staging Tree**: `site/src/content/docs/docs/` is generated by `scripts/build/prepare_starlight_docs.py`; do not edit directly.
 - **API Docs Source**: edit Sphinx and Documenter.jl API docs under `docs/api-reference/`; generated output goes through `build/api-reference/` and `site/dist/api/`.
 - **Build Owner**: Astro + Starlight renders `/docs/`; Sphinx renders `/api/python/`; Documenter.jl renders `/api/julia/`.
+- **Language**: editable docs source is English-only; generated/staging output remains excluded from direct editing.
 - **Frontmatter**: update `last_updated` and `updated_by` on content changes.
 - **Versioning**: patch/minor/major bumps for doc changes.
-- **Architecture Term**: this repo uses `Astro + Starlight zh-TW Build`.
-- **Verify**: run `uv run python scripts/check_docs_nav_routes.py --check-source`, `./scripts/build_docs_sites.sh`, `uv run python scripts/check_docs_nav_routes.py --check-built`, and `./scripts/build/build_api_docs.sh` when API reference is touched.
+- **Architecture Term**: this repo uses `Astro + Starlight English Docs Build`.
+- **Verify**: run `uv run python scripts/check_docs_nav_routes.py --check-source`, `uv run python scripts/check_docs_language.py`, `./scripts/build_docs_sites.sh`, `uv run python scripts/check_docs_nav_routes.py --check-built`, and `./scripts/build/build_api_docs.sh` when API reference is touched.
 ```

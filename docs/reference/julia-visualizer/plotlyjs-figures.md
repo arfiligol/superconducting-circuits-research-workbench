@@ -1,15 +1,15 @@
 ---
 aliases:
-  - PlotlyJS Figures
-  - Julia Visualizer PlotlyJS Figures
-  - SuperconductingCircuitsVisualizer Figures
+ - PlotlyJS Figures
+ - Julia Visualizer PlotlyJS Figures
+ - SuperconductingCircuitsVisualizer Figures
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-visualizer
-  - topic/julia-core
-  - topic/pluto
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-visualizer
+ - topic/julia-core
+ - topic/pluto
 status: stable
 owner: docs-team
 audience: contributor
@@ -27,9 +27,9 @@ updated_by: codex
 
 | Package | May depend on | Must not depend on |
 | --- | --- | --- |
-| `SuperconductingCircuitsVisualizer` | `PlotlyJS.jl`, Julia Core result types, Base/stdlib formatting utilities | Python Backend, Electron, app frontend state, Runner task protocol |
+| `SuperconductingCircuitsVisualizer` | `PlotlyJS.jl`, Julia Core result types, Base/stdlib formatting utilities | infrastructure services, packaged desktop runtime, product UI state, Runner task protocol |
 | `SuperconductingCircuitsCore` | JosephsonCircuits and Julia scientific dependencies | `PlotlyJS.jl`, `SuperconductingCircuitsVisualizer` |
-| `SuperconductingCircuitsRunner` | Julia Core and Backend Runner protocol dependencies | `PlotlyJS.jl`, `SuperconductingCircuitsVisualizer` |
+| `SuperconductingCircuitsRunner` | Julia Core and task protocol dependencies | `PlotlyJS.jl`, `SuperconductingCircuitsVisualizer` |
 
 This keeps plotting optional for compute packages. Pluto notebooks can load the visualizer when they need figures; Core and Runner remain usable in headless execution and CI without a plotting runtime.
 
@@ -63,10 +63,10 @@ result = run_hb_problem(hb_problem)
 s21 = zero_mode_s(result, 2, 1)
 
 s_parameter_db_magnitude_figure(
-    result.frequencies_hz,
-    ["S21" => s21];
-    title = "Readout Transmission",
-    config = figure_config,
+  result.frequencies_hz,
+  ["S21" => s21];
+  title = "Readout Transmission",
+  config = figure_config,
 )
 ```
 
@@ -103,17 +103,17 @@ Example:
 
 ```julia
 figure_config = PlotlyFigureConfig(
-    display_width_px = 1000,
-    display_height_px = 620,
-    download_width_px = 1800,
-    download_height_px = 1100,
-    download_scale = 3,
-    download_filename = "readout_line_s21",
-    font_scale = 1.15,
-    x_range_ghz = (4.0, 5.0),
-    y_range = (-60.0, 2.0),
-    x_axis_type = :linear,
-    y_axis_type = :linear,
+  display_width_px = 1000,
+  display_height_px = 620,
+  download_width_px = 1800,
+  download_height_px = 1100,
+  download_scale = 3,
+  download_filename = "readout_line_s21",
+  font_scale = 1.15,
+  x_range_ghz = (4.0, 5.0),
+  y_range = (-60.0, 2.0),
+  x_axis_type =:linear,
+  y_axis_type =:linear,
 )
 ```
 
@@ -131,7 +131,7 @@ The package provides PlotlyJS figures for the result families used by the Pluto 
 | --- | --- |
 | `s_parameter_db_magnitude_figure` | Frequency vector and named complex S traces; plots `20log10(abs(Sij))` in dB. |
 | `s_parameter_abs_magnitude_figure` | Frequency vector and named complex S traces; plots linear `abs(Sij)` with y-axis `\|Magnitude\|`. |
-| `s_parameter_phase_figure` | Frequency vector and named complex S traces; plots phase with `unit = :deg` or `unit = :rad`. |
+| `s_parameter_phase_figure` | Frequency vector and named complex S traces; plots phase with `unit =:deg` or `unit =:rad`. |
 | `unwrap_phase_trace` | Complex traces or wrapped phase values; returns an explicit unwrapped phase trace before plotting. |
 | `z_trace_figure` | Frequency vector and named complex Z traces; expands each trace into real and imaginary curves. |
 | `z_parameter_real_figure` | Frequency vector and named complex Z traces; plots `real(Zij)` while preserving labels such as `Z11` and `Z21`. |
@@ -145,14 +145,14 @@ The package provides PlotlyJS figures for the result families used by the Pluto 
 The phase figure helper does not silently unwrap phase. If a notebook wants a continuous phase trace, the notebook calls `unwrap_phase_trace` first and then plots the returned values with `multi_curve_figure`.
 
 ```julia
-s21_phase_deg = unwrap_phase_trace(s21; unit = :deg)
+s21_phase_deg = unwrap_phase_trace(s21; unit =:deg)
 
 multi_curve_figure(
-    result.frequencies_hz,
-    ["unwrapped phase(S21)" => s21_phase_deg];
-    title = "Readout Line Phase Delay",
-    yaxis_title = "Phase (deg)",
-    config = figure_config,
+  result.frequencies_hz,
+  ["unwrapped phase(S21)" => s21_phase_deg];
+  title = "Readout Line Phase Delay",
+  yaxis_title = "Phase (deg)",
+  config = figure_config,
 )
 ```
 
@@ -161,12 +161,12 @@ analysis owner such as `core/python/analysis/superconducting_circuits_analysis` 
 
 ```julia
 fit_overlay_figure(
-    fit_result["fit_curve"]["frequency_hz"],
-    abs.(s21_window),
-    abs.(fit_result["fit_curve"]["s21_real"] .+ im .* fit_result["fit_curve"]["s21_imag"]);
-    title = "S21 Notch Fit",
-    yaxis_title = "|S21|",
-    config = figure_config,
+  fit_result["fit_curve"]["frequency_hz"],
+  abs.(s21_window),
+  abs.(fit_result["fit_curve"]["s21_real"] .+ im .* fit_result["fit_curve"]["s21_imag"]);
+  title = "S21 Notch Fit",
+  yaxis_title = "|S21|",
+  config = figure_config,
 )
 ```
 
@@ -178,32 +178,32 @@ Z/Y helpers receive complex traces and own only the mechanical real/imaginary sp
 
 ```julia
 z_trace_figure(
-    result.frequencies_hz,
-    ["Z11" => z11, "Z21" => z21];
-    title = "Input And Transfer Impedance",
-    config = figure_config,
+  result.frequencies_hz,
+  ["Z11" => z11, "Z21" => z21];
+  title = "Input And Transfer Impedance",
+  config = figure_config,
 )
 
 z_parameter_imaginary_figure(
-    result.frequencies_hz,
-    ["Z11" => z11, "Z21" => z21, "Z12" => z12, "Z22" => z22];
-    title = "Imaginary Part Of Impedance Matrix",
-    config = figure_config,
+  result.frequencies_hz,
+  ["Z11" => z11, "Z21" => z21, "Z12" => z12, "Z22" => z22];
+  title = "Imaginary Part Of Impedance Matrix",
+  config = figure_config,
 )
 
 z_parameter_abs_imaginary_figure(
-    result.frequencies_hz,
-    ["Z11" => z11, "Z21" => z21, "Z12" => z12, "Z22" => z22];
-    title = "Absolute Imaginary Part Of Impedance Matrix",
-    config = figure_config,
-    y_axis_type = :log,
+  result.frequencies_hz,
+  ["Z11" => z11, "Z21" => z21, "Z12" => z12, "Z22" => z22];
+  title = "Absolute Imaginary Part Of Impedance Matrix",
+  config = figure_config,
+  y_axis_type =:log,
 )
 
 y_trace_figure(
-    result.frequencies_hz,
-    ["Y11" => y11];
-    title = "Input Admittance",
-    config = figure_config,
+  result.frequencies_hz,
+  ["Y11" => y11];
+  title = "Input Admittance",
+  config = figure_config,
 )
 ```
 

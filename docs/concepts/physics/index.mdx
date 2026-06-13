@@ -1,7 +1,7 @@
 ---
 aliases:
 - Physics Concepts
-- 物理問答主幹
+- Physics Questions and Answers Main
 tags:
 - diataxis/explanation
 - audience/team
@@ -9,50 +9,50 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: 超導量子電路物理知識架構總覽
+scope: Overview of the physical knowledge structure of superconducting quantum circuits
 version: v1.0.0
 last_updated: 2026-02-24
 updated_by: team
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# 物理知識架構 (Physics)
+# Physics Knowledge Architecture (Physics)
 
-本章節以**物理脈絡**為主軸，建立超導量子電路從基礎原理到工程實踐的完整知識框架。
+This chapter takes the **physical context** as the main axis to establish a complete knowledge framework of superconducting quantum circuits from basic principles to engineering practice.
 
-每篇文章的開場會是一個**物理問題句**或是**歷史社群脈絡**，讓讀者能立刻理解這篇的重要定位。每頁寫作骨架依序為：開場、先備知識對照、物理核心（包含符號定義與公式推導）、工程映射、限制與近似，以及跨文件導航。內容依據 A–I 知識架構組織，由淺入深、可線性閱讀亦可任意切入。
+The opening of each article will be a **Physics question sentence** or **Historical community context**, so that readers can immediately understand the important positioning of this article. The writing skeleton of each page is in order: opening, prior knowledge comparison, physics core (including symbol definition and formula derivation), engineering mapping, limitations and approximations, and cross-document navigation. The content is organized according to the A-I knowledge structure, from shallow to deep, and can be read linearly or cut into at will.
 
-<Aside type="note" title="撰寫原則">
+<Aside type="note" title="Writing Principles">
 
-- 所有內容遵循 [Physics Concepts Guardrail](../../reference/guardrails/documentation-design/explanation-physics.mdx)
-- 每篇頁面標註節點類型（Principle / Model / Method / Device）
+- All content follows [Physics Concepts Guardrail](../../reference/guardrails/documentation-design/explanation-physics.mdx)
+- Each page is marked with node type (Principle/Model/Method/Device)
 
 </Aside>
 
-- 工具操作步驟不放在此處，請參考 [Workflows](../../workflows/index.mdx)
+- Tool operation steps are not placed here, please refer to [Workflows](../../workflows/index.mdx)
 
 ---
 
 ## A. Foundations: The Four Pillars
-> 四大力學作為超導量子電路的先備基礎。每個主題聚焦於「與電路物理的連結點」。
+> The four major mechanics serve as the preliminary foundation for superconducting quantum circuits. Each topic focuses on "the connection point to circuit physics".
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
-| A1 | Classical Mechanics → Hamiltonian / Lagrangian mindset | Principle |
-| A2 | Electromagnetism → fields, energy flow, boundary conditions | Principle |
-| A3 | Statistical / Thermal Physics → noise, dissipation, temperature, fluctuation | Principle |
-| A4 | Quantum Mechanics → states, measurement, open systems | Principle |
+| A1 | Classical Mechanics -> Hamiltonian / Lagrangian mindset | Principle |
+| A2 | Electromagnetism -> fields, energy flow, boundary conditions | Principle |
+| A3 | Statistical / Thermal Physics -> noise, dissipation, temperature, fluctuation | Principle |
+| A4 | Quantum Mechanics -> states, measurement, open systems | Principle |
 
 ---
 
 ## B. Electromagnetics to Circuits
-> 從 Maxwell 方程到可計算的電路模型。這是所有模擬與分析的建模基礎。
+> From Maxwell's equations to computable circuit models. This is the modeling basis for all simulation and analysis.
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
 | B1 | Lumped vs Distributed | Model |
 | B2 | [Transmission Lines & Modes](coupled-transmission-lines-even-odd-maxwell-mutual.mdx) | Model |
@@ -64,9 +64,9 @@ import { Aside } from '@astrojs/starlight/components';
 ---
 
 ## C. Superconductivity & Dissipation
-> 超導體的基本物理與各種能量損耗機制。理解這些不僅能設計出高品質因子的元件，更能明白為什麼超導體能作為量子系統、被用來開發量子電腦。
+> Basic physics of superconductors and various energy loss mechanisms. Understanding these can not only design components with high quality factors, but also understand why superconductors can be used as quantum systems and be used to develop quantum computers.
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
 | C1 | Superconductivity basics (London, BCS, two-fluid intuition) | Principle |
 | C2 | Surface impedance / kinetic inductance | Model |
@@ -76,9 +76,9 @@ import { Aside } from '@astrojs/starlight/components';
 ---
 
 ## D. Josephson Physics & Nonlinearity
-> 約瑟夫森接面是超導量子電路的核心非線性元件。所有量子位元與參數放大器都建立在此基礎之上。
+> The Josephson junction is the core nonlinear component of superconducting quantum circuits. All qubits and parametric amplifiers are built on this foundation.
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
 | D1 | Josephson relations & junction models | Device / Model |
 | D2 | SQUID / arrays / tunability | Device |
@@ -88,12 +88,12 @@ import { Aside } from '@astrojs/starlight/components';
 ---
 
 ## E. Quantum Circuits Formalism
-> 電路量子化：從古典電路到量子哈密頓量。這是理解 Transmon、色散讀取與 Purcell 效應的核心理論。
+> Circuit quantization: from classical circuits to quantum Hamiltonians. This is the core theory for understanding Transmon, dispersion readout, and the Purcell effect.
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
 | E1 | Circuit quantization (node flux, charge, constraints) | Method |
-| E2 | Lagrangian → Hamiltonian → quantization | Method |
+| E2 | Lagrangian -> Hamiltonian -> quantization | Method |
 | E3 | Linearization & black-box quantization intuition | Method |
 | E4 | Open quantum systems (input-output, master equation) | Model |
 | E5 | Dispersive physics (χ, cross-Kerr, Purcell-like channels) | Model |
@@ -101,9 +101,9 @@ import { Aside } from '@astrojs/starlight/components';
 ---
 
 ## F. Core Building Blocks
-> 超導量子電路中的核心器件。每個器件解說必須指出其依賴的 Model 與 Principle。
+> Core devices in superconducting quantum circuits. Each device description must indicate the Model and Principle it depends on.
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
 | F1 | Resonators (CPW, lumped, 3D, metamaterial) | Device |
 | F2 | Qubits (transmon family, fluxonium, etc.) | Device |
@@ -112,24 +112,24 @@ import { Aside } from '@astrojs/starlight/components';
 
 ---
 
-## G. Design & Simulation (原理面)
-> 模擬工具背後的物理原理與數值方法。工具操作步驟請參考 Workflows。
+## G. Design & Simulation (Principle)
+> The physical principles and numerical methods behind simulation tools. Please refer to Workflows for tool operation steps.
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
 | G1 | Circuit simulators (lumped, harmonic balance, time-domain) | Method |
 | G2 | EM simulation (FEM / MoM) & port definitions | Method |
-| G3 | Parameter extraction (S→Y/Z, mode extraction, energy participation) | Method |
+| G3 | Parameter extraction (S->Y/Z, mode extraction, energy participation) | Method |
 | G4 | Vector fitting & rational models | Method |
 | G5 | Quantum solvers & when to use them | Method |
 | G6 | Verification strategy (cross-check hierarchy) | Method |
 
 ---
 
-## H. Cryogenic RF Engineering (原理面)
-> 低溫微波量測鏈的物理原理。儀器操作 SOP 請參考 Workflows。
+## H. Cryogenic RF Engineering (Principle)
+>Physical principles of low-temperature microwave measurement chain. Please refer to Workflows for instrument operation SOP.
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
 | H1 | RF chain architecture (attenuators, isolators, circulators, filters) | Model |
 | H2 | Calibration (power, gain, noise temperature, S-parameter cal) | Method |
@@ -139,10 +139,10 @@ import { Aside } from '@astrojs/starlight/components';
 
 ---
 
-## I. Experiments & Protocols (原理面)
-> 實驗協議背後的物理原理。量測 SOP 請參考 Workflows。
+## I. Experiments & Protocols (principle)
+> The physics behind the experimental protocol. For measurement SOP, please refer to Workflows.
 
-| 編號 | 主題 | 節點類型 |
+| Number | Topic | Node Type |
 |------|------|----------|
 | I1 | Resonator characterization | Method |
 | I2 | Qubit spectroscopy / time-domain (Rabi, T1, T2, Ramsey, Echo) | Method |
@@ -153,6 +153,6 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Related
 
-- [Workflows](../../workflows/index.mdx) — 工具操作、資料匯入與端到端流程
-- [Reference](../../reference/index.mdx) — contracts、資料格式與 API 入口
-- [Notebook Interface](../../reference/notebooks/index.md) — Pluto 與 Python notebook 角色邊界
+- [Workflows](../../workflows/index.mdx) — Tool operation, data import and end-to-end process
+- [Reference](../../reference/index.mdx) — contracts, data formats and API entries
+- [Notebook Interface](../../reference/notebooks/index.md) — Pluto and Python notebook role boundary

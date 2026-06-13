@@ -1,12 +1,12 @@
 ---
 aliases:
-  - JosephsonCompiledCircuit
-  - Compiled Circuit
+ - JosephsonCompiledCircuit
+ - Compiled Circuit
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -28,19 +28,19 @@ Compiled output is the solver-facing representation. Human-facing engineering st
 
 ```julia
 struct JosephsonCompiledCircuit
-    netlist
-    component_values
-    node_map
-    component_map
-    line_tap_map
-    port_map
-    hb_intent_summary
-    source_slot_map
-    observable_request_map
-    hb_validation_summary
-    warnings
-    provenance
-    metadata
+  netlist
+  component_values
+  node_map
+  component_map
+  line_tap_map
+  port_map
+  hb_intent_summary
+  source_slot_map
+  observable_request_map
+  hb_validation_summary
+  warnings
+  provenance
+  metadata
 end
 ```
 
@@ -86,7 +86,7 @@ The compiled HB handoff includes:
 
 - declared pump axes and their stable IDs;
 - source slots, roles, mode tuples, compiled port indices, and current-parameter names;
-- DC source-slot validation, including `role = :dc_bias`, `mode = (0,)`, and `dc = true`;
+- DC source-slot validation, including `role =:dc_bias`, `mode = (0,)`, and `dc = true`;
 - observable requests and their output/input mode-port extraction paths;
 - default solver controls and output-family requests;
 - netlist rows and component values needed by `run_hb_problem`.

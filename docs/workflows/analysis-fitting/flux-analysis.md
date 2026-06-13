@@ -1,19 +1,19 @@
 ---
 aliases:
-  - Flux Analysis Workflow
-  - 磁通分析工作流
+ - Flux Analysis Workflow
+ - Magnetic Flux Analysis Workflow
 tags:
-  - audience/team
+ - audience/team
 status: stable
 owner: docs-team
 audience: team
-scope: 磁通掃描分析在 notebook research 與 Python Analysis Core 下的流程
+scope: The process of magnetic flux scanning analysis under notebook research and Python Analysis Core
 version: v0.2.1
 last_updated: 2026-05-29
 updated_by: codex
 sidebar:
-  label: Flux Dependence Analysis
-  order: 50
+ label: Flux Dependence Analysis
+ order: 50
 ---
 
 # Flux Dependence Analysis
@@ -25,9 +25,9 @@ Use notebooks for exploratory flux maps, axis validation, resonance picking, and
 
 ```mermaid
 flowchart LR
-    VNA["VNA Flux Sweep"] --> Files["Local Export Files"]
-    Files --> Notebook["Notebook Analysis"]
-    Notebook --> Core["Reusable Analysis Helper"]
+  VNA["VNA Flux Sweep"] --> Files["Local Export Files"]
+  Files --> Notebook["Notebook Analysis"]
+  Notebook --> Core["Reusable Analysis Helper"]
 ```
 
 ## Physics Check

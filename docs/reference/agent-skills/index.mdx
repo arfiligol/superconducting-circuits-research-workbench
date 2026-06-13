@@ -1,17 +1,17 @@
 ---
 aliases:
-  - Agent Skill Library
-  - Project Skill Library
-  - Agent 技能庫
+ - Agent Skill Library
+ - Project Skill Library
+ - Agent skill library
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/governance
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/governance
 status: draft
 owner: docs-team
 audience: contributor
-scope: 跨工具 AI Agent 參與本專案開發時建議同步的 project-provided skill catalog 與同步規則
+scope: It is recommended to synchronize the project-provided skill catalog and synchronization rules when cross-tool AI Agent participates in the development of this project.
 version: v0.1.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -21,25 +21,25 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Agent Skill Library
 
-本區提供 project-provided Skill templates，讓 Codex App、Claude Code、Gemini 或其他 coding agent 可以同步成各自工具支援的 reusable instruction、skill、command 或 agent context。
+This area provides project-provided Skill templates so that Codex App, Claude Code, Gemini or other coding agents can be synchronized into reusable instructions, skills, commands or agent contexts supported by their respective tools.
 
-這裡不是新的 runtime surface，也不是固定 agent 編制。它定義的是：如果一個 agent 要參與本專案開發，最好先具備哪些可重用能力。
+This is not a new runtime surface, nor is it a fixed agent build. What it defines is: if an agent wants to participate in the development of this project, it is best to have what reusable capabilities it has.
 
 <Aside type="caution" title="Sync, then load SoT">
 
-Skill 只能提供工作流程能力。每次實際開發仍必須先讀本 repo 的 SoT、guardrails、folder structure、commands 與 validation rules。Skill 不能取代 workspace rules。
+Skills can only provide workflow capabilities. Every actual development must still read the SoT, guardrails, folder structure, commands and validation rules of this repo first. Skills cannot replace workspace rules.
 
 </Aside>
 
 ## Sync Contract
 
-Agent 同步本區 Skill 時，必須保留三件事：
+When the Agent synchronizes the skills in this area, three things must be kept:
 
 | Required part | Rule |
 | --- | --- |
-| `name` | 保留 canonical skill name，方便不同工具與交付報告使用同一名稱 |
-| trigger description | 保留何時使用此 skill 的描述，不要只留下正文 |
-| hard-block behavior | 若 skill 要求缺文件即停止，不可改成 agent 自行猜測 |
+| `name` | Reserve the canonical skill name so that different tools and delivery reports can use the same name |
+| trigger description | Keep a description of when to use this skill, don't just leave the text |
+| hard-block behavior | If the skill requires that the file is missing, it will stop. It cannot be changed to the agent's own guessing |
 
 <details class="docs-disclosure docs-disclosure--example">
 <summary>Copy this table as Markdown</summary>
@@ -47,21 +47,21 @@ Agent 同步本區 Skill 時，必須保留三件事：
 ```markdown
 | Required part | Rule |
 | --- | --- |
-| `name` | 保留 canonical skill name，方便不同工具與交付報告使用同一名稱 |
-| trigger description | 保留何時使用此 skill 的描述，不要只留下正文 |
-| hard-block behavior | 若 skill 要求缺文件即停止，不可改成 agent 自行猜測 |
+| `name` | Reserve the canonical skill name so that different tools and delivery reports can use the same name |
+| trigger description | Keep a description of when to use this skill, don't just leave the text |
+| hard-block behavior | If the skill requires that the file is missing, it will stop. It cannot be changed to the agent's own guessing |
 ```
 
 </details>
 
-Agent 可以把同一份 Skill template 轉成不同工具的原生格式：
+Agent can convert the same Skill template into the native format of different tools:
 
 | Agent environment | Expected sync behavior |
 | --- | --- |
-| Codex App | 建立對應 Codex Skill，並讓 skill description 觸發載入 |
-| Claude Code | 建立等價 reusable instruction、command、agent definition 或 context fragment |
-| Gemini | 建立等價 reusable instruction 或 project context fragment |
-| Other coding agents | 使用該工具支援的 reusable context / skill / command 機制 |
+| Codex App | Create the corresponding Codex Skill and let the skill description trigger the loading |
+| Claude Code | Create equivalent reusable instruction, command, agent definition or context fragment |
+| Gemini | Create equivalent reusable instruction or project context fragment |
+| Other coding agents | Use the reusable context / skill / command mechanism supported by this tool |
 
 <details class="docs-disclosure docs-disclosure--example">
 <summary>Copy this table as Markdown</summary>
@@ -69,17 +69,17 @@ Agent 可以把同一份 Skill template 轉成不同工具的原生格式：
 ```markdown
 | Agent environment | Expected sync behavior |
 | --- | --- |
-| Codex App | 建立對應 Codex Skill，並讓 skill description 觸發載入 |
-| Claude Code | 建立等價 reusable instruction、command、agent definition 或 context fragment |
-| Gemini | 建立等價 reusable instruction 或 project context fragment |
-| Other coding agents | 使用該工具支援的 reusable context / skill / command 機制 |
+| Codex App | Create the corresponding Codex Skill and let the skill description trigger the loading |
+| Claude Code | Create equivalent reusable instruction, command, agent definition or context fragment |
+| Gemini | Create equivalent reusable instruction or project context fragment |
+| Other coding agents | Use the reusable context / skill / command mechanism supported by this tool |
 ```
 
 </details>
 
 <Aside type="note" title="Tool-specific details">
 
-本 repo 不規定每個外部工具的本機安裝路徑。同步 agent 必須依照自己工具當下支援的官方機制建立 skill，並保留本區的 canonical content。
+This repo does not specify the native installation path for every external tool. The synchronization agent must create skills according to the official mechanism currently supported by its own tools, and retain the canonical content of this area.
 
 </Aside>
 
@@ -87,8 +87,8 @@ Agent 可以把同一份 Skill template 轉成不同工具的原生格式：
 
 | Skill | Status | Use when | Template |
 | --- | --- | --- | --- |
-| `work-lane-orchestration` | Recommended | 任務需要主 thread 統整、多 surface vertical slice、subagent work lanes、SoT loading、跨邊界驗收 | [Work Lane Orchestration](work-lane-orchestration.mdx) |
-| `write-pluto-notebook` | Recommended | 任務需要建立、修改、轉換或審查 Pluto.jl reactive notebook，尤其是 `.jl` notebook、PlutoUI / `@bind`、package environment、cell dependency 或 duplicate global definition 問題 | [Write Pluto Notebook](write-pluto-notebook.mdx) |
+| `work-lane-orchestration` | Recommended | The task requires main thread integration, multiple surface vertical slices, subagent work lanes, SoT loading, and cross-border acceptance | [Work Lane Orchestration](work-lane-orchestration.mdx) |
+| `write-pluto-notebook` | Recommended | The task requires building, modifying, converting or reviewing a Pluto.jl reactive notebook, especially `.jl` notebook, PlutoUI / `@bind`, package environment, cell dependency or duplicate global definition issues | [Write Pluto Notebook](write-pluto-notebook.mdx) |
 
 <details class="docs-disclosure docs-disclosure--example">
 <summary>Copy this table as Markdown</summary>
@@ -96,21 +96,21 @@ Agent 可以把同一份 Skill template 轉成不同工具的原生格式：
 ```markdown
 | Skill | Status | Use when | Template |
 | --- | --- | --- | --- |
-| `work-lane-orchestration` | Recommended | 任務需要主 thread 統整、多 surface vertical slice、subagent work lanes、SoT loading、跨邊界驗收 | [Work Lane Orchestration](work-lane-orchestration.mdx) |
-| `write-pluto-notebook` | Recommended | 任務需要建立、修改、轉換或審查 Pluto.jl reactive notebook，尤其是 `.jl` notebook、PlutoUI / `@bind`、package environment、cell dependency 或 duplicate global definition 問題 | [Write Pluto Notebook](write-pluto-notebook.mdx) |
+| `work-lane-orchestration` | Recommended | The task requires main thread integration, multiple surface vertical slices, subagent work lanes, SoT loading, and cross-border acceptance | [Work Lane Orchestration](work-lane-orchestration.mdx) |
+| `write-pluto-notebook` | Recommended | The task requires building, modifying, converting or reviewing a Pluto.jl reactive notebook, especially `.jl` notebook, PlutoUI / `@bind`, package environment, cell dependency or duplicate global definition issues | [Write Pluto Notebook](write-pluto-notebook.mdx) |
 ```
 
 </details>
 
 ## Update Rules
 
-新增或修改本區 Skill 時：
+When adding or modifying skills in this area:
 
-1. 在 `docs/reference/agent-skills/` 新增或更新 template page。
-2. 更新本頁 `Catalog`。
-3. 若新增頁面，確認 Starlight sidebar 與 route checks 能找到新頁面。
-4. 保持 skill template 跨專案可用，不把本 repo 的 lane taxonomy、commands 或 folder ownership hardcode 進 generic skill。
-5. 若 skill 的目的本來就是本 repo 專用，必須在頁面標明 project-specific，不要包裝成通用能力。
+1. Add or update template page in `docs/reference/agent-skills/`.
+2. Update this page `Catalog`.
+3. If a new page is added, make sure Starlight sidebar and route checks can find the new page.
+4. Keep the skill template available across projects and do not hardcode the lane taxonomy, commands or folder ownership of this repo into the generic skill.
+5. If the purpose of the skill is specifically for this repo, it must be marked project-specific on the page and should not be packaged as a general capability.
 
 ## Related
 

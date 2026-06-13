@@ -1,39 +1,39 @@
 ---
 aliases:
-  - "Floating Qubit 研究"
+ - "Floating Qubit Research"
 tags:
-  - diataxis/reference
-  - status/draft
+ - diataxis/reference
+ - status/draft
 sidebar:
-  label: Floating Qubit Study
-  order: 120
+ label: Floating Qubit Study
+ order: 120
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# Floating Qubit 研究
+#FloatingQubit Research
 
-<Aside type="note" title="研究筆記">
+<Aside type="note" title="research notes">
 
-此頁面記錄對 Floating Qubit 電路模型的探索和分析。
+This page documents the exploration and analysis of the Floating Qubit circuit model.
 
 </Aside>
 
-## 背景
+## background
 
-Floating Qubit 是一種不直接接地的 transmon 設計，透過電容耦合到讀取共振器和 XY 控制線。
+The Floating Qubit is a transmon design that is not directly connected to ground and is capacitively coupled to the read resonator and XY control lines.
 
-## 模型檔案
+## Model File
 
 - `circuit_model_analysis/floating_1Q_coupled_XY.jl`
 - `circuit_model_analysis/floating_1Q_coupled_Readout.jl`
 
-## 待探索問題
+## Questions to be explored
 
-- [ ] 不同耦合強度對模態頻率的影響
-- [ ] 與 HFSS 模擬結果的對比
-- [ ] Kron 約減的適用條件
+- [ ] Effect of different coupling strengths on modal frequencies
+- [ ] Comparison with HFSS simulation results
+- [ ] Applicable conditions for Kron reduction
 
-## 相關資源
+## Related resources
 
-- Q3D 電容矩陣：`data/q3d_exports/PF6FQ_C_Matrix.csv`
+- Q3D capacitor matrix: `data/q3d_exports/PF6FQ_C_Matrix.csv`

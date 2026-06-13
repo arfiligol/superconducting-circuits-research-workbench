@@ -1,19 +1,19 @@
 ---
 aliases:
-  - Add Data Source
-  - 新增數據來源
+ - Add Data Source
+ - Add new data source
 tags:
-  - audience/team
+ - audience/team
 status: stable
 owner: docs-team
 audience: team
-scope: 如何擴展資料匯入以支援新的數據格式
+scope: How to extend data import to support new data formats
 version: v0.2.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Add Data Source
-  order: 20
+ label: Add Data Source
+ order: 20
 ---
 
 # Add New Data Source
@@ -29,11 +29,11 @@ Do not add a product CLI command for the new source.
 ## Steps
 
 1. Analyze the raw format:
-   - header structure
-   - axis columns
-   - complex value representation
-   - units
-   - source metadata
+  - header structure
+  - axis columns
+  - complex value representation
+  - units
+  - source metadata
 2. Add a parser in the backend or a developer-only helper under `scripts/maintenance/`.
 3. Write tests that cover a small fixture and the resulting TraceStore metadata.
 4. Verify imported traces in the Application Raw Data Browser.
@@ -48,6 +48,6 @@ Do not add a product CLI command for the new source.
 
 ## Related
 
-- [TraceStore Zarr](../../reference/architecture/trace-store-zarr.md)
-- [Dataset Record](../../reference/data-formats/dataset-record.mdx)
+- [TraceStore Zarr](../architecture/contracts/trace-store-zarr.md)
+- [Dataset Record](../data-contracts/dataset-record.mdx)
 - [Script Authoring](../../reference/guardrails/code-quality/script-authoring.mdx)

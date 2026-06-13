@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Julia Core Authoring
-  - Julia Core
+ - Julia Core Authoring
+ - Julia Core
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -28,23 +28,23 @@ Julia Core does not depend on the Python Backend, FastAPI task state, Next.js UI
 
 ```text
 Pluto Notebook / Julia Runner
-        |
-        v
+    |
+    v
 User-Friendly Builder API
-        |
-        v
+    |
+    v
 Circuit Plan
-        |
-        v
+    |
+    v
 Validation
-        |
-        v
+    |
+    v
 Compiler
-        |
-        v
+    |
+    v
 JosephsonCompiledCircuit
-        |
-        v
+    |
+    v
 Simulation / Analysis
 ```
 
@@ -52,7 +52,7 @@ Pluto and the Runner are different callers of the same Core pipeline. Pluto uses
 
 <Aside type="caution" title="Boundary">
 
-The Julia Core authoring path is not a Backend task submission path. Backend task lifecycle, metadata, publication, and TraceStore ownership stay in Python Backend contracts.
+The Julia Core authoring path is not a persisted task submission path. Task lifecycle, metadata, publication, and canonical data ownership stay outside Julia Core.
 
 </Aside>
 
@@ -80,12 +80,12 @@ Component libraries depend on Julia Core. Julia Core must not depend on componen
 
 ```mermaid
 flowchart TD
-    Caller["Pluto Notebook / Julia Runner"] --> Builder["Builder API"]
-    Builder --> Plan["Circuit Plan"]
-    Plan --> Validation["Validation"]
-    Validation --> Compiler["Compiler"]
-    Compiler --> Compiled["JosephsonCompiledCircuit"]
-    Compiled --> Simulation["Simulation / Analysis"]
+  Caller["Pluto Notebook / Julia Runner"] --> Builder["Builder API"]
+  Builder --> Plan["Circuit Plan"]
+  Plan --> Validation["Validation"]
+  Validation --> Compiler["Compiler"]
+  Compiler --> Compiled["JosephsonCompiledCircuit"]
+  Compiled --> Simulation["Simulation / Analysis"]
 ```
 
 The Circuit Plan is the semantic source of truth before simulation. Reusable components, endpoint relations, line taps, spans, couplings, shunts, parameters, and provenance are stored in the plan. The compiler lowers the complete plan into a JosephsonCircuits.jl target.
@@ -93,24 +93,24 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 ## Page Map
 
 <CardGrid>
-  <LinkCard title="Authoring Model" href="authoring-model/" description="Read the main source-of-truth for component, plan, compiler, and netlist ownership." />
-  <LinkCard title="Circuit Plan" href="circuit-plan/" description="See what the plan stores and why it is not a JosephsonCircuits.jl netlist." />
-  <LinkCard title="Components and Composition" href="components-and-composition/" description="Define reusable primitive and composite components, public pins, private nodes, and namespace rules." />
-  <LinkCard title="Component Libraries" href="component-libraries/" description="Separate the Julia Core Kernel from user-space, lab-space, and project-space component libraries." />
-  <LinkCard title="Endpoints" href="endpoints/" description="Use Endpoint as the top-level attachment abstraction for pins, line taps, spans, ground, external nodes, and loops." />
-  <LinkCard title="Relations and Couplings" href="relations-and-couplings/" description="Specify node connections, capacitive couplings, shunts, inductive couplings, and distributed windows as plan-level intents." />
-  <LinkCard title="Coupling Models" href="coupling-models/" description="Distinguish point capacitive coupling, branch mutual inductance, MTL coupled windows, and physical model generators." />
-  <LinkCard title="Transmission Line Ladder" href="transmission-line-ladder/" description="Define CPW / line head-tail orientation, section indexing, LC ladder generation, and open/short terminations." />
-  <LinkCard title="Macro Authoring DSL" href="macro-authoring-dsl/" description="Capture human authoring syntax while expanding into the canonical CircuitPlan and HBIntent APIs." />
-  <LinkCard title="Engineering Graph" href="engineering-graph/" description="Preserve component-level engineering semantics for Pluto visualization, debugging, and schematic export." />
-  <LinkCard title="Compiler" href="compiler/" description="Follow the target-specific lowering pipeline from Circuit Plan to JosephsonCompiledCircuit." />
-  <LinkCard title="Compiled Circuit" href="compiled-circuit/" description="Treat compiler output as netlist plus maps, warnings, provenance, and metadata." />
-  <LinkCard title="HB Simulation Intent" href="hb-simulation-intent/" description="Declare external ports, pump axes, source slots, observables, and HB intent before Runner execution binds runtime values." />
-  <LinkCard title="JosephsonCircuits hbsolve Controls" href="josephsoncircuits-hbsolve-controls/" description="Classify first-class HB controls, whitelisted optional kwargs, unsupported product Runner controls, and source current semantics." />
-  <LinkCard title="Parameter Sweeps" href="parameter-sweeps/" description="Define structural, numeric, and hybrid sweeps, compile policies, topology keys, parallel execution, and optional fixed-topology numeric acceleration." />
-  <LinkCard title="Validation" href="validation/" description="Split authoring validation, compile validation, and physics sanity validation." />
-  <LinkCard title="Debugging and Diagnostics" href="debugging-and-diagnostics/" description="Define machine-readable diagnostic reports, topology-key explanations, debug bundles, and the AI agent debug path." />
-  <LinkCard title="Runner-Safe API" href="runner-safe-api/" description="Keep Pluto and Julia Runner on the same Core API path without duplicating construction or compiler logic." />
+ <LinkCard title="Authoring Model" href="authoring-model/" description="Read the main source-of-truth for component, plan, compiler, and netlist ownership." />
+ <LinkCard title="Circuit Plan" href="circuit-plan/" description="See what the plan stores and why it is not a JosephsonCircuits.jl netlist." />
+ <LinkCard title="Components and Composition" href="components-and-composition/" description="Define reusable primitive and composite components, public pins, private nodes, and namespace rules." />
+ <LinkCard title="Component Libraries" href="component-libraries/" description="Separate the Julia Core Kernel from user-space, lab-space, and project-space component libraries." />
+ <LinkCard title="Endpoints" href="endpoints/" description="Use Endpoint as the top-level attachment abstraction for pins, line taps, spans, ground, external nodes, and loops." />
+ <LinkCard title="Relations and Couplings" href="relations-and-couplings/" description="Specify node connections, capacitive couplings, shunts, inductive couplings, and distributed windows as plan-level intents." />
+ <LinkCard title="Coupling Models" href="coupling-models/" description="Distinguish point capacitive coupling, branch mutual inductance, MTL coupled windows, and physical model generators." />
+ <LinkCard title="Transmission Line Ladder" href="transmission-line-ladder/" description="Define CPW / line head-tail orientation, section indexing, LC ladder generation, and open/short terminations." />
+ <LinkCard title="Macro Authoring DSL" href="macro-authoring-dsl/" description="Capture human authoring syntax while expanding into the canonical CircuitPlan and HBIntent APIs." />
+ <LinkCard title="Engineering Graph" href="engineering-graph/" description="Preserve component-level engineering semantics for Pluto visualization, debugging, and schematic export." />
+ <LinkCard title="Compiler" href="compiler/" description="Follow the target-specific lowering pipeline from Circuit Plan to JosephsonCompiledCircuit." />
+ <LinkCard title="Compiled Circuit" href="compiled-circuit/" description="Treat compiler output as netlist plus maps, warnings, provenance, and metadata." />
+ <LinkCard title="HB Simulation Intent" href="hb-simulation-intent/" description="Declare external ports, pump axes, source slots, observables, and HB intent before Runner execution binds runtime values." />
+ <LinkCard title="JosephsonCircuits hbsolve Controls" href="josephsoncircuits-hbsolve-controls/" description="Classify first-class HB controls, whitelisted optional kwargs, unsupported product Runner controls, and source current semantics." />
+ <LinkCard title="Parameter Sweeps" href="parameter-sweeps/" description="Define structural, numeric, and hybrid sweeps, compile policies, topology keys, parallel execution, and optional fixed-topology numeric acceleration." />
+ <LinkCard title="Validation" href="validation/" description="Split authoring validation, compile validation, and physics sanity validation." />
+ <LinkCard title="Debugging and Diagnostics" href="debugging-and-diagnostics/" description="Define machine-readable diagnostic reports, topology-key explanations, debug bundles, and the AI agent debug path." />
+ <LinkCard title="Runner-Safe API" href="runner-safe-api/" description="Keep Pluto and Julia Runner on the same Core API path without duplicating construction or compiler logic." />
 </CardGrid>
 
 ## Ownership
@@ -121,7 +121,7 @@ The Circuit Plan is the semantic source of truth before simulation. Reusable com
 | Component Libraries | concrete reusable components, component-specific parameters, reusable plan builders, component-specific validation helpers |
 | Pluto Notebook | direct research use of Julia Core, interactive inspection, local research plots |
 | Julia Runner | deterministic execution of Julia Core work and staged numeric output |
-| Python Backend | task lifecycle, metadata, publication, TraceStore, platform result APIs |
-| Application / Electron | product workflow UI and local process supervision |
+| Publication layer | task lifecycle, metadata, publication, and result APIs |
+| Packaged product layer | workflow UI and local process supervision |
 
 Large numeric arrays should move through local filesystem packages such as Zarr, not HTTP JSON.

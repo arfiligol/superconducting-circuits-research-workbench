@@ -1,14 +1,14 @@
 ---
 title: "Sidebar"
 aliases:
-  - "Frontend Sidebar"
-  - "Unified Sidebar"
-  - "App Sidebar"
+ - "Frontend Sidebar"
+ - "Unified Sidebar"
+ - "App Sidebar"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/ui
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
 status: stable
 owner: docs-team
 audience: team

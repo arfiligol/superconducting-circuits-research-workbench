@@ -1,16 +1,16 @@
 ---
 aliases:
-  - "Error Handling"
-  - "錯誤模型"
+ - "Error Handling"
+ - "error model"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/code-quality
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/code-quality
 status: stable
 owner: docs-team
 audience: team
-scope: "定義 API、frontend、Julia Runner、Notebook 與 recovery flow 的統一錯誤分類與處理規範"
+scope: "Define unified error classification and handling specifications for API, frontend, Julia Runner, Notebook and recovery flow"
 version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -20,12 +20,12 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Error Handling
 
-本專案的錯誤處理必須可被 frontend、backend、Julia Runner、Notebook 共用理解，而不是每一層各自發明一套訊息。
+The error handling of this project must be commonly understood by frontend, backend, Julia Runner, and Notebook, rather than each layer inventing a separate set of messages.
 
 <Aside type="caution" title="Code, not message text">
 
-對外 surface 必須依穩定 `error_code` / `category` 工作。
-frontend、Notebook 與 recovery flow 不得依賴 message text matching。
+The external surface must work according to the stable `error_code` / `category`.
+frontend, notebook, and recovery flows must not rely on message text matching.
 
 </Aside>
 
@@ -33,58 +33,58 @@ frontend、Notebook 與 recovery flow 不得依賴 message text matching。
 
 | Category | Meaning |
 | --- | --- |
-| `auth_required` | 缺少有效身份或 session |
-| `permission_denied` | 身份存在，但不允許該操作 |
-| `validation_error` | 輸入、payload 或 contract 不合法 |
-| `not_found` | 目標資源不存在或不可解析 |
-| `conflict` | 資源版本、狀態或 lifecycle 衝突 |
-| `task_not_ready` | 依賴的 task / artifact 尚未到可讀狀態 |
-| `task_execution_failed` | execution 已跑完但以失敗狀態結束 |
-| `persistence_error` | metadata store / relational store 問題 |
-| `trace_store_error` | numeric trace / artifact store 問題 |
-| `internal_error` | 未分類的內部錯誤 |
+| `auth_required` | Missing valid identity or session |
+| `permission_denied` | The identity exists, but the operation is not allowed |
+| `validation_error` | Input, payload or contract is illegal |
+| `not_found` | The target resource does not exist or cannot be resolved |
+| `conflict` | Resource version, state, or lifecycle conflict |
+| `task_not_ready` | The dependent task/artifact has not yet reached a readable state |
+| `task_execution_failed` | execution has finished but ended with failure |
+| `persistence_error` |metadata store / relational store problem|
+| `trace_store_error` | Numeric trace / artifact store issue |
+| `internal_error` | Uncategorized internal error |
 
 ## Public Error Envelope
 
-所有 public-facing contract 至少要能映射到這組欄位：
+All public-facing contracts must be able to map to at least this set of fields:
 
-| 欄位 | 說明 |
+| Field | Description |
 | --- | --- |
-| `error_code` | 穩定 machine-readable code |
-| `category` | 高階分類，例如 `validation_error` |
+| `error_code` | stable machine-readable code |
+| `category` | High-level classification, such as `validation_error` |
 | `message` | user-safe message |
 | `retryable` | `true/false` |
-| `details` | 可選的 structured detail；不得洩漏 adapter internals |
-| `debug_ref` | log correlation id 或 task id；可選 |
+| `details` | Optional structured detail; must not leak adapter internals |
+| `debug_ref` | log correlation id or task id; optional |
 
 ## Surface Mapping
 
 | Surface | Rule |
 | --- | --- |
-| backend API | 回傳穩定 HTTP status + error envelope |
+| backend API | Return stable HTTP status + error envelope |
 | Julia Runner | complete/fail/progress payload and logs must map to public categories |
 | Notebook | inspection/task submission helpers must preserve `error_code` or equivalent machine-readable signal |
-| frontend | 以 `error_code` 與 `retryable` 驅動 UI，而不是靠 message text |
+| frontend | Use `error_code` and `retryable` to drive the UI instead of relying on message text |
 
 ## Retryability Rules
 
-| 類型 | 預設 retryable |
+| type | default retryable |
 | --- | --- |
-| `validation_error` | 否 |
-| `auth_required` | 否 |
-| `permission_denied` | 否 |
-| `not_found` | 否 |
-| `conflict` | 視情況；需明確標記 |
-| `task_not_ready` | 是 |
-| `task_execution_failed` | 視 execution detail；需標記 |
-| `persistence_error` | 視 storage 層；需標記 |
-| `trace_store_error` | 視 storage 層；需標記 |
-| `internal_error` | 否，除非明確標記可重試 |
+| `validation_error` | No |
+| `auth_required` | No |
+| `permission_denied` | No |
+| `not_found` | No |
+| `conflict` | Depends on situation; needs to be clearly marked |
+| `task_not_ready` | Yes |
+| `task_execution_failed` | Depends on execution detail; needs to be marked |
+| `persistence_error` | Depends on the storage layer; needs to be marked |
+| `trace_store_error` | Depends on the storage layer; needs to be marked |
+| `internal_error` | No, unless explicitly marked for retry |
 
 <Aside type="tip" title="Retryability is part of the contract">
 
-`retryable` 不是 logging 補充資訊，而是 consumer decision signal。
-只要 surface 允許 retry / resume / reattach，就必須明確標記。
+`retryable` is not logging supplementary information, but a consumer decision signal.
+Whenever a surface allows retry/resume/reattach, it must be marked explicitly.
 
 </Aside>
 
@@ -92,9 +92,9 @@ frontend、Notebook 與 recovery flow 不得依賴 message text matching。
 
 | Rule | Meaning |
 | --- | --- |
-| task submit 失敗、result attach 失敗、recovery attach 失敗必須有獨立 `error_code` | 不可全部折疊成 generic runtime failure |
-| reconnect / recovery 失敗不可全部折疊成 generic `internal_error` | recovery path 需要可診斷 |
-| `debug_ref` 優先重用 `task_id`、request id 或 trace/result ref | 讓 logs、queue、UI 可交叉追蹤 |
+| task submit failure, result attach failure, recovery attach failure must have independent `error_code` | cannot be collapsed into generic runtime failure |
+| Reconnect/recovery failure cannot be collapsed into generic `internal_error` | recovery path needs to be diagnosable |
+| `debug_ref` gives priority to reusing `task_id`, request id or trace/result ref | Make logs, queue and UI cross-traced |
 
 ## Agent Rule
 ```markdown

@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Julia Core Authoring Model
-  - Circuit Authoring Model
+ - Julia Core Authoring Model
+ - Circuit Authoring Model
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -36,23 +36,23 @@ Do not preserve outdated APIs as alternate support layers when they obscure the 
 
 ```text
 Reusable Circuit Components
-        |
-        v
+    |
+    v
 Macro DSL / Functional API
-        |
-        v
+    |
+    v
 Circuit Plan
-        |
-        v
+    |
+    v
 Plan-level relations / couplings / transforms
-        |
-        v
+    |
+    v
 EngineeringGraph
-        |
-        v
+    |
+    v
 Compiler
-        |
-        v
+    |
+    v
 JosephsonCircuits.jl target netlist
 ```
 
@@ -68,9 +68,9 @@ Do not describe or implement a workflow where each component is compiled into a 
 
 ```mermaid
 flowchart LR
-    Component["Component"] --> Plan["Circuit Plan"]
-    Plan --> Compiler["Compiler"]
-    Compiler --> Netlist["JosephsonCircuits.jl Netlist"]
+  Component["Component"] --> Plan["Circuit Plan"]
+  Plan --> Compiler["Compiler"]
+  Compiler --> Netlist["JosephsonCircuits.jl Netlist"]
 ```
 
 Users build a `CircuitPlan`, add components from a selected Component Library, connect endpoints, add couplings, validate the plan, and then call the compiler.
@@ -81,20 +81,20 @@ The following example assumes a component library provides `GroundedLCResonatorC
 plan = CircuitPlan(id = "example")
 
 lc = add_grounded_lc_resonator_component!(
-    plan;
-    id = "lc",
-    capacitance = Capacitor(80.0fF),
-    inductive_element = LinearInductor(8.0nH),
+  plan;
+  id = "lc",
+  capacitance = Capacitor(80.0fF),
+  inductive_element = LinearInductor(8.0nH),
 )
 
 qwr = add_quarter_wave_resonator_from_library!(plan; id = "qwr", line_spec = qwr_spec)
 
 couple_capacitive!(
-    plan;
-    id = "lc_to_qwr",
-    from = pin(lc, :signal),
-    to = line_tap(qwr; line = :main, at_m = 1.2mm),
-    capacitance = 3.0fF,
+  plan;
+  id = "lc_to_qwr",
+  from = pin(lc,:signal),
+  to = line_tap(qwr; line =:main, at_m = 1.2mm),
+  capacitance = 3.0fF,
 )
 
 compiled = compile_to_josephson(plan)
@@ -104,9 +104,9 @@ compiled = compile_to_josephson(plan)
 
 ```mermaid
 flowchart LR
-    Primitive["Primitive Element"] --> Composite["Composite Component"]
-    Composite --> Plan["Circuit Plan"]
-    Plan --> Compiler["Compiler"]
+  Primitive["Primitive Element"] --> Composite["Composite Component"]
+  Composite --> Plan["Circuit Plan"]
+  Plan --> Compiler["Compiler"]
 ```
 
 Primitive elements and composite components are both Plan-level objects. A composite may contain subcomponents, primitive elements, public pins, private internal nodes, local parameters, and provenance.
@@ -115,10 +115,10 @@ The hierarchy remains inspectable until compilation:
 
 ```text
 GroundedLCResonator
-    = Capacitor(signal, ground) + InductiveElement(signal, ground)
+  = Capacitor(signal, ground) + InductiveElement(signal, ground)
 
 SQUID
-    = JosephsonJunction + JosephsonJunction + optional loop inductance + flux parameter
+  = JosephsonJunction + JosephsonJunction + optional loop inductance + flux parameter
 ```
 
 These examples describe component-library definitions that use the Julia Core authoring contract.

@@ -1,11 +1,11 @@
 ---
 aliases:
-  - "Circuit Diagrams"
-  - "Contributing Circuit Diagrams"
+ - "Circuit Diagrams"
+ - "Contributing Circuit Diagrams"
 tags:
-  - diataxis/how-to
-  - audience/contributor
-  - topic/contributing
+ - diataxis/how-to
+ - audience/contributor
+ - topic/contributing
 status: stable
 owner: docs-team
 audience: contributor
@@ -14,8 +14,8 @@ version: v0.2.0
 last_updated: 2026-06-12
 updated_by: codex
 sidebar:
-  label: Circuit Diagrams
-  order: 20
+ label: Circuit Diagrams
+ order: 20
 ---
 
 # Contributing Circuit Diagrams
@@ -36,15 +36,15 @@ Create each diagram under `docs/assets/circuit_draw/`:
 ```text
 docs/assets/circuit_draw/
 ├── _lib/
-│   └── style.py
+│  └── style.py
 ├── registry.yml
 └── <topic>/<diagram_id>/
-    ├── draw.py
-    ├── diagram.yml
-    ├── diagram.light.svg
-    ├── diagram.dark.svg
-    ├── diagram.light.png
-    └── diagram.dark.png
+  ├── draw.py
+  ├── diagram.yml
+  ├── diagram.light.svg
+  ├── diagram.dark.svg
+  ├── diagram.light.png
+  └── diagram.dark.png
 ```
 
 `draw.py` must define `build_drawing(theme="light")` and return a
@@ -80,8 +80,8 @@ uv run python scripts/build/render_circuit_drawings.py --check
 ```
 
 6. Reference `diagram.light.svg` and `diagram.dark.svg` from the owning docs
-   using the shared `circuit-figure` wrapper. PNG outputs are committed for
-   repo-local preview, not for docs site rendering.
+  using the shared `circuit-figure` wrapper. PNG outputs are committed for
+  repo-local preview, not for docs site rendering.
 
 ## Authoring Style
 
@@ -94,17 +94,17 @@ from _lib.style import Theme, circuit_drawing
 
 
 def build_drawing(theme: Theme = "light") -> schemdraw.Drawing:
-    with circuit_drawing(theme=theme) as drawing:
-        elm.Dot(open=True).label("$P_1$", loc="left")
-        elm.Line().right(0.8)
-        node = elm.Dot()
+  with circuit_drawing(theme=theme) as drawing:
+    elm.Dot(open=True).label("$P_1$", loc="left")
+    elm.Line().right(0.8)
+    node = elm.Dot()
 
-        with drawing.hold():
-            drawing.move_from(node.center)
-            elm.Capacitor().down().label("$C$", loc="right")
-            elm.Ground()
+    with drawing.hold():
+      drawing.move_from(node.center)
+      elm.Capacitor().down().label("$C$", loc="right")
+      elm.Ground()
 
-    return drawing
+  return drawing
 ```
 
 Prefer anchors, `at(...)`, `to(...)`, `tox(...)`, `toy(...)`, `Wire(...)`, and
@@ -141,11 +141,11 @@ dependencies for documentation drawing.
 ## Circuit Diagrams
 - Schemdraw circuit diagrams are docs assets under `docs/assets/circuit_draw/`.
 - Each diagram has `draw.py`, `diagram.yml`, committed `diagram.light.svg`, committed `diagram.dark.svg`, committed `diagram.light.png`, and committed `diagram.dark.png`.
-- `draw.py` must define `build_drawing(theme="light")`, use `_lib.style.circuit_drawing(...)`, and must not import Backend, Julia, archived simulation runtimes, or legacy Python circuit visualizer modules.
+- `draw.py` must define `build_drawing(theme="light")`, use `_lib.style.circuit_drawing(...)`, and must not import infrastructure services, Julia, archived simulation runtimes, or legacy Python circuit visualizer modules.
 - Write Schemdraw sources with context-manager placement and chained element methods; do not use `d += ...` placement or `push()` / `pop()` branch pairs.
 - Register diagrams in `docs/assets/circuit_draw/registry.yml`.
 - Render with `uv run python scripts/build/render_circuit_drawings.py`.
 - Verify with `uv run python scripts/test/check_circuit_drawings.py` and `uv run python scripts/build/render_circuit_drawings.py --check`.
 - Schemdraw is a root dev dependency only; do not add it to product runtime packages.
-- This corpus is not an App Schemdraw workflow, Backend service, product CLI, or second circuit-authoring model.
+- This corpus is not a product Schemdraw workflow, service, product CLI, or second circuit-authoring model.
 ```

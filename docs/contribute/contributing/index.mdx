@@ -1,185 +1,185 @@
 ---
 aliases:
-  - "如何參與貢獻 (Contributing)"
-  - "Contributing"
+ - "How to contribute (Contributing)"
+ - "Contributing"
 tags:
-  - diataxis/how-to
-  - audience/contributor
-  - sot/true
-  - topic/execution
+ - diataxis/how-to
+ - audience/contributor
+ - sot/true
+ - topic/execution
 status: stable
 owner: docs-team
 audience: contributor
-scope: 建立開發環境、執行基本檢查、理解 canonical branch/worktree flow，並導向常用的 Codex contributor workflow。
+scope: Set up a development environment, perform basic checks, understand canonical branch/worktree flows, and navigate common Codex contributor workflows.
 version: v1.1.0
 last_updated: 2026-06-12
 updated_by: codex
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# 如何參與貢獻 (Contributing)
+# How to contribute (Contributing)
 
-感謝您有興趣參與 **超導量子電路平台** 專案的開發。
+Thank you for your interest in participating in the development of the **Superconducting Quantum Circuit Platform** project.
 
-本頁只提供 contributor-facing 快速入口：
+This page only provides contributor-facing quick entry:
 
-- 如何建立開發環境
-- 如何執行基本檢查
-- normal contribution 應如何對齊 branch / worktree flow
-- 如何使用 Codex 進行 docs-first、多 agent、broad-slice + fixup iteration
+- How to set up a development environment
+- How to perform basic checks
+- How normal contributions should be aligned branch / worktree flow
+- How to use Codex for docs-first, multi-agent, broad-slice + fixup iteration
 
-完整 branch roles、isolated worktree policy、merge authority 與 multi-agent delivery model，
-請以以下兩頁為準：
+complete branch roles, isolated worktree policy, merge authority and multi-agent delivery model,
+Please refer to the following two pages:
 
 - [Branch & Worktree Flow](../../reference/guardrails/execution-verification/branch-and-worktree-flow.mdx)
 - [Codex Subagent Coordination](../../reference/guardrails/execution-verification/multi-agent-collaboration.mdx)
 
-若您想直接使用本專案常見的 Codex 協作工作流，請參考：
+If you want to directly use the Codex collaboration workflow common in this project, please refer to:
 
-- [使用 Codex 的分工與 Fixup 工作流](codex-agent-workflow.mdx)
+- [Division of labor and Fixup workflow using Codex](codex-agent-workflow.mdx)
 
-## 1. 環境建置
+## 1. Environment setup
 
-我們使用 `uv` 進行依賴管理。
+We use `uv` for dependency management.
 
-### 前置需求
+### Prerequisites
 - Python 3.12+
 - [uv](https://github.com/astral-sh/uv)
 
-### 安裝步驟
+### Installation steps
 
-1.  **Fork 專案**：
-    在 GitHub 專案頁面上點擊 "Fork"，將專案複製到您自己的帳號下。
+1. **Fork Project**:
+Click "Fork" on the GitHub project page to copy the project to your own account.
 
-2.  **Clone 您的 Fork**：
-    將 `<YOUR_USERNAME>` 替換為您的 GitHub 帳號：
-    ```bash
-    git clone https://github.com/<YOUR_USERNAME>/superconducting-circuits-research-workbench.git
-    cd superconducting-circuits-research-workbench
-    ```
+2. **Clone your Fork**:
+Replace `<YOUR_USERNAME>` with your GitHub account:
+  ```bash
+  git clone https://github.com/<YOUR_USERNAME>/superconducting-circuits-research-workbench.git
+  cd superconducting-circuits-research-workbench
+  ```
 
-3.  **同步依賴 (Sync dependencies)**：
-    這會自動建立 `.venv` 虛擬環境並安裝所有套件（包含開發工具）。
-    ```bash
-    uv sync --all-packages
-    ```
+3. **Sync dependencies**:
+This will automatically set up the `.venv` virtual environment and install all packages (including development tools).
+  ```bash
+  uv sync --all-packages
+  ```
 
-4.  **啟動虛擬環境**：
-    ```bash
-    source .venv/bin/activate
-    ```
+4. **Start the virtual environment**:
+  ```bash
+  source .venv/bin/activate
+  ```
 
-## 2. 開發流程 (Workflow)
+## 2. Development process (Workflow)
 
 ### Branch / Worktree Quick Summary
 
-一般 contributor flow 的短版規則如下：
+The short version rules of general contributor flow are as follows:
 
-1. 先從 `develop` 同步最新狀態。
-2. 新工作預設從 `develop` 建立 feature branch。
-3. 若使用 AI agents，**每個 agent / task 都必須使用獨立 worktree**。
-4. normal implementation / docs / test work 的預設 PR target 是 `develop`。
-5. `main` 是 release branch，不是日常 feature work 的預設 landing branch。
+1. First synchronize the latest status from `develop`.
+2. The new work defaults to creating feature branch from `develop`.
+3. If AI agents are used, **each agent/task must use an independent worktree**.
+4. The default PR target for normal implementation / docs / test work is `develop`.
+5. `main` is a release branch, not the default landing branch for daily feature work.
 
 <Aside type="note" title="Canonical policy lives in Reference">
 
-本頁不重複完整 Git/worktree policy。
-若你要確認 `main` / `develop` 的角色、agent merge authority，或 sandbox/example agent 的 bounded write root，
-請直接閱讀 [Branch & Worktree Flow](../../reference/guardrails/execution-verification/branch-and-worktree-flow.mdx)。
-其中也明確規定：`sandbox/**` / `examples/**` 內的 source code 屬於可追蹤內容；由其產生的 `csv`、`svg`、`png` 等 disposable outputs 不屬於預設必追蹤交付物。
+This page does not repeat the full Git/worktree policy.
+If you want to confirm the role of `main` / `develop`, the agent merge authority, or the bounded write root of the sandbox/example agent,
+Please read directly [Branch & Worktree Flow](../../reference/guardrails/execution-verification/branch-and-worktree-flow.mdx).
+It also clearly stipulates that: the source code in `sandbox/**` / `examples/**` is traceable content; the disposable outputs such as `csv`, `svg`, `png` generated by it are not the default must-track deliverables.
 
 </Aside>
 
-### 執行測試
-我們使用 `pytest` 確保功能正常。
+### Execute test
+We use `pytest` to ensure proper functionality.
 ```bash
 uv run pytest
 ```
 
-### 預覽文件
-技術文件由 Astro + Starlight 建置，來源仍在 `docs/`。開發時可以直接啟動 Starlight dev server：
+### Preview file
+Technical documentation created by Astro + Starlight, source still at `docs/`. You can start Starlight dev server directly during development:
 
 ```bash
 npm run dev --prefix site
 ```
 
-正式靜態輸出會產生在 `site/dist/docs/`，並通過 route check：
+Formal static output will be generated at `site/dist/docs/` and passed route check:
 
 ```bash
 ./scripts/build_docs_sites.sh
 ```
 
-若要預覽和 GitHub Pages 相同的 combined artifact，也就是 `/`、`/docs/`、`/api/python/`、`/api/julia/` 都在同一個輸出中：
+To preview the same combined artifact as GitHub Pages, that is, `/`, `/docs/`, `/api/python/`, `/api/julia/` all in the same output:
 
 ```bash
 uv run docs-site serve --build
 ```
 
-Starlight dev server 支援 Hot Reload，儲存文件後頁面會自動重新整理。
+Starlight dev server supports Hot Reload, and the page will be automatically refreshed after saving the file.
 
-### 提交變更 (Pull Request)
+### Submit changes (Pull Request)
 
-1.  **建立分支 (Branch)**：
-    ```bash
-    git fetch origin
-    git switch develop
-    git pull --ff-only origin develop
-    git switch -c feature/my-new-feature
-    ```
-2.  **提交變更 (Commit)**：
-    我們建議遵循 Conventional Commits 規範 (e.g., `feat:`, `fix:`, `docs:`)。
-    ```bash
-    git commit -m "feat: 新增某個功能"
-    ```
-3.  **推送至 Fork (Push)**：
-    ```bash
-    git push origin feature/my-new-feature
-    ```
-4.  **發起 Pull Request**：
-    回到原始專案頁面，點擊 "Compare & pull request" 提交您的變更。
-    normal work 的預設 PR target 應為 `develop`；`main` 保留給 verified release promotion。
+1. **Create Branch**:
+  ```bash
+  git fetch origin
+  git switch develop
+  git pull --ff-only origin develop
+  git switch -c feature/my-new-feature
+  ```
+2. **Commit changes (Commit)**:
+We recommend following the Conventional Commits specification (e.g., `feat:`, `fix:`, `docs:`).
+  ```bash
+git commit -m "feat: add a new feature"
+  ```
+3. **Push to Fork (Push)**:
+  ```bash
+  git push origin feature/my-new-feature
+  ```
+4. **Initiate a Pull Request**:
+Return to the original project page and click "Compare & pull request" to submit your changes.
+The default PR target for normal work should be `develop`; `main` is reserved for verified release promotion.
 
-### 提交前檢查 (Pre-commit Checks)
-在提交 Pull Request 之前，請確保：
+### Pre-commit Checks
+Before submitting a Pull Request, please make sure:
 
-1.  **Typing**: 通過型別檢查（我們使用 Python 3.12+ 語法）。
-2.  **Formatting**: 程式碼已格式化（遵循 PEP 8，透過 Ruff 檢查）。
-3.  **Tests**: 所有測試皆通過。
+1. **Typing**: Pass type checking (we use Python 3.12+ syntax).
+2. **Formatting**: The code has been formatted (following PEP 8, checked by Ruff).
+3. **Tests**: All tests passed.
 
-> 詳細的程式碼品質規範請參考 [Code Style Guardrails](../../reference/guardrails/code-quality/code-style.mdx)。
+> For detailed code quality standards, please refer to [Code Style Guardrails](../../reference/guardrails/code-quality/code-style.mdx).
 
-## 3. 開發規範 (Guardrails)
+## 3. Development specifications (Guardrails)
 
-所有開發規範統一放在 **[Guardrails](../../reference/guardrails/index.mdx)** 區塊。
+All development specifications are placed in the **[Guardrails](../../reference/guardrails/index.mdx)** block.
 
-<Aside type="tip" title="AI 助手設定">
+<Aside type="tip" title="AI assistant settings">
 
-如果您使用 AI 輔助工具（如 Cursor, Windsurf），請前往各規範頁面，複製底部的 **[#agent-rule](../../reference/guardrails/index.mdx)** 區塊貼入您的 System Prompt。
+If you use AI auxiliary tools (such as Cursor, Windsurf), please go to each specification page, copy the **[#agent-rule](../../reference/guardrails/index.mdx)** block at the bottom and paste it into your System Prompt.
 
 </Aside>
 
-### 快速連結
+### Quick links
 
-| 類別 | 規範 | Agent Rule |
+| Category | Specification | Agent Rule |
 |---|---|---|
-| **專案基礎** | [專案概述](../../reference/guardrails/project-basics/project-overview.mdx) | [#agent-rule](../../reference/guardrails/project-basics/project-overview.mdx) |
-| | [技術堆疊](../../reference/guardrails/project-basics/tech-stack.mdx) | [#agent-rule](../../reference/guardrails/project-basics/tech-stack.mdx) |
-| | [目錄結構](../../reference/guardrails/project-basics/folder-structure.mdx) | [#agent-rule](../../reference/guardrails/project-basics/folder-structure.mdx) |
-| **執行驗證** | [執行指令](../../reference/guardrails/execution-verification/build-commands.mdx) | [#agent-rule](../../reference/guardrails/execution-verification/build-commands.mdx) |
+| **Project Basics** | [Project Overview](../../reference/guardrails/project-basics/project-overview.mdx) | [#agent-rule](../../reference/guardrails/project-basics/project-overview.mdx) |
+| | [Technology Stack](../../reference/guardrails/project-basics/tech-stack.mdx) | [#agent-rule](../../reference/guardrails/project-basics/tech-stack.mdx) |
+| | [Directory structure](../../reference/guardrails/project-basics/folder-structure.mdx) | [#agent-rule](../../reference/guardrails/project-basics/folder-structure.mdx) |
+| **Execute verification** | [Execute command](../../reference/guardrails/execution-verification/build-commands.mdx) | [#agent-rule](../../reference/guardrails/execution-verification/build-commands.mdx) |
 | | [Branch & Worktree Flow](../../reference/guardrails/execution-verification/branch-and-worktree-flow.mdx) | [#agent-rule](../../reference/guardrails/execution-verification/branch-and-worktree-flow.mdx) |
 | | [Codex Subagent Coordination](../../reference/guardrails/execution-verification/multi-agent-collaboration.mdx) | [#agent-rule](../../reference/guardrails/execution-verification/multi-agent-collaboration.mdx) |
 | | [Linting](../../reference/guardrails/execution-verification/linting.mdx) | [#agent-rule](../../reference/guardrails/execution-verification/linting.mdx) |
-| | [測試](../../reference/guardrails/execution-verification/testing.mdx) | [#agent-rule](../../reference/guardrails/execution-verification/testing.mdx) |
-| **程式品質** | [程式碼風格](../../reference/guardrails/code-quality/code-style.mdx) | [#agent-rule](../../reference/guardrails/code-quality/code-style.mdx) |
-| | [類型檢查](../../reference/guardrails/code-quality/type-checking.mdx) | [#agent-rule](../../reference/guardrails/code-quality/type-checking.mdx) |
-| | [腳本撰寫](../../reference/guardrails/code-quality/script-authoring.mdx) | [#agent-rule](../../reference/guardrails/code-quality/script-authoring.mdx) |
-| **文件設計** | [文件設計](../../reference/guardrails/documentation-design/documentation.mdx) | [#agent-rule](../../reference/guardrails/documentation-design/documentation.mdx) |
+| | [Test](../../reference/guardrails/execution-verification/testing.mdx) | [#agent-rule](../../reference/guardrails/execution-verification/testing.mdx) |
+| **Program Quality** | [Code Style](../../reference/guardrails/code-quality/code-style.mdx) | [#agent-rule](../../reference/guardrails/code-quality/code-style.mdx) |
+| | [Type check](../../reference/guardrails/code-quality/type-checking.mdx) | [#agent-rule](../../reference/guardrails/code-quality/type-checking.mdx) |
+| | [Scripting](../../reference/guardrails/code-quality/script-authoring.mdx) | [#agent-rule](../../reference/guardrails/code-quality/script-authoring.mdx) |
+| **File Design** | [File Design](../../reference/guardrails/documentation-design/documentation.mdx) | [#agent-rule](../../reference/guardrails/documentation-design/documentation.mdx) |
 | | [Standards](../../reference/guardrails/documentation-design/standards.mdx) | [#agent-rule](../../reference/guardrails/documentation-design/standards.mdx) |
 | | [Style](../../reference/guardrails/documentation-design/style.mdx) | [#agent-rule](../../reference/guardrails/documentation-design/style.mdx) |
 | | [Maintenance](../../reference/guardrails/documentation-design/maintenance.mdx) | [#agent-rule](../../reference/guardrails/documentation-design/maintenance.mdx) |
-| | [電路繪圖](circuit-diagrams.mdx) | [#agent-rule](circuit-diagrams.mdx#agent-rule) |
+| | [Circuit drawing](circuit-diagrams.mdx) | [#agent-rule](circuit-diagrams.mdx#agent-rule) |
 | | [Starlight Native Style](../../reference/guardrails/documentation-design/starlight-native-style.mdx) | [#agent-rule](../../reference/guardrails/documentation-design/starlight-native-style.mdx) |

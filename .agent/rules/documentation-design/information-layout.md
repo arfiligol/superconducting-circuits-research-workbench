@@ -1,13 +1,13 @@
 ## Macro Style / Information Layout
-- 每個小節只回答一個主要問題；先建立資訊分層，再增加內容密度
-- 正文、表格、tabs、asides、摺疊區塊都必須有明確語意，不可裝飾性使用
-- 頁面應支援先掃讀再細讀：標題、導言、表格標題應能先傳達主要骨架
-- Sidebar 是導覽；正文不是 sidebar 複寫
-- 每個 editable docs page 都必須由 sidebar explicit `slug` 或 `autogenerate.directory` 覆蓋；禁止 hidden pages
+- Only answer one main question in each section; establish information layering first, then increase content density
+- Text, tables, tabs, asides, and folded blocks must have clear semantics and cannot be used for decoration.
+- The page should support scanning first and then detailed reading: the title, introduction, and table title should convey the main skeleton first
+- Sidebar is a navigation; the text is not a copy of the sidebar
+- Every editable docs page must be overridden by sidebar explicit `slug` or `autogenerate.directory`; hidden pages are prohibited
 - Top-level docs maps should be reader/task-first, not Diataxis-first.
-- Start Here should be notebook-first and Pluto-led; Product App belongs in its own top-level group, not the onboarding mainline.
+- Start Here should be a two-step student/research path: first Pluto notebook, then reusable circuit design. Product App belongs in its own top-level group, not the onboarding mainline.
 - Product App should be a top-level reader lane for app contracts and Python Notebook app-prototyping boundaries.
-- Start Here, Workflows, and Concepts are strict research-core lanes; do not place Product App, Backend, Frontend, Schema Editor, ResultView, TraceStore, FastAPI, WebUI, or Product Async workflow procedures there.
-- Product architecture, Backend publication, UI/schema-editor decisions, old App workflows, and product async material belong under `docs/app/**`; obsolete App-specific tutorials belong under `docs/app/archive/**`.
-- Overview / Index 頁只列真正存在的頁面連結；IA 分組必須明確標示為分組，不可寫得像獨立頁
-- 避免文字牆、容器濫用、分組假裝成頁面、以及重複的 `Sections/Topics/Page Map`
+- Start Here, Workflows, Concepts, and non-app Reference are strict research-core lanes; do not place Product App, Backend, Frontend, Desktop, Electron, Schema Editor, ResultView, TraceStore, FastAPI, WebUI, Data Search/Data Management, or Product Async workflow procedures there.
+- Product architecture, Backend publication, UI/schema-editor decisions, data contracts/search/management, old App workflows, and product async material belong under `docs/app/**`; obsolete App-specific tutorials belong under `docs/app/archive/**`.
+- The Overview / Index page only lists real existing page links; IA groups must be clearly marked as groups and cannot be written like independent pages
+- Avoid text walls, container abuse, groups pretending to be pages, and duplicate `Sections/Topics/Page Map`

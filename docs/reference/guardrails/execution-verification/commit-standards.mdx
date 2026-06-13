@@ -1,14 +1,14 @@
 ---
 aliases:
-  - "Commit Standards"
-  - "提交規範"
+ - "Commit Standards"
+ - "Submission specifications"
 tags:
-  - audience/team
-  - sot/true
+ - audience/team
+ - sot/true
 status: stable
 owner: docs-team
 audience: team
-scope: "Commit 時機、粒度、格式規範"
+scope: "Commit timing, granularity, format specifications"
 version: v1.1.0
 last_updated: 2026-03-14
 updated_by: docs-team
@@ -18,63 +18,63 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Commit Standards
 
-規範 **何時** 以及 **如何** 提交程式碼。
+Specify **when** and **how** to submit code.
 
 <Aside type="note" title="Use this page before creating a commit">
 
-先判斷這是不是單一邏輯單元，再確認檢查是否已通過。若你需要寫很長的說明來解釋「為什麼這個 commit 同時改很多不相關的東西」，通常就代表 commit 粒度太大。
+First determine whether this is a single logical unit, and then confirm whether the check has passed. If you need to write a long description to explain "why this commit changes many unrelated things at the same time", it usually means that the commit granularity is too large.
 
 </Aside>
 
 ## Decision Map
 
-| 問題 | 合格答案 |
+| Question | Qualified Answer |
 | --- | --- |
-| 這是單一邏輯單元嗎？ | 一個 feature、一個 bugfix、一個 refactor |
-| 現在適合 commit 嗎？ | 編譯、型別、測試、必要檢查都已通過 |
-| 這個 commit 能獨立 revert 嗎？ | 可以，不會讓其他功能一起壞掉 |
+| Is this a single logical unit? | A feature, a bugfix, a refactor |
+| Is this the right time to commit? | Compilation, type, testing, and necessary checks have all passed |
+| Can this commit be revert independently? | Yes, other functions will not be broken together |
 
-## 何時應該 Commit
+## When should Commit
 
-1. **單一邏輯單元完成** - 一個 feature、一個 bugfix、一個 refactor
-2. **通過所有檢查** - `uv run pre-commit run --all-files` 通過
-3. **可獨立 revert** - 這個 commit 可以單獨撤銷而不破壞其他功能
+1. **Single logical unit completed** - one feature, one bugfix, and one refactor
+2. **PASS ALL CHECK** - `uv run pre-commit run --all-files` PASSED
+3. **Independently revert** - This commit can be undone independently without destroying other functions
 
-## 何時不應該 Commit
+## When not to Commit
 
-1. **半途而廢** - 編譯不過、型別錯誤、測試失敗
-2. **混合變更** - 同時修 bug + 加 feature + 改格式
-3. **WIP 狀態** - 功能未完成 (除非明確標註 `WIP:`)
+1. **Failed halfway** - Failed to compile, type error, failed test
+2. **Mixed changes** - fix bugs + add features + change format at the same time
+3. **WIP Status** - Function not completed (unless explicitly marked `WIP:`)
 
-## Commit 粒度
+## Commit granularity
 
-| 類型 | 粒度 | 範例 |
+| Type | Granularity | Example |
 |------|------|------|
-| `feat:` | 一個完整功能 | `feat: add SQLite persistence layer` |
-| `fix:` | 一個 bug 修復 | `fix: handle empty dataset in fit` |
-| `docs:` | 一份文件更新 | `docs: add logging guardrails` |
-| `refactor:` | 一個重構步驟 | `refactor: extract repositories` |
-| `style:` | 格式修正 | `style: apply ruff formatting` |
-| `test:` | 測試新增/修改 | `test: add unit tests for UoW` |
-| `chore:` | 維護任務 | `chore: update dependencies` |
+| `feat:` | A complete function | `feat: add SQLite persistence layer` |
+| `fix:` | A bug fix | `fix: handle empty dataset in fit` |
+| `docs:` | A document update | `docs: add logging guardrails` |
+| `refactor:` | A reconstruction step | `refactor: extract repositories` |
+| `style:` | Format correction | `style: apply ruff formatting` |
+| `test:` | Test new/modified | `test: add unit tests for UoW` |
+| `chore:` | Maintenance tasks | `chore: update dependencies` |
 
 <Aside type="caution" title="Do not hide mixed changes">
 
-如果同一個 commit 同時混了 feature、bugfix、格式化與文件整理，review 與 revert 成本都會上升。拆開比一次塞完更重要。
+If the same commit is mixed with features, bugfixes, formatting, and file organization, the review and revert costs will increase. Unpacking is more important than stuffing it all at once.
 
 </Aside>
 
-## Commit Message 格式
+## Commit Message format
 
 ```
-<type>: <短描述>
+<type>: <short description>
 
-[可選：詳細說明]
+[Optional: detailed description]
 
-[可選：Closes #issue]
+[Optional: Closes #issue]
 ```
 
-**範例：**
+**example:**
 
 ```
 feat: add colored logging with Rich
@@ -89,7 +89,7 @@ Closes #42
 <details class="docs-disclosure docs-disclosure--note">
 <summary>WIP commits</summary>
 
-只有在團隊流程明確接受、且 commit message 有清楚 `WIP:` 前綴時，才允許未完成但需要保存現場的 commit。
+Unfinished commits that need to be saved on-site are only allowed if the team process explicitly accepts them and the commit message has a clear `WIP:` prefix.
 
 </details>
 
@@ -99,14 +99,14 @@ Closes #42
 ```markdown
 ## Commit Standards
 - **When to Commit**:
-    - Single logical unit complete (one feature, one fix, one refactor).
-    - All checks pass: `uv run pre-commit run --all-files`.
-    - Independently revertable.
+  - Single logical unit complete (one feature, one fix, one refactor).
+  - All checks pass: `uv run pre-commit run --all-files`.
+  - Independently revertable.
 - **When NOT to Commit**:
-    - Code doesn't compile/type-check.
-    - Mixed changes (bug fix + feature + formatting).
-    - Incomplete work (unless `WIP:` prefix).
+  - Code doesn't compile/type-check.
+  - Mixed changes (bug fix + feature + formatting).
+  - Incomplete work (unless `WIP:` prefix).
 - **Commit Format**: `<type>: <description>`
-    - Types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`.
+  - Types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`.
 - **Before Commit**: ALWAYS run `uv run pre-commit run --all-files`.
 ```

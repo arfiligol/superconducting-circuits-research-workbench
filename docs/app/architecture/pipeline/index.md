@@ -1,22 +1,22 @@
 ---
 aliases:
-  - Pipeline Concepts
-  - 管線概念
+ - Pipeline Concepts
+ - pipeline concept
 tags:
-  - diataxis/explanation
-  - audience/team
-  - topic/architecture
-  - topic/pipeline
+ - diataxis/explanation
+ - audience/team
+ - topic/architecture
+ - topic/pipeline
 status: stable
 owner: docs-team
 audience: team
-scope: Research Direct、Product Async 與 Data / Platform Notebook tracks 的資料與執行流程說明
+scope: Information and execution process instructions for Research Direct, Product Async and Data/Platform Notebook tracks
 version: v1.0.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 # Pipeline
@@ -47,6 +47,6 @@ The tracks share scientific concepts and data formats, but they do not share own
 
 ## Related
 
-- [Simulation Interface Boundaries](../../../reference/architecture/simulation-interface-boundaries.md)
-- [Product Async Contracts](../../../reference/architecture/product-async-contracts.md)
-- [TraceStore Zarr](../../../reference/architecture/trace-store-zarr.md)
+- [Simulation Interface Boundaries](../contracts/simulation-interface-boundaries.md)
+- [Product Async Contracts](../contracts/product-async-contracts.md)
+- [TraceStore Zarr](../contracts/trace-store-zarr.md)

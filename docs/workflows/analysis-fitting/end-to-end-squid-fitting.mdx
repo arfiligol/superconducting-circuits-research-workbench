@@ -1,22 +1,22 @@
 ---
 aliases:
-  - "End-to-End SQUID Fitting"
-  - "完整流程教學：SQUID 擬合"
+ - "End-to-End SQUID Fitting"
+ - "Complete process tutorial: SQUID fitting"
 tags:
-  - diataxis/tutorial
-  - audience/user
-  - sot/true
-  - topic/analysis
+ - diataxis/tutorial
+ - audience/user
+ - sot/true
+ - topic/analysis
 status: stable
 owner: team
 audience: user
-scope: "從 HFSS 匯出數據到 notebook SQUID fitting 的完整研究流程"
+scope: "Complete research process for exporting data from HFSS to notebook SQUID fitting"
 version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: End-to-End SQUID Fitting
-  order: 40
+ label: End-to-End SQUID Fitting
+ order: 40
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -29,10 +29,10 @@ This tutorial shows the research route from HFSS export files to a notebook fitt
 
 ```mermaid
 flowchart LR
-    HFSS["HFSS Export"] --> Files["Local Research Files"]
-    Files --> Inspect["Notebook Inspection"]
-    Inspect --> Fit["Python Analysis Core Fit"]
-    Fit --> Result["Figures + Derived Parameters"]
+  HFSS["HFSS Export"] --> Files["Local Research Files"]
+  Files --> Inspect["Notebook Inspection"]
+  Inspect --> Fit["Python Analysis Core Fit"]
+  Fit --> Result["Figures + Derived Parameters"]
 ```
 
 ## 1. Prepare HFSS Data

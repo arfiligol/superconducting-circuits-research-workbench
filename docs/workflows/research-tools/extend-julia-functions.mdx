@@ -1,41 +1,41 @@
 ---
 aliases:
-  - "Extend Julia Functions"
-  - "擴充 Julia 函數"
+ - "Extend Julia Functions"
+ - "Extending Julia functions"
 tags:
-  - diataxis/how-to
-  - status/stable
-  - topic/extend
-  - topic/contributing
-  - topic/julia
+ - diataxis/how-to
+ - status/stable
+ - topic/extend
+ - topic/contributing
+ - topic/julia
 status: stable
 owner: docs-team
 audience: contributor
-scope: "貢獻者指南：擴充 Julia Core、Visualizer 與 Analysis Bridge research helpers"
+scope: "Contributor Guide: Extending Julia Core, Visualizer, and Analysis Bridge research helpers"
 version: v0.2.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Extend Julia Functions
-  order: 30
+ label: Extend Julia Functions
+ order: 30
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 # Extend Julia Research Functions
 
-新增模擬或分析能力時，先把 reusable research logic 放進 Julia Core、Visualizer 或 Analysis Bridge。Notebook 只保留實驗組裝、參數選擇與展示。
+When adding new simulation or analysis capabilities, first put reusable research logic into Julia Core, Visualizer or Analysis Bridge. Notebook only retains experimental assembly, parameter selection and display.
 
 ## Architecture
 
 ```text
 Pluto Notebook
-      |
-      | direct research execution
-      v
+   |
+   | direct research execution
+   v
 Julia Core -----> Visualizer
-      |
-      +-----> Analysis Bridge -----> Python Analysis Core
+   |
+   +-----> Analysis Bridge -----> Python Analysis Core
 ```
 
 ## Step 1: Add Julia Core logic

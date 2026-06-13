@@ -3,7 +3,7 @@
 - **Hierarchy**: L1 = domain directories (A-I groups), L2 = topic pages, L3 = optional sub-pages when L2 > 3000 words
 - **L1 creation rule**: only create an L1 directory + nav entry when it has at least one L2 page
 - **Content boundary**: Physics explains WHY/HOW-IT-WORKS only. Tool usage, CLI steps, and workflows go to Workflows or Reference.
-- **Node types**: each page declares node_type in tags (principle/model/method/device). Dependencies flow: Principle → Model → Device/Method
+- **Node types**: each page declares node_type in tags (principle/model/method/device). Dependencies flow: Principle -> Model -> Device/Method
 - **Positioning**: must be both a full learning backbone and reusable concept nodes
 - **Opener**: each page starts from either a physics question OR a historical/community narrative — never a tool-operation question
 - **Per-page contract**: question, prerequisites mapping, physics core, engineering mapping, limits/approximations, cross-links

@@ -1,14 +1,14 @@
 ---
 aliases:
-  - "Logging Rules"
-  - "日誌規範"
+ - "Logging Rules"
+ - "Log specifications"
 tags:
-  - audience/team
-  - sot/true
+ - audience/team
+ - sot/true
 status: stable
 owner: docs-team
 audience: team
-scope: "日誌記錄規範：分級、使用方式、scripts 邊界"
+scope: "Logging specifications: classification, usage, scripts boundaries"
 version: v2.0.0
 last_updated: 2026-03-25
 updated_by: codex
@@ -18,50 +18,50 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Logging Standards
 
-本專案的 Python runtime 使用標準 `logging` 模組。Rich 可用於開發端彩色輸出，但不得被升格成 user-facing command product surface。
+The Python runtime of this project uses the standard `logging` module. Rich can be used for development-side color output, but may not be promoted to a user-facing command product surface.
 
 <Aside type="note" title="Use this page for runtime logging">
 
-這頁管的是開發與執行期 logging，不是 app-level audit logging。需要 actor/action/resource 的治理記錄時，應看 `App > Shared / Audit Logging`。
-若要區分 audit logging、workflow observability 與 product telemetry 的責任，應看 `App > Shared / Observability Model`。
+This page manages development and execution logging, not app-level audit logging. When governance records for actor/action/resource are required, look at `App > Shared / Audit Logging`.
+To distinguish the responsibilities of audit logging, workflow observability, and product telemetry, you should see `App > Shared / Observability Model`.
 
 </Aside>
 
 ## Logging Map
 
-| 問題 | 應看哪裡 |
+| Question | Where to look |
 | --- | --- |
-| 哪裡可以 `print()`？ | `core/` 與 `scripts/` 的邊界 |
-| 什麼時候用 `info` / `warning` / `error`？ | 日誌等級表 |
-| scripts 如何顯示開發端 logging？ | `setup_logging` + optional `RichHandler` |
+| Where can I get `print()`? | Boundary between `core/` and `scripts/` |
+| When to use `info` / `warning` / `error`? | Log level table |
+| scripts How to display development side logging? | `setup_logging` + optional `RichHandler` |
 
-## 原則
+## in principle
 
-1. **`core/` 層禁止 `print()`** - 只有 `scripts/` 層可以直接輸出
-2. **所有 `core/` 層使用 `logging`** - 讓呼叫者決定如何處理日誌
-3. **彩色分級** - 使用 Rich 的 Console 輸出
-4. **Rich 是開發端輸出選項** - scripts 可使用 `RichHandler`，但它不是 product CLI contract
+1. **`core/` layer prohibits `print()`** - only `scripts/` layer can be output directly
+2. **All `core/` layers use `logging`** - let the caller decide what to do with the logs
+3. **Color Grading** - Console output using Rich
+4. **Rich is the development-side output option** - scripts can use `RichHandler`, but it is not a product CLI contract
 
-## 日誌等級
+## Log level
 
-| Level | 用途 | 顏色 |
+| Level | Purpose | Color |
 |-------|------|------|
-| `DEBUG` | 開發調試資訊 | 灰色 |
-| `INFO` | 正常流程資訊 | 綠色 |
-| `WARNING` | 潛在問題 | 黃色 |
-| `ERROR` | 錯誤但可繼續 | 紅色 |
-| `CRITICAL` | 嚴重錯誤 | 粗體紅色 |
+| `DEBUG` | Development and debugging information | Gray |
+| `INFO` | Normal process information | Green |
+| `WARNING` | Potential Problems | Yellow |
+| `ERROR` | Error but can continue | Red |
+| `CRITICAL` | Serious error | Bold red |
 
 <Aside type="caution" title="Message formatting rule">
 
-logging 呼叫一律使用參數化格式，例如 `logger.info("Value: %s", value)`；不要用 f-string 先把訊息展開。
+Always use parameterized formats for logging calls, such as `logger.info("Value: %s", value)`; do not use f-string to expand the message first.
 
 </Aside>
 
-## 使用方式
+## Usage
 
 <Tabs>
-<TabItem label="在 `core/` 層">
+<TabItem label="At layer `core/`">
 
 
 ```python
@@ -70,63 +70,63 @@ import logging
 logger = logging.getLogger(__name__)
 
 def process_data(path: Path) -> Result:
-    logger.info("Processing %s", path.name)
+  logger.info("Processing %s", path.name)
 
-    if not path.exists():
-        logger.warning("File not found: %s", path)
-        return None
+  if not path.exists():
+    logger.warning("File not found: %s", path)
+    return None
 
-    try:
-        result = do_something()
-        logger.debug("Result: %s", result)
-        return result
-    except ValueError as e:
-        logger.error("Failed to process: %s", e)
-        raise
+  try:
+    result = do_something()
+    logger.debug("Result: %s", result)
+    return result
+  except ValueError as e:
+    logger.error("Failed to process: %s", e)
+    raise
 ```
 
 </TabItem>
 
-<TabItem label="在 `scripts/` 層">
+<TabItem label="At layer `scripts/`">
 
 
 ```python
 from superconducting_circuits_analysis.infrastructure.logging import setup_logging
 
 def main() -> None:
-    setup_logging(level="INFO")  # 或 DEBUG for verbose
+setup_logging(level="INFO") # or DEBUG for verbose
 
-    # 現在所有 core/ 層的 logging 會顯示彩色輸出
-    result = process_data(path)
+# Now all core/ layer logging will show colored output
+  result = process_data(path)
 
-    # scripts 層可以用 print() 做最終 developer-facing summary
-    print(f"Result: {result}")
+# The scripts layer can use print() to make the final developer-facing summary
+  print(f"Result: {result}")
 ```
 
 </TabItem>
 
 </Tabs>
 
-## 配置
+## Configuration
 
-### 預設 Logger Setup (`superconducting_circuits_analysis/infrastructure/logging.py`)
+### Default Logger Setup (`superconducting_circuits_analysis/infrastructure/logging.py`)
 
 ```python
 from rich.logging import RichHandler
 
 def setup_logging(level: str = "INFO") -> None:
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        handlers=[RichHandler(rich_tracebacks=True)]
-    )
+  logging.basicConfig(
+    level=level,
+    format="%(message)s",
+    handlers=[RichHandler(rich_tracebacks=True)]
+  )
 ```
 
-## 遷移指南
+## Migration Guide
 
-將現有 `print()` 替換為 `logging`：
+Replace existing `print()` with `logging`:
 
-| 原本 | 替換為 |
+| original | replaced by |
 |------|--------|
 | `print(f"[Info] ...")` | `logger.info("...")` |
 | `print(f"[Warning] ...")` | `logger.warning("...")` |
@@ -136,7 +136,7 @@ def setup_logging(level: str = "INFO") -> None:
 <details class="docs-disclosure docs-disclosure--note">
 <summary>Why this page stays simple</summary>
 
-logging 規則故意保持薄層：先把 `print()` 邊界、level 語意、scripts handler 定清楚，再由各子系統決定具體欄位與 correlation data。
+The logging rules are deliberately kept thin: first define the `print()` boundaries, level semantics, and scripts handlers, and then let each subsystem determine the specific fields and correlation data.
 
 </details>
 
@@ -148,14 +148,14 @@ logging 規則故意保持薄層：先把 `print()` 邊界、level 語意、scri
 - **No `print()` in `core/`**: Use `logging` module only.
 - **`print()` allowed ONLY in `scripts/`**: For final developer-facing helper output.
 - **Setup**:
-    - Import: `import logging; logger = logging.getLogger(__name__)`
-    - Configure in scripts when useful: `from superconducting_circuits_analysis.infrastructure.logging import setup_logging`
-    - **Handler**: Use `RichHandler` only as developer-facing script output, not as a product CLI contract.
+  - Import: `import logging; logger = logging.getLogger(__name__)`
+  - Configure in scripts when useful: `from superconducting_circuits_analysis.infrastructure.logging import setup_logging`
+  - **Handler**: Use `RichHandler` only as developer-facing script output, not as a product CLI contract.
 - **Levels**:
-    - `logger.debug()`: Development details.
-    - `logger.info()`: Normal flow (e.g., "Processing file...").
-    - `logger.warning()`: Potential issues (e.g., "File not found").
-    - `logger.error()`: Errors that allow continuation.
-    - `logger.critical()`: Fatal errors.
+  - `logger.debug()`: Development details.
+  - `logger.info()`: Normal flow (e.g., "Processing file...").
+  - `logger.warning()`: Potential issues (e.g., "File not found").
+  - `logger.error()`: Errors that allow continuation.
+  - `logger.critical()`: Fatal errors.
 - **Never**: Use f-string in logger. Use `logger.info("Value: %s", value)`.
 ```

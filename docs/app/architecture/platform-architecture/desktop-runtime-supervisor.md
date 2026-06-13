@@ -1,23 +1,23 @@
 ---
 aliases:
-  - Desktop Runtime Supervisor
-  - Electron Runtime Profiles
-  - 桌面執行時監管器
+ - Desktop Runtime Supervisor
+ - Electron Runtime Profiles
+ - desktop execution supervisor
 tags:
-  - diataxis/explanation
-  - audience/team
-  - topic/architecture
-  - topic/desktop
+ - diataxis/explanation
+ - audience/team
+ - topic/architecture
+ - topic/desktop
 status: stable
 owner: docs-team
 audience: team
-scope: Electron desktop shell 如何監管 frontend、Python Backend 與 Julia Runner
+scope: How the Electron desktop shell supervises frontend, Python Backend and Julia Runner
 version: v0.2.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Desktop Runtime Supervisor
-  order: 40
+ label: Desktop Runtime Supervisor
+ order: 40
 ---
 
 # Desktop Runtime Supervisor
@@ -54,12 +54,12 @@ It must not:
 
 ```mermaid
 flowchart LR
-    Launch["App Launch"] --> Shell["Electron Shell"]
-    Shell --> Frontend["Start Frontend"]
-    Shell --> Backend["Start Python Backend"]
-    Shell --> Runner["Start Julia Runner"]
-    Backend --> API["Task + Data APIs Ready"]
-    Runner --> Claim["Runner Claims Tasks"]
+  Launch["App Launch"] --> Shell["Electron Shell"]
+  Shell --> Frontend["Start Frontend"]
+  Shell --> Backend["Start Python Backend"]
+  Shell --> Runner["Start Julia Runner"]
+  Backend --> API["Task + Data APIs Ready"]
+  Runner --> Claim["Runner Claims Tasks"]
 ```
 
 The shell can open before every process is ready.

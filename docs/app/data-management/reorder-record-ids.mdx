@@ -1,26 +1,26 @@
 ---
 aliases:
-  - "重排 Record IDs"
-  - "Reorder Record IDs"
+ - "Rearrange Record IDs"
+ - "Reorder Record IDs"
 tags:
-  - diataxis/how-to
-  - status/stable
-  - topic/database
+ - diataxis/how-to
+ - status/stable
+ - topic/database
 status: deprecated
 owner: docs-team
 audience: user
-scope: "Record ID 重排政策"
+scope: "Record ID reordering policy"
 version: v0.2.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Reorder Record IDs
-  order: 40
+ label: Reorder Record IDs
+ order: 40
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# 重排 Record IDs
+# Rearrange Record IDs
 
 Record IDs are persisted metadata identifiers.
 Do not reorder them as a routine workflow.
@@ -39,7 +39,7 @@ uv run --package superconducting-circuits-backend pytest app/backend/tests -q
 
 ## Notes / Warnings
 
-<Aside type="caution" title="不可重複 ID">
+<Aside type="caution" title="Unrepeatable ID">
 
 ID rewrite tools can break provenance and TraceStore references.
 Do not reintroduce an active `auto-reorder` CLI command.

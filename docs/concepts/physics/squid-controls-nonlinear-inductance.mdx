@@ -1,6 +1,6 @@
 ---
 aliases:
-- SQUID 控制非線性電感
+- SQUID controls nonlinear inductance
 tags:
 - diataxis/explanation
 - audience/user
@@ -8,61 +8,61 @@ tags:
 status: draft
 owner: docs-team
 audience: user
-scope: 解釋 SQUID 為何可調控等效 Josephson 電感
+scope: Explain how SQUID can control the equivalent Josephson inductor
 version: v0.1.0
 last_updated: 2026-02-16
 updated_by: team
 sidebar:
-  label: SQUID Nonlinear Inductance
-  order: 60
+ label: SQUID Nonlinear Inductance
+ order: 60
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# 為什麼 SQUID 可以控制非線性電感值？
+# Why can SQUID control nonlinear inductance values?
 
-## 本章回答的問題
+## Questions answered in this chapter
 
-為什麼在固定幾何結構下，只靠外加磁通偏壓，就能改變 SQUID 的等效電感與非線性強度？
+Why can the equivalent inductance and nonlinear strength of SQUID be changed only by applying an external magnetic flux bias under a fixed geometric structure?
 
-## 先備知識對照
+## Prerequisite knowledge comparison
 
-- 量子：相位差與波函數單值性
-- 電磁：外加磁通與迴路約束
-- 古典：等效參數與小訊號線性化
+- Quantum: phase difference and single value of wave function
+- Electromagnetic: external magnetic flux and loop constraints
+- Classical: equivalent parameters and small signal linearization
 
-## 物理核心
+## Physics Core
 
-對稱 SQUID 在常見近似下可寫成有效 Josephson 能量
+A symmetric SQUID can be written as the effective Josephson energy under common approximations
 
 $$
 E_J^{\mathrm{eff}}(\Phi_{\mathrm{ext}}) \approx 2E_{J0}\cos\left(\pi\frac{\Phi_{\mathrm{ext}}}{\Phi_0}\right).
 $$
 
-而 Josephson 電感與能量尺度近似成反比，因此可藉由 `\Phi_{\mathrm{ext}}` 連續調控等效電感：
+The Josephson inductance is approximately inversely proportional to the energy scale, so the equivalent inductance can be continuously controlled by `\Phi_{\mathrm{ext}}`:
 
 $$
 L_J^{\mathrm{eff}} \propto \frac{1}{E_J^{\mathrm{eff}}}.
 $$
 
-<Aside type="note" title="歷史脈絡">
+<Aside type="note" title="Historical context">
 
-可調電感讓單一晶片能在不同工作點切換，促成 tunable qubit、參數放大器與可重構耦合架構的快速發展。
+Tunable inductors allow a single chip to switch between different operating points, leading to the rapid development of tunable qubits, parametric amplifiers and reconfigurable coupling architectures.
 
 </Aside>
 
-## 工程映射
+## Project mapping
 
-- 用磁通偏壓可調頻率、非線性與耦合強度。
-- 設計上需在可調範圍、敏感度與噪聲之間取捨。
+- Adjustable frequency, nonlinearity and coupling strength using flux bias.
+- Design requires a trade-off between adjustable range, sensitivity and noise.
 
-## 限制與近似
+## Limitations and approximations
 
-- 對稱與小迴路近似失效時，需納入不對稱與自感效應。
-- 接近 `E_J^{\mathrm{eff}} \to 0` 區域時，模型對雜訊與高階效應更敏感。
+- When symmetrical and small loops approximate failure, asymmetry and self-induction effects need to be included.
+- Near the `E_J^{\mathrm{eff}} \to 0` region, the model is more sensitive to noise and higher-order effects.
 
-## 跨文件導航
+## Cross-file navigation
 
-- 前置：[拉格朗日力學如何與電路物理結合？](lagrangian-mechanics-and-circuit-physics.mdx)
-- 任務導向：[SQUID Fitting](../../workflows/analysis-fitting/squid-fitting.mdx)
-- 任務導向：[Notebook Interface](../../reference/notebooks/index.md)
+- Preface: [How does Lagrangian mechanics combine with circuit physics? ](lagrangian-mechanics-and-circuit-physics.mdx)
+- Task-oriented: [SQUID Fitting](../../workflows/analysis-fitting/squid-fitting.mdx)
+- Task-oriented: [Notebook Interface](../../reference/notebooks/index.md)

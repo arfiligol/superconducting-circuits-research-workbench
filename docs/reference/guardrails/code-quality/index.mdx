@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Code Quality
-  - 程式碼品質規範
+ - Code Quality
+ - Code quality standards
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/code-quality
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/code-quality
 status: stable
 owner: docs-team
 audience: contributor
-scope: Code quality、型別、架構邊界、契約版本與錯誤模型索引。
+scope: Code quality, types, architectural boundaries, contract versions, and error model indexes.
 version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -20,13 +20,13 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Code Quality
 
-本區定義 rewrite branch 的程式品質規範。
-重點不是追求框架技巧，而是讓 UI、API、Notebook、Julia Runner 與科學核心可以穩定共演化。
+This area defines the program quality specifications for the rewrite branch.
+The focus is not on pursuing framework skills, but on allowing the UI, API, Notebook, Julia Runner and scientific core to stably co-evolve.
 
 <Aside type="note" title="How to use this section">
 
-先用 `Design Patterns` 與 `Contract Versioning` 判斷邊界，再回到 `Code Style`、`Type Checking`、`Error Handling` 等較細的規則。
-不要只讀 style 類頁面，就開始改 service boundary 或 contract owner。
+First use `Design Patterns` and `Contract Versioning` to determine the boundary, and then return to `Code Style`, `Type Checking`, `Error Handling` and other finer rules.
+Don't just read the style page and start changing the service boundary or contract owner.
 
 </Aside>
 
@@ -34,27 +34,27 @@ import { Aside } from '@astrojs/starlight/components';
 
 | Page | Read this when | Primary concern |
 | --- | --- | --- |
-| [Code Style](code-style.mdx) | 你在寫或重構一般程式碼 | naming、small functions、clarity |
-| [Type Checking](type-checking.mdx) | 你在改 Python / TypeScript 型別 | static guarantees |
-| [Design Patterns](design-patterns.mdx) | 你在改 service、repository、DI、layer boundary | architectural consistency |
-| [Script Authoring](script-authoring.mdx) | 你在新增或重整 dev/build/test/maintenance helper | scripts structure and responsibility |
-| [Data Handling](data-handling.mdx) | 你在動 metadata、trace store、result storage | data boundaries |
-| [Logging](logging.mdx) | 你在加 runtime logging | log discipline |
-| [Contract Versioning](contract-versioning.mdx) | 你在改 public contract / canonical schema | compatibility strategy |
-| [Error Handling](error-handling.mdx) | 你在改 API / worker / CLI error paths | shared error model |
+| [Code Style](code-style.mdx) | You are writing or refactoring general code | naming, small functions, clarity |
+| [Type Checking](type-checking.mdx) | You are changing the Python / TypeScript type | static guarantees |
+| [Design Patterns](design-patterns.mdx) | You are changing service, repository, DI, layer boundary | architectural consistency |
+| [Script Authoring](script-authoring.mdx) | You are adding or reorganizing dev/build/test/maintenance helper | scripts structure and responsibility |
+| [Data Handling](data-handling.mdx) | You are moving metadata, trace store, result storage | data boundaries |
+| [Logging](logging.mdx) | You are adding runtime logging | log discipline |
+| [Contract Versioning](contract-versioning.mdx) |You are changing the public contract / canonical schema| compatibility strategy |
+| [Error Handling](error-handling.mdx) | You are changing API / worker / CLI error paths | shared error model |
 
 <Aside type="caution" title="Common failure mode">
 
-最常見的錯誤不是「code style 不一致」，而是 UI、API、Notebook、Runner 或 scripts 各自重做同一段 workflow。
-只要任務開始碰到 shared workflow，就必須先檢查 `Design Patterns`、`Contract Versioning` 與 `Error Handling`。
+The most common error is not "inconsistent code style", but that the UI, API, Notebook, Runner or scripts each redo the same workflow.
+As soon as the task starts encountering the shared workflow, it must first check `Design Patterns`, `Contract Versioning` and `Error Handling`.
 
 </Aside>
 
 ## Agent Rule
 ```markdown
 ## Code Quality
-- 遵循 Clean Code：命名清晰、函式短小、責任單一。
-- UI、API、Notebook、Runner、scripts 不得各自複製業務流程；共享規則應集中在 app backend services、Julia Core、Julia Runner 或明確 contract packages。
-- 優先修正程式碼而不是增加例外或忽略規則。
-- 需要時查閱子文件：Code Style / Type Checking / Design Patterns / Script Authoring / Data Handling / Logging / Contract Versioning / Error Handling。
+- Follow Clean Code: clear naming, short functions, and single responsibility.
+- UI, API, Notebook, Runner, and scripts must not each replicate business processes; sharing rules should be focused on app backend services, Julia Core, Julia Runner, or explicit contract packages.
+- Prioritize fixing code rather than adding exceptions or ignoring rules.
+- Consult sub-files when needed: Code Style / Type Checking / Design Patterns / Script Authoring / Data Handling / Logging / Contract Versioning / Error Handling.
 ```

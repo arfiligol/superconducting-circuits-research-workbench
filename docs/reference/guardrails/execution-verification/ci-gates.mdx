@@ -1,16 +1,16 @@
 ---
 aliases:
-  - CI Gates
-  - CI 品質關卡
+ - CI Gates
+ - CI quality level
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/execution
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/execution
 status: stable
 owner: docs-team
 audience: contributor
-scope: develop 日常整合與 main release promotion 的 PR 品質門檻，含 public site、app layout、Julia Runner、desktop shell 與 docs route validation。
+scope: PR quality threshold for develop daily integration and main release promotion, including public site, app layout, Julia Runner, desktop shell and docs route validation.
 version: v3.3.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -20,18 +20,18 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # CI Gates
 
-所有 PR 在 merge 前必須通過與 touched area 對應的必要檢查。
-日常 integration 的預設目標是 `develop`；`main` 只接 verified release promotion。
+All PRs must pass the necessary checks corresponding to the touched area before merging.
+The default target for daily integration is `develop`; `main` only receives verified release promotion.
 
 <Aside type="note" title="How to use this page">
 
-先依 touched area 找對應 gate，再確認是否還需要 docs 或 desktop 的補充檢查。這頁定的是最低 merge bar，不是每次本地開發都要全跑。
+First find the corresponding gate according to the touched area, and then confirm whether additional checks of docs or desktop are needed. This page sets the minimum merge bar. It does not have to be run every time you develop locally.
 
 </Aside>
 
 ## Gate Map
 
-| touched area | 至少要過的 gate |
+| touched area | gate that must be passed at least |
 | --- | --- |
 | foundation workspaces | backend pytest + frontend test/build + desktop lint/build + Julia Runner test |
 | public site | Astro check/build + combined public artifact build |
@@ -47,28 +47,28 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 <TabItem label="Foundation Workspaces">
 
 
-- install：`uv sync --all-packages`、`npm install --prefix app/frontend`、`npm install --prefix app/desktop`
-- check：`uv run --package superconducting-circuits-backend pytest app/backend/tests -q`、`uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`、`npm run test --prefix app/frontend`、`npm run lint --prefix app/desktop`、`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`、`JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
-- build：`npm run build --prefix app/frontend`、`npm run build --prefix app/desktop`
+- install:`uv sync --all-packages`, `npm install --prefix app/frontend`, `npm install --prefix app/desktop`
+- check:`uv run --package superconducting-circuits-backend pytest app/backend/tests -q`, `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`, `npm run test --prefix app/frontend`, `npm run lint --prefix app/desktop`, `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`, `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- build:`npm run build --prefix app/frontend`, `npm run build --prefix app/desktop`
 
 </TabItem>
 
 <TabItem label="Backend / Frontend / Desktop">
 
 
-- backend foundation：startup smoke 與 `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
-- frontend：`npm run lint --prefix app/frontend`、`npm run typecheck --prefix app/frontend`、`npm run test --prefix app/frontend`、`npm run build --prefix app/frontend`
-- desktop：`npm run lint --prefix app/desktop`、`npm run build --prefix app/desktop`
-- Julia Runner：`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-- Julia Analysis Bridge：`JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+- backend foundation:startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+- frontend:`npm run lint --prefix app/frontend`, `npm run typecheck --prefix app/frontend`, `npm run test --prefix app/frontend`, `npm run build --prefix app/frontend`
+- desktop:`npm run lint --prefix app/desktop`, `npm run build --prefix app/desktop`
+- Julia Runner:`julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+- Julia Analysis Bridge:`JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
 
 </TabItem>
 
 <TabItem label="Public Site">
 
 
-- site：`npm run check --prefix site`、`npm run build --prefix site`
-- combined artifact：`./scripts/build/build_public_site.sh`
+- site:`npm run check --prefix site`, `npm run build --prefix site`
+- combined artifact:`./scripts/build/build_public_site.sh`
 - deployment artifact must upload `site/dist/`; `site/dist/docs/` is produced by the Astro/Starlight build
 
 </TabItem>
@@ -76,18 +76,18 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 <TabItem label="API Reference">
 
 
-- Python API：`uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
-- Julia API：`julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
-- combined API docs：`./scripts/build/build_api_docs.sh`
-- public artifact links：`uv run python scripts/build/check_api_reference_links.py` after `./scripts/build/build_public_site.sh`
+- Python API: `uv run sphinx-build -W --keep-going -b html docs/api-reference/python/source build/api-reference/python/html`
+- Julia API:`julia --project=docs/api-reference/julia docs/api-reference/julia/make.jl`
+- combined API docs:`./scripts/build/build_api_docs.sh`
+- public artifact links:`uv run python scripts/build/check_api_reference_links.py` after `./scripts/build/build_public_site.sh`
 
 </TabItem>
 
 <TabItem label="Docs / Review">
 
 
-- docs：`uv run python scripts/check_docs_nav_routes.py --check-source`、`./scripts/build_docs_sites.sh`、`uv run python scripts/check_docs_nav_routes.py --check-built`（docs touched 時）
-- 至少一位 reviewer approve
+- docs: `uv run python scripts/check_docs_nav_routes.py --check-source`, `./scripts/build_docs_sites.sh`, `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
+- At least one reviewer approves
 
 </TabItem>
 
@@ -96,44 +96,44 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 ## Notes
 
 - Starlight dev preview warnings are not CI failures by themselves; failing build, route, or API reference integrity checks are merge blockers
-- backend 專用 lint / type-check gate 之後可再提升；目前 foundation gate 先以 startup smoke + pytest 為主
+- The backend-specific lint / type-check gate can be upgraded later; currently the foundation gate is mainly based on startup smoke + pytest
 
 <Aside type="caution" title="Merge blocking rule">
 
-任何 failing required check 都直接阻擋 merge；不要用「這次看起來只是小改」當作跳過 CI gate 的理由。
+Any failing required check directly blocks the merge; don't use "this time it looks like a small change" as a reason to skip the CI gate.
 
 </Aside>
 
 ## Branch Policy
 
-- `main` 禁止直接 push
-- 日常 feature / docs / test work 預設 merge 到 `develop`
-- `main` 只接從 `develop` 進行的 verified release promotion
-- branch roles、direct-develop policy 與 optional worktree use 以 [Branch & Worktree Flow](branch-and-worktree-flow.mdx) 為準
-- guardrail source 的規則變更需同步更新 `.agent/rules`
+- `main` prohibits direct push
+- Daily feature/docs/test work default merge to `develop`
+- `main` only accepts verified release promotion from `develop`
+- branch roles, direct-develop policy and optional worktree use are subject to [Branch & Worktree Flow](branch-and-worktree-flow.mdx)
+- Rule changes for guardrail source need to be updated simultaneously `.agent/rules`
 
 ## Agent Rule
 ```markdown
 ## CI Gates
 - Mandatory checks include:
-    - backend startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
-    - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
-    - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
-    - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
-    - `npm run lint --prefix app/frontend`
-    - `npm run typecheck --prefix app/frontend`
-    - `npm run test --prefix app/frontend`
-    - `npm run build --prefix app/frontend`
-    - `npm run check --prefix site` when public site is touched
-    - `npm run build --prefix site` when public site is touched
-    - `./scripts/build/build_public_site.sh` when public site, docs mount, or deployment artifact is touched
-    - `./scripts/build/build_api_docs.sh` when API reference docs, Python core package exports/docstrings, or Julia package exports/docstrings are touched
-    - `uv run python scripts/build/check_api_reference_links.py` after public artifact builds that touch API reference links
-    - `npm run lint --prefix app/desktop`
-    - `npm run build --prefix app/desktop`
-    - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched
-    - `./scripts/build_docs_sites.sh` when docs are touched
-    - `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
+  - backend startup smoke and `uv run --package superconducting-circuits-backend pytest app/backend/tests -q`
+  - `uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q`
+  - `julia --project=core/julia/SuperconductingCircuitsRunner -e 'using Pkg; Pkg.test()'`
+  - `JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'`
+  - `npm run lint --prefix app/frontend`
+  - `npm run typecheck --prefix app/frontend`
+  - `npm run test --prefix app/frontend`
+  - `npm run build --prefix app/frontend`
+  - `npm run check --prefix site` when public site is touched
+  - `npm run build --prefix site` when public site is touched
+  - `./scripts/build/build_public_site.sh` when public site, docs mount, or deployment artifact is touched
+  - `./scripts/build/build_api_docs.sh` when API reference docs, Python core package exports/docstrings, or Julia package exports/docstrings are touched
+  - `uv run python scripts/build/check_api_reference_links.py` after public artifact builds that touch API reference links
+  - `npm run lint --prefix app/desktop`
+  - `npm run build --prefix app/desktop`
+  - `uv run python scripts/check_docs_nav_routes.py --check-source` when docs are touched
+  - `./scripts/build_docs_sites.sh` when docs are touched
+  - `uv run python scripts/check_docs_nav_routes.py --check-built` when docs are touched
 - `main` must not receive direct pushes.
 - Daily feature/docs/test integration targets `develop` by default.
 - `main` only receives verified release promotion from `develop`.

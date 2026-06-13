@@ -1,13 +1,13 @@
 ---
 aliases:
-  - Prototype To Product
-  - Notebook Prototype To Product
-  - App Prototyping Workflow
+ - Prototype To Product
+ - Notebook Prototype To Product
+ - App Prototyping Workflow
 tags:
-  - diataxis/how-to
-  - audience/team
-  - topic/productization
-  - topic/notebooks
+ - diataxis/how-to
+ - audience/team
+ - topic/productization
+ - topic/notebooks
 status: stable
 owner: docs-team
 audience: team
@@ -16,8 +16,8 @@ version: v1.0.0
 last_updated: 2026-06-12
 updated_by: codex
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 # Prototype To Product
@@ -38,10 +38,10 @@ Use this workflow when a notebook idea is no longer just exploration. The goal i
 
 ```text
 Pluto Notebook
-  -> reusable Julia Core / component-library logic
-  -> optional Python Analysis Core through Analysis Bridge
-  -> Python Notebook validation for app-facing data/API/task assumptions
-  -> Product App contract and implementation
+ -> reusable Julia Core / component-library logic
+ -> optional Python Analysis Core through Analysis Bridge
+ -> Python Notebook validation for app-facing data/API/task assumptions
+ -> Product App contract and implementation
 ```
 
 Do not turn Python Notebook into the normal Julia compute cockpit. It may read data files, inspect Backend APIs, submit product tasks, and validate ResultView assumptions; direct research-grade simulation remains Pluto or Julia Runner.
@@ -59,7 +59,7 @@ If the answer becomes stable and user-facing, move the contract into Product App
 
 ## Related
 
-- [Prototype Path](../../start/prototype-path.md)
+- [Prototype Path](../../workflows/research-tools/promote-pluto-prototype-to-reusable-core.md)
 - [Notebook Interface](../../reference/notebooks/index.md)
 - [Python Core](../../reference/core/python-core.mdx)
 - [Application Authoring Map](../application-authoring.md)

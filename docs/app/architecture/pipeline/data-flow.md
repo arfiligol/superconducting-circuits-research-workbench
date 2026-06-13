@@ -1,23 +1,23 @@
 ---
 aliases:
-  - Data Flow
-  - 數據流程
+ - Data Flow
+ - data flow
 tags:
-  - diataxis/explanation
-  - status/stable
-  - topic/architecture
-  - topic/pipeline
-  - audience/team
+ - diataxis/explanation
+ - status/stable
+ - topic/architecture
+ - topic/pipeline
+ - audience/team
 status: stable
 owner: docs-team
 audience: team
-scope: Research Direct、Product Async 與 Data / Platform Notebook tracks 的資料流與 authority handoff
+scope: Data flow and authority handoff for Research Direct, Product Async and Data / Platform Notebook tracks
 version: v1.0.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Data Flow
-  order: 20
+ label: Data Flow
+ order: 20
 ---
 
 # Data Flow
@@ -26,24 +26,24 @@ The platform has three data-flow tracks. Each track has a different authority bo
 
 ```mermaid
 flowchart TB
-    subgraph Research["Research Direct Track"]
-        Pluto["Pluto Notebook"] --> JuliaCore["Julia Core"]
-        JuliaCore --> ResearchOutput["Local research outputs"]
-    end
+  subgraph Research["Research Direct Track"]
+    Pluto["Pluto Notebook"] --> JuliaCore["Julia Core"]
+    JuliaCore --> ResearchOutput["Local research outputs"]
+  end
 
-    subgraph Product["Product Async Track"]
-        Workbench["Application Simulation Workbench"] --> BackendTask["Python Backend task"]
-        PySubmit["Python Notebook task submission"] --> BackendTask
-        BackendTask --> Runner["Julia Runner"]
-        Runner --> Staging["Local Zarr staging + manifest"]
-        Staging --> Publisher["Backend publication"]
-        Publisher --> TraceStore["TraceStore / Result View"]
-    end
+  subgraph Product["Product Async Track"]
+    Workbench["Application Simulation Workbench"] --> BackendTask["Python Backend task"]
+    PySubmit["Python Notebook task submission"] --> BackendTask
+    BackendTask --> Runner["Julia Runner"]
+    Runner --> Staging["Local Zarr staging + manifest"]
+    Staging --> Publisher["Backend publication"]
+    Publisher --> TraceStore["TraceStore / Result View"]
+  end
 
-    subgraph Notebook["Data / Platform Notebook Track"]
-        PyNotebook["Python Notebook"] --> DirectRead["Direct local / exported / canonical data reads"]
-        PyNotebook --> BackendAPI["Backend API for metadata, task, publication, provenance"]
-    end
+  subgraph Notebook["Data / Platform Notebook Track"]
+    PyNotebook["Python Notebook"] --> DirectRead["Direct local / exported / canonical data reads"]
+    PyNotebook --> BackendAPI["Backend API for metadata, task, publication, provenance"]
+  end
 ```
 
 ## Track Contracts
@@ -71,6 +71,6 @@ Large ND arrays do not move through HTTP JSON. Simulation and trace payloads liv
 
 ## Related
 
-- [Product Async Contracts](../../../reference/architecture/product-async-contracts.md)
-- [Runner Result Manifest](../../../reference/architecture/runner-result-manifest.md)
-- [TraceStore Zarr](../../../reference/architecture/trace-store-zarr.md)
+- [Product Async Contracts](../contracts/product-async-contracts.md)
+- [Runner Result Manifest](../contracts/runner-result-manifest.md)
+- [TraceStore Zarr](../contracts/trace-store-zarr.md)

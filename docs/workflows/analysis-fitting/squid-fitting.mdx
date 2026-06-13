@@ -1,53 +1,53 @@
 ---
 aliases:
-  - "Fitting SQUID Parameters"
-  - "SQUID 參數擬合"
+ - "Fitting SQUID Parameters"
+ - "SQUID parameter fitting"
 tags:
-  - diataxis/how-to
-  - audience/user
-  - sot/true
-  - topic/analysis
+ - diataxis/how-to
+ - audience/user
+ - sot/true
+ - topic/analysis
 status: stable
 owner: team
 audience: user
-scope: "如何從 Admittance 數據擬合 SQUID 電路參數 (Ls, C)"
+scope: "How to fit SQUID circuit parameters (Ls, C) from Admittance data"
 version: v1.1.0
 last_updated: 2026-01-31
 updated_by: team
 sidebar:
-  label: SQUID Fitting
-  order: 30
+ label: SQUID Fitting
+ order: 30
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 # Fitting SQUID Models
 
-本指南說明 LC-SQUID fitting 在研究路徑中的執行邊界。
+This guide describes the execution boundaries of LC-SQUID fitting in the study path.
 Reusable fitting belongs to Python Analysis Core; exploratory setup belongs in Pluto or Python notebooks.
 
-<Aside type="note" title="前置條件">
+<Aside type="note" title="Preconditions">
 
-- 已準備 HFSS admittance 或 notebook-produced trace data。
-- 已確認頻率軸、單位、port 定義與目標 resonance 區間。
+- HFSS admittance or notebook-produced trace data has been prepared.
+- The frequency axis, unit, port definition and target resonance interval have been confirmed.
 
 </Aside>
 
 ---
 
-## 選擇擬合策略
+## Select fitting strategy
 
-根據您的電路設計與數據特性，選擇合適的擬合模式：
+Choose the appropriate fitting mode based on your circuit design and data characteristics:
 
-| 模式 | 適用情境 | Input |
+| Mode | Applicable Scenario | Input |
 |------|----------|------------|
-| **Standard (With Ls)** | 一般情況，需同時決定 $L_s$ 與 $C$ | `mode = "standard"` |
-| **Fixed Capacitance** | 已知量測或設計的準確電容值，僅需優化 $L_s$ | `fixed_capacitance` |
-| **Ideal LC (No Ls)** | 忽略系列電感，僅擬合純 LC 共振 (較少用) | `mode = "ideal_lc"` |
+| **Standard (With Ls)** | In general, $L_s$ and $C$ need to be determined at the same time | `mode = "standard"` |
+| **Fixed Capacitance** | The accurate capacitance value measured or designed is known and only needs to be optimized $L_s$ | `fixed_capacitance` |
+| **Ideal LC (No Ls)** | Ignore the series inductance and only fit pure LC resonance (less used) | `mode = "ideal_lc"` |
 
 ---
 
-## 操作步驟
+## Operation steps
 
 Use a Pluto notebook when you need direct exploration or model iteration.
 The notebook may call Julia Core directly and inspect intermediate arrays.
@@ -64,9 +64,9 @@ Keep notebook-only glue out of package code; keep reusable fitting functions cov
 
 ---
 
-## 結果檢視
+## Result View
 
-擬合完成後，研究結果應記錄：
+After the fitting is completed, the study results should be recorded:
 
 1. source trace path or notebook cell provenance
 2. fitting mode and fixed parameters
@@ -75,7 +75,7 @@ Keep notebook-only glue out of package code; keep reusable fitting functions cov
 
 ---
 
-## 相關參考
+## Related references
 
 - [Tutorial: End-to-End Fitting](end-to-end-squid-fitting.mdx)
 - [Python Core](../../reference/core/python-core.mdx)

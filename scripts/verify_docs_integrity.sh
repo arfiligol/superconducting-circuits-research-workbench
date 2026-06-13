@@ -6,6 +6,7 @@ cd "${ROOT_DIR}"
 
 uv run python scripts/check_docs_nav_routes.py --check-source
 uv run python scripts/check_docs_app_quarantine.py
+uv run python scripts/check_docs_language.py
 ./scripts/build_docs_sites.sh
 uv run python scripts/check_docs_nav_routes.py --check-built
 

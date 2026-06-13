@@ -1,6 +1,6 @@
 ---
 aliases:
-- 非線性與非等間距能階
+- Nonlinear and non-equally spaced energy levels
 tags:
 - diataxis/explanation
 - audience/user
@@ -8,62 +8,62 @@ tags:
 status: draft
 owner: docs-team
 audience: user
-scope: 解釋 Josephson 非線性如何導致非等間距能階
+scope: Explain how Josephson nonlinearity leads to non-equally spaced energy levels
 version: v0.1.0
 last_updated: 2026-02-16
 updated_by: team
 sidebar:
-  label: Nonlinearity and Level Spacing
-  order: 50
+ label: Nonlinearity and Level Spacing
+ order: 50
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# 為什麼非線性會讓能階間距不一致？
+# Why does nonlinearity make the energy level spacing inconsistent?
 
-## 本章回答的問題
+## Questions answered in this chapter
 
-為什麼超導電路中的 Josephson 非線性，會讓 `|0\rangle\to|1\rangle` 與 `|1\rangle\to|2\rangle` 的能階差不再一樣？
+Why does the Josephson nonlinearity in superconducting circuits make the energy level difference between `|0\rangle\to|1\rangle` and `|1\rangle\to|2\rangle` no longer the same?
 
-## 先備知識對照
+## Prerequisite knowledge comparison
 
-- 量子：量子化振子、微擾觀念
-- 古典：位能曲率與小振盪
-- 電磁：電容能與電感能
+- Quantum: quantized oscillator, perturbation concept
+- Classical: Potential energy curvature and small oscillations
+- Electromagnetism: capacitive energy and inductive energy
 
-## 物理核心
+## Physics Core
 
-線性 LC 振子近似為二次位能，因此能階等間距。Josephson 元件位能
+Linear LC oscillators approximate quadratic potential energy, so the energy levels are equally spaced. Josephson element potential energy
 
 $$
 U_J(\varphi) = -E_J\cos\varphi
 $$
 
-在平衡點附近展開後，除了二次項還有四次與更高次項，形成非諧振子：
+After expansion near the equilibrium point, in addition to the quadratic terms, there are also fourth-order and higher-order terms, forming an anharmonic oscillator:
 
 $$
 U(\varphi) \approx \frac{1}{2}k\varphi^2 + \alpha\varphi^4 + \cdots
 $$
 
-非二次項使不同量子數的能量修正不同，故能階間距不再一致（anhamonicity）。
+The non-quadratic terms make the energy corrections of different quantum numbers different, so the energy level spacing is no longer consistent (anhamonicity).
 
-<Aside type="note" title="歷史脈絡">
+<Aside type="note" title="Historical context">
 
-可辨識的非等間距能階，讓超導電路可以被當作可控兩能階系統使用，是超導 qubit 可行性的核心之一。
+Discernible non-equally spaced energy levels allow superconducting circuits to be used as controllable two-energy level systems, which is one of the cores of the feasibility of superconducting qubits.
 
 </Aside>
 
-## 工程映射
+## Project mapping
 
-- 非等間距決定 qubit 的選擇性驅動能力。
-- 過小非線性會造成 leakage；過大則可能加劇敏感度與雜訊耦合。
+- Non-equal spacing determines the selective driving capability of the qubit.
+- If the nonlinearity is too small, it will cause leakage; if it is too large, it may increase sensitivity and noise coupling.
 
-## 限制與近似
+## Limitations and approximations
 
-- 小振幅展開只在平衡點附近成立。
-- 強驅動下需考慮高階項與多能階效應。
+- Small amplitude expansion is only true near the equilibrium point.
+- High-order terms and multi-energy level effects need to be considered under strong driving.
 
-## 跨文件導航
+## Cross-file navigation
 
-- 前置：[為什麼磁通量會是量子化的？](why-flux-is-quantized.mdx)
-- 下一步：[拉格朗日力學如何與電路物理結合？](lagrangian-mechanics-and-circuit-physics.mdx)
+- Preface: [Why is magnetic flux quantized? ](why-flux-is-quantized.mdx)
+- Next step: [How is Lagrangian mechanics combined with circuit physics? ](lagrangian-mechanics-and-circuit-physics.mdx)

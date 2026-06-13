@@ -32,7 +32,7 @@ The Backend exposes the Runner protocol at:
 POST /runner/v1/tasks/claim
 POST /runner/v1/tasks/{task_id}/heartbeat
 POST /runner/v1/tasks/{task_id}/progress
-GET  /runner/v1/tasks/{task_id}/cancellation
+GET /runner/v1/tasks/{task_id}/cancellation
 POST /runner/v1/tasks/{task_id}/complete
 POST /runner/v1/tasks/{task_id}/fail
 ```

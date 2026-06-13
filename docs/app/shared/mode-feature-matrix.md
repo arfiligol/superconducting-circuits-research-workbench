@@ -1,13 +1,13 @@
 ---
 title: "Mode Feature Matrix"
 aliases:
-  - "Local Online Feature Matrix"
-  - "Runtime Mode Feature Matrix"
+ - "Local Online Feature Matrix"
+ - "Runtime Mode Feature Matrix"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: team

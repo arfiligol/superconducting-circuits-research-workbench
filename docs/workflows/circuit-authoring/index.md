@@ -1,36 +1,36 @@
 ---
 aliases:
-  - Circuit Authoring & Reuse
-  - 電路撰寫與重用
+ - Circuit Authoring & Reuse
+ - Circuit writing and reuse
 tags:
-  - diataxis/how-to
-  - audience/user
-  - topic/circuit-authoring
+ - diataxis/how-to
+ - audience/user
+ - topic/circuit-authoring
 status: stable
 owner: docs-team
 audience: user
-scope: 使用 Julia Core、source netlist、repeat sections 與 reusable circuit components 建立可模擬系統。
+scope: Build simulatable systems using Julia Core reusable components, plan builders, and CircuitPlan.
 version: v1.0.0
 last_updated: 2026-06-12
 updated_by: codex
 title: Circuit Authoring & Reuse
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 # Julia Core Circuit Authoring
 
-這一區回答「我要怎麼在研究路徑中描述、重用、組合一個可模擬的 circuit/system」。
+This area answers "How do I describe, reuse, and combine a simulated circuit/system in the research path?"
 
 ## Page Map
 
 | Page | Use it when |
 | --- | --- |
-| [LC Resonator](lc-resonator.md) | 需要最小 circuit example |
-| [Parameter Sweep](parameter-sweep.md) | 需要掃描 circuit parameters |
-| [Circuit Netlist Getting Started](circuit-netlist-getting-started.md) | 第一次理解 Source Form / netlist |
-| [Repeating Circuit Sections](repeating-circuit-sections.md) | 要表達可維護的重複結構 |
+| [LC Resonator](lc-resonator.md) | Requires minimum circuit example |
+| [Parameter Sweep](parameter-sweep.md) | Need to scan circuit parameters |
+| [Promote Pluto Prototype To Reusable Core](../research-tools/promote-pluto-prototype-to-reusable-core.md) | notebook prototype starts to appear repeatedly and should be converged into component library or reusable builder |
+| [Component Libraries](../../reference/julia-core/component-libraries.md) |requires reference-level reusable component library contract|
 
 ## Related
 

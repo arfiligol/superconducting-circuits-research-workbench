@@ -1,17 +1,17 @@
 ---
 aliases:
-  - Response and Error Contract
-  - Common API Contract
-  - 回應與錯誤契約
+ - Response and Error Contract
+ - Common API Contract
+ - Response and Error Contract
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: draft
 owner: docs-team
 audience: team
-scope: app backend surfaces 共用的 success envelope、error envelope、error code family 與 frontend display contract
+scope: app backend surfaces sharedof success envelope, error envelope, error code family and frontend display contract
 version: v0.1.2
 last_updated: 2026-06-12
 updated_by: codex
@@ -21,18 +21,18 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Response & Error Contract
 
-本頁定義 App backend surfaces 共用的回應 envelope 與 error code contract。frontend 應以本頁作為顯示與分流錯誤的共同基線。
+This page defines the response envelope and error code contract shared by App backend surfaces. The frontend should use this page as a common baseline for displaying and triaging errors.
 
 <Aside type="note" title="Shared backend contract">
 
-`Session & Workspace`、`Tasks & Execution`、`Circuit Definitions`、`Analysis Results` 都應回到這份 shared envelope。
+`Session & Workspace`, `Tasks & Execution`, `Circuit Definitions`, `Analysis Results` should all return to this shared envelope.
 
 </Aside>
 
 <Aside type="caution" title="Frontend keys off codes, not messages">
 
-前端 UI 不應靠訊息文字比對來決定顯示行為。
-正式分流鍵是 `error.code`、`error.category` 與 `error.retryable`。
+Front-end UI should not rely on message text comparison to determine display behavior.
+The official split keys are `error.code`, `error.category` and `error.retryable`.
 
 </Aside>
 
@@ -40,24 +40,24 @@ import { Aside } from '@astrojs/starlight/components';
 
 | Field | Required | Meaning |
 |---|---|---|
-| `ok` | required | success 時固定為 `true` |
+| `ok` | required | Fixed to `true` when success |
 | `data` | required | surface-specific payload |
-| `meta` | optional | collection pagination、generated_at、request echo、context summary |
+| `meta` | optional |collection pagination, generated_at, request echo, context summary|
 
 <Aside type="note" title="Success envelope">
 
 ```json
 {
-  "ok": true,
-  "data": {
-    "workspace": {
-      "id": "ws_lab_a",
-      "name": "Lab A"
-    }
-  },
-  "meta": {
-    "generated_at": "2026-03-14T10:00:00Z"
+ "ok": true,
+ "data": {
+  "workspace": {
+   "id": "ws_lab_a",
+   "name": "Lab A"
   }
+ },
+ "meta": {
+  "generated_at": "2026-03-14T10:00:00Z"
+ }
 }
 ```
 
@@ -65,21 +65,21 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Collection Meta Baseline
 
-對 list / catalog / history / task execution 類回應，`meta` 應優先採用 cursor-based collection meta。
+In response to list / catalog / history / task execution classes, `meta` should prefer cursor-based collection meta.
 
 | Field | Meaning |
 |---|---|
-| `generated_at` | response 產生時間 |
-| `limit` | 本次回應的目標筆數 |
-| `next_cursor` | 下一頁 cursor；若無更多資料可為 `null` |
-| `prev_cursor` | 回看前一段資料的 cursor；若不支援或已在起點可為 `null` |
-| `has_more` | 是否仍有更多資料 |
-| `filter_echo` | backend 實際採用的 filter / scope / sort |
+| `generated_at` | response generation time |
+| `limit` | The target number of pens for this response |
+| `next_cursor` | Next page cursor; if there is no more information, it can be `null` |
+| `prev_cursor` | Look back at the cursor of the previous data; if it is not supported or is already at the starting point, it can be `null` |
+| `has_more` | Is there still more information |
+| `filter_echo` | backend actual filter / scope / sort |
 
 <Aside type="tip" title="Cursor-based by default">
 
-App backend 的動態列表應優先採 cursor-based pagination，而不是 `page/page_size`。
-這特別適用於 task execution history、run history、audit logs，以及會持續變動的 catalog / browse surfaces。
+The dynamic list of App backend should prefer cursor-based pagination instead of `page/page_size`.
+This especially applies to task execution history, run history, audit logs, and catalog / browse surfaces that change continuously.
 
 </Aside>
 
@@ -87,30 +87,30 @@ App backend 的動態列表應優先採 cursor-based pagination，而不是 `pag
 
 | Field | Required | Meaning |
 |---|---|---|
-| `ok` | required | error 時固定為 `false` |
-| `error.code` | required | 穩定 machine-readable error code |
-| `error.category` | required | 共用高階分類 |
+| `ok` | required | fixed to `false` when error occurs |
+| `error.code` | required |stable machine-readable error code|
+| `error.category` | required | Shared high-level classification |
 | `error.message` | required | user-safe message |
-| `error.retryable` | required | 是否可安全重試 |
+| `error.retryable` | required | Is it safe to retry |
 | `error.details` | optional | redaction-safe structured detail |
-| `error.debug_ref` | optional | correlation id、task id 或 request id |
+| `error.debug_ref` | optional |correlation id, task id or request id|
 
 <Aside type="note" title="Error envelope">
 
 ```json
 {
-  "ok": false,
-  "error": {
-    "code": "dataset_not_visible_in_workspace",
-    "category": "permission_denied",
-    "message": "The selected dataset is not visible in the active workspace.",
-    "retryable": false,
-    "details": {
-      "dataset_id": "ds_123",
-      "workspace_id": "ws_lab_a"
-    },
-    "debug_ref": "req_7b4c4e"
-  }
+ "ok": false,
+ "error": {
+  "code": "dataset_not_visible_in_workspace",
+  "category": "permission_denied",
+  "message": "The selected dataset is not visible in the active workspace.",
+  "retryable": false,
+  "details": {
+   "dataset_id": "ds_123",
+   "workspace_id": "ws_lab_a"
+  },
+  "debug_ref": "req_7b4c4e"
+ }
 }
 ```
 
@@ -118,19 +118,19 @@ App backend 的動態列表應優先採 cursor-based pagination，而不是 `pag
 
 ## Common Error Categories
 
-本頁沿用 [Code Quality / Error Handling](../../reference/guardrails/code-quality/error-handling.mdx) 的高階分類。
+This page follows the high-level classification of [Code Quality / Error Handling](../../reference/guardrails/code-quality/error-handling.mdx).
 
 | Category | Meaning |
 |---|---|
-| `auth_required` | 尚未登入或 session 不可用 |
-| `permission_denied` | 已登入，但目前身份 / workspace 無權執行 |
-| `validation_error` | request payload 或 surface-specific input 不合法 |
-| `not_found` | 目標資源不存在或不可解析 |
-| `conflict` | 版本衝突、狀態衝突、ownership 衝突 |
-| `task_not_ready` | 結果或控制動作尚未準備好 |
-| `task_execution_failed` | runtime / execution 本身失敗 |
-| `persistence_error` | storage / persistence 寫入或讀取失敗 |
-| `internal_error` | 未分類的服務端錯誤 |
+| `auth_required` | Not logged in or session is unavailable |
+| `permission_denied` | Logged in, but current identity / workspace does not have permission to execute |
+| `validation_error` | The request payload or surface-specific input is illegal |
+| `not_found` | The target resource does not exist or cannot be resolved |
+| `conflict` | Version conflict, status conflict, ownership conflict |
+| `task_not_ready` | The result or control action is not ready yet |
+| `task_execution_failed` | runtime/execution itself failed |
+| `persistence_error` | storage/persistence write or read failed |
+| `internal_error` | Uncategorized server error |
 
 ## Shared Error Code Families
 
@@ -158,15 +158,15 @@ App backend 的動態列表應優先採 cursor-based pagination，而不是 `pag
 
 | Signal | Frontend expectation |
 |---|---|
-| `error.code` | 驅動 page-specific UI state 與 action disable / retry affordance |
-| `error.retryable = true` | 可顯示 retry CTA 或 polling guidance |
-| `error.debug_ref` | 不直接當 user message，但可供 support / audit / logs 關聯 |
-| `error.details` | 只用於 safe structured rendering，不顯示 raw internals |
+| `error.code` | Driver page-specific UI state and action disable / retry affordance |
+| `error.retryable = true` | Can display retry CTA or polling guidance |
+| `error.debug_ref` | Not directly used as user message, but can be associated with support / audit / logs |
+| `error.details` | Only used for safe structured rendering, do not display raw internals |
 
 <Aside type="tip" title="Surface-specific pages still define their own codes">
 
-這份文件只定 envelope 與共用 families。
-每一個 backend surface 仍需列出自己的 concrete error codes 與 example payload。
+This document only defines envelopes and shared families.
+Each backend surface still needs to list its own concrete error codes and example payload.
 
 </Aside>
 

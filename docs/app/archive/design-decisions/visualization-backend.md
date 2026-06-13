@@ -1,59 +1,59 @@
 ---
 aliases:
 - Visualization Backend
-- 視覺化後端選擇
+- Visual backend selection
 tags:
-  - diataxis/explanation
-  - status/stable
-  - topic/architecture
-  - topic/visualization
-  - audience/team
+ - diataxis/explanation
+ - status/stable
+ - topic/architecture
+ - topic/visualization
+ - audience/team
 status: stable
 owner: docs-team
 audience: team
-scope: Plotly vs Matplotlib 選擇理由
+scope: Plotly vs Matplotlib Reasons to choose
 version: v0.1.0
 last_updated: 2026-01-28
 updated_by: docs-team
 sidebar:
-  label: Visualization Backend
-  order: 60
+ label: Visualization Backend
+ order: 60
 ---
 
 # Visualization Backend
 
-本專案預設使用 **Plotly**，但保留 **Matplotlib** 作為備選。
+This project uses **Plotly** by default, but retains **Matplotlib** as an alternative.
 
 ## Why Plotly by Default?
 
-1. **互動性 (Interactivity)**
-   - 資料探勘 (Data Exploration) 非常需要 Zoom-in、Hover 查看數值。
-   - 在 Jupyter Notebook 或瀏覽器中體驗極佳。
+1. **Interactivity**
+- Data Exploration requires Zoom-in and Hover to view values.
+- Works great in Jupyter Notebook or the browser.
 
 2. **Web Ready**
-   - 可以直接匯出成 HTML 分享給團隊成員，無需安裝 Python 環境即可查看。
+- You can directly export it to HTML and share it with team members, and you don’t need to install a Python environment to view it.
 
-3. **美觀**
-   - 預設樣式現代化，適合報告展示。
+3. **Beautiful**
+- The default style is modern and suitable for report display.
 
 ## Why Keep Matplotlib?
 
-1. **靜態出版 (Publication)**
-   - 論文或 PDF 報告需要高品質的向量圖 (PDF/SVG)。
-   - Matplotlib 在這方面仍是標準。
+1. **Static Publishing (Publication)**
+- Papers or PDF reports require high-quality vector graphics (PDF/SVG).
+- Matplotlib is still the standard in this regard.
 
-2. **相容性**
-   - 某些環境 (如純終端機伺服器) 可能無法方便地顯示互動式圖表。
+2. **Compatibility**
+- Some environments (such as pure terminal servers) may not display interactive charts conveniently.
 
 ## Implementation
 
-所有繪圖腳本都支援 `--matplotlib` 參數切換：
+All drawing scripts support `--matplotlib` parameter switching:
 
 ```python
 if use_matplotlib:
-    _render_matplotlib(...)
+  _render_matplotlib(...)
 else:
-    _render_plotly(...)
+  _render_plotly(...)
 ```
 
-這確保了兩種需求都能被滿足。
+This ensures that both needs are met.

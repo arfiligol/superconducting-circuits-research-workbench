@@ -1,11 +1,11 @@
 ---
 aliases:
-  - Backend Tasks Execution Reference
+ - Backend Tasks Execution Reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: team
@@ -21,29 +21,29 @@ Python Backend owns task lifecycle. Julia Runner owns compute.
 
 Application-triggered simulation and analysis are asynchronous. The app never sends large numeric arrays over HTTP/JSON.
 
-Product request, Runner envelope, manifest, and result-view boundaries are defined in [Product Async Contracts](../../reference/architecture/product-async-contracts.md). Frontend code and Python notebooks submit product requests; only the Backend compiles Runner task envelopes.
+Product request, Runner envelope, manifest, and result-view boundaries are defined in [Product Async Contracts](../architecture/contracts/product-async-contracts.md). Frontend code and Python notebooks submit product requests; only the Backend compiles Runner task envelopes.
 
 ## Task Execution Pipeline
 
 ```text
 Simulation / Analysis Workbench
-    -> SimulationRequestV1 or AnalysisRequestV1
+  -> SimulationRequestV1 or AnalysisRequestV1
 Python Backend
-    -> validates request
-    -> creates persisted Task
-    -> prepares staging directory
+  -> validates request
+  -> creates persisted Task
+  -> prepares staging directory
 Julia Runner
-    -> claims task
-    -> executes Julia Core / analysis logic
-    -> writes result.zarr + manifest.json
-    -> reports complete/fail/progress
+  -> claims task
+  -> executes Julia Core / analysis logic
+  -> writes result.zarr + manifest.json
+  -> reports complete/fail/progress
 Python Backend Publisher
-    -> validates manifest and Zarr
-    -> publishes canonical TraceStore
-    -> records TraceBatch / TraceRecord / Result handles
+  -> validates manifest and Zarr
+  -> publishes canonical TraceStore
+  -> records TraceBatch / TraceRecord / Result handles
 Application
-    -> polls or subscribes to task state
-    -> opens ResultView after Backend publication
+  -> polls or subscribes to task state
+  -> opens ResultView after Backend publication
 ```
 
 The product metaphor is Task Execution Pipeline, Runner Runtime, Task / Execution Center, and ResultView. It is not a separate queue-service UI or standalone runtime wall.
@@ -108,9 +108,9 @@ Product task payloads separate design intent from runtime values:
 
 ```text
 SimulationRequestV1
-    -> design / circuit definition reference
-    -> runtime values
-    -> requested run profile
+  -> design / circuit definition reference
+  -> runtime values
+  -> requested run profile
 ```
 
 They are not arbitrary JosephsonCircuits solver internals with no CircuitPlan validation. CircuitPlan declares ports, source slots, pump axes, and observables. Julia Core validates that HB intent during compile and HB problem construction. The Runner binds runtime values such as frequency arrays, source currents, pump frequencies, harmonic counts, and whitelisted solver kwargs.
@@ -134,65 +134,65 @@ This page defines the target product contract. Current implementation may still 
 
 ```json
 {
-  "task": {
-    "task_id": "task_001",
-    "task_kind": "julia_simulation_frequency_sweep",
-    "input": {
-      "design_ref": {
-        "kind": "circuit_definition",
-        "definition_id": "design_001"
-      },
-      "frequency_sweep": {
-        "start_hz": 4000000000,
-        "stop_hz": 6000000000,
-        "point_count": 401,
-        "spacing": "linear"
-      },
-      "runtime_bindings": {
-        "pump_frequencies_hz": {
-          "pump": 8000000000
-        },
-        "source_currents": {
-          "pump_in": 0.0
-        }
-      },
-      "observables": [
-        {
-          "observable_id": "s11_signal",
-          "representation": "complex"
-        }
-      ],
-      "solver": {
-        "engine": "josephson_circuits",
-        "hb_controls": {
-          "n_pump_harmonics": {
-            "pump": 16
-          },
-          "n_modulation_harmonics": 8,
-          "dc": false,
-          "threewavemixing": false,
-          "fourwavemixing": true,
-          "returnS": true,
-          "returnZ": true,
-          "returnQE": true,
-          "returnCM": true,
-          "sorting": "name",
-          "keyedarrays": false
-        },
-        "optional_hb_kwargs": {}
-      }
+ "task": {
+  "task_id": "task_001",
+  "task_kind": "julia_simulation_frequency_sweep",
+  "input": {
+   "design_ref": {
+    "kind": "circuit_definition",
+    "definition_id": "design_001"
+   },
+   "frequency_sweep": {
+    "start_hz": 4000000000,
+    "stop_hz": 6000000000,
+    "point_count": 401,
+    "spacing": "linear"
+   },
+   "runtime_bindings": {
+    "pump_frequencies_hz": {
+     "pump": 8000000000
     },
-    "output_target": {
-      "dataset_id": "ds_001",
-      "design_id": "design_001"
+    "source_currents": {
+     "pump_in": 0.0
     }
+   },
+   "observables": [
+    {
+     "observable_id": "s11_signal",
+     "representation": "complex"
+    }
+   ],
+   "solver": {
+    "engine": "josephson_circuits",
+    "hb_controls": {
+     "n_pump_harmonics": {
+      "pump": 16
+     },
+     "n_modulation_harmonics": 8,
+     "dc": false,
+     "threewavemixing": false,
+     "fourwavemixing": true,
+     "returnS": true,
+     "returnZ": true,
+     "returnQE": true,
+     "returnCM": true,
+     "sorting": "name",
+     "keyedarrays": false
+    },
+    "optional_hb_kwargs": {}
+   }
   },
-  "staging": {
-    "mode": "local_filesystem",
-    "task_dir": "data/staging/tasks/task_001",
-    "result_zarr": "data/staging/tasks/task_001/result.zarr",
-    "manifest": "data/staging/tasks/task_001/manifest.json"
+  "output_target": {
+   "dataset_id": "ds_001",
+   "design_id": "design_001"
   }
+ },
+ "staging": {
+  "mode": "local_filesystem",
+  "task_dir": "data/staging/tasks/task_001",
+  "result_zarr": "data/staging/tasks/task_001/result.zarr",
+  "manifest": "data/staging/tasks/task_001/manifest.json"
+ }
 }
 ```
 
@@ -204,9 +204,9 @@ Runner completion sends only manifest metadata:
 
 ```json
 {
-  "runner_id": "runner_local_001",
-  "manifest_path": "data/staging/tasks/task_001/manifest.json",
-  "manifest_sha256": "..."
+ "runner_id": "runner_local_001",
+ "manifest_path": "data/staging/tasks/task_001/manifest.json",
+ "manifest_sha256": "..."
 }
 ```
 
@@ -250,9 +250,9 @@ Polling is the baseline status sync mechanism. SSE or WebSocket may be added as 
 
 ## Related
 
-* [Julia Runner Compute Plane](../../reference/architecture/julia-runner-compute-plane.md)
-* [Product Async Contracts](../../reference/architecture/product-async-contracts.md)
+* [Julia Runner Compute Plane](../architecture/contracts/julia-runner-compute-plane.md)
+* [Product Async Contracts](../architecture/contracts/product-async-contracts.md)
 * [ResultView API](result-view-api.md)
-* [Runner Result Manifest](../../reference/architecture/runner-result-manifest.md)
-* [TraceStore Zarr](../../reference/architecture/trace-store-zarr.md)
+* [Runner Result Manifest](../architecture/contracts/runner-result-manifest.md)
+* [TraceStore Zarr](../architecture/contracts/trace-store-zarr.md)
 * [Task Management](../frontend/shared-workflow/task-management.md)

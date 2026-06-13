@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Layout Patterns
-  - 佈局規範
+ - Layout Patterns
+ - layout specifications
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/ui-ux
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
 status: stable
 owner: docs-team
 audience: contributor
-scope: App Router layout、workspace shell 與 data-dense 頁面結構規範。
+scope: App Router layout, workspace shell and data-dense page structure specifications.
 version: v2.3.0
 last_updated: 2026-03-18
 updated_by: codex
@@ -22,63 +22,63 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="note" title="Use this page for shell and page-structure decisions">
 
-這頁回答 layout boundary 應該放在哪一層，以及 data-dense 頁面應該怎麼排。它不替代 page-level spec。
+This page answers where the layout boundary should be placed, and how the data-dense pages should be arranged. It does not replace page-level spec.
 
 </Aside>
 
 ## Layout Map
 
-| 層級 | 主要責任 |
+| Hierarchy | Key Responsibilities |
 | --- | --- |
-| Root layout | providers、theme、fonts、global styles |
-| Workspace layout | sidebar、top bar、shared workspace context |
-| Feature layout | tabs、breadcrumb、sub-navigation |
+| Root layout |providers, theme, fonts, global styles|
+| Workspace layout |sidebar, top bar, shared workspace context|
+| Feature layout |tabs, breadcrumb, sub-navigation|
 
 ## App Router Responsibilities
 
-- Root layout：providers、theme、fonts、global styles
-- Workspace layout：sidebar、top bar、shared workspace context
-- Feature layout：tabs、breadcrumb、sub-navigation
+- Root layout:providers, theme, fonts, global styles
+- Workspace layout:sidebar, top bar, shared workspace context
+- Feature layout:tabs, breadcrumb, sub-navigation
 
 ## Route Groups
 
-- `(workspace)`：主產品區
-- `(docs)` 或其他非主產品區可獨立分群
-- 不要把所有頁面都堆在 root layout 下
+- `(workspace)`: Main product area
+- `(docs)` or other non-main product areas can be grouped independently
+- Don’t pile all pages under the root layout
 
 ## Data-Dense View Pattern
 
-資料密集頁面優先採用 master-detail：
+For data-intensive pages, master-detail is preferred:
 
-- 左側：table / list / search / filters
-- 右側：detail panel / chart / analysis output
-- mobile 下需可堆疊
+- Left side:table / list / search / filters
+- Right side: detail panel / chart / analysis output
+- Stackable for mobile
 
 <Aside type="tip" title="Good default">
 
-若頁面同時有列表、搜尋、過濾與 detail/preview，優先從 master-detail 開始，而不是先把所有東西往單欄直堆。
+If the page has list, search, filtering and detail/preview at the same time, it is better to start from master-detail instead of stacking everything in a single column first.
 
 </Aside>
 
 ## Spacing
 
-- 使用一致的 spacing scale
-- 頁面級區塊用中等間距
-- 卡片內距保持緊湊但可讀
-- 避免為了「看起來大氣」而犧牲資料密度
+- Use consistent spacing scale
+- Use medium spacing for page-level blocks
+- Card spacing remains tight but readable
+- Avoid sacrificing data density for the sake of "looking great"
 
 ## Guidance Density
 
 | Prefer | Avoid |
 |---|---|
-| 透過 hierarchy、grouping、alignment 與 spacing 引導 | 先堆大量 explanatory paragraphs 再希望使用者自己整理 |
-| concise labels、status badges、section titles | 長段 helper copy 佔滿 shell 或 card |
-| clear primary action + quiet secondary actions | 同層級塞滿很多文案與 CTA |
+| Guided through hierarchy, grouping, alignment and spacing | Pile a large number of explanatory paragraphs first and then hope users can organize them themselves |
+| concise labels, status badges, section titles | Long section helper copy takes up shell or card |
+| clear primary action + quiet secondary actions | The same level is filled with a lot of copywriting and CTA |
 
 <Aside type="tip" title="Let layout teach first">
 
-能用佈局、分區、按鈕層級與狀態位置說清楚的事情，就不要再加一段輔助文字。
-說明文字應是補充，不應成為整個 UX 的主要導引機制。
+Don't add a paragraph of auxiliary text when things can be explained clearly using layout, partitions, button hierarchy and status positions.
+Description text should be supplementary and should not be the main navigation mechanism for the entire UX.
 
 </Aside>
 
@@ -86,15 +86,15 @@ import { Aside } from '@astrojs/starlight/components';
 
 | Rule | Meaning |
 |---|---|
-| One page, one primary job | 每個 page body 應明確服務一個主任務，例如 dataset management、raw-data browse、simulation workflow、schemdraw authoring |
-| Secondary surfaces stay secondary | 支援資訊可以存在，但不得稀釋主任務或搶走首屏注意力 |
-| Shell context stays in shell | `Runtime Mode`、`Active Workspace`、`Active Dataset`、`Tasks Queue`、worker summary 屬於 shared shell，不應在各頁重做 context summary wall |
-| Cross-page CTA is not IA | `Open X`、`Go to Y`、`Handoff to Z` 不是資訊架構；只有在它是單一主要下一步時才應出現 |
+| One page, one primary job | Each page body should clearly serve a primary task, such as dataset management, raw-data browse, simulation workflow, schemdraw authoring |
+| Secondary surfaces stay secondary | Support information may exist, but must not dilute the main mission or steal attention from the first screen |
+| Shell context stays in shell | `Runtime Mode`, `Active Workspace`, `Active Dataset`, `Tasks Queue`, worker summary belong to shared shell and should not be redone on each page context summary wall |
+| Cross-page CTA is not IA | `Open X`, `Go to Y`, `Handoff to Z` is not information architecture; should only appear if it is a single major next step |
 
 <Aside type="caution" title="Do not overbuild page bodies">
 
-不要因為某塊資訊「看起來完整」就把它塞進 page body。
-duplicated shell context、authority summary、handoff cards、navigation button walls 與大段 explanation copy，若不是完成本頁主任務不可缺，就不應存在。
+Don’t shove a piece of information into the page body just because it “looks complete.”
+Duplicated shell context, authority summary, handoff cards, navigation button walls, and large explanation copy should not exist if they are not indispensable for completing the main task of this page.
 
 </Aside>
 
@@ -102,18 +102,18 @@ duplicated shell context、authority summary、handoff cards、navigation button
 
 | Keep | Remove or demote |
 |---|---|
-| 清楚的 section hierarchy、必要的 state、單一 primary CTA | runtime mode cards、target dataset cards、submit authority cards 等重複 shell context |
-| 主流程需要的 concise blocking reason | 只是為了「幫忙解釋」而放的大段補充文字 |
-| 與本頁主任務直接相關的結果 / 狀態 | 跨頁導航牆、handoff wall、與本頁無直接關聯的 summary cards |
-| 可快速掃讀的 metadata 與 status | 會讓頁面變成管理牆或 diagnostics wall 的額外資訊 |
+| Clear section hierarchy, necessary state, single primary CTA | Repeated shell context such as runtime mode cards, target dataset cards, submit authority cards, etc. |
+| The concise blocking reason required for the main process | A large piece of supplementary text just to "help explain" |
+| Results/status directly related to the main task of this page | Cross-page navigation wall, handoff wall, summary cards not directly related to this page |
+| Metadata and status that can be quickly scanned | Additional information that turns the page into an admin wall or diagnostics wall |
 
 ## Agent Rule
 ```markdown
 ## Layout Patterns
 - Use App Router layouts intentionally:
-    - root layout for providers/theme/fonts
-    - workspace layout for shared shell
-    - feature layout for sub-navigation
+  - root layout for providers/theme/fonts
+  - workspace layout for shared shell
+  - feature layout for sub-navigation
 - Use route groups to separate workspace surfaces from other sections.
 - Data-dense pages should prefer a master-detail structure with mobile-safe stacking.
 - Keep spacing consistent and compact enough for dense data workflows.

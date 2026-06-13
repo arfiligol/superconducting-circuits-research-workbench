@@ -1,0 +1,3 @@
+# Optional allowlist for unavoidable non-English source terms in editable docs.
+# Format: <path-or-*>:<literal>
+# Keep this file empty unless a citation, personal name, or source term must remain non-English.

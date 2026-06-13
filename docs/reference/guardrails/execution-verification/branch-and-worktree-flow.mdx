@@ -1,18 +1,18 @@
 ---
 aliases:
-  - Branch and Worktree Flow
-  - Git Flow and Worktree Policy
-  - Branch / Worktree Policy
-  - 分支與 Worktree 流程
+ - Branch and Worktree Flow
+ - Git Flow and Worktree Policy
+ - Branch / Worktree Policy
+ - Branching and Worktree processes
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/execution
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/execution
 status: stable
 owner: docs-team
 audience: team
-scope: main/develop branch roles、direct-develop policy、optional worktree isolation 與 release promotion。
+scope: main/develop branch roles, direct-develop policy, optional worktree isolation and release promotion.
 version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -87,9 +87,9 @@ No repo-level role gate controls who can update `develop`. Codex may use subagen
 
 ```text
 direct update or task branch
-    -> develop
-    -> verified release promotion
-    -> main
+  -> develop
+  -> verified release promotion
+  -> main
 ```
 
 ## Related
@@ -111,6 +111,6 @@ direct update or task branch
 - Preserve unrelated dirty work; do not stage, revert, or overwrite it unless the user explicitly asks.
 - Codex may use subagents internally, but repo rules no longer gate `develop` updates by role.
 - Promotion path is:
-    - direct update or task branch -> `develop`
-    - verified release promotion -> `main`
+  - direct update or task branch -> `develop`
+  - verified release promotion -> `main`
 ```

@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Pluto Parameter Sweep Workflow
-  - Pluto Sweep Preflight
+ - Pluto Parameter Sweep Workflow
+ - Pluto Sweep Preflight
 tags:
-  - diataxis/how-to
-  - status/stable
-  - topic/julia-core
-  - topic/pluto
+ - diataxis/how-to
+ - status/stable
+ - topic/julia-core
+ - topic/pluto
 status: stable
 owner: docs-team
 audience: user
@@ -15,8 +15,8 @@ version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Parameter Sweep Workflow
-  order: 30
+ label: Parameter Sweep Workflow
+ order: 30
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -62,9 +62,9 @@ using SuperconductingCircuitsCore
 using MyLabComponents
 
 params = (
-    qwr_length_mm = 5.0,
-    coupling_fF = 3.0,
-    flux_phi0 = 0.1,
+  qwr_length_mm = 5.0,
+  coupling_fF = 3.0,
+  flux_phi0 = 0.1,
 )
 
 plan = build_plan(params)
@@ -94,13 +94,13 @@ Batch sweeps should use a `SweepSpec`, a compile policy, and an executor.
 
 ```julia
 sweep = SweepSpec(
-    axes = (
-        qwr_length_mm = StructuralAxis([4.8, 5.0, 5.2]),
-        coupling_fF = NumericAxis(range(1.0, 10.0, length = 50)),
-        flux_phi0 = NumericAxis(range(-0.5, 0.5, length = 101)),
-    ),
-    compile_policy = CompileByTopologyKey(),
-    executor = ThreadedExecutor(),
+  axes = (
+    qwr_length_mm = StructuralAxis([4.8, 5.0, 5.2]),
+    coupling_fF = NumericAxis(range(1.0, 10.0, length = 50)),
+    flux_phi0 = NumericAxis(range(-0.5, 0.5, length = 101)),
+  ),
+  compile_policy = CompileByTopologyKey(),
+  executor = ThreadedExecutor(),
 )
 ```
 

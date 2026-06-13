@@ -1,14 +1,14 @@
 ---
 title: "Task Management"
 aliases:
-  - "Frontend Task Management"
-  - "Task Execution Management"
-  - "Task Attachment"
+ - "Frontend Task Management"
+ - "Task Execution Management"
+ - "Task Attachment"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/ui
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
 status: stable
 owner: docs-team
 audience: team
@@ -68,4 +68,4 @@ Runner completion does not equal product result availability. Result handoff bel
 
 * [Tasks](../workspace/tasks.mdx)
 * [Backend / Tasks & Execution](../../backend/tasks-execution.md)
-* [TraceStore Zarr](../../../reference/architecture/trace-store-zarr.md)
+* [TraceStore Zarr](../../architecture/contracts/trace-store-zarr.md)

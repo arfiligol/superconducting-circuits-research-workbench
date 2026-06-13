@@ -11,25 +11,25 @@ TraceStore is the canonical numeric authority after the Backend validates and pu
 
 ```text
 data/
-  metadata.db
-  trace_store/
-    datasets/
-      <dataset_id>/
-        designs/
-          <design_id>/
-            batches/
-              <batch_id>.zarr/
-  artifacts/
-    tasks/
-      <task_id>/
-        manifest.json
-        logs/
-  staging/
-    tasks/
-      <task_id>/
-        manifest.json
-        result.zarr/
-        logs/
+ metadata.db
+ trace_store/
+  datasets/
+   <dataset_id>/
+    designs/
+     <design_id>/
+      batches/
+       <batch_id>.zarr/
+ artifacts/
+  tasks/
+   <task_id>/
+    manifest.json
+    logs/
+ staging/
+  tasks/
+   <task_id>/
+    manifest.json
+    result.zarr/
+    logs/
 ```
 
 ## Publication

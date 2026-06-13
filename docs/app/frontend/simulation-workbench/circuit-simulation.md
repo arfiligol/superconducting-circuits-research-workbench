@@ -1,12 +1,12 @@
 ---
 title: "Circuit Simulation Workbench"
 aliases:
-  - "Circuit Simulation UI"
+ - "Circuit Simulation UI"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: team
@@ -24,17 +24,17 @@ Circuit Simulation Workbench is the productized application surface for simulati
 
 ```text
 Application Simulation Workbench
-    -> Python Backend SimulationRequestV1
-    -> persisted Task
-    -> Julia Runner
-    -> local Zarr staging
-    -> Backend publication
-    -> TraceStore / Result View
+  -> Python Backend SimulationRequestV1
+  -> persisted Task
+  -> Julia Runner
+  -> local Zarr staging
+  -> Backend publication
+  -> TraceStore / Result View
 ```
 
 The workbench builds product-grade simulation requests, submits them to the Backend, monitors task state, and renders published results through the shared task/result surfaces.
 
-See [Product Async Contracts](../../../reference/architecture/product-async-contracts.md) for the product request, `SimulationRequestV1` minimum shape, Runner envelope, manifest, and result-view contract.
+See [Product Async Contracts](../../architecture/contracts/product-async-contracts.md) for the product request, `SimulationRequestV1` minimum shape, Runner envelope, manifest, and result-view contract.
 
 ## Boundary
 
@@ -101,7 +101,7 @@ It must not own:
 ## Request Behavior
 
 - Workbench sends `SimulationRequestV1`, not `RunnerTaskEnvelopeV1`.
-- The canonical minimum request shape is defined in [SimulationRequestV1 Minimum Shape](../../../reference/architecture/product-async-contracts.md#simulationrequestv1-minimum-shape).
+- The canonical minimum request shape is defined in [SimulationRequestV1 Minimum Shape](../../architecture/contracts/product-async-contracts.md#simulationrequestv1-minimum-shape).
 - Workbench receives `task_id` from the Backend and uses the Task / Execution Center or a stage-local panel for status.
 - Workbench opens ResultView only after Backend publication.
 - Workbench may reuse shared task/result components.
@@ -111,8 +111,8 @@ It must not own:
 ## Related
 
 * [Application Interface](../../application-interface.md)
-* [Simulation Interface Boundaries](../../../reference/architecture/simulation-interface-boundaries.md)
-* [Product Async Contracts](../../../reference/architecture/product-async-contracts.md)
+* [Simulation Interface Boundaries](../../architecture/contracts/simulation-interface-boundaries.md)
+* [Product Async Contracts](../../architecture/contracts/product-async-contracts.md)
 * [ResultView API](../../backend/result-view-api.md)
-* [Julia Runner Compute Plane](../../../reference/architecture/julia-runner-compute-plane.md)
-* [TraceStore Zarr](../../../reference/architecture/trace-store-zarr.md)
+* [Julia Runner Compute Plane](../../architecture/contracts/julia-runner-compute-plane.md)
+* [TraceStore Zarr](../../architecture/contracts/trace-store-zarr.md)

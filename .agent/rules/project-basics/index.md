@@ -1,6 +1,6 @@
 ## Project Basics
-- Project Basics 定義 platform 的使命、範疇、技術棧與結構。
-- 任何影響整體協作與架構一致性的變更，必須先更新本區。
-- 目前 public introduction site 方向為 Astro；product app UI 方向為 Next.js，API 方向為 FastAPI，compute plane 方向為 Julia Runner，Notebook 是研究 cockpit。
-- backend 的責任邊界與內部藍圖由 `backend-architecture.md` 定義。
-- 舊的 command workflow、retired Python UI runtime、separate queue worker runtime 與 Python in-process Julia runtime 不屬於產品 contract，不應再成為新功能的預設落點。
+- Project Basics defines the mission, scope, technology stack and structure of the platform.
+- Any changes that affect overall collaboration and architectural consistency must first update this area.
+- The current public introduction site direction is Astro; the product app UI direction is Next.js, the API direction is FastAPI, the compute plane direction is Julia Runner, and the Notebook is a research cockpit.
+- The backend's responsibility boundaries and internal blueprint are defined by `backend-architecture.md`.
+- The old command workflow, retired Python UI runtime, separate queue worker runtime and Python in-process Julia runtime are not part of the product contract and should no longer be the default landing point for new features.

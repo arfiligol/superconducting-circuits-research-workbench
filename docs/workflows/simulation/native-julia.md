@@ -1,67 +1,67 @@
 ---
 aliases:
-  - "Native Julia Simulation"
-  - "原生 Julia 模擬"
+ - "Native Julia Simulation"
+ - "Native Julia emulation"
 tags:
-  - diataxis/how-to
-  - status/stable
-  - topic/simulation
-  - topic/julia
-  - topic/advanced
+ - diataxis/how-to
+ - status/stable
+ - topic/simulation
+ - topic/julia
+ - topic/advanced
 status: stable
 owner: docs-team
 audience: user
-scope: "原生 Julia 模擬進階教學"
+scope: "Advanced tutorial on native Julia simulation"
 version: v0.2.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Native Julia Simulation
-  order: 30
+ label: Native Julia Simulation
+ order: 30
 ---
 
-# 原生 Julia 模擬
+# Native Julia mocking
 
-本教學說明如何直接使用 JosephsonCircuits.jl 進行電路模擬，適合進階使用者或需要擴充功能的開發者。
+This tutorial explains how to directly use JosephsonCircuits.jl to perform circuit simulation. It is suitable for advanced users or developers who need expanded functions.
 
-## 何時選擇原生 Julia？
+## When to choose native Julia?
 
-| 情況 | 建議方法 |
+| Situation | Suggested approach |
 |------|----------|
-| 複雜電路、自定義元件 | **原生 Julia** |
-| 開發新模擬功能 | **原生 Julia** |
-| 效能關鍵應用 | **原生 Julia** |
+| Complex circuits, custom components | **Native Julia** |
+| Developing new simulation features | **Native Julia** |
+| Performance critical applications | **Native Julia** |
 
-## 環境設定
+## Preferences
 
-### 使用專案 Julia 環境
+### Using the project Julia environment
 
 ```bash
 cd superconducting-circuits-research-workbench
 julia --project=core/julia/SuperconductingCircuitsCore
 ```
 
-### 載入套件
+### Loading the package
 
 ```julia
 using JosephsonCircuits
-using Plots  # 可選，用於繪圖
+using Plots # optional, used for plotting
 ```
 
-## 基本語法
+## Basic syntax
 
-### 單位定義
+### Unit definition
 
 ```julia
-# 常用單位
-nH = 1e-9   # nanohenry
-pF = 1e-12  # picofarad
-fF = 1e-15  # femtofarad
-GHz = 1e9   # gigahertz
-MHz = 1e6   # megahertz
+# Commonly used units
+nH = 1e-9  # nanohenry
+pF = 1e-12 # picofarad
+fF = 1e-15 # femtofarad
+GHz = 1e9  # gigahertz
+MHz = 1e6  # megahertz
 ```
 
-### 符號變數
+### Symbol variables
 
 ```julia
 using JosephsonCircuits: @variables
@@ -69,143 +69,143 @@ using JosephsonCircuits: @variables
 @variables L C Cj Lj R50
 ```
 
-### 電路定義
+### Circuit definition
 
-電路以 Tuple 陣列定義，每個元素格式為：
-`(元件名稱, 節點1, 節點2, 值)`
+The circuit is defined as a Tuple array, and the format of each element is:
+`(component name, node1, node2, value)`
 
 ```julia
 circuit = [
-    ("P1", "1", "0", 1),       # Port (固定值 1)
-    ("R50", "1", "0", R50),    # 電阻
-    ("L", "1", "2", L),        # 電感
-    ("C", "2", "0", C),        # 電容
+("P1", "1", "0", 1), # Port (fixed value 1)
+("R50", "1", "0", R50), # Resistor
+("L", "1", "2", L), # inductor
+("C", "2", "0", C), # capacitor
 ]
 ```
 
-### 參數值
+### Parameter value
 
 ```julia
 circuitdefs = Dict(
-    L => 10nH,
-    C => 1pF,
-    R50 => 50.0,
+  L => 10nH,
+  C => 1pF,
+  R50 => 50.0,
 )
 ```
 
-## 執行 Harmonic Balance
+## Execute Harmonic Balance
 
-### 頻率設定
+### Frequency setting
 
 ```julia
-# 頻率範圍
+# Frequency range
 f_start, f_stop, n_points = 0.1GHz, 5GHz, 100
 frequencies = range(f_start, f_stop, length=n_points)
-ws = 2π .* frequencies  # 角頻率
+ws = 2π .* frequencies # Angular frequency
 ```
 
-### Pump 設定
+### Pump settings
 
 ```julia
-# Pump 頻率和源設定
-wp = (2π * 5GHz,)  # Pump 頻率
+# Pump frequency and source settings
+wp = (2π * 5GHz,) # Pump frequency
 sources = [(mode=(1,), port=1, current=0.0)]
 ```
 
-### 執行模擬
+### Execute simulation
 
 ```julia
-# hbsolve 參數: (ws, wp, sources, Npumpharmonics, Nmodulationharmonics, circuit, circuitdefs)
+# hbsolve parameters: (ws, wp, sources, Npumpharmonics, Nmodulationharmonics, circuit, circuitdefs)
 sol = hbsolve(ws, wp, sources, (10,), (20,), circuit, circuitdefs)
 ```
 
-## 提取 S 參數
+## Extract S parameters
 
 ```julia
-# 提取 S11
+# Extract S11
 S11 = sol.linearized.S(
-    outputmode=(0,),
-    outputport=1,
-    inputmode=(0,),
-    inputport=1,
-    freqindex=:
+  outputmode=(0,),
+  outputport=1,
+  inputmode=(0,),
+  inputport=1,
+  freqindex=:
 )
 
-# 計算振幅和相位
+# Calculate amplitude and phase
 S11_mag = abs.(S11)
 S11_phase = angle.(S11)
 
-# 找共振
+# Find resonance
 min_idx = argmin(S11_mag)
 resonance_freq = frequencies[min_idx] / GHz
-println("共振頻率: $(resonance_freq) GHz")
+println("Resonance frequency: $(resonance_freq) GHz")
 ```
 
-## 進階：Josephson Junction
+## Advanced: Josephson Junction
 
-模擬含 Josephson Junction 的電路：
+Simulate a circuit with a Josephson Junction:
 
 ```julia
 @variables Lj Cj Ic
 
-# SQUID 電路範例
+# SQUID circuit example
 circuit = [
-    ("P1", "1", "0", 1),
-    ("R50", "1", "0", 50.0),
-    ("C", "1", "2", C),
-    ("Lj", "2", "0", Lj),     # Junction 電感
-    ("Cj", "2", "0", Cj),     # Junction 電容
+  ("P1", "1", "0", 1),
+  ("R50", "1", "0", 50.0),
+  ("C", "1", "2", C),
+("Lj", "2", "0", Lj), # Junction inductor
+("Cj", "2", "0", Cj), # Junction capacitor
 ]
 
-# Junction 參數
-Φ0 = 2.067833848e-15  # 磁通量子
-Ic = 1e-6             # 臨界電流 (1 μA)
-Lj0 = Φ0 / (2π * Ic)  # Josephson 電感
+# Junction parameters
+Φ0 = 2.067833848e-15 # Magnetic flux quantum
+Ic = 1e-6 # Critical current (1 μA)
+Lj0 = Φ0 / (2π * Ic) #Josephson Inductor
 
 circuitdefs = Dict(
-    C => 10fF,
-    Lj => Lj0,
-    Cj => 5fF,
+  C => 10fF,
+  Lj => Lj0,
+  Cj => 5fF,
 )
 ```
 
-## 參數掃描
+## Parameter scan
 
 ```julia
-# 掃描電容值
+#Scan capacitance value
 C_values = [0.5, 1.0, 1.5, 2.0] .* pF
 results = []
 
 for C_val in C_values
-    circuitdefs[C] = C_val
-    sol = hbsolve(ws, wp, sources, (10,), (20,), circuit, circuitdefs)
-    S11 = sol.linearized.S(outputmode=(0,), outputport=1, inputmode=(0,), inputport=1, freqindex=:)
-    push!(results, (C=C_val, S11=S11))
+  circuitdefs[C] = C_val
+  sol = hbsolve(ws, wp, sources, (10,), (20,), circuit, circuitdefs)
+  S11 = sol.linearized.S(outputmode=(0,), outputport=1, inputmode=(0,), inputport=1, freqindex=:)
+  push!(results, (C=C_val, S11=S11))
 end
 ```
 
-## 多執行緒加速
+## Multi-thread acceleration
 
 ```julia
 using Base.Threads
 
-# 確認執行緒數
-println("使用 $(nthreads()) 個執行緒")
+# Confirm the number of execution threads
+println("Using $(nthreads()) threads")
 
-# 平行掃描
+# parallel scan
 Threads.@threads for i in 1:length(C_values)
-    # ... 模擬邏輯
+# ... simulation logic
 end
 ```
 
-啟動 Julia 時指定執行緒數：
+Specify the number of threads when starting Julia:
 
 ```bash
 julia --project=. --threads=auto
 ```
 
-## 相關資源
+## Related resources
 
-- [JosephsonCircuits.jl 文件](https://qicklab.github.io/JosephsonCircuits.jl/)
-- [Tutorial: LC 共振器](../circuit-authoring/lc-resonator.md) - 入門案例
-- [Extending Research Tools](../research-tools/extend-julia-functions.mdx) - 貢獻者指南
+- [JosephsonCircuits.jl docs](https://qicklab.github.io/JosephsonCircuits.jl/)
+- [Tutorial: LC Resonator](../circuit-authoring/lc-resonator.md) - Getting Started Case
+- [Extending Research Tools](../research-tools/extend-julia-functions.mdx) - Contributor Guide

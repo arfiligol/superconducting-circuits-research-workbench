@@ -1,15 +1,15 @@
 ---
 aliases:
-  - Backend Session Workspace Reference
+ - Backend Session Workspace Reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: draft
 owner: docs-team
 audience: team
-scope: Backend runtime mode、session、workspace membership、active workspace、active dataset、collaboration mutations 與 capability exposure surface
+scope: Backend runtime mode, session, workspace membership, active workspace, active dataset, collaboration mutations and capability exposure surface
 version: v0.12.0
 last_updated: 2026-03-17
 updated_by: codex
@@ -19,33 +19,33 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Session & Workspace
 
-本頁定義 frontend shell、workspace pages 與 shared app model 共用的 runtime-mode-aware session / workspace authority surface。
+This page defines the runtime-mode-aware session / workspace authority surface shared by frontend shell, workspace pages and shared app model.
 
 <Aside type="note" title="Surface Boundary">
 
-本頁負責 runtime mode、session、workspace membership、active workspace、active dataset、workspace invitation / membership management、user summary、workspace role 與 capability exposure。
-task lifecycle、definition preview、result artifact 與 audit query 不屬於本頁責任。
+This page owns runtime mode, session, workspace membership, active workspace, active dataset, workspace invitation / membership management, user summary, workspace role, and capability exposure.
+task lifecycle, definition preview, result artifact and audit query are not the responsibility of this page.
 
 </Aside>
 
 <Aside type="caution" title="Single Context Authority">
 
-app shell 顯示的 `Active Workspace`、`Active Dataset`、`Workspace Role`、`User Menu Summary`
-與 collaboration controls 必須來自同一份 backend session authority。
+`Active Workspace`, `Active Dataset`, `Workspace Role`, `User Menu Summary` displayed by app shell
+Must come from the same backend session authority as collaboration controls.
 
 </Aside>
 
 <Aside type="caution" title="Local And Online Must Not Share One Session Cache">
 
-local mode 與 online mode 都走同一套 session surface，但不得共用同一份 active context。
-mode switch 必須重新建立 session envelope，而不是沿用舊 mode 的 workspace / dataset / user state。
+Both local mode and online mode use the same session surface, but they must not share the same active context.
+The mode switch must re-establish the session envelope instead of inheriting the workspace/dataset/user state of the old mode.
 
 </Aside>
 
 <Aside type="note" title="Authorization baseline">
 
-本頁所有 capability flags、membership mutation permission 與 collaboration control 都以 backend authorization engine 為準。
-正式 baseline 採 `Casbin`，由 backend service 先整理 resource envelope，再回傳 materialized `capabilities` 與 `allowed_actions`。
+All capability flags, membership mutation permission and collaboration control on this page are subject to the backend authorization engine.
+The official baseline adopts `Casbin`. The backend service first sorts out the resource envelope and then returns materialized `capabilities` and `allowed_actions`.
 
 </Aside>
 
@@ -53,31 +53,31 @@ mode switch 必須重新建立 session envelope，而不是沿用舊 mode 的 wo
 
 | Surface | Meaning |
 | --- | --- |
-| Runtime mode | app 目前以 `local` 或 `online` 運行 |
-| Auth state | 使用者目前是 `local_bypass`、`authenticated`、`anonymous` 還是 `degraded` session |
-| Connection target | 目前 active online target 的摘要，或 `null` |
-| User summary | Header user icon / menu 所需 display data |
-| Workspace identity | active workspace、membership role、default task scope |
-| Workspace membership list | user 可切換的 workspaces 與 roles |
+| Runtime mode | app is currently running as `local` or `online` |
+| Auth state | Whether the user is currently `local_bypass`, `authenticated`, `anonymous` or `degraded` session |
+| Connection target | A summary of the currently active online target, or `null` |
+| User summary |Header user icon / menu required display data|
+| Workspace identity |active workspace, membership role, default task scope|
+| Workspace membership list | user switchable workspaces and roles |
 | Active dataset | shell-level global dataset context |
-| Capability flags | frontend 與 shared task-management 可直接使用的 permission summary |
-| Collaboration mutations | invite、revoke、leave、remove member、transfer owner |
+| Capability flags | frontend and shared task-management directly usable permission summary |
+| Collaboration mutations |invite, revoke, leave, remove member, transfer owner|
 
 ## Session Envelope
 
-backend session surface 至少必須提供：
+The backend session surface must provide at least:
 
 | Field | Meaning |
 | --- | --- |
-| `auth.state` | `local_bypass`, `authenticated`, `anonymous`, `degraded` 等 session state |
-| `runtime_mode` | `local` 或 `online` |
+| `auth.state` |`local_bypass`, `authenticated`, `anonymous`, `degraded` and similar values session state|
+| `runtime_mode` | `local` or `online` |
 | `auth.mode` | auth transport or mode summary |
-| `session_id` | 目前 session identity；public online session 可為 `null` |
-| `connection.target` | nested target summary object，含 `origin`、`label`、`is_active`、`validation_status`、`last_checked_at`；local mode 為 `null` |
-| `user.id` | 目前使用者 identity |
-| `user.display_name` | Header user icon / menu 顯示名稱 |
+| `session_id` | Current session identity; public online session can be `null` |
+| `connection.target` | Nested target summary object containing `origin`, `label`, `is_active`, `validation_status`, `last_checked_at`; local mode uses `null` |
+| `user.id` | Current user identity |
+| `user.display_name` | Header user icon / menu display name |
 | `user.platform_role` | `admin` / `user` |
-| `workspace.memberships[]` | 使用者可進入的 workspace 列表與 role 摘要；local mode 可退化成單一 `Local Space` membership |
+| `workspace.memberships[]` | Workspace list and role summary that users can enter; local mode can be reduced to a single `Local Space` membership |
 | `workspace.id` | active workspace identity |
 | `workspace.slug` | workspace route / slug summary |
 | `workspace.name` | workspace display name |
@@ -85,150 +85,150 @@ backend session surface 至少必須提供：
 | `workspace.default_task_scope` | task default visibility scope |
 | `workspace.allowed_actions` | workspace-scoped mutation availability summary |
 | `active_dataset.id` / `name` | global dataset context |
-| `active_dataset.visibility_scope` | `local`, `private`, `workspace` 之一 |
+| `active_dataset.visibility_scope` | One of `local`, `private`, `workspace` |
 | `capabilities` | capability flags summary |
 
 ## Runtime Mode Rules
 
 | Rule | Meaning |
 | --- | --- |
-| Same envelope family | local 與 online 應回傳相容的 session envelope shape |
-| Local mode returns implicit session | backend 直接提供 local user / `Local Space` / capability summary |
-| Online mode may require auth | 若尚未登入，session surface 回 `auth_required` 或 anonymous/degraded state |
-| Mode switch is session mutation | 不是單純 frontend config toggle |
-| Mode switch clears stale shell context | 舊 mode 的 dataset、task list、attached task refs 不得殘留 |
-| Mode switch drops remote auth continuity | 從 online 切到 local 再切回 online，不保留舊的 remote authenticated session |
+| Same envelope family | local and online should return compatible session envelope shapes |
+| Local mode returns implicit session | backend directly provided local user / `Local Space` / capability summary |
+| Online mode may require auth | If you have not logged in, the session surface will return `auth_required` or anonymous/degraded state |
+| Mode switch is session mutation | Not just frontend config toggle |
+| Mode switch clears stale shell context | The dataset, task list, and attached task refs of the old mode must not remain |
+| Mode switch drops remote auth continuity | Switch from online to local and back to online without retaining the old remote authenticated session |
 
 ## Authorization Resolution Rules
 
 | Rule | Meaning |
 | --- | --- |
-| Session never trusts JWT claims for permissions | JWT 只提供 authentication continuity |
-| Workspace role is backend-resolved | active workspace role 由 membership lookup + authorization engine 決定 |
-| Capability flags are materialized decisions | frontend 不需自行重建 role matrix |
-| Mutation availability is echoed | invite / revoke / leave / remove / transfer 等 controls 必須回傳 `allowed_actions` 或等價 flags |
-| Casbin policy is implementation baseline | policy engine 可替換，但對 frontend 暴露的 contract 不變 |
+| Session never trusts JWT claims for permissions |JWT only provides authentication continuity|
+| Workspace role is backend-resolved | Active workspace role is decided by membership lookup + authorization engine |
+| Capability flags are materialized decisions | frontend does not need to rebuild the role matrix by itself |
+| Mutation availability is echoed | invite / revoke / leave / remove / transfer and other controls must return `allowed_actions` or equivalent flags |
+| Casbin policy is implementation baseline | policy engine can be replaced, but the contract exposed by frontend remains unchanged |
 
 ## Active Workspace Switching
 
 | Rule | Meaning |
 | --- | --- |
-| Session exposes memberships | Header 要能列出使用者可切換的 workspaces |
-| Switch mutates session | active workspace switch 是 session mutation，不是純 frontend state |
-| Dataset rebinding is required | workspace 切換後，active dataset 必須重新驗證或重選 |
-| Task rebinding is required | workspace 切換後，task visibility 與 allowed actions 必須同步更新 |
+| Session exposes memberships | Header should be able to list user-switchable workspaces |
+| Switch mutates session |Active workspace switch is a session mutation, not a pure frontend state|
+| Dataset rebinding is required | After the workspace is switched, the active dataset must be re-verified or re-selected |
+| Task rebinding is required | After the workspace is switched, task visibility and allowed actions must be updated simultaneously |
 
 ## Mutation Surfaces
 
 | Mutation | Responsibility |
 | --- | --- |
-| `switch_runtime_mode(runtime_mode, server_origin | null, label | null)` | 切換 `local` / `online`，建立對應 session envelope 或 auth-required outcome |
-| `list_server_targets()` | 列出 active target 與 remembered recent online targets |
-| `validate_server_target(server_origin)` | 驗證 target reachability / health / version compatibility |
-| `remember_server_target(server_origin, label | null)` | 儲存或更新 app-level online target config |
-| `switch_active_workspace(workspace_id)` | 變更 active workspace，回傳新 session envelope 與 rebind outcome |
-| `activate_dataset(dataset_id | null)` | 設定 active dataset，並驗證該 dataset 對目前 active workspace 可見 |
-| `create_workspace_invitation(workspace_id, email, role)` | 建立 pending invite 並觸發 outbound delivery |
-| `revoke_workspace_invitation(invite_id)` | 在 accept 前撤銷 pending / delivered invite |
-| `accept_workspace_invitation(invite_token)` | 驗證 invite、建立 membership，並回傳 post-accept suggestion |
-| `leave_workspace(workspace_id)` | 使用者主動退出 membership，並重新繫結 session context |
-| `remove_workspace_member(workspace_id, member_user_id)` | 移除其他 membership |
-| `transfer_workspace_owner(workspace_id, new_owner_user_id)` | 轉移 owner 權限並回傳更新後 membership summary |
+| `switch_runtime_mode(runtime_mode, server_origin | null, label | null)` | Switch `local` / `online` to establish corresponding session envelope or auth-required outcome |
+| `list_server_targets()` | List active targets and remembered recent online targets |
+| `validate_server_target(server_origin)` | Validates target reachability / health / version compatibility |
+| `remember_server_target(server_origin, label | null)` | Save or update app-level online target config |
+| `switch_active_workspace(workspace_id)` | Change active workspace, return new session envelope and rebind outcome |
+| `activate_dataset(dataset_id | null)` | Set the active dataset and verify that the dataset is visible to the current active workspace |
+| `create_workspace_invitation(workspace_id, email, role)` | Create pending invite and trigger outbound delivery |
+| `revoke_workspace_invitation(invite_id)` | Withdraw pending / delivered invite before accept |
+| `accept_workspace_invitation(invite_token)` | Verify invite, establish membership, and return post-accept suggestion |
+| `leave_workspace(workspace_id)` | The user actively exits the membership and reconnects the session context |
+| `remove_workspace_member(workspace_id, member_user_id)` | Remove other memberships |
+| `transfer_workspace_owner(workspace_id, new_owner_user_id)` | Transfer owner permissions and return updated membership summary |
 
 ## Live HTTP Routes
 
 | Route | Status | Responsibility |
 | --- | --- | --- |
-| `GET /session` | live | 回傳 runtime-mode-aware session envelope |
-| `PATCH /session/runtime-mode` | live | 切換 `local` / `online`，並回傳新 session envelope + switch result fields |
-| `GET /session/server-targets` | live | 列出 remembered online targets 與 active target origin |
-| `POST /session/server-targets` | live | 新增或更新 app-level online target config |
-| `POST /session/server-targets/validate` | live | 驗證 target reachability / health / compatibility |
-| `PATCH /session/active-workspace` | live | 切換 active workspace |
-| `PATCH /session/active-dataset` | live | 切換 active dataset |
-| `POST /session/login` | live | 建立 online authenticated session |
-| `POST /session/logout` | live | 清除 online authenticated session |
-| `POST /session/refresh` | live | 透過 refresh transport 重建 online authenticated session |
+| `GET /session` | live |Envelope runtime-mode-aware session envelope|
+| `PATCH /session/runtime-mode` | live | Switch `local` / `online` and return new session envelope + switch result fields |
+| `GET /session/server-targets` | live | List remembered online targets and active target origin |
+| `POST /session/server-targets` | live | Add or update app-level online target config |
+| `POST /session/server-targets/validate` | live | Validates target reachability / health / compatibility |
+| `PATCH /session/active-workspace` | live |Switch active workspace|
+| `PATCH /session/active-dataset` | live | switch active dataset |
+| `POST /session/login` | live |Create online authenticated session|
+| `POST /session/logout` | live |Clear online authenticated session|
+| `POST /session/refresh` | live | Rebuild online authenticated session via refresh transport |
 
 ## Workspace Switch Response
 
 | Field | Meaning |
 | --- | --- |
-| `workspace.id` / `name` / `role` | 新的 active workspace |
+| `workspace.id` / `name` / `role` |new active workspace|
 | `active_dataset_resolution` | `preserved`, `rebound`, `cleared` |
-| `active_dataset` | 重新繫結後的 dataset summary，或 `null` |
-| `detached_task_ids[]` | 因 visibility 失效而解除附著的 task ids |
-| `capabilities` | 新 workspace 下的 capability summary |
-| `memberships[]` | 供 Header 重新渲染 switcher |
+| `active_dataset` | The rejoined dataset summary, or `null` |
+| `detached_task_ids[]` | Task ids detached due to visibility failure |
+| `capabilities` | capability summary under new workspace |
+| `memberships[]` | For Header to re-render switcher |
 
 ## Runtime Mode Switch Response
 
 <Aside type="note" title="Extends the session envelope">
 
-`PATCH /session/runtime-mode` 的成功回應不是一個獨立小 payload。
-它會回傳完整 session envelope，再額外附加 runtime-mode switch result fields。
+The successful response of `PATCH /session/runtime-mode` is not a separate small payload.
+It returns the complete session envelope, plus additional runtime-mode switch result fields.
 
 </Aside>
 
 | Field | Meaning |
 | --- | --- |
-| `runtime_mode` | 新的 active mode |
-| `connection.target` | nested target summary object 或 `null`；不再使用 plain string target |
-| `outcome` | backend switch outcome：目前 live values 為 `entered_local`、`entered_online_auth_required` |
-| `auth_transition` | auth continuity outcome：目前 live values 為 `entered_local_bypass`、`online_auth_required`、`online_session_dropped` |
-| `session_reset` | 是否已清除舊 mode shell context |
-| `workspace` | 使用標準 session workspace object；online public session 也保留 object shape，但 identity fields 為 `null` |
-| `active_dataset` | 使用標準 session active-dataset object，若尚未解析 dataset 則為 `null` |
-| `capabilities` | 由新 mode materialize 的 capability summary |
-| `detached_task_ids[]` | mode switch 時被解除附著的 task ids |
+| `runtime_mode` | New active mode |
+| `connection.target` | nested target summary object or `null`; plain string target is no longer used |
+| `outcome` | backend switch outcome: The current live values ​​are `entered_local`, `entered_online_auth_required` |
+| `auth_transition` |auth continuity outcome: The current live values ​​are `entered_local_bypass`, `online_auth_required`, `online_session_dropped`|
+| `session_reset` | Whether the old mode shell context has been cleared |
+| `workspace` | Use standard session workspace object; online public session also retains object shape, but identity fields are `null` |
+| `active_dataset` | Use the standard session active-dataset object, or `null` if the dataset has not been parsed yet |
+| `capabilities` | capability summary by new mode materialize |
+| `detached_task_ids[]` | Task ids that are detached when mode switch |
 
 ## Server Target Summary Shape
 
 | Field | Meaning |
 | --- | --- |
-| `origin` | canonical remote origin，例如 `https://lab.example.com` |
+| `origin` |canonical remote origin, such as `https://lab.example.com`|
 | `label` | target display label |
-| `is_active` | 是否為目前 active online target |
-| `validation_status` | `validated`、`target_validation_failed`、`target_unreachable`、`target_incompatible`、`online_target_rejected` |
-| `last_checked_at` | 最近一次 validation timestamp；若尚未驗證可為 `null` |
+| `is_active` | Is it the current active online target |
+| `validation_status` |`validated`, `target_validation_failed`, `target_unreachable`, `target_incompatible`, `online_target_rejected`|
+| `last_checked_at` | The latest validation timestamp; if it has not yet been verified, it can be `null` |
 
 ## Online Server Target Rules
 
 | Rule | Meaning |
 | --- | --- |
-| App-level owner | server target config 不屬於 workspace、dataset 或 account preference |
-| One active target | 同一時間只有一個 active online target |
-| Recent history allowed | 可保留 remembered recent targets，供 mode switcher 重用 |
-| Validation before switch | 切到 online mode 前，必須先完成 target validation |
-| Failure keeps current mode | 若 target 驗證失敗，保持原 active mode，不建立半完成 session |
-| Connection shape | session / runtime-mode response 中的 `connection.target` 一律使用 nested summary object 或 `null` |
+| App-level owner | server target config does not belong to workspace, dataset, or account preference |
+| One active target | There is only one active online target at the same time |
+| Recent history allowed | remembered recent targets can be retained for reuse by mode switcher |
+| Validation before switch | Target validation must be completed before switching to online mode |
+| Failure keeps current mode | If target verification fails, keep the original active mode and do not establish a half-completed session |
+| Connection shape | `connection.target` in session / runtime-mode response Always use nested summary object or `null` |
 
 ## Active Dataset Activation Rules
 
 | Rule | Meaning |
 | --- | --- |
-| Must belong to active workspace | dataset 若不屬於或不可見於 active workspace，mutation 必須被拒絕 |
-| Explicit clear allowed | 允許把 active dataset 設為 `null` |
-| Session-wide propagation | mutation 成功後，所有 page consumers 看到同一 active dataset |
-| Rejection must explain why | 至少區分 `not_found`、`not_visible_in_workspace`、`archived` 等原因 |
+| Must belong to active workspace | If the dataset does not belong to or is not visible in the active workspace, the mutation must be rejected |
+| Explicit clear allowed | Allow active dataset to be set to `null` |
+| Session-wide propagation | After mutation is successful, all page consumers see the same active dataset |
+| Rejection must explain why | At least distinguish `not_found`, `not_visible_in_workspace`, `archived` and other reasons |
 
 ## Local Session Baseline
 
 | Field | Required behavior |
 | --- | --- |
-| `runtime_mode` | 必須是 `local` |
-| `auth.state` | 使用 `local_bypass` 或等價 local state |
-| `user` | 回傳 implicit local operator summary |
-| `workspace` | 回傳 `Local Space` |
-| `memberships[]` | 可省略，或回傳單一 `Local Space` membership |
-| `connection.target` | 回傳 `null`，而不是 `"local"` string |
-| `active_dataset.visibility_scope` | 若 local dataset 已綁定，必須是 `local` |
-| `capabilities` | 回傳 local mode capability summary，不由 frontend 猜測 |
+| `runtime_mode` | Must be `local` |
+| `auth.state` | Use `local_bypass` or equivalent local state |
+| `user` | Return implicit local operator summary |
+| `workspace` | Return `Local Space` |
+| `memberships[]` | Can be omitted, or return a flyer `Local Space` membership |
+| `connection.target` | Returns `null`, not `"local"` string |
+| `active_dataset.visibility_scope` | If the local dataset is bound, it must be `local` |
+| `capabilities` | Return local mode capability summary, not guessed by frontend |
 
 <Aside type="note" title="Local mode still uses the same backend surface">
 
-local mode 不代表跳過 backend session surface。
-frontend 仍應透過同一份 authority 取得 user summary、workspace、dataset 與 capability flags。
+Local mode does not mean skipping the backend session surface.
+The frontend should still obtain user summary, workspace, dataset and capability flags through the same authority.
 
 </Aside>
 
@@ -249,19 +249,19 @@ frontend 仍應透過同一份 authority 取得 user summary、workspace、datas
 | Field | Meaning |
 | --- | --- |
 | `invite.status` | `accepted`, `revoked`, `expired`, `rejected_account_mismatch` |
-| `workspace` | 受邀 workspace summary |
-| `membership.role` | 新 membership role |
-| `switch_available` | 若目前已有其他 active workspace，提示 frontend 顯示切換 CTA |
-| `recommended_next_action` | `switch_workspace`, `stay_current`, `reopen_invite` 等 |
+| `workspace` | Invited workspace summary |
+| `membership.role` | New membership role |
+| `switch_available` | If there are other active workspaces, prompt frontend display switching CTA |
+| `recommended_next_action` | `switch_workspace`, `stay_current`, `reopen_invite`, etc. |
 
 ## Membership Management Rules
 
 | Rule | Meaning |
 | --- | --- |
-| Invite creation is explicit | 不存在靜默 auto-join |
-| Owner leave requires another owner | 否則必須先 transfer ownership |
-| Removing active member rebinds session | 若目標 user 正在使用此 workspace，session 必須清除 active workspace / dataset |
-| Transfer owner updates capabilities immediately | owner transfer 成功後，雙方 capability summary 都必須立即改變 |
+| Invite creation is explicit | There is no silent auto-join |
+| Owner leave requires another owner | Transfer ownership |
+| Removing active member rebinds session | If the target user is using this workspace, the session must be cleared active workspace / dataset |
+| Transfer owner updates capabilities immediately | After the owner transfer is successful, the capability summary of both parties must be changed immediately |
 
 ## Request / Response Examples
 
@@ -270,35 +270,35 @@ frontend 仍應透過同一份 authority 取得 user summary、workspace、datas
 Request:
 ```json
 {
-  "workspace_id": "ws_lab_a"
+ "workspace_id": "ws_lab_a"
 }
 ```
 
 Response:
 ```json
 {
-  "ok": true,
-  "data": {
-    "workspace": {
-      "id": "ws_lab_a",
-      "name": "Lab A",
-      "role": "member"
-    },
-    "active_dataset_resolution": "rebound",
-    "active_dataset": {
-      "id": "ds_xy_001",
-      "name": "FloatingQubitWithXYLine Post 0308_1819"
-    },
-    "detached_task_ids": ["task_402"],
-    "capabilities": {
-      "can_switch_workspace": true,
-      "can_switch_dataset": true,
-      "can_submit_tasks": true
-    }
+ "ok": true,
+ "data": {
+  "workspace": {
+   "id": "ws_lab_a",
+   "name": "Lab A",
+   "role": "member"
   },
-  "meta": {
-    "memberships_count": 3
+  "active_dataset_resolution": "rebound",
+  "active_dataset": {
+   "id": "ds_xy_001",
+   "name": "FloatingQubitWithXYLine Post 0308_1819"
+  },
+  "detached_task_ids": ["task_402"],
+  "capabilities": {
+   "can_switch_workspace": true,
+   "can_switch_dataset": true,
+   "can_submit_tasks": true
   }
+ },
+ "meta": {
+  "memberships_count": 3
+ }
 }
 ```
 
@@ -309,48 +309,48 @@ Response:
 Request:
 ```json
 {
-  "runtime_mode": "local",
-  "server_origin": null
+ "runtime_mode": "local",
+ "server_origin": null
 }
 ```
 
 Response:
 ```json
 {
-  "ok": true,
-  "data": {
-    "session_id": "local-session",
-    "runtime_mode": "local",
-    "outcome": "entered_local",
-    "connection": {
-      "target": null
-    },
-    "auth": {
-      "state": "local_bypass",
-      "mode": "local_bypass",
-      "reason": null
-    },
-    "auth_transition": "entered_local_bypass",
-    "session_reset": true,
-    "workspace": {
-      "id": "local-space",
-      "slug": "local-space",
-      "name": "Local Space",
-      "role": "owner"
-    },
-    "active_dataset": {
-      "id": "local-dataset-001",
-      "name": "Local Dataset 001",
-      "visibility_scope": "local"
-    },
-    "capabilities": {
-      "can_switch_runtime_mode": true,
-      "can_switch_workspace": false,
-      "can_switch_dataset": true,
-      "can_submit_tasks": true
-    },
-    "detached_task_ids": [44]
-  }
+ "ok": true,
+ "data": {
+  "session_id": "local-session",
+  "runtime_mode": "local",
+  "outcome": "entered_local",
+  "connection": {
+   "target": null
+  },
+  "auth": {
+   "state": "local_bypass",
+   "mode": "local_bypass",
+   "reason": null
+  },
+  "auth_transition": "entered_local_bypass",
+  "session_reset": true,
+  "workspace": {
+   "id": "local-space",
+   "slug": "local-space",
+   "name": "Local Space",
+   "role": "owner"
+  },
+  "active_dataset": {
+   "id": "local-dataset-001",
+   "name": "Local Dataset 001",
+   "visibility_scope": "local"
+  },
+  "capabilities": {
+   "can_switch_runtime_mode": true,
+   "can_switch_workspace": false,
+   "can_switch_dataset": true,
+   "can_submit_tasks": true
+  },
+  "detached_task_ids": [44]
+ }
 }
 ```
 
@@ -361,46 +361,46 @@ Response:
 Request:
 ```json
 {
-  "runtime_mode": "online",
-  "server_origin": "https://lab.example.com",
-  "label": "Lab Server"
+ "runtime_mode": "online",
+ "server_origin": "https://lab.example.com",
+ "label": "Lab Server"
 }
 ```
 
 Response:
 ```json
 {
-  "ok": true,
-  "data": {
-    "session_id": null,
-    "runtime_mode": "online",
-    "outcome": "entered_online_auth_required",
-    "connection": {
-      "target": {
-        "origin": "https://lab.example.com",
-        "label": "Lab Server",
-        "is_active": true,
-        "validation_status": "validated",
-        "last_checked_at": "2026-03-17T09:10:00Z"
-      }
-    },
-    "auth": {
-      "state": "anonymous",
-      "mode": "jwt_refresh_cookie",
-      "reason": null
-    },
-    "auth_transition": "online_auth_required",
-    "session_reset": true,
-    "workspace": {
-      "id": null,
-      "slug": null,
-      "name": null,
-      "role": null
-    },
-    "active_dataset": null,
-    "capabilities": {},
-    "detached_task_ids": [12]
-  }
+ "ok": true,
+ "data": {
+  "session_id": null,
+  "runtime_mode": "online",
+  "outcome": "entered_online_auth_required",
+  "connection": {
+   "target": {
+    "origin": "https://lab.example.com",
+    "label": "Lab Server",
+    "is_active": true,
+    "validation_status": "validated",
+    "last_checked_at": "2026-03-17T09:10:00Z"
+   }
+  },
+  "auth": {
+   "state": "anonymous",
+   "mode": "jwt_refresh_cookie",
+   "reason": null
+  },
+  "auth_transition": "online_auth_required",
+  "session_reset": true,
+  "workspace": {
+   "id": null,
+   "slug": null,
+   "name": null,
+   "role": null
+  },
+  "active_dataset": null,
+  "capabilities": {},
+  "detached_task_ids": [12]
+ }
 }
 ```
 
@@ -411,27 +411,27 @@ Response:
 Request:
 ```json
 {
-  "workspace_id": "ws_lab_a",
-  "email": "researcher@example.com",
-  "role": "member"
+ "workspace_id": "ws_lab_a",
+ "email": "researcher@example.com",
+ "role": "member"
 }
 ```
 
 Response:
 ```json
 {
-  "ok": true,
-  "data": {
-    "invite_id": "inv_4d7c8f",
-    "workspace_id": "ws_lab_a",
-    "email": "researcher@example.com",
-    "role": "member",
-    "status": "delivered",
-    "expires_at": "2026-03-21T10:30:00Z",
-    "delivery": {
-      "channel": "smtp"
-    }
+ "ok": true,
+ "data": {
+  "invite_id": "inv_4d7c8f",
+  "workspace_id": "ws_lab_a",
+  "email": "researcher@example.com",
+  "role": "member",
+  "status": "delivered",
+  "expires_at": "2026-03-21T10:30:00Z",
+  "delivery": {
+   "channel": "smtp"
   }
+ }
 }
 ```
 
@@ -442,28 +442,28 @@ Response:
 Request:
 ```json
 {
-  "invite_token": "inv_4d7c8f"
+ "invite_token": "inv_4d7c8f"
 }
 ```
 
 Response:
 ```json
 {
-  "ok": true,
-  "data": {
-    "invite": {
-      "status": "accepted"
-    },
-    "workspace": {
-      "id": "ws_lab_b",
-      "name": "Lab B"
-    },
-    "membership": {
-      "role": "viewer"
-    },
-    "switch_available": true,
-    "recommended_next_action": "switch_workspace"
-  }
+ "ok": true,
+ "data": {
+  "invite": {
+   "status": "accepted"
+  },
+  "workspace": {
+   "id": "ws_lab_b",
+   "name": "Lab B"
+  },
+  "membership": {
+   "role": "viewer"
+  },
+  "switch_available": true,
+  "recommended_next_action": "switch_workspace"
+ }
 }
 ```
 
@@ -474,24 +474,24 @@ Response:
 Request:
 ```json
 {
-  "workspace_id": "ws_lab_a",
-  "new_owner_user_id": "user_44"
+ "workspace_id": "ws_lab_a",
+ "new_owner_user_id": "user_44"
 }
 ```
 
 Response:
 ```json
 {
-  "ok": true,
-  "data": {
-    "workspace": {
-      "id": "ws_lab_a",
-      "name": "Lab A"
-    },
-    "previous_owner_user_id": "user_12",
-    "new_owner_user_id": "user_44",
-    "memberships_updated": true
-  }
+ "ok": true,
+ "data": {
+  "workspace": {
+   "id": "ws_lab_a",
+   "name": "Lab A"
+  },
+  "previous_owner_user_id": "user_12",
+  "new_owner_user_id": "user_44",
+  "memberships_updated": true
+ }
 }
 ```
 
@@ -501,64 +501,64 @@ Response:
 
 | Code | Category | When it applies |
 | --- | --- | --- |
-| `auth_required` | `auth_required` | session 無效或未登入 |
-| `request_validation_failed` | `validation_error` | `runtime_mode`、`server_origin`、`label` 等 request payload 不合法 |
-| `target_validation_failed` | `conflict` | target 回應存在 validation failure，無法進入 online mode |
-| `target_unreachable` | `conflict` | online server target 無法連線 |
-| `target_incompatible` | `conflict` | target reachability 正常，但版本或 contract 不相容 |
-| `online_target_rejected` | `conflict` | target validation 被拒絕或無法歸類到更細的 failure code |
-| `auth_session_expired` | `auth_required` | 先前 online authenticated session 已失效，需重新登入 |
-| `workspace_membership_required` | `permission_denied` | 目標 workspace 不屬於目前 memberships |
-| `dataset_not_visible_in_workspace` | `permission_denied` | activate dataset 指向不可見 dataset |
-| `dataset_archived` | `conflict` | active dataset 已 archive |
-| `workspace_invite_expired` | `conflict` | invite token 已過期 |
-| `workspace_invite_revoked` | `conflict` | invite 已撤銷 |
-| `workspace_invite_account_mismatch` | `permission_denied` | invite email 與目前帳號不符 |
-| `workspace_invite_create_denied` | `permission_denied` | session 無 invite 權限 |
-| `workspace_invite_not_found` | `not_found` | invite identity 不存在 |
-| `workspace_member_remove_denied` | `permission_denied` | session 無移除 member 權限 |
-| `workspace_owner_transfer_denied` | `permission_denied` | session 無 transfer owner 權限 |
-| `workspace_owner_transfer_invalid` | `validation_error` | 目標 user 不符合 owner transfer 條件 |
-| `context_rebind_required` | `conflict` | session 切換後需重新選 dataset / task |
+| `auth_required` | `auth_required` | Invalid session or not logged in |
+| `request_validation_failed` | `validation_error` | `runtime_mode`, `server_origin`, `label`, etc. request payload is illegal |
+| `target_validation_failed` | `conflict` | The target response has validation failure and cannot enter online mode |
+| `target_unreachable` | `conflict` | online server target cannot connect |
+| `target_incompatible` | `conflict` | target reachability is normal, but version or contract is incompatible |
+| `online_target_rejected` | `conflict` | target validation was rejected or could not be classified into a more detailed failure code |
+| `auth_session_expired` | `auth_required` | The previous online authenticated session has expired and needs to be logged in again |
+| `workspace_membership_required` | `permission_denied` | Target workspace does not belong to current memberships |
+| `dataset_not_visible_in_workspace` | `permission_denied` | activate dataset points to invisible dataset |
+| `dataset_archived` | `conflict` | Active dataset is archived |
+| `workspace_invite_expired` | `conflict` | invite token has expired |
+| `workspace_invite_revoked` | `conflict` | invite revoked |
+| `workspace_invite_account_mismatch` | `permission_denied` | invite email does not match the current account |
+| `workspace_invite_create_denied` | `permission_denied` | session without invite permission |
+| `workspace_invite_not_found` | `not_found` | invite identity does not exist |
+| `workspace_member_remove_denied` | `permission_denied` | session does not have permission to remove members |
+| `workspace_owner_transfer_denied` | `permission_denied` | session without transfer owner permission |
+| `workspace_owner_transfer_invalid` | `validation_error` | The target user does not meet the owner transfer conditions |
+| `context_rebind_required` | `conflict` | You need to reselect dataset/task after session switching |
 
 ## Capability Flags
 
 | Capability | Why frontend needs it |
 | --- | --- |
-| `can_switch_workspace` | 顯示 workspace switcher |
-| `can_switch_runtime_mode` | 顯示 local / online mode switcher |
-| `can_switch_dataset` | 顯示 active dataset switcher |
-| `can_import_datasets` | 顯示 import / upload entry |
-| `can_export_datasets` | 顯示 export / download entry |
-| `can_invite_members` | 顯示 invite entry point |
-| `can_remove_members` | 顯示 member removal action |
-| `can_transfer_workspace_owner` | 顯示 owner transfer action |
-| `can_submit_tasks` | 決定 Simulation Workbench / Analysis Workbench 是否可送出 task |
+| `can_switch_workspace` | show workspace switcher |
+| `can_switch_runtime_mode` | show local / online mode switcher |
+| `can_switch_dataset` | show active dataset switcher |
+| `can_import_datasets` | show import / upload entry |
+| `can_export_datasets` | show export / download entry |
+| `can_invite_members` | Show invite entry point |
+| `can_remove_members` | Show member removal action |
+| `can_transfer_workspace_owner` | Show owner transfer action |
+| `can_submit_tasks` | Determine whether Simulation Workbench / Analysis Workbench can send tasks |
 | `can_cancel_local_tasks` / `can_terminate_local_tasks` / `can_retry_local_tasks` | local mode task row actions |
-| `can_manage_workspace_tasks` | 決定 Header task execution summary 是否顯示 `Cancel` / `Terminate` / `Retry` |
-| `can_manage_definitions` | 決定 `Schemas` / `Schema Editor` 是否可建立、儲存、刪除 |
-| `can_publish_definitions` | 決定 online publish controls 是否可顯示 |
-| `can_manage_datasets` | 決定 `Dashboard` metadata editing 是否可寫入 |
-| `can_view_audit_logs` | 決定 governance surfaces 是否可顯示 audit entry points |
+| `can_manage_workspace_tasks` | Determine whether the Header task execution summary displays `Cancel` / `Terminate` / `Retry` |
+| `can_manage_definitions` | Determine whether `Schemas` / `Schema Editor` can be created, stored, and deleted |
+| `can_publish_definitions` | Determine whether online publish controls can be displayed |
+| `can_manage_datasets` | Determines whether `Dashboard` metadata editing can be written |
+| `can_view_audit_logs` | Determines whether governance surfaces can display audit entry points |
 
 ## Delivery Rules
 
 | Rule | Meaning |
 | --- | --- |
-| Dataset switch is global | active dataset 一旦切換，所有 page consumers 應看到同一版本 |
-| Mode switch is stronger than workspace switch | 切 mode 之後，workspace / dataset / task list / user summary 都必須以新 mode 重建 |
-| Role is workspace-scoped | shell 與 pages 看到的 action availability 必須依 workspace role 決定 |
-| Capability beats guessing | frontend page 不得自己推斷是否可 submit / manage / delete |
-| Session survives refresh | refresh 後必須能重建 user summary、workspace role 與 active dataset |
+| Dataset switch is global | active dataset Once switched, all page consumers should see the same version |
+| Mode switch is stronger than workspace switch | After switching mode, workspace / dataset / task list / user summary must be rebuilt in the new mode |
+| Role is workspace-scoped | The action availability seen by shells and pages must be determined by the workspace role |
+| Capability beats guessing | frontend page Do not infer whether it is possible submit / manage / delete |
+| Session survives refresh | User summary, workspace role and active dataset must be rebuilt after refresh |
 
 ## Pairing
 
 | Consumer | Why it depends on this surface |
 | --- | --- |
-| [Header](../frontend/shared-shell/header.mdx) | 顯示 active workspace、active dataset 與 user menu |
-| [Sidebar](../frontend/shared-shell/sidebar.md) | 需要知道 shell-level context propagation |
-| [Dashboard](../frontend/workspace/dashboard.mdx) | dataset metadata editing 依賴 capability flags |
-| [Task Management](../frontend/shared-workflow/task-management.md) | task visibility 與 row actions 依賴 workspace role / capability |
+| [Header](../frontend/shared-shell/header.mdx) | Display active workspace, active dataset and user menu |
+| [Sidebar](../frontend/shared-shell/sidebar.md) | Need to know shell-level context propagation |
+| [Dashboard](../frontend/workspace/dashboard.mdx) | Dataset metadata editing depends on capability flags |
+| [Task Management](../frontend/shared-workflow/task-management.md) | Task visibility and row actions depend on workspace role / capability |
 
 ## Related
 

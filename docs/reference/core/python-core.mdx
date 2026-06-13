@@ -1,11 +1,11 @@
 ---
 aliases:
-  - Python Core Reference
+ - Python Core Reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/core-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/core-reference
 status: stable
 owner: docs-team
 audience: team
@@ -19,20 +19,19 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Python Core
 
-本頁記錄 active Python-owned core surfaces：`superconducting_circuits_analysis` 的 analysis package，以及 `schemdraw_circuit_library` 的 renderer-side reusable circuit visual components。
+This page documents active Python-owned core surfaces: `superconducting_circuits_analysis`'s analysis package, and `schemdraw_circuit_library`'s renderer-side reusable circuit visual components.
 
 <Aside type="note" title="Owned Surfaces">
 
 `core/python/analysis/superconducting_circuits_analysis/` owns installable Python analysis algorithms.
 `core/python/circuit_libraries/schemdraw_circuit_library/` owns reusable Schemdraw visual components.
-`app/backend/app_backend/domain/runtime_contracts/` owns App Backend tasking, execution, and storage runtime contracts.
 
 </Aside>
 
 <Aside type="caution" title="Do Not Move Ownership">
 
-HTTP schema、ORM / repository implementation、Circuit Definition Editor preview behavior、Electron runtime concerns、Backend task runtime contracts 不得寫成 `Python Core` 的 owner 範圍。
-這些屬於 App Backend、adapter 或 app layer。
+HTTP schema, ORM / repository implementation, interactive editor preview behavior, runtime process concerns, task runtime contracts must not be written in the owner scope of `Python Core`.
+These belong to the product runtime, adapter or infrastructure layer.
 
 </Aside>
 
@@ -74,28 +73,15 @@ may hold work-in-progress visual families until their API is stable.
 
 </Tabs>
 
-## App Backend Runtime Contracts
-
-| Surface | Role | Why it is not Python Core |
-|---|---|---|
-| `app_backend.domain.runtime_contracts.tasking` | task submission kind、lane naming、dispatch routing metadata | App Backend owns product task lifecycle and Runner protocol coordination |
-| `app_backend.domain.runtime_contracts.execution` | task creation、lifecycle mutation、execution operation、history / audit payload | execution records are App task-runtime contracts |
-| `app_backend.domain.runtime_contracts.storage` | trace / result handles、TraceStore locator、payload lifecycle、version markers | storage publication is App Backend infrastructure and domain behavior |
-
-Runtime contracts remain framework-agnostic inside the backend domain: no FastAPI, SQLAlchemy, file I/O, repository imports, or runner process code.
-
 ## Consumer Pairing
 
-| Consumer | 主要依賴 |
+| Consumer | Main dependencies |
 |---|---|
-| Backend task / dataset adapters | `app_backend.domain.runtime_contracts.execution`, `app_backend.domain.runtime_contracts.storage` |
-| Backend runner API / publisher | `app_backend.domain.runtime_contracts.tasking`, `execution`, `storage` |
-| Backend Circuit Definition Editor feature | App-local inspection and legacy netlist helpers |
 | Pluto Analysis Bridge | `superconducting_circuits_analysis` |
 | Docs schematic renderer | `schemdraw_circuit_library` |
+| Python notebooks | `superconducting_circuits_analysis` for reusable fitting/matrix logic; local notebook code for one-off inspection |
 
 ## Related
 
 - [Core Reference](index.md)
 - [Julia Wrapper](julia-wrapper.md)
-- [App / Backend / Tasks & Execution](../../app/backend/tasks-execution.md)

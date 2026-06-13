@@ -1,12 +1,12 @@
 ---
 aliases:
-  - JosephsonCircuits hbsolve Controls
-  - HB Solver Controls
+ - JosephsonCircuits hbsolve Controls
+ - HB Solver Controls
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -51,18 +51,18 @@ These controls should become typed product / Runner controls because they common
 
 ```julia
 HBSolverControls(
-    pump_frequencies_hz,
-    n_pump_harmonics,
-    n_modulation_harmonics,
-    dc,
-    threewavemixing,
-    fourwavemixing,
-    returnS,
-    returnZ,
-    returnQE,
-    returnCM,
-    sorting,
-    keyedarrays,
+  pump_frequencies_hz,
+  n_pump_harmonics,
+  n_modulation_harmonics,
+  dc,
+  threewavemixing,
+  fourwavemixing,
+  returnS,
+  returnZ,
+  returnQE,
+  returnCM,
+  sorting,
+  keyedarrays,
 )
 ```
 
@@ -121,18 +121,18 @@ Product HB profiles are `:pump_off`, `:pumped`, and `:pumped_dc`. All three keep
 
 ```julia
 HBSolverControls(
-    pump_frequencies_hz = Dict(:pump => 8.0e9),
-    n_pump_harmonics = Dict(:pump => 16),
-    n_modulation_harmonics = (8,),
-    dc = false,
-    threewavemixing = false,
-    fourwavemixing = true,
-    returnS = true,
-    returnZ = true,
-    returnQE = true,
-    returnCM = true,
-    sorting = :name,
-    keyedarrays = false,
+  pump_frequencies_hz = Dict(:pump => 8.0e9),
+  n_pump_harmonics = Dict(:pump => 16),
+  n_modulation_harmonics = (8,),
+  dc = false,
+  threewavemixing = false,
+  fourwavemixing = true,
+  returnS = true,
+  returnZ = true,
+  returnQE = true,
+  returnCM = true,
+  sorting =:name,
+  keyedarrays = false,
 )
 ```
 
@@ -162,8 +162,8 @@ Double-pump JPA:
 ```julia
 wp = (2*pi*4.65001*1e9, 2*pi*4.85001*1e9)
 sources = [
-    (mode=(1, 0), port=1, current=Ip),
-    (mode=(0, 1), port=1, current=Ip),
+  (mode=(1, 0), port=1, current=Ip),
+  (mode=(0, 1), port=1, current=Ip),
 ]
 Npumpharmonics = (8, 8)
 Nmodulationharmonics = (8, 8)
@@ -174,13 +174,13 @@ Flux-pumped / DC style:
 
 ```julia
 sources = [
-    (mode=(0,), port=2, current=Idc),
-    (mode=(1,), port=2, current=Ip),
+  (mode=(0,), port=2, current=Idc),
+  (mode=(1,), port=2, current=Ip),
 ]
 Npumpharmonics = (16,)
 Nmodulationharmonics = (8,)
 hbsolve(ws, wp, sources, Nmodulationharmonics, Npumpharmonics,
-    circuit, circuitdefs; dc=true, threewavemixing=true, fourwavemixing=true)
+  circuit, circuitdefs; dc=true, threewavemixing=true, fourwavemixing=true)
 ```
 
 JTWPA:
@@ -211,8 +211,8 @@ For multiple pump axes, use named entries:
 
 ```julia
 n_pump_harmonics = Dict(
-    :pump_1 => 8,
-    :pump_2 => 8,
+  :pump_1 => 8,
+  :pump_2 => 8,
 )
 ```
 
@@ -268,7 +268,7 @@ product Runner execution unless an explicit Julia Core contract owns them.
 
 | Control | Contract boundary | Expected failure behavior |
 | --- | --- | --- |
-| `returnSnoise` | Noise observables require an explicit noise result schema and TraceStore mapping. | reject in Runner payload |
+| `returnSnoise` | Noise observables require an explicit noise result schema and canonical storage mapping. | reject in Runner payload |
 | `returnnodeflux` / `returnvoltage` | Node-resolved outputs require compiled node provenance and a storage schema. | reject in Runner payload |
 | adjoint output flags | Adjoint result families require explicit observable request types. | reject in Runner payload |
 | sensitivity flags | Sensitivity results require stable provenance and owned result contracts. | reject in Runner payload |
@@ -331,12 +331,12 @@ Product requests bind source currents by source slot ID:
 
 ```json
 {
-  "runtime_bindings": {
-    "source_currents": {
-      "dc_bias": 0.000001,
-      "pump_in": 0.0
-    }
+ "runtime_bindings": {
+  "source_currents": {
+   "dc_bias": 0.000001,
+   "pump_in": 0.0
   }
+ }
 }
 ```
 
@@ -385,4 +385,3 @@ Solver-returned `NaN` values are preserved and surfaced as solver output. Julia 
 
 - [HB Simulation Intent](hb-simulation-intent.mdx)
 - [Runner-Safe API](runner-safe-api.md)
-- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)

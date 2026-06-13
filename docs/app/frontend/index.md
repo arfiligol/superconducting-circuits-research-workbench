@@ -1,14 +1,14 @@
 ---
 aliases:
-  - App Reference
-  - UI Reference
-  - 介面參考
-  - Frontend Reference
+ - App Reference
+ - UI Reference
+ - Interface reference
+ - Frontend Reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: team
@@ -59,14 +59,14 @@ The canonical Analysis Workbench route is `/tasks?lane=analysis` unless a future
 | [Header](shared-shell/header.mdx) | compact shell context | [Session & Workspace](../backend/session-workspace.mdx) |
 | [Sidebar](shared-shell/sidebar.md) | navigation-only app IA | [Application Interface](../application-interface.md) |
 | [Auth Entry](shared-shell/auth-entry.mdx) | online-mode auth entry | [Authentication & Authorization](../shared/authentication-and-authorization.mdx) |
-| [Circuit Simulation Workbench](simulation-workbench/circuit-simulation.md) | productized simulation request/result workflow | [Simulation Interface Boundaries](../../reference/architecture/simulation-interface-boundaries.md) |
-| [Analysis Workbench](analysis-workbench/analysis-workbench.md) | productized analysis/fitting/post-processing workflow | [Product Async Contracts](../../reference/architecture/product-async-contracts.md), [ResultView API](../backend/result-view-api.md) |
+| [Circuit Simulation Workbench](simulation-workbench/circuit-simulation.md) | productized simulation request/result workflow | [Simulation Interface Boundaries](../architecture/contracts/simulation-interface-boundaries.md) |
+| [Analysis Workbench](analysis-workbench/analysis-workbench.md) | productized analysis/fitting/post-processing workflow | [Product Async Contracts](../architecture/contracts/product-async-contracts.md), [ResultView API](../backend/result-view-api.md) |
 | [Task Management](shared-workflow/task-management.md) | shared task execution monitoring and attach/recover behavior | [Tasks & Execution](../backend/tasks-execution.md) |
 | [Dashboard](workspace/dashboard.mdx) | workspace overview | [Datasets & Results](../backend/datasets-results.mdx) |
 | [Dataset](workspace/dataset.mdx) | dataset selection and lifecycle | [Datasets & Results](../backend/datasets-results.mdx) |
 | [Tasks](workspace/tasks.mdx) | Task / Execution Center | [Tasks & Execution](../backend/tasks-execution.md), [ResultView API](../backend/result-view-api.md) |
 | [Data Ingestion](workspace/data-ingestion.mdx) | raw data intake | [Datasets & Results](../backend/datasets-results.mdx) |
-| [Raw Data Browser](workspace/raw-data-browser.mdx) | trace browse and preview | [Datasets & Results](../backend/datasets-results.mdx), [ResultView API](../backend/result-view-api.md), [TraceStore Zarr](../../reference/architecture/trace-store-zarr.md) |
+| [Raw Data Browser](workspace/raw-data-browser.mdx) | trace browse and preview | [Datasets & Results](../backend/datasets-results.mdx), [ResultView API](../backend/result-view-api.md), [TraceStore Zarr](../architecture/contracts/trace-store-zarr.md) |
 | [Schemas](definition/schemas.mdx) | design/source asset catalog | [Circuit Definitions](../backend/circuit-definitions.mdx) |
 | [Schema Editor](definition/schema-editor.mdx) | edit one design/source asset | [Circuit Definitions](../backend/circuit-definitions.mdx) |
 
@@ -79,4 +79,4 @@ The app should show product work surfaces, not architecture explanations. If a u
 * [Application Interface](../application-interface.md)
 * [Backend Reference](../backend/index.md)
 * [Shared App Model](../shared/index.mdx)
-* [Architecture Reference](../../reference/architecture/index.md)
+* [Architecture Reference](../architecture/contracts/index.md)

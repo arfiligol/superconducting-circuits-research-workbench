@@ -1,0 +1,163 @@
+---
+aliases:
+ - Query Indexing Strategy
+ - Query index strategy
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/data-format
+status: stable
+owner: docs-team
+audience: team
+scope: dataset-first metadata DB query strategy, DesignScope lifecycle lookup and TraceStore slice-read strategy
+version: v3.1.0
+last_updated: 2026-04-30
+updated_by: codex
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Query Indexing Strategy
+
+This page defines the division of performance responsibilities under the dataset-first persisted model:
+
+1. **metadata DB** handles dataset, design, trace, lineage, and artifact queries.
+2. **TraceStore (`Zarr`)** handles ND numeric payload and slice read.
+3. Major performance issues with large trace values ​​should no longer be pushed back to SQLite/PostgreSQL JSON/BLOB.
+
+## Metadata DB Hot Paths
+
+### Dataset / Design / Trace path
+
+| Repo API | Usage scenarios | Main filter / sort |
+| --- | --- | --- |
+| `list_visible_datasets(workspace_id, query=...)` | Header dataset switcher / dashboard selector | `workspace_id`, `visibility_scope`, `updated_at` |
+| `get_dataset_profile(dataset_id)` | Dashboard profile read | `dataset_id` |
+| `list_design_scopes(dataset_id, query=...)` | Raw Data / Characterization design selector | `dataset_id`, `lifecycle_state`, `name`, `updated_at` |
+| `resolve_design_scope(dataset_id, design_id)` | stale deep-link / archived redirect handling | `dataset_id`, `design_id`, `lifecycle_state`, `redirect_design_id` |
+| `list_target_design_scopes(dataset_id, query=...)` | Data Ingestion / Simulation publication target selector | `dataset_id`, `lifecycle_state=active`, `name`, `source_coverage` |
+| `count_traces(dataset_id, design_id)` | design scope summary | `dataset_id`, `design_id` |
+| `list_trace_index_page(dataset_id, design_id, query=...)` | Raw Data / Characterization / compare trace selection | `dataset_id`, `design_id`, `family`, `parameter`, `representation`, `source_kind`, `stage_kind` |
+| `list_distinct_trace_index(dataset_id, design_id, ...)` | trace compatibility / UI filter options | `dataset_id`, `design_id`, `family`, `parameter`, `representation` |
+
+### TraceBatch / Provenance path
+
+| Repo API | Usage scenarios | Main filter / sort |
+| --- | --- | --- |
+| `list_batches(dataset_id, design_id)` | provenance timeline | `dataset_id`, `design_id`, `source_kind`, `stage_kind`, `created_at` |
+| `get_batch_lineage(batch_id)` | postprocess / analysis lineage | `parent_batch_id` |
+| `list_traces_by_batch(batch_id)` | batch-scoped trace lookup | `trace_batch_id` |
+
+### Analysis / Artifact path
+
+| Repo API | Usage scenarios | Main filter / sort |
+| --- | --- | --- |
+| `list_analysis_runs(dataset_id, design_id)` | Characterization history | `dataset_id`, `design_id`, `analysis_id`, `created_at` |
+| `list_result_artifacts(run_id)` | Result artifact manifest | `run_id`, `category`, `trace_mode_group` |
+| `list_derived_parameters(dataset_id, design_id)` | result tables / dashboards | `dataset_id`, `design_id`, `analysis_run_id`, `name` |
+
+## Metadata Index Direction
+
+Priority index candidates:
+
+1. `dataset_records(workspace_id, visibility_scope, lifecycle_state, updated_at)`
+2. `design_scopes(dataset_id, lifecycle_state, name, updated_at)`
+3. `design_scopes(dataset_id, redirect_design_id)`
+4. `trace_records(dataset_id, design_id, family, parameter, representation)`
+5. `trace_batch_records(dataset_id, design_id, source_kind, stage_kind, created_at)`
+6. `trace_batch_trace_links(trace_batch_id, trace_record_id)`
+7. `analysis_run_records(dataset_id, design_id, analysis_id, created_at)`
+8. `result_artifacts(analysis_run_id, category, trace_mode_group)`
+9. `derived_parameter_records(dataset_id, design_id, analysis_run_id, name)`
+
+## Required Join Discipline
+
+| Rule | Meaning |
+| --- | --- |
+| Dataset first | Confirm the app shell context with `dataset_id` first |
+| Design second | Then use `design_id` to determine page-local analytical scope |
+| Trace third | trace / batch / run query must not skip the dataset boundary and directly use `design_id` |
+| Lifecycle resolution before heavy query | Before using `design_id` to enter trace / batch / run query, you must first resolve whether the design scope is active, archived redirect or deleted tombstone |
+
+## Design Scope Lifecycle Query Strategy
+
+| Concern | Rule |
+| --- | --- |
+| Default selectors | Data Ingestion, Simulation publication, Raw Data normal browse, and Characterization normal selectors list only `active` scopes |
+| Archived visibility | archived scopes can be displayed in history / stale-link / admin-like context, but must not be a normal target |
+| Redirect lookup | stale `design_id` deep link should check `redirect_design_id` first, and then return target summary or archived-state explanation |
+| Merge re-parenting | merge must update `design_id` for all design-scoped rows in the metadata DB and refresh/invalidate materialized summaries |
+| TraceStore path | query strategy does not depend on the design segment in TraceStore physical path; `store_ref` is held by backend and is not used by query consumer parse |
+| Target scope create | create-new target scope first creates active `DesignScope` row, and then writes imported / published records |
+
+## TraceStore Read Strategy
+
+<Aside type="caution" title="Filter in metadata DB first">
+
+Dataset / design / trace selection must be completed in the metadata DB first.
+`TraceStore` is read only when the user actually enters trace detail, result payload or slice preview.
+
+</Aside>
+
+<Aside type="caution" title="Do not full-read then slice">
+
+UI / Characterization If you only need a certain ND slice, you should directly perform slice read on `Zarr`.
+You cannot read `[:]` in its entirety first and then slice it into Python memory.
+
+</Aside>
+
+### Common Access Pattern
+
+Simulation / Post-Processing / Characterization UI common paths:
+
+- Fixed sweep coordinates
+- `X = frequency`
+- Compare multiple traces with different sweep values
+
+Recommended chunking direction:
+
+- sweep dims using small chunks
+- frequency dim uses continuous chunks
+
+For example trace shape:
+
+```text
+(sweep_a, sweep_b, frequency)
+```
+
+Consider chunk:
+
+```text
+(1, 1, 4001)
+```
+
+or
+
+```text
+(1, 1, 512)
+```
+
+## S3 / MinIO Direction
+
+When the TraceStore backend is changed to S3-compatible, the performance strategy remains the same:
+
+- metadata query is completed in DB first
+- numeric payload is accessed with chunked slice read
+- The app/service layer must not couple local-path-only logic
+
+## Validation Direction
+
+When implementing this architecture, prioritize verification:
+
+1. The ingest / simulation / postprocess processes can all correctly write `dataset_id + design_id + TraceBatchRecord + TraceRecord + Zarr`
+2. The query path of dataset/design/trace is first filtered in metadata DB.
+3. UI compare / Characterization path only reads necessary slices, not full-read as a whole
+4. Both post-processed sweep and raw sweep can be aligned with the same trace-first query model
+5. After design scope merge, the old `design_id` deep link can be resolved to archived redirect, and target scope summary / trace browse has reflected re-parented rows
+
+## Related
+
+- [Dataset / Design / Trace Schema](dataset-record.mdx)
+- [Analysis Result](analysis-result.mdx)
+- [Data Storage](../../app/architecture/platform-architecture/data-storage.md)

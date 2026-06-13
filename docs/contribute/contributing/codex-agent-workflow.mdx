@@ -1,105 +1,105 @@
 ---
 aliases:
-  - "Codex Agent Workflow"
-  - "Codex 協作工作流"
+ - "Codex Agent Workflow"
+ - "Codex collaborative workflow"
 tags:
-  - diataxis/how-to
-  - audience/contributor
-  - topic/execution
+ - diataxis/how-to
+ - audience/contributor
+ - topic/execution
 status: stable
 owner: docs-team
 audience: contributor
-scope: 以 Codex 作為整合者，進行 SoT-first、直接實作、驗證與回報的工作流。
+scope: Use Codex as an integrator for a SoT-first, direct implementation, verification and reporting workflow.
 version: v1.0.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Codex Agent Workflow
-  order: 30
+ label: Codex Agent Workflow
+ order: 30
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# 使用 Codex 的協作工作流
+# Collaborative workflow using Codex
 
-這份 how-to 說明如何讓 Codex 在本 repo 中完成一個可 review 的變更：先讀相關 SoT，再直接實作，最後驗證並回報剩餘風險。
+This how-to explains how to make Codex complete a reviewable change in this repo: first read the relevant SoT, then directly implement it, and finally verify and report the remaining risks.
 
-<Aside type="note" title="這不是 branch policy 的 SoT">
+<Aside type="note" title="This is not the SoT of branch policy">
 
-正式 branch/worktree policy 與 subagent coordination 仍以以下 reference 頁面為準：
+Formal branch/worktree policy and subagent coordination are still subject to the following reference page:
 
 - [Branch & Worktree Flow](../../reference/guardrails/execution-verification/branch-and-worktree-flow.mdx)
 - [Codex Subagent Coordination](../../reference/guardrails/execution-verification/multi-agent-collaboration.mdx)
 
 </Aside>
 
-## 使用時機
+## Timing of use
 
-使用這套 workflow 處理一般 docs、backend、frontend、Runner、test 或 cleanup 工作。
+Use this workflow to handle general docs, backend, frontend, runner, test or cleanup work.
 
-適合直接交給 Codex 的情境：
+Scenarios suitable for handing over directly to Codex:
 
-- SoT 已經存在，任務是把文件或實作對齊它。
-- 使用者明確提供了 fixup plan 或 cleanup plan。
-- 變更可用 touched-area checks 驗證。
-- 需要 Codex 自行決定是否開 subagent，但不需要使用者手動分 lane。
+- The SoT already exists and the task is to align the documentation or implementation to it.
+- The user explicitly provides a fixup plan or cleanup plan.
+- Changes can be verified with touched-area checks.
+- Codex needs to decide whether to open a subagent on its own, but does not require users to manually allocate lanes.
 
-如果產品語意本身還不清楚，先更新 `docs/reference/**` 的 owner SoT。
+If the product semantics itself is not clear, update the owner SoT of `docs/reference/**` first.
 
-## 工作流
+## Workflow
 
 ```mermaid
 flowchart TD
-    A["確認需求"] --> B["載入相關 SoT / guardrails"]
-    B --> C["實作或文件更新"]
-    C --> D["執行 touched-area 驗證"]
-    D --> E["回報 changed surfaces / validation / residual risk"]
+A["Confirm requirements"] --> B["Load related SoT/guardrails"]
+B --> C["Implementation or file update"]
+C --> D["Perform touched-area verification"]
+D --> E["Report changed surfaces / validation / residual risk"]
 ```
 
-## 操作規則
+## Operation rules
 
-1. 先讀與任務相關的 guardrails 與 owner docs。
-2. 直接在合適的 canonical surface 修改，例如 `app/`、`core/`、`notebooks/`、`scripts/` 或 `docs/`。
-3. Codex 可自行使用 subagents，但最終整合與回報由目前對話負責。
-4. 不建立 committed planning artifacts；長期決策必須寫回 `docs/reference/**`。
-5. 驗證以 touched area 為準，並在 final response 說明已跑與未跑的檢查。
+1. Read the guardrails and owner docs related to the task first.
+2. Modify directly on the appropriate canonical source surface.
+3. Codex can use subagents on its own, but the final integration and return is the responsibility of the current dialogue.
+4. Committed planning artifacts are not created; long-term decisions must be written back to `docs/reference/**`.
+5. The verification is based on the touched area, and the final response indicates whether the check has been run or not.
 
-## 常用請求
+## Common requests
 
-### 更新 SoT
+### Update SoT
 
 ```text
-請把這個架構決策寫進 docs/reference 的 owner SoT。
+Please write this architectural decision into the owner SoT in docs/reference.
 ```
 
-### 實作 Fixup
+### Implement Fixup
 
 ```text
-請照這份 fixup plan 實作，保留既有未提交變更，最後跑 touched-area validation。
+Please follow this fixup plan, keep existing uncommitted changes, and finally run touched-area validation.
 ```
 
-### Review 結果
+### Review results
 
 ```text
-請用 code-review stance 檢查這份 diff，先列 bugs / regressions / missing tests。
+Please check this diff with code-review stance, listing bugs / regressions / missing tests first.
 ```
 
 ### Merge / Cleanup / Verify
 
 ```text
-請把 accepted work merge 回 develop，清理分支或 worktree，並執行最後驗證。
+Please merge the accepted work back to develop, clean up the branch or worktree, and perform final verification.
 ```
 
-## 回報格式
+##Report format
 
-一般 final response 應包含：
+Generally the final response should contain:
 
 - changed surfaces
 - validation commands and results
 - skipped checks or residual risk
 - unrelated dirty state, if relevant
 
-寬範圍變更可以使用：
+Wide range changes can be made using:
 
 ```markdown
 ## Summary
@@ -114,6 +114,6 @@ flowchart TD
 
 ## Related
 
-- [如何參與貢獻 (Contributing)](index.mdx)
+- [How to contribute (Contributing)](index.mdx)
 - [Branch & Worktree Flow](../../reference/guardrails/execution-verification/branch-and-worktree-flow.mdx)
 - [Codex Subagent Coordination](../../reference/guardrails/execution-verification/multi-agent-collaboration.mdx)

@@ -21,6 +21,7 @@ PY
 export PUBLIC_SITE_URL
 export PUBLIC_BASE_PATH
 
+uv run python scripts/check_docs_language.py
 npm run build --prefix site
 uv run python scripts/check_docs_nav_routes.py --check-built
 ./scripts/build/build_api_docs.sh

@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Architecture Reference
-  - 架構參考
+ - Architecture Reference
+ - Architecture reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/architecture
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/architecture
 status: stable
 owner: docs-team
 audience: team
-scope: Notebook Interface、Application Interface、Python Backend、Julia Runner 與 TraceStore 的 owner boundary
+scope: Notebook Interface, Application Interface, Python Backend, Julia Runner and TraceStore of owner boundary
 version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -18,7 +18,7 @@ updated_by: codex
 
 # Architecture Reference
 
-本區定義目前平台的正式架構 SoT。
+This area defines the formal architecture of the current platform SoT.
 
 Current architecture:
 
@@ -26,16 +26,16 @@ Current architecture:
 Notebook Interface + Electron Application Interface + Julia Runner Compute Plane
 ```
 
-Python Backend 是 control/data plane。Julia Runner 是 compute plane。Electron App 是 productized data workbench。Pluto Notebook 是 research cockpit。
+Python Backend is control/data plane.Julia Runner is compute plane.Electron App is productized data workbench.Pluto Notebook is research cockpit.
 
 ## Page Map
 
 | Page | Core focus |
 |---|---|
 | [Simulation Interface Boundaries](simulation-interface-boundaries.md) | Pluto direct research, Python Notebook data inspection, and Application Simulation/Analysis Workbench boundary |
-| [Product Async Contracts](product-async-contracts.md) | SimulationRequest、AnalysisRequest、RunnerTaskEnvelope、Runner manifest、ResultView API boundary |
-| [Julia Runner Compute Plane](julia-runner-compute-plane.md) | Runner process boundary、claim/execute/complete protocol |
-| [Runner Result Manifest](runner-result-manifest.md) | manifest schema、safe path rules、Zarr declaration |
+| [Product Async Contracts](product-async-contracts.md) |SimulationRequest, AnalysisRequest, RunnerTaskEnvelope, Runner manifest, ResultView API boundary|
+| [Julia Runner Compute Plane](julia-runner-compute-plane.md) |Runner process boundary, claim/execute/complete protocol|
+| [Runner Result Manifest](runner-result-manifest.md) |manifest schema, safe path rules, Zarr declaration|
 | [TraceStore Zarr](trace-store-zarr.md) | canonical local Zarr authority owned by Python Backend |
 | [Canonical Contract Registry](canonical-contract-registry.mdx) | cross-layer contracts and owners |
 

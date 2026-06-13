@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Julia Core Validation
-  - Circuit Plan Validation
+ - Julia Core Validation
+ - Circuit Plan Validation
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor

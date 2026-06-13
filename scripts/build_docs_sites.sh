@@ -5,5 +5,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 uv run python scripts/check_docs_nav_routes.py --check-source
+uv run python scripts/check_docs_language.py
 npm run build --prefix site
 uv run python scripts/check_docs_nav_routes.py --check-built

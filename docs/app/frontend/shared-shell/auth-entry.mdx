@@ -1,18 +1,18 @@
 ---
 title: "Auth Entry"
 aliases:
-  - "Frontend Auth Entry"
-  - "Login Surface"
-  - "Authentication Entry"
+ - "Frontend Auth Entry"
+ - "Login Surface"
+ - "Authentication Entry"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/ui
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
 status: draft
 owner: docs-team
 audience: team
-scope: Frontend online-mode login、logout、anonymous / degraded session entry 與 auth-diagnostics density contract
+scope: Frontend online-mode login, logout, anonymous / degraded session entry and auth-diagnostics density contract
 version: v0.4.0
 last_updated: 2026-03-17
 updated_by: codex
@@ -22,26 +22,26 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Auth Entry
 
-本頁定義 frontend 在 `Online Mode` 下未登入、已登出或 session degraded 時的正式 auth entry surface。
+This page defines the formal auth entry surface of the frontend when it is not logged in, logged out or session degraded under `Online Mode`.
 
 <Aside type="note" title="Surface Boundary">
 
-本頁負責 login / logout / recovery entry 的產品呈現密度。
-workspace membership、invite lifecycle、capability flags 與 JWT transport authority 仍由 shared auth / backend session surfaces 擁有。
+This page is responsible for the product presentation density of login / logout / recovery entry.
+workspace membership, invite lifecycle, capability flags, and JWT transport authority remain owned by shared auth / backend session surfaces.
 
 </Aside>
 
 <Aside type="caution" title="Auth Entry Is Online-Mode Only">
 
-`Local Mode` 不應被 auth entry 攔住。
-使用者切到 local mode 時，應直接進入 app shell；只有 `Online Mode` 且需要 auth 時，auth entry 才成為 primary surface。
+`Local Mode` should not be blocked by auth entry.
+When users switch to local mode, they should directly enter the app shell; only when `Online Mode` and auth is required, the auth entry becomes the primary surface.
 
 </Aside>
 
 <Aside type="caution" title="Auth Entry Is Not A Diagnostics Dashboard">
 
-在 anonymous 或 degraded 狀態下，auth entry 的 primary UI 必須聚焦在使用者下一步要做的動作。
-`Auth State`、`Workspace`、`Session Mode` 這類 diagnostics 不得作為 primary cards 預設鋪開。
+In the anonymous or degraded state, the primary UI of the auth entry must focus on the user's next action.
+Diagnostics such as `Auth State`, `Workspace`, and `Session Mode` cannot be deployed as primary cards by default.
 
 </Aside>
 
@@ -58,15 +58,15 @@ workspace membership、invite lifecycle、capability flags 與 JWT transport aut
 
 | Surface area | Required behavior |
 |---|---|
-| Primary panel | 只承接 action、concise status、minimal recovery guidance |
-| Secondary disclosure | diagnostics、session internals、workspace/debug state 只能作 secondary disclosure |
-| Tone | 簡潔、產品導向，不可呈現成 developer diagnostics page |
-| Copy weight | 能靠 layout、field labels、status badge 與 button hierarchy 解決的，不要再堆段落說明 |
+| Primary panel | Only undertakes action, concise status, minimal recovery guidance |
+| Secondary disclosure | Diagnostics, session internals, and workspace/debug state can only be secondary disclosures |
+| Tone | Concise, product-oriented, cannot be presented as a developer diagnostics page |
+| Copy weight | What can be solved by layout, field labels, status badge and button hierarchy, don't pile up paragraph descriptions |
 
 <Aside type="tip" title="Layout should carry the guidance">
 
-auth entry 應優先用 card hierarchy、field order、button prominence、status placement 來引導使用者。
-不要依賴大量文字說明才讓使用者知道下一步該做什麼。
+Auth entry should prioritize card hierarchy, field order, button prominence, and status placement to guide users.
+Don’t rely on extensive text instructions to let users know what to do next.
 
 </Aside>
 
@@ -74,12 +74,12 @@ auth entry 應優先用 card hierarchy、field order、button prominence、statu
 
 | State | Required presentation |
 |---|---|
-| `anonymous` | 顯示 sign-in / sign-up entry 與最少必要說明 |
-| `degraded` | 顯示簡短狀態、compact warning 與 recovery action |
-| `online_session_dropped` | 顯示「已連上 target，但舊 online session 不可沿用」的 warning，優先引導重新登入 |
-| `signed_out` | 顯示已登出確認與重新登入入口 |
-| `invite_pending_auth` | 優先引導登入，再保留 invite continuation |
-| `mode_switch_to_local` | 允許使用者改切 local mode，直接 bypass auth entry |
+| `anonymous` | Show sign-in / sign-up entry with minimum necessary description |
+| `degraded` | Display brief status, compact warning and recovery action |
+| `online_session_dropped` | A warning of "Connected to the target, but the old online session cannot be used" is displayed, and the priority is to guide you to log in again |
+| `signed_out` | Show logged out confirmation and re-login entrance |
+| `invite_pending_auth` | Guide login first, then reserve invite continuation |
+| `mode_switch_to_local` | Allows users to change local mode and directly bypass auth entry |
 
 ## Diagnostics Placement
 
@@ -89,53 +89,53 @@ auth entry 應優先用 card hierarchy、field order、button prominence、statu
 | `Workspace` | secondary disclosure only |
 | `Session Mode` | secondary disclosure only |
 | transport / debug refs | secondary disclosure only |
-| recovery detail | 可在 secondary disclosure 或 opened panel 顯示，不得搶過 primary action |
+| recovery detail | can be displayed in secondary disclosure or opened panel, and must not overtake primary action |
 
 ## Developer Mode Interaction
 
 | Concern | Required behavior |
 |---|---|
-| Preference owner | 由 [Header](header.mdx) 的 account surface 擁有，屬於 app-level preference |
-| `Developer Mode = Off` | auth entry 只顯示 concise status、action 與 minimal recovery guidance；raw transport / exception detail 保留在 secondary disclosure 或 debug block |
-| `Developer Mode = On` | 允許 transport / technical detail 直接出現在發生錯誤的 auth surface，幫助辨識壞掉區塊；secondary debug block 仍可存在 |
-| Guardrail | `Developer Mode` 影響的是錯誤訊息密度，不是 debug surface 是否存在；auth entry 仍不得整頁退化成 diagnostics dashboard |
+| Preference owner | Owned by the account surface of [Header](header.mdx), belonging to app-level preference |
+| `Developer Mode = Off` | auth entry only displays concise status, action and minimal recovery guidance; raw transport / exception detail is retained in secondary disclosure or debug block |
+| `Developer Mode = On` | Allow transport / technical detail to appear directly on the auth surface where the error occurred, helping to identify broken blocks; secondary debug block can still exist |
+| Guardrail | `Developer Mode` affects the density of error messages, not whether the debug surface exists; the auth entry still cannot degenerate the entire page into diagnostics dashboard |
 
 ## Mode Switching
 
 | Concern | Required behavior |
 |---|---|
-| Entry condition | 只有 `Online Mode` 且 auth 尚未建立時，才進入 auth entry |
-| Local escape hatch | auth entry 應允許使用者改切 `Local Mode`，而不是把使用者永久困在登入頁 |
-| Online re-entry | auth entry 應允許使用者重新指定 `IP:Port` / target，或重試目前 target |
-| Switch-result relation | 若 runtime-mode mutation 回 `online_auth_required` 或 `online_session_dropped`，auth entry 應接手後續 sign-in flow |
-| Post-login handoff | online mode 登入成功後，回到 shell 並重建 online session context |
-| Post-switch handoff | 切回 local mode 後，直接建立 local session 並離開 auth entry |
+| Entry condition | Only enter auth entry if `Online Mode` and auth has not been established |
+| Local escape hatch | auth entry should allow the user to change `Local Mode` instead of permanently trapping the user on the login page |
+| Online re-entry | auth entry should allow the user to re-specify `IP:Port`/target, or retry the current target |
+| Switch-result relation | If the runtime-mode mutation returns `online_auth_required` or `online_session_dropped`, the auth entry should take over the subsequent sign-in flow |
+| Post-login handoff | online mode After successful login, return to the shell and rebuild the online session context |
+| Post-switch handoff | After switching back to local mode, directly establish the local session and leave the auth entry |
 
 ## Connection Failure Presentation
 
 | Situation | Required behavior |
 |---|---|
-| target connecting | 顯示明確的 connecting / validating spinner 與 concise status |
-| target rejected | 顯示 concise failure summary，並提供 `Retry`、`Edit Server Target`、`Switch to Local Mode` |
-| target summary | 以 target `label` / `origin` 的 summary object 呈現，不依賴 raw string target |
-| target detail | `IP:Port` / target label 可顯示為 secondary context，不應壓過 primary recovery action |
-| degraded transport | 可保留 compact debug ref 或 disclosure；`Developer Mode = On` 時可在出錯區塊直接顯示 raw technical detail |
+| target connecting | Show clear connecting / validating spinner and concise status |
+| target rejected | Display concise failure summary and provide `Retry`, `Edit Server Target`, `Switch to Local Mode` |
+| target summary | Presented as summary object of target `label` / `origin`, does not rely on raw string target |
+| target detail | `IP:Port` / target label can be displayed as secondary context and should not override primary recovery action |
+| degraded transport | compact debug ref or disclosure can be retained; when `Developer Mode = On`, raw technical detail can be displayed directly in the error block |
 
 ## Layout Baseline
 
 | Concern | Rule |
 |---|---|
-| Primary layout | 單一主 card 或明確主次分層，不可出現左右兩欄同級大診斷卡 |
-| Status placement | 靠近 primary action，保持 concise |
-| Error detail | summary 先出現，長 detail 收在 disclosure |
-| Logged-in handoff | 若 session 已恢復或已登入，應 hand off 回 shell / target route，而非停留在 auth entry 上堆更多資訊 |
+| Primary layout | Single primary card or clear primary and secondary hierarchies. Large diagnostic cards of the same level in the left and right columns are not allowed |
+| Status placement | Close to primary action, keep concise |
+| Error detail | summary appears first, long detail is included in disclosure |
+| Logged-in handoff | If the session has been restored or logged in, you should hand off and return to the shell / target route instead of staying on the auth entry to pile up more information |
 
 ## User-Facing Copy Baseline
 
 | Prefer | Avoid |
 |---|---|
-| `Sign in`, `Continue`, `Session expired`, `Try again` | `Auth State`, `Workspace`, `Session Mode` 當作大標題 |
-| concise recovery hint | 長段 diagnostics narrative |
+| `Sign in`, `Continue`, `Session expired`, `Try again` | `Auth State`, `Workspace`, `Session Mode` as headlines |
+| concise recovery hint |long diagnostics narrative|
 | action-first labels | debug-first section labels |
 
 ## App Pair

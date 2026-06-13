@@ -8,5 +8,5 @@
 - Preserve unrelated dirty work; do not stage, revert, or overwrite it unless the user explicitly asks.
 - Codex may use subagents internally, but repo rules no longer gate `develop` updates by role.
 - Promotion path is:
-    - direct update or task branch -> `develop`
-    - verified release promotion -> `main`
+  - direct update or task branch -> `develop`
+  - verified release promotion -> `main`

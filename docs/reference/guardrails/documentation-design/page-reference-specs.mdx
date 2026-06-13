@@ -1,17 +1,17 @@
 ---
 aliases:
-  - "Page Reference Specs"
-  - "App Page Reference"
-  - "頁面規格文件"
+ - "Page Reference Specs"
+ - "App Page Reference"
+ - "page specification file"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/documentation
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
 status: stable
 owner: docs-team
 audience: team
-scope: "App frontend pages 技術文件的固定骨架、命名規則、引用方式與驗收標準"
+scope: "App frontend pages The fixed skeleton, naming rules, citation methods and acceptance criteria of technical documents"
 version: v0.4.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -21,63 +21,63 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Page Reference Specs
 
-本文件定義 App frontend pages 技術文件的正式寫法。
+This document defines the formal writing of technical documents for App frontend pages.
 
-這類文件不是需求文件，不是設計理念散文，也不是實作筆記。
-它們是 **Page Reference Spec**：
-直接描述某一頁現在應該長什麼樣、做什麼事、怎麼互動、依賴哪些正式 contract，以及什麼叫做實作完成。
+This type of document is not a requirements document, a design concept essay, or an implementation note.
+They are **Page Reference Spec**:
+Directly describe what a page should look like now, what it does, how it interacts, what formal contracts it relies on, and what is called implementation completion.
 
 ---
 
-## 適用範圍
+## Scope of application
 
-本規範適用於：
+This specification applies to:
 
-- `docs/app/frontend/` 下的 App frontend page reference
-- 任何以 route / page 為單位的正式 UI reference 頁
+- App frontend page reference under `docs/app/frontend/`
+- Any official UI reference page in route/page units
 
-本規範不適用於：
+This specification does not apply to:
 
 - Tutorials
 - How-to
 - Explanation
-- migration 背景說明
+- migration background description
 - implementation notes / PR notes
 
 ---
 
-## 核心原則
+## Core Principles
 
-| 原則 | 說明 |
+| Principles | Description |
 |------|------|
-| 文件是 SoT | 頁面規格以文件為準，實作必須對齊文件 |
-| 描述現在式 | 不寫歷史背景、舊版行為、遷移故事；只寫本頁當前正式規格 |
-| 先寫穩定結構 | 先固定頁面目的、區塊順序、互動流程，再寫細節 |
-| 人機共讀 | 人類能快速掃描，AI Agent 能穩定抽取欄位 |
-| 少講實作，多講契約 | 不先寫 framework / hook / service 類名；先寫 UI contract |
-| 一頁一格式 | 所有 page reference 採同一套骨架，降低理解成本 |
+| The file is SoT | The page specification is subject to the file, and the implementation must align the file |
+| Describe the present tense | Do not write historical background, old version behavior, migration story; only write the current official specifications of this page |
+| Write a stable structure first | Fix the page purpose, block sequence, and interaction process first, and then write the details |
+| Human-machine co-reading | Humans can scan quickly, and AI Agent can extract fields stably |
+| Less about implementation, more about contract | Don’t write the framework / hook / service class name first; write the UI contract first |
+| One page format | All page references adopt the same skeleton to reduce the cost of understanding |
 
-<Aside type="caution" title="Reference 邊界">
+<Aside type="caution" title="Reference boundary">
 
-Page Reference Spec 屬於 `Reference`。
-它描述的是正式頁面契約，不是設計理由，也不是操作教學。
+Page Reference Spec belongs to `Reference`.
+It describes a formal page contract, not a design rationale, nor an operational tutorial.
 
 </Aside>
 
 ---
 
-## 推薦位置與命名
+## Recommended location and naming
 
-App frontend pages 技術文件建議放在：
+App frontend pages technical documents are recommended to be placed at:
 
 - `docs/app/frontend/pages/<route-name>.md`
 
-若既有專案仍維持較扁平的 frontend reference 結構，應逐步整理到 `app/frontend/` 下，再依需要細分子目錄。
+If the existing project still maintains a relatively flat frontend reference structure, it should be gradually organized under `app/frontend/`, and then subdivided into subdirectories as needed.
 
-頁面標題應優先對齊 sidebar / nav label。
-route 應保留在 frontmatter 的 `route` 欄位與正文 identity 區塊，不應拿 route 直接取代頁名。
+The page title should be aligned with the sidebar / nav label first.
+The route should be kept in the `route` field of the frontmatter and the identity block of the body. The route should not be used to directly replace the page name.
 
-frontmatter 建議至少包含：
+frontmatter is recommended to contain at least:
 
 | Property | Required | Example |
 |----------|----------|---------|
@@ -90,9 +90,9 @@ frontmatter 建議至少包含：
 
 ---
 
-## 固定骨架
+## Fixed skeleton
 
-每一頁 App page reference 必須固定成以下 8 個區塊：
+Each App page reference must be fixed into the following 8 blocks:
 
 1. `Purpose`
 2. `User Goal`
@@ -103,94 +103,94 @@ frontmatter 建議至少包含：
 7. `Visual Rules`
 8. `Acceptance Checklist`
 
-這 8 個區塊是最小完整骨架，不得任意省略。
+These 8 blocks are the minimum complete skeleton and cannot be omitted arbitrarily.
 
 ---
 
-## 區塊定義
+## Block definition
 
 ### 1. Purpose
 
-回答這頁是什麼、負責什麼。
+Answer what this page is and what it is responsible for.
 
-應寫：
+Should write:
 
-- 本頁負責的正式範圍
-- 本頁承接的平台能力
+- The official scope of this page's responsibility
+- Platform capabilities undertaken by this page
 
-不應寫：
+Should not write:
 
-- 設計動機故事
-- 技術框架選型理由
+- Design motivation story
+- Reasons for selecting technical framework
 
 ### 2. User Goal
 
-回答使用者進這頁要完成什麼。
+Answer what users want to accomplish when entering this page.
 
-應包含：
+Should contain:
 
-- 主要目標
-- 非目標
+- Main goal
+- non-target
 
 ### 3. Layout Structure
 
-回答畫面骨架與區塊順序。
+Answer the screen skeleton and block sequence.
 
-至少應包含：
+It should contain at least:
 
-- shell 區塊
+- shell block
 - main content order
-- 簡化 UI tree
+- Simplified UI tree
 
-優先使用：
+Preferred use:
 
-- 表格
-- 有序列表
-- 簡單 tree block
+- sheet
+- ordered list
+- Simple tree block
 
 ### 4. Component Inventory
 
-回答有哪些關鍵元件，以及每個元件的責任。
+Answer what the key components are and the responsibilities of each component.
 
-至少應包含：
+It should contain at least:
 
-- 元件 ID
-- 元件名稱
-- 類型
-- 位置
-- 作用
-- 關鍵行為
+- Component ID
+- Component name
+- type
+- Location
+- Function
+- key behaviors
 
-跨頁共用元件若已有獨立 spec，應引用，不要重複定義。
+If a cross-page shared component already has an independent spec, it should be quoted instead of repeatedly defined.
 
 ### 5. Data & State Contract
 
-回答本頁依賴哪些正式資料與狀態。
+Answer what official information and status this page relies on.
 
-至少應包含：
+It should contain at least:
 
 - data dependencies
 - page state
-- UI states（`loading` / `empty` / `error` / `partial` / `default`）
+- UI states (`loading` / `empty` / `error` / `partial` / `default`)
 
-本節應使用正式 contract 名稱，不得直接引用 implementation-local 類名作為規格本體。
+This section should use formal contract names and should not directly reference implementation-local class names as specification bodies.
 
 ### 6. Interaction Flows
 
-回答操作路徑與事件結果。
+Answer the operation path and event results.
 
-每個 flow 應寫成明確步驟，例如：
+Each flow should be written in clear steps, for example:
 
-1. 使用者做什麼
-2. state / request 發生什麼
-3. UI 更新什麼
-4. 成功 / 失敗後如何處理
+1. What does the user do?
+2. What happens in state / request
+3. What to update the UI?
+4. What to do after success/failure
 
 ### 7. Visual Rules
 
-回答視覺層級與版面關係。
+Answer the relationship between visual hierarchy and layout.
 
-應寫：
+Should write:
 
 - hierarchy
 - CTA placement
@@ -198,33 +198,33 @@ frontmatter 建議至少包含：
 - empty-state alignment
 - responsive rules
 
-不應寫：
+Should not write:
 
-- 像素級 spacing
-- 純實作層 hover workaround
-- 框架特定 style hook
+- Pixel-level spacing
+- Pure implementation layer hover workaround
+- Framework specific style hooks
 
 ### 8. Acceptance Checklist
 
-回答什麼叫做實作完成。
+Answer what is implementation completion.
 
-應使用可驗收條列，例如：
+A column of acceptance criteria should be used, for example:
 
-- [ ] 區塊順序正確
-- [ ] 主要元件齊全
-- [ ] UI states 完整
-- [ ] interaction flows 可走通
-- [ ] 只透過正式 contract 存取資料
+- [ ] Block order is correct
+- [ ] Complete main components
+- [ ] UI states complete
+- [ ] interaction flows can be passed through
+- [ ] Only access data through formal contracts
 
 ---
 
-## 可選附加區塊
+## Optional additional blocks
 
 ### Related Contracts
 
-若頁面依賴共享 contract，應引用而不是重複定義。
+If the page relies on a shared contract, it should be quoted rather than repeated.
 
-例如：
+For example:
 
 - Session / Workspace Contract
 - Task Runtime / Task Execution Contract
@@ -233,101 +233,101 @@ frontmatter 建議至少包含：
 
 ### Runtime Notes
 
-只有 simulation / task / characterization 這類研究 workflow 頁面可以額外加 `Runtime Notes`。
+Only research workflow pages such as simulation / task / characterization can add `Runtime Notes`.
 
-用途是補充：
+Purpose is to supplement:
 
 - task attachment
 - refresh / reconnect recovery
 - persisted contract rebuild
 - failure display
 
-這一節只在 runtime-sensitive pages 使用，不是所有頁面都必須有。
+This section is only used for runtime-sensitive pages and is not required for all pages.
 
 ---
 
-## 觀測輸入與正式規格
+## Observation input and formal specifications
 
-Page Reference Spec 可以吸收其他來源整理出的頁面觀測資料，例如：
+Page Reference Spec can absorb page observation data compiled from other sources, such as:
 
-- 其他 Agent 抽出的 page context
-- 現有頁面的 UI inventory
-- 截圖整理出的 layout / component / flow
-- 現行產品需求補充
+- Page context extracted by other Agents
+- UI inventory of existing pages
+- layout/component/flow compiled from screenshots
+- Supplementary requirements for current products
 
-但這些資料只能作為 **輸入材料**，不能直接原樣視為正式規格。
+However, these data can only be used as **input materials** and cannot be directly regarded as official specifications as they are.
 
-### 正規化原則
+### Regularization principle
 
-當你把 page context 轉成正式 Page Reference Spec 時，必須遵守：
+When you convert a page context into a formal Page Reference Spec, you must comply with:
 
-| 原則 | 說明 |
+| Principles | Description |
 |------|------|
-| 保留穩定頁面身份 | 保留 page purpose、route、主要 user goals、穩定 layout 結構 |
-| 重新整理為正式骨架 | 必須改寫成 8 個固定區塊，不保留自由格式觀測筆記 |
-| 吸收新需求 | 若目前產品已要求 task management、result recovery、research workflow 等能力，正式 spec 應納入，不得被舊觀測內容限制 |
-| Unknown 不能直接進正式 SoT | `Unknown from current page context` 這類內容只能作為待確認訊號；正式 reference 必須驗證後再寫，或暫不列入 |
-| 觀測不等於契約 | 現場看到的錯誤訊息、暫時 UI 呈現、框架特定行為，不自動等於正式 contract |
+| Preserve stable page identity | Preserve page purpose, route, main user goals, stable layout structure |
+| Reorganized into a formal skeleton | Must be rewritten into 8 fixed blocks, no free-form observation notes retained |
+| Absorb new requirements | If the current product already requires task management, result recovery, research workflow and other capabilities, the formal spec should be included and must not be restricted by old observation content |
+| Unknown cannot directly enter the official SoT | `Unknown from current page context` This type of content can only be used as a signal to be confirmed; the official reference must be verified before being written, or it may not be included temporarily |
+| Observation does not equal a contract | Error messages seen on-site, temporary UI rendering, and framework-specific behaviors do not automatically equal a formal contract |
 
-### 區塊對應方式
+### Block correspondence method
 
-若輸入材料含有下列常見欄位，轉寫時應對應如下：
+If the input material contains the following common fields, the translation should be as follows:
 
-| 輸入欄位 | 正式 Page Reference 位置 |
+| Input field | Formal Page Reference location |
 |----------|--------------------------|
 | `Page Context` / `Route / Identity` | frontmatter + `Purpose` + `User Goal` |
 | `Layout Structure` / `UI Tree` | `Layout Structure` |
 | `Component Inventory` | `Component Inventory` |
-| `Data Surface` | `Data & State Contract` 的 `Data Dependencies` / `UI States` |
+| `Data Surface` | `Data & State Contract` of `Data Dependencies` / `UI States` |
 | `Interaction Flows` | `Interaction Flows` |
-| `UI States` | `Data & State Contract` 或 `Runtime Notes` |
+| `UI States` | `Data & State Contract` or `Runtime Notes` |
 | `Acceptance Criteria` | `Acceptance Checklist` |
 
-### 擴寫規則
+### Expansion rules
 
-若一頁原本只有列表與基本 CRUD，但目前產品已明確需要更高階 workflow，正式 spec 應主動補上：
+If a page originally only had a list and basic CRUD, but the current product has clearly required a higher-level workflow, the formal spec should be proactively added:
 
 - task attachment / task management
 - result / trace / event / provenance surfaces
 - refresh / reconnect recovery
-- 與 backend / CLI / shared contracts 的一致性
+- Consistency with backend / CLI / shared contracts
 
-正式 reference 的目標不是複製既有畫面，而是定義 **當前應實作的頁面契約**。
+The goal of a formal reference is not to copy an existing page, but to define the page contract that should currently be implemented.
 
 ---
 
-## 不應寫進 Page Reference 的內容
+## What should not be written into Page Reference
 
-以下內容不應作為 page reference 正文主體：
+The following should not be included in the body of a page reference:
 
-- 歷史背景
-- 舊版行為
-- migration 故事
-- React hook 名稱
-- framework component 實作細節
-- repository / service 類名
-- CSS pixel 級細節
-- 暫時性 workaround
+- historical background
+- Legacy behavior
+- migration story
+- React hook name
+- framework component implementation details
+- repository/service class name
+- CSS pixel-level details
+- Temporary workaround
 
-<Aside type="caution" title="禁止歷史化語氣">
+<Aside type="caution" title="Historical tone prohibited">
 
-不要寫「原本」「舊版」「legacy page」「移植前」。
-Page Reference Spec 只描述當前正式頁面契約。
+Do not write "original", "old version", "legacy page" or "before porting".
+Page Reference Spec only describes the current official page contract.
 
 </Aside>
 
 ---
 
-## 建議模板
+## Suggested templates
 
 ````md
 ---
 title: Page Name
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/ui
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
 page_id: app.page.route_name
 route: /route
 owner: app-team
@@ -338,17 +338,17 @@ status: stable
 
 ## 1. Purpose
 
-本頁負責：
+This page is responsible for:
 - ...
 - ...
 
 ## 2. User Goal
 
-使用者進入本頁時，主要想完成：
+When users enter this page, they mainly want to complete:
 - ...
 - ...
 
-非目標：
+Non-target:
 - ...
 - ...
 
@@ -356,7 +356,7 @@ status: stable
 
 ### Global Shell
 
-| 區塊 | 說明 |
+| Block | Description |
 |---|---|
 | Sidebar | ... |
 | Main Content | ... |
@@ -383,99 +383,99 @@ Page
 
 ## 4. Component Inventory
 
-| ID | 元件名稱 | 類型 | 位置 | 作用 | 關鍵行為 |
+| ID | Component name | Type | Location | Function | Key behaviors |
 |---|---|---|---|---|---|
-| C1 | Page Title | heading | top | 顯示頁面名稱 | 無 |
-| C2 | Search Input | input | filter row | 過濾列表 | 更新 filter state |
-| C3 | Create Button | primary button | action row | 建立新項目 | 導向 create flow |
+| C1 | Page Title | heading | top | Display page name | None |
+| C2 | Search Input | input | filter row | filter list | update filter state |
+| C3 | Create Button | primary button | action row | Create new project | Guide create flow |
 
 ## 5. Data & State Contract
 
 ### Data Dependencies
 
-| 資料名稱 | 來源 | 必要性 | 用途 |
+| Data name | Source | Necessity | Purpose |
 |---|---|---|---|
-| current_user | session contract | required | 顯示權限與 scope |
-| dataset_list | backend API | required | 主列表 |
+| current_user | session contract | required | show permissions and scope |
+| dataset_list | backend API | required | master list |
 
 ### Page State
 
-| State | 類型 | 說明 |
+| State | Type | Description |
 |---|---|---|
-| search_query | local UI state | 搜尋輸入值 |
-| current_page | local UI state | 分頁頁碼 |
+| search_query | local UI state | Search input value |
+| current_page | local UI state | paging page number |
 
 ### UI States
 
-| 狀態 | 說明 |
+| Status | Description |
 |---|---|
-| default | 資料成功載入 |
-| loading | 主資料載入中 |
-| empty | 無資料或 filter 無結果 |
-| error | 請求失敗 |
-| partial | 部分資料可用、部分失敗 |
+| default | Data loaded successfully |
+| loading | Master data loading |
+| empty | No information or filter no results |
+| error | Request failed |
+| partial | Some data available, some failed |
 
 ## 6. Interaction Flows
 
-### Flow A: 搜尋
+### Flow A: Search
 
-1. 使用者輸入關鍵字
-2. 更新 search_query
-3. 重新過濾或重新請求列表
-4. 列表更新
+1. User enters keywords
+2. Update search_query
+3. Re-filter or re-request the list
+4. List update
 
 ## 7. Visual Rules
 
-| 項目 | 規則 |
+| Project | Rules |
 |---|---|
-| Title hierarchy | 頁面標題必須高於 subtitle |
-| CTA placement | 主要操作按鈕先於 filters |
-| Empty state | 與 content area 對齊，不改變 shell 結構 |
+| Title hierarchy | Page title must be higher than subtitle |
+| CTA placement | Main action buttons precede filters |
+| Empty state | Aligned with content area, does not change shell structure |
 
 ## 8. Acceptance Checklist
 
-- [ ] 頁面目的與使用者目標可由 UI 直接看出
-- [ ] 主要區塊順序符合 Layout Structure
-- [ ] loading / empty / error state 都有明確實作
-- [ ] interaction flows 可完整走通
-- [ ] 資料依賴只透過正式 contract 存取
+- [ ] Page purpose and user goals can be seen directly from the UI
+- [ ] The order of the main blocks conforms to the Layout Structure
+- [ ] loading / empty / error state have clear implementation
+- [ ] interaction flows can be completely routed
+- [ ] Data dependencies are only accessible through formal contracts
 ````
 
 ---
 
 ## Review Checklist
 
-當你撰寫或審查 App page reference 時，至少確認：
+When you write or review an App page reference, make sure to at least:
 
-- 是否完整包含 8 個固定區塊
-- 是否只寫當前正式規格
-- 是否以 contract / state / flow 為主，而非實作細節
-- 是否可讓 AI Agent 直接依文件實作
-- 是否可讓 reviewer 直接依文件驗收
+- Whether it completely contains 8 fixed blocks
+- Whether to write only the current official specifications
+- Whether to focus on contract / state / flow rather than implementation details
+- Whether AI Agent can be implemented directly based on files
+- Is it possible for reviewers to accept documents directly?
 
 ---
 
 ## Agent Rule
 ```markdown
 ## Page Reference Specs
-- **Type**: App frontend page 技術文件必須寫成 Page Reference Spec，不是需求文件、散文或實作筆記
-- **Diataxis**: 這類文件屬於 `Reference`
-- **Now-only**: 只寫當前正式頁面契約；不要寫舊版/legacy/migration 歷史
-- **Title alignment**: 文件 `title` 與 H1 必須優先對齊 sidebar / nav label；route 另寫在 frontmatter `route` 與正文 identity
-- **Observed input**: 其他 Agent 抽出的 page context、截圖整理、現有 UI inventory 只能當輸入材料，不能直接當正式 spec
-- **Normalization**: 輸入材料必須重新整理成 8 個固定區塊；`Unknown from current page context` 不得直接留在正式 SoT
-- **Current product wins**: 若目前產品已要求 task management、result recovery、research workflow 等能力，正式 spec 必須納入，不受舊畫面限制
-- **Fixed sections**: 必須包含 8 個區塊：
-  1. Purpose
-  2. User Goal
-  3. Layout Structure
-  4. Component Inventory
-  5. Data & State Contract
-  6. Interaction Flows
-  7. Visual Rules
-  8. Acceptance Checklist
-- **Optional sections**: `Related Contracts`、`Runtime Notes` 只在需要時加入
-- **Focus**: 先寫 page purpose、layout、components、state、flows、acceptance；不要先寫框架細節
-- **Do not include**: framework 實作細節、repository/service 類名、pixel 級 CSS、歷史背景
-- **Naming**: 新頁面優先使用 `docs/app/frontend/pages/<route-name>.md`，並與 Product App sidebar IA 對齊
+- **Type**: App frontend page technical documents must be written as Page Reference Spec, not requirements documents, prose or implementation notes
+- **Diataxis**: This type of file belongs to `Reference`
+- **Now-only**: Only write the current official page contract; do not write the old version/legacy/migration history
+- **Title alignment**: Files `title` and H1 must be aligned sidebar / nav label first; route is also written in frontmatter `route` and body identity
+- **Observed input**: The page context, screenshot collection, and existing UI inventory extracted by other Agents can only be used as input materials and cannot be directly used as official specs.
+- **Normalization**: Input materials must be reorganized into 8 fixed blocks; `Unknown from current page context` must not be left directly in the official SoT
+- **Current product wins**: If the current product requires task management, result recovery, research workflow and other capabilities, the official spec must be included and is not restricted by the old screen.
+- **Fixed sections**: must contain 8 sections:
+ 1. Purpose
+ 2. User Goal
+ 3. Layout Structure
+ 4. Component Inventory
+ 5. Data & State Contract
+ 6. Interaction Flows
+ 7. Visual Rules
+ 8. Acceptance Checklist
+- **Optional sections**: `Related Contracts`, `Runtime Notes` are added only when needed
+- **Focus**: Write page purpose, layout, components, state, flows, acceptance first; do not write framework details first
+- **Do not include**: framework implementation details, repository/service class name, pixel-level CSS, historical background
+- **Naming**: New pages use `docs/app/frontend/pages/<route-name>.md` first and align with Product App sidebar IA
 ```

@@ -1,103 +1,103 @@
 ---
 aliases:
-  - "LC 共振器"
+ - "LC resonator"
 tags:
-  - diataxis/tutorial
-  - status/draft
+ - diataxis/tutorial
+ - status/draft
 sidebar:
-  label: LC Resonator
-  order: 20
+ label: LC Resonator
+ order: 20
 ---
 
-# LC 共振器
+# LC Resonator
 
-LC 共振器是最基本的超導電路模型，理解它是學習更複雜電路的基礎。
+The LC resonator is the most basic superconducting circuit model, and understanding it is the basis for learning more complex circuits.
 
-## 物理背景
+## Physics Background
 
-LC 電路的共振頻率由電感 $L$ 和電容 $C$ 決定：
+The resonant frequency of the LC circuit is determined by the inductor $L$ and capacitor $C$:
 
 $$f_0 = \frac{1}{2\pi\sqrt{LC}}$$
 
-在共振頻率處，電路阻抗達到極值，反射係數 $S_{11}$ 會出現明顯的相位變化。
+At the resonant frequency, the circuit impedance reaches an extreme value and the reflection coefficient $S_{11}$ will show significant phase changes.
 
-## 電路模型
+## Circuit model
 
 ```text
-     ┌───────┐
- ────┤ Port  ├────┬────
-     │  50Ω  │    │
-     └───────┘    │
-                ┌─┴─┐
-                │ L │ 電感
-                └─┬─┘
-                  │
-                ┌─┴─┐
-                │ C │ 電容
-                └─┬─┘
-                  │
-                 GND
+   ┌───────┐
+ ────┤ Port ├────┬────
+   │ 50Ω │  │
+   └───────┘  │
+        ┌─┴─┐
+│ L │ Inductance
+        └─┬─┘
+         │
+        ┌─┴─┐
+│ C │ Capacitance
+        └─┬─┘
+         │
+         GND
 ```
 
-## 完整程式碼
+## Complete code
 
 ```julia title="examples/01_simple_lc/lc_resonator.jl"
 using JosephsonCircuits
 using PlotlyJS
 
-# === 單位定義 ===
+# === Unit definition ===
 const nH = 1e-9
 const pF = 1e-12
 const GHz = 1e9
 
-# === 符號變數 ===
+# === Symbol variables ===
 @variables L C R50
 
-# === 電路拓撲 ===
+# === Circuit topology ===
 circuit = [
-    ("P1", "1", "0", 1),
-    ("R50", "1", "0", R50),
-    ("L", "1", "2", L),
-    ("C", "2", "0", C),
+  ("P1", "1", "0", 1),
+  ("R50", "1", "0", R50),
+  ("L", "1", "2", L),
+  ("C", "2", "0", C),
 ]
 
-# === 參數值 ===
+# === Parameter value ===
 circuitdefs = Dict(
-    L => 10nH,
-    C => 1pF,
-    R50 => 50,
+  L => 10nH,
+  C => 1pF,
+  R50 => 50,
 )
 
-# === 模擬設定 ===
+# === Mock settings ===
 ws = 2π * (0.1:0.01:10) * GHz
 wp = (2π * 5.0GHz,)
 sources = [(mode=(1,), port=1, current=0.0)]
 
-# === 執行模擬 ===
+# === Execute simulation ===
 sol = hbsolve(ws, wp, sources, (10,), (20,), circuit, circuitdefs)
 
-# === 提取結果 ===
+# === Extract results ===
 freqs = sol.linearized.w / (2π * GHz)
 S11 = sol.linearized.S(outputmode=(0,), outputport=1, inputmode=(0,), inputport=1, freqindex=:)
 
-# === 繪圖 ===
+# === Drawing ===
 phase_deg = rad2deg.(angle.(S11))
 trace = scatter(x=freqs, y=phase_deg, mode="lines", name="S11 Phase")
 plot(trace)
 ```
 
-👉 [下載完整程式碼](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/examples/01_simple_lc/lc_resonator.jl)
+[Download full code](https://github.com/arfiligol/superconducting-circuits-research-workbench/blob/main/examples/01_simple_lc/lc_resonator.jl)
 
-## 參數探索
+## Parameter exploration
 
-試著改變 L 和 C 的值，觀察共振頻率如何變化：
+Try changing the values ​​of L and C and see how the resonant frequency changes:
 
 | L (nH) | C (pF) | $f_0$ (GHz) |
 |--------|--------|-------------|
-| 10     | 1      | 1.59        |
-| 5      | 1      | 2.25        |
-| 10     | 0.5    | 2.25        |
+| 10   | 1   | 1.59    |
+| 5   | 1   | 2.25    |
+| 10   | 0.5  | 2.25    |
 
-## 下一步
+## Next step
 
-👉 [參數掃描](parameter-sweep.md) — 學習如何自動化掃描參數
+👉[Parameter Scan](parameter-sweep.md) — Learn how to automatically scan parameters

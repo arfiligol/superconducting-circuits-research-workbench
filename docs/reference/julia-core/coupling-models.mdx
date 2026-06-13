@@ -1,13 +1,13 @@
 ---
 aliases:
-  - Julia Core Coupling Models
-  - Coupling Model Layer
-  - MTL Coupled Window
+ - Julia Core Coupling Models
+ - Coupling Model Layer
+ - MTL Coupled Window
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -35,11 +35,11 @@ Primitive relations are the lowest authoring layer that still carries engineerin
 
 ```julia
 couple_capacitive!(
-    plan;
-    id="readout_filter_cin",
-    from=input_node,
-    to=filter_node,
-    capacitance=2.0e-15,
+  plan;
+  id="readout_filter_cin",
+  from=input_node,
+  to=filter_node,
+  capacitance=2.0e-15,
 )
 ```
 
@@ -51,11 +51,11 @@ Use it for localized capacitive ports, lumped pads, small intentional capacitors
 
 ```julia
 couple_inductive!(
-    plan;
-    id="m12",
-    inductor_a=line_a.series_inductors[2],
-    inductor_b=line_b.series_inductors[2],
-    mutual_inductance=3.0e-12,
+  plan;
+  id="m12",
+  inductor_a=line_a.series_inductors[2],
+  inductor_b=line_b.series_inductors[2],
+  mutual_inductance=3.0e-12,
 )
 ```
 
@@ -63,11 +63,11 @@ or:
 
 ```julia
 couple_inductive!(
-    plan;
-    id="k12",
-    inductor_a=line_a.series_inductors[2],
-    inductor_b=line_b.series_inductors[2],
-    coupling_coefficient=0.08,
+  plan;
+  id="k12",
+  inductor_a=line_a.series_inductors[2],
+  inductor_b=line_b.series_inductors[2],
+  coupling_coefficient=0.08,
 )
 ```
 
@@ -93,14 +93,14 @@ The older endpoint-style `couple_inductive!(from=..., to=...)` still records flu
 
 ```julia
 window = couple_transmission_window!(
-    plan;
-    id="readout_qwr_mtl_window",
-    line1=readout_line,
-    line2=qwr,
-    start1=2.25e-3,
-    start2=0.0,
-    length=1.5e-3,
-    model=MTLCoupledRLGCSpec(...),
+  plan;
+  id="readout_qwr_mtl_window",
+  line1=readout_line,
+  line2=qwr,
+  start1=2.25e-3,
+  start2=0.0,
+  length=1.5e-3,
+  model=MTLCoupledRLGCSpec(...),
 )
 ```
 
@@ -110,16 +110,16 @@ For each coupled section, Julia Core emits self terms from the coupled-section m
 
 ```text
 Line 1:
-  series L11
-  shunt C11/2 at each section boundary
+ series L11
+ shunt C11/2 at each section boundary
 
 Line 2:
-  series L22
-  shunt C22/2 at each section boundary
+ series L22
+ shunt C22/2 at each section boundary
 
 Between lines:
-  physical C12/2 between paired boundary nodes
-  M12 / K between paired section-centered inductors
+ physical C12/2 between paired boundary nodes
+ M12 / K between paired section-centered inductors
 ```
 
 Open or externally connected endpoints keep their endpoint half-shunt. Grounded endpoints omit the local ground-to-ground half-shunt.
@@ -128,18 +128,18 @@ The canonical matrix form is:
 
 ```julia
 model = MTLCoupledRLGCSpec(
-    start1_m=2.25e-3,
-    start2_m=0.0,
-    length_m=1.5e-3,
-    section_length_m=0.75e-3,
-    l_matrix_per_m_h=[
-        L11 L12
-        L12 L22
-    ],
-    c_matrix_per_m_f=[
-        C11 -C12
-        -C12 C22
-    ],
+  start1_m=2.25e-3,
+  start2_m=0.0,
+  length_m=1.5e-3,
+  section_length_m=0.75e-3,
+  l_matrix_per_m_h=[
+    L11 L12
+    L12 L22
+  ],
+  c_matrix_per_m_f=[
+    C11 -C12
+    -C12 C22
+  ],
 )
 ```
 
@@ -173,7 +173,7 @@ The RLGC physical matrix does not change with orientation. `C_matrix_F_per_m` ke
 `couple_transmission_window!` records primitive C12 and M12 relations and a semantic window relation:
 
 ```text
-relation_type = :coupled_window
+relation_type =:coupled_window
 from = (line = "readout_line", sections = i:j)
 to = (line = "qwr", sections = k:l)
 through = MTLCoupledRLGCSpec(...)
@@ -184,8 +184,8 @@ This lets notebooks show statements such as:
 
 ```text
 readout_line sections 4:5 couple to qwr sections 1:2
-section_model = :pi
-coupling_orientation = :same_direction
+section_model =:pi
+coupling_orientation =:same_direction
 capacitive_boundary_records = start/stop node pair records
 ```
 

@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Julia Core Parameter Sweeps
-  - Sweep Architecture
+ - Julia Core Parameter Sweeps
+ - Sweep Architecture
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -46,26 +46,26 @@ If yes, it is structural. If no, it is numeric or runtime-bindable.
 
 ```text
 Component Library plan builder
-        |
-        v
+    |
+    v
 Parameterized CircuitPlan
-        |
-        v
+    |
+    v
 SweepSpec
-        |
-        v
+    |
+    v
 Parameter classification
-        |
-        v
+    |
+    v
 Topology grouping / compile key
-        |
-        v
+    |
+    v
 Compile policy
-        |
-        v
+    |
+    v
 Execution backend
-        |
-        v
+    |
+    v
 SweepResult
 ```
 
@@ -79,16 +79,16 @@ This section is a quick role overview. The formal declaration, verification, and
 
 ```text
 StructuralParameter
-    changes CircuitPlan topology or compiler lowering result
+  changes CircuitPlan topology or compiler lowering result
 
 NumericParameter
-    changes numeric values only, without changing topology
+  changes numeric values only, without changing topology
 
 DriveParameter
-    changes drive / source / pump settings
+  changes drive / source / pump settings
 
 AnalysisParameter
-    changes post-processing / fitting / result extraction settings
+  changes post-processing / fitting / result extraction settings
 ```
 
 | Parameter | Role | Reason |
@@ -97,7 +97,7 @@ AnalysisParameter
 | `n_sections` | structural | Changes target netlist size and topology |
 | `line_tap_position` | structural | Changes breakpoint insertion and node map |
 | `line_span_start_stop` | structural | Changes distributed coupling region |
-| `boundary = :open / :short` | structural | Changes circuit connection topology |
+| `boundary =:open /:short` | structural | Changes circuit connection topology |
 | `component_type = LinearInductor / SQUID` | structural | Changes component hierarchy and lowering |
 | `capacitance_value` | numeric | Changes value binding only |
 | `inductance_value` | numeric | Changes value binding only |
@@ -147,11 +147,11 @@ Structural sweep execution:
 
 ```text
 for each structural point or topology group:
-    build CircuitPlan
-    validate_authoring(plan)
-    compiled = compile_to_josephson(plan)
-    run simulation
-    collect result
+  build CircuitPlan
+  validate_authoring(plan)
+  compiled = compile_to_josephson(plan)
+  run simulation
+  collect result
 ```
 
 Structural sweeps should use parallel execution whenever points are independent.
@@ -185,9 +185,9 @@ validate_authoring(plan)
 compiled = compile_to_josephson(plan)
 
 for each numeric point:
-    bound = bind_numeric_parameters(compiled, numeric_point)
-    run simulation
-    collect result
+  bound = bind_numeric_parameters(compiled, numeric_point)
+  run simulation
+  collect result
 ```
 
 The compiled circuit should be reused.
@@ -207,11 +207,11 @@ The baseline numeric sweep path is:
 
 ```text
 compile once
-        |
-        v
+    |
+    v
 bind numeric values repeatedly
-        |
-        v
+    |
+    v
 run with Julia CPU / Julia threaded execution
 ```
 
@@ -222,36 +222,36 @@ Hybrid sweeps contain both structural and numeric axes.
 Example:
 
 ```text
-qwr_length       structural
-coupling_fF      numeric
-flux_phi0        numeric
-pump_power       drive
+qwr_length    structural
+coupling_fF   numeric
+flux_phi0    numeric
+pump_power    drive
 ```
 
 Hybrid sweep execution should group points by topology key:
 
 ```text
 for each topology_key:
-    build representative CircuitPlan
-    compiled = compile_to_josephson(plan)
+  build representative CircuitPlan
+  compiled = compile_to_josephson(plan)
 
-    for each numeric / drive / analysis point inside the group:
-        bind values
-        run simulation or analysis
-        collect result
+  for each numeric / drive / analysis point inside the group:
+    bind values
+    run simulation or analysis
+    collect result
 ```
 
 Example conceptual API:
 
 ```julia
 sweep = SweepSpec(
-    axes = (
-        qwr_length = StructuralAxis([4.8mm, 5.0mm, 5.2mm]),
-        coupling_fF = NumericAxis(range(1.0, 10.0, length = 50)),
-        flux_phi0 = NumericAxis(range(-0.5, 0.5, length = 101)),
-    ),
-    compile_policy = CompileByTopologyKey(),
-    executor = ThreadedExecutor(),
+  axes = (
+    qwr_length = StructuralAxis([4.8mm, 5.0mm, 5.2mm]),
+    coupling_fF = NumericAxis(range(1.0, 10.0, length = 50)),
+    flux_phi0 = NumericAxis(range(-0.5, 0.5, length = 101)),
+  ),
+  compile_policy = CompileByTopologyKey(),
+  executor = ThreadedExecutor(),
 )
 ```
 
@@ -259,16 +259,16 @@ Expected behavior:
 
 ```text
 qwr_length = 4.8 mm
-    compile once
-    sweep coupling_fF x flux_phi0 numerically
+  compile once
+  sweep coupling_fF x flux_phi0 numerically
 
 qwr_length = 5.0 mm
-    compile once
-    sweep coupling_fF x flux_phi0 numerically
+  compile once
+  sweep coupling_fF x flux_phi0 numerically
 
 qwr_length = 5.2 mm
-    compile once
-    sweep coupling_fF x flux_phi0 numerically
+  compile once
+  sweep coupling_fF x flux_phi0 numerically
 ```
 
 ## Compile Policy
@@ -277,18 +277,18 @@ Compile policies define when the sweep engine may reuse a compiled circuit.
 
 ```text
 CompileEveryPoint
-    compile every sweep point;
-    safest but slowest;
-    useful for debugging or fully structural sweeps.
+  compile every sweep point;
+  safest but slowest;
+  useful for debugging or fully structural sweeps.
 
 CompileOnce
-    compile one representative plan;
-    valid only when all sweep axes are numeric / drive / analysis and topology is unchanged.
+  compile one representative plan;
+  valid only when all sweep axes are numeric / drive / analysis and topology is unchanged.
 
 CompileByTopologyKey
-    group sweep points by compile-equivalence key;
-    compile once per group;
-    preferred default for hybrid sweeps.
+  group sweep points by compile-equivalence key;
+  compile once per group;
+  preferred default for hybrid sweeps.
 ```
 
 The preferred default is:
@@ -366,10 +366,10 @@ The declared role is not automatically trusted as final. The compiler and sweep 
 
 ```text
 Declared role
-    provided by Component Library / Relation / Plan Builder / SweepSpec
+  provided by Component Library / Relation / Plan Builder / SweepSpec
 
 Effective role
-    validated or inferred by Compiler / Sweep Engine
+  validated or inferred by Compiler / Sweep Engine
 ```
 
 ### Parameter Role Examples
@@ -396,11 +396,11 @@ The sweep engine should use declared roles as input, but the compiler-visible to
 
 ```text
 Authoring inputs declare parameter role:
-    structural / numeric / drive / analysis
+  structural / numeric / drive / analysis
 
 Compiler validates whether the role is consistent:
-    numeric parameter must not change topology key
-    structural parameter may change topology key
+  numeric parameter must not change topology key
+  structural parameter may change topology key
 ```
 
 If the declared role and effective role disagree, strictness policy decides the behavior.
@@ -409,13 +409,13 @@ Supported strictness policies:
 
 ```text
 StrictSweepClassification
-    error if declared role disagrees with compiler-verified effective role
+  error if declared role disagrees with compiler-verified effective role
 
 PermissiveSweepClassification
-    warn and promote the parameter to the compiler-verified effective role
+  warn and promote the parameter to the compiler-verified effective role
 
 DebugSweepClassification
-    compile every point and report declared role, inferred effective role, and topology-key differences
+  compile every point and report declared role, inferred effective role, and topology-key differences
 ```
 
 The recommended default is:
@@ -434,10 +434,10 @@ Example:
 
 ```julia
 build_qwr_readout_plan(;
-    gap_um,
-    window_length_um,
-    qwr_length_mm,
-    coupling_fF,
+  gap_um,
+  window_length_um,
+  qwr_length_mm,
+  coupling_fF,
 )
 ```
 
@@ -462,7 +462,7 @@ Recommended role order:
 
 ```text
 StructuralParameter
-    stronger than
+  stronger than
 NumericParameter / DriveParameter / AnalysisParameter
 ```
 
@@ -470,20 +470,20 @@ Examples:
 
 ```text
 gap_um
-    maps only to coupling_capacitance
-    -> NumericParameter
+  maps only to coupling_capacitance
+  -> NumericParameter
 
 window_length_um
-    maps to line_span start / stop and coupled-window length
-    -> StructuralParameter
+  maps to line_span start / stop and coupled-window length
+  -> StructuralParameter
 
 resonator_design_scale
-    maps to line length and capacitance value
-    -> StructuralParameter because line length affects topology
+  maps to line length and capacitance value
+  -> StructuralParameter because line length affects topology
 
 flux_bias
-    maps only to SQUID external_flux binding
-    -> NumericParameter or DriveParameter
+  maps only to SQUID external_flux binding
+  -> NumericParameter or DriveParameter
 ```
 
 If any mapped target changes topology key, the high-level knob must be treated as structural.
@@ -496,16 +496,16 @@ Examples:
 
 ```text
 coupling_capacitance
-    NumericParameter if the capacitive coupling relation already exists
-    StructuralParameter if the sweep toggles whether the coupling relation exists
+  NumericParameter if the capacitive coupling relation already exists
+  StructuralParameter if the sweep toggles whether the coupling relation exists
 
 gap_um
-    NumericParameter if it is only converted to an existing capacitance value
-    StructuralParameter if it changes layout geometry, endpoint positions, line spans, or coupling-window geometry
+  NumericParameter if it is only converted to an existing capacitance value
+  StructuralParameter if it changes layout geometry, endpoint positions, line spans, or coupling-window geometry
 
 external_flux
-    NumericParameter / DriveParameter if SQUID topology is fixed
-    StructuralParameter if it selects a different component model or junction topology
+  NumericParameter / DriveParameter if SQUID topology is fixed
+  StructuralParameter if it selects a different component model or junction topology
 ```
 
 Conditional roles must declare their assumptions.
@@ -554,16 +554,16 @@ Conceptual shape:
 
 ```julia
 struct SweepExecutionPlan
-    sweep_spec
-    compile_policy
-    executor
-    acceleration_policy
-    axes
-    role_report
-    topology_groups
-    estimated_compiles
-    estimated_simulations
-    warnings
+  sweep_spec
+  compile_policy
+  executor
+  acceleration_policy
+  axes
+  role_report
+  topology_groups
+  estimated_compiles
+  estimated_simulations
+  warnings
 end
 ```
 
@@ -577,19 +577,19 @@ Execution backends are part of the final sweep architecture.
 
 ```text
 SerialExecutor
-    deterministic single-thread execution
+  deterministic single-thread execution
 
 ThreadedExecutor
-    local Julia multi-threaded execution over independent sweep points
+  local Julia multi-threaded execution over independent sweep points
 
 RunnerExecutor
-    Julia Runner task execution path for product / platform tasks
+  Julia Runner task execution path for product / platform tasks
 
 DistributedExecutor
-    optional local multi-process execution
+  optional local multi-process execution
 
 HPCExecutor
-    optional future cluster / job-array execution
+  optional future cluster / job-array execution
 ```
 
 If independent sweep points can be parallelized with Julia parallel execution, the sweep engine should support doing so.
@@ -637,34 +637,34 @@ The final architecture includes optional acceleration hooks, but they must not r
 
 ```text
 NumericAccelerationBackend
-    None
-    JAXSurrogateBackend
-    JuliaGPUKernelBackend
+  None
+  JAXSurrogateBackend
+  JuliaGPUKernelBackend
 ```
 
 Baseline:
 
 ```text
 None
-    compile once
-    bind numeric values
-    run with Julia CPU / ThreadedExecutor
+  compile once
+  bind numeric values
+  run with Julia CPU / ThreadedExecutor
 ```
 
 Optional backends:
 
 ```text
 JAXSurrogateBackend
-    fixed-topology compact / surrogate model
-    must be validated against HBSolver / JosephsonCircuits baseline
-    must pass capability probe
-    must respect validated parameter domain
+  fixed-topology compact / surrogate model
+  must be validated against HBSolver / JosephsonCircuits baseline
+  must pass capability probe
+  must respect validated parameter domain
 
 JuliaGPUKernelBackend
-    fixed-topology numeric kernel
-    may use CUDA.jl, AMDGPU.jl, or Metal.jl depending on device and implementation
-    must pass capability probe
-    must validate against CPU / HBSolver baseline
+  fixed-topology numeric kernel
+  may use CUDA.jl, AMDGPU.jl, or Metal.jl depending on device and implementation
+  must pass capability probe
+  must validate against CPU / HBSolver baseline
 ```
 
 <Aside type="caution" title="Acceleration is not solver replacement">
@@ -693,12 +693,12 @@ Suggested result concept:
 
 ```julia
 AccelerationCapability(
-    available = true,
-    backend = :cuda,
-    supports_complex = true,
-    supports_float64 = true,
-    device_name = "...",
-    warnings = String[],
+  available = true,
+  backend =:cuda,
+  supports_complex = true,
+  supports_float64 = true,
+  device_name = "...",
+  warnings = String[],
 )
 ```
 
@@ -706,13 +706,13 @@ Acceleration selection should support policies:
 
 ```text
 RequireAcceleration(:jax)
-    error if unavailable
+  error if unavailable
 
 PreferAcceleration(:jax, baseline = JuliaThreadedBackend())
-    use acceleration if valid, otherwise use the baseline Julia executor
+  use acceleration if valid, otherwise use the baseline Julia executor
 
 NoAcceleration()
-    use baseline Julia execution
+  use baseline Julia execution
 ```
 
 ## Validation Requirement for Surrogate / Compact Backends
@@ -761,15 +761,15 @@ Two Pluto modes are supported:
 
 ```text
 Reactive single-point exploration
-    user changes parameters
-    one plan is built
-    one compiled circuit is produced
-    one simulation is run
+  user changes parameters
+  one plan is built
+  one compiled circuit is produced
+  one simulation is run
 
 Explicit batch sweep
-    user defines SweepSpec
-    user intentionally runs a sweep
-    sweep engine uses compile policy and executor
+  user defines SweepSpec
+  user intentionally runs a sweep
+  sweep engine uses compile policy and executor
 ```
 
 Pluto should not accidentally trigger large batch sweeps through reactive slider updates.
@@ -782,10 +782,10 @@ A Pluto-friendly sweep workflow should separate:
 
 ```text
 Reactive single-point exploration
-    safe to recompute reactively
+  safe to recompute reactively
 
 Explicit batch sweep
-    user intentionally launches the sweep
+  user intentionally launches the sweep
 ```
 
 Recommended Pluto cell layout:
@@ -827,8 +827,8 @@ Recommended reactive single-point pattern:
 
 ```julia
 params = (
-    coupling_fF = 3.0,
-    flux_phi0 = 0.1,
+  coupling_fF = 3.0,
+  flux_phi0 = 0.1,
 )
 
 plan = build_plan(params)
@@ -840,12 +840,12 @@ Recommended explicit batch sweep pattern:
 
 ```julia
 sweep = SweepSpec(
-    axes = (
-        coupling_fF = NumericAxis(range(1.0, 10.0, length = 50)),
-        flux_phi0 = NumericAxis(range(-0.5, 0.5, length = 101)),
-    ),
-    compile_policy = CompileOnce(),
-    executor = ThreadedExecutor(),
+  axes = (
+    coupling_fF = NumericAxis(range(1.0, 10.0, length = 50)),
+    flux_phi0 = NumericAxis(range(-0.5, 0.5, length = 101)),
+  ),
+  compile_policy = CompileOnce(),
+  executor = ThreadedExecutor(),
 )
 
 result = run_parameter_sweep(build_plan, sweep)
@@ -857,7 +857,7 @@ Runner should use the same sweep architecture.
 
 Runner execution should not create a separate sweep model.
 
-The Runner may map Backend task payloads into:
+The Runner may map persisted task payloads into:
 
 ```text
 Component Library plan builder

@@ -136,12 +136,6 @@ def target_for(source_path: Path) -> Path | None:
         return None
 
     if source_path.suffix in MARKUP_SUFFIXES:
-        if source_path.name.endswith(".en.md"):
-            preferred = source_path.with_name(source_path.name.replace(".en.md", ".md"))
-            preferred_mdx = preferred.with_suffix(".mdx")
-            if preferred.exists() or preferred_mdx.exists():
-                return None
-            relative = relative.with_name(relative.name.replace(".en.md", ".md"))
         return STARLIGHT_DOCS / relative
 
     return STARLIGHT_DOCS / relative

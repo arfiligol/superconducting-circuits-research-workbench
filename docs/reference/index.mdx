@@ -1,7 +1,7 @@
 ---
 aliases:
 - Reference
-- 技術參考
+- Technical reference
 tags:
 - diataxis/reference
 - audience/team
@@ -10,7 +10,7 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: 技術規格索引，涵蓋 API reference、architecture、agent skills、notebooks、core、data formats 與開發規範
+scope: Research-core technical reference index for API reference, core packages, notebooks, utilities, agent skills, guardrails, and contributors.
 version: v0.9.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -20,55 +20,49 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Reference
 
-本區是平台的規格表。
+This area is the specification sheet of research-core.
 
-凡是寫在 `Reference` 的定義，都是 notebooks、Product App、backend、Julia Runner 與核心能力需要對齊的 SoT。
+All definitions written in `Reference` should serve Pluto, Julia Core, Python Analysis Core, notebook research surfaces, API reference and file management. The architecture, data contracts, runtime, UI, task lifecycle, and archived workflows of production applications do not belong in this area.
 
 <Aside type="note" title="How to read Reference">
 
-先看 `Architecture`、`Notebooks`、`Core`、`Data Formats` 這些 owner layer，再用 `Product App` 查產品化 App contracts，用 `Guardrails` 確認開發流程與寫作規範。
+First look at the research owner layers `API Reference`, `Core`, `Julia Core`, and `Notebook Interface`; when productized application data is needed, switch to the exclusive product file lane.
 
 </Aside>
 
 ## Reading Map
 
-| 如果你想確認 | 先看哪裡 |
+| If you want to confirm | Where to look first |
 | --- | --- |
-| Product App 的 shell、page、backend authority | `Product App` |
-| Notebook workflow 與直接研究執行 | `Notebook Interface` |
-| Julia Runner compute plane | `Julia Runner Compute Plane` |
-| 核心科學模組、Python Analysis Core 與 Julia/Python 邊界 | `Core` |
-| persisted payload 與 canonical record schema | `Data Formats` |
-| 哪個 contract 由誰擁有 | `Architecture Reference` |
-| 跨工具 agent skill 同步 | `Agent Skills` |
-| 開發與文件規範 | `Guardrails` |
+| Notebook workflow and direct study execution | `Notebook Interface` |
+| Core Science Modules, Python Analysis Core and the Julia/Python Boundary | `Core Packages` |
+| Reusable circuit authoring contracts | `Julia Core` |
+| PlotlyJS figure construction contract | `Julia Visualizer` |
+| Cross-tool agent skill synchronization | `Agent Skills` |
+| Development and Documentation Specifications | `Guardrails` |
 | Python / Julia package API | `API Reference` |
 
 ## Categories
 
-| 類別 | 核心聚焦 |
+| Categories | Core Focus |
 |---|---|
-| [API Reference](api/index.md) | generated Sphinx Python API 與 Documenter.jl Julia API 入口 |
-| [Architecture Reference](architecture/index.md) | cross-layer registry、owner boundary 與 parity 對齊 |
-| [Julia Runner Compute Plane](architecture/julia-runner-compute-plane.md) | async compute plane、Runner API 與 task execution boundary |
-| [Runner Result Manifest](architecture/runner-result-manifest.md) | staged result manifest schema 與 Backend validation |
-| [TraceStore Zarr](architecture/trace-store-zarr.md) | canonical local Zarr publication contract |
-| [Agent Skills](agent-skills/index.mdx) | coding agents 參與專案前建議同步的 reusable skill templates |
+| [API Reference](api/index.md) | generated Sphinx Python API and Documenter.jl Julia API entrance |
 | [Notebook Interface](notebooks/index.md) | Pluto / Python notebook roles |
-| [Product App](../app/) | productized workbench contracts、shared model、frontend、backend、Python Notebook prototyping |
-| [Core](core/index.md) | Python core、Julia wrapper、Julia core 與 Julia plotting |
-| [Data Formats](data-formats/index.mdx) | 數據格式、record schema 與 canonical payload rules |
-| [Utilities](utilities.mdx) | legacy utility-oriented route 與目前 visualization / notebook routing |
-| [Guardrails](guardrails/index.mdx) | workspace 開發規範、文件規範與執行驗證規則 |
-| [Contributors](contributors.mdx) | 貢獻者名錄與文件引用依據 |
+| [Core](core/index.md) |Python core, Julia wrapper, Julia core and Julia plotting|
+| [Julia Core](julia-core/index.mdx) |reusable circuit authoring, CircuitPlan, components, compiler, simulation intent and schematic intent|
+| [Julia Visualizer](julia-visualizer/index.mdx) | Pluto-facing PlotlyJS figure contracts |
+| [Agent Skills](agent-skills/index.mdx) | coding agents recommend synchronizing reusable skill templates before participating in the project |
+| [Utilities](utilities.mdx) |legacy utility-oriented route andcurrent visualization / notebook routing|
+| [Guardrails](guardrails/index.mdx) | workspace development specifications, file specifications and execution verification rules |
+| [Contributors](contributors.mdx) | List of contributors and document citations |
 
 <Aside type="tip" title="Owner-first rule">
 
-若兩頁看起來都在談同一件事，優先回到真正擁有該 contract 的 layer，而不是先相信較靠近 consumer 的說明頁。
+If both pages seem to be talking about the same thing, give priority to returning to the layer that actually owns the contract, rather than trusting the description page closer to the consumer first. If the content is a production application runtime, data contracts or UI, please check the dedicated product documentation lane instead.
 
 </Aside>
 
 ## Related
 
-- [Concepts](../concepts/) - 核心概念與設計背景
-- [Workflows](../workflows/) - 任務導向操作指南
+- [Concepts](../concepts/) - Core concepts and design background
+- [Workflows](../workflows/) - Task-oriented operation guide

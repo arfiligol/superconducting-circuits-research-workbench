@@ -1,0 +1,557 @@
+---
+aliases:
+ - "Dataset Record Schema"
+ - "Dataset / Design / Trace Schema"
+ - "Documentation/Design/Trace Specifications"
+tags:
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/data-format
+status: stable
+owner: docs-team
+audience: team
+scope: DatasetRecord, dataset-local DesignScope lifecycle, TraceRecord, TraceBatchRecord, AnalysisRunRecord, DerivedParameterRecord and TraceStore contract
+version: v3.5.0
+last_updated: 2026-04-30
+updated_by: codex
+title: Dataset / Design / Trace Schema
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Dataset / Design / Trace Schema
+
+This page defines the canonical research-data contract shared by app and persisted storage.
+
+<Aside type="note" title="Dataset-first baseline">
+
+`DatasetRecord` is the top-level container for collaboration, session context and persistence.
+`Active Dataset` is bound to the dataset, not the design.
+
+</Aside>
+
+<Aside type="caution" title="Design does not replace dataset">
+
+`Design` is the analysis boundary within the dataset, not another global context that can replace `Active Dataset`.
+`Raw Data Browser` and `Characterization` select **dataset-local design scope**.
+
+</Aside>
+
+## Canonical Relationship
+
+```text
+DatasetRecord
+├── DesignScope
+│  ├── DesignAssetRecord[]
+│  ├── TraceBatchRecord[]
+│  ├── TraceRecord[]
+│  ├── AnalysisRunRecord[]
+│  ├── ResultArtifactRecord[]
+│  └── DerivedParameterRecord[]
+└── Dataset-level profile / tags / shared metadata
+```
+
+| Object | Canonical meaning |
+| --- | --- |
+| `DatasetRecord` | app-level persisted research container; also the binding object of session `active_dataset` |
+| `DesignScope` | Dataset-local lifecycle-managed analytical scope used by Raw Data Browser, Characterization, simulation publication, and result views |
+| `TraceRecord` |one logical observable over ordered axes of canonical metadata record|
+| `TraceBatchRecord` |import / simulation / preprocess / postprocess / analysis of persisted execution boundary|
+| `AnalysisRunRecord` |trace-consuming analysis run of persisted identity|
+| `DerivedParameterRecord` | Nameable physical parameters extracted from analysis run |
+
+## Resource Envelope
+
+All persisted research assets must have at least the following envelope:
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `owner_user_id` | required | owner / creator identity |
+| `workspace_id` | required |only workspace boundary|
+| `visibility_scope` | required | `local`, `private` or `workspace` |
+| `lifecycle_state` | required | `active`, `archived`, `deleted` |
+| `created_at` | required | Creation time |
+| `updated_at` | required | Last updated |
+
+<Aside type="tip" title="Inherited visibility">
+
+`TraceBatchRecord`, `AnalysisRunRecord`, `ResultArtifactRecord`, `DerivedParameterRecord`
+The default inheritance source is `workspace_id` and `visibility_scope` from dataset/task.
+
+</Aside>
+
+## DatasetRecord
+
+`DatasetRecord` is the main container for app-level collaboration and workflow.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string or int | required | dataset identity |
+| `name` | string | required | dataset display name |
+| `owner_user_id` | string | required | owner identity |
+| `workspace_id` | string | required | owning workspace |
+| `visibility_scope` | enum | required | `local` / `private` / `workspace` |
+| `lifecycle_state` | enum | required | `active` / `archived` / `deleted` |
+| `dataset_meta` | JSON | optional | dataset-level metadata / tags / summary |
+| `profile_payload` | JSON | optional |device type, capabilities, profile source|
+| `created_at` | datetime | required | creation time |
+| `updated_at` | datetime | required | last update time |
+
+### Dataset-level responsibilities
+
+- session `active_dataset` is bound to `DatasetRecord.id`
+- Dashboard’s metadata editing works on dataset-level profile
+- dataset visibility / publish / archive / copy with lineage is also bounded by dataset
+
+## DesignScope
+
+`DesignScope` is the analytical / browse boundary within the dataset and is also the official scope resource for cross-source data alignment.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `design_id` | string or int | required | design scope identity; only guaranteed to be stable within the dataset |
+| `dataset_id` | string or int | required | parent dataset |
+| `name` | string | required | design label |
+| `lifecycle_state` | enum | required | `active`, `archived`, `deleted` |
+| `redirect_design_id` | string or int | optional | merge / archive redirect target; if there is no redirect, it is `null` |
+| `design_meta` | JSON | optional | design-scoped metadata / source coverage / readiness summary |
+| `source_coverage` | JSON | optional | source coverage summary |
+| `created_at` | datetime | required | creation time |
+| `updated_at` | datetime | required | last update time |
+
+### Design scope rules
+
+1. `DesignScope` must always belong to a single `dataset_id`.
+2. `Characterization`, `Raw Data Browser` and design-scoped results all use `design_id + dataset_id` to determine the boundary.
+3. `DesignScope` is not a session global context; switching dataset will first change the visible design scope collection.
+4. `active` design scopes can be used as normal targets for Data Ingestion, Simulation publication, Raw Data trace mutation and Characterization.
+5. `DesignScope.name` is a display label, not an identity; the active scope name within the same dataset should remain unique, and rename does not change `design_id`.
+6. The UI can name the selector label `Target Design Scope`, but the backend/domain canonical resource name is still `DesignScope`.
+
+<Aside type="note" title="Browse projection is allowed">
+
+The implementation can use a dedicated table or derived read model to generate design browse rows.
+But for frontend/backend contracts, the semantics of `design_id`, `dataset_id`, `name`, `lifecycle_state`, `redirect_design_id`, and `source_coverage` must be stable.
+
+</Aside>
+
+### Design Scope Lifecycle Contract
+
+| Operation | Backend contract | Frontend rule |
+| --- | --- | --- |
+| create | backend mints `design_id` inside one `dataset_id` and creates an `active` scope | may request create with a display `name`; must not synthesize authority locally |
+| rename | updates `name` / display metadata only; `design_id` remains stable | may submit requested label and refresh returned row |
+| merge | re-parents source-scope records into target scope, archives source scope, and writes `redirect_design_id=target_design_id` | may request source + target, then follow backend redirect / returned rows |
+| archive | removes scope from default target selectors and normal analysis targets while preserving persisted history | may hide from normal selectors and expose archived state in browse/history contexts |
+| delete | terminal soft lifecycle state for scopes that are not usable as targets; physical purge is outside the normal scope lifecycle contract | may show destructive confirmation, but must rely on backend `allowed_actions` |
+
+### Target Design Scope Selection
+
+Data Ingestion and Simulation publication both require an explicit target scope decision.
+
+| Submit mode | Contract |
+| --- | --- |
+| Existing scope | request carries explicit `dataset_id + design_id` |
+| Create-new scope | request carries create intent and display name; backend creates `DesignScope` before attaching imported / published records |
+| Free-text name | only a create-new default; it is not hidden authority and must not silently match or override an existing scope |
+| Circuit Definition hint | a linked Circuit Definition may suggest a target scope, but user-visible target selection remains the authority |
+
+### Design Scope Merge Re-parenting
+
+`merge(source_design_id, target_design_id)` is backend-owned metadata re-parenting inside one dataset.
+
+| Concern | Rule |
+| --- | --- |
+| Dataset boundary | source and target must share the same `dataset_id` |
+| Scope state | source and target must be usable active scopes before merge; archiveddeleted scopes are not normal merge targets |
+| Re-parented objects | backend must re-parent trace metadata, trace batches, trace-batch links, analysis runs, result artifacts, derived parameters, design assets, readiness summaries and design-scoped read models |
+| Source scope after merge | source scope becomes `archived` with `redirect_design_id` pointing to target |
+| Target scope after merge | target keeps its `design_id`; source coverage, trace counts, compare readiness, collection projections, analysis readiness and tagged metric summaries must be refreshed or invalidated |
+| TraceStore | merge does not require physical TraceStore path rewrites; `store_ref` is backend-owned opaque locator and remains valid after metadata re-parenting |
+| Identity stability | trace, batch, run, artifact and derived-parameter identities remain stable unless a dedicated migration contract says otherwise |
+
+<Aside type="caution" title="Frontend does not re-parent">
+
+Frontend may request merge, show confirmation and consume returned rows.
+It must not locally rewrite `design_id`, parse `store_ref`, move TraceStore payloads or delete/recreate records to simulate merge.
+
+</Aside>
+
+### Merge Conflict Rules
+
+| Conflict | Required behavior |
+| --- | --- |
+| active name collision | backend rejects rename / create with `design_scope_name_conflict` or returns a confirmed disambiguated name |
+| trace identity collision | backend must reject; trace identities are stable and cannot be silently overwritten |
+| duplicate design asset | exact duplicates may be coalesced by backend; non-identical conflicts require explicit backend conflict response |
+| analysis / artifact display label collision | preserve stable ids and disambiguate display labels or grouping summary |
+
+### Deep Links And Stale Design IDs
+
+| Stored `design_id` state | Consumer behavior |
+| --- | --- |
+| `active` | load normally inside its `dataset_id` |
+| `archived` with `redirect_design_id` | backend should return redirect / replacement summary so page can move to target scope with a stale-link notice |
+| `archived` without redirect | page should clear active design selection and show archived-state explanation |
+| `deleted` | treat as tombstone / unavailable target; do not auto-create a replacement scope |
+
+## DesignAssetRecord
+
+Design layer source artifact.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string or int | required | asset identity |
+| `dataset_id` | string or int | required |Belonging to dataset|
+| `design_id` | string or int | optional | The design scope it belongs to; if it is a dataset-level source, it can be `null` |
+| `asset_type` | string | required | `circuit_definition`, `layout_source`, `measurement_source`, `import_manifest` |
+| `version` | string | optional | revision / import version |
+| `content_payload` | JSON | required | source-form document or import manifest |
+| `created_at` | datetime | required | creation time |
+
+<Aside type="caution" title="Circuit Definition stays document-first">
+
+The atomic unit of a Circuit Definition is still a revised source document.
+Not split into relational components/topology rows first.
+
+</Aside>
+
+### Circuit Definition Relationship
+
+| Concern | Rule |
+| --- | --- |
+| Definition authority | Circuit Definition remains a document-first source owned by the definition contract |
+| Scope association | a definition may be associated with a `DesignScope` through `DesignAssetRecord` or equivalent backend-owned association |
+| Simulation publication | linked definition context may suggest a `Target Design Scope`, but publication still sends an explicit existing `design_id` or create-new intent |
+| Non-goal | `CircuitDefinition` must not become a relational design-scope table or replace `DesignScope` identity |
+
+## TraceRecord
+
+`TraceRecord` is one logical observable over axes of canonical metadata record.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string or int | required | trace identity |
+| `dataset_id` | string or int | required | parent dataset |
+| `design_id` | string or int | required | parent design scope |
+| `family` | string | required | `s_matrix`, `y_matrix`, `z_matrix` or equivalent canonical family |
+| `parameter` | string | required |`Y11`, `Y_dm_dm`, `S21`, etc.|
+| `representation` | string | required | `real`, `imaginary`, `magnitude`, `phase` |
+| `axes` | JSON | required |axis definitions, order and canonical sweep structure|
+| `trace_meta` | JSON | optional |units, basis labels, source annotations, compare tags|
+| `store_ref` | JSON | required | canonical TraceStore locator |
+| `created_at` | datetime | required | creation time |
+
+### Axes Contract
+
+```json
+[
+ {"name": "frequency", "unit": "GHz", "length": 4001},
+ {"name": "L_q", "unit": "nH", "length": 11}
+]
+```
+
+| Concern | Rule |
+| --- | --- |
+| Semantic axis authority | `TraceRecord.axes` has canonical axis identity; it contains at least axis names, order, units and semantic axis meaning |
+| Coordinate values ​​| axis definition must make coordinate values ​​machine-readably recoverable; can be saved inline or retrieved through backend-controlled store reference; `length` alone is not enough |
+| Axis naming | parameter sweep axis name should reuse the canonical parameter name of Circuit Definition / simulation setup |
+| Axis order | axis order is part of the canonical numeric layout; the consumer is not allowed to rearrange itself and then write back to authority |
+| Responsibility split | dense coordinate arrays can be held by `TraceStore`; metadata/read model only exposes query-safe summary and does not directly replace axis authority |
+
+### TraceStoreRef Contract
+
+```json
+{
+ "backend": "local_zarr",
+ "store_key": "datasets/ds_xy_001/designs/design_a/batches/batch_105.zarr",
+ "store_uri": "data/trace_store/datasets/ds_xy_001/designs/design_a/batches/batch_105.zarr",
+ "group_path": "/traces/trace_9001",
+ "array_path": "values",
+ "dtype": "float64",
+ "shape": [4001, 11],
+ "chunk_shape": [4001, 1],
+ "schema_version": "1.0"
+}
+```
+
+`store_key` is a canonical locator; `store_uri` is only a backend-controlled opaque locator and should not be parsed by the UI or app layer to resolve the local path layout.
+
+<Aside type="tip" title="Axis coordinates may live beside values">
+
+Axis coordinate arrays of sweep-aware traces can exist `TraceStore` together with `values`.
+The actual field naming can be controlled by the backend storage contract, but the coordinate values ​​must remain machine-readable and can be restored by the Characterization input collection and result explorer.
+
+</Aside>
+
+### Axis Signature Contract
+
+`axis_signature` is a deterministic summary of canonical axis identity / coordinate structure.
+
+| Concern | Rule |
+| --- | --- |
+| Primary use | Used for cache safety, collection derivation, grouping compatibility checks, and deep-link safety |
+| Non-goal | It is not a user-facing scientific label, nor is it a replacement for full coordinate arrays |
+| Equality meaning | Under the same contract version, equal signatures should represent the same canonical axis structure |
+| Formula freedom | exact hashing / signature formula can be determined by implementation, but must be deterministic and reconstructable |
+
+<Aside type="caution" title="Canonical ND trace">
+
+canonical `TraceRecord` can be 1D, 2D or ND.
+Sweep point is not the only canonical record unit; if the UI requires point-level rows, it should be considered a projection.
+
+</Aside>
+
+### Sweep-aware Trace Rules
+
+| Concern | Rule |
+| --- | --- |
+| Canonical swept publication | parameter-swept simulation / post-processing outputs should be persisted with canonical ND `TraceRecord` instead of multiple sweep-point 1D traces as the only authority |
+| Axis authority | `frequency` and all parameter sweep axes must exist directly in `TraceRecord.axes`, and cannot be hidden in file names, `parameter` strings or provenance prose |
+| Sweep meaning recovery | The semantics of sweep axis must be recoverable by `TraceRecord.axes` and source `TraceBatchRecord.setup_payload`; must not rely on free-form label parsing |
+| Point / slice browse | point-level rows, single sweep point preview, or compare slices can only be viewed as browse projections and cannot be reversed into canonical storage models |
+| Multi-sweep | Multi-axis sweep can be directly represented by ND trace, such as `axes = [frequency, L_jun, C_q]` |
+
+<Aside type="tip" title="Circuit Definition + Simulation Setup authority">
+
+Which parameters can be swept, from Circuit Definition / schema parameter model;
+Which axes, values ​​and order are actually swept, from `TraceBatchRecord.setup_payload`.
+`TraceRecord.axes` is published numeric result of canonical axis contract.
+
+</Aside>
+
+### Invalid Cell And Mask Semantics
+
+| Concern | Rule |
+| --- | --- |
+| Canonical invalid cell | persisted numeric payload can use `NaN` to represent cells without valid values ​​in the canonical ND grid |
+| `NaN` meaning | `NaN` represents invalid / unavailable numeric value and shall not be reinterpreted as `0` |
+| Mask-first processing | analysis / explorer should first establish the validity mask, and then only calculate the valid cells while retaining the original ND axes / shape |
+| Shape preservation | Consumers must not silently drop values ​​and reshape them into authority payloads of different dimensions just because some cells are invalid |
+| Fully masked slice | Even if the entire slice / sweep point has no valid cells, the axis member must still exist in the canonical grid and must not be deleted due to full masking |
+| Transport projection | transport / UI can use display-safe empty cell, `null` or explicit mask summary to render invalid cells, but the `NaN` + mask semantics of persisted authority must not be changed |
+
+### Metadata Materialization Direction
+
+The trace summary required for the query / filter / readiness surface should be materialized in the metadata/query layer instead of opening the full ND payload each time.
+
+recommended materialization targets:
+
+| Summary concern | Direction |
+| --- | --- |
+| grid rank / shape |``person'', ``shape''|
+| axis structure |`axis_names`, `axis_units`, `axis_lengths`|
+| sweep readiness | `available_sweep_axes` |
+| summary-safe filtering contract | Axis existence / shape / typing; excludes coordinate-value / range filtering |
+| coordinate identity | `axis_signature` or equivalent coordinate/hash summary |
+| scientific identity |`family`, `parameter`, `representation`, `source_kind`, `stage_kind`|
+| collection derivation |lineage / batch summary, shared-axis summary|
+
+<Aside type="tip" title="Field names may evolve">
+
+The field names of the final metadata DB / read model can be adjusted;
+But the above summary meaning must exist on the query-compatible surface and cannot just stay deep in TraceStore.
+
+</Aside>
+
+<Aside type="caution" title="Query surfaces do not own dense coordinates">
+
+query / filter / readiness surfaces own only summary-safe axis information.
+Full coordinate arrays still belong to the dense numeric authority and must not require list/filter paths to open them to determine compatibility.
+
+</Aside>
+
+## TraceBatchRecord
+
+`TraceBatchRecord` is the persisted execution boundary for one import / simulation / preprocess / postprocess / analysis run.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string or int | required | batch identity |
+| `dataset_id` | string or int | required | parent dataset |
+| `design_id` | string or int | required | parent design scope |
+| `owner_user_id` | string | required | execution owner |
+| `workspace_id` | string | required | owning workspace |
+| `visibility_scope` | enum | required | inherited `local` / `private` / `workspace` |
+| `lifecycle_state` | enum | required | `active`, `archived`, `deleted` |
+| `source_kind` | string | required | `circuit_simulation`, `layout_simulation`, `measurement` |
+| `stage_kind` | string | required | `import`, `raw`, `preprocess`, `postprocess`, `analysis` |
+| `parent_batch_id` | string or int | optional | upstream lineage |
+| `asset_record_id` | string or int | optional | linked source asset |
+| `status` | string | required | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |
+| `setup_kind` | string | required | execution/setup family |
+| `setup_version` | string | required | payload version |
+| `setup_payload` | JSON | required | source/setup/post-processing contract |
+| `provenance_payload` | JSON | required | lineage / source refs / summaries |
+| `summary_payload` | JSON | optional | UI-safe summary / preview |
+| `created_at` | datetime | required | creation time |
+| `completed_at` | datetime | optional | terminal time |
+
+<Aside type="caution" title="Persisted execution boundary">
+
+The formal authority of trace-producing flow is `TraceBatchRecord` + `TraceRecord` + `TraceStore`.
+Page-local last result, live memory cache, or ad-hoc file parser must not be the only authority.
+
+</Aside>
+
+### Sweep Publication Rules
+
+| Concern | Rule |
+| --- | --- |
+| Sweepable parameter source | `setup_payload` can only refer to Circuit Definition / simulation setup parameter axes that have been defined as sweepable |
+| Published trace grouping | ND traces generated by the same parameter-swept execution should be formed with shared `TraceBatchRecord` lineage and compatible axes structures scientific grouping |
+| Browse projection | implementation may additionally produce sweep-point browse rows, slice thumbnails or compare projections, but they are read models and do not replace `TraceRecord` / `TraceStore` authority |
+| Provenance wording | provenance / summary payload may provide a human-readable summary, but must not be the only machine-readable source of sweep axis meaning |
+
+### Query Efficiency Direction
+
+| Concern | Rule |
+| --- | --- |
+| List / filter / readiness | Reliance should be given to materialized metadata summary instead of full ND values ​​or full coordinate arrays by default |
+| Detail / explorer | Load full coordinate arrays or dense numeric slices only when really needed by trace detail, explorer or result view |
+| Storage chunking | `TraceStore` chunking should align with the main scientific access pattern instead of just using generic square chunk defaults |
+| Current target pattern |Currently priority is given to `fixed sweep point -> read full frequency slice` and `fixed result axes -> read single plot / table projection`|
+
+## TraceBatchTraceLink
+
+Batch is associated with the membership of trace.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `trace_batch_id` | string or int | required | batch identity |
+| `trace_record_id` | string or int | required | trace identity |
+
+## AnalysisRunRecord
+
+`AnalysisRunRecord` is trace-consuming analysis of persisted identity.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string or int | required | run identity |
+| `dataset_id` | string or int | required | parent dataset |
+| `design_id` | string or int | required | parent design scope |
+| `owner_user_id` | string | required | run owner |
+| `workspace_id` | string | required | owning workspace |
+| `visibility_scope` | enum | required | inherited `local` / `private` / `workspace` |
+| `lifecycle_state` | enum | required | `active`, `archived`, `deleted` |
+| `analysis_id` | string | required |`admittance_extraction` etc.|
+| `input_trace_ids` | JSON | required | user-selected trace ids |
+| `input_batch_ids` | JSON | optional | source batch refs |
+| `input_collection_payload` | JSON | optional | scientific input collection derived from persisted trace structure; retains shared axes, sweep values ​​and grouping summary |
+| `input_result_refs` | JSON | optional | upstream run / artifact refs consumed by downstream analysis; used when input comes from persisted analysis result surface |
+| `config_payload` | JSON | required | analysis config |
+| `status` | string | required | `queued`, `running`, `completed`, `failed`, `cancelled`, `terminated` |
+| `artifact_manifest` | JSON | optional | result artifact summary |
+| `result_axes_manifest` | JSON | optional |analysis-defined input axes, derived axes, metric axes and preset view semantics|
+| `created_at` | datetime | required | creation time |
+| `completed_at` | datetime | optional | terminal time |
+
+<Aside type="caution" title="Trace-first authority">
+
+The unified input of Characterization is `TraceRecord`, and the circuit/layout/measurement dedicated analysis process is not distinguished by source type.
+
+</Aside>
+
+### Characterization Input Collection Rules
+
+| Concern | Rule |
+| --- | --- |
+| Interaction vs scientific authority | `input_trace_ids` retains an explicit selection of the user interaction layer; the scientific meaning is derived from the backend according to the persisted trace structure `input_collection_payload` |
+| Preserved structure | `input_collection_payload` At least selected traces, shared axes, axis labels / units / values, compatible grouping and source batch lineage should be preserved |
+| ND sweep input | If the source traces themselves are parameter-swept ND traces, the collection contract should directly retain the sweep axes instead of first reducing them to scattered 1D point rows |
+| No free-form recovery | The sweep meaning of collection must not rely on parsing `parameter` label, file name or provenance prose |
+| Upstream result lineage | If analysis consumes the persisted result surface of the previous analysis, it must be explicitly recorded through `input_result_refs` or equivalent lineage refs, instead of only retaining raw trace selection |
+
+### Analysis Pipeline Lineage Rules
+
+| Concern | Rule |
+| --- | --- |
+| Separate analysis runs | extraction, fitting, comparison, etc. each analysis remains independent `AnalysisRunRecord` |
+| Upstream dependency | Downstream analysis If it depends on the upstream persisted result, it must explicitly point to upstream run / artifact refs in the run lineage |
+| No synthetic mega-run | pipeline relation is connected by lineage, multi-step analysis must not be compressed into a single do-everything run record |
+| Compare-preserving path | If the result needs to retain multiple collection members / source identities at the same time, the identity must enter the result artifact / manifest contract instead of being averaged and lost in the runtime |
+
+### Result Axes Manifest Rules
+
+| Concern | Rule |
+| --- | --- |
+| Input axes | `result_axes_manifest` must be able to indicate which input axes are consumed by analysis, for example `L_jun` |
+| Derived axes | analysis If derived axes are generated, such as `mode_index`, they must be explicitly marked as derived and must not be pretended to be source traces with their own axis |
+| Compare dimension | If analysis needs to retain multiple collection members/source identities, `result_axes_manifest` or artifact query spec must explicitly indicate member/source compare dimension instead of hiding identity in prose |
+| Metric axes | table / plot cell metric such as `frequency_ghz`, must be clearly identifiable by the manifest |
+| Explorer presets | If the result default supports table / plot views, the axis semantics of row / column / x / y / series should be explicitly stated by the manifest or artifact query spec |
+| First-phase mode semantics | `mode_index` only represents the ordinal extracted modes within a single sweep point; it is not a physical mode identity across sweeps |
+
+## ResultArtifactRecord
+
+Result inspection focuses on artifact-first contracts.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `artifact_id` | string | required | artifact identity |
+| `analysis_run_id` | string or int | required | parent analysis run |
+| `dataset_id` | string or int | required | parent dataset |
+| `design_id` | string or int | required | parent design scope |
+| `category` | string | required |`resonance`, `fit_table`, `plot`, `summary` and similar values|
+| `view_kind` | string | required | `table`, `plot`, `text`, `json` |
+| `title` | string | required | display title |
+| `trace_mode_group` | string | optional | `base`, `sideband`, `all` |
+| `query_spec` | JSON | optional | artifact payload query baseline |
+| `payload_ref` | JSON | required | storage / payload handle |
+
+## DerivedParameterRecord
+
+Canonical scalar contract of physical extraction results and tagged metrics.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string or int | required | parameter identity |
+| `dataset_id` | string or int | required | parent dataset |
+| `design_id` | string or int | required | parent design scope |
+| `analysis_run_id` | string or int | required | source analysis run |
+| `name` | string | required | parameter name |
+| `value` | float | required | scalar value |
+| `unit` | string | optional | unit |
+| `extra` | JSON | optional | sweep provenance / fit metadata / trace mode |
+
+## TraceStore Direction
+
+`TraceStore` adopts `Zarr` and retains backend storage abstraction:
+
+- baseline:local filesystem Zarr managed by Python Backend
+- remote object storage:only allowed after a storage-backend SoT defines adapter semantics, validation, and operations ownership
+
+### Recommended Local Layout
+
+```text
+data/trace_store/
+└── datasets/
+  └── <dataset_id>/
+    └── designs/
+      └── <design_id>/
+        └── batches/
+          └── <batch_id>.zarr
+```
+
+## Canonical Relationship Summary
+
+| Question | Canonical answer |
+| --- | --- |
+| What does `active_dataset` point to? | `DatasetRecord.id` |
+| What does the user pick inside Raw Data Browser / Characterization? | a dataset-local `design_id` |
+| Can a design exist outside a dataset? | No |
+| Can a resource belong to multiple workspaces? | No |
+| Where do large numeric arrays live? | `TraceStore`, referenced by `store_ref` |
+| What is the canonical model for parameter sweeps? |ND `TraceRecord` axes; point rows are projections|
+| Where does sweep meaning come from? | Circuit Definition / setup payload + `TraceRecord.axes` |
+| Where should query/filter summaries live? | materialized metadata/query surfaces, not only TraceStore |
+
+## Related
+
+- [Data Formats Overview](index.mdx)
+- [Raw Data Layout](raw-data-layout.mdx)
+- [Query Indexing Strategy](query-indexing-strategy.mdx)
+- [Analysis Result](analysis-result.mdx)
+- [Datasets & Results](../../app/backend/datasets-results.mdx)
+- [Data Handling](../guardrails/code-quality/data-handling.mdx)

@@ -1,193 +1,191 @@
 ---
 aliases:
-  - "提取 Floating Qubit 看出去的 Real Part Admittance"
-  - "Floating Qubit Real Part Admittance Extraction"
+ - "Extract the Real Part Admittance seen from the Floating Qubit"
+ - "Floating Qubit Real Part Admittance Extraction"
 tags:
-  - diataxis/reference
-  - audience/team
-  - topic/physics
-  - topic/simulation
-  - status/draft
+ - diataxis/reference
+ - audience/team
+ - topic/physics
+ - topic/simulation
+ - status/draft
 status: draft
 owner: docs-team
 audience: team
-scope: Floating qubit 的 differential driving-point admittance 提取流程（PTC -> CT -> Kron）
+scope: Floating qubit's differential driving-point admittance extraction process (PTC -> CT -> Kron)
 version: v0.4.0
 last_updated: 2026-03-13
 updated_by: team
 sidebar:
-  label: Floating Qubit Admittance Extraction
-  order: 110
+ label: Floating Qubit Admittance Extraction
+ order: 110
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# 提取 Floating Qubit 看出去的 Real Part Admittance
+# Extract the Real Part Admittance seen by Floating Qubit
 
-<Aside type="note" title="研究筆記（工作中）">
+<Aside type="note" title="Research notes (at work)">
 
-本頁記錄目前研究 notebook 可重現、且與正式 Reference 契約一致的流程。
-主題是提取 floating qubit differential port 的 `Re(Y_in)`，作為後續 `T1` 分析前置量。
+This page documents the current process for research notebooks that are reproducible and consistent with the formal Reference contract.
+The topic is to extract the `Re(Y_in)` of the floating qubit differential port as the preamble for subsequent `T1` analysis.
 
 </Aside>
 
-## 目標（與契約對齊）
+## Target (aligned with contract)
 
-針對 floating qubit，提取 differential port 的 driving-point admittance：
+For the floating qubit, extract the driving-point admittance of the differential port:
 
 `Y_in,dm(omega)`
 
-並且可明確控制是否保留其他埠（例如 Port 3）的 `50 Ohm` loading。
+And it is possible to explicitly control whether `50 Ohm` loading of other ports (such as Port 3) is preserved.
 
 ---
 
-## 契約來源（必讀）
+## Contract source (required reading)
 
-本頁完全採用下列文件定義，不自行發明新語意：
+This page completely adopts the following file definitions and does not invent new semantics on its own:
 
-- [Julia Runner Compute Plane](../reference/architecture/julia-runner-compute-plane/)
-- [Schur Complement 與 Kron Reduction（Concept）](./schur-complement-kron-reduction/)
-- [Analysis Result Data Format（HFSS comparable 欄位語意）](../reference/data-formats/analysis-result/)
-- [Physics Symbol Glossary（符號對照）](./symbol-glossary/)
+- [Schur Complement and Kron Reduction (Concept)](./schur-complement-kron-reduction/)
+- [Physics Symbol Glossary (symbol comparison)](./symbol-glossary/)
 
-本頁使用的核心運算契約：
+The core computing contracts used on this page:
 
-1. 以 `Y` 域作為唯一變換主體
-2. `Coordinate Transformation`：`Y_m = A^{-T} Y A^{-1}`
-3. `Kron Reduction`：Schur complement
-4. 最後才讀取目標模式 `Y_in`
+1. Use the `Y` domain as the only transformation subject
+2. `Coordinate Transformation`:`Y_m = A^{-T} Y A^{-1}`
+3. `Kron Reduction`:Schur complement
+4. Read the target pattern `Y_in` last
 
 ---
 
-## 嚴格流程：PTC -> CT -> Kron
+## Strict process: PTC -> CT -> Kron
 
-### Step 0：Raw 多埠導納
+### Step 0: Raw multi-port admittance
 
-solver 給定：
+solver is given:
 
 `I = Y_raw(omega) V`
 
-三埠範例：
+Example of three ports:
 
-- Port 1：Pad 1
-- Port 2：Pad 2
-- Port 3：XY / drive line
+- Port 1:Pad 1
+- Port 2:Pad 2
+- Port 3:XY / drive line
 
-### Step 1：Port Termination Compensation（只扣除 solver-artificial termination）
+### Step 1:Port Termination Compensation (subtract only solver-artificial termination)
 
-若要保留 Port 3 的物理 loading，但去除 Port 1/2 的 solver 端口定義電阻：
+To retain the physical loading of Port 3, but remove the solver port definition resistance of Port 1/2:
 
 ```text
 Y_ptc = Y_raw - diag(1/50, 1/50, 0)
 ```
 
-<Aside type="caution" title="物理語意">
+<Aside type="caution" title="physical semantics">
 
-這一步是「修正端口定義」，不是物理模式轉換。
-若略過此步，Port 1/2 的人工 50 Ohm 會被帶入後續 dm 模態。
+This step is "correcting the port definition", not a physical mode conversion.
+If this step is skipped, the artificial 50 Ohm of Port 1/2 will be brought into the subsequent dm mode.
 
 </Aside>
 
-### Step 2：Post Processing Input 必須選 `PTC Y`
+### Step 2: Post Processing Input must select `PTC Y`
 
-Post Processing 若從 `Raw Y` 開始，CT 後的 `dm` 會混入人工耗散通道。
+If Post Processing starts from `Raw Y`, `dm` after CT will be mixed into the artificial dissipation channel.
 
-### Step 3：Coordinate Transformation（port basis -> physical mode basis）
+### Step 3:Coordinate Transformation (port basis -> physical mode basis)
 
-cm/dm 定義：
+cm/dm definition:
 
 - `V_cm = alpha V1 + beta V2`
 - `V_dm = V1 - V2`
-- 約束：`alpha + beta = 1`
+- Constraint: `alpha + beta = 1`
 
-Auto 權重（Electrical Centroid）：
+Auto weight (Electrical Centroid):
 
 - `w1 = Σ C(node1 <-> 0)`
 - `w2 = Σ C(node2 <-> 0)`
 - `alpha = w1 / (w1 + w2)`
-- `beta  = w2 / (w1 + w2)`
+- `beta = w2 / (w1 + w2)`
 
-<Aside type="note" title="Auto alpha/beta 的正式規則">
+<Aside type="note" title="Formal rules for Auto alpha/beta">
 
-Auto 權重提取規則以 `Circuit Simulation Reference` 為準，本頁僅引用，不重複定義。
+The Auto weight extraction rules are based on `Circuit Simulation Reference`, which is only quoted on this page and will not be repeatedly defined.
 
 </Aside>
 
-### Step 4：Kron Reduction（只保留 `dm`）
+### Step 4: Kron Reduction (only keep `dm`)
 
-在 `(cm, dm, 3)` 基底下，以 Schur complement 消去非觀察自由度（通常 `cm` 與 `3`）：
+Under the `(cm, dm, 3)` basis, use Schur complement to eliminate non-observable degrees of freedom (usually `cm` and `3`):
 
 ```text
 Y_red = Y_bb - Y_bi * Y_ii^{-1} * Y_ib
 ```
 
-若 `b = {dm}`，則輸出即為：
+If `b = {dm}`, the output is:
 
 `Y_in,dm = Y_red(dm,dm)`
 
 ---
 
-## 為什麼順序不可交換
+## Why the order cannot be exchanged
 
-1. `CT` 在 `PTC` 前：人工 `50 Ohm` 會混入 dm，`Re(Y_dm)` 被污染。
-2. `Kron` 在 `CT` 前：消去的是原始 port，不是物理模式，破壞 qubit mode 意義。
-3. 不做 `Kron`：得到多埠表示，不是 driving-point admittance。
+1. `CT` before `PTC`: artificial `50 Ohm` will be mixed into dm, and `Re(Y_dm)` will be contaminated.
+2. `Kron` before `CT`: What is deleted is the original port, not the physical mode, which destroys the meaning of qubit mode.
+3. Do not do `Kron`: get multi-port representation, not driving-point admittance.
 
-因此本流程採：
+Therefore this process adopts:
 
 `PTC -> CT -> Kron`
 
 ---
 
-## UI 實作對照（可重現）
+## UI implementation comparison (reproducible)
 
-### Case A：包含 Port 3 的 50 Ohm loading
+### Case A: Contains 50 Ohm loading of Port 3
 
-1. `Port Termination Compensation` 只選 Port 1、Port 2
-2. `Post Processing` 的 `Input Y Source` 選 `PTC Y`
-3. 新增 `Coordinate Transformation`（1,2 -> cm/dm）
-4. 新增 `Kron Reduction`（keep 只留 `dm`）
-5. 在 `Post-Processed Result View` 讀 `Y_dm_dm` 的 `Real(Y)`
+1. `Port Termination Compensation` only selects Port 1 and Port 2
+2. `Post Processing`’s `Input Y Source` selects `PTC Y`
+3. Added `Coordinate Transformation` (1,2 -> cm/dm)
+4. Add `Kron Reduction` (keep only `dm`)
+5. Read `Real(Y)` of `Y_dm_dm` in `Post-Processed Result View`
 
-### Case B：觀察更接近 intrinsic（移除全部目標端口 shunt）
+### Case B: Observation is closer to intrinsic (remove all target port shunts)
 
-1. `Port Termination Compensation` 選全部目標 ports
+1. `Port Termination Compensation` selects all target ports
 2. `Input Y Source = PTC Y`
-3. 同樣做 CT + Kron，再取 `Re(Y_dm_dm)`
+3. Do the same CT + Kron, and then get `Re(Y_dm_dm)`
 
-<Aside type="caution" title="Raw S / PTC 邊界（Reference 契約）">
+<Aside type="caution" title="Raw S / PTC Boundary (Reference Contract)">
 
-`Simulation Results` 的 `S` 仍是 solver-native raw `S`。
-PTC 在 Raw View 只作用於 `Y/Z` family（見 Reference 契約）。
+`S` of `Simulation Results` is still solver-native raw `S`.
+PTC in Raw View only works on `Y/Z` family (see Reference contract).
 
 </Aside>
 
 ---
 
-## 與 HFSS 比對（當前契約）
+## Compare with HFSS (current contract)
 
-`Post Processing Results` 的 `HFSS Comparable` 通常需同時滿足：
+`HFSS Comparable` of `Post Processing Results` usually needs to meet the following requirements at the same time:
 
-1. PTC 啟用
+1. PTC enabled
 2. `Input Y Source = PTC Y`
-3. pipeline 至少一個啟用中的 `Coordinate Transformation`
+3. pipeline has at least one active `Coordinate Transformation`
 
-參考：
+refer to:
 
-- [Julia Runner Compute Plane](../reference/architecture/julia-runner-compute-plane/)
-- [Analysis Result 欄位語意（`hfss_comparable` / reason）](../reference/data-formats/analysis-result/)
+- [Schur Complement and Kron Reduction (Concept)](./schur-complement-kron-reduction/)
+- [Physics Symbol Glossary (symbol comparison)](./symbol-glossary/)
 
 ---
 
-## 目前限制（2026-03-05）
+## Current restrictions (2026-03-05)
 
-1. differential normalization（`v_dm` 縮放慣例）尚未鎖定為唯一規則
-2. HFSS 對齊的 `Zref` / port reference 還未形成最終契約
-3. UI 尚未提供直接 `Y_in` 計算器（輸入 keep/drop/load 條件）
+1. Differential normalization (`v_dm` scaling convention) has not been locked as a unique rule
+2. The HFSS aligned `Zref` / port reference has not yet formed a final contract
+3. The UI does not yet provide a direct `Y_in` calculator (input keep/drop/load conditions)
 
-## 待補強清單
+## List of improvements to be made
 
-- [ ] 明確鎖定 differential normalization（例如 `v_dm` 縮放慣例）
-- [ ] 明確鎖定 HFSS 對齊的 `Zref` / port reference 規則
-- [ ] UI 提供直接 `Y_in` 工具（可輸入保留/消除埠與負載條件）
-- [ ] 將 `Re(Y_in)` -> `T1` 串成 Characterization 可重用分析流程
+- [ ] Explicitly lock differential normalization (e.g. `v_dm` scaling convention)
+- [ ] Explicitly lock `Zref`/port reference rules for HFSS alignment
+- [ ] UI provides direct `Y_in` tool (can enter retain/eliminate port and load conditions)
+- [ ] String `Re(Y_in)` -> `T1` into Characterization reusable analysis process

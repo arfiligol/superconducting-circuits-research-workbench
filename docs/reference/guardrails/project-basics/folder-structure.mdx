@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Folder Structure
-  - 目錄結構
+ - Folder Structure
+ - Directory structure
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/project-basics
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/project-basics
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 current platform 的 site/app/core/notebooks/scripts/docs canonical surfaces、direct-develop iteration 與 migration residue 邊界。
+scope: Defines the site/app/core/notebooks/scripts/docs canonical surfaces, direct-develop iteration, and migration residue boundaries of the current platform.
 version: v4.8.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -20,65 +20,66 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Folder Structure
 
-本 branch 的 canonical target layout 以 `site/`、`app/`、`core/`、`notebooks/`、`scripts/`、`docs/` 作為正式架構邊界。
-`site/` 是 Astro public introduction site 與 Starlight docs host；`docs/` 是 notebook-first reader/task-first technical docs source、Product App docs source 與 API reference source。
-`app/backend/`、`app/frontend/`、`app/desktop/`、`core/julia/`、`core/python/analysis/`、`core/python/circuit_libraries/` 是目前應被人類與 AI Agent 直接辨識的主要開發對象。
+The canonical target layout of this branch uses `site/`, `app/`, `core/`, `notebooks/`, `scripts/`, and `docs/` as the formal architectural boundaries.
+`site/` is Astro public introduction site and Starlight docs host; `docs/` is notebook-first reader/task-first technical docs source, Product App docs source and API reference source.
+`docs/start/` only contains first Pluto notebook and reusable circuit design onboarding; productized App setup does not belong to Start Here.
+`app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/analysis/`, `core/python/circuit_libraries/` are currently the main development objects that should be directly recognized by humans and AI Agents.
 
-root-level `backend/`、`frontend/`、`desktop/`、`cli/` 與 `src/` 不再是 active surfaces。
-若未來又看到這些 root-level 位置出現可執行 code，應先視為 architecture regression。
+root-level `backend/`, `frontend/`, `desktop/`, `cli/` and `src/` are no longer active surfaces.
+If you see executable code appearing in these root-level locations in the future, you should first treat it as architecture regression.
 
 <Aside type="note" title="How to use this page">
 
-當你不確定新檔案該放哪裡時，先看 placement rules，而不是先照習慣找最近的資料夾塞進去。這頁的重點是 owner boundary，不是完整檔案樹教學。
+When you're not sure where to put a new file, look at the placement rules first instead of finding the nearest folder and stuffing it in first. The focus of this page is the owner boundary, not the complete file tree tutorial.
 
 </Aside>
 
-See [Simulation Interface Boundaries](../../architecture/simulation-interface-boundaries.md) before changing notebook, Application Simulation/Analysis Workbench, Backend task, or Runner ownership.
+See [Simulation Interface Boundaries](../../../app/architecture/contracts/simulation-interface-boundaries.md) before changing notebook, Application Simulation/Analysis Workbench, Backend task, or Runner ownership.
 
 ## Target Layout
 
 ```text
 superconducting-circuits-research-workbench/
-├── site/                      # Astro public introduction site
+├── site/           # Astro public introduction site
 ├── app/
-│   ├── backend/               # Python Backend control/data plane
-│   ├── frontend/              # Next.js data workbench
-│   └── desktop/               # Electron shell
+│  ├── backend/        # Python Backend control/data plane
+│  ├── frontend/       # Next.js data workbench
+│  └── desktop/        # Electron shell
 ├── core/
-│   ├── julia/
-│   │   ├── SuperconductingCircuitsCore/
-│   │   ├── SuperconductingCircuitsVisualizer/
-│   │   ├── SuperconductingCircuitsRunner/
-│   │   └── SuperconductingCircuitsAnalysisBridge/
-│   └── python/
-│       ├── analysis/
-│       │   └── superconducting_circuits_analysis/
-│       └── circuit_libraries/
-│           └── schemdraw_circuit_library/
+│  ├── julia/
+│  │  ├── SuperconductingCircuitsCore/
+│  │  ├── SuperconductingCircuitsVisualizer/
+│  │  ├── SuperconductingCircuitsRunner/
+│  │  └── SuperconductingCircuitsAnalysisBridge/
+│  └── python/
+│    ├── analysis/
+│    │  └── superconducting_circuits_analysis/
+│    └── circuit_libraries/
+│      └── schemdraw_circuit_library/
 ├── notebooks/
-│   ├── pluto/
-│   └── python/
-├── docs/                      # reader/task-first Starlight source docs, API docs source, and guardrails
-│   ├── start/
-│   ├── workflows/
-│   ├── concepts/
-│   ├── app/
-│   ├── reference/
-│   ├── contribute/
-│   └── api-reference/
-├── data/                      # raw / processed / trace-store / local DB
-├── archived                  # inert code quarantine; not imported or traversed
-├── openapi.json               # committed OpenAPI snapshot for contract sync
+│  ├── pluto/
+│  └── python/
+├── docs/           # reader/task-first Starlight source docs, API docs source, and guardrails
+│  ├── start/
+│  ├── workflows/
+│  ├── concepts/
+│  ├── app/
+│  ├── reference/
+│  ├── contribute/
+│  └── api-reference/
+├── data/           # raw / processed / trace-store / local DB
+├── archived         # inert code quarantine; not imported or traversed
+├── openapi.json        # committed OpenAPI snapshot for contract sync
 └── scripts/
-    ├── dev/
-    ├── build/
-    ├── test/
-    └── maintenance/
+  ├── dev/
+  ├── build/
+  ├── test/
+  └── maintenance/
 ```
 
 <Aside type="caution" title="Top-level folders are the architecture boundaries">
 
-這份 target layout 故意不把 root `backend/`、`frontend/`、`desktop/`、`cli/` 或 `src/` 畫成 canonical surfaces。
+This target layout intentionally does not draw root `backend/`, `frontend/`, `desktop/`, `cli/` or `src/` as canonical surfaces.
 Python editable packages use direct layout in this repo: `app/backend/app_backend/`,
 `core/python/analysis/superconducting_circuits_analysis/superconducting_circuits_analysis/`,
 `core/python/circuit_libraries/schemdraw_circuit_library/schemdraw_circuit_library/`.
@@ -88,7 +89,7 @@ Do not reintroduce Python package-internal `src/` directories unless the SoT is 
 
 ## Placement Rules
 
-| 如果要改 | 應放位置 |
+| If you want to change | the location |
 | --- | --- |
 | Public introduction page, product positioning, marketing/static landing content | `site/` |
 | Next.js page, layout, component | `app/frontend/` |
@@ -110,8 +111,8 @@ Do not reintroduce Python package-internal `src/` directories unless the SoT is 
 | Start Here docs | `docs/start/` |
 | Task-first workflow docs | `docs/workflows/` |
 | Conceptual docs and design decisions | `docs/concepts/` |
-| Product App docs, app shared/frontend/backend contracts, Python Notebook app-prototyping path | `docs/app/` |
-| Reference contracts, guardrails, agent skills, contributors, API landing | `docs/reference/` |
+| Product App docs, Architecture Contracts, Data Contracts, app shared/frontend/backend/desktop contracts, Python Notebook app-prototyping path, archived App workflows | `docs/app/` |
+| Research-core reference contracts, guardrails, agent skills, contributors, API landing | `docs/reference/` |
 | Contribution workflow docs | `docs/contribute/` |
 | Pluto notebook | `notebooks/pluto/` |
 | Direct research notebook | `notebooks/pluto/` |
@@ -119,13 +120,13 @@ Do not reintroduce Python package-internal `src/` directories unless the SoT is 
 | Backend/API notebook inspection client | `notebooks/python/` |
 | dev/build/test/maintenance helper | `scripts/dev/`, `scripts/build/`, `scripts/test/`, `scripts/maintenance/` |
 | archived legacy UI / command workflow / runtime residue | root `archived` as inert reference code, `docs/archive/` as inert text, or delete if not needed |
-| retired root worker runtime residue | 不屬於 target layout；不得新增或恢復 |
+| retired root worker runtime residue | does not belong to target layout; cannot be added or restored |
 | committed OpenAPI contract snapshot | root `openapi.json` |
 
 <Aside type="caution" title="Do not reintroduce old root package surfaces">
 
-這次決策不是把 `app/backend/`、`app/frontend/`、`app/desktop/` 再拆回 root `backend/`、`frontend/`、`desktop/`。
-也不要讓 root `cli/` 或 `src/` 重新變成 active entrypoint。
+The decision this time is not to remove `app/backend/`, `app/frontend/`, and `app/desktop/` back to the root `backend/`, `frontend/`, and `desktop/`.
+Also do not let root `cli/` or `src/` become the active entrypoint again.
 
 </Aside>
 
@@ -176,14 +177,14 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 
 ## Related Blueprints
 
-- backend 的責任分層與模組邊界，參見 [Backend Architecture](backend-architecture.mdx)
-- Python core package boundaries，參見 [Core Reference](../../core/index.md)
+- Backend's responsibility hierarchy and module boundaries, see [Backend Architecture](backend-architecture.mdx)
+- Python core package boundaries, see [Core Reference](../../core/index.md)
 
 ## Dependency Direction
 
-1. `app/frontend/` 依賴 API contract，不直接依賴 backend internals
-2. `app/desktop/` 依賴 frontend build、backend/runner process supervision 與受控 IPC，不承載業務規則
-3. `app/backend/` API 層依賴 services/domain/infrastructure，不執行 heavy compute
+1. `app/frontend/` relies on API contract and does not directly rely on backend internals
+2. `app/desktop/` relies on frontend build, backend/runner process supervision and controlled IPC, and does not carry business rules
+3. `app/backend/` API layer depends on services/domain/infrastructure and does not execute heavy compute
 4. Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
 5. `notebooks/python/` may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
 6. Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
@@ -194,14 +195,14 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 11. `core/python/analysis/superconducting_circuits_analysis/` may own Python analysis algorithms and schemas, but must not import FastAPI routes or frontend DTOs
 12. `core/python/circuit_libraries/schemdraw_circuit_library/` owns renderer-side visual components only; it does not own circuit semantics or solve physics
 13. `app/backend/app_backend/domain/runtime_contracts/` owns App Backend tasking, execution, and storage runtime contracts; it must stay framework-agnostic and must not import FastAPI, SQLAlchemy, repositories, file I/O, or runner process code
-14. `scripts/` 不得成為 user-facing command-line product surface
-15. root `backend/`、`frontend/`、`desktop/`、`cli/`、`src/` residues 不得被重新解讀成正式 architecture boundary
+14. `scripts/` shall not be a user-facing command-line product surface
+15. root `backend/`, `frontend/`, `desktop/`, `cli/`, `src/` residues shall not be reinterpreted as formal architecture boundary
 16. root `archived` is an inert quarantine; active code, docs tooling, package discovery, type checking, linting, and tests must not traverse or import it
 
 <details class="docs-disclosure docs-disclosure--note">
 <summary>Why the full tree is still shown</summary>
 
-這頁保留完整 target layout，是因為 folder boundary 本身就是 reference contract。其餘 guardrails 不需要都像這樣展開。
+This page retains the complete target layout because the folder boundary itself is the reference contract. The rest of the guardrails don't all need to be expanded like this.
 
 </details>
 
@@ -240,17 +241,17 @@ If a deleted plan contains a durable decision, promote that decision to `docs/re
 - **Committed OpenAPI snapshot** stays at repo root as `openapi.json` for contract-sync verification.
 - Root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces.
 - Dependency direction:
-    - frontend depends on API contracts, not backend internals
-    - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
-    - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
-    - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
-    - Julia Visualizer may depend on PlotlyJS and Julia numeric traces; Julia Core and Julia Runner must not depend on PlotlyJS
-    - Julia Analysis Bridge may depend on PythonCall and Python analysis; Julia Core must not depend on PythonCall
-    - Python analysis may own fitting and matrix algorithms; Backend must not execute heavy analysis compute in process
-    - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
-    - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
-    - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
-    - Julia Core must stay framework-agnostic
-    - public site is a static introduction surface and must not import app/backend internals
-    - scripts are helpers, not user-facing workflow contracts
+  - frontend depends on API contracts, not backend internals
+  - desktop depends on frontend outputs, backend/runner process supervision, and secure IPC, not business logic ownership
+  - backend API layer depends inward on services/domain/infrastructure and must not run heavy compute
+  - Pluto Notebook may depend directly on `SuperconductingCircuitsCore`
+  - Julia Visualizer may depend on PlotlyJS and Julia numeric traces; Julia Core and Julia Runner must not depend on PlotlyJS
+  - Julia Analysis Bridge may depend on PythonCall and Python analysis; Julia Core must not depend on PythonCall
+  - Python analysis may own fitting and matrix algorithms; Backend must not execute heavy analysis compute in process
+  - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
+  - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
+  - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
+  - Julia Core must stay framework-agnostic
+  - public site is a static introduction surface and must not import app/backend internals
+  - scripts are helpers, not user-facing workflow contracts
 ```

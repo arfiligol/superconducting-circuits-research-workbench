@@ -1,145 +1,145 @@
 ---
 aliases:
-  - Schur Complement 與 Kron Reduction
-  - 網路約減（Schur Complement）
+- Schur Complement and Kron Reduction
+ - Online Reduction (Schur Complement)
 tags:
-  - diataxis/explanation
-  - audience/team
-  - topic/physics
-  - topic/simulation
-  - node_type/method
+ - diataxis/explanation
+ - audience/team
+ - topic/physics
+ - topic/simulation
+ - node_type/method
 status: stable
 owner: docs-team
 audience: team
-scope: 以 Schur Complement 實作 Kron Reduction 的物理語意、數學推導與在本專案的使用邊界
+scope: The physical semantics, mathematical derivation and usage boundaries of Kron Reduction implemented with Schur Complement in this project
 version: v0.1.1
 last_updated: 2026-03-05
 updated_by: docs-team
 sidebar:
-  label: Schur Complement and Kron Reduction
-  order: 80
+ label: Schur Complement and Kron Reduction
+ order: 80
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-# Schur Complement 與 Kron Reduction
+# Schur Complement and Kron Reduction
 
-你如果正在做超導電路的多埠矩陣分析，幾乎一定會遇到這個問題：
-「我只關心某些 port/mode，要怎麼把其他自由度消掉，同時保留正確的等效 I-V 關係？」
-Kron Reduction 的核心就是 Schur Complement。
+If you are doing multi-port matrix analysis of superconducting circuits, you will almost certainly encounter this problem:
+"I only care about certain ports/modes, how can I eliminate other degrees of freedom while retaining the correct equivalent I-V relationship?"
+At the heart of Kron Reduction is Schur Complement.
 
-## 先講結論
+## Let’s talk about the conclusion first
 
-把導納矩陣切成「保留集合」與「消除集合」後，在 `I_drop = 0`（Neumann 邊界）條件下，等效導納是：
+After dividing the admittance matrix into "retaining sets" and "eliminating sets", under the conditions of `I_drop = 0` (Neumann boundary), the equivalent admittance is:
 
 ```text
 Y_eff = Y_kk - Y_kd * (Y_dd)^(-1) * Y_dk
 ```
 
-- `k`：keep（要保留的 ports/modes）
-- `d`：drop（要消除的 ports/modes）
+- `k`: keep (ports/modes to be retained)
+- `d`: drop (ports/modes to be eliminated)
 
-這個式子就是 Schur Complement，也是 Kron Reduction 的計算核心。
+This formula is Schur Complement, which is also the calculation core of Kron Reduction.
 
-## 為什麼這件事是對的（物理語意）
+## Why this is right (physical semantics)
 
-在被消除的自由度上設 `I_drop = 0`，意思是：
+Set `I_drop = 0` on the eliminated degrees of freedom, which means:
 
-- 這些節點/模態沒有外部注入電流
-- 但它們仍可被動響應，並回饋到保留自由度
+- These nodes/modes have no external injected current
+- But they can still react passively and give back to retaining degrees of freedom
 
-所以「消除」不是把它們硬刪掉，而是把它們的被動回應吸收到等效矩陣裡。
-這也是為什麼結果不是單純子矩陣 `Y_kk`，而要再減掉耦合項。
+Therefore, "elimination" does not mean to delete them hard, but to absorb their passive responses into the equivalent matrix.
+This is why the result is not the simplex matrix `Y_kk`, but the coupling term is subtracted.
 
-## 推導（最小必要版）
+## Derivation (minimum necessary version)
 
-從分塊矩陣開始：
+Start with a block matrix:
 
 ```text
-[ I_k ]   [ Y_kk  Y_kd ] [ V_k ]
-[ I_d ] = [ Y_dk  Y_dd ] [ V_d ]
+[ I_k ]  [ Y_kk Y_kd ] [ V_k ]
+[ I_d ] = [ Y_dk Y_dd ] [ V_d ]
 ```
 
-施加 `I_d = 0`：
+Apply `I_d = 0`:
 
 ```text
 0 = Y_dk V_k + Y_dd V_d
 => V_d = -(Y_dd)^(-1) Y_dk V_k
 ```
 
-代回 `I_k`：
+Replace `I_k`:
 
 ```text
 I_k = (Y_kk - Y_kd (Y_dd)^(-1) Y_dk) V_k
 ```
 
-得到 `Y_eff`。
+Get `Y_eff`.
 
-## 在本專案的兩段式用法
+## Two-stage usage in this project
 
-### 1) Port-space reduction（可先做）
+### 1) Port-space reduction (can be done first)
 
-先在物理 port 空間消除不關心的 ports（例如環境 port）。
+First eliminate ports that you don't care about (such as environment ports) in the physical port space.
 
-### 2) Coordinate transform 後再做 modal reduction
+### 2) Modal reduction after Coordinate transform
 
-先做座標轉換（例如 `1,2 -> cm,dm`），再把非目標模態（例如 `cm`）用同一個 Schur Complement 消除。
+First perform coordinate transformation (for example, `1,2 -> cm,dm`), and then use the same Schur Complement to eliminate the non-target modes (for example, `cm`).
 
-<Aside type="caution" title="同一個核心可重用">
+<Aside type="caution" title="The same core can be reused">
 
-Port reduction 與 modal reduction 在數學上是同一件事，只差在矩陣座標系不同。
-
-</Aside>
-
-## 與 Floating Qubit `Y_in` 的關係
-
-常見目標是 differential mode 的輸入導納：
-
-1. 先得到轉換後矩陣（包含 `dm`）
-2. 對其餘自由度做 Schur Complement
-3. 取等效單埠元素 `Y_dm,dm`
-4. 用 `Re(Y_dm,dm)` 做後續耗散/T1 相關分析
-
-## 與 Port Termination Compensation (PTC) 的關係
-
-PTC 與 Kron Reduction 是兩個不同操作：
-
-- PTC：先在 `Y` 域扣除選定 ports 的 shunt termination（例如 `diag(1/R_i)`）
-- Kron：在指定邊界條件下消除自由度
-
-你可以先 PTC 再 Kron，也可以視分析目標保留特定 port 的 termination 再 Kron。
-
-## 使用邊界（目前專案）
-
-<Aside type="caution" title="目前是 Port-Level，不是 Nodal-Level">
-
-目前研究流程的 post-processing 作用在模擬回傳的 port-space `Y(ω)`。
-不是完整內部節點（nodal）矩陣，因此無法直接做 arbitrary internal-node elimination。
+Port reduction and modal reduction are mathematically the same thing, except in the matrix coordinate system.
 
 </Aside>
 
-<Aside type="note" title="可比對 HFSS 的脈絡">
+## Relation to Floating Qubit `Y_in`
 
-若目標是和 HFSS floating-port 結果比對，通常需要：
-1. 明確的座標轉換（含 normalization 定義）
-2. 一致的 reference impedance 假設
-3. 清楚指定哪些 ports 要做 PTC
+A common target is the input admittance of differential mode:
+
+1. First get the converted matrix (including `dm`)
+2. Perform Schur Complement on the remaining degrees of freedom
+3. Get the equivalent port element `Y_dm,dm`
+4. Use `Re(Y_dm,dm)` to do subsequent dissipation/T1 related analysis
+
+## Relationship to Port Termination Compensation (PTC)
+
+PTC and Kron Reduction are two different operations:
+
+- PTC: First deduct the shunt termination of the selected ports in the `Y` field (for example, `diag(1/R_i)`)
+- Kron: Eliminate degrees of freedom under specified boundary conditions
+
+You can do PTC first and then Kron, or you can keep the termination of a specific port and then Kron depending on the analysis goal.
+
+## Use boundaries (current project)
+
+<Aside type="caution" title="Currently it is Port-Level, not Nodal-Level">
+
+The post-processing of the current research process is used to simulate the return port-space `Y(ω)`.
+It is not a complete internal node (nodal) matrix, so arbitrary internal-node elimination cannot be done directly.
 
 </Aside>
 
-## 常見誤解
+<Aside type="note" title="Comparable context of HFSS">
 
-1. **誤解：Kron reduction 就是刪掉列/行**
-   錯。那會丟掉耦合回饋，通常不對。
-2. **誤解：只要做一次就萬用**
-   錯。port-space 與 mode-space 常常需要分兩次做。
-3. **誤解：S-domain 也能直接用同樣變換**
-   需要小心。wave normalization/reference 設定會影響結果，通常先在 Y/Z 域處理更穩定。
+If the goal is to compare with HFSS floating-port results, you usually need:
+1. Explicit coordinate conversion (including normalization definition)
+2. Consistent reference impedance assumption
+3. Clearly specify which ports need to be PTC
 
-## 相關連結
+</Aside>
+
+## Common misunderstandings
+
+1. **Misunderstanding: Kron reduction means deleting columns/rows**
+wrong. That would throw away coupled feedback, which is usually not correct.
+2. **Misconception: Just do it once and it will work for you**
+wrong. Port-space and mode-space often need to be done twice.
+3. **Misunderstanding: S-domain can also use the same transformation directly**
+Need to be careful. The wave normalization/reference setting will affect the results, and it is usually more stable to process it in the Y/Z domain first.
+
+## Related links
 
 - [Physics Overview](./)
-- [符號總表](./symbol-glossary/)
+- [Symbol table](./symbol-glossary/)
 - [Simulation Result Views](../architecture/circuit-simulation/simulation-result-views/)
 - [Floating Qubit Real-Part Admittance Notebook](./floating-qubit-real-part-admittance-extraction/)
 

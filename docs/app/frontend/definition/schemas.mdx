@@ -1,20 +1,20 @@
 ---
 title: "Schemas"
 aliases:
-  - "Schemas UI"
-  - "Circuit Schemas UI"
-  - "電路綱要清單介面"
+ - "Schemas UI"
+ - "Circuit Schemas UI"
+ - "Circuit outline list interface"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/ui
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
 page_id: app.page.schemas
 route: /schemas
 status: draft
 owner: docs-team
 audience: team
-scope: "/schemas 頁面的 circuit schema catalog、搜尋/排序/cursor-based browse，以及建立/開啟/刪除契約"
+scope: "/schemas page circuit schema catalog, search/sort/cursor-based browse, and create/open/delete contracts"
 version: v0.7.0
 last_updated: 2026-03-23
 updated_by: codex
@@ -24,102 +24,102 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Schemas
 
-本頁定義 Circuit Schema catalog 的瀏覽、搜尋、排序、cursor-based browse、建立、開啟與刪除契約。
+This page defines the circuit schema catalog's browse, search, sort, cursor-based browse, create, open, and delete contracts.
 
 <Aside type="note" title="Page Frame">
 
-本頁負責 schema catalog、搜尋 / 排序 / cursor-based browse、建立、刪除與開啟 editor。
-source 編輯、preview render 與 simulation execution 不屬於本頁責任。
+This page is responsible for schema catalog, search/sort/cursor-based browse, creation, deletion and opening of editor.
+Source editing, preview rendering and simulation execution are not the responsibility of this page.
 
 </Aside>
 
 <Aside type="tip" title="Shared Shell">
 
-本頁位於 shared [Header](../shared-shell/header.mdx) / [Sidebar](../shared-shell/sidebar.md) shell 中，但本頁本身不擁有 dataset 或 task context authority。
+This page is located in the shared [Header](../shared-shell/header.mdx) / [Sidebar](../shared-shell/sidebar.md) shell, but this page itself does not own the dataset or task context authority.
 
 </Aside>
 
 <Aside type="note" title="Workspace-scoped catalog">
 
-Schema catalog 只列出目前 `Active Workspace` 中可見的 definitions。
-`private` schema 只對 owner、workspace owner 與 admin 可見；`workspace` schema 才是共同清單的一部分。
+Schema catalog only lists definitions currently visible in `Active Workspace`.
+The `private` schema is only visible to owner, workspace owner and admin; the `workspace` schema is part of the common manifest.
 
 </Aside>
 
 <Aside type="caution" title="Schema identity display">
 
-- persisted schema identity 是 UUIDv4-only `definition_id`
-- UI 不得再把 schema identity 描述成 `Definition #...` 這種 compact sequential 編號
-- 同名 schema 必須依 short `Schema ID` + `created_at` 區分；必要時補 owner / workspace context
+- persisted schema identity is UUIDv4-only `definition_id`
+- The UI must no longer describe the schema identity as a compact sequential number such as `Definition #...`
+- Schemas with the same name must be distinguished by short `Schema ID` + `created_at`; add owner / workspace context if necessary
 
 </Aside>
 
 ---
 
-## 使用者目標 (User Goals)
+## User Goals
 
-*   **高效檢索**: 在數以百計的 Schema 中快速定位目標。
-*   **版本確認**: 根據建立時間或名稱確認最新的開發進度。
-*   **便捷管理**: 快速啟動新專案 (New Circuit) 或清理廢棄的電路定義。
-*   **流暢對接**: 從清單無縫導向至 `Schema Editor` 或 `Circuit Simulation`。
+* **Efficient Search**: Quickly locate targets in hundreds of Schemas.
+* **Version Confirmation**: Confirm the latest development progress based on build time or name.
+* **Convenient Management**: Quickly start a new project (New Circuit) or clean up abandoned circuit definitions.
+* **Smooth docking**: Seamlessly guide from the list to `Schema Editor` or `Circuit Simulation`.
 
 ---
 
-## UI 配置與 組件說明
+## UI configuration and component description
 
-### 佈局結構 (Layout Structure)
+### Layout Structure
 
 ```mermaid
 graph LR
-    H[Page Header] --> Actions[Primary Actions]
-    Actions --> Filters[Search & Sort Bars]
-    Filters --> List[Schema List Container]
-    List --> Paging[Browse Status]
+  H[Page Header] --> Actions[Primary Actions]
+  Actions --> Filters[Search & Sort Bars]
+  Filters --> List[Schema List Container]
+  List --> Paging[Browse Status]
 ```
 
-### 關鍵組件清單 (Components)
+### List of key components (Components)
 
-| ID | 組件 | 功能描述 | 關鍵行為 |
-| :--- | :--- | :--- | :--- |
-| **C1** | New Circuit Button | 位於頂部，為主要行動按鈕。 | 導向至 Schema 建立流程。 |
-| **C2** | Filter Bar | 提供名稱搜尋、欄位排序與方向選擇。 | 觸發列表重新查詢。 |
-| **C3** | Schema Item Row | 列表核心，顯示 `name`、short `Schema ID`、`created_at`。 | 支援開啟、編輯與刪除。 |
-| **C4** | Browse Controls | 位於底部，控制 cursor-based 的前後段瀏覽。 | 驅動分段載入，同步更新總數與 cursor 狀態。 |
+| ID | Component | Functional Description | Key Behaviors |
+|:--- |:--- |:--- |:--- |
+| **C1** | New Circuit Button | Located at the top, it is the main action button. | Directed to Schema to create the process. |
+| **C2** | Filter Bar | Provides name search, field sorting and direction selection. | Trigger list requery. |
+| **C3** | Schema Item Row | List core, showing `name`, short `Schema ID`, `created_at`. | Supports opening, editing and deletion. |
+| **C4** | Browse Controls | Located at the bottom, controls cursor-based front and back browsing. | The driver is loaded in stages, and the total number and cursor status are updated simultaneously. |
 
 ---
 
-## 資料與狀態契約 (Contract)
+## Data and status contract (Contract)
 
 <Tabs>
-<TabItem label="數據依賴 (Data Dependencies)">
+<TabItem label="Data Dependencies">
 
-| 資料 | 來源 | 必要性 | 用途 |
-| :--- | :--- | :---: | :--- |
-| schema summary list | definition summary service | ✅ | 渲染各列摘要。 |
-| total items count | definition summary service | ✅ | 顯示總筆數與 browse summary。 |
-| cursor meta | definition summary service | ✅ | 驅動前後段瀏覽。 |
-| search & sort params | UI State | ✅ | 控制過濾與排序行為。 |
-| active workspace | session surface | ✅ | 限定 catalog 可見範圍。 |
-| capability flags | session surface | ✅ | 決定是否顯示 create / delete affordance。 |
+| Information | Source | Necessity | Purpose |
+|:--- |:--- |:---: |:--- |
+| schema summary list | definition summary service | ✅ | Render a summary of each column. |
+| total items count | definition summary service | ✅ | Display the total number of items and browse summary. |
+| cursor meta | definition summary service | ✅ | Drive front and back browsing. |
+| search & sort params | UI State | ✅ | Control filtering and sorting behavior. |
+| active workspace | session surface | ✅ | Limit the visible range of catalog. |
+| capability flags | session surface | ✅ | Determines whether to display create / delete affordance. |
 
 </TabItem>
 
-<TabItem label="頁面狀態 (States)">
+<TabItem label="Page States (States)">
 
-| 狀態 | 說明 |
-| :--- | :--- |
-| `Default` | 正常顯示清單與控制項。 |
-| `Loading` | 資料更新中，列表顯示載入遮罩。 |
-| `Empty` | 查無資料 (或搜尋後無結果)，顯示對應提示。 |
-| `Error` | 服務請求失敗，於列表區塊顯示錯誤資訊。 |
+| Status | Description |
+|:--- |:--- |
+| `Default` | Display the list and control items normally. |
+| `Loading` | The data is being updated, and the list shows the loaded masks. |
+| `Empty` | No data found (or no results after searching), corresponding prompts are displayed. |
+| `Error` | The service request failed and error information is displayed in the list block. |
 
 </TabItem>
 
 </Tabs>
 
-<Aside type="caution" title="邊界約束">
+<Aside type="caution" title="boundary constraints">
 
-Schema Catalog **禁止**在列表階段預載完整的 Definition Payload。其詳細內容應僅在 Editor 或 Detail 流中按需讀取。
+Schema Catalog **disables** preloading the complete Definition Payload during the listing stage. Its details should only be read on demand in the Editor or Detail stream.
 
 </Aside>
 
@@ -127,54 +127,54 @@ Schema Catalog **禁止**在列表階段預載完整的 Definition Payload。其
 
 | Concern | Rule |
 |---|---|
-| Persisted identity | catalog row 綁定的是 full UUIDv4 `definition_id` |
-| Visible label | row 可顯示 short `Schema ID`，但這只是 full UUIDv4 的縮寫 display |
-| Same-name rows | 不得用隱含 display order 當唯一區分；至少要顯示 short `Schema ID` + `created_at` |
-| Sorting | 使用 `created_at`、`updated_at`、`name` 等欄位；不得使用 `definition_id` 值排序 |
-| Open / delete / clone | 仍以 full `definition_id` 作為 action binding；不是以 row order 或 visible short ID 綁定 |
+| Persisted identity | catalog row is bound to full UUIDv4 `definition_id` |
+| Visible label | row can display short `Schema ID`, but this is just the abbreviation of full UUIDv4 display |
+| Same-name rows | Do not use implicit display order as the only distinction; at least short `Schema ID` + `created_at` must be displayed |
+| Sorting | Use `created_at`, `updated_at`, `name` fields; do not use `definition_id` value sorting |
+| Open / delete / clone | Still using full `definition_id` as action binding; not binding with row order or visible short ID |
 
 ## Workspace And Permission Rules
 
 | Concern | Rule |
 |---|---|
-| Catalog scope | 僅查詢目前 active workspace 可見的 definitions |
-| Create permission | 只有具 `can_manage_definitions` 的 session 才能建立 |
-| Delete permission | 由 backend capability 與 ownership 決定；frontend 不自行猜測 |
-| Default creation scope | 新建 schema 預設屬於 current active workspace，且預設 `private` |
-| Workspace switch | 切換 workspace 後，catalog 必須重查；若目前 editor 目標不再可見，不得假裝仍存在於清單 |
+| Catalog scope | Only query definitions visible to the currently active workspace |
+| Create permission | Only sessions with `can_manage_definitions` can be created |
+| Delete permission | Determined by backend capability and ownership; frontend does not guess on its own |
+| Default creation scope | The new schema defaults to the current active workspace, and the default is `private` |
+| Workspace switch | After switching workspace, the catalog must be rechecked; if the current editor target is no longer visible, it must not pretend to still exist in the list |
 
 ---
 
-## 互動流程 (Interaction Flow)
+##Interaction Flow
 
 <Tabs>
-<TabItem label="建立與開啟 (Create/Open)">
+<TabItem label="Create/Open">
 
-1.  點擊 `New Circuit` → 導向 Editor 建立新檔。
-2.  點擊 `Edit` 或 Row → 導向 Editor 並帶入選定的 full UUIDv4 `definition_id`。
+1. Click `New Circuit` -> Navigate to Editor to create a new file.
+2. Click `Edit` or Row -> Navigate to Editor and bring in the selected full UUIDv4 `definition_id`.
 
 </TabItem>
 
 <TabItem label="Workspace Rebinding">
 
-1. Header 切換 active workspace。
-2. 本頁清除舊列表結果並重查新 workspace 的 definition summaries。
-3. 若目前 search/sort/cursor 不再適用，至少清除 cursor 並保留可重用的 filter。
+1.Header switching active workspace.
+2. This page clears the old list results and rechecks the definition summaries of the new workspace.
+3. If the current search/sort/cursor is no longer applicable, at least clear the cursor and retain the reusable filter.
 
 </TabItem>
 
-<TabItem label="搜尋與排序 (Search/Sort)">
+<TabItem label="Search/Sort">
 
-1.  更新搜尋框或排序選項。
-2.  清除目前 cursor。
-3.  根據新條件刷新列表視圖。
+1. Update search box or sorting options.
+2. Clear the current cursor.
+3. Refresh the list view based on the new criteria.
 
 </TabItem>
 
-<TabItem label="刪除流程 (Delete)">
+<TabItem label="Delete process (Delete)">
 
-1.  點擊 `Delete` → 觸發二次確認視窗。
-2.  成功刪除後，刷新列表並重新校正 cursor 視圖 (如有必要)。
+1. Click `Delete` -> trigger the secondary confirmation window.
+2. After successful deletion, refresh the list and recalibrate the cursor view (if necessary).
 
 </TabItem>
 
@@ -182,20 +182,20 @@ Schema Catalog **禁止**在列表階段預載完整的 Definition Payload。其
 
 ---
 
-## 視覺規範 (Visual Rules)
+## Visual Rules
 
-*   **層次分明**: Page Title 的視覺比重必須顯著高於 Subtitle。
-*   **CTA 定位**: `New Circuit` 按鈕應始終位於主要內容區的最上方。
-*   **密度一致**: 無論使用 Table 或 Card，short `Schema ID`、`Created At` 與 Action 按鈕在每列中需維持穩定對齊。
-*   **反饋定位**: Error 或 Mutation Feedback 應在列表區域附近清晰可見。
+* **Clearly layered**: The visual weight of the Page Title must be significantly higher than that of the Subtitle.
+* **CTA Positioning**: The `New Circuit` button should always be at the top of the main content area.
+* **Consistent Density**: Whether using Table or Card, short `Schema ID`, `Created At` and Action buttons need to maintain stable alignment in each column.
+* **Feedback Positioning**: Error or Mutation Feedback should be clearly visible near the list area.
 
 ---
 
-## 相關參考
+## Related references
 
-*   [Schema Editor](schema-editor.mdx)
-*   [Header](../shared-shell/header.mdx)
-*   [Sidebar](../shared-shell/sidebar.md)
-*   [Circuit Simulation](../simulation-workbench/circuit-simulation.md)
-*   [Backend: Circuit Definitions](../../backend/circuit-definitions.mdx)
-*   [Record Format: Circuit Netlist](../../../reference/data-formats/circuit-netlist.mdx)
+*  [Schema Editor](schema-editor.mdx)
+*  [Header](../shared-shell/header.mdx)
+*  [Sidebar](../shared-shell/sidebar.md)
+*  [Circuit Simulation](../simulation-workbench/circuit-simulation.md)
+*  [Backend: Circuit Definitions](../../backend/circuit-definitions.mdx)
+*  [Record Format: Circuit Netlist](../../archive/old-app-contracts/circuit-netlist.mdx)

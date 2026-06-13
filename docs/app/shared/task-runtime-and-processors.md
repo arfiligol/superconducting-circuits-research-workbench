@@ -1,13 +1,13 @@
 ---
 aliases:
-  - Task Runtime and Processors
-  - Runner Runtime
-  - 任務執行時與處理器
+ - Task Runtime and Processors
+ - Runner Runtime
+ - Task execution time and processor
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: team
@@ -41,17 +41,17 @@ There is no separate local queue service. The runner claims tasks through the ba
 
 ```mermaid
 stateDiagram-v2
-    [*] --> queued
-    queued --> claimed
-    claimed --> running
-    running --> staging_result
-    staging_result --> publishing
-    publishing --> completed
-    queued --> cancelled
-    claimed --> cancelled
-    running --> failed
-    staging_result --> failed
-    publishing --> failed
+  [*] --> queued
+  queued --> claimed
+  claimed --> running
+  running --> staging_result
+  staging_result --> publishing
+  publishing --> completed
+  queued --> cancelled
+  claimed --> cancelled
+  running --> failed
+  staging_result --> failed
+  publishing --> failed
 ```
 
 ## Runner Liveness
@@ -75,4 +75,4 @@ stateDiagram-v2
 ## Related
 
 * [Backend / Tasks & Execution](../backend/tasks-execution.md)
-* [Julia Runner Compute Plane](../../reference/architecture/julia-runner-compute-plane.md)
+* [Julia Runner Compute Plane](../architecture/contracts/julia-runner-compute-plane.md)

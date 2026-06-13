@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Runner-Safe Julia Core API
-  - Pluto Runner Shared API
+ - Runner-Safe Julia Core API
+ - Pluto Runner Shared API
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -25,11 +25,11 @@ Pluto should not require a special compute path. Runner execution should call th
 ## Shared Pipeline
 
 ```text
-                    Julia Core Pipeline
-          Component -> Plan -> Compiler -> Simulation
-                  ^                         ^
-                  |                         |
-          Pluto Notebook              Julia Runner
+          Julia Core Pipeline
+     Component -> Plan -> Compiler -> Simulation
+         ^             ^
+         |             |
+     Pluto Notebook       Julia Runner
 ```
 
 ## Caller Roles
@@ -50,10 +50,10 @@ Runner execution calls Julia Core for deterministic task execution. It does not 
 | Julia Core | owns circuit authoring, compiler concepts, simulation helpers, and analysis helpers |
 | Pluto | direct Julia Core research surface |
 | Julia Runner | calls Julia Core for deterministic task execution and writes staged numeric output |
-| Python Backend | owns task lifecycle, metadata, publication, and TraceStore |
-| Application / Electron | owns product UI and desktop process supervision |
+| Publication layer | owns task lifecycle, metadata, publication, and canonical result availability |
+| Packaged product layer | owns product UI and local process supervision |
 
-Julia Core must not depend on FastAPI, Next.js, Electron, or Backend task state.
+Julia Core must not depend on HTTP frameworks, browser UI frameworks, packaged desktop runtime, or external task state.
 
 The Runner owns execution orchestration and staged output, not authoring semantics. Circuit construction, endpoint resolution, compiler semantics, and simulation result extraction belong to Julia Core.
 
@@ -61,7 +61,7 @@ Runner receives a RunSpec and binds it to a compiled HB intent. Runner must not 
 
 Runner also must not invent EngineeringGraph semantics. Component identity, engineering roles, relation types, port roles, source slots, observable requests, groups, and schematic export hints come from CircuitPlan authoring and selected Component Libraries.
 
-Large numeric arrays should not move through HTTP JSON. Runner outputs should use staged local filesystem packages, with Backend publication handling canonical TraceStore records.
+Large numeric arrays should not move through HTTP JSON. Runner outputs should use staged local filesystem packages, with publication handling canonical records.
 
 ## HB Simulation Boundary
 
@@ -71,17 +71,17 @@ The shared contract is:
 
 ```text
 CircuitPlan
-        |
-        v
+    |
+    v
 HBIntent: ports, pump axes, source slots, observables
-        |
-        v
+    |
+    v
 compile_to_josephson
-        |
-        v
+    |
+    v
 JosephsonCompiledCircuit with validated HB metadata
-        |
-        v
+    |
+    v
 Runner binds runtime values and executes
 ```
 
@@ -130,23 +130,23 @@ The Runner must call Julia Core through the documented authoring path:
 
 ```text
 Component Library plan builder
-        |
-        v
+    |
+    v
 CircuitPlan
-        |
-        v
+    |
+    v
 EngineeringGraph
-        |
-        v
+    |
+    v
 Validation
-        |
-        v
+    |
+    v
 Compiler
-        |
-        v
+    |
+    v
 JosephsonCompiledCircuit
-        |
-        v
+    |
+    v
 Simulation / Analysis
 ```
 
@@ -167,7 +167,7 @@ Runner sweep tasks should call the Julia Core sweep engine.
 
 Runner sweep tasks use Julia Core sweep planning and execution.
 
-Runner adapters may map Backend payloads into:
+Runner adapters may map persisted task payloads into:
 
 ```text
 Component Library plan builder
@@ -214,7 +214,7 @@ preflight = preflight_sweep(build_plan, sweep)
 result = run_parameter_sweep(build_plan, sweep)
 ```
 
-The Runner adapter may map Backend payloads into component-library plan builders, `SweepSpec`, `CompilePolicy`, `Executor`, and `AccelerationPolicy`, but the mapping layer must stay outside the Core authoring model.
+The Runner adapter may map persisted task payloads into component-library plan builders, `SweepSpec`, `CompilePolicy`, `Executor`, and `AccelerationPolicy`, but the mapping layer must stay outside the Core authoring model.
 
 ## Unsupported Shortcuts
 

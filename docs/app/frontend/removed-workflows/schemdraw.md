@@ -1,12 +1,12 @@
 ---
 title: "Schemdraw Workflow Removed"
 aliases:
-  - "Circuit Schemdraw UI"
-  - "Schemdraw Workspace"
+ - "Circuit Schemdraw UI"
+ - "Schemdraw Workspace"
 tags:
-  - diataxis/reference
-  - audience/team
-  - topic/removed-surface
+ - diataxis/reference
+ - audience/team
+ - topic/removed-surface
 status: archived
 owner: docs-team
 audience: team

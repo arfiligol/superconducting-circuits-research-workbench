@@ -1,13 +1,13 @@
 ---
 aliases:
-  - Transmission Line Ladder
-  - CPW LC Ladder
-  - Julia Core RLGCSpec
+ - Transmission Line Ladder
+ - CPW LC Ladder
+ - Julia Core RLGCSpec
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -29,12 +29,12 @@ The ladder contract is electrical. Human-facing placement such as top/bottom tra
 
 ```julia
 spec = RLGCSpec(
-    length_m=6.0e-3,
-    section_length_m=0.75e-3,
-    l_per_m_h=404.313e-9,
-    c_per_m_f=179.86e-12,
-    r_per_m_ohm=0.0,
-    g_per_m_s=0.0,
+  length_m=6.0e-3,
+  section_length_m=0.75e-3,
+  l_per_m_h=404.313e-9,
+  c_per_m_f=179.86e-12,
+  r_per_m_ohm=0.0,
+  g_per_m_s=0.0,
 )
 ```
 
@@ -72,8 +72,8 @@ section index starting at 1 from the head
 For `N` sections, the ladder has `N + 1` ordered nodes:
 
 ```text
-nodes[1]     = head
-nodes[2]     = first internal/tail-side node
+nodes[1]   = head
+nodes[2]   = first internal/tail-side node
 ...
 nodes[N + 1] = tail
 ```
@@ -107,13 +107,13 @@ Section-level RLGC overrides are part of the ladder contract for physical spans 
 
 ```julia
 line = build_lc_ladder_line!(
-    plan;
-    id="readout_line",
-    head=input_node,
-    tail=output_node,
-    spec=spec,
-    head_termination=:external,
-    tail_termination=:open,
+  plan;
+  id="readout_line",
+  head=input_node,
+  tail=output_node,
+  spec=spec,
+  head_termination=:external,
+  tail_termination=:open,
 )
 ```
 
@@ -177,13 +177,13 @@ Use a ladder with a grounded/coupled head and an open tail:
 
 ```julia
 qwr = build_lc_ladder_line!(
-    plan;
-    id="qwr",
-    head=qwr_ground,
-    tail=qwr_open,
-    spec=qwr_spec,
-    head_termination=:short,
-    tail_termination=:open,
+  plan;
+  id="qwr",
+  head=qwr_ground,
+  tail=qwr_open,
+  spec=qwr_spec,
+  head_termination=:short,
+  tail_termination=:open,
 )
 ```
 
@@ -200,13 +200,13 @@ Use an open-open ladder or capacitively coupled endpoints:
 
 ```julia
 filter = build_lc_ladder_line!(
-    plan;
-    id="purcell_filter",
-    head=filter_head,
-    tail=filter_tail,
-    spec=filter_spec,
-    head_termination=:open,
-    tail_termination=:open,
+  plan;
+  id="purcell_filter",
+  head=filter_head,
+  tail=filter_tail,
+  spec=filter_spec,
+  head_termination=:open,
+  tail_termination=:open,
 )
 ```
 
@@ -217,7 +217,7 @@ In a point-coupled model, add capacitors from readout input/output nodes to the 
 The builder records a semantic relation:
 
 ```text
-relation_type = :transmission_line_ladder
+relation_type =:transmission_line_ladder
 from = head
 to = tail
 through = line id

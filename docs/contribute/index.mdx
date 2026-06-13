@@ -1,11 +1,11 @@
 ---
 aliases:
-  - Contribute & Govern
-  - 貢獻與治理
+ - Contribute & Govern
+ - Contribution and Governance
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - topic/contributing
+ - diataxis/reference
+ - audience/contributor
+ - topic/contributing
 status: stable
 owner: docs-team
 audience: contributor
@@ -16,22 +16,22 @@ updated_by: codex
 title: Contribute & Govern
 description: Project contribution, agent skills, guardrails, and contributor registry.
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
 
-這一區給維護者與 agent 使用。一般產品/研究使用者通常先看 Workflows 或 Reference。
+This area is for maintainers and agents. General product/research users usually look at Workflows or Reference first.
 
 <CardGrid>
-  <LinkCard title="Contributing" href="./contributing/" description="開發環境、文件貢獻、Codex workflow 與 circuit diagram 規範。" />
-  <LinkCard title="Agent Skills" href="../reference/agent-skills/" description="跨工具 agent 參與專案前應同步的 reusable skill templates。" />
-  <LinkCard title="Guardrails" href="../reference/guardrails/" description="workspace Source of Truth、文件、架構、測試與 UI/UX 規則。" />
-  <LinkCard title="Contributors" href="../reference/contributors/" description="Frontmatter owner/updated_by 可引用的人名與貢獻者名錄。" />
+ <LinkCard title="Contributing" href="./contributing/" description="Development environment, file contributions, Codex workflow and circuit diagram specifications." />
+ <LinkCard title="Agent Skills" href="../reference/agent-skills/" description="Reusable skill templates that should be synchronized before cross-tool agents participate in the project." />
+ <LinkCard title="Guardrails" href="../reference/guardrails/" description="workspace Source of Truth, documentation, architecture, testing and UI/UX disciplines." />
+ <LinkCard title="Contributors" href="../reference/contributors/" description="Frontmatter owner/updated_by Citable names and contributors." />
 </CardGrid>
 
 <Aside type="caution" title="Guardrail path stays fixed">
-  Guardrails 的 source path 仍是 <code>docs/reference/guardrails/</code>。
-  Sidebar 會把它呈現在 Contribute & Govern，但檔案不可搬離 reference path。
+The source path for Guardrails is still <code>docs/reference/guardrails/</code>.
+Sidebar will render it in Contribute & Govern, but the file cannot be moved out of the reference path.
 </Aside>

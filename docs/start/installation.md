@@ -1,28 +1,28 @@
 ---
 aliases:
-  - "安裝環境"
+ - "Installation environment"
 tags:
-  - diataxis/how-to
-  - status/stable
-  - topic/getting-started
+ - diataxis/how-to
+ - status/stable
+ - topic/getting-started
 sidebar:
-  label: Installation
-  order: 20
+ label: Installation
+ order: 20
 ---
 
-# 安裝環境
+# Installation
 
-Start Here 的安裝路徑以 notebook research 為主：先讓 Pluto 可以載入本地 Julia packages，並讓 Julia Analysis Bridge 可以呼叫 Python Analysis Core。
+The Start Here installation path only does one thing: allows fresh checkout to start Pluto, and allows the notebook to load local Julia packages.
 
 ## Requirements
 
-研究主線需要：
+The main line of research requires:
 
 - Python 3.12+
 - `uv`
 - Julia 1.12+
 
-如果你要建置 public docs，再安裝：
+If you want to build public docs, then install:
 
 - Node.js 22+
 - npm
@@ -37,7 +37,7 @@ node --version
 npm --version
 ```
 
-## Install Python And Julia Research Dependencies
+## Install The Local Environment
 
 From the repository root:
 
@@ -45,19 +45,18 @@ From the repository root:
 uv sync --all-packages
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.instantiate()'
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.instantiate()'
-JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.instantiate()'
 ```
 
-這一步同時準備：
+This step prepares the two core packages needed for the first Pluto notebook:
 
-- `SuperconductingCircuitsCore`：Pluto 直接研究與 reusable circuit authoring。
-- `SuperconductingCircuitsVisualizer`：Pluto / report figure helpers。
-- `SuperconductingCircuitsAnalysisBridge`：Pluto-friendly bridge into Python Analysis Core。
-- `superconducting_circuits_analysis`：Python-owned fitting / matrix analysis package。
+- `SuperconductingCircuitsCore`: Pluto direct research and reusable circuit authoring.
+- `SuperconductingCircuitsVisualizer`:Pluto / report figure helpers.
 
-## Install Local Julia Packages For Pluto
+Python Analysis Core and Analysis Bridge are subsequent fitting / matrix-analysis workflows; the first Pluto notebook does not require understanding them first.
 
-Register Core, Visualizer, Analysis Bridge, and Revise in the Julia default environment that Pluto uses:
+## Register Local Packages For Pluto
+
+Register Core, Visualizer, Pluto, PlutoUI, and Revise in the Julia default environment that Pluto uses:
 
 ```bash
 npm run julia:dev-install
@@ -73,10 +72,8 @@ julia --startup-file=no --project=@v1.12
 using Revise
 using SuperconductingCircuitsCore
 using SuperconductingCircuitsVisualizer
-using SuperconductingCircuitsAnalysisBridge
 pathof(SuperconductingCircuitsCore)
 pathof(SuperconductingCircuitsVisualizer)
-pathof(SuperconductingCircuitsAnalysisBridge)
 ```
 
 Start Pluto from that same environment:
@@ -96,7 +93,7 @@ using Revise
 using SuperconductingCircuitsCore
 ```
 
-Add `using PlutoUI`, `using SuperconductingCircuitsVisualizer`, and `using SuperconductingCircuitsAnalysisBridge` only when the notebook needs UI helpers, PlotlyJS figures, or Python Analysis Core calls. The `Pkg.activate(...)` line disables Pluto's automatic per-notebook package manager for this local dev workflow.
+Add `using PlutoUI` and `using SuperconductingCircuitsVisualizer` when the notebook needs UI helpers or PlotlyJS figures. The `Pkg.activate(...)` line disables Pluto's automatic per-notebook package manager for this local dev workflow.
 
 If you launch Julia or Pluto with a custom environment, run the same install script against that environment, for example:
 
@@ -106,18 +103,16 @@ julia --startup-file=no --project=/path/to/env scripts/dev/install_julia_dev_pac
 
 Then replace the notebook activation path with that custom environment path.
 
-## Validate The Research Path
+## Validate The Pluto Path
 
-Run the focused notebook / analysis checks:
+Run the focused Julia checks:
 
 ```bash
-julia --startup-file=no --project=@v1.12 -e 'using Revise; using SuperconductingCircuitsCore; using SuperconductingCircuitsVisualizer; using SuperconductingCircuitsAnalysisBridge; println(pathof(SuperconductingCircuitsCore)); println(pathof(SuperconductingCircuitsVisualizer)); println(pathof(SuperconductingCircuitsAnalysisBridge))'
+julia --startup-file=no --project=@v1.12 -e 'using Revise; using SuperconductingCircuitsCore; using SuperconductingCircuitsVisualizer; println(pathof(SuperconductingCircuitsCore)); println(pathof(SuperconductingCircuitsVisualizer))'
 julia --project=core/julia/SuperconductingCircuitsCore -e 'using Pkg; Pkg.test()'
 julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.test()'
-uv run --package superconducting-circuits-analysis pytest tests/core/analysis -q
-JULIA_PYTHONCALL_EXE="$PWD/.venv/bin/python" julia --project=core/julia/SuperconductingCircuitsAnalysisBridge -e 'using Pkg; Pkg.test()'
 ```
 
 ## Next Step
 
-Run [First Pluto Notebook](first-pluto-notebook.md), then read [Prototype Path](prototype-path.md) when you need to decide which research code should become reusable.
+Run [First Pluto Notebook](first-pluto-notebook.md), then read [Reusable Circuit Design](reusable-circuit-design.md).

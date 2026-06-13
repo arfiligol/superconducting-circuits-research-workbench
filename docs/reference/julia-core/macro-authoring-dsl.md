@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Macro Authoring DSL
-  - Julia Core Macro DSL
+ - Macro Authoring DSL
+ - Julia Core Macro DSL
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -33,12 +33,12 @@ The macro layer is not a separate netlist language. It records source provenance
 
 ```text
 @circuit_component / @circuit
-  -> canonical Julia Core API
-  -> CircuitPlan
-  -> EngineeringGraph
-  -> SchematicLayoutIntent
-  -> SchematicExportSpec
-  -> compiler netlist
+ -> canonical Julia Core API
+ -> CircuitPlan
+ -> EngineeringGraph
+ -> SchematicLayoutIntent
+ -> SchematicExportSpec
+ -> compiler netlist
 ```
 
 `@circuit_component` and `@circuit` serve different purposes. A component macro defines a reusable template. A circuit macro instantiates one complete design point that can be validated, compiled, and simulated.
@@ -56,27 +56,27 @@ The macro layer is not a separate netlist language. It records source provenance
 
 Only `pin`, line taps derived from `line`, and `probe` expose electrical endpoints. An `anchor` is not electrically connectable. If a reference point must accept a capacitor, port, transmission-window attachment, or other electrical relation, model it as a `pin`, line tap, or `probe`.
 
-Line-like interfaces are declared with `line :main` or `line(:main)`. The `tap` accessor is not a declaration keyword; it retrieves an endpoint on a component line after an instance exists.
+Line-like interfaces are declared with `line:main` or `line(:main)`. The `tap` accessor is not a declaration keyword; it retrieves an endpoint on a component line after an instance exists.
 
 Component instances expose their public interface through stable accessors:
 
 ```julia
-pin(instance, :name)
+pin(instance,:name)
 tap(instance, distance_from_head)
-line_tap(instance; line = :main, at_m = distance_from_head)
-probe(instance, :name)
-anchor(instance, :name)
+line_tap(instance; line =:main, at_m = distance_from_head)
+probe(instance,:name)
+anchor(instance,:name)
 ```
 
-The shorthand `tap(instance, distance_from_head)` is valid only when the component exposes one unambiguous default line. Components with multiple exposed lines must use `line_tap(instance; line = :name, at_m = distance_from_head)`.
+The shorthand `tap(instance, distance_from_head)` is valid only when the component exposes one unambiguous default line. Components with multiple exposed lines must use `line_tap(instance; line =:name, at_m = distance_from_head)`.
 
 ```julia
 transmission_path! = @circuit_component "transmission_path" begin
-    pin :head
-    pin :tail
-    line :main
+  pin:head
+  pin:tail
+  line:main
 
-    parameter(:length_m; unit = "m")
+  parameter(:length_m; unit = "m")
 end
 ```
 
@@ -88,26 +88,26 @@ Use `@circuit_component` when a circuit fragment is meant to become reusable:
 
 ```julia
 lc_resonator! = @circuit_component "lc_resonator" begin
-    pin :signal
+  pin:signal
 
-    parameter(:capacitance; unit = "F")
-    parameter(:inductance; unit = "H")
+  parameter(:capacitance; unit = "F")
+  parameter(:inductance; unit = "H")
 
-    shunt_capacitor!(
-        id = :Cres,
-        at = pin(:signal),
-        capacitance = capacitance,
-        role = :resonator_capacitance,
-        label = "Cres",
-    )
+  shunt_capacitor!(
+    id =:Cres,
+    at = pin(:signal),
+    capacitance = capacitance,
+    role =:resonator_capacitance,
+    label = "Cres",
+  )
 
-    shunt_inductor!(
-        id = :Lres,
-        at = pin(:signal),
-        inductance = inductance,
-        role = :resonator_inductance,
-        label = "Lres",
-    )
+  shunt_inductor!(
+    id =:Lres,
+    at = pin(:signal),
+    inductance = inductance,
+    role =:resonator_inductance,
+    label = "Lres",
+  )
 end
 ```
 
@@ -119,21 +119,21 @@ Use `@circuit` for a complete system-level design:
 
 ```julia
 plan = @circuit "one-port-lc" begin
-    drive = external_node("drive")
+  drive = external_node("drive")
 
-    resonator = lc_resonator!(
-        id = :res,
-        signal = drive,
-        capacitance = C,
-        inductance = L,
-    )
+  resonator = lc_resonator!(
+    id =:res,
+    signal = drive,
+    capacitance = C,
+    inductance = L,
+  )
 
-    port(:drive_port) do
-        index = 1
-        endpoint = pin(resonator, :signal)
-        resistance = 50.0
-        role = :reflection
-    end
+  port(:drive_port) do
+    index = 1
+    endpoint = pin(resonator,:signal)
+    resistance = 50.0
+    role =:reflection
+  end
 end
 ```
 
@@ -145,30 +145,30 @@ This block creates one runnable `CircuitPlan`. Reuse belongs in the `lc_resonato
 
 ```julia
 plan = @circuit "capacitive-probe" begin
-    target = external_node("target")
-    probe_node = external_node("probe")
+  target = external_node("target")
+  probe_node = external_node("probe")
 
-    shunt_capacitor!(
-        id = :Ctarget,
-        at = target,
-        capacitance = Ctarget,
-        role = :node_capacitance,
-    )
+  shunt_capacitor!(
+    id =:Ctarget,
+    at = target,
+    capacitance = Ctarget,
+    role =:node_capacitance,
+  )
 
-    couple_capacitive!(
-        id = :Cprobe,
-        from = probe_node,
-        to = target,
-        capacitance = Cprobe,
-        role = :probe_coupling,
-    )
+  couple_capacitive!(
+    id =:Cprobe,
+    from = probe_node,
+    to = target,
+    capacitance = Cprobe,
+    role =:probe_coupling,
+  )
 
-    port(:probe_port) do
-        index = 1
-        endpoint = probe_node
-        resistance = 50.0
-        role = :probe
-    end
+  port(:probe_port) do
+    index = 1
+    endpoint = probe_node
+    resistance = 50.0
+    role =:probe
+  end
 end
 ```
 
@@ -180,52 +180,52 @@ Port `role` values are semantic metadata. A role does not create hidden componen
 
 ```julia
 plan = @circuit "readout-qwr-mtl" begin
-    input = external_node("input")
-    output = external_node("output")
-    qwr_open = external_node("qwr_open")
+  input = external_node("input")
+  output = external_node("output")
+  qwr_open = external_node("qwr_open")
 
-    readout = transmission_line!(
-        id = :readout,
-        head = input,
-        tail = output,
-        spec = readout_spec,
-        head_termination = :external,
-        tail_termination = :external,
-        role = :readout_line,
-    )
+  readout = transmission_line!(
+    id =:readout,
+    head = input,
+    tail = output,
+    spec = readout_spec,
+    head_termination =:external,
+    tail_termination =:external,
+    role =:readout_line,
+  )
 
-    qwr = quarter_wave_resonator!(
-        id = :qwr,
-        grounded_head = ground(),
-        open_tail = qwr_open,
-        spec = qwr_spec,
-        role = :readout_resonator,
-    )
+  qwr = quarter_wave_resonator!(
+    id =:qwr,
+    grounded_head = ground(),
+    open_tail = qwr_open,
+    spec = qwr_spec,
+    role =:readout_resonator,
+  )
 
-    window = couple_transmission_window!(
-        id = :readout_qwr_window,
-        line1 = readout.line,
-        line2 = qwr.line,
-        start1 = 1.2e-3,
-        start2 = 0.0,
-        length = 500e-6,
-        model = window_model,
-        role = :distributed_readout_coupling,
-    )
+  window = couple_transmission_window!(
+    id =:readout_qwr_window,
+    line1 = readout.line,
+    line2 = qwr.line,
+    start1 = 1.2e-3,
+    start2 = 0.0,
+    length = 500e-6,
+    model = window_model,
+    role =:distributed_readout_coupling,
+  )
 
-    port(:input_port) do
-        index = 1
-        endpoint = input
-        resistance = 50.0
-        role = :readout_input
-    end
+  port(:input_port) do
+    index = 1
+    endpoint = input
+    resistance = 50.0
+    role =:readout_input
+  end
 
-    port(:output_port) do
-        index = 2
-        endpoint = output
-        resistance = 50.0
-        role = :readout_output
-    end
+  port(:output_port) do
+    index = 2
+    endpoint = output
+    resistance = 50.0
+    role =:readout_output
+  end
 end
 ```
 
@@ -237,69 +237,69 @@ Reusable components, distributed models, and primitive relations may coexist in 
 
 ```julia
 floating_lc! = @circuit_component "floating_lc" begin
-    pin :island1
-    pin :island2
-    probe :differential_mode
+  pin:island1
+  pin:island2
+  probe:differential_mode
 
-    parameter(:capacitance; unit = "F")
-    parameter(:inductance; unit = "H")
+  parameter(:capacitance; unit = "F")
+  parameter(:inductance; unit = "H")
 
-    couple_capacitive!(
-        id = :Cq,
-        from = pin(:island1),
-        to = pin(:island2),
-        capacitance = capacitance,
-        role = :floating_capacitance,
-    )
+  couple_capacitive!(
+    id =:Cq,
+    from = pin(:island1),
+    to = pin(:island2),
+    capacitance = capacitance,
+    role =:floating_capacitance,
+  )
 
-    series_inductor!(
-        id = :Lq,
-        from = pin(:island1),
-        to = pin(:island2),
-        inductance = inductance,
-        role = :floating_inductance,
-    )
+  series_inductor!(
+    id =:Lq,
+    from = pin(:island1),
+    to = pin(:island2),
+    inductance = inductance,
+    role =:floating_inductance,
+  )
 end
 
 plan = @circuit "floating-lc-xy" begin
-    q = floating_lc!(
-        id = :q,
-        capacitance = Cq,
-        inductance = Lq,
-    )
+  q = floating_lc!(
+    id =:q,
+    capacitance = Cq,
+    inductance = Lq,
+  )
 
-    xy = transmission_line!(
-        id = :xy,
-        head = external_node("xy_input"),
-        tail = external_node("xy_open"),
-        spec = xy_spec,
-        head_termination = :external,
-        tail_termination = :open,
-        role = :xy_line,
-    )
+  xy = transmission_line!(
+    id =:xy,
+    head = external_node("xy_input"),
+    tail = external_node("xy_open"),
+    spec = xy_spec,
+    head_termination =:external,
+    tail_termination =:open,
+    role =:xy_line,
+  )
 
-    couple_capacitive!(
-        id = :Cxy1,
-        from = tap(xy, 1.0e-3),
-        to = pin(q, :island1),
-        capacitance = Cxy1,
-        role = :xy_to_qubit_coupling,
-    )
+  couple_capacitive!(
+    id =:Cxy1,
+    from = tap(xy, 1.0e-3),
+    to = pin(q,:island1),
+    capacitance = Cxy1,
+    role =:xy_to_qubit_coupling,
+  )
 
-    couple_capacitive!(
-        id = :Cxy2,
-        from = tap(xy, 1.0e-3),
-        to = pin(q, :island2),
-        capacitance = Cxy2,
-        role = :xy_to_qubit_coupling,
-    )
+  couple_capacitive!(
+    id =:Cxy2,
+    from = tap(xy, 1.0e-3),
+    to = pin(q,:island2),
+    capacitance = Cxy2,
+    role =:xy_to_qubit_coupling,
+  )
 
-    port(:xy_port) do
-        index = 1
-        endpoint = pin(xy, :head)
-        resistance = 50.0
-        role = :xy_drive
-    end
+  port(:xy_port) do
+    index = 1
+    endpoint = pin(xy,:head)
+    resistance = 50.0
+    role =:xy_drive
+  end
 end
 ```
 
@@ -323,64 +323,64 @@ An unconnected `:external` terminal is a dangling interface endpoint and validat
 
 ```julia
 begin
-    plan = @circuit "readout-qwr-mtl" begin
-        input = external_node("input")
-        output = external_node("output")
+  plan = @circuit "readout-qwr-mtl" begin
+    input = external_node("input")
+    output = external_node("output")
 
-        readout = transmission_line!(
-            id = :readout,
-            head = input,
-            tail = output,
-            spec = readout_spec,
-            head_termination = :external,
-            tail_termination = :external,
-            role = :readout_line,
-        )
+    readout = transmission_line!(
+      id =:readout,
+      head = input,
+      tail = output,
+      spec = readout_spec,
+      head_termination =:external,
+      tail_termination =:external,
+      role =:readout_line,
+    )
 
-        port(:input_port) do
-            index = 1
-            endpoint = input
-            resistance = 50.0
-            role = :readout_input
-        end
-
-        port(:output_port) do
-            index = 2
-            endpoint = output
-            resistance = 50.0
-            role = :readout_output
-        end
+    port(:input_port) do
+      index = 1
+      endpoint = input
+      resistance = 50.0
+      role =:readout_input
     end
 
-    @hbintent plan begin
-        pump_axis(:pump; frequency_parameter = :pump_frequency)
+    port(:output_port) do
+      index = 2
+      endpoint = output
+      resistance = 50.0
+      role =:readout_output
+    end
+  end
 
-        source_slot(:pump_in) do
-            role = :pump
-            port = :input_port
-            mode = (1,)
-            current_parameter = :pump_current
-        end
+  @hbintent plan begin
+    pump_axis(:pump; frequency_parameter =:pump_frequency)
 
-        sparameter(:s21) do
-            outputmode = (0,)
-            outputport = :output_port
-            inputmode = (0,)
-            inputport = :input_port
-        end
-
-        solver_controls() do
-            n_pump_harmonics = 1
-            n_modulation_harmonics = 1
-            returnS = true
-            returnZ = true
-            returnQE = true
-            returnCM = true
-            keyedarrays = false
-        end
+    source_slot(:pump_in) do
+      role =:pump
+      port =:input_port
+      mode = (1,)
+      current_parameter =:pump_current
     end
 
-    plan
+    sparameter(:s21) do
+      outputmode = (0,)
+      outputport =:output_port
+      inputmode = (0,)
+      inputport =:input_port
+    end
+
+    solver_controls() do
+      n_pump_harmonics = 1
+      n_modulation_harmonics = 1
+      returnS = true
+      returnZ = true
+      returnQE = true
+      returnCM = true
+      keyedarrays = false
+    end
+  end
+
+  plan
 end
 ```
 

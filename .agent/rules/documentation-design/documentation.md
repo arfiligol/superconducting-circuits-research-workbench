@@ -1,11 +1,12 @@
 ## Documentation Design
-- **Standards**: Diataxis + Frontmatter/Tags + 核心規則（見 `standards.md`）
-- **Starlight Native Style**: 目前契約優先、happy path、examples、Starlight-native 呈現節奏（見 `starlight-native-style.md`）
-- **API Reference**: generated API docs ownership、docstring style、Sphinx/Documenter build boundary（見 `api-reference.md`）
-- **Macro Style / Information Layout**: 宏觀頁面編排、視覺節奏、overview/index 規則（見 `information-layout.md`）
-- **Micro Style / Writing & Visual Elements**: 語氣、段落寫法與視覺元素使用（見 `style.md`）
-- **Maintenance**: 單語來源樹 + Frontmatter 更新 + Starlight build / route checks（見 `maintenance.md`）
-- **Physics Concepts**: 教學定位、章節骨架、跨文件引用規範（見 `explanation-physics.md`）
-- **Page Reference Specs**: App frontend page 技術文件的固定骨架、命名、引用與驗收規範（見 `page-reference-specs.md`）
-- **Architecture Term**: 本專案文件架構的正式名稱是 `Astro + Starlight zh-TW Build`
-- 詳細規範請以各子文件為準。
+- **Standards**: Diataxis + Frontmatter/Tags + Core Rules (see `standards.md`)
+- **Starlight Native Style**: Current contract priority, happy path, examples, Starlight-native rendering rhythm (see `starlight-native-style.md`)
+- **API Reference**: generated API docs ownership, docstring style, Sphinx/Documenter build boundary (see `api-reference.md`)
+- **Macro Style / Information Layout**: Macro page layout, visual rhythm, overview/index rules (see `information-layout.md`)
+- **Micro Style / Writing & Visual Elements**: Tone, paragraph writing and use of visual elements (see `style.md`)
+- **Maintenance**: Monolingual source tree + Frontmatter update + Starlight build / route checks (see `maintenance.md`)
+- **Physics Concepts**: Teaching positioning, chapter skeleton, cross-document reference specifications (see `explanation-physics.md`)
+- **Page Reference Specs**: Fixed skeleton, naming, citation and acceptance specifications of App frontend page technical documents (see `page-reference-specs.md`)
+- **Language**: editable docs source is English-only; generated/staging output is excluded from direct editing.
+- **Architecture Term**: The official name of this project file architecture is `Astro + Starlight English Docs Build`
+- Please refer to each sub-document for detailed specifications.

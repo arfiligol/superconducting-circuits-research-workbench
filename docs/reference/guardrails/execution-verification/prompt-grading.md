@@ -1,13 +1,13 @@
 ---
 aliases:
-  - "Task Scope Sizing"
-  - "Prompt Grading"
-  - "Prompt 分級"
+ - "Task Scope Sizing"
+ - "Prompt Grading"
+ - "Prompt rating"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/execution
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/execution
 status: stable
 owner: docs-team
 audience: team

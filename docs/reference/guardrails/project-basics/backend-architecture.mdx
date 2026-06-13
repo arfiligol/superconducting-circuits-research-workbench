@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Backend Architecture
-  - 後端架構藍圖
+ - Backend Architecture
+ - Backend Architecture Blueprint
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/project-basics
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/project-basics
 status: stable
 owner: docs-team
 audience: contributor
-scope: 定義 Python Backend control/data plane、Runner protocol 與 TraceStore publication 邊界。
+scope: Define Python Backend control/data plane, Runner protocol and TraceStore publication boundaries.
 version: v2.0.1
 last_updated: 2026-05-28
 updated_by: codex
@@ -20,13 +20,13 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Backend Architecture
 
-Python Backend 的目標不是單純 CRUD API，也不是 heavy simulation runtime。
-它是 control plane + data plane：負責 auth/session/workspace、metadata、task lifecycle、Runner protocol、TraceStore publication、provenance 與 frontend/notebook data APIs。
+The goal of Python Backend is not a pure CRUD API, nor a heavy simulation runtime.
+It is the control plane + data plane: it owns auth/session/workspace, metadata, task lifecycle, Runner protocol, TraceStore publication, provenance, and frontend/notebook data APIs.
 
 <Aside type="note" title="Use this page for boundary decisions">
 
-當問題在問「這段 backend code 應該放哪一層、誰可以依賴誰、哪裡才是 owner」時，先回到本頁。
-這頁不是 API endpoint 清單，而是 backend 內部責任分層的藍圖。
+When the question asks "Which layer should this backend code be placed on, who can rely on whom, and where is the owner?", return to this page first.
+This page is not a list of API endpoints, but a blueprint for the layering of responsibilities within the backend.
 
 </Aside>
 
@@ -61,8 +61,8 @@ Python Backend 的目標不是單純 CRUD API，也不是 heavy simulation runti
 
 <Aside type="caution" title="Common failure mode">
 
-最常見的 backend drift 不是少一層 abstraction，而是把 UI state、transport detail、heavy compute 或 unchecked Runner output 偷塞進 services。
-一旦出現這種情況，先回來檢查 layer boundary，而不是只補 helper。
+The most common backend drift is not to remove a layer of abstraction, but to sneak UI state, transport detail, heavy compute or unchecked Runner output into services.
+Once this happens, go back and check the layer boundary first instead of just filling in the helper.
 
 </Aside>
 
@@ -71,43 +71,43 @@ Python Backend 的目標不是單純 CRUD API，也不是 heavy simulation runti
 ```text
 app/backend/app_backend/
 ├── api/
-│   ├── router.py
-│   ├── routers/
-│   ├── schemas/
-│   └── presenters/
+│  ├── router.py
+│  ├── routers/
+│  ├── schemas/
+│  └── presenters/
 ├── services/
 ├── domain/
 └── infrastructure/
-    ├── runtime.py
-    ├── repositories/
-    ├── persistence/
-    ├── tracestore/
-    └── runner/
+  ├── runtime.py
+  ├── repositories/
+  ├── persistence/
+  ├── tracestore/
+  └── runner/
 ```
 
 ## Layer Boundaries
 
 | Layer | Owns | Must not own |
 | --- | --- | --- |
-| API | request parsing、auth gate、service invocation、response mapping、transport error translation | business workflow、persistence details、heavy compute |
-| Services | use case orchestration、repository coordination、task submission、Runner state transitions、publication flow、framework-agnostic application errors | FastAPI transport exceptions、web concerns |
-| Domain | backend-owned models for auth/session/task/storage adapters and publication records | HTTP schema concerns、framework bootstrapping |
-| Infrastructure | persistence / TraceStore / Runner protocol adapters、composition root wiring | heavy simulation execution、frontend state |
+| API |request parsing, auth gate, service invocation, response mapping, transport error translation|business workflow, persistence details, heavy compute|
+| Services |use case orchestration, repository coordination, task submission, Runner state transitions, publication flow, framework-agnostic application errors|FastAPI transport exceptions, web concerns|
+| Domain | backend-owned models for auth/session/task/storage adapters and publication records |HTTP schema concerns, framework bootstrapping|
+| Infrastructure |persistence / TraceStore / Runner protocol adapters, composition root wiring|heavy simulation execution, frontend state|
 
 <details class="docs-disclosure docs-disclosure--info">
 <summary>Why the table is enough here</summary>
 
-本頁要先讓讀者快速判斷 owner boundary。
-若需要更細的 transport / request-response 規格，應去看 `App / Backend` 的對應 reference，而不是在這頁重複 endpoint-level 細節。
+This page should first allow readers to quickly determine the owner boundary.
+If you need more detailed transport / request-response specifications, you should check the corresponding reference of `App / Backend` instead of repeating the endpoint-level details on this page.
 
 </details>
 
 ## Dependency Direction
 
-1. API 依賴 inward services/domain
-2. services 依賴 abstractions 與 infrastructure 注入物
-3. infrastructure 依賴外部系統與 runtime
-4. backend 可依賴 framework-neutral Python contract packages only when needed
+1. API depends on inward services/domain
+2. Services depend on abstractions and infrastructure injectors
+3. Infrastructure relies on external systems and runtime
+4. backend may depend on framework-neutral Python contract packages only when needed
 5. Julia Core and Julia Runner do not depend on backend internals; they communicate through HTTP/JSON task protocol and local filesystem staging
 
 ## Runner Protocol

@@ -1,13 +1,13 @@
 ---
 title: "Analysis Workbench"
 aliases:
-  - "Application Analysis Workbench"
-  - "Fitting Workbench"
+ - "Application Analysis Workbench"
+ - "Fitting Workbench"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: stable
 owner: docs-team
 audience: team
@@ -27,17 +27,17 @@ It does not run heavy compute in the frontend, Electron main process, or Backend
 
 ```text
 Application Analysis Workbench
-    -> Python Backend AnalysisRequestV1
-    -> persisted Task
-    -> Julia Runner
-    -> local Zarr staging
-    -> Backend publication
-    -> TraceStore / ResultView
+  -> Python Backend AnalysisRequestV1
+  -> persisted Task
+  -> Julia Runner
+  -> local Zarr staging
+  -> Backend publication
+  -> TraceStore / ResultView
 ```
 
 The workbench builds product-grade analysis requests, submits them to the Backend, monitors task state, and renders published results through the shared task/result surfaces.
 
-See [Product Async Contracts](../../../reference/architecture/product-async-contracts.md) for the product request, `Analysis Family Registry`, Runner envelope, manifest, and ResultView contract.
+See [Product Async Contracts](../../architecture/contracts/product-async-contracts.md) for the product request, `Analysis Family Registry`, Runner envelope, manifest, and ResultView contract.
 
 ## Responsibilities
 
@@ -73,25 +73,25 @@ It must not own:
 
 ```json
 {
-  "schema_version": "app.analysis_request.v1",
-  "dataset_id": "ds_001",
-  "design_id": "design_001",
-  "analysis_family": "resonance_fit",
-  "selection": {
-    "trace_ids": ["trace_001"],
-    "result_handles": [],
-    "collection_key": null
-  },
-  "parameters": {},
-  "output_target": {
-    "mode": "existing_design",
-    "design_id": "design_001"
-  }
+ "schema_version": "app.analysis_request.v1",
+ "dataset_id": "ds_001",
+ "design_id": "design_001",
+ "analysis_family": "resonance_fit",
+ "selection": {
+  "trace_ids": ["trace_001"],
+  "result_handles": [],
+  "collection_key": null
+ },
+ "parameters": {},
+ "output_target": {
+  "mode": "existing_design",
+  "design_id": "design_001"
+ }
 }
 ```
 
 `AnalysisRequestV1` is a product request. The workbench must not build `RunnerTaskEnvelopeV1`, manifest locators, or staging paths.
-The canonical `analysis_family` values are defined in [Analysis Family Registry](../../../reference/architecture/product-async-contracts.md#analysis-family-registry).
+The canonical `analysis_family` values are defined in [Analysis Family Registry](../../architecture/contracts/product-async-contracts.md#analysis-family-registry).
 
 ## UI States
 
@@ -125,6 +125,6 @@ The canonical `analysis_family` values are defined in [Analysis Family Registry]
 * [Frontend Reference](../index.md)
 * [Task Management](../shared-workflow/task-management.md)
 * [Datasets & Results](../../backend/datasets-results.mdx)
-* [Product Async Contracts](../../../reference/architecture/product-async-contracts.md)
+* [Product Async Contracts](../../architecture/contracts/product-async-contracts.md)
 * [ResultView API](../../backend/result-view-api.md)
-* [Simulation Interface Boundaries](../../../reference/architecture/simulation-interface-boundaries.md)
+* [Simulation Interface Boundaries](../../architecture/contracts/simulation-interface-boundaries.md)

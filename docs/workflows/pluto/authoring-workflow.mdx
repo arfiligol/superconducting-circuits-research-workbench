@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Pluto Authoring Workflow
-  - Pluto Julia Core Authoring
+ - Pluto Authoring Workflow
+ - Pluto Julia Core Authoring
 tags:
-  - diataxis/how-to
-  - status/stable
-  - topic/julia-core
-  - topic/pluto
+ - diataxis/how-to
+ - status/stable
+ - topic/julia-core
+ - topic/pluto
 status: stable
 owner: docs-team
 audience: user
@@ -15,8 +15,8 @@ version: v1.1.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Authoring Workflow
-  order: 20
+ label: Authoring Workflow
+ order: 20
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -31,20 +31,20 @@ Build and inspect a circuit through the Julia Core authoring model:
 
 ```text
 Component Library plan builder
-        |
-        v
+    |
+    v
 CircuitPlan
-        |
-        v
+    |
+    v
 Validation
-        |
-        v
+    |
+    v
 Compiler
-        |
-        v
+    |
+    v
 JosephsonCompiledCircuit
-        |
-        v
+    |
+    v
 Simulation / Analysis
 ```
 
@@ -131,9 +131,9 @@ using SuperconductingCircuitsCore
 using MyLabComponents
 
 params = (
-    qwr_length_mm = 5.0,
-    coupling_fF = 3.0,
-    flux_phi0 = 0.1,
+  qwr_length_mm = 5.0,
+  coupling_fF = 3.0,
+  flux_phi0 = 0.1,
 )
 ```
 

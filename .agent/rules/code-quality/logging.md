@@ -2,13 +2,13 @@
 - **No `print()` in `core/`**: Use `logging` module only.
 - **`print()` allowed ONLY in `scripts/`**: For final developer-facing helper output.
 - **Setup**:
-    - Import: `import logging; logger = logging.getLogger(__name__)`
-    - Configure in scripts when useful: `from core.shared.logging import setup_logging`
-    - **Handler**: Use `RichHandler` only as developer-facing script output, not as a product CLI contract.
+  - Import: `import logging; logger = logging.getLogger(__name__)`
+  - Configure in scripts when useful: `from superconducting_circuits_analysis.infrastructure.logging import setup_logging`
+  - **Handler**: Use `RichHandler` only as developer-facing script output, not as a product CLI contract.
 - **Levels**:
-    - `logger.debug()`: Development details.
-    - `logger.info()`: Normal flow (e.g., "Processing file...").
-    - `logger.warning()`: Potential issues (e.g., "File not found").
-    - `logger.error()`: Errors that allow continuation.
-    - `logger.critical()`: Fatal errors.
+  - `logger.debug()`: Development details.
+  - `logger.info()`: Normal flow (e.g., "Processing file...").
+  - `logger.warning()`: Potential issues (e.g., "File not found").
+  - `logger.error()`: Errors that allow continuation.
+  - `logger.critical()`: Fatal errors.
 - **Never**: Use f-string in logger. Use `logger.info("Value: %s", value)`.

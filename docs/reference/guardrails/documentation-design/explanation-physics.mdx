@@ -1,17 +1,17 @@
 ---
 aliases:
-  - "Physics Concepts Guardrail"
-  - "Physics Concepts 物理規範"
+ - "Physics Concepts Guardrail"
+ - "Physics Concepts Physics Specifications"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/documentation
-  - topic/physics
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
+ - topic/physics
 status: stable
 owner: docs-team
 audience: team
-scope: "Concepts/Physics 的知識架構、分層規則與寫作規範"
+scope: "Knowledge structure, hierarchical rules and writing specifications of Concepts/Physics"
 version: v1.1.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -21,32 +21,32 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Physics Concepts
 
-本文件定義 `docs/concepts/physics/` 的知識架構與寫作規範。
+This document defines the knowledge structure and writing specifications of `docs/concepts/physics/`.
 
 ---
 
-## 教學定位（必須同時成立）
+## Teaching positioning (must be established at the same time)
 
-1. **主幹課程（Backbone）**
-   - 從基礎物理一路連到超導量子電路工程語境。
-   - 目標讀者：修過四大力學的物理系學生（含複習需求）。
-2. **可引用節點（Reusable nodes）**
-   - 每篇可被 Tutorial / How-to / Reference 單獨引用。
-   - 讀者不需先讀完整套內容才能進入特定主題。
+1. **Backbone**
+- From basic physics all the way to the engineering context of superconducting quantum circuits.
+- Target readers: Physics students who have studied the four major mechanics (including review requirements).
+2. **Reusable nodes**
+- Each article can be cited individually by Tutorial / How-to / Reference.
+- Readers do not need to read the entire set before entering a specific topic.
 
-<Aside type="caution" title="Diataxis 邊界">
+<Aside type="caution" title="Diataxis boundary">
 
-Physics Concepts 只回答「為什麼/如何理解」，不提供命令式操作步驟（那是 Workflows）。
+Physics Concepts only answers "why/how to understand" and does not provide imperative operation steps (that is Workflows).
 
 </Aside>
 
 ---
 
-## 知識架構（A–J Roadmap）
+## Knowledge Architecture (A–J Roadmap)
 
-`concepts/physics/` 的內容覆蓋範圍以下列 A–I 區塊為準。每個區塊代表一個知識領域；工具使用（G 區塊的操作面）與量測工程（H 區塊的操作面）屬於 Workflows/Reference，不收錄在 Physics Concepts 中。
+Content coverage of `concepts/physics/` is based on the following blocks A–I. Each block represents a knowledge area; tool usage (the operation surface of the G block) and measurement engineering (the operation surface of the H block) belong to Workflows/Reference and are not included in Physics Concepts.
 
-| 區塊 | 領域 | 節點類型 |
+| Block | Domain | Node Type |
 |------|------|----------|
 | **A** | Foundations: The Four Pillars | Principle |
 | **B** | Electromagnetics to Circuits | Model |
@@ -54,140 +54,140 @@ Physics Concepts 只回答「為什麼/如何理解」，不提供命令式操�
 | **D** | Josephson Physics & Nonlinearity | Device / Model |
 | **E** | Quantum Circuits Formalism | Model / Method |
 | **F** | Core Building Blocks | Device |
-| **G** | Design & Simulation (原理面) | Model / Method |
-| **H** | Cryogenic RF Engineering (原理面) | Principle / Model |
-| **I** | Experiments & Protocols (原理面) | Model / Method |
+| **G** | Design & Simulation (Principle) | Model / Method |
+| **H** | Cryogenic RF Engineering (Principle) | Principle / Model |
+| **I** | Experiments & Protocols (principle) | Model / Method |
 
-> **J. End-to-End Workflows** 歸屬於 `docs/workflows/`，不放在 Physics Concepts。
+> **J. End-to-End Workflows** belongs to `docs/workflows/`, not Physics Concepts.
 
-### Overview 頁面
+### Overview page
 
-`concepts/physics/index.md` 必須包含完整的 A–I 路線圖總覽，列出所有區塊與子主題。已有內容的子主題以超連結呈現；尚未建立的以純文字標記。
+`concepts/physics/index.md` must contain a complete A–I roadmap overview, listing all blocks and subtopics. Subtopics with existing content are presented as hyperlinks; those that have not yet been created are marked with plain text.
 
 ---
 
-## 三層分層規則
+## Three-layer hierarchical rules
 
 ```
 concepts/physics/
-├── index.md                           ← Overview（A–I 總覽）
-├── foundations/                        ← L1：A 區塊
-│   ├── index.md                       ← L1 Landing
-│   ├── lagrangian-mechanics.md        ← L2：A1 主題
-│   └── electromagnetic-energy.md      ← L2：A2 主題
-├── superconductivity/                 ← L1：C 區塊
-│   ├── index.md
-│   ├── basics.md                      ← L2：C1
-│   ├── loss-channels/                 ← L2→L3（當 C3 太大時拆分）
-│   │   ├── index.md
-│   │   ├── dielectric.md              ← L3
-│   │   └── quasiparticles.md          ← L3
-│   └── ...
+├── index.md              ← Overview (A–I overview)
+├── foundations/ ← L1:A block
+│  ├── index.md            ← L1 Landing
+│ ├── lagrangian-mechanics.md ← L2:A1 Theme
+│ └── electromagnetic-energy.md ← L2:A2 Topic
+├── superconductivity/ ← L1: C block
+│  ├── index.md
+│ ├── basics.md ← L2:C1
+│ ├── loss-channels/ ← L2->L3 (split when C3 is too large)
+│  │  ├── index.md
+│  │  ├── dielectric.md       ← L3
+│  │  └── quasiparticles.md     ← L3
+│  └── ...
 ```
 
-### 規則
+### rule
 
-1. **L1（Sidebar 頂層子目錄）** = A–I 的大類領域（Foundations, EM-to-Circuits, Superconductivity...）
-   - 每個 L1 是一個子目錄，含一個 `index.md` Landing Page
-   - **只有當該 L1 底下有至少一篇 L2 頁面時，才建立該 L1 目錄與 Nav 項目**
-2. **L2（子目錄內的頁面）** = 各大類底下的具體主題（A1, A2, C1, C2, C3...）
-   - 預設每個主題一篇文件
-3. **L3（選擇性細分）** = 只有當 L2 頁面內容過多（建議 > 3000 字）時，才可拆分為子目錄
-   - L3 目錄需包含自己的 `index.md`
-   - 不建議超過三層
+1. **L1 (Sidebar top-level subdirectory)** = A–I’s major categories (Foundations, EM-to-Circuits, Superconductivity...)
+- Each L1 is a subdirectory containing a `index.md` Landing Page
+- **Only when there is at least one L2 page under the L1, the L1 directory and Nav project will be created**
+2. **L2 (pages in subdirectories)** = specific topics under each major category (A1, A2, C1, C2, C3...)
+- Default is one document per topic
+3. **L3 (Selective Segmentation)** = Split into subdirectories only when the L2 page has too much content (recommended > 3000 words)
+- The L3 directory needs to contain its own `index.md`
+- Not recommended to exceed three layers
 
 ---
 
-## 內容邊界
+## Content boundaries
 
-### Physics 收錄
+### Physics included
 
-- 物理原理（why）
-- 數學模型與推導（how it works）
-- 工程映射：將物理量映射到電路設計量（元件值、可觀測量）
-- 限制與近似條件
+-Principles of physics (why)
+- Mathematical models and derivation (how it works)
+- Engineering mapping: mapping physical quantities to circuit design quantities (component values, observable quantities)
+- Limitations and approximations
 
-### Physics 不收錄（屬於其他 reader/task-first 區域）
+### Physics is not included (belongs to other reader/task-first areas)
 
-| 內容 | 歸屬 |
+| Content | Attribution |
 |------|------|
-| CLI 操作步驟 | Workflows |
-| 軟體工具使用指南（HFSS, Python, Julia） | Workflows |
-| CLI 參數規格 | Reference |
-| 端到端工作流程 | Workflows |
+| CLI steps | Workflows |
+| Software tool usage guide (HFSS, Python, Julia) | Workflows |
+| CLI parameter specifications | Reference |
+| End-to-end workflow | Workflows |
 
 ---
 
-## 節點類型（Frontmatter）
+## Node type (Frontmatter)
 
-每篇 Physics 頁面的 frontmatter 應包含 `node_type`：
+The frontmatter of each Physics page should contain `node_type`:
 
 ```yaml
 tags:
-  - node_type/principle    # 基礎原理（不依賴特定器件或工具）
-  - node_type/model        # 可計算模型（方程、近似、邊界條件）
-  - node_type/method       # 推導方法 / 數值方法
-  - node_type/device       # 器件與元件描述
+- node_type/principle # Basic principles (not dependent on specific devices or tools)
+- node_type/model # Computable models (equations, approximations, boundary conditions)
+- node_type/method # Derivation method / numerical method
+- node_type/device #Device and component description
 ```
 
-依賴方向：
+Depends on direction:
 
-- **Principle** 不依賴 Tool 或 Device
-- **Model** 可依賴 Principle，不依賴特定 Device
-- **Device** 必須指出依賴的 Model（例：SQUID 依賴 D1+D2+B5）
-- **Method** 可依賴 Model + Principle
-
----
-
-## 開場驅動（問題句或歷史脈絡）
-
-每篇 Physics 的開場應讓讀者立刻理解「這篇在講什麼、為什麼重要」。以下兩種開場方式皆可：
-
-1. **物理問題句**：以一個具體的物理因果問題開頭（例如：「為什麼磁通量會是量子化的？」）。適合概念推導型頁面。
-2. **歷史 / 社群脈絡**：說明「什麼時間發生了什麼事，因此研究了 XXX」，再展開成果。適合器件發展、實驗突破、或跨領域融合型頁面。
-
-> 不論哪種方式，開場都不應以「工具怎麼用」或「流程怎麼做」為主。工程內容只作為物理概念的落地映射，不可喧賓奪主。
+- **Principle** does not depend on Tool or Device
+- **Model** can depend on Principle and does not depend on a specific Device
+- **Device** must indicate the dependent Model (for example: SQUID depends on D1+D2+B5)
+- **Method** can depend on Model + Principle
 
 ---
 
-## 每頁寫作骨架
+## Opening driver (question sentence or historical context)
 
-1. **開場（問題或脈絡）**：用物理問題句或歷史脈絡定義本頁的核心主題。
-2. **先備知識對照**（建議）：列出相關的先備觀念（不限四大力學皆要，有對應的就寫）。
-3. **物理核心**：最小必要方程式與假設；所有符號需定義，單位需一致。
-4. **工程映射**（建議）：將物理量映射到電路與系統設計量。純 Principle 頁面若離工程尚有距離，可省略。
-5. **限制與近似**：明確寫出模型適用範圍與失效條件。
-6. **跨文件導航**：依內容相關性提供 1–3 個延伸連結。
+The opening of each Physics article should allow the reader to immediately understand "what this article is about and why it is important." The following two opening methods are available:
 
----
+1. **Physics Question Sentence**: Start with a specific physical cause and effect question (for example: "Why is magnetic flux quantized?"). Suitable for concept derivation pages.
+2. **History/Community Context**: Explain "what happened at what time, so I studied XXX", and then develop the results. It is suitable for device development, experimental breakthroughs, or cross-field integration pages.
 
-## 學術引用與可靠性
-
-所有涉及核心物理推導、近似模型或工程擬合公式的段落，都**必須附上參考文獻**。
-
-- 格式：文件底部需建立 `## References` 區塊，建議使用 **APA 格式**。
-- 連結寫法：若有 DOI 或 arXiv 連結，應以 Markdown 形式附上。
+> Regardless of the method, the opening should not focus on "how to use the tool" or "how to do the process". The project content is only used as a reflection of the physical concept and should not overshadow the project.
 
 ---
 
-## 符號總表（Symbol Glossary）
+## Writing skeleton per page
 
-為確保跨頁面的符號一致性，符號管理分兩層：
-
-1. **各頁面內的符號定義**：每篇文章中首次使用的符號必須在該頁內定義（行內或表格皆可）。
-2. **全域符號總表**：在 `concepts/physics/index.md`（Overview）中維護一份跨頁面的符號總表，彙整所有頁面使用的主要符號、單位與定義。若總表過長，可獨立為 `concepts/physics/symbol-glossary.md`。
-
-> 當不同頁面的符號慣例有衝突時（例如 $\omega$ 在某頁代表角頻率、在另一頁代表特定模態頻率），總表中需明確標註適用範圍。
+1. **Opening (question or context)**: Use a physics question sentence or historical context to define the core theme of this page.
+2. **Pre-requisite knowledge comparison** (suggestion): List relevant pre-requisite concepts (not limited to all four major mechanics, write down those that correspond).
+3. **Physics Core**: Minimum necessary equations and assumptions; all symbols need to be defined and the units need to be consistent.
+4. **Engineering Mapping** (recommended): Map physical quantities to circuit and system design quantities. If the pure Principle page is still far away from the project, it can be omitted.
+5. **Limitations and Approximations**: Clearly write down the applicable scope and failure conditions of the model.
+6. **Cross-document navigation**: Provide 1–3 extended links based on content relevance.
 
 ---
 
-## 可中途切入規範
+## Academic Citations and Reliability
 
-每篇 Physics Concept 應提供：
+All paragraphs involving core physical derivation, approximate models, or engineering fitting formulas must be accompanied by a reference.
 
-- **你可以從這裡開始**：適合直接閱讀的前置條件清單
-- **若要補背景，請先讀**：1–3 個回補連結
-- **如果你只想做任務**：導向對應 Workflows
+- Format: `## References` block needs to be created at the bottom of the file. It is recommended to use **APA format**.
+- Link writing method: If there is a DOI or arXiv link, it should be attached in Markdown format.
+
+---
+
+## Symbol Glossary
+
+To ensure symbol consistency across pages, symbol management is divided into two layers:
+
+1. **Symbol definitions on each page**: The symbols used for the first time in each article must be defined on that page (either in a row or in a table).
+2. **Global symbol table**: Maintain a cross-page symbol table in `concepts/physics/index.md` (Overview), summarizing the main symbols, units and definitions used on all pages. If the total table is too long, it can be independently used as `concepts/physics/symbol-glossary.md`.
+
+> When the notation conventions of different pages conflict (e.g. $\omega$ represents angular frequencies on one page and specific modal frequencies on another page), the applicable scope needs to be clearly marked in the summary table.
+
+---
+
+## Can enter the specification midway
+
+Each Physics Concept should provide:
+
+- **You can start here**: A list of prerequisites suitable for direct reading
+- **To make up for the background, please read first**: 1–3 backlinks
+- **If you only want to do tasks**: Orientation corresponds to Workflows
 
 ---
 
@@ -198,7 +198,7 @@ tags:
 - **Hierarchy**: L1 = domain directories (A-I groups), L2 = topic pages, L3 = optional sub-pages when L2 > 3000 words
 - **L1 creation rule**: only create an L1 directory + nav entry when it has at least one L2 page
 - **Content boundary**: Physics explains WHY/HOW-IT-WORKS only. Tool usage, CLI steps, and workflows go to Workflows or Reference.
-- **Node types**: each page declares node_type in tags (principle/model/method/device). Dependencies flow: Principle → Model → Device/Method
+- **Node types**: each page declares node_type in tags (principle/model/method/device). Dependencies flow: Principle -> Model -> Device/Method
 - **Positioning**: must be both a full learning backbone and reusable concept nodes
 - **Opener**: each page starts from either a physics question OR a historical/community narrative — never a tool-operation question
 - **Per-page contract**: question, prerequisites mapping, physics core, engineering mapping, limits/approximations, cross-links

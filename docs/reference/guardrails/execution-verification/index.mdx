@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Execution & Verification
-  - 執行與驗證
+ - Execution & Verification
+ - Execution and verification
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/execution
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/execution
 status: stable
 owner: docs-team
 audience: contributor
-scope: build、lint、test、CI、direct-develop flow 與 Codex subagent coordination 規範索引。
+scope: Build, lint, test, CI, direct-develop flow and Codex subagent coordination specification index.
 version: v2.1.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -20,13 +20,13 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Execution & Verification
 
-本區定義 workspace delivery 的執行與驗證基準。
-若新規則與現有腳本不一致，應修正腳本或規則來源，而不是放棄驗證基準。
+This area defines the execution and verification baseline of workspace delivery.
+If a new rule is inconsistent with an existing script, the script or rule source should be corrected rather than abandoning the validation baseline.
 
 <Aside type="note" title="What belongs here">
 
-這一層不是在定義產品功能，而是在定義如何交付、如何驗證、如何協作。
-如果問題在問 build、test、CI、handoff 或 Codex subagent execution flow，答案應該先從這裡找。
+This layer is not defining product functions, but defining how to deliver, how to verify, and how to collaborate.
+If the question is asking about build, test, CI, handoff or Codex subagent execution flow, the answer should be found here first.
 
 </Aside>
 
@@ -34,29 +34,29 @@ import { Aside } from '@astrojs/starlight/components';
 
 | Page | Read this when | Primary concern |
 | --- | --- | --- |
-| [Build Commands](build-commands.mdx) | 你要跑開發環境、build、docs build | run and build entrypoints |
-| [Linting & Formatting](linting.mdx) | 你要跑 format、lint、typecheck | static quality gates |
-| [Testing](testing.mdx) | 你要補單元測試、integration、Playwright | test expectations |
-| [Commit Standards](commit-standards.mdx) | 你要整理 commit 邊界與訊息 | commit hygiene |
-| [Branch & Worktree Flow](branch-and-worktree-flow.mdx) | 你在定義 `develop` direct update、optional branch/worktree 或 release promotion | canonical Git/worktree policy |
-| [CI Gates](ci-gates.mdx) | 你在改 GitHub Actions 或 merge criteria | pipeline acceptance |
-| [Task Scope Sizing](./prompt-grading.md) | 你在決定 task 粒度、驗證深度或是否需要短 plan | task sizing |
-| [Codex Subagent Coordination](multi-agent-collaboration.mdx) | 你在決定是否使用 Codex subagents、如何切 work lanes、或如何回報整合結果 | subagent work lanes |
-| [Work Summary Formats](./contributor-reporting.md) | 你要撰寫 final summary、PR body 或風險回報 | summary structure |
+| [Build Commands](build-commands.mdx) | You need to run the development environment, build, docs build | run and build entrypoints |
+| [Linting & Formatting](linting.mdx) |You need to run format, lint, typecheck| static quality gates |
+| [Testing](testing.mdx) | You need to complete unit testing, integration, and Playwright | test expectations |
+| [Commit Standards](commit-standards.mdx) | You need to organize commit boundaries and messages | commit hygiene |
+| [Branch & Worktree Flow](branch-and-worktree-flow.mdx) |You are defining `develop` direct update, optional branch/worktree or release promotion| canonical Git/worktree policy |
+| [CI Gates](ci-gates.mdx) | You are changing GitHub Actions or merge criteria | pipeline acceptance |
+| [Task Scope Sizing](./prompt-grading.md) | You are deciding task granularity, verification depth, or whether you need a short plan | task sizing |
+| [Codex Subagent Coordination](multi-agent-collaboration.mdx) | Are you deciding whether to use Codex subagents, how to cut work lanes, or how to report integration results | subagent work lanes |
+| [Work Summary Formats](./contributor-reporting.md) | You want to write a final summary, PR body or risk reward | summary structure |
 
 <Aside type="caution" title="Do not skip verification ownership">
 
-`Implementation` 完成不等於整條交付線完成。
-integration / E2E / final summary 仍必須對齊 `Testing` 與 `Codex Subagent Coordination` 的規則。
+Completion of `Implementation` does not mean completion of the entire delivery line.
+integration / E2E / final summary The rules for `Testing` and `Codex Subagent Coordination` must still be aligned.
 
 </Aside>
 
 ## Agent Rule
 ```markdown
 ## Execution & Verification
-- 定義 build、lint、type-check、test、CI 的 workspace 基線。
-- branch roles、direct-develop policy 與 optional worktree use 由 `Branch & Worktree Flow` 定義。
-- 變更程式碼時，優先執行與 touched area 直接相關的檢查。
-- workspace delivery baseline 包含 app/frontend、app/backend、Julia Runner、desktop、docs 五條驗證線。
-- task scope、驗證深度與 subagent work lane coordination 需對齊本區規則。
+- Define workspace baselines for build, lint, type-check, test, and CI.
+- branch roles, direct-develop policy and optional worktree use are defined by `Branch & Worktree Flow`.
+- When changing the code, give priority to checks directly related to the touched area.
+- The workspace delivery baseline includes five verification lines: app/frontend, app/backend, Julia Runner, desktop, and docs.
+- Task scope, verification depth and subagent work lane coordination need to be aligned with the rules of this area.
 ```

@@ -1,14 +1,14 @@
 ## Type Checking
 - **Python**:
-    - use BasedPyright
-    - treat `basic` mode as mandatory
-    - type all function parameters and return values
-    - use modern syntax like `list[str]` and `str | None`
-    - avoid `Any` unless dealing with untyped third-party code
+  - use BasedPyright
+  - treat `basic` mode as mandatory
+  - type all function parameters and return values
+  - use modern syntax like `list[str]` and `str | None`
+  - avoid `Any` unless dealing with untyped third-party code
 - **TypeScript**:
-    - use strict mode
-    - do not trust raw API payloads without schema validation
-    - keep service, schema, hook, and component contracts typed
+  - use strict mode
+  - do not trust raw API payloads without schema validation
+  - keep service, schema, hook, and component contracts typed
 - **Fix policy**:
-    - fix the code first
-    - use `# type: ignore` only in the smallest justified scope
+  - fix the code first
+  - use `# type: ignore` only in the smallest justified scope

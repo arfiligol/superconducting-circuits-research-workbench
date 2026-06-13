@@ -1,12 +1,12 @@
 ---
 aliases:
-  - HB Simulation Intent
-  - Harmonic Balance Simulation Intent
+ - HB Simulation Intent
+ - Harmonic Balance Simulation Intent
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/julia-core
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/julia-core
 status: stable
 owner: docs-team
 audience: contributor
@@ -34,12 +34,12 @@ Runner binds runtime values and executes the validated HB problem.
 
 ```text
 CircuitPlan
-  -> ExternalPort declarations
-  -> HBIntent declarations
-  -> compile_to_josephson
-  -> JosephsonCompiledCircuit
-  -> HBProblemSpec
-  -> run_hb_problem / run_frequency_sweep
+ -> ExternalPort declarations
+ -> HBIntent declarations
+ -> compile_to_josephson
+ -> JosephsonCompiledCircuit
+ -> HBProblemSpec
+ -> run_hb_problem / run_frequency_sweep
 ```
 
 CircuitPlan declares what is allowed. The compiler validates and maps that intent into the compiled circuit. The Runner binds task runtime values to the validated slots. JosephsonCircuits.jl receives normalized netlist rows, component values, sources, frequencies, harmonic counts, and whitelisted solver controls.
@@ -89,11 +89,11 @@ Conceptual shape:
 
 ```julia
 ExternalPort(
-    id,
-    index,
-    endpoint,
-    resistance_ohm,
-    role,
+  id,
+  index,
+  endpoint,
+  resistance_ohm,
+  role,
 )
 ```
 
@@ -121,16 +121,16 @@ Single pump:
 
 ```julia
 PumpAxis(
-    id = :pump,
-    frequency_parameter = :pump_frequency,
+  id =:pump,
+  frequency_parameter =:pump_frequency,
 )
 ```
 
 Double pump:
 
 ```julia
-PumpAxis(id = :pump_1, frequency_parameter = :pump_1_frequency)
-PumpAxis(id = :pump_2, frequency_parameter = :pump_2_frequency)
+PumpAxis(id =:pump_1, frequency_parameter =:pump_1_frequency)
+PumpAxis(id =:pump_2, frequency_parameter =:pump_2_frequency)
 ```
 
 Rules:
@@ -156,11 +156,11 @@ Modeled large-signal source:
 
 ```julia
 HBSourceSlot(
-    id = :large_signal_in,
-    role = :signal,
-    port = :signal_port,
-    mode = (1,),
-    current_parameter = :large_signal_current,
+  id =:large_signal_in,
+  role =:signal,
+  port =:signal_port,
+  mode = (1,),
+  current_parameter =:large_signal_current,
 )
 ```
 
@@ -168,11 +168,11 @@ Pump source:
 
 ```julia
 HBSourceSlot(
-    id = :pump_in,
-    role = :pump,
-    port = :pump_port,
-    mode = (1,),
-    current_parameter = :pump_current,
+  id =:pump_in,
+  role =:pump,
+  port =:pump_port,
+  mode = (1,),
+  current_parameter =:pump_current,
 )
 ```
 
@@ -180,19 +180,19 @@ Double-pump source:
 
 ```julia
 HBSourceSlot(
-    id = :pump_1_in,
-    role = :pump,
-    port = :pump_port,
-    mode = (1, 0),
-    current_parameter = :pump_1_current,
+  id =:pump_1_in,
+  role =:pump,
+  port =:pump_port,
+  mode = (1, 0),
+  current_parameter =:pump_1_current,
 )
 
 HBSourceSlot(
-    id = :pump_2_in,
-    role = :pump,
-    port = :pump_port,
-    mode = (0, 1),
-    current_parameter = :pump_2_current,
+  id =:pump_2_in,
+  role =:pump,
+  port =:pump_port,
+  mode = (0, 1),
+  current_parameter =:pump_2_current,
 )
 ```
 
@@ -200,11 +200,11 @@ DC source:
 
 ```julia
 HBSourceSlot(
-    id = :dc_bias,
-    role = :dc_bias,
-    port = :pump_port,
-    mode = (0,),
-    current_parameter = :dc_current,
+  id =:dc_bias,
+  role =:dc_bias,
+  port =:pump_port,
+  mode = (0,),
+  current_parameter =:dc_current,
 )
 ```
 
@@ -212,12 +212,12 @@ Runtime binding:
 
 ```julia
 HBRunSpec(
-    frequency_sweep = frequency_sweep,
-    pump_frequencies = Dict(:pump => pump_frequency),
-    source_currents = Dict(
-        :dc_bias => dc_current,
-        :pump_in => pump_current,
-    ),
+  frequency_sweep = frequency_sweep,
+  pump_frequencies = Dict(:pump => pump_frequency),
+  source_currents = Dict(
+    :dc_bias => dc_current,
+    :pump_in => pump_current,
+  ),
 )
 ```
 
@@ -247,11 +247,11 @@ Source slot example:
 
 ```julia
 HBSourceSlot(
-    id = :pump_in,
-    role = :pump,
-    port = :pump_port,
-    mode = (1,),
-    current_parameter = :pump_current,
+  id =:pump_in,
+  role =:pump,
+  port =:pump_port,
+  mode = (1,),
+  current_parameter =:pump_current,
 )
 ```
 
@@ -259,11 +259,11 @@ Linearized probe example:
 
 ```julia
 SParameterRequest(
-    id = :s11_signal,
-    outputmode = (0,),
-    outputport = :signal_port,
-    inputmode = (0,),
-    inputport = :signal_port,
+  id =:s11_signal,
+  outputmode = (0,),
+  outputport =:signal_port,
+  inputmode = (0,),
+  inputport =:signal_port,
 )
 ```
 
@@ -281,10 +281,10 @@ Signal reflection:
 
 ```julia
 SParameterRequest(
-    outputmode = (0,),
-    outputport = :signal_port,
-    inputmode = (0,),
-    inputport = :signal_port,
+  outputmode = (0,),
+  outputport =:signal_port,
+  inputmode = (0,),
+  inputport =:signal_port,
 )
 ```
 
@@ -292,10 +292,10 @@ Idler observable:
 
 ```julia
 SParameterRequest(
-    outputmode = (-1,),
-    outputport = :signal_port,
-    inputmode = (0,),
-    inputport = :signal_port,
+  outputmode = (-1,),
+  outputport =:signal_port,
+  inputmode = (0,),
+  inputport =:signal_port,
 )
 ```
 
@@ -329,10 +329,10 @@ Conceptual shape:
 
 ```julia
 HBIntent(
-    pump_axes = [...],
-    source_slots = [...],
-    observables = [...],
-    default_solver_controls = HBSolverControls(...),
+  pump_axes = [...],
+  source_slots = [...],
+  observables = [...],
+  default_solver_controls = HBSolverControls(...),
 )
 ```
 
@@ -360,36 +360,36 @@ Shared pump-off / pumped declaration:
 
 ```julia
 hb_intent!(
-    plan;
-    pump_axes = [
-        PumpAxis(id = :pump, frequency_parameter = :pump_frequency),
-    ],
-    source_slots = [
-        HBSourceSlot(
-            id = :pump_in,
-            role = :pump,
-            port = :pump_port,
-            mode = (1,),
-            current_parameter = :pump_current,
-        ),
-    ],
-    observables = [
-        SParameterRequest(
-            id = :s11_signal,
-            outputmode = (0,),
-            outputport = :signal_port,
-            inputmode = (0,),
-            inputport = :signal_port,
-        ),
-    ],
-    default_solver_controls = HBSolverControls(
-        n_pump_harmonics = 16,
-        n_modulation_harmonics = 8,
-        returnS = true,
-        returnZ = true,
-        returnQE = true,
-        returnCM = true,
+  plan;
+  pump_axes = [
+    PumpAxis(id =:pump, frequency_parameter =:pump_frequency),
+  ],
+  source_slots = [
+    HBSourceSlot(
+      id =:pump_in,
+      role =:pump,
+      port =:pump_port,
+      mode = (1,),
+      current_parameter =:pump_current,
     ),
+  ],
+  observables = [
+    SParameterRequest(
+      id =:s11_signal,
+      outputmode = (0,),
+      outputport =:signal_port,
+      inputmode = (0,),
+      inputport =:signal_port,
+    ),
+  ],
+  default_solver_controls = HBSolverControls(
+    n_pump_harmonics = 16,
+    n_modulation_harmonics = 8,
+    returnS = true,
+    returnZ = true,
+    returnQE = true,
+    returnCM = true,
+  ),
 )
 ```
 
@@ -397,9 +397,9 @@ Pump-off runtime binding:
 
 ```julia
 HBRunSpec(
-    frequency_sweep = frequency_sweep,
-    pump_frequencies = Dict(:pump => pump_frequency),
-    source_currents = Dict(:pump_in => 0.0),
+  frequency_sweep = frequency_sweep,
+  pump_frequencies = Dict(:pump => pump_frequency),
+  source_currents = Dict(:pump_in => 0.0),
 )
 ```
 

@@ -1,12 +1,12 @@
 ## Commit Standards
 - **When to Commit**:
-    - Single logical unit complete (one feature, one fix, one refactor).
-    - All checks pass: `uv run pre-commit run --all-files`.
-    - Independently revertable.
+  - Single logical unit complete (one feature, one fix, one refactor).
+  - All checks pass: `uv run pre-commit run --all-files`.
+  - Independently revertable.
 - **When NOT to Commit**:
-    - Code doesn't compile/type-check.
-    - Mixed changes (bug fix + feature + formatting).
-    - Incomplete work (unless `WIP:` prefix).
+  - Code doesn't compile/type-check.
+  - Mixed changes (bug fix + feature + formatting).
+  - Incomplete work (unless `WIP:` prefix).
 - **Commit Format**: `<type>: <description>`
-    - Types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`.
+  - Types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`.
 - **Before Commit**: ALWAYS run `uv run pre-commit run --all-files`.

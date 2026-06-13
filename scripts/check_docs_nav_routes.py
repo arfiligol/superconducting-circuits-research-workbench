@@ -12,9 +12,7 @@ BUILT_DOCS_ROOT = Path("site/dist/docs")
 SIDEBAR_CONFIG = Path("site/astro.config.mjs")
 EXCLUDED_DIRS = {"api-reference", "site"}
 SOURCE_SUFFIXES = {".md", ".mdx"}
-LEGACY_VISUAL_SYNTAX_RE = re.compile(
-    r'^\s*(?:!!!|\?\?\?|===\s+")|<div class="grid cards"'
-)
+LEGACY_VISUAL_SYNTAX_RE = re.compile(r'^\s*(?:!!!|\?\?\?|===\s+")|<div class="grid cards"')
 SIDEBAR_SLUG_RE = re.compile(r'slug:\s*"([^"]+)"')
 SIDEBAR_AUTOGENERATE_RE = re.compile(r'directory:\s*"([^"]+)"')
 
@@ -29,20 +27,12 @@ def _source_markup_paths() -> list[Path]:
     for path in sorted(p for suffix in SOURCE_SUFFIXES for p in DOCS_ROOT.rglob(f"*{suffix}")):
         if _should_skip(path):
             continue
-        if path.name.endswith(".en.md"):
-            preferred = path.with_name(path.name.replace(".en.md", ".md"))
-            preferred_mdx = preferred.with_suffix(".mdx")
-            if preferred.exists() or preferred_mdx.exists():
-                continue
         paths.append(path)
     return paths
 
 
 def _source_route(path: Path) -> PurePosixPath:
-    relative = PurePosixPath(path.relative_to(DOCS_ROOT).as_posix())
-    if relative.name.endswith(".en.md"):
-        relative = relative.with_name(relative.name.replace(".en.md", ".md"))
-    return relative
+    return PurePosixPath(path.relative_to(DOCS_ROOT).as_posix())
 
 
 def _expected_built_html_path(path: Path) -> Path:
@@ -57,11 +47,7 @@ def _expected_built_html_path(path: Path) -> Path:
 def _docs_route_slug(path: Path) -> str:
     relative = _source_route(path)
     route = PurePosixPath("docs") / relative
-    route = (
-        route.parent
-        if relative.name in {"index.md", "index.mdx"}
-        else route.with_suffix("")
-    )
+    route = route.parent if relative.name in {"index.md", "index.mdx"} else route.with_suffix("")
     return route.as_posix()
 
 
@@ -78,8 +64,7 @@ def _is_route_in_sidebar(route: str, slugs: set[str], autogenerate_dirs: set[str
     if route in slugs:
         return True
     return any(
-        route == directory or route.startswith(f"{directory}/")
-        for directory in autogenerate_dirs
+        route == directory or route.startswith(f"{directory}/") for directory in autogenerate_dirs
     )
 
 
@@ -104,8 +89,7 @@ def _check_source() -> list[str]:
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if LEGACY_VISUAL_SYNTAX_RE.search(line):
                 errors.append(
-                    "[SOURCE] forbidden legacy visual syntax in "
-                    f"'{path.as_posix()}:{line_number}'"
+                    f"[SOURCE] forbidden legacy visual syntax in '{path.as_posix()}:{line_number}'"
                 )
     return errors
 
@@ -116,8 +100,7 @@ def _check_built() -> list[str]:
         expected = _expected_built_html_path(path)
         if not expected.is_file():
             errors.append(
-                f"[BUILT] missing '{expected.as_posix()}' "
-                f"(from source '{path.as_posix()}')"
+                f"[BUILT] missing '{expected.as_posix()}' (from source '{path.as_posix()}')"
             )
     return errors
 

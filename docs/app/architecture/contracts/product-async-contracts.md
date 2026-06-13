@@ -2,15 +2,15 @@
 title: "Product Async Contracts"
 description: "Defines the Application-to-Backend-to-Runner contracts for productized async simulation and result viewing."
 aliases:
-  - Product Async Contract
-  - SimulationRequestV1
-  - AnalysisRequestV1
-  - RunnerTaskEnvelopeV1
+ - Product Async Contract
+ - SimulationRequestV1
+ - AnalysisRequestV1
+ - RunnerTaskEnvelopeV1
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/architecture
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/architecture
 status: stable
 owner: docs-team
 audience: team
@@ -48,57 +48,57 @@ This page defines the target product contract. Current implementation may still 
 
 ```json
 {
-  "schema_version": "app.simulation_request.v1",
-  "dataset_id": "ds_001",
-  "design_id": "design_001",
-  "source": {
-    "kind": "design_asset",
-    "asset_id": "design_asset_001"
+ "schema_version": "app.simulation_request.v1",
+ "dataset_id": "ds_001",
+ "design_id": "design_001",
+ "source": {
+  "kind": "design_asset",
+  "asset_id": "design_asset_001"
+ },
+ "simulation_family": "frequency_sweep",
+ "frequency_sweep": {
+  "start_hz": 4000000000,
+  "stop_hz": 6000000000,
+  "point_count": 401,
+  "spacing": "linear"
+ },
+ "runtime_bindings": {
+  "pump_frequencies_hz": {
+   "pump": 8000000000
   },
-  "simulation_family": "frequency_sweep",
-  "frequency_sweep": {
-    "start_hz": 4000000000,
-    "stop_hz": 6000000000,
-    "point_count": 401,
-    "spacing": "linear"
-  },
-  "runtime_bindings": {
-    "pump_frequencies_hz": {
-      "pump": 8000000000
-    },
-    "source_currents": {
-      "pump_in": 0.0
-    }
-  },
-  "observables": [
-    {
-      "observable_id": "s11_signal",
-      "representation": "complex"
-    }
-  ],
-  "solver": {
-    "engine": "josephson_circuits",
-    "hb_controls": {
-      "n_pump_harmonics": {
-        "pump": 16
-      },
-      "n_modulation_harmonics": 8,
-      "dc": false,
-      "threewavemixing": false,
-      "fourwavemixing": true,
-      "returnS": true,
-      "returnZ": true,
-      "returnQE": true,
-      "returnCM": true,
-      "sorting": "name",
-      "keyedarrays": false
-    },
-    "optional_hb_kwargs": {}
-  },
-  "output_target": {
-    "mode": "existing_design",
-    "design_id": "design_001"
+  "source_currents": {
+   "pump_in": 0.0
   }
+ },
+ "observables": [
+  {
+   "observable_id": "s11_signal",
+   "representation": "complex"
+  }
+ ],
+ "solver": {
+  "engine": "josephson_circuits",
+  "hb_controls": {
+   "n_pump_harmonics": {
+    "pump": 16
+   },
+   "n_modulation_harmonics": 8,
+   "dc": false,
+   "threewavemixing": false,
+   "fourwavemixing": true,
+   "returnS": true,
+   "returnZ": true,
+   "returnQE": true,
+   "returnCM": true,
+   "sorting": "name",
+   "keyedarrays": false
+  },
+  "optional_hb_kwargs": {}
+ },
+ "output_target": {
+  "mode": "existing_design",
+  "design_id": "design_001"
+ }
 }
 ```
 
@@ -241,22 +241,22 @@ Polling is the baseline status sync mechanism. SSE or WebSocket may be added as 
 
 ```text
 Simulation / Analysis Workbench or Python Notebook
-    -> SimulationRequestV1 or AnalysisRequestV1
+  -> SimulationRequestV1 or AnalysisRequestV1
 Python Backend
-    -> validates request
-    -> persisted task
-    -> RunnerTaskEnvelopeV1
+  -> validates request
+  -> persisted task
+  -> RunnerTaskEnvelopeV1
 Julia Runner
-    -> executes Julia Core / analysis logic
-    -> local Zarr staging
-    -> RunnerResultManifestV1
+  -> executes Julia Core / analysis logic
+  -> local Zarr staging
+  -> RunnerResultManifestV1
 Python Backend Publisher
-    -> validates manifest and Zarr
-    -> TraceStore
-    -> ResultView API
+  -> validates manifest and Zarr
+  -> TraceStore
+  -> ResultView API
 Application / Python Notebook
-    -> polls task state
-    -> opens ResultView after Backend publication
+  -> polls task state
+  -> opens ResultView after Backend publication
 ```
 
 ## Related

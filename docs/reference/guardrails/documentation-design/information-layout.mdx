@@ -1,18 +1,18 @@
 ---
 aliases:
-  - "Documentation Information Layout"
-  - "文件資訊編排"
-  - "Macro Style"
-  - "Information Layout"
+ - "Documentation Information Layout"
+ - "Document information arrangement"
+ - "Macro Style"
+ - "Information Layout"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/documentation
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
 status: stable
 owner: docs-team
 audience: team
-scope: "Macro Style / Information Layout：文件資訊分層、視覺節奏與 overview/index 頁的版面編排規範"
+scope: "Macro Style / Information Layout: Document information layering, visual rhythm, and layout specifications for overview/index pages"
 version: v0.5.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -22,130 +22,130 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Macro Style / Information Layout
 
-本文件定義 `Documentation Style` 的宏觀層，處理文件頁面的資訊編排規則。目標不是讓頁面更花，而是讓資訊落在正確的視覺層級，避免讀者一打開就看到文字牆或誤判頁面結構。
+This document defines the macro layer of `Documentation Style` and handles the information arrangement rules of the document page. The goal is not to make the page more colorful, but to put the information at the correct visual level to prevent readers from seeing a wall of text or misjudging the page structure as soon as they open it.
 
-<Aside type="note" title="對應的 Micro Style">
+<Aside type="note" title="Corresponding Micro Style">
 
-本頁負責頁面節奏、容器分工與 overview/index 的呈現方式。
-語氣、段落寫法與元件語法則回到 [Micro Style / Writing & Visual Elements](style.mdx) 查看。
+This page is responsible for page rhythm, container division of labor, and overview/index presentation.
+For mood, paragraph writing and element syntax, return to [Micro Style / Writing & Visual Elements](style.mdx).
 
 </Aside>
 
 ---
 
-## 核心原則
+## Core Principles
 
-| 原則 | 說明 |
+| Principles | Description |
 |------|------|
-| 一節只回答一個問題 | 每個段落或小節應只處理一個主題，避免在同一區塊同時講目的、流程、例外與驗收。 |
-| 先分層，再加密度 | 先把頁面切成清楚層級，再決定是否用表格、tabs 或 asides。不要先堆資訊再回頭補樣式。 |
-| 容器必須有語意 | 表格、tabs、asides、摺疊區塊都必須對應明確用途，不能只為了讓畫面看起來比較豐富。 |
-| 先掃讀，再細讀 | 頁面應允許讀者先靠標題、短導言、表格抓住骨架，再決定是否展開次要細節。 |
-| Sidebar 與正文分工不同 | Sidebar 負責站點導覽；正文負責頁面解釋。不要把 sidebar 結構原樣複製到正文。 |
-| 分組不是頁面 | `Workspace`、`Definition`、`Simulation Workbench` 這類 IA 分組必須明確標示為分組，不可寫得像缺少連結的獨立頁。 |
-| 不允許隱藏頁 | 每個 editable docs page 都必須能在 Starlight sidebar 中找到；不可只靠 in-page link 或直接 URL 抵達。 |
+| Only answer one question in one section | Each paragraph or subsection should only deal with one topic, and avoid talking about purpose, process, exceptions, and acceptance in the same block. |
+| Layer first, then density | Cut the page into clear levels first, and then decide whether to use tables, tabs or asides. Don’t pile up information first and then go back and add styles. |
+| Containers must have semantics | Tables, tabs, asides, and foldable blocks must all correspond to clear purposes, not just to make the picture look richer. |
+| Scan first, then read carefully | The page should allow readers to grasp the skeleton through titles, short introductions, and tables before deciding whether to expand on minor details. |
+| Sidebar and main text have different division of labor | Sidebar is responsible for site navigation; the main text is responsible for page explanation. Do not copy the sidebar structure unchanged into the body. |
+| Groups are not pages | IA groups such as `Workspace`, `Definition`, `Simulation Workbench` must be clearly marked as groups and cannot be written like independent pages without links. |
+| Hidden pages are not allowed | Each editable docs page must be found in the Starlight sidebar; it cannot be reached by just an in-page link or direct URL. |
 
-<Aside type="tip" title="判斷標準">
+<Aside type="tip" title="Judgment criteria">
 
-如果一段內容搬進不同視覺容器後，讀者更容易判斷「它是規格、對照、提醒，還是次要細節」，就代表編排方向是對的。
-
-</Aside>
-
----
-
-## 頁面節奏
-
-建議先建立以下閱讀節奏，再視內容調整：
-
-1. 頁面定位：標題 + 1 至 2 句導言。
-2. 第一層骨架：用小節清楚分開不同問題。
-3. 結構化事實：用表格、清單或 tabs 呈現穩定資訊。
-4. 補充強調：只在必要處加入 asides 或可摺疊細節。
-5. 收尾區塊：放 Related、驗收條件或 Agent Rule。
-
-<Aside type="note" title="預設閱讀路徑">
-
-讀者應該能只看標題、導言、表格標題，就先抓住頁面 60% 到 70% 的內容，再決定要不要深入閱讀正文。
+If a piece of content is moved into different visual containers, it is easier for readers to judge "whether it is a specification, a comparison, a reminder, or a minor detail", which means the layout direction is correct.
 
 </Aside>
 
 ---
 
-## 容器選擇
+## Page rhythm
 
-| 容器 | 適合放什麼 | 不適合放什麼 |
+It is recommended to establish the following reading rhythm first, and then adjust it according to the content:
+
+1. Page positioning: title + 1 to 2 sentences of introduction.
+2. The first level of skeleton: Use subsections to clearly separate different problems.
+3. Structured facts: Use tables, lists or tabs to present stable information.
+4. Add emphasis: Add asides or foldable details only where necessary.
+5. Closing block: put Related, acceptance conditions or Agent Rule.
+
+<Aside type="note" title="Default reading path">
+
+Readers should be able to grasp 60% to 70% of the page by just looking at the title, introduction, and table headings, and then decide whether to read the text in depth.
+
+</Aside>
+
+---
+
+## Container selection
+
+| Containers | What is suitable for storage | What is not suitable for storage |
 |------|------------|--------------|
-| 正文段落 | 正常說明、導言、短結論 | 長串規格、平行比較、反覆提醒 |
-| 表格 | 穩定規格、欄位定義、分類對照 | 長篇解釋、故事式背景 |
-| Tabs | 同層級變體、平行分類、情境切換 | 有先後順序的流程 |
-| Asides | 需要語意強調的提醒、建議、風險、驗證 | 一般說明、每個小節的標準開場 |
-| `<details>` | 次要細節、進階補充、邊界情境、長原始碼 | 主流程的核心定義或 warning / danger 語意 |
-| Page Map / Link List | 真正存在的子頁入口 | 分組標籤、尚未存在的頁面名稱 |
+| Body paragraphs | Normal description, introduction, short conclusion | Long list of specifications, parallel comparisons, repeated reminders |
+| Tables | Stable specifications, field definitions, classification comparisons | Long explanations, story-like backgrounds |
+| Tabs | Variations at the same level, parallel classification, situation switching | Sequential processes |
+| Asides | Reminders, suggestions, risks, verifications that require semantic emphasis | General instructions, standard opening of each section |
+| `<details>` | Minor details, advanced supplements, edge situations, long source code | Core definition of the main process or warning / danger semantics |
+| Page Map / Link List | Really existing sub-page entries | Group labels, page names that do not yet exist |
 
-<Aside type="caution" title="避免容器濫用">
+<Aside type="caution" title="Avoid container abuse">
 
-不要把表格當成萬用格式，也不要為了拆掉文字牆就把整頁塞進 asides。容器越多，越需要確保每一種容器都在做不同工作。
+Don’t treat tables as a catch-all format, and don’t shove entire pages aside just to break down walls of text. The more containers there are, the more important it is to ensure that each container is doing a different job.
 
 </Aside>
 
 ---
 
-## Overview 與 Index 頁規則
+## Overview and Index page rules
 
-Overview / Index 頁最容易把 sidebar 結構原樣複製進正文，導致讀者誤以為分組本身也是一頁文件。這類頁面應優先做成「頁面地圖」，不是「導覽樹複寫」。
+The Overview / Index page is most likely to copy the sidebar structure into the text, causing readers to mistakenly think that the group itself is also a one-page document. This type of page should be prioritized as a "page map" rather than a "navigation tree copy".
 
-在 Astro + Starlight docs 中，第一層頁面地圖應服務讀者意圖：
+In the Astro + Starlight docs, first-level page maps should serve reader intent:
 
-- `Start Here`: 新讀者最短 notebook-first 路徑，以 Pluto research setup 與 first notebook 為主。
-- `Workflows`: 想完成研究任務的人；主線只放 Pluto、Julia Core、Python Analysis Core、Python Notebook、research data/evidence 與 research tooling。
-- `Concepts`: 想理解物理、reusable circuit authoring model 與 research stack 的人。
-- `Product App`: 想查看產品化 workbench、Python Notebook App prototyping、frontend、backend、shared contracts 的人。
-- `Reference`: 想查 stable contracts 的人。
-- `Contribute & Govern`: 想貢獻、審查或執行 agent workflow 的人。
+- `Start Here`: The shortest notebook-first path for new readers, only the two-step onboarding of first Pluto notebook and reusable circuit design.
+- `Workflows`: People who want to complete research tasks; the main line only includes Pluto, Julia Core, Python Analysis Core, Python Notebook, research data/evidence and research tooling.
+- `Concepts`: People who want to understand physics, reusable circuit authoring models and research stack.
+- `Product App`: People who want to see productized workbench, Python Notebook App prototyping, Architecture Contracts, Data Contracts, frontend, backend, desktop, shared contracts.
+- `Reference`: For people looking for research-core stable contracts; not production runtime, data search, backend/frontend/desktop, Schema Editor or ResultView contracts.
+- `Contribute & Govern`: People who want to contribute, review or execute the agent workflow.
 
 <Tabs>
-<TabItem label="應該做">
+<TabItem label="should do">
 
 
-- 先用短導言說明本區收錄什麼。
-- 用分組標題整理 IA，但每個分組下只列真正存在的文件頁。
-- 若分組名稱本身不是頁面，明確標記它只是分組。
-- 在每個連結後補一句簡短 focus，讓讀者知道應該去那頁查什麼。
+- First use a short introduction to explain what is included in this area.
+- Organize IA with group titles, but only list actual existing file pages under each group.
+- If the group name itself is not a page, explicitly mark it as just a group.
+- Add a short focus sentence after each link to let readers know what to look for on that page.
 
 </TabItem>
 
-<TabItem label="避免做">
+<TabItem label="avoid doing">
 
 
-- 在正文重現一份和 sidebar 幾乎一模一樣的樹。
-- 讓分組標籤看起來像漏掉連結的頁面。
-- 同時出現 `Sections`、`Topics`、`Page Map` 三套重複結構。
-- 用長條列把整區頁面列完，卻沒有交代每頁責任。
+- Reproduce a tree almost identical to sidebar in the main text.
+- Make group labels look like pages with missing links.
+- Three sets of repeated structures `Sections`, `Topics`, and `Page Map` appear at the same time.
+- Use long columns to list the pages in the entire area, but do not explain the responsibilities of each page.
 
 </TabItem>
 
 </Tabs>
 
-<Aside type="tip" title="Overview 頁的正確狀態">
+<Aside type="tip" title="The correct status of the Overview page">
 
-讀者應能分辨：
-1. 哪些是分組。
-2. 哪些是真正存在的頁面。
-3. 每一頁大致負責什麼。
+Readers should be able to distinguish:
+1. What are the groups?
+2. Which pages actually exist.
+3. What is roughly what each page is responsible for.
 
 </Aside>
 
 ---
 
-## 常見反模式
+## Common anti-patterns
 
-| 反模式 | 問題 | 建議修正 |
+| Anti-Pattern | Problem | Suggested Fix |
 |--------|------|----------|
-| 文字牆 | 讀者無法快速抓住頁面主題與層次 | 先拆成更小的小節，再決定哪些資訊適合進表格或 tabs |
-| 裝飾性 asides | 框很多，但沒有明確語意差異 | 只保留真正需要強調的提醒，把一般說明移回正文 |
-| 分組假裝成頁面 | 讀者會誤以為缺頁或 broken link | 分組標題只作為 IA label，連結只列實際文件 |
-| 導覽樹複製貼上 | sidebar 與正文重複，畫面密度高但資訊量沒有增加 | 正文改寫成 page map 或責任摘要 |
-| 一節混太多事 | 同時講定位、流程、邊界、例外，難以掃讀 | 把內容拆到不同小節，各自回答單一問題 |
+| Text wall | Readers cannot quickly grasp the theme and level of the page | Break it into smaller sections first, and then decide which information is suitable for tables or tabs |
+| Decorative asides | Many boxes, but no clear semantic differences | Only keep reminders that really need to be emphasized, and move general instructions back to the text |
+| The group pretends to be a page | Readers will mistakenly think that it is a missing page or broken link | The group title is only used as an IA label, and the link only lists the actual file |
+| Copy and paste the navigation tree | The sidebar is repeated with the main text, the screen density is high but the amount of information has not increased | The main text is rewritten into a page map or summary of responsibilities |
+| There are too many things mixed into one section | It talks about positioning, process, boundaries, and exceptions at the same time, making it difficult to scan | Split the content into different sections, each answering a single question |
 
 ---
 
@@ -160,16 +160,16 @@ Overview / Index 頁最容易把 sidebar 結構原樣複製進正文，導致讀
 ## Agent Rule
 ```markdown
 ## Macro Style / Information Layout
-- 每個小節只回答一個主要問題；先建立資訊分層，再增加內容密度
-- 正文、表格、tabs、asides、摺疊區塊都必須有明確語意，不可裝飾性使用
-- 頁面應支援先掃讀再細讀：標題、導言、表格標題應能先傳達主要骨架
-- Sidebar 是導覽；正文不是 sidebar 複寫
-- 每個 editable docs page 都必須由 sidebar explicit `slug` 或 `autogenerate.directory` 覆蓋；禁止 hidden pages
+- Only answer one main question in each section; establish information layering first, then increase content density
+- Text, tables, tabs, asides, and folded blocks must have clear semantics and cannot be used for decoration.
+- The page should support scanning first and then detailed reading: the title, introduction, and table title should convey the main skeleton first
+- Sidebar is a navigation; the text is not a copy of the sidebar
+- Every editable docs page must be overridden by sidebar explicit `slug` or `autogenerate.directory`; hidden pages are prohibited
 - Top-level docs maps should be reader/task-first, not Diataxis-first.
-- Start Here should be notebook-first and Pluto-led; Product App belongs in its own top-level group, not the onboarding mainline.
+- Start Here should be a two-step student/research path: first Pluto notebook, then reusable circuit design. Product App belongs in its own top-level group, not the onboarding mainline.
 - Product App should be a top-level reader lane for app contracts and Python Notebook app-prototyping boundaries.
-- Start Here, Workflows, and Concepts are strict research-core lanes; do not place Product App, Backend, Frontend, Schema Editor, ResultView, TraceStore, FastAPI, WebUI, or Product Async workflow procedures there.
-- Product architecture, Backend publication, UI/schema-editor decisions, old App workflows, and product async material belong under `docs/app/**`; obsolete App-specific tutorials belong under `docs/app/archive/**`.
-- Overview / Index 頁只列真正存在的頁面連結；IA 分組必須明確標示為分組，不可寫得像獨立頁
-- 避免文字牆、容器濫用、分組假裝成頁面、以及重複的 `Sections/Topics/Page Map`
+- Start Here, Workflows, Concepts, and non-app Reference are strict research-core lanes; do not place Product App, Backend, Frontend, Desktop, Electron, Schema Editor, ResultView, TraceStore, FastAPI, WebUI, Data Search/Data Management, or Product Async workflow procedures there.
+- Product architecture, Backend publication, UI/schema-editor decisions, data contracts/search/management, old App workflows, and product async material belong under `docs/app/**`; obsolete App-specific tutorials belong under `docs/app/archive/**`.
+- The Overview / Index page only lists real existing page links; IA groups must be clearly marked as groups and cannot be written like independent pages
+- Avoid text walls, container abuse, groups pretending to be pages, and duplicate `Sections/Topics/Page Map`
 ```

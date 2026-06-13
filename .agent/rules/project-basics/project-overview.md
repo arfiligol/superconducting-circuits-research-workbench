@@ -1,36 +1,36 @@
 ## Project Goal
 - **Mission**: Build a superconducting-circuit workbench centered on Notebook Interface, Electron Application Interface, and Julia Runner Compute Plane.
 - **Core product surfaces**:
-    - Data Browser
-    - Dataset
-    - Simulation Workbench
-    - Data Ingestion
-    - Raw Data / Trace Browser
-    - Task / Execution Center
-    - Analysis Workbench
-    - Notebook Interface
+  - Data Browser
+  - Dataset
+  - Simulation Workbench
+  - Data Ingestion
+  - Raw Data / Trace Browser
+  - Task / Execution Center
+  - Analysis Workbench
+  - Notebook Interface
 - **Data sources**:
-    - circuit simulation
-    - layout simulation
-    - measurement
-    - compatible S/Y/Z traces
+  - circuit simulation
+  - layout simulation
+  - measurement
+  - compatible S/Y/Z traces
 - **Architecture direction**:
-    - UI uses Next.js App Router
-    - API uses FastAPI
-    - Python Backend is the control plane + data plane
-    - Julia Runner is the async compute plane
-    - Electron is the local desktop shell around frontend, backend, and runner
-    - Pluto is the direct Julia research cockpit
-    - Python Notebook is a Product App prototyping and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts
-    - Application Simulation Workbench submits persisted simulation tasks through Backend and Runner
-    - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are not active product/runtime surfaces
+  - UI uses Next.js App Router
+  - API uses FastAPI
+  - Python Backend is the control plane + data plane
+  - Julia Runner is the async compute plane
+  - Electron is the local desktop shell around frontend, backend, and runner
+  - Pluto is the direct Julia research cockpit
+  - Python Notebook is a Product App prototyping and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts
+  - Application Simulation Workbench submits persisted simulation tasks through Backend and Runner
+  - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are not active product/runtime surfaces
 - **Core values**:
-    - scientific accuracy
-    - reproducible workflows
-    - explicit staging/publication boundary between Runner outputs and official TraceStore records
+  - scientific accuracy
+  - reproducible workflows
+  - explicit staging/publication boundary between Runner outputs and official TraceStore records
 - **Product goals**:
-    - support notebook research, application simulation, data browsing, async analysis, task tracking, and result recovery in one platform
-    - keep metadata, trace payloads, Runner manifests, and provenance contracts explicit and reconstructible
-    - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
-    - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving legacy product paths
+  - support notebook research, application simulation, data browsing, async analysis, task tracking, and result recovery in one platform
+  - keep metadata, trace payloads, Runner manifests, and provenance contracts explicit and reconstructible
+  - ensure frontend holds draft/view state only, while canonical computation state stays in backend/core/storage contracts
+  - remove active legacy command/UI/queue/Python-Julia entrypoints instead of preserving legacy product paths
 - **Audience**: researchers, students, and developers working on superconducting-circuit simulation and analysis workflows.

@@ -1,11 +1,11 @@
 ---
 aliases:
-  - Python Notebooks
-  - Python Notebook Workflows
+ - Python Notebooks
+ - Python Notebook Workflows
 tags:
-  - diataxis/how-to
-  - audience/user
-  - topic/notebooks
+ - diataxis/how-to
+ - audience/user
+ - topic/notebooks
 status: stable
 owner: docs-team
 audience: user
@@ -14,8 +14,8 @@ version: v1.0.0
 last_updated: 2026-06-12
 updated_by: codex
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 # Python Notebooks
@@ -40,6 +40,5 @@ Use Python notebooks when the work is easier in Python than Pluto: local file in
 
 ## Related
 
-- [Python Notebook Authoring](../../reference/notebooks/python-authoring.md)
 - [Python Core](../../reference/core/python-core.mdx)
 - [Python Analysis Core](../analysis-fitting/index.md)

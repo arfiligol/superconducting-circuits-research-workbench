@@ -1,15 +1,15 @@
 ---
 aliases:
-  - "貢獻者名錄"
-  - "Contributors Registry"
+ - "Contributors list"
+ - "Contributors Registry"
 tags:
-  - diataxis/reference
-  - status/stable
-  - audience/contributor
-  - topic/governance
+ - diataxis/reference
+ - status/stable
+ - audience/contributor
+ - topic/governance
 owner: docs-team
 audience: contributor
-scope: Frontmatter 中人名欄位的正式驗證名錄
+scope: Officially verified directory of name fields in Frontmatter
 version: v1.1.0
 last_updated: 2026-03-14
 updated_by: codex
@@ -17,55 +17,55 @@ updated_by: codex
 
 import { Aside } from '@astrojs/starlight/components';
 
-# 貢獻者名錄 (Contributors)
+#Contributors
 
-本文件為專案貢獻者的官方記錄。所有在文件 Frontmatter 中提及的人名（如 `owner`, `last_updated_by`）**必須**存在於此名錄中。
+This document is the official record of contributors to the project. All names mentioned in the file Frontmatter (e.g. `owner`, `last_updated_by`) **must** exist in this directory.
 
 <Aside type="note" title="How to use this page">
 
-這頁不是感謝名單，而是 frontmatter 人名驗證的正式 registry。新增或引用新的人名之前，應先更新這裡。
+This page is not a thank you list, but an official registry for frontmatter name verification. This should be updated before adding or citing new names.
 
 </Aside>
 
 ## Registry Map
 
-| category | 用途 |
+| category | purpose |
 | --- | --- |
-| Primary Contributors | 核心開發、維護、文件撰寫 |
-| Secondary Contributors | 提供建議或指導，但不直接寫 code/docs |
-| Honorary Contributors | 過去曾是主要貢獻者，現已退出核心維護 |
+| Primary Contributors | Core development, maintenance, document writing |
+| Secondary Contributors | Provide advice or guidance, but do not directly write code/docs |
+| Honorary Contributors | Formerly a major contributor, now retired from core maintenance |
 
-## 主要貢獻者 (Primary Contributors)
+## Primary Contributors
 
-主要負責專案開發、維護、文件撰寫的核心成員。
+The core member who is mainly responsible for project development, maintenance, and document writing.
 
-| 姓名 | GitHub ID | 角色 | 加入日期 |
+| Name | GitHub ID | Role | Date Joined |
 |------|-----------|------|----------|
-| I-LI CHIU | arfiligol | 專案創建者、主要維護者 | 2024-01 |
+| I-LI CHIU | arfiligol | Project creator, main maintainer | 2024-01 |
 
 ---
 
-## 次要貢獻者 (Secondary Contributors)
+## Secondary Contributors
 
-不直接參與程式碼或文件撰寫，但透過口頭、書面或其他方式提供建議、指導的成員。
+Members who do not directly participate in the writing of code or documents, but provide suggestions and guidance verbally, in writing, or in other ways.
 
-| 姓名 | 角色/貢獻 | 備註 |
+| Name | Role/Contribution | Notes |
 |------|-----------|------|
-| — | — | 尚無記錄 |
+| — | — | No records yet |
 
 ---
 
-## 榮譽貢獻者 (Honorary Contributors)
+## Honorary Contributors
 
-曾為主要貢獻者，後因故退出核心維護的成員。我們感謝他們過去的付出。
+A member who was once a major contributor but later withdrew from core maintenance for some reason. We thank them for their past contributions.
 
-| 姓名 | GitHub ID | 原角色 | 貢獻期間 |
+| Name | GitHub ID | Original role | Contribution period |
 |------|-----------|--------|----------|
 | — | — | — | — |
 
 <Aside type="caution" title="Name validation rule">
 
-任何 frontmatter 裡出現的 `owner`、`updated_by`、`last_updated_by` 等人名欄位，都不應跳過這份名錄直接自由輸入。
+Any name fields such as `owner`, `updated_by`, `last_updated_by` that appear in the frontmatter should not be entered directly without skipping this list.
 
 </Aside>
 
@@ -74,8 +74,8 @@ import { Aside } from '@astrojs/starlight/components';
 ## Contributors Registry Rules
 - **Name Validation**: Any person mentioned in Frontmatter (`owner`, `last_updated_by`) MUST exist in this Contributors registry.
 - **Categories**:
-    - Primary: Core developers and maintainers.
-    - Secondary: Advisors who don't directly write code/docs.
-    - Honorary: Former primary contributors.
+  - Primary: Core developers and maintainers.
+  - Secondary: Advisors who don't directly write code/docs.
+  - Honorary: Former primary contributors.
 - **Update Protocol**: Add new contributors before referencing them in any document.
 ```

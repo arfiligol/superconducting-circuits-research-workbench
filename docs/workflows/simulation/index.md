@@ -1,11 +1,11 @@
 ---
 aliases:
-  - "Simulation Guide"
-  - "模擬指南"
+ - "Simulation Guide"
+ - "Simulation Guide"
 tags:
-  - diataxis/how-to
-  - status/stable
-  - topic/simulation
+ - diataxis/how-to
+ - status/stable
+ - topic/simulation
 status: stable
 owner: docs-team
 audience: user
@@ -14,34 +14,34 @@ version: v0.2.0
 last_updated: 2026-06-12
 updated_by: codex
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 # Julia Core Simulation
 
-本專案的研究模擬路徑以 Pluto Notebook 作為起點，再把穩定語意推進 Julia Core。研究者應先用 Pluto 直接呼叫 Julia Core / JosephsonCircuits.jl，確認物理設定、sweep 範圍與可視化結果。
+The research simulation path of this project uses Pluto Notebook as the starting point, and then advances the stable semantics to Julia Core. Researchers should first use Pluto to directly call Julia Core / JosephsonCircuits.jl to confirm the physics settings, sweep range, and visualization results.
 
-## 教學方法選擇
+## Teaching method selection
 
-使用下列入口：
+Use the following entrance:
 
-| 方法 | 適合對象 | Contract |
+| Method | Suitable for Object | Contract |
 |------|----------|----------|
-| **Pluto Notebook** | 研究、快速實驗、直接呼叫 Julia Core | notebook kernel 是 explicit research execution environment |
-| **Julia Core package code** | 可重用 components、helpers、simulation intent | package code owns reusable semantics |
-| **Native Julia script / REPL** | 小型檢查或除錯 | explicit local execution |
+| **Pluto Notebook** | Research, quick experiments, direct calls to Julia Core | The notebook kernel is an explicit research execution environment |
+| **Julia Core package code** |Reusable components, helpers, simulation intent| package code owns reusable semantics |
+| **Native Julia script / REPL** | Small checking or debugging | explicit local execution |
 
-## 教學列表
+## Teaching list
 
-| 教學 | 說明 |
+| Teaching | Instructions |
 |------|------|
-| [Pluto Research](../pluto/index.md) | Pluto Notebook 的研究執行與參數掃描入口 |
-| [Notebook Interface](../../reference/notebooks/index.md) | Pluto 與 Python notebook 的使用邊界 |
-| [原生 Julia 模擬](native-julia.md) | 直接使用 Julia Core / JosephsonCircuits.jl 進行研究模擬 |
+| [Pluto Research](../pluto/index.md) | Research execution and parameter scanning entrance of Pluto Notebook |
+| [Notebook Interface](../../reference/notebooks/index.md) | Boundaries of use between Pluto and Python notebook |
+| [Native Julia simulation](native-julia.md) | Use Julia Core / JosephsonCircuits.jl directly for research simulation |
 
-## 相關資源
+## Related resources
 
-- [Tutorial: LC 共振器](../circuit-authoring/lc-resonator.md) - 完整入門案例
-- [Core Reference](../../reference/core/index.md) - Julia Core、Python Core、Runner 與 Analysis Bridge 的責任邊界
-- [Extending Research Tools](../research-tools/index.md) - 貢獻者指南
+- [Tutorial: LC Resonator](../circuit-authoring/lc-resonator.md) - Complete Getting Started Case
+- [Core Reference](../../reference/core/index.md) - Responsibility boundaries for Julia Core, Python Core, Runner and Analysis Bridge
+- [Extending Research Tools](../research-tools/index.md) - Contributor Guide

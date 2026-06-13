@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Routing
-  - 路由策略
+ - Routing
+ - Routing strategy
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/ui-ux
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
 status: stable
 owner: docs-team
 audience: contributor
-scope: Next.js App Router 的 route groups、dynamic routes 與 layout 邊界。
+scope: Next.js App Router’s route groups, dynamic routes and layout boundaries.
 version: v1.1.0
 last_updated: 2026-03-14
 updated_by: docs-team
@@ -22,7 +22,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="note" title="Use this page for route shape decisions">
 
-這頁先定 route group、dynamic route 與 layout boundary 的最低規則。需要知道每一頁具體 route 時，應回到 frontend page reference。
+This page first defines the minimum rules for route group, dynamic route and layout boundary. When you need to know the specific route of each page, you should return to the frontend page reference.
 
 </Aside>
 
@@ -30,18 +30,18 @@ import { Aside } from '@astrojs/starlight/components';
 
 | concern | baseline |
 | --- | --- |
-| route groups | 用來組織 workspace 與非 workspace 區 |
-| dynamic routes | 優先 `[id]` 或 `[resourceId]` |
-| URL ownership | 不要讓 URL string 散落在 component |
-| nesting | 超過四層時要先檢討資訊架構 |
+| route groups | used to organize workspace and non-workspace areas |
+| dynamic routes | Prioritize `[id]` or `[resourceId]` |
+| URL ownership | Don't let URL strings litter components |
+| nesting | If there are more than four layers, review the information architecture first |
 
 ## Rules
 
-- 使用 App Router route groups 組織 workspace
-- dynamic route 優先使用 `[id]` 或 `[resourceId]`
-- 不要硬編碼 URL string 到處散落
-- layout boundary 要和產品資訊架構對齊
-- 避免超過 4 層以上的 route nesting
+- Organize workspaces using App Router route groups
+- dynamic route preferentially uses `[id]` or `[resourceId]`
+- Don't hardcode URL strings scattered everywhere
+- The layout boundary should be aligned with the product information architecture
+- Avoid more than 4 levels of route nesting
 
 ## Agent Rule
 ```markdown

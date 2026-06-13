@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Code Style
-  - 程式碼風格
+ - Code Style
+ - coding style
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/code-quality
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/code-quality
 status: stable
 owner: docs-team
 audience: contributor
-scope: Python 與 TypeScript 的共同程式風格與實作原則。
+scope: Common programming styles and implementation principles for Python and TypeScript.
 version: v3.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -20,34 +20,34 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Code Style
 
-本專案的風格規則以「可讀、可改、可測」為優先。
-若某個實作讓 UI、API、Notebook、Runner 或 scripts 其中一層看起來方便，卻讓共享規則變得分散或難以驗證，則視為不合格。
+The style rules of this project give priority to "readable, changeable, and testable".
+An implementation is considered ineligible if it makes one of the UI, API, Notebook, Runner, or scripts layers look convenient, but makes sharing rules fragmented or difficult to verify.
 
 <Aside type="note" title="How to use this page">
 
-先看跨語言原則，再看對應語言規則。若某個變更同時碰到 Python 與 TypeScript，優先遵守共通邊界，再處理語言特有風格。
+Let’s look at cross-language principles first, and then look at corresponding language rules. If a change touches both Python and TypeScript, priority is given to adhering to common boundaries and then handling language-specific styles.
 
 </Aside>
 
 ## Style Map
 
-| 區塊 | 回答的問題 |
+| Blocks | Answered Questions |
 | --- | --- |
-| Cross-Language Principles | 所有語言都必須遵守的結構原則 |
-| Language Rules | Python 與 TypeScript 各自怎麼保持可讀與可驗證 |
-| Refactoring Rule | 什麼樣的重構粒度才算合格 |
+| Cross-Language Principles | Structural principles that all languages ​​must abide by |
+| Language Rules | How Python and TypeScript remain readable and verifiable |
+| Refactoring Rule | What kind of refactoring granularity is qualified |
 
 ## Cross-Language Principles
 
-- 優先小 diff，避免無關重構
-- 一個函式只做一件事
-- 明確命名，不用模糊縮寫
-- 避免把業務邏輯塞進 route handler、React component、notebook helper 或 script
-- 重複邏輯先抽到共享層，再擴增呼叫點
+- Prioritize small diffs and avoid irrelevant refactorings
+- A function only does one thing
+- Clearly named, no vague abbreviations
+- Avoid stuffing business logic into route handlers, React components, notebook helpers or scripts
+- Repeated logic is extracted to the shared layer first, and then the call points are expanded.
 
 <Aside type="caution" title="Boundary rule">
 
-看起來方便的 inline workflow，若讓 route handler、component、notebook helper 或 script 擁有真正的業務決策，就屬於不合格實作。
+Inline workflow may seem convenient, but if route handlers, components, notebook helpers or scripts have real business decisions, it is a substandard implementation.
 
 </Aside>
 
@@ -57,20 +57,20 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 <TabItem label="Python">
 
 
-- 使用現代語法：`list[str]`、`str | None`
-- 依照 Ruff 規範維持 import 與格式一致
-- 在科學計算情境中，必要時可在名稱中保留單位，例如 `frequency_hz`
-- `core/` 與 service 層禁止 `print()`
+- Use modern syntax: `list[str]`, `str | None`
+- Keep import and format consistent according to Ruff specification
+- In a scientific computing context, keep the units in the name if necessary, e.g. `frequency_hz`
+- `core/` and service layer prohibit `print()`
 
 </TabItem>
 
 <TabItem label="TypeScript">
 
 
-- 使用 TypeScript strict mode
-- 禁止無理由的 `any`
-- component props、service 回傳值、schema parse 結果都要有明確型別
-- React component 應保持 presentation-focused，資料抓取與 mutation 邏輯集中在 hooks / services
+- Use TypeScript strict mode
+- Unreasonable `any` is prohibited
+- component props, service return values, and schema parse results must have clear types
+- React components should remain presentation-focused, and data fetching and mutation logic should be concentrated in hooks / services
 
 </TabItem>
 
@@ -78,14 +78,14 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 ## Refactoring Rule
 
-- 先做能被驗證的小步修改
-- 先修正結構問題，再考慮抽象化
-- 若抽象只服務單一使用點且沒有減少複雜度，先不要抽
+- Make small changes first that can be verified
+- Fix structural problems first, then consider abstraction
+- If the abstraction only serves a single use point and does not reduce complexity, don't abstract it yet
 
 <details class="docs-disclosure docs-disclosure--note">
 <summary>Why this page stays short</summary>
 
-這頁只定共通風格，不重複 lint、type-check、error handling 等更細的 guardrails。需要具體工具規則時，直接看同層專頁。
+This page only defines common styles and does not repeat lint, type-check, error handling and other more detailed guardrails. If you need specific tool rules, please refer directly to the same page.
 
 </details>
 
@@ -93,15 +93,15 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 ```markdown
 ## Code Style
 - **Standard**:
-    - Python uses Ruff + modern Python syntax
-    - TypeScript uses strict typing and consistent formatting
+  - Python uses Ruff + modern Python syntax
+  - TypeScript uses strict typing and consistent formatting
 - **Naming**:
-    - variables use clear nouns
-    - functions use clear verb phrases
-    - scientific names may include units when that removes ambiguity
+  - variables use clear nouns
+  - functions use clear verb phrases
+  - scientific names may include units when that removes ambiguity
 - **Boundaries**:
-    - do not put business workflow logic inside route handlers, React components, notebooks, or scripts
-    - shared logic belongs in app backend services, Julia Core, Julia Runner, or explicit contract packages
+  - do not put business workflow logic inside route handlers, React components, notebooks, or scripts
+  - shared logic belongs in app backend services, Julia Core, Julia Runner, or explicit contract packages
 - **Refactoring**: prefer small, atomic changes
 - **Complexity**: keep functions focused; split code when one function starts handling multiple responsibilities
 ```

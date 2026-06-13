@@ -1,43 +1,43 @@
 ---
 aliases:
 - Dataset Schema Design
-- 資料集 Schema 設計
+- Data set Schema design
 - Schema Design
-- Schema 設計
+- Schema design
 tags:
-  - diataxis/explanation
-  - status/stable
-  - topic/architecture
-  - topic/data-format
-  - audience/team
+ - diataxis/explanation
+ - status/stable
+ - topic/architecture
+ - topic/data-format
+ - audience/team
 status: stable
 owner: docs-team
 audience: team
-scope: DatasetRecord/DataRecord 的資料集 Schema 設計細節
+scope: DatasetRecord/DataRecord’s data set Schema design details
 version: v0.2.0
 last_updated: 2026-02-27
 updated_by: docs-team
 sidebar:
-  label: Dataset Schema Design
-  order: 40
+ label: Dataset Schema Design
+ order: 40
 ---
 
 # Dataset Schema Design
 
-目前的標準資料格式以 **SQLite Dataset** 為核心，使用 `DatasetRecord`/`DataRecord` 存放資料與關聯資訊。
+The current standard data format is based on **SQLite Dataset** and uses `DatasetRecord`/`DataRecord` to store data and related information.
 
-## 核心概念
+## Core concepts
 
-- **DatasetRecord**：描述一組資料的 metadata（名稱、來源、標籤、建立時間）。
-- **DataRecord**：存放實際量測/模擬數據與軸資訊（頻率、偏壓等）。
-- **DerivedParameter**：分析後的參數結果（例如擬合得到的 $L_s, C$）。
+- **DatasetRecord**: Metadata describing a set of data (name, source, label, creation time).
+- **DataRecord**: stores actual measurement/simulation data and axis information (frequency, bias, etc.).
+- **DerivedParameter**: Parameter results after analysis (such as $L_s, C$ obtained by fitting).
 
-## 擴展性考量
+## Scalability considerations
 
-- **多軸支援**：同一 Dataset 可包含多維掃描資料。
-- **多參數**：一個 Dataset 可以同時包含多個參數族（S/Y/Z）或不同表示法。
-- **可追溯**：資料來源與標籤集中管理，方便回溯與查詢。
+- **Multi-axis support**: The same Dataset can contain multi-dimensional scan data.
+- **Multiple Parameters**: A Dataset can contain multiple parameter families (S/Y/Z) or different representations at the same time.
+- **Traceability**: Centralized management of data sources and tags to facilitate traceability and query.
 
 ## Related
 
-- [Dataset Record Reference](../../../reference/data-formats/dataset-record.mdx) - 完整欄位說明
+- [Dataset Record Reference](../../data-contracts/dataset-record.mdx) - Complete field description

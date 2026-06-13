@@ -1,16 +1,16 @@
 ---
 aliases:
-  - App Shared Reference
-  - Shared App Model
+ - App Shared Reference
+ - Shared App Model
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: draft
 owner: docs-team
 audience: team
-scope: App 共享模型，涵蓋 runtime modes、workspace、resource scope、auth、runtime、observability 與 audit
+scope: App sharing model, covering runtime modes, workspace, resource scope, auth, runtime, observability and audit
 version: v0.4.0
 last_updated: 2026-03-25
 updated_by: codex
@@ -20,43 +20,43 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Shared App Model
 
-本區收錄 Frontend 與 Backend 共同依賴的 App-level shared model。
+This area includes the App-level shared model that Frontend and Backend both depend on.
 
 <Aside type="note" title="What belongs here">
 
-若一份文件同時在回答 shell context、workspace collaboration、task execution visibility、runtime governance 或 audit trail，
-但又不屬於單一 frontend page 或單一 backend surface，它就應該放在這裡。
+If a document is also responding to shell context, workspace collaboration, task execution visibility, runtime governance, or audit trail,
+But it does not belong to a single frontend page or a single backend surface, so it should be placed here.
 
 </Aside>
 
 <Aside type="caution" title="Not Core, Not CLI">
 
-本區不是 `Core`，也不是 `CLI`。
-這些頁主要定義 multi-user app 與 service-backed workflows 的 shared semantics。
+This zone is neither `Core` nor `CLI`.
+These pages mainly define the shared semantics of multi-user apps and service-backed workflows.
 
 </Aside>
 
 <Aside type="note" title="Same app across local and online modes">
 
-本區也負責同一個 App 在 `Local Mode` 與 `Online Mode` 之間共享的 mode model。
-若某個 contract 需要回答「local 是否 bypass auth」、「online 是否需要 collaboration」，通常都屬於這裡。
+This area is also responsible for the mode model shared between `Local Mode` and `Online Mode` for the same App.
+If a contract needs to answer "whether local bypass auth" or "whether online requires collaboration", it usually belongs here.
 
 </Aside>
 
 ## Grouping Principle
 
-本區優先依 **責任類型** 分組，而不是依 `Local Mode` / `Online Mode` 分樹。
+This area gives priority to grouping by **responsibility type** instead of splitting trees according to `Local Mode` / `Online Mode`.
 
-原因是：
+The reason is:
 
-- 多數 shared contracts 同時適用於 `local` 與 `online`
-- 差異通常是 applicability 或 authority semantics，不是 owner 真的換了一套
-- 若直接拆成 mode-based folder / nav，反而容易長出兩份互相重複的 SoT
+- Most shared contracts apply to both `local` and `online`
+- The difference is usually applicability or authority semantics, not that the owner has really changed his mind
+- If you directly split it into a mode-based folder / nav, it will be easy to have two duplicate SoTs.
 
 <Aside type="note" title="Mode is an applicability dimension">
 
-`Local Mode` / `Online Mode` 應優先在各頁 contract 內表達 applicability 與差異語意。
-Shared index 與 nav 則優先回答「這份 contract 在管什麼責任」。
+`Local Mode` / `Online Mode` should give priority to expressing applicability and difference semantics in the contract on each page.
+Shared index and nav give priority to answering "What responsibilities does this contract manage?"
 
 </Aside>
 
@@ -68,9 +68,9 @@ Shared index 與 nav 則優先回答「這份 contract 在管什麼責任」。
 
 | Page | Core focus |
 |---|---|
-| [Runtime Modes](runtime-modes.mdx) | 同一個 App 的 `Local Mode` / `Online Mode`、desktop runtime profile overlay、mode switch 與 isolation rules |
-| [Mode Feature Matrix](mode-feature-matrix.md) | 各 shared surfaces / workflows 在 `Local Mode` 與 `Online Mode` 下的 support matrix |
-| [Response & Error Contract](response-and-error-contract.mdx) | success / error envelope、common error families、frontend display contract |
+| [Runtime Modes](runtime-modes.mdx) | `Local Mode` / `Online Mode`, desktop runtime profile overlay, mode switch and isolation rules of the same App |
+| [Mode Feature Matrix](mode-feature-matrix.md) | The support matrix of each shared surface / workflows under `Local Mode` and `Online Mode` |
+| [Response & Error Contract](response-and-error-contract.mdx) |success / error envelope, common error families, frontend display contract|
 
 </TabItem>
 
@@ -79,10 +79,10 @@ Shared index 與 nav 則優先回答「這份 contract 在管什麼責任」。
 
 | Page | Core focus |
 |---|---|
-| [Identity & Workspace Model](identity-workspace-model.mdx) | user、session、active workspace、active dataset 的最小模型 |
-| [Resource Ownership & Visibility](resource-ownership-and-visibility.mdx) | dataset / schema / task / result 的 workspace ownership 與 sharing rules |
-| [Authentication & Authorization](authentication-and-authorization.mdx) | workspace membership、capabilities、task execution permissions |
-| [Outbound Email Delivery](outbound-email-delivery.mdx) | workspace invitation 的 SMTP baseline 與 mail delivery contract |
+| [Identity & Workspace Model](identity-workspace-model.mdx) | Minimal model for user, session, active workspace, active dataset |
+| [Resource Ownership & Visibility](resource-ownership-and-visibility.mdx) |dataset / schema / task / result of workspace ownership and sharing rules|
+| [Authentication & Authorization](authentication-and-authorization.mdx) |workspace membership, capabilities, task execution permissions|
+| [Outbound Email Delivery](outbound-email-delivery.mdx) |workspace invitation of SMTP baseline and mail delivery contract|
 
 </TabItem>
 
@@ -91,7 +91,7 @@ Shared index 與 nav 則優先回答「這份 contract 在管什麼責任」。
 
 | Page | Core focus |
 |---|---|
-| [Task Runtime & Processors](task-runtime-and-processors.md) | Runner / processor status、task state machine、cancel / terminate、local runtime topology |
+| [Task Runtime & Processors](task-runtime-and-processors.md) |Runner / processor status, task state machine, cancel / terminate, local runtime topology|
 
 </TabItem>
 
@@ -100,8 +100,8 @@ Shared index 與 nav 則優先回答「這份 contract 在管什麼責任」。
 
 | Page | Core focus |
 |---|---|
-| [Observability Model](observability-model.mdx) | audit logging、workflow observability、product telemetry 的 shared taxonomy |
-| [Audit Logging](audit-logging.mdx) | actor-centric audit trail 與 separate audit store |
+| [Observability Model](observability-model.mdx) |audit logging, workflow observability, product telemetry of shared taxonomy|
+| [Audit Logging](audit-logging.mdx) |actor-centric audit trail and separate audit store|
 
 </TabItem>
 
@@ -111,4 +111,4 @@ Shared index 與 nav 則優先回答「這份 contract 在管什麼責任」。
 
 * [Frontend Reference](../frontend/index.md)
 * [Backend Reference](../backend/index.md)
-* [Architecture Reference](../../reference/architecture/index.md)
+* [Architecture Reference](../architecture/contracts/index.md)

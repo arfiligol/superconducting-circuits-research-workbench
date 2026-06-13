@@ -1,7 +1,7 @@
 ---
 aliases:
 - Platform Architecture Concepts
-- 架構概念
+- Architecture concepts
 tags:
 - diataxis/explanation
 - audience/team
@@ -9,37 +9,37 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Architecture 說明索引，涵蓋 Clean Architecture、Data Storage、Desktop、Observability、Pipeline、Circuit Simulation
+scope: Architecture description index, covering Clean Architecture, Data Storage, Desktop, Observability, Pipeline, Circuit Simulation
 version: v0.4.0
 last_updated: 2026-03-25
 updated_by: codex
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 # Architecture
 
-這個區塊整理系統的架構觀點，聚焦「為什麼這樣設計」與「如何運作」。
+The architectural perspective of this block organization system focuses on "why it is designed this way" and "how it works".
 
 ## Sections
 
 - [Clean Architecture](clean-architecture.md)
-  分層邊界、依賴方向、組合位置。
+Hierarchical boundaries, dependency directions, combined locations.
 - [Data Storage](data-storage.md)
-  `DesignRecord / TraceRecord / TraceBatchRecord / TraceStore` 的責任分層。
+Layering of responsibilities for `DesignRecord / TraceRecord / TraceBatchRecord / TraceStore`.
 - [Desktop Runtime Supervisor](desktop-runtime-supervisor.md)
-  為什麼 desktop shell 應採 Electron + runtime profile supervisor，而不是讓 main process 承擔 solver work。
+Why desktop shell should use Electron + runtime profile supervisor, instead of letting the main process take on the solver work.
 - [Observability Taxonomy](observability-taxonomy.mdx)
-  為什麼 audit logging、workflow observability 與 product telemetry 必須分層。
+Why audit logging, workflow observability and product telemetry must be layered.
 - [Pipeline](../pipeline/index.md)
-  Research Direct、Product Async 與 Data / Platform Notebook tracks 的資料與執行流程。
+Data and execution processes for Research Direct, Product Async and Data / Platform Notebook tracks.
 - [Circuit Simulation](circuit-simulation/index.mdx)
-  Schema 編輯、Live Preview、領域語意與互動策略。
+Schema editing, Live Preview, domain semantics and interaction strategies.
 - [Visualization Backend](../design-decisions/visualization-backend.md)
-  Plotly / Matplotlib 的定位與取捨。
+Positioning and trade-offs of Plotly / Matplotlib.
 
 ## Related
 
 - [Concepts](../index.mdx)
-- [Data Formats](../../../reference/data-formats/index.mdx)
+- [Data Formats](../../data-contracts/index.mdx)

@@ -1,7 +1,7 @@
 ---
 aliases:
 - Circuit Simulation Architecture
-- 電路模擬架構
+- circuit simulation architecture
 tags:
 - diataxis/explanation
 - audience/team
@@ -10,37 +10,37 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Circuit Simulation 在 UI/CLI 的結構、即時預覽、語意映射與編輯器策略
+scope: Circuit Simulation’s UI/CLI structure, instant preview, semantic mapping and editor strategy
 version: v0.2.0
 last_updated: 2026-03-01
 updated_by: docs-team
 sidebar:
-  label: Circuit Simulation
-  order: 60
+ label: Circuit Simulation
+ order: 60
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 # Circuit Simulation
 
-Circuit Simulation 區塊聚焦三件事：Schema 如何被編輯、如何被理解（Live Preview）、以及如何維持可維護的互動體驗。
+The Circuit Simulation block focuses on three things: how the Schema is edited, how it is understood (Live Preview), and how to maintain a maintainable interactive experience.
 
-<Aside type="note" title="定位">
+<Aside type="note" title="position">
 
-這裡討論的是架構與設計理由（why）。實際操作流程請看 Workflows。
+What is discussed here is the architecture and design reasons (why). Please see Workflows for the actual operation process.
 
 </Aside>
 
 ## Topics
 
 - [Circuit Schema Live Preview](../../design-decisions/circuit-schema-live-preview.mdx)
-  Netlist 到 SVG 的佈局契約、標註策略、Panzoom 狀態同步與非回歸準則。
+Netlist to SVG layout contracts, annotation strategies, Panzoom state synchronization and non-regression criteria.
 - [Schema Editor Formatting](../../design-decisions/schema-editor-formatting.mdx)
-  為何格式化能力屬於架構決策，以及它與 source-form SoT / expansion pipeline 的邊界。
+Why formatting capabilities are an architectural decision, and where it ties into the source-form SoT / expansion pipeline.
 - [Live Preview Domain Semantics Profiles](../../design-decisions/live-preview-domain-semantics.mdx)
-  Qubit / JPA / JTWPA / Quantum Memory 的語意規則與視覺映射。
+Semantic rules and visual mapping of Qubit / JPA / JTWPA / Quantum Memory.
 - [Simulation Result Views](simulation-result-views.mdx)
-  為什麼 Raw / Post-Processed / Sweep 要分成三個結果節點，以及它們共享哪些互動心智模型。
+Why Raw / Post-Processed / Sweep are divided into three result nodes, and what interactive mental models they share.
 
 ## Related
 

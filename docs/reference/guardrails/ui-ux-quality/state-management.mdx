@@ -1,16 +1,16 @@
 ---
 aliases:
-  - State Management
-  - 狀態管理
+ - State Management
+ - Status management
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/ui-ux
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
 status: stable
 owner: docs-team
 audience: contributor
-scope: frontend server/client/form state 的策略。
+scope: Strategy for frontend server/client/form state.
 version: v1.1.0
 last_updated: 2026-03-14
 updated_by: docs-team
@@ -22,31 +22,31 @@ import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="note" title="How to read this page">
 
-先判斷狀態屬於 server、UI、form 還是 URL，再選工具。不要從工具喜好反推狀態邊界。
+First determine whether the status belongs to server, UI, form or URL, and then select the tool. Don't extrapolate state boundaries from tool preferences.
 
 </Aside>
 
 ## State Categories
 
-| 類型 | 工具 | 用途 |
+| Type | Tool | Purpose |
 | --- | --- | --- |
-| Server State | SWR | API 讀取、cache、revalidation |
-| Client UI State | React Context 或局部 state | shell 狀態、選取狀態、暫時 UI 狀態 |
-| Form State | React Hook Form + Zod | 表單驗證與提交 |
-| URL State | route params / search params | 可分享、可重播的頁面狀態 |
+| Server State | SWR | API read, cache, validation |
+| Client UI State | React Context or local state | shell state, selection state, temporary UI state |
+| Form State | React Hook Form + Zod | Form validation and submission |
+| URL State | route params / search params | Shareable and replayable page state |
 
 <Aside type="caution" title="Do not hide shareable state">
 
-如果某個狀態能影響使用者看到的資料集合或頁面結果，而且需要可重播/可分享，就不應被偷偷藏在 global context 或 local component state。
+If a state affects the collection of data or page results seen by the user, and needs to be replayable/shareable, it should not be hidden in the global context or local component state.
 
 </Aside>
 
 ## Rules
 
-- component 內不要直接散落 `fetch`
-- API 讀取應集中在 hooks / services
-- mutation 應明確處理 loading、success、error
-- 可以由 URL 表示的狀態，不要藏在 global context
+- Do not scatter `fetch` directly inside the component
+- API reading should be concentrated in hooks/services
+- mutation should handle loading, success, error explicitly
+- State that can be represented by URL, do not hide it in global context
 
 ## Agent Rule
 ```markdown

@@ -1,20 +1,20 @@
 ---
 title: "Tasks"
 aliases:
-  - "Tasks UI"
-  - "Task Center"
-  - "Task / Execution Center"
+ - "Tasks UI"
+ - "Task Center"
+ - "Task / Execution Center"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/ui
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/ui
 page_id: app.page.tasks
 route: /tasks
 status: stable
 owner: docs-team
 audience: team
-scope: "/tasks 的 Task / Execution Center、execution history、task detail、Runner runtime summary、result handoff 與 control-action 契約"
+scope: "/tasks of Task / Execution Center, execution history, task detail, Runner runtime summary, result handoff and control-action contract"
 version: v1.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -28,20 +28,20 @@ import { Aside } from '@astrojs/starlight/components';
 
 `/tasks` is the Task / Execution Center. It is the product surface for cross-workbench execution visibility, task detail, progress, errors, actions, Runner runtime status summary, and result handoff.
 
-本頁負責：
+This page is responsible for:
 
-- 以 extended browse 方式檢視 persisted tasks
-- 檢視 execution history、search 與 filter 結果
-- 以 master-detail 方式檢視 task detail、event history、result attachment 與 control actions
-- 提供比 Header `Global Context` 更完整的 Runner runtime summary 與 Runner status detail
+- View persisted tasks in extended browse mode
+- View execution history, search and filter results
+- View task detail, event history, result attachment and control actions in master-detail mode
+- Provides a more complete Runner runtime summary and Runner status detail than Header `Global Context`
 
-本頁不負責：
+This page is not responsible for:
 
-- 取代 Simulation Workbench 或 Analysis Workbench 的 request-building surface
-- 取代 workflow page 的 stage-local result context
-- 取代 `Header -> Global Context` 的 quick management 角色
-- 成為 separate queue-service UI 或 standalone runtime wall
-- 在 page body 重做 runtime mode / active dataset 的 shell context wall
+- Replaces the request-building surface of Simulation Workbench or Analysis Workbench
+- Replaces the stage-local result context of workflow page
+- Replaces quick management role of `Header -> Global Context`
+- Become a separate queue-service UI or standalone runtime wall
+- Redo the shell context wall of runtime mode / active dataset in page body
 
 <Aside type="note" title="Two-layer task execution model">
 
@@ -53,17 +53,17 @@ Simulation and Analysis workbenches remain first-class workflow surfaces; `/task
 
 ## User Goal
 
-- 快速找到正在跑、剛完成、或需要處理的 task
-- 透過 filter / search / history 找到特定 task
-- 檢查 task detail、event timeline、result linkage 與 Runner runtime 狀態
-- 對可見 task 執行 `Attach`、`Cancel`、`Terminate`、`Retry`
+- Quickly find tasks that are running, just completed, or need to be processed
+- Find specific tasks through filter / search / history
+- Check task detail, event timeline, result linkage and Runner runtime status
+- Execute `Attach`, `Cancel`, `Terminate`, `Retry` on visible tasks
 
-非目標：
+Non-target:
 
-- 不在此頁重新完成 simulation 或 analysis workflow 本身
-- 不把 page body 變成第二個 shell context 管理牆
-- 不以跨頁 CTA 牆取代清楚的 task browse 與 detail IA
-- 不把 persisted task execution 呈現成 Redis/RQ-style queue-service product
+- Do not re-complete the simulation or analysis workflow itself on this page
+- Do not turn the page body into a second shell context management wall
+- Do not replace clear task browse and detail IA with cross-page CTA wall
+- Do not render persisted task execution into Redis/RQ-style queue-service product
 
 ## Layout Structure
 
@@ -75,28 +75,28 @@ Simulation and Analysis workbenches remain first-class workflow surfaces; `/task
 
 ```mermaid
 flowchart TD
-    Header["Shared Header / Global Context"] --> Main["Tasks Page Body"]
-    Main --> H1["Page Header"]
-    Main --> Summary["Execution + Runner Runtime Summary"]
-    Main --> Filters["Search / Filters / Scope"]
-    Main --> List["Task List / History Table"]
-    Main --> Detail["Task Detail Panel"]
-    Detail --> Events["Event Timeline"]
-    Detail --> Result["Result Attachment"]
-    Detail --> Actions["Attach / Cancel / Terminate / Retry"]
+  Header["Shared Header / Global Context"] --> Main["Tasks Page Body"]
+  Main --> H1["Page Header"]
+  Main --> Summary["Execution + Runner Runtime Summary"]
+  Main --> Filters["Search / Filters / Scope"]
+  Main --> List["Task List / History Table"]
+  Main --> Detail["Task Detail Panel"]
+  Detail --> Events["Event Timeline"]
+  Detail --> Result["Result Attachment"]
+  Detail --> Actions["Attach / Cancel / Terminate / Retry"]
 ```
 
 ## Component Inventory
 
 | ID | Component | Role | Required behavior |
 |---|---|---|---|
-| `C1` | Page Header | page identity | 明確說明這是 Task / Execution Center |
-| `C2` | Execution Summary | top-level state | 顯示 waiting / preparing / running / saving result / publishing / completed / failed / cancelled counts 與 concise Runner runtime overview |
-| `C3` | Filter Bar | browse controls | 提供 scope、status、task family、search 等 controls |
-| `C4` | Tasks Table | master list | 顯示 persisted task rows，支援排序、選取與 cursor-based browse |
-| `C5` | Task Detail Panel | detail surface | 顯示 selected task 的 lifecycle、context、result attachment 與 allowed actions |
-| `C6` | Event Timeline | diagnostics drill-down | 顯示 selected task 的 append-only event history |
-| `C7` | Runner Status Detail | extended operational detail | 提供比 Header 更完整的 Runner runtime inspection，並以 `idle / running / draining / degraded / offline` 呈現 liveness semantics |
+| `C1` | Page Header | page identity | Make it clear that this is Task / Execution Center |
+| `C2` | Execution Summary | top-level state |shows waiting / preparing / running / saving result / publishing / completed / failed / cancelled counts and concise Runner runtime overview|
+| `C3` | Filter Bar | browse controls |Provide controls such as scope, status, task family, search, etc.|
+| `C4` | Tasks Table | master list | Display persisted task rows, support sorting, selection and cursor-based browse |
+| `C5` | Task Detail Panel | detail surface |shows selected task of lifecycle, context, result attachment and allowed actions|
+| `C6` | Event Timeline | diagnostics drill-down |Display append-only event history of selected task|
+| `C7` | Runner Status Detail | extended operational detail | Provides a more complete Runner runtime inspection than Header and presents liveness semantics with `idle / running / draining / degraded / offline` |
 
 ## Data & State Contract
 
@@ -105,7 +105,7 @@ flowchart TD
 | Data | Source | Required | Use |
 |---|---|---:|---|
 | task rows | task execution surface | ✅ | list / history browse |
-| Runner runtime summary | task execution + runtime surface | ✅ | top summary 與 Runner status detail |
+| Runner runtime summary | task execution + runtime surface | ✅ |top summary and Runner status detail|
 | task detail | task execution surface | ✅ | detail panel |
 | event history | task execution surface | ✅ | timeline |
 | result attachment | task execution surface | ✅ | result linkage / handoff |
@@ -115,10 +115,10 @@ flowchart TD
 
 | State | Required behavior |
 |---|---|
-| `loading` | table 與 detail panel 可分區 loading，不把整頁鎖死 |
-| `empty` | 若當前 filter 下沒有 rows，顯示 concise no-executions guidance |
-| `partial` | 某個 detail 區塊失敗時，只局部報錯 |
-| `error` | 顯示 task query 或 detail fetch 的局部錯誤，不遮蔽其他已成功區塊 |
+| `loading` | table and detail panel can be partitioned for loading without locking the entire page |
+| `empty` | If there are no rows under the current filter, concise no-executions guidance will be displayed |
+| `partial` | When a detail block fails, only a partial error is reported |
+| `error` | Display local errors of task query or detail fetch without covering other successful blocks |
 
 ### Product status labels
 
@@ -144,32 +144,32 @@ Runner completion does not equal product result availability. The Application ma
 ## Interaction Flows
 
 1. **Open from Global Context**
-   - 使用者在 Header `Tasks` trigger 進行 quick management
-   - 若需要更多 history / filtering / detail，進入 `/tasks`
-   - page 以目前 runtime mode / workspace context 初始化 browse state
+- User performs quick management on Header `Tasks` trigger
+- If you need more history / filtering / detail, enter `/tasks`
+- page initializes browse state with current runtime mode / workspace context
 
 2. **Browse and inspect**
-   - 使用者調整 filters 或 search
-   - table 更新 rows
-   - 選中某 row 後，detail panel 顯示 task detail、events、result attachment 與 allowed actions
+- User adjusts filters or search
+- table update rows
+- After selecting a row, the detail panel displays task detail, events, result attachment and allowed actions.
 
 3. **Control action**
-   - 使用者在 detail panel 或 row action 執行 `Attach`、`Cancel`、`Terminate`、`Retry`
-   - backend 回寫新的 persisted state
-   - table 與 detail panel 同步刷新
+- User executes `Attach`, `Cancel`, `Terminate`, `Retry` in detail panel or row action
+- backend writes back the new persisted state
+- Synchronous refresh of table and detail panel
 
 4. **Mode or workspace change**
-   - Header 切換 runtime mode 或 active workspace
-   - `/tasks` 重新綁定 task execution / Runner runtime authority
-   - 舊 rows 不得和新 mode / workspace 混顯
+- Header switches runtime mode or active workspace
+- `/tasks` rebind task execution / Runner runtime authority
+- Old rows must not be mixed with new mode / workspace
 
 ## Visual Rules
 
-- 使用 master-detail，而不是 giant stacked diagnostics wall
-- quick summary 在上，extended browse / detail 在下
-- task history / detail 應是主要視覺；cross-page CTA 應安靜且稀少
-- Runner status detail 可以比 Header 詳細，但不應壓過 task list 與 task detail 主體
-- page body 不得重複 `Runtime Mode`、`Active Workspace`、`Active Dataset` 等 shell-owned context cards
+- Use master-detail instead of giant stacked diagnostics wall
+- quick summary is at the top, extended browse / detail is at the bottom
+- task history/detail should be the main visual; cross-page CTAs should be quiet and sparse
+- Runner status detail can be more detailed than Header, but should not overwhelm task list and task detail bodies.
+- page body must not repeat `Runtime Mode`, `Active Workspace`, `Active Dataset`, etc. shell-owned context cards
 
 <Aside type="caution" title="Runner diagnostics are secondary">
 
@@ -181,11 +181,11 @@ Runner status must not dominate the page or become a standalone operations conso
 
 ## Acceptance Checklist
 
-- [ ] `/tasks` 被定義為 Task / Execution Center，而不是 workflow page 的替代品
-- [ ] `Header -> Global Context` 與 `/tasks` 的角色區分清楚
-- [ ] page 支援 extended history / filter / detail / action，不只是 panel 放大版
-- [ ] task execution / Runner runtime authority 仍來自 backend persisted task surface，不由 frontend 自行拼裝
-- [ ] page body 不重做 shell context wall，也不變成 handoff button wall
+- [ ] `/tasks` is defined as Task / Execution Center, not as a replacement for workflow page
+- [ ] The roles of `Header -> Global Context` and `/tasks` are clearly distinguished
+- [ ] page supports extended history / filter / detail / action, not just an enlarged version of the panel
+- [ ] task execution / Runner runtime authority still comes from the backend persisted task surface and is not assembled by the frontend itself.
+- [ ] page body does not redo the shell context wall, nor does it become a handoff button wall
 
 ## Related
 

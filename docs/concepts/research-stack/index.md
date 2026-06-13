@@ -1,11 +1,11 @@
 ---
 aliases:
-  - Research Stack
-  - Research Runtime Boundaries
+ - Research Stack
+ - Research Runtime Boundaries
 tags:
-  - diataxis/explanation
-  - audience/team
-  - topic/architecture
+ - diataxis/explanation
+ - audience/team
+ - topic/architecture
 status: stable
 owner: docs-team
 audience: team
@@ -15,8 +15,8 @@ last_updated: 2026-06-12
 updated_by: codex
 title: Research Stack
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 # Research Stack

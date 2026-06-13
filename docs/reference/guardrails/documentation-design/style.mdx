@@ -1,18 +1,18 @@
 ---
 aliases:
-  - "Documentation Style"
-  - "文件風格"
-  - "Micro Style"
-  - "Writing & Visual Elements"
+ - "Documentation Style"
+ - "File style"
+ - "Micro Style"
+ - "Writing & Visual Elements"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/documentation
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/documentation
 status: stable
 owner: docs-team
 audience: team
-scope: "Micro Style / Writing & Visual Elements：語氣、段落寫法與視覺元素使用（Astro + Starlight）"
+scope: "Micro Style / Writing & Visual Elements: Tone, paragraph writing and use of visual elements (Astro + Starlight)"
 version: v0.7.0
 last_updated: 2026-06-12
 updated_by: codex
@@ -22,117 +22,117 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Micro Style / Writing & Visual Elements
 
-本文件定義 `Documentation Style` 的微觀層，負責語氣、段落寫法與視覺元素的正式規範。來源 Markdown / MDX 以 `docs/` 為準，並由 Starlight staging transformer 轉成 Astro + Starlight 可渲染的格式。
+This document defines the micro-level of `Documentation Style`, responsible for the formal specification of tone, paragraph writing, and visual elements. The source Markdown / MDX is based on `docs/` and converted to a format that can be rendered by Astro + Starlight by Starlight staging transformer.
 
-<Aside type="note" title="對應的 Macro Style">
+<Aside type="note" title="Corresponding Macro Style">
 
-如果你要處理的是整頁的資訊分層、overview/index 的頁面地圖、或如何避免正文重複 sidebar，請改看 [Macro Style / Information Layout](information-layout.mdx)。
-本頁只處理寫法、語氣與視覺元件的使用方式。
+If you want to deal with the information layering of the entire page, the page map of overview/index, or how to avoid repeated sidebar text, please read [Macro Style / Information Layout](information-layout.mdx) instead.
+This page only deals with writing, tone, and use of visual elements.
 
 </Aside>
 
 ---
 
-## 語言與語氣
+## Language and Tone
 
-| 項目 | 規範 |
+| Projects | Specifications |
 |------|------|
-| 主要語言 | 繁體中文（zh-TW） |
-| 專有名詞 | 優先保留英文或中英並列（例如：`SQUID`、導納 (Admittance)） |
-| 句子/段落 | 短句、短段落；每段一個重點 |
-| 語氣 | 依 Diataxis 調整：Tutorial 引導、How-to 指令式、Reference 中立、Explanation 解釋式 |
+| Primary language | English |
+| Proper nouns | Preserve official names, package identifiers, physics notation, file paths, citations, and established technical terms |
+| Sentences/Paragraphs | Short sentences, short paragraphs; one key point in each paragraph |
+| Tone | Adjusted according to Diataxis: Tutorial, How-to, Reference neutral, Explanation |
 
-<Aside type="tip" title="寫作原則">
+<Aside type="tip" title="Writing principles">
 
-- 標題直接反映內容目的
-- 優先用條列與表格；避免長段落堆疊
-- 重要提醒用 Starlight `Aside`，不在正文重複
+- The title directly reflects the purpose of the content
+- Prioritize the use of columns and tables; avoid stacking long paragraphs
+- Use Starlight `Aside` for important reminders and do not repeat them in the main text.
 
 </Aside>
 
 ---
 
-## 視覺元素（建議順序：表格 → Asides → Tabs → Mermaid）
+## Visual elements (suggested order: Tables -> Asides -> Tabs -> Mermaid)
 
 ### Asides
 
-需要語意強調時，將文件改成 `.mdx`，並使用官方 `Aside` 元件：
+When semantic emphasis is needed, change the file to `.mdx` and use the official `Aside` component:
 
 ```mdx
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="tip" title="標題（可選）">
+<Aside type="tip" title="Title (optional)">
 
-內容維持一般 Markdown 寫法。
+The content maintains the normal Markdown writing method.
 
 </Aside>
 
 ```
 
-<Aside type="caution" title="語法注意">
+<Aside type="caution" title="Note on grammar">
 
-不要使用 GitHub 風格 `> [!NOTE]`，也不要使用 MkDocs 風格 admonition 或 tab 語法。editable docs source 的正式視覺元素寫法是 Starlight 官方 MDX component syntax。
-
-</Aside>
-
-<Aside type="note" title="使用原則">
-
-Asides 是語意強調工具，不是一般段落的替代品。
-只有在內容真的需要被讀者快速辨識成「建議 / 風險 / 範例 / 驗證狀態 / 次要細節」時才使用。
+Do not use GitHub-style `> [!NOTE]`, and do not use MkDocs-style admonition or tab syntax. The official visual element writing method of editable docs source is Starlight official MDX component syntax.
 
 </Aside>
 
-#### 什麼情況該用哪一種
+<Aside type="note" title="Usage principles">
 
-| 類型 | 適用情境 | 想傳達的語氣 |
+Asides are semantic emphasis tools, not replacements for regular paragraphs.
+Only use it when the content really needs to be quickly identified by readers as "recommendations/risks/examples/validation status/minor details".
+
+</Aside>
+
+#### Which one should be used in any situation?
+
+| Type | Applicable situation | The tone you want to convey |
 |------|----------|--------------|
-| `<Aside type="tip">` | 推薦做法、較佳路徑、最佳實務 | 你最好這樣做 |
-| `<Aside type="note">` | 中性背景、補充理解、上下文說明、範例 | 這有助於理解 |
-| `<Aside type="caution">` | 風險、限制、容易誤解的邊界 | 這裡很容易出錯 |
-| `<Aside type="danger">` | 會破壞資料、契約或安全性的禁止事項 | 這不能做 |
-| `<details>` | 次要補充、進階細節、邊界情境 | 這有用，但不是第一輪必讀 |
+| `<Aside type="tip">` | Recommended practices, better paths, best practices | You'd better do this |
+| `<Aside type="note">` | Neutral background, supplementary understanding, contextual explanation, examples | This helps understanding |
+| `<Aside type="caution">` | Risks, Limitations, Misunderstood Boundaries | It’s easy to make mistakes here |
+| `<Aside type="danger">` | Prohibitions that would violate data, contracts, or security | This can't be done |
+| `<details>` | Minor supplements, advanced details, edge cases | This is useful, but not a first-round must read |
 
-#### 選用判斷
+#### Selection judgment
 
 - `tip`
-  用在明確推薦讀者採取某種寫法或結構，能避免後續文件變亂時。
+Used when clearly recommending readers to adopt a certain writing method or structure to avoid subsequent document confusion.
 - `info`
-  用在補充背景，但不構成風險或硬限制時。
+Used when adding context but not posing a risk or hard limit.
 - `warning`
-  用在若忽略就可能寫錯、誤解契約、或讓讀者採取錯誤實作時。
+Used when omitting it may lead to incorrect writing, misinterpretation of the contract, or causing readers to take incorrect actions.
 - `note`
-  用在補充背景、具體命令、payload、畫面結構示例、驗證結果或正確狀態時。
+Used to supplement background, specific commands, payloads, screen structure examples, verification results or correct status.
 - `danger`
-  用在忽略後會造成破壞性後果的禁止事項時。
+Used when ignoring a prohibition would have devastating consequences.
 - `<details>`
-  用在值得保留、但不應打斷主閱讀流的進階說明時。
+Use when further explanation is worth retaining but should not interrupt the main flow of reading.
 
-<Aside type="tip" title="簡單判斷法">
+<Aside type="tip" title="simple judgment method">
 
-如果你拿不定主意，先問自己：
-1. 這段如果忽略，會不會導致錯誤？若會，優先用 `warning`。
-2. 這段是不是推薦讀者採取較好的方法？若是，用 `tip`。
-3. 這段只是幫助理解背景？若是，用 `info`。
-4. 這段是在示範具體做法？若是，用 `example`。
-5. 這段是在描述正確完成狀態？若是，用 `success` / `check`。
-6. 這段只是次要補充？若是，用 `<details>`。
+If you can't make up your mind, ask yourself:
+1. If this paragraph is ignored, will it cause errors? If so, use `warning` first.
+2. Does this paragraph recommend readers to take a better approach? If so, use `tip`.
+3. Is this paragraph just to help understand the background? If so, use `info`.
+4. Does this paragraph demonstrate a specific method? If so, use `example`.
+5. Does this paragraph describe the correct completion state? If so, use `success` / `check`.
+6. Is this paragraph just a minor supplement? If so, use `<details>`.
 
 </Aside>
 
-<Aside type="caution" title="避免過度使用">
+<Aside type="caution" title="avoid overuse">
 
-如果一整頁幾乎每個小節都包進 Aside，閱讀節奏反而會更差。
-一般說明、正常段落、普通條列，應維持在正文中完成。
+If almost every section of a whole page is included in Aside, the reading rhythm will be worse.
+General descriptions, normal paragraphs, and general clauses should be maintained in the main text.
 
 </Aside>
 
 ### Collapsible Details
 
-可摺疊內容使用原生 `<details>`，只放次要補充、原始碼、長表格或進階邊界案例；不要拿它取代 warning / danger 語意。
+Use native `<details>` for collapsible content, and only include minor supplements, source code, long tables, or advanced edge cases; do not use it to replace warning / danger semantics.
 
 ````mdx
 <details class="docs-disclosure docs-disclosure--note">
-<summary>可摺疊標題</summary>
+<summary>Collapsible title</summary>
 
 ```python
 print("optional source")
@@ -145,7 +145,7 @@ print("optional source")
 
 ### Tabs
 
-使用官方 `Tabs` / `TabItem` 區分同層級情境（例如：不同語言 / 不同 OS）：
+Use official `Tabs` / `TabItem` to distinguish situations at the same level (for example: different languages/different OSs):
 
 ````mdx
 import { TabItem, Tabs } from '@astrojs/starlight/components';
@@ -175,66 +175,66 @@ println("Hello")
 
 ### Mermaid
 
-- 用途：流程圖、架構圖、序列圖
-- 建議：節點 < 10，保持可讀性
-- 方向：優先 `TD` 或 `LR`
+- Usage: flow charts, architecture diagrams, sequence diagrams
+- Recommendation: nodes < 10 to maintain readability
+- Direction: Priority `TD` or `LR`
 
 ````markdown
 ```mermaid
 flowchart LR
-    A[Start] --> B[Process] --> C[Done]
+  A[Start] --> B[Process] --> C[Done]
 ```
 ````
 
 ---
 
-### 程式碼區塊
+### Code block
 
-程式碼區塊必須標註語言：
+Blocks of code must be marked with a language:
 
 ```python
 def hello() -> None:
-    print("Hello")
+  print("Hello")
 ```
 
 ---
 
-## How-to 文件建議模板
+## How-to file suggestion template
 
 ````markdown
-# 標題
+# title
 
-1–2 句說明（說清楚「要解決什麼問題」）
+1–2 sentences of description (state clearly “what problem you want to solve”)
 
 ---
 
-## 開發流程
+## Development process
 
 ```mermaid
 flowchart TD
-    A[Start] --> B[Do work] --> C[Verify]
+  A[Start] --> B[Do work] --> C[Verify]
 ```
 
 ---
 
-## 步驟
+## Steps
 
-### 1. 步驟一
-### 2. 步驟二
+### 1. Step 1
+### 2. Step 2
 
 ---
 
-## 必要檢查
+## Necessary checks
 
-| 檢查項目 | 指令 | 必要性 |
+| Inspection items | Instructions | Necessity |
 |---|---|---|
 | Docs build | `./scripts/build_docs_sites.sh` | ✅ |
 
 ---
 
-## 參考
+## refer to
 
-- [相關規範連結]
+- [Relevant specification link]
 ````
 
 ---
@@ -242,9 +242,9 @@ flowchart TD
 ## Agent Rule
 ```markdown
 ## Micro Style / Writing & Visual Elements
-- **Language**: zh-TW primary
+- **Language**: English-only editable docs source
 - **Tone**: Tutorial guiding / How-to imperative / Reference neutral / Explanation reasoning
-- **Terms**: keep technical terms in English or bilingual
+- **Terms**: preserve official names, package identifiers, physics notation, file paths, citations, and established technical terms
 - **Pairing**: macro-level page layout belongs to `information-layout.md`
 - **Visual components**: use official Starlight MDX components imported from `@astrojs/starlight/components`; convert pages that need them to `.mdx`
 - **Asides**: use `<Aside type="note|tip|caution|danger">` by semantic intent, not decorative emphasis

@@ -13,39 +13,39 @@ The example below is a minimal manifest shape example. It is not a fixture-task 
 
 ```json
 {
-  "schema_version": "sc.runner.result.v1",
-  "task_id": "306",
-  "producer": {
-    "runner": "SuperconductingCircuitsRunner",
-    "runner_version": "0.1.0",
-    "core_version": "0.1.0",
-    "julia_version": "1.12"
-  },
-  "array_store": {
-    "format": "zarr",
-    "zarr_format": 2,
-    "uri": "result.zarr"
-  },
-  "traces": [
+ "schema_version": "sc.runner.result.v1",
+ "task_id": "306",
+ "producer": {
+  "runner": "SuperconductingCircuitsRunner",
+  "runner_version": "0.1.0",
+  "core_version": "0.1.0",
+  "julia_version": "1.12"
+ },
+ "array_store": {
+  "format": "zarr",
+  "zarr_format": 2,
+  "uri": "result.zarr"
+ },
+ "traces": [
+  {
+   "trace_key": "S11",
+   "family": "s_matrix",
+   "parameter": "S11",
+   "representation": "complex",
+   "real_path": "/traces/S11/real",
+   "imag_path": "/traces/S11/imag",
+   "shape": [5],
+   "chunk_shape": [5],
+   "dtype": "float64",
+   "axes": [
     {
-      "trace_key": "S11",
-      "family": "s_matrix",
-      "parameter": "S11",
-      "representation": "complex",
-      "real_path": "/traces/S11/real",
-      "imag_path": "/traces/S11/imag",
-      "shape": [5],
-      "chunk_shape": [5],
-      "dtype": "float64",
-      "axes": [
-        {
-          "name": "frequency",
-          "unit": "Hz",
-          "path": "/axes/frequency"
-        }
-      ]
+     "name": "frequency",
+     "unit": "Hz",
+     "path": "/axes/frequency"
     }
-  ]
+   ]
+  }
+ ]
 }
 ```
 

@@ -1,89 +1,91 @@
 ## Tech Stack
 - **Public site**:
-    - `site/`
-    - Astro
-    - Starlight for `/docs/`
-    - reader/task-first docs IA with curated manual top/two-level sidebar groups
-    - custom CSS for the public introduction pages
-    - static output
-    - mounts Starlight technical docs at `/docs/`
-    - mounts Sphinx Python API reference at `/api/python/`
-    - mounts Documenter.jl Julia API reference at `/api/julia/`
-    - does not import application internals or own app runtime behavior
+  - `site/`
+  - Astro
+  - Starlight for `/docs/`
+  - reader/task-first docs IA with curated manual top/two-level sidebar groups
+  - custom CSS for the public introduction pages
+  - static output
+  - mounts Starlight technical docs at `/docs/`
+  - mounts Sphinx Python API reference at `/api/python/`
+  - mounts Documenter.jl Julia API reference at `/api/julia/`
+  - does not import application internals or own app runtime behavior
 - **Frontend**:
-    - Next.js App Router
-    - React 19
-    - TypeScript
-    - Tailwind CSS v4
-    - Radix UI + shadcn/ui
-    - next-themes
-    - SWR
-    - react-hook-form + zod
-    - Electron is allowed as the desktop shell around the frontend
+  - Next.js App Router
+  - React 19
+  - TypeScript
+  - Tailwind CSS v4
+  - Radix UI + shadcn/ui
+  - next-themes
+  - SWR
+  - react-hook-form + zod
+  - Electron is allowed as the desktop shell around the frontend
 - **Backend**:
-    - FastAPI
-    - Pydantic
-    - Pydantic Settings
-    - SQLAlchemy
-    - Alembic
-    - NumPy
-    - Zarr
-    - fsspec
+  - FastAPI
+  - Pydantic
+  - Pydantic Settings
+  - SQLAlchemy
+  - Alembic
+  - NumPy
+  - Zarr
+  - fsspec
 - **Julia Core**:
-    - `core/julia/SuperconductingCircuitsCore/`
-    - docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers
+  - `core/julia/SuperconductingCircuitsCore/`
+  - docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers
 - **Julia Runner**:
-    - `core/julia/SuperconductingCircuitsRunner/`
-    - calls Julia Core for deterministic task execution
-    - Runner adapters must not create a separate circuit construction path or preserve outdated Core APIs as fallback paths
-    - HTTP.jl
-    - JSON3.jl
-    - StructTypes.jl
-    - Zarr.jl
-    - DataFrames.jl
+  - `core/julia/SuperconductingCircuitsRunner/`
+  - calls Julia Core for deterministic task execution
+  - Runner adapters must not create a separate circuit construction path or preserve outdated Core APIs as fallback paths
+  - HTTP.jl
+  - JSON3.jl
+  - StructTypes.jl
+  - Zarr.jl
+  - DataFrames.jl
 - **Local runtime backbone**:
-    - frontend
-    - Python Backend
-    - Julia Runner
-    - no separate queue service
-    - Local Mode is not a shell-only product mode; UI-only shell previews are developer tools, not product runtime modes.
+  - frontend
+  - Python Backend
+  - Julia Runner
+  - no separate queue service
+  - Local Mode is not a shell-only product mode; UI-only shell previews are developer tools, not product runtime modes.
 - **Interface boundaries**:
-    - Pluto Notebook is the direct Julia Core research interface.
-    - Backend task submission is outside the Pluto Notebook role.
-    - Python Notebook is a Product App prototyping and platform-inspection surface; it may directly read data files, but platform state changes must go through Backend contracts.
-    - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
-    - Application Simulation Workbench and Analysis Workbench are first-class and submit persisted async tasks through Python Backend and Julia Runner.
-    - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
-    - Julia Runner owns async compute execution and local Zarr staging.
+  - Pluto Notebook is the direct Julia Core research interface.
+  - Backend task submission is outside the Pluto Notebook role.
+  - Python Notebook is a Product App prototyping and platform-inspection surface; it may directly read data files, but platform state changes must go through Backend contracts.
+  - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
+  - Application Simulation Workbench and Analysis Workbench are first-class and submit persisted async tasks through Python Backend and Julia Runner.
+  - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
+  - Julia Runner owns async compute execution and local Zarr staging.
 - **Scripts**:
-    - `scripts/dev/`
-    - `scripts/build/`
-    - `scripts/test/`
-    - `scripts/maintenance/`
-    - no active command-line product surface
+  - `scripts/dev/`
+  - `scripts/build/`
+  - `scripts/test/`
+  - `scripts/maintenance/`
+  - no active command-line product surface
 - **Topology**:
-    - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/analysis/`, `core/python/`, `notebooks/`, `scripts/`, and `docs/`
-    - `site/` is the Astro public introduction site and Starlight docs host
-    - `docs/` is the Astro + Starlight technical documentation source mounted at `/docs/`
-    - `docs/app/` owns Product App documentation and app shared/frontend/backend contracts
-    - `docs/start/` is notebook-first and should lead with Pluto research setup
-    - `docs/workflows/` and `docs/concepts/` are research-core lanes and must not expose Product App implementation workflows
-    - `docs/app/archive/` preserves legacy App-specific workflow/design notes as inert reference
-    - `docs/api-reference/` is generated API reference source for Sphinx and Documenter.jl
-    - generated API reference deploys as sibling static sites under `/api/python/` and `/api/julia/`
-    - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
+  - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/analysis/`, `core/python/circuit_libraries/`, `notebooks/`, `scripts/`, and `docs/`
+  - `core/python/circuit_libraries/schemdraw_circuit_library/` owns Python Schemdraw visual components that consume renderer-neutral schematic data; it must not define solver semantics or become an App/Backend runtime dependency
+  - `app/backend/app_backend/domain/runtime_contracts/` owns App Backend tasking, execution, and storage runtime contracts; it must stay framework-agnostic and not import FastAPI, SQLAlchemy, repositories, file I/O, or runner process code
+  - `site/` is the Astro public introduction site and Starlight docs host
+  - `docs/` is the Astro + Starlight technical documentation source mounted at `/docs/`
+  - `docs/app/` owns Product App documentation and app shared/frontend/backend contracts
+  - `docs/start/` is notebook-first and should lead with Pluto research setup
+  - `docs/workflows/` and `docs/concepts/` are research-core lanes and must not expose Product App implementation workflows
+  - `docs/app/archive/` preserves legacy App-specific workflow/design notes as inert reference
+  - `docs/api-reference/` is generated API reference source for Sphinx and Documenter.jl
+  - generated API reference deploys as sibling static sites under `/api/python/` and `/api/julia/`
+  - root-level `backend/`, `frontend/`, `desktop/`, `cli/`, and `src/` are not canonical product surfaces
 - **Quality tools**:
-    - Ruff
-    - BasedPyright
-    - pytest
-    - Sphinx
-    - Documenter.jl
-    - Vitest / Playwright when frontend exists
+  - Ruff
+  - BasedPyright
+  - pytest
+  - Sphinx
+  - Documenter.jl
+  - Vitest / Playwright when frontend exists
 - **Storage direction**:
-    - metadata DB: SQLite local, PostgreSQL target
-    - metadata DB schema versioning: Alembic
-    - Runner staging: local filesystem Zarr v2
-    - official TraceStore: Python Backend-managed Zarr
+  - metadata DB: SQLite local, PostgreSQL target
+  - metadata DB schema versioning: Alembic
+  - Runner staging: local filesystem Zarr v2
+  - official TraceStore: Python Backend-managed Zarr
 - New UI work should target Next.js, not the legacy UI layer.
 - New public introduction page work should target Astro under `site/`, not Starlight docs templates.
 - Desktop packaging should use Electron around frontend + Python Backend + Julia Runner.

@@ -1,16 +1,16 @@
 ---
 aliases:
-  - "Contract Versioning"
-  - "契約版本策略"
+ - "Contract Versioning"
+ - "Contract version strategy"
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/code-quality
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/code-quality
 status: stable
 owner: docs-team
 audience: team
-scope: "定義 canonical contracts、資料格式與 adapter payload 的版本策略"
+scope: "Define version policies for canonical contracts, data formats, and adapter payloads"
 version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -20,21 +20,21 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Contract Versioning
 
-本文件定義 contract 演進的最低要求，避免 Julia Core、Julia Runner、Python Backend、Notebook、frontend 之間各自解讀資料格式與 API payload。
+This document defines the minimum requirements for contract evolution to prevent Julia Core, Julia Runner, Python Backend, Notebook, and frontend from interpreting the data format and API payload respectively.
 
 <Aside type="note" title="How to read this page">
 
-先判斷變更碰到哪一種 contract，再判斷變更類型是 additive、soft-breaking 還是 breaking。最後依照 required update set 補齊 owner docs、canonical registry 與測試。
+First determine which contract the change encounters, and then determine whether the change type is additive, soft-breaking or breaking. Finally, complete the owner docs, canonical registry and tests according to the required update set.
 
 </Aside>
 
 ## Decision Map
 
-| 先回答 | 再決定 |
+| Answer first | Decide later |
 | --- | --- |
-| 這是哪一類 contract？ | 需不需要 version-aware 欄位或 lockstep 說明 |
-| 這是 additive 還是 breaking？ | 是否必須同步更新 owner docs、canonical registry 與 tests |
-| 這是 persisted data 嗎？ | 是否需要 schema update、data transform、rebuild path 或 explicit unsupported-data rule |
+| What type of contract is this? | Whether version-aware field or lockstep description is required |
+| Is this additive or breaking? | Whether owner docs, canonical registry and tests must be updated simultaneously |
+| Is this persisted data? | Whether schema update, data transform, rebuild path or explicit unsupported-data rule is required |
 
 ## Contracts That Must Be Version-Aware
 
@@ -48,54 +48,54 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Version Fields
 
-| Contract 類型 | 最低要求 |
+| Contract Type | Minimum Requirements |
 | --- | --- |
-| persisted data contract | 明確 `schema_version` 或等價欄位 |
-| API payload contract | route-level version note 或明確 lockstep branch policy |
+| persisted data contract | clear `schema_version` or equivalent field |
+| API payload contract | route-level version note or explicit lockstep branch policy |
 | Runner manifest | explicit `schema_version` and validation contract |
-| task/result handle | 必須可追到 result/provenance contract 版本 |
+| task/result handle | must be traceable to result/provenance contract version |
 
 ## Change Classes
 
-| 類型 | 定義 | 預設處理 |
+| Type | Definition | Default Processing |
 | --- | --- | --- |
-| Additive | 新增可選欄位、附加 metadata、保留舊欄位語意 | 可接受，但仍需更新 owner reference |
-| Soft-breaking | 欄位仍存在，但預設值、排序、空值語意改變 | 視為高風險，需同步寫明行為改變 |
-| Breaking | 刪除欄位、改型別、改必要欄位、改 enum / lifecycle 語意 | 必須更新 owner docs、canonical registry、data handling story 與 tests |
+| Additive | Add optional fields, additional metadata, retain old field semantics | Acceptable, but still need to update owner reference |
+| Soft-breaking | The field still exists, but the default value, sorting, and null value semantics have changed | Considered high risk, the behavior change needs to be written simultaneously |
+| Breaking | Delete fields, change types, change necessary fields, change enum / lifecycle semantics | Must update owner docs, canonical registry, data handling story and tests |
 
 ## Persisted Data Rules
 
-- SQLite metadata、TraceStore payload、export artifact 的 persisted contract 不能靜默失效。
-- 如果 persisted contract 改變，必須明確提供下列其中一種 data handling story：
-  - schema update script or Alembic revision
-  - deterministic data transform
-  - rebuild path
-  - explicit unsupported-data rule surfaced in owner docs
-- Julia Core / Runner 與 backend 不得各自維護不同版本解讀規則。
-- Reset/rebuild tooling 可以作為 development recovery path，但不能取代 owner docs 中的 persisted data rule。
+- The persisted contracts of SQLite metadata, TraceStore payload, and export artifact cannot be invalidated silently.
+- If the persisted contract changes, one of the following data handling stories must be explicitly provided:
+ - schema update script or Alembic revision
+ - deterministic data transform
+ - rebuild path
+ - explicit unsupported-data rule surfaced in owner docs
+- Julia Core/Runner and backend must not each maintain different version interpretation rules.
+- Reset/rebuild tooling can be used as a development recovery path, but it cannot replace the persisted data rule in the owner docs.
 
 ## Contract Rules
 
-| 規則 | 說明 |
+| Rules | Description |
 | --- | --- |
-| Contract changes update owner docs | 變更欄位、enum、lifecycle、manifest 或 task payload 時，先更新 owner reference |
-| Registry stays aligned | cross-layer contract 必須同步更新 [Canonical Contract Registry](../../architecture/canonical-contract-registry.mdx) |
-| Persisted data needs a data handling story | DB、TraceStore、export artifact 的破壞性變更不可靜默失效 |
-| Legacy fallback is not implied | 不因舊資料或舊 adapter 存在就新增 dual-path product behavior |
-| Tests prove the contract | 對應 tests 必須驗證新的 success path 與 rejection path |
+| Contract changes update owner docs | When changing fields, enum, lifecycle, manifest or task payload, update owner reference first |
+| Registry stays aligned | cross-layer contract must be updated simultaneously [Canonical Contract Registry](../../../app/architecture/contracts/canonical-contract-registry.mdx) |
+| Persisted data needs a data handling story | Destructive changes to DB, TraceStore, and export artifacts cannot be invalidated silently |
+| Legacy fallback is not implied | Do not add dual-path product behavior due to the existence of old data or old adapter |
+| Tests prove the contract | Corresponding tests must verify the new success path and rejection path |
 
 ## Required Update Set for Breaking Changes
 
-任何 breaking contract 變更，都必須在同一交付線更新：
+Any breaking contract changes must be updated in the same delivery line:
 
 1. owner reference docs
-2. [Canonical Contract Registry](../../architecture/canonical-contract-registry.mdx)
+2. [Canonical Contract Registry](../../../app/architecture/contracts/canonical-contract-registry.mdx)
 3. persisted data handling story, when the contract stores data
 4. relevant tests
 
 <Aside type="tip" title="Fast check">
 
-如果你無法在同一交付線同時回答「資料如何維持可解讀、consumer 怎麼知道版本變了、哪些 owner docs 要更新、哪些 tests 驗證拒絕路徑」，就還不應該送出 breaking contract change。
+If you can't answer "how does the data remain interpretable, how does the consumer know the version has changed, which owner docs need to be updated, and which tests verify the rejection path" at the same time in the same delivery line, you shouldn't send a breaking contract change yet.
 
 </Aside>
 
@@ -104,10 +104,10 @@ import { Aside } from '@astrojs/starlight/components';
 ## Contract Versioning
 - Treat circuit definitions, dataset/trace/result contracts, task contracts, Runner manifests, session/workspace payloads, and notebook/API payloads as version-aware surfaces.
 - Contract changes MUST update:
-    - owner reference docs
-    - canonical contract registry
-    - persisted data handling story, when the contract stores data
-    - relevant tests
+  - owner reference docs
+  - canonical contract registry
+  - persisted data handling story, when the contract stores data
+  - relevant tests
 - Persisted DB/TraceStore/exported data MUST have an explicit schema update, deterministic transform, rebuild path, or unsupported-data rule before breaking a contract.
 - Legacy fallback is not implied by old data or old adapters; only add dual-path product behavior when an owner SoT requires it.
 - Do not hide contract patches only inside adapters; document them in the owner docs and registry.

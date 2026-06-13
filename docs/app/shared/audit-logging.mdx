@@ -1,17 +1,17 @@
 ---
 aliases:
-  - Audit Logging
-  - Audit Trail
-  - 稽核日誌
+ - Audit Logging
+ - Audit Trail
+ - Audit log
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/app-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/app-reference
 status: draft
 owner: docs-team
 audience: team
-scope: persisted audit trail、separate audit store、query/redaction/retention contract
+scope: persisted audit trail, separate audit store, query/redaction/retention contract
 version: v0.5.1
 last_updated: 2026-05-28
 updated_by: codex
@@ -21,17 +21,17 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Audit Logging
 
-本頁定義 multi-user app 的 persisted audit logging 契約。
+This page defines the persisted audit logging contract for multi-user apps.
 
 <Aside type="note" title="App governance surface">
 
-audit logging 是 App collaboration / governance 的一部分，不是一般 runtime logging 的替代品。
+Audit logging is part of App collaboration/governance and is not a replacement for general runtime logging.
 
 </Aside>
 
 <Aside type="caution" title="Separate Audit Store">
 
-audit logs 不得與 app operational database 共用同一個資料庫。
+Audit logs must not share the same database as the app operational database.
 
 </Aside>
 
@@ -39,14 +39,14 @@ audit logs 不得與 app operational database 共用同一個資料庫。
 
 | Layer | What it answers | What it must not replace |
 |---|---|---|
-| Audit logging | 誰對哪種資源做了什麼治理意義的動作 | workflow task timeline、product telemetry |
-| Workflow observability | request / task / execution runtime / result 經過哪些 runtime stage | actor-centric governance trail |
-| Product telemetry | 哪種 flow 常用、哪裡慢、哪裡值得優化 | audit trail、single-task debug record |
+| Audit logging | Who did what governance actions on which resources | task timeline, product telemetry | workflow
+| Workflow observability |Which runtime stages does request/task/execution runtime/result go through?| actor-centric governance trail |
+| Product telemetry | Which flows are commonly used, which ones are slow, and which ones deserve optimization | audit trail, single-task debug record |
 
 <Aside type="note" title="Shared identifiers are allowed">
 
-`correlation_id` 可以同時出現在 audit row 與 workflow timeline。
-這不表示 audit logging 可以取代 workflow observability。
+`correlation_id` can appear in both the audit row and workflow timeline.
+This does not mean that audit logging can replace workflow observability.
 
 </Aside>
 
@@ -54,15 +54,15 @@ audit logs 不得與 app operational database 共用同一個資料庫。
 
 | Field | Meaning |
 |---|---|
-| `audit_id` | audit row 的唯一識別 |
-| `occurred_at` | 事件時間 |
-| `actor_user_id` | 執行動作者 |
-| `session_id` | 對應 session |
-| `correlation_id` | 將同一串 workflow / request 關聯起來 |
-| `workspace_id` | 對應 workspace |
-| `action_kind` | 穩定 machine-readable action |
-| `resource_kind` | `task`, `dataset`, `definition`, `user`, `workspace` 等 |
-| `resource_id` | 被操作資源識別 |
+| `audit_id` | Unique identification of audit row |
+| `occurred_at` | Event time |
+| `actor_user_id` | Performer |
+| `session_id` | Corresponding session |
+| `correlation_id` | Associate the same workflow / request |
+| `workspace_id` | Corresponding workspace |
+| `action_kind` | Stable machine-readable action |
+| `resource_kind` |`task`, `dataset`, `definition`, `user`, `workspace` and similar values|
+| `resource_id` | Operation resource identification |
 | `outcome` | `accepted`, `rejected`, `completed`, `failed` |
 | `payload` | redaction-safe structured payload |
 
@@ -81,25 +81,25 @@ audit logs 不得與 app operational database 共用同一個資料庫。
 
 | Rule | Meaning |
 |---|---|
-| Separate store | audit store 與 app operational DB 分離 |
-| Append-only | 一般 workflow 不可更新既有 audit row |
-| Workspace-aware query | query 至少支援依 `workspace_id`、`actor_user_id`、`action_kind` 過濾 |
-| Retention baseline | 預設保留至少 365 days |
-| Redaction-safe payload | 不保存 secret-bearing raw payload |
+| Separate store | Audit store is separated from app operational DB |
+| Append-only | General workflow cannot update existing audit row |
+| Workspace-aware query | query supports at least filtering by `workspace_id`, `actor_user_id`, `action_kind` |
+| Retention baseline | Default retention of at least 365 days |
+| Redaction-safe payload |Do not save secret-bearing raw payload|
 
 ## Storage Baseline
 
 | Rule | Meaning |
 |---|---|
-| Separate physical store | audit store 與 app operational DB 必須分開部署 |
-| SQL-first baseline | 第一版採 append-only SQL audit store；NoSQL 可之後再擴充 |
-| Write path isolation | app workflow 寫 audit 時，不得要求 page consumer 直接碰 audit DB |
-| Governance-oriented query | audit query API 與 app operational query 分開考慮，不混用一般 page list endpoint |
+| Separate physical store | Audit store and app operational DB must be deployed separately |
+| SQL-first baseline | First version adopts append-only SQL audit store; NoSQL can be expanded later |
+| Write path isolation | When app workflow writes audit, page consumer must not be required to directly touch audit DB |
+| Governance-oriented query | Audit query API and app operational query are considered separately and do not mix with general page list endpoint |
 
 <Aside type="caution" title="Audit logging is not UI event history">
 
-audit log 不是 task events 的別名，也不是 page analytics。
-它回答的是誰在什麼 workspace 對哪種資源做了什麼具治理意義的動作。
+audit log is not an alias for task events, nor is it an alias for page analytics.
+It answers who did what governance-significant action on which resource in what workspace.
 
 </Aside>
 

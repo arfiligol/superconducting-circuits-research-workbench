@@ -1,15 +1,15 @@
 ---
 aliases:
-  - Core Reference
+ - Core Reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/core-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/core-reference
 status: stable
 owner: docs-team
 audience: team
-scope: Core reference 索引，條列 Julia Core、Julia Visualizer、Julia Runner、Julia Analysis Bridge、Python analysis 與 Python Schemdraw visual library。
+scope: Core reference index, listing Julia Core, Julia Visualizer, Julia Runner, Julia Analysis Bridge, Python analysis, and the Python Schemdraw visual library.
 version: v0.10.0
 last_updated: 2026-05-30
 updated_by: codex
@@ -18,7 +18,7 @@ updated_by: codex
 # Core Reference
 
 Core docs describe reusable contracts and compute libraries.
-Application session state, HTTP transport, UI state, and desktop lifecycle live outside this section.
+Session state, HTTP transport, UI state, and packaged application lifecycle live outside this section.
 
 ## Read Order
 
@@ -33,11 +33,11 @@ Application session state, HTTP transport, UI state, and desktop lifecycle live 
 | Rule | Meaning |
 |---|---|
 | Julia Core owns reusable compute logic | keep HTTP, task polling, and database publication out of Core |
-| Julia Runner owns async task execution | claim tasks, dispatch compute, write staging Zarr, write manifest, report complete/fail |
+| Julia Runner owns async task execution | claim tasks, dispatch compute, write staging artifacts, write manifest, report complete/fail |
 | Julia Analysis Bridge owns Pluto-friendly Python analysis calls | wrap Python analysis through PythonCall without moving algorithms into Julia |
-| Python analysis owns fitting and matrix algorithms | keep FastAPI routes and frontend DTOs out of analysis code |
-| Python Backend owns publication | validate manifests, publish TraceStore data, create metadata and provenance records |
-| App surfaces stay outside Core | HTTP schemas, session authority, frontend state, and desktop supervision are app concerns |
+| Python analysis owns fitting and matrix algorithms | keep transport routes and UI DTOs out of analysis code |
+| Product publication stays outside Core | validate manifests, publish canonical data, create metadata and provenance records |
+| Packaged application surfaces stay outside Core | HTTP schemas, session authority, UI state, and packaged lifecycle are separate concerns |
 
 ## Page Map
 
@@ -51,7 +51,5 @@ Application session state, HTTP transport, UI state, and desktop lifecycle live 
 
 ## Related
 
-- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
 - [Julia Visualizer](../julia-visualizer/index.mdx)
-- [Runner Result Manifest](../architecture/runner-result-manifest.md)
-- [TraceStore Zarr](../architecture/trace-store-zarr.md)
+- [Notebook Interface](../notebooks/index.md)

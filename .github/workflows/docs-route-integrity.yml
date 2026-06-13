@@ -9,6 +9,8 @@ on:
       - "scripts/build/prepare_starlight_docs.py"
       - "scripts/check_docs_nav_routes.py"
       - "scripts/check_docs_app_quarantine.py"
+      - "scripts/check_docs_language.py"
+      - "scripts/check_docs_language_allowlist.txt"
       - ".github/workflows/docs-route-integrity.yml"
   push:
     branches: [main]
@@ -19,6 +21,8 @@ on:
       - "scripts/build/prepare_starlight_docs.py"
       - "scripts/check_docs_nav_routes.py"
       - "scripts/check_docs_app_quarantine.py"
+      - "scripts/check_docs_language.py"
+      - "scripts/check_docs_language_allowlist.txt"
       - ".github/workflows/docs-route-integrity.yml"
 
 jobs:
@@ -48,6 +52,9 @@ jobs:
 
       - name: Validate docs App quarantine
         run: uv run python scripts/check_docs_app_quarantine.py
+
+      - name: Validate docs language
+        run: uv run python scripts/check_docs_language.py
 
       - name: Build docs sites
         run: ./scripts/build_docs_sites.sh

@@ -1,7 +1,7 @@
 ## Lint / Format Commands
 - **Python format**: `uv run ruff format .`
 - **Python lint**: `uv run ruff check .`
-- **Python type check**: `uv run basedpyright app/backend/app_backend core/analysis core/python core/sc_core core/shared core/simulation scripts`
+- **Python type check**: `uv run basedpyright app/backend/app_backend core/python scripts`
 - **Pre-commit**: `uv run pre-commit run --all-files`
 - **Frontend lint**: `npm run lint --prefix app/frontend`
 - **Frontend format**: `npm run format --prefix app/frontend`

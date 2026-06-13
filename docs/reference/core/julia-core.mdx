@@ -1,11 +1,11 @@
 ---
 aliases:
-  - Julia Core Reference
+ - Julia Core Reference
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/core-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/core-reference
 status: stable
 owner: docs-team
 audience: team
@@ -19,7 +19,7 @@ import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
 
 # Julia Core
 
-本頁記錄 Julia-native simulation / visualization / analysis bridge runtime 的目前邊界，以及 repo 內正式存在的 Julia package surfaces。
+This page documents the current boundaries of the Julia-native simulation / visualization / analysis bridge runtime, as well as the Julia package surfaces that officially exist in the repo.
 
 For the reusable Circuit Plan authoring architecture, use [Julia Core Authoring](../julia-core/index.mdx). For PlotlyJS figure contracts, use [Julia Visualizer](../julia-visualizer/index.mdx). This page records package placement and package-level ownership.
 
@@ -27,8 +27,8 @@ For concrete component families, use project-space or lab-space component librar
 
 <Aside type="note" title="Current Julia Surface">
 
-canonical Julia surface 已收斂到 `core/julia/`。
-目前 repository 內的 Julia packages 是：
+The canonical Julia surface has converged to `core/julia/`.
+The current Julia packages in the repository are:
 1. `core/julia/SuperconductingCircuitsCore/`
 2. `core/julia/SuperconductingCircuitsVisualizer/`
 3. `core/julia/SuperconductingCircuitsRunner/`
@@ -42,7 +42,7 @@ Julia Core owns reusable simulation and trace-extraction logic.
 Julia Visualizer owns Pluto-facing PlotlyJS figures from real `HBSolveResult` traces.
 Julia Runner owns asynchronous compute execution and staged result packages.
 Julia Analysis Bridge owns Pluto-friendly PythonCall wrappers around Python-owned fitting in `core/python/analysis/superconducting_circuits_analysis`.
-Python Backend still owns task lifecycle, canonical TraceStore publication, and provenance records.
+Product publication and provenance ownership stay outside Julia packages.
 
 </Aside>
 
@@ -76,7 +76,7 @@ Python Backend still owns task lifecycle, canonical TraceStore publication, and 
 
 | Surface | Role |
 |---|---|
-| `core/julia/SuperconductingCircuitsRunner/` | backend polling, task dispatch, local Zarr staging writer, manifest generation, complete/fail reporting |
+| `core/julia/SuperconductingCircuitsRunner/` | task polling, dispatch, local Zarr staging writer, manifest generation, complete/fail reporting |
 | `data/staging/tasks/<task_id>/result.zarr/` | temporary local Zarr package written by the runner |
 | `data/staging/tasks/<task_id>/manifest.json` | runner result manifest validated by the backend publisher |
 
@@ -108,14 +108,12 @@ Python Backend still owns task lifecycle, canonical TraceStore publication, and 
 
 | Consumer | Reads Julia surface through |
 |---|---|
-| Python Backend | [Julia Compute Boundary](julia-wrapper.md) and runner API docs |
 | Advanced Julia users / contributors | [Notebook Interface](../notebooks/index.md), [Julia Visualizer](../julia-visualizer/index.mdx), and Pluto notebooks |
-| Julia Runner contributors | [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md) |
+| Julia Runner contributors | [Julia Compute Boundary](julia-wrapper.md) and package docs |
 
 ## Related
 
 - [Julia Core Authoring](../julia-core/index.mdx)
 - [Julia Visualizer](../julia-visualizer/index.mdx)
 - [Julia Compute Boundary](julia-wrapper.md)
-- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
 - [Notebook Interface](../notebooks/index.md)

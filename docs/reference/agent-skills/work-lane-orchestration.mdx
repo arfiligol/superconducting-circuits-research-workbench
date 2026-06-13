@@ -1,17 +1,17 @@
 ---
 aliases:
-  - Work Lane Orchestration Skill
-  - 協作編排 Skill
-  - 工作泳道編排 Skill
+ - Work Lane Orchestration Skill
+ - Collaborative Orchestration Skill
+ - Working lane arrangement skill
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/governance
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/governance
 status: draft
 owner: docs-team
 audience: contributor
-scope: architecture-guided multi-subagent workflow 的跨工具 Skill template
+scope: Cross-tool Skill template for architecture-guided multi-subagent workflow
 version: v0.1.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -21,27 +21,27 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Work Lane Orchestration
 
-`work-lane-orchestration` 是給 coding agent 使用的協作編排 Skill。它讓一個主 thread 依照目標 repo 的 SoT 切分 optional subagent work lanes，並由主 thread 統整 patch、驗收與 final report。
+`work-lane-orchestration` is a collaborative orchestration skill for coding agents. It allows a main thread to split optional subagent work lanes according to the SoT of the target repo, and the main thread integrates patch, acceptance and final report.
 
-這份 template 必須保持跨專案可用。它不定義本 repo 的固定 lane，不指定 Codex-only 安裝路徑，也不把 Claude Code、Gemini 或其他工具的本機格式當成唯一標準。
+This template must remain available across projects. It does not define a fixed lane for this repo, does not specify a Codex-only installation path, and does not treat the native format of Claude Code, Gemini, or other tools as the only standard.
 
 <Aside type="caution" title="Do not hardcode this repo">
 
-這個 Skill 的核心是動態讀取目標 repo 的 SoT。同步到任何 agent 之後，都不能把本專案目前的 folder structure、lane names 或 commands 寫死成通用規則。
+The core of this skill is to dynamically read the SoT of the target repo. After synchronizing to any agent, the current folder structure, lane names or commands of this project cannot be hard-coded into general rules.
 
 </Aside>
 
 ## Sync Steps
 
-1. 建立該 agent 原生支援的 reusable instruction、skill、command 或 context entry。
-2. 使用 `work-lane-orchestration` 作為 canonical name。
-3. 保留 frontmatter 或等價 metadata 中的 trigger description。
-4. 將下方 `SKILL.md` template 的正文同步到該 agent 的 skill body。
-5. 若該工具不支援 skill metadata，至少要保留 `name`、trigger description 與 `Hard Blocks`。
+1. Create a reusable instruction, skill, command or context entry that is natively supported by the agent.
+2. Use `work-lane-orchestration` as the canonical name.
+3. Keep the trigger description in frontmatter or equivalent metadata.
+4. Synchronize the text of the `SKILL.md` template below to the skill body of the agent.
+5. If the tool does not support skill metadata, at least `name`, trigger description and `Hard Blocks` must be retained.
 
 ## Canonical Template
 
-將以下內容同步成目標 agent 的原生 skill。
+Synchronize the following content into the native skill of the target agent.
 
 ````markdown
 ---
@@ -156,18 +156,18 @@ If a required command cannot be run, report why, what evidence remains, and what
 
 ## Verification
 
-同步後，agent 應該用一個低風險任務 dry run：
+After synchronization, the agent should dry run with a low-risk task:
 
 ```text
 Use work-lane-orchestration to inspect this repository's source-of-truth and report whether enough rules exist to safely coordinate a multi-surface feature. Do not edit files.
 ```
 
-成功訊號：
+Success signal:
 
-- agent 先讀 workspace rules，而不是直接產生 lane plan；
-- agent 能指出 task-relevant SoT；
-- agent 不自創 repo-specific lane taxonomy；
-- agent 在缺少必要 rule 時會 hard-block。
+- The agent reads the workspace rules first instead of directly generating the lane plan;
+- The agent can point out the task-relevant SoT;
+- The agent does not create its own repo-specific lane taxonomy;
+- The agent will hard-block when necessary rules are missing.
 
 ## Related
 

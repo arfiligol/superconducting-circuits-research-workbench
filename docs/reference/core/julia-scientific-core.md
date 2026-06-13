@@ -1,15 +1,15 @@
 ---
 aliases:
-  - Julia Scientific Core
+ - Julia Scientific Core
 tags:
-  - diataxis/reference
-  - audience/team
-  - sot/true
-  - topic/core-reference
+ - diataxis/reference
+ - audience/team
+ - sot/true
+ - topic/core-reference
 status: stable
 owner: docs-team
 audience: team
-scope: Julia Core scientific API ownership for Pluto direct research and Julia Runner product execution.
+scope: Julia Core scientific API ownership for Pluto direct research and Julia Runner package execution.
 version: v1.2.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -22,11 +22,11 @@ Julia Core is the canonical scientific library for the docs-defined authoring mo
 Both execution tracks use the same Julia Core APIs:
 
 - Pluto notebooks call Julia Core directly for research-grade exploration.
-- Julia Runner calls Julia Core while executing persisted Backend tasks for product workflows.
+- Julia Runner calls Julia Core while executing persisted task envelopes for packaged workflows.
 
-The Python Backend, Electron Application, and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or simulation analysis owned by Julia Core. Declared Python fitting algorithms, such as complex S21 notch/transmission fitting and S21 vector fitting, belong to `core/python/analysis/superconducting_circuits_analysis` and can be reached from Pluto through Julia Analysis Bridge.
+Infrastructure layers and Python notebooks do not reimplement circuit construction, lowering, sweep logic, or simulation analysis owned by Julia Core. Declared Python fitting algorithms, such as complex S21 notch/transmission fitting and S21 vector fitting, belong to `core/python/analysis/superconducting_circuits_analysis` and can be reached from Pluto through Julia Analysis Bridge.
 
-Python notebooks may analyze local Zarr, exported data, CSV/raw files, and canonical TraceStore files directly. That read-only analysis role does not make them Julia Core simulation owners or platform publication authorities.
+Python notebooks may analyze local Zarr, exported data, and CSV/raw files directly. That read-only analysis role does not make them Julia Core simulation owners or publication authorities.
 
 ## Canonical Package
 
@@ -93,37 +93,31 @@ Pluto is still the direct Julia Core research surface, but the old sandbox noteb
 
 ```text
 Pluto Notebook
-    -> direct Julia call
+  -> direct Julia call
 Julia Core
-    -> Component Library plan builder / Circuit Plan
+  -> Component Library plan builder / Circuit Plan
 Compiler
-    -> JosephsonCompiledCircuit
+  -> JosephsonCompiledCircuit
 JosephsonCircuits.jl target
-    -> simulation / sweep
+  -> simulation / sweep
 Result object / table / plot-ready data
 ```
 
 Pluto notebooks stay thin. They may define parameters, build designs through selected Component Libraries and the public Julia Core API, run a simulation or sweep, and inspect local research outputs. They must not duplicate reusable component definitions, compiler logic, coupled-window lowering logic, or result extraction core logic.
 
-Pluto outputs are research-local by default. Official platform data must enter through an explicit import/publication workflow or through the Product Async Track.
+Pluto outputs are research-local by default. Durable publication belongs to the product documentation lane.
 
-## Product Async Track
+## Packaged Execution Track
 
 ```text
-Application Simulation Workbench / Python Notebook
-    -> Python Backend task
 Julia Runner
-    -> Julia Core
-    -> local Zarr staging + manifest
-Python Backend Publisher
-    -> TraceStore + metadata records
+  -> Julia Core
+  -> local staging + manifest
 ```
 
-Julia Runner is the product execution adapter around Julia Core. It receives Backend-owned task envelopes, executes the relevant Julia Core operations, writes staged result packages, and reports manifest locators.
+Julia Runner is the packaged execution adapter around Julia Core. It receives task envelopes, executes the relevant Julia Core operations, writes staged result packages, and reports manifest locators.
 
-Python Backend owns task lifecycle, publication, provenance, TraceStore registration, and result APIs. It does not run heavy scientific compute in request threads.
-
-Python notebooks may submit Backend tasks through this product async path when the result should become platform state. They must not publish TraceStore records directly.
+The publication owner does not run heavy scientific compute in request threads.
 
 ## Ownership Rules
 
@@ -131,11 +125,11 @@ Python notebooks may submit Backend tasks through this product async path when t
 |---|---|
 | Julia owns scientific construction contracts | Component interfaces, endpoints, Circuit Plan state, relation/coupling concepts, compiler concepts, simulation wrappers, sweeps, and analysis helpers live in Julia Core. |
 | Delayed lowering stays required | Author a high-level Circuit Plan first; call the compiler only at the end. Do not patch already-flat JosephsonCircuits rows in place. |
-| Pluto is direct research execution | Pluto may call Julia Core directly and inspect intermediate local data. Pluto is not a Backend task submitter. |
-| Runner is product execution | Julia Runner calls Julia Core from Backend task envelopes and writes staging packages for Backend publication. |
-| Python Backend does not own lowering | Python Backend validates requests and publishes results; it does not reimplement construction, lowering, sweep, or Julia-owned simulation logic. |
+| Pluto is direct research execution | Pluto may call Julia Core directly and inspect intermediate local data. Pluto is not a persisted task submitter. |
+| Runner is packaged execution | Julia Runner calls Julia Core from task envelopes and writes staging packages for later publication. |
+| Infrastructure does not own lowering | request/publish layers validate envelopes and publish results; they do not reimplement construction, lowering, sweep, or Julia-owned simulation logic. |
 | Python analysis owns declared fitting algorithms | `core/python/analysis/superconducting_circuits_analysis` owns reusable Python fitting algorithms such as complex S21 notch/transmission fitting and S21 vector fitting. |
-| Python Notebook is read/inspect only for files | Python notebooks may analyze data files directly, but do not own Julia Core simulation, lowering, platform publication, or metadata mutation authority. |
+| Python Notebook is read/inspect only for files | Python notebooks may analyze data files directly, but do not own Julia Core simulation, lowering, publication, or metadata mutation authority. |
 
 ## JosephsonCircuits Validation
 
@@ -150,9 +144,9 @@ Julia Core returns scientific results to its caller. Storage authority belongs o
 | Caller | Storage responsibility |
 |---|---|
 | Pluto Notebook | local research outputs, scratch plots, and notebook-owned analysis artifacts |
-| Python Notebook | read-only local/exported/canonical data-file analysis; platform writes go through Backend contracts |
+| Python Notebook | read-only local/exported data-file analysis |
 | Julia Runner | local staging Zarr package plus `manifest.json` |
-| Python Backend | canonical TraceStore publication, metadata records, provenance, and result APIs |
+| Publication layer | canonical publication, metadata records, provenance, and result APIs |
 
 ## Related
 
@@ -160,5 +154,3 @@ Julia Core returns scientific results to its caller. Storage authority belongs o
 - [Julia Core Authoring](../julia-core/index.mdx)
 - [Julia Core](julia-core.mdx)
 - [Julia Wrapper](julia-wrapper.md)
-- [Julia Runner Compute Plane](../architecture/julia-runner-compute-plane.md)
-- [Simulation Interface Boundaries](../architecture/simulation-interface-boundaries.md)

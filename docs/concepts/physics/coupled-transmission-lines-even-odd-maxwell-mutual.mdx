@@ -1,47 +1,47 @@
 ---
 aliases:
-  - Coupled Transmission Lines
-  - Even/Odd, Maxwell, Mutual
-  - 耦合傳輸線：Even/Odd、Maxwell、Mutual
+ - Coupled Transmission Lines
+ - Even/Odd, Maxwell, Mutual
+ - Coupled transmission lines: Even/Odd, Maxwell, Mutual
 tags:
-  - diataxis/explanation
-  - audience/team
-  - topic/physics
-  - topic/simulation
-  - node_type/model
+ - diataxis/explanation
+ - audience/team
+ - topic/physics
+ - topic/simulation
+ - node_type/model
 status: draft
 owner: docs-team
 audience: team
-scope: 說明 coupled transmission line 的 even/odd modal 參數、Maxwell capacitance matrix、mutual capacitance matrix，以及它們如何對接到分散式 ladder builder
+scope: Explain the even/odd modal parameters of the coupled transmission line, the Maxwell capacitance matrix, the mutual capacitance matrix, and how they interface to the decentralized ladder builder
 version: v0.1.1
 last_updated: 2026-06-12
 updated_by: codex
 sidebar:
-  label: Coupled Transmission Lines
-  order: 70
+ label: Coupled Transmission Lines
+ order: 70
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 import coupledLineLadderSectionDark from '../../assets/circuit_draw/physics/coupled_line_ladder_section/diagram.dark.svg';
 import coupledLineLadderSectionLight from '../../assets/circuit_draw/physics/coupled_line_ladder_section/diagram.light.svg';
 
-# Coupled Transmission Lines：Even/Odd、Maxwell、Mutual
+# Coupled Transmission Lines:Even/Odd, Maxwell, Mutual
 
-如果你現在想做的是 distributed coupled-line section，幾乎一定會撞到這三種表示法：
+If what you want to do now is distributed coupled-line section, you will almost certainly run into these three representations:
 
-- even / odd mode 參數
+- even / odd mode parameters
 - Maxwell capacitance matrix
 - mutual capacitance matrix
 
-這三個名字看起來像三套不同理論，但其實它們在討論的是**同一段對稱雙導體 coupled line**，只是各自站在不同的描述角度。
+These three names look like three different theories, but in fact they are discussing the same symmetrical double-conductor coupled line, but they are just from different description angles.
 
-這篇的核心問題是：
+The core question of this article is:
 
-**為什麼 `JosephsonCircuits` 會同時提供 `maxwell_to_even_odd`、`mutual_to_even_odd`、`even_odd_to_mutual`？如果我要寫 `add_coupled_line_section!`，到底該用哪一個？**
+**Why does `JosephsonCircuits` provide `maxwell_to_even_odd`, `mutual_to_even_odd`, and `even_odd_to_mutual` at the same time? If I want to write `add_coupled_line_section!`, which one should I use? **
 
 <span class="circuit-figure">
-  <img class="circuit-figure__image circuit-figure__light" src={coupledLineLadderSectionLight.src ?? coupledLineLadderSectionLight} alt="Coupled-line ladder section" />
-  <img class="circuit-figure__image circuit-figure__dark" src={coupledLineLadderSectionDark.src ?? coupledLineLadderSectionDark} alt="" aria-hidden="true" />
+ <img class="circuit-figure__image circuit-figure__light" src={coupledLineLadderSectionLight.src ?? coupledLineLadderSectionLight} alt="Coupled-line ladder section" />
+ <img class="circuit-figure__image circuit-figure__dark" src={coupledLineLadderSectionDark.src ?? coupledLineLadderSectionDark} alt="" aria-hidden="true" />
 </span>
 
 <details class="docs-disclosure docs-disclosure--quote">
@@ -52,306 +52,306 @@ Regenerate it with `uv run python scripts/build/render_circuit_drawings.py --dia
 
 </details>
 
-## 先講結論
+## Let’s talk about the conclusion first
 
-如果你的目標是**真的把 coupled line 寫成 netlist 裡的一段 distributed ladder**，最實用的流程通常是：
+If your goal is to actually write the coupled line as a distributed ladder in the netlist, the most practical process is usually:
 
-1. 先用 even/odd 參數描述你要的 coupled section
-2. 用 `even_odd_to_mutual(...)` 轉成 `L` 與 `C_mutual`
-3. 再把它離散成很多個小 section
-4. 每個 section 都用：
-   - 兩顆 series `L`
-   - 一個 mutual `K`
-   - 兩顆對地 `C`
-   - 一顆跨線 `C`
+1. First use the even/odd parameters to describe the coupled section you want
+2. Use `even_odd_to_mutual(...)` to convert to `L` and `C_mutual`
+3. Then discrete it into many small sections
+4. Use for each section:
+- Two series `L`
+- a mutual `K`
+- Two to the ground `C`
+- One jumper `C`
 
-也就是說：
+That is to say:
 
-- **even/odd form** 最適合做規格與物理解讀
-- **Maxwell form** 最適合做矩陣分析
-- **mutual form** 最適合映射到「實體 netlist 元件」
+- **even/odd form** is most suitable for specifications and physical interpretation
+- **Maxwell form** is most suitable for matrix analysis
+- **mutual form** is most suitable for mapping to "entity netlist elements"
 
-如果你最後是要寫 `add_coupled_line_section!`，最關鍵的通常不是 `maxwell_to_even_odd`，而是：
+If you end up writing `add_coupled_line_section!`, the most critical thing is usually not `maxwell_to_even_odd`, but:
 
 - `even_odd_to_mutual`
 - `mutual_to_even_odd`
 
-前者把 modal specification 變成可下 netlist 的 physical section；後者則讓你檢查「我寫出的 physical ladder，是不是對應我原本想要的 even/odd 模態」。
+The former turns the modal specification into a physical section that can be downloaded from the netlist; the latter allows you to check "whether the physical ladder I wrote corresponds to the even/odd modal I originally wanted."
 
-## 你可以從這裡開始
+## You can start here
 
-- 你知道 transmission line 的 `Z_0`、相速度、相位速度或折射率
-- 你知道 coupled line 會有 even mode 與 odd mode
-- 你能接受 2×2 矩陣表示每單位長度的 `L` 與 `C`
+- Do you know the `Z_0`, phase velocity, phase velocity or refractive index of the transmission line?
+- You know that coupled line has even mode and odd mode
+- You can accept 2×2 matrices representing `L` and `C` per unit length
 
-若要補背景，請先讀：
+To add background, please read:
 
 - [Physics Overview](index.mdx)
 - [Schur Complement & Kron Reduction](schur-complement-kron-reduction.mdx)
 
-如果你只想先做任務：
+If you just want to do the task first:
 
-- 先用 [Parameter Sweep](../../workflows/circuit-authoring/parameter-sweep.md) 的思路把 coupled section 當成一段可 sweep 的結構
+- First use the idea of ​​[Parameter Sweep](../../workflows/circuit-authoring/parameter-sweep.md) to treat the coupled section as a sweepable structure
 
-## 三種表示法在講同一件事
+## The three representations are talking about the same thing
 
-### 1. Even / Odd mode form：最適合講物理
+### 1. Even / Odd mode form: most suitable for teaching physics
 
-對稱雙線 coupled line 的兩個本徵模態是：
+The two eigenmodes of a symmetric coupled line are:
 
-- **even mode**：兩條線同電位、同方向電流
-- **odd mode**：兩條線反相電位、反方向電流
+- **even mode**: The two lines have the same potential and current in the same direction
+- **odd mode**: two lines with opposite phase potential and reverse direction current
 
-對一段對稱 coupled line，你常常拿到的是：
+For a symmetric coupled line, what you often get is:
 
 - `Z_even`
 - `Z_odd`
 - `n_even`
 - `n_odd`
 
-這四個量的好處是物理直覺很強：
+The advantage of these four quantities is that physical intuition is very strong:
 
-- `Z_even` / `Z_odd` 告訴你兩個模態的特性阻抗
-- `n_even` / `n_odd` 告訴你兩個模態的相速度差異
+- `Z_even` / `Z_odd` tells you the characteristic impedance of the two modes
+- `n_even` / `n_odd` tells you the phase velocity difference between the two modes
 
-這也是 Qucs 對 coupled transmission line 元件的主要描述方式之一：把 coupled line 看成 even mode 與 odd mode 各自一條獨立的傳輸線，再組回 4-port 結果。參見 Qucs 的 coupled transmission line technical note。[Qucs](https://qucs.sourceforge.net/tech/node63.html)
+This is also one of the main ways Qucs describes coupled transmission line components: treat the coupled line as an independent transmission line for even mode and odd mode, and then combine them back into a 4-port result. See Qucs' coupled transmission line technical note. [Qucs](https://qucs.sourceforge.net/tech/node63.html)
 
-### 2. Maxwell capacitance matrix：最適合做節點電荷-電壓分析
+### 2. Maxwell capacitance matrix: most suitable for node charge-voltage analysis
 
-`JosephsonCircuits.maxwell_to_even_odd(L, Cmaxwell)` 用的是 **Maxwell capacitance matrix**。
+`JosephsonCircuits.maxwell_to_even_odd(L, Cmaxwell)` uses **Maxwell capacitance matrix**.
 
-它的定義是：
+Its definition is:
 
 ```text
 Q = C_maxwell V
 ```
 
-也就是說：
+That is to say:
 
 - `C_maxwell[i, j] = dQ_i / dV_j`
-- 對角項代表該節點電荷對自己電壓的靈敏度
-- 非對角項通常是負值，因為鄰近節點電壓上升會拉走本節點的電荷
+- The diagonal term represents the sensitivity of the node's charge to its own voltage
+- The off-diagonal term is usually negative because an increase in the voltage at a neighboring node will pull away the charge at this node
 
-對兩條對稱 coupled line，如果用 Maxwell form，最典型會長成：
+For two symmetric coupled lines, if Maxwell form is used, the most typical form will be:
 
 ```text
 C_maxwell =
-[ C11   C12 ]
-[ C12   C11 ]
+[ C11  C12 ]
+[ C12  C11 ]
 ```
 
-而且通常 `C12 < 0`。
+And usually `C12 < 0`.
 
-在 `JosephsonCircuits` 的 reference 裡，對稱情況下有：
+In the reference of `JosephsonCircuits`, in the symmetric case:
 
 ```text
 Z_even = sqrt((L11 + L12) / (C11 + C12))
-Z_odd  = sqrt((L11 - L12) / (C11 - C12))
+Z_odd = sqrt((L11 - L12) / (C11 - C12))
 ```
 
-見官方 reference 與原始實作。[JosephsonCircuits Reference](https://josephsoncircuits.org/stable/reference/)
+See the official reference and original implementation. [JosephsonCircuits Reference](https://josephsoncircuits.org/stable/reference/)
 
-### 3. Mutual capacitance matrix：最適合畫成實體 netlist
+### 3. Mutual capacitance matrix: most suitable for drawing as an entity netlist
 
-`JosephsonCircuits.even_odd_to_mutual(...)` 回傳的是 **mutual capacitance matrix**。
+`JosephsonCircuits.even_odd_to_mutual(...)` returns the **mutual capacitance matrix**.
 
-這個表示法的重點不是 `Q = CV`，而是：
+The point of this notation is not `Q = CV`, but:
 
-- 對角項 = 每條線對地的實體電容
-- 非對角項 = 線與線之間的實體耦合電容
+- Diagonal term = physical capacitance of each line to ground
+- Off-diagonal term = physical coupling capacitance between lines
 
-也就是說，它更像「真正要在 netlist 裡擺的電容元件表」。
+In other words, it is more like "a list of capacitive components that really needs to be placed in the netlist."
 
-對稱雙線時，它長得像：
+When the double line is symmetrical, it looks like:
 
 ```text
 C_mutual =
-[ Cg   Cm ]
-[ Cm   Cg ]
+[ Cg  Cm ]
+[ Cm  Cg ]
 ```
 
-這裡：
+here:
 
-- `Cg` 是每條線對地的 physical capacitor
-- `Cm` 是兩條線之間的 physical coupling capacitor
+- `Cg` is the physical capacitor of each line to ground
+- `Cm` is the physical coupling capacitor between the two lines
 
-這就是為什麼 **mutual form 最適合直接變成 ladder section**。
+This is why **mutual form is best suited to be turned directly into a section ladder**.
 
-## 為什麼 Maxwell form 與 mutual form 長得不一樣
+## Why do Maxwell form and mutual form look different?
 
-這是最容易混淆的地方。
+This is where the most confusion arises.
 
-在 `JosephsonCircuits` 裡：
+In `JosephsonCircuits`:
 
 ```text
 C_mutual = maxwell_to_mutual(C_maxwell)
 ```
 
-對稱雙線最常見的對應是：
+The most common correspondences of symmetrical double lines are:
 
 ```text
 C_mutual =
-[ Cg   Cm ]
-[ Cm   Cg ]
+[ Cg  Cm ]
+[ Cm  Cg ]
 ```
 
-對應到：
+Corresponds to:
 
 ```text
 C_maxwell =
-[ Cg + Cm   -Cm     ]
-[ -Cm       Cg + Cm ]
+[ Cg + Cm  -Cm   ]
+[ -Cm    Cg + Cm ]
 ```
 
-所以：
+so:
 
-- mutual form 的 `Cm` 是你真的會放在兩線之間的 capacitor
-- Maxwell form 的 off-diagonal 是負的，因為它是節點電荷-電壓關係，不是 physical branch list
+- `Cm` in mutual form is the capacitor you would really put between the two lines
+- The off-diagonal of Maxwell form is negative because it is the node charge-voltage relationship, not the physical branch list
 
-這也是為什麼 `mutual_to_even_odd(...)` 的結果會變成：
+This is why the result of `mutual_to_even_odd(...)` becomes:
 
 ```text
 Z_even = sqrt((Ls + Lm) / Cg)
-Z_odd  = sqrt((Ls - Lm) / (Cg + 2Cm))
+Z_odd = sqrt((Ls - Lm) / (Cg + 2Cm))
 ```
 
-乍看很奇怪，但其實完全合理：
+It seems strange at first, but it actually makes perfect sense:
 
-- even mode 時，兩條線同電位，所以**跨線電容 `Cm` 沒有電壓差，不參與儲能**
-- odd mode 時，兩條線反相，所以**跨線電容兩端電壓差最大，儲能最強**
+- In even mode, the two lines have the same potential, so the **cross-line capacitor `Cm` has no voltage difference and does not participate in energy storage**
+- In odd mode, the two lines are in opposite phase, so the voltage difference between the two ends of the capacitor across the line is the largest and the energy storage is the strongest**
 
-因此：
+therefore:
 
-- even mode 看到的有效電容只剩 `Cg`
-- odd mode 看到的有效電容會增加到 `Cg + 2Cm`
+- The only effective capacitance seen in even mode is `Cg`
+- The effective capacitance seen by odd mode will increase to `Cg + 2Cm`
 
-這正是 `JosephsonCircuits.mutual_to_even_odd(...)` 的物理意義。[JosephsonCircuits Reference](https://josephsoncircuits.org/stable/reference/)
+This is exactly the physical meaning of `JosephsonCircuits.mutual_to_even_odd(...)`. [JosephsonCircuits Reference](https://josephsoncircuits.org/stable/reference/)
 
-## 用基底轉換看這件事，會最清楚
+## It will be most clear to see this matter using base conversion.
 
-令 even/odd basis 的變換矩陣為：
+Let the transformation matrix on even/odd basis be:
 
 ```text
-T = 1/sqrt(2) * [ 1   1 ]
-                  [ 1  -1 ]
+T = 1/sqrt(2) * [ 1  1 ]
+         [ 1 -1 ]
 ```
 
-對稱情況下，
+In the case of symmetry,
 
 ```text
 L =
-[ Ls   Lm ]
-[ Lm   Ls ]
+[ Ls  Lm ]
+[ Lm  Ls ]
 ```
 
-會被對角化成：
+will be diagonalized into:
 
 ```text
 T^T L T = diag(Ls + Lm, Ls - Lm)
 ```
 
-而 Maxwell capacitance matrix
+and Maxwell capacitance matrix
 
 ```text
 C_maxwell =
-[ Cg + Cm   -Cm     ]
-[ -Cm       Cg + Cm ]
+[ Cg + Cm  -Cm   ]
+[ -Cm    Cg + Cm ]
 ```
 
-也會被對角化成：
+It will also be diagonalized into:
 
 ```text
 T^T C_maxwell T = diag(Cg, Cg + 2Cm)
 ```
 
-所以 even / odd 模態本質上就是把對稱 coupled pair 對角化。
+So the even / odd mode essentially diagonalizes the symmetric coupled pair.
 
-這也是 `maxwell_to_even_odd` 看起來那麼簡潔的真正原因：
-它不是神奇公式，而是**對稱雙線的 2×2 模態分解**。
+This is also the real reason why `maxwell_to_even_odd` looks so simple:
+It's not a magic formula, it's the 2×2 modal decomposition of a symmetric double line.
 
-## 三個函式各自該怎麼用
+## How to use each of the three functions
 
 ### `maxwell_to_even_odd(L, Cmaxwell)`
 
-用在你已經有：
+Use if you already have:
 
 - inductance matrix `L`
 - Maxwell capacitance matrix `Cmaxwell`
 
-而你想知道：
+And you want to know:
 
 - `Z_even`
 - `Z_odd`
 - `n_even`
 - `n_odd`
 
-這很適合：
+This works great for:
 
-- 從 field solver / nodal matrix 結果抽 modal quantities
-- 做基底理解與 sanity check
+- extract modal quantities from field solver / nodal matrix results
+- Do basic understanding and sanity check
 
 ### `mutual_to_even_odd(L, Cmutual)`
 
-用在你已經有：
+Use if you already have:
 
 - physical inductor coupling
 - physical capacitors to ground and between lines
 
-而你想知道：
+And you want to know:
 
-- 這些實體元件對應到什麼 even / odd 模態
+- What even / odd modes do these solid components correspond to?
 
-這很適合：
+This works great for:
 
-- 檢查你手刻的 ladder section 是不是合理
-- 從實體 section 值回推 modal behavior
+- Check whether your hand-engraved ladder section is reasonable
+- Push back modal behavior from entity section value
 
 ### `even_odd_to_mutual(Zeven, Zodd, neven, nodd)`
 
-這是如果你要寫 `add_coupled_line_section!` 最關鍵的一個。
+This is the most critical one if you are going to write `add_coupled_line_section!`.
 
-它適合的問題是：
+The questions it is suitable for are:
 
-**我先在模態空間指定 coupled line 規格，怎麼把它變成 netlist 裡的 section 元件？**
+**I first specify the coupled line specification in the modal space. How can I turn it into a section element in the netlist? **
 
-也就是：
+That is:
 
 ```text
 (Z_even, Z_odd, n_even, n_odd)
-    -> (L matrix, C_mutual matrix)
-    -> ladder sections
+  -> (L matrix, C_mutual matrix)
+  -> ladder sections
 ```
 
-## 例子 1：完全不耦合的極限
+## Example 1: The limit of complete uncoupling
 
-如果
+if
 
 ```text
 Lm = 0
 Cm = 0
 ```
 
-那麼：
+So:
 
 ```text
 L = [Ls 0; 0 Ls]
 C_mutual = [Cg 0; 0 Cg]
 ```
 
-此時：
+at this time:
 
 - `Z_even = Z_odd`
 - `n_even = n_odd`
 
-這就是兩條互不影響的獨立線。
+These are two independent lines that do not affect each other.
 
-這個例子很重要，因為它是所有 coupled-line builder 的第一個 sanity check：
+This example is important because it is the first sanity check of any coupled-line builder:
 
-- 如果把 coupling 關掉，結果必須退化回兩條普通 transmission line
+- If coupling is turned off, the result must be reduced to two ordinary transmission lines
 
-## 例子 2：為什麼 odd mode 比 even mode 更慢
+## Example 2: Why odd mode is slower than even mode
 
-假設：
+Assumptions:
 
 ```text
 Ls = 1.0
@@ -360,118 +360,118 @@ Cg = 1.6
 Cm = 0.4
 ```
 
-那麼：
+So:
 
 ```text
 L_even = Ls + Lm = 1.1
-L_odd  = Ls - Lm = 0.9
-C_even = Cg      = 1.6
-C_odd  = Cg + 2Cm = 2.4
+L_odd = Ls - Lm = 0.9
+C_even = Cg   = 1.6
+C_odd = Cg + 2Cm = 2.4
 ```
 
-所以：
+so:
 
-- even mode 的電感比較大，但電容較小
-- odd mode 的電感比較小，但電容更大
+- Even mode has a larger inductance but smaller capacitance
+- The inductance of odd mode is smaller, but the capacitance is larger
 
-在很多實際結構裡，odd mode 的電容增加更明顯，因此常會比 even mode 更慢。
+In many practical structures, the capacitance increase in odd mode is more obvious, so it is often slower than even mode.
 
-這也就是為什麼 coupled-line calculator 經常會同時報：
-
-- `Z_even`
-- `Z_odd`
-- `n_even`
-- `n_odd`
-
-而不是只給你單一 `Z0`。
-
-## 例子 3：從 even/odd 規格回推出單一 ladder section
-
-假設你有一段 coupled section，長度為 `ℓ`，分成 `N` 段。
-
-你已知：
+This is why the coupled-line calculator often reports both:
 
 - `Z_even`
 - `Z_odd`
 - `n_even`
 - `n_odd`
 
-先做：
+Instead of just giving you a single `Z0`.
+
+## Example 3: Export a single ladder section from even/odd specifications
+
+Suppose you have a coupled section of length `ℓ`, divided into `N` segments.
+
+You already know:
+
+- `Z_even`
+- `Z_odd`
+- `n_even`
+- `n_odd`
+
+First do:
 
 ```julia
 Lmat, Cmut = JosephsonCircuits.even_odd_to_mutual(Zeven, Zodd, neven, nodd)
 ```
 
-得到每單位長度矩陣：
+Get the matrix per unit length:
 
 ```text
 Lmat =
-[ L11  L12 ]
-[ L12  L11 ]
+[ L11 L12 ]
+[ L12 L11 ]
 
 Cmut =
-[ Cg   Cm ]
-[ Cm   Cg ]
+[ Cg  Cm ]
+[ Cm  Cg ]
 ```
 
-令 `Δx = ℓ / N`，則每一個離散 section 可以寫成：
+Let `Δx = ℓ / N`, then each discrete section can be written as:
 
 ```text
-Line A series inductor:  L11 * Δx
-Line B series inductor:  L11 * Δx
-Mutual coupling:         K = L12 / L11
-Line A shunt capacitor:  Cg  * Δx
-Line B shunt capacitor:  Cg  * Δx
-Cross capacitor:         Cm  * Δx
+Line A series inductor: L11 * Δx
+Line B series inductor: L11 * Δx
+Mutual coupling:     K = L12 / L11
+Line A shunt capacitor: Cg * Δx
+Line B shunt capacitor: Cg * Δx
+Cross capacitor:     Cm * Δx
 ```
 
-如果是 lossless superconducting case，則：
+If it is a lossless superconducting case, then:
 
 ```text
 R' = 0
 G' = 0
 ```
 
-完全不需要再放任何 `R` 或 `G` branch。
+There is absolutely no need to put any `R` or `G` branches.
 
-## 例子 4：我們怎麼做 `add_coupled_line_section!`
+## Example 4: How do we do `add_coupled_line_section!`
 
-下面是一個**概念上正確、而且和本 repo 目前 netlist 風格一致**的做法：
+The following is an approach that is conceptually correct and consistent with the current netlist style of this repo:
 
 ```julia
 function add_coupled_line_section!(
-    circuit;
-    prefix,
-    left_node_a,
-    right_node_a,
-    left_node_b,
-    right_node_b,
-    length_m,
-    n_sections,
-    Zeven,
-    Zodd,
-    neven,
-    nodd,
+  circuit;
+  prefix,
+  left_node_a,
+  right_node_a,
+  left_node_b,
+  right_node_b,
+  length_m,
+  n_sections,
+  Zeven,
+  Zodd,
+  neven,
+  nodd,
 )
-    Lmat, Cmut = JosephsonCircuits.even_odd_to_mutual(Zeven, Zodd, neven, nodd)
-    dx = length_m / n_sections
+  Lmat, Cmut = JosephsonCircuits.even_odd_to_mutual(Zeven, Zodd, neven, nodd)
+  dx = length_m / n_sections
 
-    Lself = Lmat[1, 1] * dx
-    Lmut = Lmat[1, 2] * dx
-    Cg = Cmut[1, 1] * dx
-    Cm = Cmut[1, 2] * dx
-    k = Lmut / Lself
+  Lself = Lmat[1, 1] * dx
+  Lmut = Lmat[1, 2] * dx
+  Cg = Cmut[1, 1] * dx
+  Cm = Cmut[1, 2] * dx
+  k = Lmut / Lself
 
-    # 然後對每一段 section：
-    # 1. line A 放一顆 series L
-    # 2. line B 放一顆 series L
-    # 3. 兩顆 L 之間放一個 K
-    # 4. 兩條線各放一顆對地 Cg
-    # 5. 兩條線之間放一顆 Cm
+# Then for each section:
+# 1. line A put one series L
+# 2. line B put one series L
+# 3. Place a K between two L’s
+# 4. Place a Cg on each of the two lines.
+# 5. Place a Cm between the two lines
 end
 ```
 
-如果展成單一 section，它大概會對應到這樣的 netlist：
+If expanded into a single section, it would probably correspond to a netlist like this:
 
 ```text
 ("L_A_1", a0, a1, Lself)
@@ -482,94 +482,94 @@ end
 ("C_AB_1", a1, b1, Cm)
 ```
 
-這就是為什麼我前面說：
-**要寫 distributed coupled-line section，最實用的入口往往是 `even_odd_to_mutual`。**
+This is why I said before:
+**To write distributed coupled-line section, the most practical entry is often `even_odd_to_mutual`. **
 
-## 為什麼這個 builder 是合理的
+## Why this builder is reasonable
 
-因為它同時滿足三件事：
+Because it satisfies three things at the same time:
 
-1. **modal specification 清楚**
-   - 你可以直接對 `Z_even`, `Z_odd`, `n_even`, `n_odd` 做設計與比對
-2. **netlist mapping 清楚**
-   - 你最後真的能用 `L / C / K` 元件落到 `JosephsonCircuits`
-3. **可離散、可收斂**
-   - `N` 越大，對 distributed section 的近似越好
+1. **modal specification clear**
+- You can directly design and compare `Z_even`, `Z_odd`, `n_even`, `n_odd`
+2. **netlist mapping clear**
+- You can actually end up using `L / C / K` components down to `JosephsonCircuits`
+3. **Discrete and Convergable**
+- The larger `N`, the better the approximation to the distributed section
 
-這跟把 coupled line 硬塞成「某個神祕的 lumped coupler」不同。
-你保留了：
+This is different from shoehorning a coupled line into "some mysterious lumped coupler."
+You retain:
 
-- 長度
-- 位置
-- 局部耦合窗口
-- 與其他結構的接點
+- length
+- Location
+- Local coupling window
+-Joints with other structures
 
-所以它很適合用在你現在想做的事情：
+So it's perfect for what you want to do now:
 
-- Purcell filter 的某一段與另一個結構做 distributed coupling
-- readout line 與 resonator 做有限長度的 coupled window
+- A certain section of the Purcell filter is distributed coupled with another structure
+- readout line and resonator create a limited-length coupled window
 
-## 工程映射：從模態規格到電路 builder
+## Project mapping: from modal specifications to circuit builder
 
-如果你是從設計角度出發，最自然的工作流通常是：
+If you're coming from a design perspective, the most natural workflow is usually:
 
-1. 先從 EM / calculator 拿到：
-   - `Z_even`, `Z_odd`
-   - `n_even`, `n_odd`
-2. 用 `even_odd_to_mutual(...)` 得到 per-unit-length `L` 與 `C`
-3. 選一個 coupled window 長度 `ℓ`
-4. 選 section 數 `N`
-5. 離散成 ladder
-6. 再把這段 coupled ladder 插到更大的電路裡
+1. Get from EM/calculator:
+  - `Z_even`, `Z_odd`
+  - `n_even`, `n_odd`
+2. Use `even_odd_to_mutual(...)` to get per-unit-length `L` and `C`
+3. Select a coupled window length `ℓ`
+4. Select the section number `N`
+5. Discretize into ladder
+6. Then insert this coupled ladder into a larger circuit
 
-如果你是從已知電路出發，想驗證某段耦合 window 的物理意義，則流程反過來：
+If you start from a known circuit and want to verify the physical meaning of a certain coupling window, the process is reversed:
 
-1. 先寫出 section 的 physical `L / C / K`
-2. 算出對應的 `Lmat`, `Cmut`
-3. 再用 `mutual_to_even_odd(...)` 回推 modal quantities
-4. 看它是不是你原本想要的 `Z_even/Z_odd/n_even/n_odd`
+1. First write the physical `L / C / K` of section
+2. Calculate the corresponding `Lmat`, `Cmut`
+3. Then use `mutual_to_even_odd(...)` to push back the modal quantities
+4. See if it is what you originally wanted `Z_even/Z_odd/n_even/n_odd`
 
-## 限制與近似
+## Limitations and approximations
 
-這篇的討論有幾個重要限制：
+This discussion has several important limitations:
 
-1. **只討論對稱的兩線 coupled section**
-   - 也就是 `L11 = L22`、`C11 = C22`
-2. **先假設 lossless**
-   - `R' = 0`, `G' = 0`
-3. **先用 TEM / quasi-TEM intuition**
-   - 這對 CPW / microstrip 的低損近似很常見，但不是所有頻段都完美成立
-4. **builder 是 ladder approximation，不是連續解析解本身**
-   - `N` 太小時，分散式效果會被離散誤差污染
+1. **Only discuss the symmetrical two-line coupled section**
+- That is `L11 = L22`, `C11 = C22`
+2. **Assume lossless first**
+  - `R' = 0`, `G' = 0`
+3. **early HAS / almost HAS intuition**
+- This is a common low-loss approximation of CPW / microstrip, but does not hold perfectly for all frequency bands
+4. **builder is the ladder approximation, not the continuous analytical solution itself**
+- If `N` is too small, the dispersion effect will be contaminated by discrete errors
 
-另外還要特別注意：
+Also pay special attention to:
 
-<Aside type="caution" title="文獻中的 C 矩陣慣例可能不同">
+<Aside type="caution" title="C matrix conventions in the literature may differ">
 
-有些文獻的 `C_m` 是 telegrapher equation 中的耦合係數，有些文獻的 `C_m` 則是 physical capacitor。
-在本專案裡，如果你要下 netlist，最安全的做法是明確區分：
+`C_m` in some documents is the coupling coefficient in the telegrapher equation, and `C_m` in some documents is the physical capacitor.
+In this project, if you want to download netlist, the safest way is to clearly distinguish:
 - `C_maxwell`
 - `C_mutual`
 
 </Aside>
 
-## 你可以怎麼向別人報告這件事
+## How can you report this to someone else?
 
-如果你要做口頭報告，最容易讓聽眾抓到主線的說法是：
+If you are giving an oral presentation, the easiest way for the audience to catch the main line is:
 
-1. **even/odd form**：是 coupled line 的模態語言，最適合談物理
-2. **Maxwell form**：是電荷-電壓矩陣語言，最適合談節點分析
-3. **mutual form**：是 physical capacitor / inductor 的語言，最適合下 netlist
-4. 我們真正做 builder 時，是用 `even_odd_to_mutual` 把 modal spec 轉成可離散的 ladder section
+1. **even/odd form**: It is a modal language of coupled line, which is most suitable for talking about physics.
+2. **Maxwell form**: It is a charge-voltage matrix language, most suitable for discussing node analysis
+3. **mutual form**: It is the language of physical capacitor / inductor, most suitable for netlist
+4. When we actually make the builder, we use `even_odd_to_mutual` to convert the modal spec into a discrete ladder section.
 
-如果你只記一件事，請記：
+If you only remember one thing, please remember:
 
-> `even_odd_to_mutual` 不是一個額外的花俏函式，它其實是在幫你把「模態規格」翻譯成「可實作的電路 section」。
+> `even_odd_to_mutual` is not an extra fancy function, it actually helps you translate "modal specification" into "implementable circuit section".
 
-## 相關連結
+## Related links
 
 - [Physics Overview](index.mdx)
-- [符號總表](symbol-glossary.md)
+- [Symbol table](symbol-glossary.md)
 - [Circuit Diagrams Guide](../../contribute/contributing/circuit-diagrams.mdx)
 - [Parameter Sweep Tutorial](../../workflows/circuit-authoring/parameter-sweep.md)
 

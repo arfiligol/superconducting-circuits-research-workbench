@@ -1,7 +1,7 @@
 ## Micro Style / Writing & Visual Elements
-- **Language**: zh-TW primary
+- **Language**: English-only editable docs source
 - **Tone**: Tutorial guiding / How-to imperative / Reference neutral / Explanation reasoning
-- **Terms**: keep technical terms in English or bilingual
+- **Terms**: preserve official names, package identifiers, physics notation, file paths, citations, and established technical terms
 - **Pairing**: macro-level page layout belongs to `information-layout.md`
 - **Visual components**: use official Starlight MDX components imported from `@astrojs/starlight/components`; convert pages that need them to `.mdx`
 - **Asides**: use `<Aside type="note|tip|caution|danger">` by semantic intent, not decorative emphasis

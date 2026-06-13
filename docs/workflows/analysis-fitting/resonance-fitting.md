@@ -1,9 +1,9 @@
 ---
 aliases:
-  - Resonance Fitting Workflow
-  - 共振擬合工作流
+ - Resonance Fitting Workflow
+ - Resonance fitting workflow
 tags:
-  - audience/team
+ - audience/team
 status: stable
 owner: docs-team
 audience: team
@@ -12,8 +12,8 @@ version: v0.2.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Resonance Fitting
-  order: 20
+ label: Resonance Fitting
+ order: 20
 ---
 
 # Resonance Fitting

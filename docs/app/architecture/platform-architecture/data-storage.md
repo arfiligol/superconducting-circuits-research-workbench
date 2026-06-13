@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Data Storage Architecture
-  - 資料儲存架構
+ - Data Storage Architecture
+ - Data storage architecture
 tags:
-  - diataxis/explanation
-  - audience/team
-  - topic/architecture
-  - topic/data
+ - diataxis/explanation
+ - audience/team
+ - topic/architecture
+ - topic/data
 status: stable
 owner: docs-team
 audience: team
@@ -15,8 +15,8 @@ version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
 sidebar:
-  label: Data Storage
-  order: 30
+ label: Data Storage
+ order: 30
 ---
 
 # Data Storage
@@ -30,22 +30,22 @@ Julia Runner only writes temporary staging packages.
 
 ```mermaid
 flowchart TB
-    Dataset["DatasetRecord"]
-    Design["DesignRecord"]
-    Task["TaskRecord"]
-    Batch["TraceBatchRecord"]
-    Trace["TraceRecord"]
-    Staging["Runner Staging result.zarr"]
-    Store["Canonical TraceStore Zarr"]
-    Artifact["Task Artifacts"]
+  Dataset["DatasetRecord"]
+  Design["DesignRecord"]
+  Task["TaskRecord"]
+  Batch["TraceBatchRecord"]
+  Trace["TraceRecord"]
+  Staging["Runner Staging result.zarr"]
+  Store["Canonical TraceStore Zarr"]
+  Artifact["Task Artifacts"]
 
-    Dataset --> Design
-    Design --> Task
-    Task --> Staging
-    Staging --> Store
-    Task --> Artifact
-    Store --> Batch
-    Batch --> Trace
+  Dataset --> Design
+  Design --> Task
+  Task --> Staging
+  Staging --> Store
+  Task --> Artifact
+  Store --> Batch
+  Batch --> Trace
 ```
 
 ## Filesystem Layout
@@ -56,14 +56,14 @@ Use this local layout:
 data/
 ├── metadata.db
 ├── trace_store/
-│   └── datasets/<dataset_id>/designs/<design_id>/batches/<batch_id>.zarr/
+│  └── datasets/<dataset_id>/designs/<design_id>/batches/<batch_id>.zarr/
 ├── artifacts/
-│   └── tasks/<task_id>/
+│  └── tasks/<task_id>/
 └── staging/
-    └── tasks/<task_id>/
-        ├── manifest.json
-        ├── result.zarr/
-        └── logs/
+  └── tasks/<task_id>/
+    ├── manifest.json
+    ├── result.zarr/
+    └── logs/
 ```
 
 `data/staging/` is temporary.
@@ -104,6 +104,6 @@ The Julia Runner writes local staging packages and does not write directly to ob
 
 ## Related
 
-- [TraceStore Zarr](../../../reference/architecture/trace-store-zarr.md)
-- [Runner Result Manifest](../../../reference/architecture/runner-result-manifest.md)
+- [TraceStore Zarr](../contracts/trace-store-zarr.md)
+- [Runner Result Manifest](../contracts/runner-result-manifest.md)
 - [Backend Architecture](../../../reference/guardrails/project-basics/backend-architecture.mdx)

@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Design Patterns
-  - 設計模式
+ - Design Patterns
+ - design pattern
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/code-quality
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/code-quality
 status: stable
 owner: docs-team
 audience: contributor
-scope: rewrite branch 的服務邊界、依賴方向與共享邏輯規範。
+scope: Service boundaries, dependency directions and shared logic specifications of rewrite branch.
 version: v2.0.0
 last_updated: 2026-05-28
 updated_by: codex
@@ -20,39 +20,39 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Design Patterns
 
-本專案的設計模式重點是把共享規則放在穩定的位置，而不是讓每個入口層各自長出一份邏輯。
+The design pattern of this project focuses on placing shared rules in a stable position, rather than allowing each entry layer to grow its own logic.
 
 <Aside type="note" title="Use this page for boundary and ownership decisions">
 
-這頁回答 workflow logic、dependency injection、canonical definition 與 API layer responsibility 應該放在哪裡。它不取代 folder structure 或 backend architecture，而是補 owner pattern。
+This page answers where workflow logic, dependency injection, canonical definition and API layer responsibility should be placed. It does not replace the folder structure or backend architecture, but complements the owner pattern.
 
 </Aside>
 
 ## Pattern Map
 
-| pattern | 回答的問題 |
+| pattern | answered questions |
 | --- | --- |
-| Dependency Direction | 哪一層可以擁有 workflow |
-| Dependency Injection | service / repository / adapter 應怎麼被組裝 |
-| Compute Boundary | Python Backend 與 Julia Runner 如何分工 |
-| API Layer Responsibility | API handler 可以做什麼、不可以做什麼 |
+| Dependency Direction | Which layer can have workflow |
+| Dependency Injection | How service / repository / adapter should be assembled |
+| Compute Boundary | How Python Backend and Julia Runner divide their labor |
+| API Layer Responsibility | What an API handler can and cannot do |
 
 ## Core Rules
 
 ### Dependency Direction
 
-- React component 不能承擔業務流程編排
-- FastAPI router 不能直接承擔完整 workflow
-- scripts 不能複製 backend service 或 Runner 邏輯
-- Python Backend 不能執行 heavy simulation / analysis compute
-- Julia Runner 不能寫正式 metadata DB
-- 共享規則應集中在 app backend service、Julia Core、Julia Runner 或明確 contract package
+- React component cannot undertake business process orchestration
+- FastAPI router cannot directly undertake the complete workflow
+- scripts cannot copy backend service or Runner logic
+- Python Backend cannot execute heavy simulation / analysis compute
+-Julia Runner cannot write formal metadata DB
+- Sharing rules should be focused on app backend service, Julia Core, Julia Runner or explicit contract package
 
 ### Dependency Injection
 
-- service 依賴以建構子或明確 factory 注入
-- 禁止在函式內隨手 new repository / client / adapter
-- framework-specific 組裝放在 composition root
+- Service dependencies are injected via constructor or explicit factory
+- It is forbidden to use new repository / client / adapter within the function
+- framework-specific assembly is placed in the composition root
 
 ### Compute Boundary
 
@@ -68,15 +68,15 @@ import { Aside } from '@astrojs/starlight/components';
 - service call
 - response mapping
 
-不應包含：
+Should not contain:
 
-- 長流程業務判斷
-- persistence 細節
-- 跨多模組重複的轉換邏輯
+- Long process business judgment
+- persistence details
+- Duplicate conversion logic across multiple modules
 
 <Aside type="caution" title="Do not let entry layers fork the workflow">
 
-若 component、router、notebook helper、Runner 或 script 各自偷偷長出一份相似但不完全相同的流程，最後一定會漂移。這頁的重點就是避免這種局部合理、全域失控的設計。
+If component, router, notebook helper, runner or script each secretly grows a similar but not identical process, they will eventually drift. The focus of this page is to avoid this kind of locally reasonable and globally out-of-control design.
 
 </Aside>
 

@@ -1,16 +1,16 @@
 ---
 aliases:
-  - Component Guidelines
-  - 元件規範
+ - Component Guidelines
+ - Component Specifications
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/ui-ux
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/ui-ux
 status: stable
 owner: docs-team
 audience: contributor
-scope: frontend component 選型、表單、dialog 與資料表格規範。
+scope: frontend component selection, form, dialog and data table specifications.
 version: v2.4.0
 last_updated: 2026-03-18
 updated_by: codex
@@ -20,90 +20,90 @@ import { Aside } from '@astrojs/starlight/components';
 
 # Component Guidelines
 
-元件規範的目標是讓 frontend 在資料密集與互動密集情境下仍保持一致。
+The goal of the component specification is to make the frontend consistent in data-intensive and interaction-intensive situations.
 
 <Aside type="note" title="How to read this page">
 
-先決定元件屬於 primitive、feature-local 還是 app-wide layout，再看 interaction 與 data browser 規則。這頁重點是 component boundary，不是完整 design system token 表。
+First decide whether the component belongs to primitive, feature-local or app-wide layout, and then look at the interaction and data browser rules. The focus of this page is component boundary, not the complete design system token table.
 
 </Aside>
 
 ## Component Sources
 
-| 類型 | 來源 |
+| Type | Source |
 | --- | --- |
-| 基礎 UI primitives | `@/components/ui/*`（shadcn/ui） |
+| Basic UI primitives |`@/components/ui/*` (shadcn/ui)|
 | feature-specific UI | `frontend/src/features/<feature>/components/*` |
 | app-wide layout | `frontend/src/components/layout/*` |
 
 ## Visible Surface Rule
 
-- 所有使用者可見的互動 UI，必須以 `@/components/ui/*` 或 feature-local wrapper 呈現
-- 不可把 browser 預設樣式的 `button`、`input`、`select`、`textarea`、`dialog` 直接當成最終產品 UI
-- 若平台原生控制不可避免，必須用自家 trigger / label / helper text / error state / surrounding layout 包起來
-- 例外必須屬於 platform bridge 類型，例如：
-  - `input[type=file]` 觸發檔案選擇
-  - browser / OS 提供的 picker surface
-  - 無法完全自繪的安全權限 prompt
+- All user-visible interactive UI must be rendered with `@/components/ui/*` or feature-local wrapper
+- Do not use browser default styles `button`, `input`, `select`, `textarea`, `dialog` directly as the final product UI
+- If platform native control is unavoidable, it must be wrapped with your own trigger / label / helper text / error state / surrounding layout
+- The exception must be of type platform bridge, for example:
+- `input[type=file]` trigger file selection
+- picker surface provided by browser/OS
+- Security permission prompt that cannot be fully self-drawn
 
 <Aside type="caution" title="Native controls are implementation detail, not product surface">
 
-原生控制可以是橋接機制，但不應直接成為使用者看到的最終互動樣式。
-若不得不用原生控制，產品仍必須提供一致的外框、標籤、狀態提示、錯誤訊息與操作入口。
+Native controls can be bridging mechanisms, but they should not directly become the final interaction style seen by users.
+If native control has to be used, the product must still provide consistent frames, labels, status prompts, error messages, and operation entrances.
 
 </Aside>
 
 ## Interaction Rules
 
-- 優先使用 `@/components/ui` 的 Button、Input、Select、Dialog、Tabs、Table 等封裝
-- 禁止使用 `alert()`、`confirm()`、`prompt()`
-- 表單要搭配 Label、validation、error state
-- destructive action 必須有確認流程
-- 所有可點擊 icon 必須提供明確 hover state；至少要有 cursor feedback 與可見的 hover 樣式變化
-- data-dense table 必須支援 sorting、filtering、pagination 或明確的 virtualization 策略
+- Give priority to using `@/components/ui`'s Button, Input, Select, Dialog, Tabs, Table and other packages
+- Use of `alert()`, `confirm()`, `prompt()` is prohibited
+- The form must be matched with Label, validation, and error state
+- Destructive action must have a confirmation process
+- All clickable icons must provide explicit hover state; at least cursor feedback and visible hover style changes
+- data-dense table must support sorting, filtering, pagination or explicit virtualization strategy
 
 <Aside type="caution" title="Confirmation rule">
 
-destructive action 不能退化成 browser-native `confirm()`。產品互動必須保留一致的語意、樣式與 error handling surface。
+Destructive action cannot degenerate into browser-native `confirm()`. Product interactions must retain consistent semantics, style, and error handling surfaces.
 
 </Aside>
 
 ## Data Browser Contract
 
-- 列表先載入 summary rows
-- 詳細 payload 僅在 row selection 或 detail panel 時抓取
-- 不要因為單純切頁就重抓大型 payload
+- The list loads summary rows first
+- Detailed payload is only captured when row selection or detail panel
+- Don’t re-catch large payloads just because you cut the page
 
 ## Copy Density Contract
 
-- 元件與卡片應優先靠標題、status、metadata 與 action hierarchy 自我說明
-- helper text 僅在風險高、歧義高或表單輸入需要額外說明時出現
-- empty / loading / error state 應簡短直接，不應變成一大段說明牆
-- shell、sidebar、header 與 login entry 尤其應避免多餘文字
+- Components and cards should be self-explanatory with priority on title, status, metadata and action hierarchy
+- helper text only appears when risk is high, ambiguity is high, or the form input requires additional clarification
+- empty / loading / error state should be short and direct, and should not become a long explanation wall
+- Shell, sidebar, header and login entry should especially avoid redundant text.
 
 ## Anti-overbuild Contract
 
-- page 不應因為「資訊很多比較完整」就增加不必要的卡片、summary 與按鈕
-- duplicated shell context 不屬於 feature page component inventory，例如：
-  - `Runtime Mode`
-  - `Active Workspace`
-  - `Active Dataset`
-  - `Submit Authority`
-  - global queue / worker summary
-- cross-page navigation buttons 必須節制；若不是單一明確下一步，就不應成為常駐 component
-- authority explanation、DTO authoring helper、handoff preview 卡片若不是完成本頁任務必需，應移除或降級
+- The page should not add unnecessary cards, summary and buttons just because "there is a lot of information and it is relatively complete"
+- duplicated shell context does not belong to feature page component inventory, for example:
+ - `Runtime Mode`
+ - `Active Workspace`
+ - `Active Dataset`
+ - `Submit Authority`
+ - global queue / worker summary
+- Cross-page navigation buttons must be moderated; if they are not a single clear next step, they should not become a permanent component
+- Authority explanation, DTO authoring helper, handoff preview cards should be removed or downgraded if they are not necessary to complete the task of this page.
 
 <Aside type="caution" title="Single-task surfaces beat &#x27;complete-looking&#x27; surfaces">
 
-frontend page 正確性的第一原則，是讓使用者能快速完成本頁主任務。
-不要為了看起來完整，就把別的頁面責任、shell context 或 infrastructure explanation 帶進來。
+The first principle of frontend page correctness is to allow users to quickly complete the main task of this page.
+Don't bring in other page responsibilities, shell context, or infrastructure explanation just to look complete.
 
 </Aside>
 
 <Aside type="tip" title="Use copy as support, not scaffolding">
 
-若一個 surface 需要大量文字才能被理解，優先先調整 component hierarchy、grouping 與 layout。
-只有在這些都不足時，再加入精簡的輔助文案。
+If a surface requires a lot of text to be understood, adjust the component hierarchy, grouping and layout first.
+Only when these are insufficient, add streamlined auxiliary copy.
 
 </Aside>
 

@@ -1,30 +1,32 @@
 ---
 aliases:
 - Extending Research Tools
-- 擴展研究工具
+- Expanded research tools
 tags:
 - audience/team
 status: draft
 owner: docs-team
 audience: team
-scope: 擴展 Julia Core、Analysis Bridge 與 research helper 的工作流
+scope: Extend workflows for Julia Core, Analysis Bridge and research helpers
 version: v0.1.0
 last_updated: 2026-01-12
 updated_by: docs-team
 sidebar:
-  label: Overview
-  order: 10
+ label: Overview
+ order: 10
 ---
 
 # Extending Research Tools
 
-本區整理如何擴展研究主線的 reusable code：Julia Core、Visualizer、Analysis Bridge 與 Python Analysis Core。
+This section organizes how to extend the reusable code of the main research line: Julia Core, Visualizer, Analysis Bridge and Python Analysis Core.
 
 ## Guides
 
-- [Extend Julia Functions](extend-julia-functions.mdx) - 新增 Julia Core research helper 或 simulation utility
+- [Extend Julia Functions](extend-julia-functions.mdx) - Added Julia Core research helper or simulation utility
+- [Promote Pluto Prototype To Reusable Core](promote-pluto-prototype-to-reusable-core.md) - Convert notebook prototype turn into reusable component, plan builder, package helper or tested analysis code
 
 ## Related
 
-- [Research Stack](../../concepts/research-stack/index.md) - 理解研究主線分層
-- [Guardrails](../../reference/guardrails/index.mdx) - 開發規範
+- [Reusable Circuit Design](../../start/reusable-circuit-design.md) - Start Here of reusable circuit mental model
+- [Research Stack](../../concepts/research-stack/index.md) - Understand the research main line layering
+- [Guardrails](../../reference/guardrails/index.mdx) - Development specifications

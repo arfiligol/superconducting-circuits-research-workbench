@@ -1,12 +1,12 @@
 ---
 aliases:
-  - Simulation Interface Boundaries
-  - Pluto vs Application Simulation
+ - Simulation Interface Boundaries
+ - Pluto vs Application Simulation
 tags:
-  - diataxis/reference
-  - audience/contributor
-  - sot/true
-  - topic/architecture
+ - diataxis/reference
+ - audience/contributor
+ - sot/true
+ - topic/architecture
 status: stable
 owner: docs-team
 audience: contributor
@@ -26,9 +26,9 @@ The project has two simulation-facing execution tracks and one data-inspection t
 
 ```text
 Pluto Notebook
-    -> Julia Core
-    -> direct JosephsonCircuits.jl / Julia analysis
-    -> local research outputs
+  -> Julia Core
+  -> direct JosephsonCircuits.jl / Julia analysis
+  -> local research outputs
 ```
 
 Pluto Notebook is the direct Julia Core research interface. It is used to prototype physics, component APIs, sweeps, and analysis logic.
@@ -41,12 +41,12 @@ Pluto outputs are research-local by default. They are not canonical TraceStore r
 
 ```text
 Electron Application / Python Notebook when submitting platform tasks
-    -> Python Backend
-    -> persisted Task
-    -> Julia Runner
-    -> local Zarr staging
-    -> Backend publication
-    -> TraceStore / Result View
+  -> Python Backend
+  -> persisted Task
+  -> Julia Runner
+  -> local Zarr staging
+  -> Backend publication
+  -> TraceStore / Result View
 ```
 
 Application Simulation Workbench is the productized simulation surface. It submits persisted simulation requests and renders published results.
@@ -61,8 +61,8 @@ See [Product Async Contracts](product-async-contracts.md) for the product reques
 
 ```text
 Python Notebook
-    -> direct local/exported/canonical data reads
-    -> Backend APIs for platform state, task submission, metadata, publication, provenance
+  -> direct local/exported/canonical data reads
+  -> Backend APIs for platform state, task submission, metadata, publication, provenance
 ```
 
 Python Notebook is a programmable data-analysis and inspection surface.
@@ -115,10 +115,10 @@ Python Notebook is useful for file inspection, debugging, data repair checks, em
 
 ```text
 Prototype in Pluto
-    -> stabilize Julia Core API
-    -> implement Julia Runner task
-    -> expose Backend request/result contract
-    -> productize in Application Simulation Workbench
+  -> stabilize Julia Core API
+  -> implement Julia Runner task
+  -> expose Backend request/result contract
+  -> productize in Application Simulation Workbench
 ```
 
 This path lets Julia Core, Pluto, and the Application develop together without duplicating compute ownership.
