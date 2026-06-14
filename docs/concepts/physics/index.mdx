@@ -9,10 +9,10 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Overview of the physical knowledge structure of superconducting quantum circuits
-version: v1.0.0
-last_updated: 2026-02-24
-updated_by: team
+scope: Pure physics foundation map for superconducting-circuit research.
+version: v2.0.0
+last_updated: 2026-06-14
+updated_by: codex
 sidebar:
  label: Overview
  order: 10
@@ -20,9 +20,9 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-# Physics Knowledge Architecture (Physics)
+# Physics Foundations
 
-This chapter takes the **physical context** as the main axis to establish a complete knowledge framework of superconducting quantum circuits from basic principles to engineering practice.
+This chapter keeps pure physics foundations separate from workflow-method pages. Use it for superconductivity, Josephson physics, circuit quantization, transmission-line intuition, and measurement physics. Use the other Concepts groups when the page is mainly about a research workflow method such as vector fitting, S/Y/Z trace interpretation, artifact contracts, or pulse-simulation placement.
 
 The opening of each article will be a **Physics question sentence** or **Historical community context**, so that readers can immediately understand the important positioning of this article. The writing skeleton of each page is in order: opening, prior knowledge comparison, physics core (including symbol definition and formula derivation), engineering mapping, limitations and approximations, and cross-document navigation. The content is organized according to the A-I knowledge structure, from shallow to deep, and can be read linearly or cut into at will.
 
@@ -55,11 +55,11 @@ The opening of each article will be a **Physics question sentence** or **Histori
 | Number | Topic | Node Type |
 |------|------|----------|
 | B1 | Lumped vs Distributed | Model |
-| B2 | [Transmission Lines & Modes](coupled-transmission-lines-even-odd-maxwell-mutual.mdx) | Model |
+| B2 | Transmission Lines & Modes | Model |
 | B3 | Impedance, Admittance, Matching | Model |
 | B4 | Scattering Parameters (S-parameters) | Model |
 | B5 | Resonators & Coupling (Q, κ, bandwidth, ringdown) | Model |
-| B6 | [Network Reduction (Kron, port reduction, equivalent circuits)](./schur-complement-kron-reduction/) | Model |
+| B6 | Network Reduction (Kron, port reduction, equivalent circuits) | Model |
 
 ---
 
@@ -153,6 +153,8 @@ The opening of each article will be a **Physics question sentence** or **Histori
 
 ## Related
 
-- [Workflows](../../workflows/index.mdx) — Tool operation, data import and end-to-end process
-- [Reference](../../reference/index.mdx) — contracts, data formats and API entries
-- [Notebook Interface](../../reference/notebooks/index.md) — Pluto and Python notebook role boundary
+- [Workflows](../../workflows/index.mdx) - route procedures and end-to-end process
+- [Equivalent Circuit Modeling](../equivalent-circuit-modeling/index.mdx) - network traces, reduction, fitting, and passivity
+- [Quantum Modeling](../quantum-modeling/index.md) - Hamiltonian and circuit-quantization handoff
+- [Reference](../../reference/index.mdx) - contracts, data formats, and API entries
+- [Notebook Interface](../../reference/notebooks/index.md) - Pluto and Python notebook role boundary

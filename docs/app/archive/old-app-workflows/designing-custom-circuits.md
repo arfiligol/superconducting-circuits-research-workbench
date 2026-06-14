@@ -85,4 +85,4 @@ Can be used directly as a JSON source for Schema Editor:
 
 - [Circuit Netlist](../old-app-contracts/circuit-netlist.mdx)
 - [Schema Editor UI](../../frontend/definition/schema-editor.mdx)
-- [Promote Pluto Prototype To Reusable Core](../../../workflows/research-tools/promote-pluto-prototype-to-reusable-core.md)
+- [Promote Pluto Prototype To Reusable Core](../../../workflows/reusable-circuit-authoring/promote-pluto-prototype-to-reusable-core.md)

@@ -59,7 +59,7 @@ If the answer becomes stable and user-facing, move the contract into Product App
 
 ## Related
 
-- [Prototype Path](../../workflows/research-tools/promote-pluto-prototype-to-reusable-core.md)
+- [Prototype Path](../../workflows/reusable-circuit-authoring/promote-pluto-prototype-to-reusable-core.md)
 - [Notebook Interface](../../reference/notebooks/index.md)
 - [Python Core](../../reference/core/python-core.mdx)
 - [Application Authoring Map](../application-authoring.md)

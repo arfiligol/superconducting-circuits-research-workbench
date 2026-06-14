@@ -9,9 +9,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: Julia-native core, visualizer, and runner package reference surface.
-version: v0.7.0
-last_updated: 2026-05-30
+scope: Julia-native core, visualizer, runner, and analysis bridge package reference surface.
+version: v0.8.0
+last_updated: 2026-06-14
 updated_by: codex
 ---
 
@@ -43,6 +43,8 @@ Julia Visualizer owns Pluto-facing PlotlyJS figures from real `HBSolveResult` tr
 Julia Runner owns asynchronous compute execution and staged result packages.
 Julia Analysis Bridge owns Pluto-friendly PythonCall wrappers around Python-owned fitting in `core/python/analysis/superconducting_circuits_analysis`.
 Product publication and provenance ownership stay outside Julia packages.
+
+Julia Core must not absorb downstream analysis stacks. It does not depend on scqubits, QuTiP, QuantumToolbox.jl, QuantumOptics.jl, gdsfactory, gsim, gplugins, qpdk, PythonCall, or notebook-only analysis libraries. Those tools belong to Python notebooks, Python Analysis Core, future separate quantum packages, or upstream ecosystem workflows.
 
 </Aside>
 
@@ -117,3 +119,4 @@ Product publication and provenance ownership stay outside Julia packages.
 - [Julia Visualizer](../julia-visualizer/index.mdx)
 - [Julia Compute Boundary](julia-wrapper.md)
 - [Notebook Interface](../notebooks/index.md)
+- [Quantum Model Boundary](../research-contracts/quantum-model-boundary.md)

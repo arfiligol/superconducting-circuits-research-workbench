@@ -53,6 +53,6 @@ You can write the prototype first in the Notebook cell, but don't let the notebo
 
 ## What To Learn Next
 
-- [Promote Pluto Prototype To Reusable Core](../workflows/research-tools/promote-pluto-prototype-to-reusable-core.md) - Convergence notebook idea into reusable Julia Core / component library work.
+- [Promote Pluto Prototype To Reusable Core](../workflows/reusable-circuit-authoring/promote-pluto-prototype-to-reusable-core.md) - Convergence notebook idea into reusable Julia Core / component library work.
 - [Circuit Authoring Model](../concepts/circuit-authoring-model/index.md) - Understand the conceptual division of labor between reusable components, systems, plan builders and compilers.
 - [Component Libraries](../reference/julia-core/component-libraries.md) - See reusable component library of reference contract.

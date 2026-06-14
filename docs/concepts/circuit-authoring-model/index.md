@@ -37,5 +37,5 @@ The core concept is: researchers first quickly explore in Pluto, but stable and 
 ## Related
 
 - [Reusable Circuit Design](../../start/reusable-circuit-design.md)
-- [Circuit Authoring & Reuse](../../workflows/circuit-authoring/index.md)
+- [Reusable Circuit Authoring](../../workflows/reusable-circuit-authoring/index.md)
 - [Julia Core Reference](../../reference/julia-core/index.mdx)

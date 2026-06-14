@@ -10,11 +10,11 @@ status: stable
 owner: docs-team
 audience: user
 scope: "Shortest student/research onboarding path for launching Pluto and understanding reusable circuit design."
-version: v2.1.0
-last_updated: 2026-06-12
+version: v2.3.0
+last_updated: 2026-06-14
 updated_by: codex
 title: Start Here
-description: The shortest path from a fresh checkout to one working Pluto notebook and the reusable circuit design model.
+description: The shortest path from a fresh checkout to one working Pluto notebook and reusable circuit design.
 sidebar:
  label: Overview
  order: 10
@@ -22,13 +22,12 @@ sidebar:
 
 import { CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
 
-First run through a Pluto notebook, and then understand the most important reusable circuit design model of this repo.
-Start Here only serves research and students getting started, so start with Pluto/Julia Core.
+Start Here is the shortest research-first prototype path through the repo. It only introduces Julia Core + Pluto: first run a Pluto notebook, then understand the reusable circuit design model.
 
 <Steps>
 1. Install a minimal research environment so that Pluto can load local Julia packages.
 2. Run through the first Pluto notebook and confirm that Julia Core, Visualizer and real solver path are available.
-3. Understand reusable circuit design:Component Library -> CircuitPlan -> reusable plan builder -> schematic/export intent -> simulation.
+3. Understand reusable circuit design: Component Library -> CircuitPlan -> reusable plan builder -> schematic/export intent -> simulation.
 </Steps>
 
 <CardGrid>

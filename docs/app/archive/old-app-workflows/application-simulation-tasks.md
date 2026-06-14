@@ -33,6 +33,6 @@ This chapter organizes the operation teaching entrance of "Schema -> Task -> Run
 
 ## Related
 
-- [Promote Pluto Prototype To Reusable Core](../../../workflows/research-tools/promote-pluto-prototype-to-reusable-core.md)
+- [Promote Pluto Prototype To Reusable Core](../../../workflows/reusable-circuit-authoring/promote-pluto-prototype-to-reusable-core.md)
 - [Application Interface](../../application-interface.md)
 - [Julia Runner Compute Plane](../../architecture/contracts/julia-runner-compute-plane.md)

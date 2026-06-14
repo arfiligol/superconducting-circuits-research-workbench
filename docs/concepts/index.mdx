@@ -9,9 +9,9 @@ tags:
 status: stable
 owner: docs-team
 audience: team
-scope: "Concept map for physics, circuit authoring model, and research stack boundaries."
-version: v1.0.0
-last_updated: 2026-06-12
+scope: "Workflow-supporting knowledge base for physics, circuit authoring, equivalent-circuit modeling, quantum modeling, pulse simulation, and GDSFactory-compatible artifacts."
+version: v2.0.0
+last_updated: 2026-06-14
 updated_by: codex
 title: Concepts
 description: Choose this section when you need to understand the model behind the workflows and contracts.
@@ -22,10 +22,13 @@ sidebar:
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-This area answers "why". It focuses on physical concepts, research models of Julia Core/Pluto, and the research boundaries of Python analysis; the formal contract is still subject to the Reference owner pages.
+This area answers "why". It is the workflow knowledge base for the four research routes. Pure physics stays in Physics Foundations; engineering and research-method knowledge lives beside the route it supports. Formal contracts still live in Reference owner pages.
 
 <CardGrid>
- <LinkCard title="Physics" href="./physics/" description="The physics behind superconducting quantum circuits, SQUIDs, transmission lines and resonance fitting." />
-<LinkCard title="Circuit Authoring Model" href="./circuit-authoring-model/" description="reusable components, systems, CircuitPlan and compiler mental model." />
- <LinkCard title="Research Stack" href="./research-stack/" description="Separation of responsibilities for Pluto, Julia Core, Visualizer, Analysis Bridge, Python Analysis Core and Python Notebook." />
+ <LinkCard title="Physics Foundations" href="./physics/" description="Superconducting-circuit principles that support every route." />
+ <LinkCard title="Circuit Authoring Model" href="./circuit-authoring-model/" description="Reusable components, systems, CircuitPlan, and compiler mental model." />
+ <LinkCard title="Equivalent Circuit Modeling" href="./equivalent-circuit-modeling/" description="S/Y/Z traces, poles, residues, vector fitting, passivity, and model-family choice." />
+ <LinkCard title="Quantum Modeling" href="./quantum-modeling/" description="Equivalent-circuit parameters to Hamiltonians, scqubits-style models, and quantization boundaries." />
+ <LinkCard title="Quantum Dynamics & Pulse Simulation" href="./quantum-dynamics-pulse-simulation/" description="Time evolution, open-system simulation, and pulse-level route boundaries." />
+ <LinkCard title="GDSFactory-Compatible Artifacts" href="./gdsfactory-compatible-artifacts/" description="Artifact compatibility with gsim, gplugins, SAX, and JAX-style downstream use." />
 </CardGrid>

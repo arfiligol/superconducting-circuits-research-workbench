@@ -55,7 +55,7 @@ This is also how notebook prototypes become durable. A prototype cell can sketch
 
 ## Related
 
-- [Circuit Authoring & Reuse](../../workflows/circuit-authoring/index.md)
+- [Reusable Circuit Authoring](../../workflows/reusable-circuit-authoring/index.md)
 - [Reusable Circuit Design](../../start/reusable-circuit-design.md)
 - [Authoring Model](../../reference/julia-core/authoring-model.mdx)
 - [Components and Composition](../../reference/julia-core/components-and-composition.mdx)

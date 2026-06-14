@@ -83,4 +83,4 @@ Pluto is the direct research cockpit:
 ## Next Step
 
 - [Reusable Circuit Design](reusable-circuit-design.md) - understand how component libraries, plan builders, `CircuitPlan`, schematic intent, and simulation fit together.
-- [Pluto Examples](../workflows/pluto/pluto-examples.mdx) - continue the numbered notebook learning path.
+- [Pluto Examples](../workflows/reusable-circuit-authoring/pluto-examples.mdx) - continue the numbered notebook learning path.

@@ -37,7 +37,7 @@ Python notebooks may analyze local Zarr, exported data, and CSV/raw files direct
 | Low-level line specs and tuple-netlist helpers | `src/components/` |
 | Simulation and current sweep helpers | `src/simulation/` |
 | Authoring architecture SoT | `docs/reference/julia-core/` |
-| Pluto workflow docs | `docs/workflows/pluto/` |
+| Pluto workflow docs | `docs/workflows/reusable-circuit-authoring/` |
 
 Use from a user-written Pluto notebook after local dev installation:
 
@@ -86,8 +86,8 @@ julia --project=core/julia/SuperconductingCircuitsVisualizer -e 'using Pkg; Pkg.
 
 Pluto is still the direct Julia Core research surface, but the old sandbox notebooks that demonstrated the retired draft/finalize flow have been removed. Use the Pluto how-to pages for the target authoring and sweep workflow:
 
-- [Pluto Authoring Workflow](../../workflows/pluto/authoring-workflow.mdx)
-- [Pluto Parameter Sweep Workflow](../../workflows/pluto/parameter-sweep-workflow.mdx)
+- [Pluto Authoring Workflow](../../workflows/reusable-circuit-authoring/pluto-authoring-workflow.mdx)
+- [Pluto Parameter Sweep Workflow](../../workflows/reusable-circuit-authoring/pluto-parameter-sweep-workflow.mdx)
 
 ## Research Direct Track
 

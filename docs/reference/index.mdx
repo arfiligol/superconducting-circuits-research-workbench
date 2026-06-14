@@ -10,9 +10,9 @@ tags:
 status: draft
 owner: docs-team
 audience: team
-scope: Research-core technical reference index for API reference, core packages, notebooks, utilities, agent skills, guardrails, and contributors.
-version: v0.9.0
-last_updated: 2026-06-12
+scope: Research-core technical reference index for API reference, core packages, notebooks, research contracts, utilities, agent skills, guardrails, and contributors.
+version: v1.0.0
+last_updated: 2026-06-14
 updated_by: codex
 ---
 
@@ -22,7 +22,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 This area is the specification sheet of research-core.
 
-All definitions written in `Reference` should serve Pluto, Julia Core, Python Analysis Core, notebook research surfaces, API reference and file management. The architecture, data contracts, runtime, UI, task lifecycle, and archived workflows of production applications do not belong in this area.
+All definitions written in `Reference` should serve Pluto, Julia Core, Python Analysis Core, notebook research surfaces, research contracts, API reference and file management. The architecture, data contracts, runtime, UI, task lifecycle, and archived workflows of production applications do not belong in this area.
 
 <Aside type="note" title="How to read Reference">
 
@@ -35,6 +35,7 @@ First look at the research owner layers `API Reference`, `Core`, `Julia Core`, a
 | If you want to confirm | Where to look first |
 | --- | --- |
 | Notebook workflow and direct study execution | `Notebook Interface` |
+| External FEM result inputs, equivalent circuit models, and quantum-model boundaries | `Research Contracts` |
 | Core Science Modules, Python Analysis Core and the Julia/Python Boundary | `Core Packages` |
 | Reusable circuit authoring contracts | `Julia Core` |
 | PlotlyJS figure construction contract | `Julia Visualizer` |
@@ -47,6 +48,7 @@ First look at the research owner layers `API Reference`, `Core`, `Julia Core`, a
 | Categories | Core Focus |
 |---|---|
 | [API Reference](api/index.md) | generated Sphinx Python API and Documenter.jl Julia API entrance |
+| [Research Contracts](research-contracts/index.md) | external FEM result ingestion, equivalent circuit model, quantum model, and notebook role contracts |
 | [Notebook Interface](notebooks/index.md) | Pluto / Python notebook roles |
 | [Core](core/index.md) |Python core, Julia wrapper, Julia core and Julia plotting|
 | [Julia Core](julia-core/index.mdx) |reusable circuit authoring, CircuitPlan, components, compiler, simulation intent and schematic intent|

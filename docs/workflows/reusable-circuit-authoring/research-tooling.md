@@ -28,5 +28,5 @@ This section organizes how to extend the reusable code of the main research line
 ## Related
 
 - [Reusable Circuit Design](../../start/reusable-circuit-design.md) - Start Here of reusable circuit mental model
-- [Research Stack](../../concepts/research-stack/index.md) - Understand the research main line layering
+- [Research Stack](../../concepts/gdsfactory-compatible-artifacts/research-stack-boundaries.md) - Understand the research main line layering
 - [Guardrails](../../reference/guardrails/index.mdx) - Development specifications

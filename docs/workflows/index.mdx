@@ -9,9 +9,9 @@ tags:
 status: stable
 owner: docs-team
 audience: user
-scope: "Reader/task-first workflow map for Pluto research, Julia Core authoring/simulation, Python analysis, notebooks, research data, and extension tasks."
-version: v2.0.0
-last_updated: 2026-06-12
+scope: "Route-first workflow map for reusable circuit authoring, FEM-result equivalent-circuit fitting, quantum-model handoff, and dynamics/pulse simulation."
+version: v3.0.0
+last_updated: 2026-06-14
 updated_by: codex
 title: Workflows
 description: Choose this section when you want to complete a task.
@@ -22,14 +22,11 @@ sidebar:
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-This area answers "What should I do?" The first entrance is notebook research; here only research, Julia Core, Pluto, Python Analysis Core and Python Notebook workflow are placed.
+This area answers "What should I do next?" after the Start Here path. Workflows are organized by research route, not by tool, so the reader can see the boundary between circuit prototyping, external-result fitting, quantum-model construction, and pulse-level dynamics.
 
 <CardGrid>
- <LinkCard title="Pluto Research" href="./pluto/" description="Use Pluto authoring, sweep, and numbered example notebooks." />
- <LinkCard title="Julia Core Circuit Authoring" href="./circuit-authoring/" description="Create reusable circuit components, netlist and repeat sections." />
- <LinkCard title="Julia Core Simulation" href="./simulation/" description="Use Julia Core / JosephsonCircuits.jl directly for research simulations." />
- <LinkCard title="Python Analysis Core" href="./analysis-fitting/" description="Use Python Analysis Core and Analysis Bridge to do fitting / derived analysis." />
- <LinkCard title="Python Notebooks" href="./python-notebooks/" description="Use Python notebook for file inspection, analysis sketch and report material organization." />
- <LinkCard title="Research Data & Evidence" href="./research-data/" description="Organize HFSS exports, notebook inputs, figures, and reproducible evidence." />
- <LinkCard title="Extending Research Tools" href="./research-tools/" description="Extend Julia Core, Analysis Bridge, or research helpers." />
+ <LinkCard title="Reusable Circuit Authoring" href="./reusable-circuit-authoring/" description="Prototype circuit performance with Pluto, Julia Core, reusable components, CircuitPlan builders, and JosephsonCircuits.jl responses." />
+ <LinkCard title="FEM Result To Equivalent Circuit" href="./fem-result-to-equivalent-circuit/" description="Normalize external S/Y/Z traces, fit equivalent RLC/RLGC/coupling models, and prepare GDSFactory ecosystem-compatible results." />
+ <LinkCard title="Equivalent Circuit To Quantum Model" href="./equivalent-circuit-to-quantum-model/" description="Turn a reviewed equivalent circuit into scqubits or Hamiltonian inputs without contaminating Julia Core." />
+ <LinkCard title="Quantum Dynamics / Pulse Simulation" href="./quantum-dynamics-pulse-simulation/" description="Use Hamiltonian-level outputs for QuTiP/qutip-qip dynamics and pulse-level studies, with Julia dynamics kept isolated." />
 </CardGrid>

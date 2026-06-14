@@ -233,4 +233,4 @@ A correct visualizer-backed notebook has these observable properties:
 - [Julia Core](../julia-core/index.mdx)
 - [HB Simulation Intent](../julia-core/hb-simulation-intent.mdx)
 - [Runner-Safe API](../julia-core/runner-safe-api.md)
-- [Pluto Examples](../../workflows/pluto/pluto-examples.mdx)
+- [Pluto Examples](../../workflows/reusable-circuit-authoring/pluto-examples.mdx)

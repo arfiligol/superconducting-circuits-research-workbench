@@ -49,32 +49,20 @@ export default defineConfig({
      items: [
       { label: "Overview", slug: "docs/workflows" },
       {
-       label: "Pluto Research",
-       items: [{ autogenerate: { directory: "docs/workflows/pluto" } }],
+       label: "Reusable Circuit Authoring",
+       items: [{ autogenerate: { directory: "docs/workflows/reusable-circuit-authoring" } }],
       },
       {
-       label: "Julia Core Circuit Authoring",
-       items: [{ autogenerate: { directory: "docs/workflows/circuit-authoring" } }],
+       label: "FEM Result To Equivalent Circuit",
+       items: [{ autogenerate: { directory: "docs/workflows/fem-result-to-equivalent-circuit" } }],
       },
       {
-       label: "Julia Core Simulation",
-       items: [{ autogenerate: { directory: "docs/workflows/simulation" } }],
+       label: "Equivalent Circuit To Quantum Model",
+       items: [{ autogenerate: { directory: "docs/workflows/equivalent-circuit-to-quantum-model" } }],
       },
       {
-       label: "Python Analysis Core",
-       items: [{ autogenerate: { directory: "docs/workflows/analysis-fitting" } }],
-      },
-      {
-       label: "Python Notebooks",
-       items: [{ autogenerate: { directory: "docs/workflows/python-notebooks" } }],
-      },
-      {
-       label: "Research Data & Evidence",
-       items: [{ autogenerate: { directory: "docs/workflows/research-data" } }],
-      },
-      {
-       label: "Extending Research Tools",
-       items: [{ autogenerate: { directory: "docs/workflows/research-tools" } }],
+       label: "Quantum Dynamics / Pulse Simulation",
+       items: [{ autogenerate: { directory: "docs/workflows/quantum-dynamics-pulse-simulation" } }],
       },
      ],
     },
@@ -84,7 +72,7 @@ export default defineConfig({
      items: [
       { label: "Overview", slug: "docs/concepts" },
       {
-       label: "Physics",
+       label: "Physics Foundations",
        items: [{ autogenerate: { directory: "docs/concepts/physics" } }],
       },
       {
@@ -92,8 +80,20 @@ export default defineConfig({
        items: [{ autogenerate: { directory: "docs/concepts/circuit-authoring-model" } }],
       },
       {
-       label: "Research Stack",
-       items: [{ autogenerate: { directory: "docs/concepts/research-stack" } }],
+       label: "Equivalent Circuit Modeling",
+       items: [{ autogenerate: { directory: "docs/concepts/equivalent-circuit-modeling" } }],
+      },
+      {
+       label: "GDSFactory-Compatible Artifacts",
+       items: [{ autogenerate: { directory: "docs/concepts/gdsfactory-compatible-artifacts" } }],
+      },
+      {
+       label: "Quantum Modeling",
+       items: [{ autogenerate: { directory: "docs/concepts/quantum-modeling" } }],
+      },
+      {
+       label: "Quantum Dynamics & Pulse Simulation",
+       items: [{ autogenerate: { directory: "docs/concepts/quantum-dynamics-pulse-simulation" } }],
       },
      ],
     },
@@ -188,6 +188,11 @@ export default defineConfig({
       {
        label: "Notebook Interface",
        items: [{ autogenerate: { directory: "docs/reference/notebooks" } }],
+      },
+      {
+       label: "Research Contracts",
+       collapsed: true,
+       items: [{ autogenerate: { directory: "docs/reference/research-contracts" } }],
       },
       { label: "Utilities", slug: "docs/reference/utilities" },
      ],
