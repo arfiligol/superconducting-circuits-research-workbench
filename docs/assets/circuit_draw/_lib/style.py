@@ -26,7 +26,7 @@ def configure(
     drawing: schemdraw.Drawing,
     *,
     theme: Theme = "light",
-    unit: float = 1.9,
+    unit: float = 3.0,
     fontsize: int = 11,
 ) -> None:
     color = theme_color(theme)

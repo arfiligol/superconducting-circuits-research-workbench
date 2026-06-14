@@ -10,7 +10,7 @@ outputs:
     svg: docs/assets/circuit_draw/physics/coupled_line_ladder_section/diagram.dark.svg
     png: docs/assets/circuit_draw/physics/coupled_line_ladder_section/diagram.dark.png
 owning_docs:
-  - docs/concepts/physics/coupled-transmission-lines-even-odd-maxwell-mutual.mdx
+  - docs/concepts/equivalent-circuit-modeling/coupled-transmission-lines-even-odd-maxwell-mutual.mdx
 julia_core_semantics:
   docs:
     - docs/reference/julia-core/coupling-models.mdx
@@ -19,7 +19,7 @@ julia_core_semantics:
     - core/julia/SuperconductingCircuitsCore/src/components/coupled_window.jl
     - core/julia/SuperconductingCircuitsCore/src/components/transmission_lines.jl
 physical_model_refs:
-  - docs/concepts/physics/coupled-transmission-lines-even-odd-maxwell-mutual.mdx
+  - docs/concepts/equivalent-circuit-modeling/coupled-transmission-lines-even-odd-maxwell-mutual.mdx
 implementation_refs:
   - core/julia/SuperconductingCircuitsCore/src/components/coupled_window.jl
 review:

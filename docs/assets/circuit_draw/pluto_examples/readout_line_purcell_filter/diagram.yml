@@ -10,7 +10,7 @@ outputs:
     svg: docs/assets/circuit_draw/pluto_examples/readout_line_purcell_filter/diagram.dark.svg
     png: docs/assets/circuit_draw/pluto_examples/readout_line_purcell_filter/diagram.dark.png
 owning_docs:
-  - docs/workflows/pluto/pluto-examples.mdx
+  - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
   - notebooks/pluto/04_readout_line_purcell_filter.jl
 julia_core_semantics:
   docs:

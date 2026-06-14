@@ -2,6 +2,7 @@ schema_version: 1
 diagram_id: pluto.grounded_lc_resonator
 title: Grounded LC resonator
 source_path: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/draw.py
+core_export_fixture: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/schematic_export.json
 outputs:
   light:
     svg: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.light.svg
@@ -10,7 +11,7 @@ outputs:
     svg: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.dark.svg
     png: docs/assets/circuit_draw/pluto_examples/grounded_lc_resonator/diagram.dark.png
 owning_docs:
-  - docs/workflows/pluto/pluto-examples.mdx
+  - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
   - notebooks/pluto/00_parallel_lc_resonator.jl
 julia_core_semantics:
   docs:
@@ -20,7 +21,7 @@ julia_core_semantics:
   source_refs:
     - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
 physical_model_refs:
-  - docs/workflows/pluto/pluto-examples.mdx
+  - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
 implementation_refs:
   - notebooks/pluto/00_parallel_lc_resonator.jl
 review:

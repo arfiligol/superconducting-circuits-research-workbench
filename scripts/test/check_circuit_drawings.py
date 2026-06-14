@@ -164,6 +164,13 @@ def _check_manifest(manifest_path: Path, expected_diagram_id: str) -> list[str]:
     if source_path_value and not source_path.exists():
         failures.append(f"source_path does not exist: {source_path_value}")
 
+    core_export_fixture = manifest.get("core_export_fixture")
+    if core_export_fixture is not None:
+        if not isinstance(core_export_fixture, str):
+            failures.append(f"{manifest_rel} core_export_fixture must be a string.")
+        elif not (ROOT / core_export_fixture).exists():
+            failures.append(f"core_export_fixture does not exist: {core_export_fixture}")
+
     output_path_values, output_failures = _manifest_outputs(manifest, manifest_rel)
     failures.extend(output_failures)
     output_paths: dict[str, dict[str, Path]] = {}

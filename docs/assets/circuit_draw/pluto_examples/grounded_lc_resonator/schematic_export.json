@@ -1,0 +1,109 @@
+{
+    "schema_version": 1,
+    "components": [
+        {
+            "label": "resonator",
+            "role": "resonator",
+            "parameters": {
+                "capacitance_f": 5.82e-14,
+                "inductive_branch_kind": "linear",
+                "inductance_h": 2.15e-8
+            },
+            "pins": [
+                "signal"
+            ],
+            "id": "resonator",
+            "component_type": "GroundedLCResonator"
+        }
+    ],
+    "relations": [
+        {
+            "label": "$C_r$",
+            "role": "parallel_lc_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 5.82e-14
+            },
+            "id": "resonator_capacitance",
+            "to": "ground",
+            "from": "signal",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$L_r$",
+            "role": "parallel_lc_inductance",
+            "parameters": {
+                "schematic_kind": "inductor",
+                "inductance": 2.15e-8
+            },
+            "id": "resonator_inductance",
+            "to": "ground",
+            "from": "signal",
+            "relation_type": "terminates",
+            "through": "inductance"
+        }
+    ],
+    "ports": [
+        {
+            "role": "mixed",
+            "port_index": 1,
+            "id": "signal_port",
+            "component": null,
+            "resistance": 50,
+            "endpoint": "signal"
+        }
+    ],
+    "groups": [
+    ],
+    "tracks": [
+    ],
+    "segments": [
+    ],
+    "coupled_spans": [
+    ],
+    "terminals": [
+        {
+            "label": "$P_1$",
+            "kind": "port",
+            "side": "left",
+            "id": "signal_port_terminal",
+            "hints": {
+            },
+            "endpoint": "signal",
+            "track": null
+        }
+    ],
+    "node_labels": [
+        {
+            "label": "signal",
+            "id": "signal_node_label",
+            "hints": {
+            },
+            "target": "signal"
+        }
+    ],
+    "segment_labels": [
+    ],
+    "anchors": [
+    ],
+    "layout_hints": {
+    },
+    "render_hints": {
+        "schemdraw": {
+            "parameters": {
+                "component_id": "resonator",
+                "inductive_branch_kind": "linear",
+                "port_resistance_ohm": 50
+            },
+            "unit_length": 3,
+            "labels": {
+                "c_label": "$C_r$",
+                "resistance_label": "$R_{50}$",
+                "l_label": "$L_r$",
+                "port_label": "$P_1$"
+            },
+            "component_type": "GroundedLCResonator"
+        }
+    }
+}

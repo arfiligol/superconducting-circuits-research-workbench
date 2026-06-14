@@ -1,0 +1,132 @@
+{
+    "schema_version": 1,
+    "components": [
+        {
+            "label": "jpa",
+            "role": "resonator",
+            "parameters": {
+                "capacitance_f": 9.0e-14,
+                "inductive_branch_kind": "josephson",
+                "coupling_capacitance_f": 1.6e-14,
+                "josephson_inductance_h": 7.5e-9
+            },
+            "pins": [
+                "port",
+                "resonator"
+            ],
+            "id": "jpa",
+            "component_type": "CapacitivelyCoupledGroundedLCResonator"
+        }
+    ],
+    "relations": [
+        {
+            "label": "$C_c$",
+            "role": "jpa_coupling_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitive_coupling",
+                "capacitance": 1.6e-14
+            },
+            "id": "jpa_coupling_capacitance",
+            "to": "jpa_resonator",
+            "from": "signal",
+            "relation_type": "couple",
+            "through": "jpa_coupling_capacitance"
+        },
+        {
+            "label": "$C_r$",
+            "role": "jpa_resonator_capacitance",
+            "parameters": {
+                "schematic_kind": "capacitor",
+                "capacitance": 9.0e-14
+            },
+            "id": "jpa_shunt_capacitance",
+            "to": "ground",
+            "from": "jpa_resonator",
+            "relation_type": "terminates",
+            "through": "capacitance"
+        },
+        {
+            "label": "$JJ$",
+            "role": "jpa_josephson_junction",
+            "parameters": {
+                "schematic_kind": "josephson_junction",
+                "josephson_inductance": 7.5e-9
+            },
+            "id": "jpa_junction",
+            "to": "ground",
+            "from": "jpa_resonator",
+            "relation_type": "josephson_junction",
+            "through": "jpa_junction"
+        }
+    ],
+    "ports": [
+        {
+            "role": "signal",
+            "port_index": 1,
+            "id": "signal_port",
+            "component": null,
+            "resistance": 50,
+            "endpoint": "signal"
+        }
+    ],
+    "groups": [
+    ],
+    "tracks": [
+    ],
+    "segments": [
+    ],
+    "coupled_spans": [
+    ],
+    "terminals": [
+        {
+            "label": "$P_1$",
+            "kind": "port",
+            "side": "right",
+            "id": "signal_port_terminal",
+            "hints": {
+            },
+            "endpoint": "signal",
+            "track": null
+        }
+    ],
+    "node_labels": [
+        {
+            "label": "signal",
+            "id": "port_node_label",
+            "hints": {
+            },
+            "target": "signal"
+        },
+        {
+            "label": "jpa_resonator",
+            "id": "resonator_node_label",
+            "hints": {
+            },
+            "target": "jpa_resonator"
+        }
+    ],
+    "segment_labels": [
+    ],
+    "anchors": [
+    ],
+    "layout_hints": {
+    },
+    "render_hints": {
+        "schemdraw": {
+            "parameters": {
+                "component_id": "jpa",
+                "inductive_branch_kind": "josephson",
+                "port_resistance_ohm": 50
+            },
+            "unit_length": 2.55,
+            "labels": {
+                "coupling_label": "$C_c$",
+                "junction_label": "$JJ$",
+                "c_label": "$C_r$",
+                "resistance_label": "$R_{50}$",
+                "port_label": "$P_1$"
+            },
+            "component_type": "CapacitivelyCoupledGroundedLCResonator"
+        }
+    }
+}

@@ -2,6 +2,7 @@ schema_version: 1
 diagram_id: pluto.floating_lc_xy_line
 title: Floating LC with XY line
 source_path: docs/assets/circuit_draw/pluto_examples/floating_lc_xy_line/draw.py
+core_export_fixture: docs/assets/circuit_draw/pluto_examples/floating_lc_xy_line/schematic_export.json
 outputs:
   light:
     svg: docs/assets/circuit_draw/pluto_examples/floating_lc_xy_line/diagram.light.svg
@@ -10,7 +11,7 @@ outputs:
     svg: docs/assets/circuit_draw/pluto_examples/floating_lc_xy_line/diagram.dark.svg
     png: docs/assets/circuit_draw/pluto_examples/floating_lc_xy_line/diagram.dark.png
 owning_docs:
-  - docs/workflows/pluto/pluto-examples.mdx
+  - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
   - notebooks/pluto/02_floating_lc_xy_line.jl
 julia_core_semantics:
   docs:

@@ -10,7 +10,7 @@ outputs:
     svg: docs/assets/circuit_draw/pluto_examples/readout_purcell_hanging_qwr_mtl/diagram.dark.svg
     png: docs/assets/circuit_draw/pluto_examples/readout_purcell_hanging_qwr_mtl/diagram.dark.png
 owning_docs:
-  - docs/workflows/pluto/pluto-examples.mdx
+  - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
   - notebooks/pluto/06_readout_purcell_hanging_qwr_mtl.jl
 julia_core_semantics:
   docs:

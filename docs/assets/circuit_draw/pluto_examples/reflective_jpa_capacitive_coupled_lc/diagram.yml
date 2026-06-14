@@ -2,6 +2,7 @@ schema_version: 1
 diagram_id: pluto.reflective_jpa_capacitive_coupled_lc
 title: Reflective JPA capacitively coupled LC
 source_path: docs/assets/circuit_draw/pluto_examples/reflective_jpa_capacitive_coupled_lc/draw.py
+core_export_fixture: docs/assets/circuit_draw/pluto_examples/reflective_jpa_capacitive_coupled_lc/schematic_export.json
 outputs:
   light:
     svg: docs/assets/circuit_draw/pluto_examples/reflective_jpa_capacitive_coupled_lc/diagram.light.svg
@@ -10,7 +11,7 @@ outputs:
     svg: docs/assets/circuit_draw/pluto_examples/reflective_jpa_capacitive_coupled_lc/diagram.dark.svg
     png: docs/assets/circuit_draw/pluto_examples/reflective_jpa_capacitive_coupled_lc/diagram.dark.png
 owning_docs:
-  - docs/workflows/pluto/pluto-examples.mdx
+  - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
   - notebooks/pluto/01_reflective_jpa_capacitive_coupled_lc.jl
 julia_core_semantics:
   docs:
@@ -20,7 +21,7 @@ julia_core_semantics:
   source_refs:
     - core/julia/SuperconductingCircuitsCore/src/examples/pluto_examples.jl
 physical_model_refs:
-  - docs/workflows/pluto/pluto-examples.mdx
+  - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
 implementation_refs:
   - notebooks/pluto/01_reflective_jpa_capacitive_coupled_lc.jl
 review:

@@ -10,7 +10,7 @@ outputs:
     svg: docs/assets/circuit_draw/pluto_examples/transmission_line_circuit_model/diagram.dark.svg
     png: docs/assets/circuit_draw/pluto_examples/transmission_line_circuit_model/diagram.dark.png
 owning_docs:
-  - docs/workflows/pluto/pluto-examples.mdx
+  - docs/workflows/reusable-circuit-authoring/pluto-examples.mdx
   - notebooks/pluto/03_transmission_line_circuit_model.jl
 julia_core_semantics:
   docs:
