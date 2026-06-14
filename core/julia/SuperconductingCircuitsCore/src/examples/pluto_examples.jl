@@ -121,6 +121,69 @@ function _external_two_port!(plan::CircuitPlan; input, output, port_resistance)
     return nothing
 end
 
+function _engineering_relation_label(plan::CircuitPlan, relation_id)
+    selected_id = Symbol(relation_id)
+    for relation in engineering_graph(plan).relations
+        relation.id == selected_id && return relation.label
+    end
+    _validation_error("Missing engineering relation label for '$(selected_id)'.")
+end
+
+function _port_label(port::EngineeringPort)
+    return "\$P_$(port.port_index)\$"
+end
+
+function _port_resistance_label(port::EngineeringPort)
+    isapprox(port.resistance, 50.0) && return raw"$R_{50}$"
+    return "\$R_{$(port.resistance)}\$"
+end
+
+function _schemdraw_schematic!(
+    plan::CircuitPlan;
+    id,
+    component_type,
+    component_id,
+    unit_length,
+    labels,
+    parameters=Dict{Symbol,Any}(),
+    terminals=NamedTuple[],
+    node_labels=NamedTuple[],
+)
+    render_parameters = Dict{Symbol,Any}(:component_id => string(component_id))
+    merge!(render_parameters, Dict{Symbol,Any}(parameters))
+    return schematic!(
+        plan;
+        id=id,
+        render_hints=Dict(
+            :schemdraw => Dict(
+                :component_type => string(component_type),
+                :unit_length => Float64(unit_length),
+                :labels => Dict{Symbol,Any}(labels),
+                :parameters => render_parameters,
+            ),
+        ),
+    ) do intent
+        for terminal in terminals
+            record_schematic_terminal!(
+                intent;
+                id=terminal.id,
+                endpoint=terminal.endpoint,
+                side=terminal.side,
+                kind=haskey(terminal, :kind) ? terminal.kind : :port,
+                label=terminal.label,
+            )
+        end
+        for label in node_labels
+            record_schematic_node_label!(
+                intent;
+                id=label.id,
+                target=label.target,
+                label=label.label,
+            )
+        end
+    end
+end
+
 function build_parallel_lc_resonator_example(;
     id="parallel-lc-resonator-example",
     capacitance=58.2e-15,
@@ -135,13 +198,36 @@ function build_parallel_lc_resonator_example(;
 )
     plan = CircuitPlan(id)
     signal = external_node("signal")
-    external_port!(plan; id=:signal_port, index=1, endpoint=signal, resistance=port_resistance, role=:mixed)
+    signal_port = external_port!(plan; id=:signal_port, index=1, endpoint=signal, resistance=port_resistance, role=:mixed)
     resonator = add_parallel_lc_resonator!(
         plan;
         id="resonator",
         node=signal,
         capacitance=capacitance,
         inductance=inductance,
+    )
+    _schemdraw_schematic!(
+        plan;
+        id=:pluto_00_grounded_lc,
+        component_type=:GroundedLCResonator,
+        component_id=:resonator,
+        unit_length=3.0,
+        labels=Dict(
+            :c_label => _engineering_relation_label(plan, resonator.capacitor.id),
+            :l_label => _engineering_relation_label(plan, resonator.inductor.id),
+            :port_label => _port_label(signal_port),
+            :resistance_label => _port_resistance_label(signal_port),
+        ),
+        parameters=Dict(
+            :inductive_branch_kind => :linear,
+            :port_resistance_ohm => signal_port.resistance,
+        ),
+        terminals=[
+            (id=:signal_port_terminal, endpoint=signal, side=:left, label=_port_label(signal_port)),
+        ],
+        node_labels=[
+            (id=:signal_node_label, target=signal, label="signal"),
+        ],
     )
     _port_hb_intent!(plan; ports=[:signal_port])
     example = _prepare_example(
@@ -174,7 +260,7 @@ function build_reflective_jpa_capacitive_coupled_lc_example(;
     plan = CircuitPlan(id)
     port_node = external_node("signal")
     resonator_node = external_node("jpa_resonator")
-    external_port!(plan; id=:signal_port, index=1, endpoint=port_node, resistance=port_resistance, role=:signal)
+    signal_port = external_port!(plan; id=:signal_port, index=1, endpoint=port_node, resistance=port_resistance, role=:signal)
     jpa = add_reflective_jpa!(
         plan;
         id="jpa",
@@ -183,6 +269,31 @@ function build_reflective_jpa_capacitive_coupled_lc_example(;
         coupling_capacitance=coupling_capacitance,
         resonator_capacitance=resonator_capacitance,
         josephson_inductance=josephson_inductance,
+    )
+    _schemdraw_schematic!(
+        plan;
+        id=:pluto_01_reflective_jpa,
+        component_type=:CapacitivelyCoupledGroundedLCResonator,
+        component_id=:jpa,
+        unit_length=2.55,
+        labels=Dict(
+            :coupling_label => _engineering_relation_label(plan, jpa.coupling_capacitor.id),
+            :c_label => _engineering_relation_label(plan, jpa.shunt_capacitor.id),
+            :junction_label => _engineering_relation_label(plan, jpa.junction.id),
+            :port_label => _port_label(signal_port),
+            :resistance_label => _port_resistance_label(signal_port),
+        ),
+        parameters=Dict(
+            :inductive_branch_kind => :josephson,
+            :port_resistance_ohm => signal_port.resistance,
+        ),
+        terminals=[
+            (id=:signal_port_terminal, endpoint=port_node, side=:right, label=_port_label(signal_port)),
+        ],
+        node_labels=[
+            (id=:port_node_label, target=port_node, label="signal"),
+            (id=:resonator_node_label, target=resonator_node, label="jpa_resonator"),
+        ],
     )
     linear_inductor = isnothing(linear_inductance) ? nothing : shunt_inductor!(
         plan;
@@ -278,7 +389,7 @@ function build_floating_lc_xy_line_example(;
         at=pad1,
         capacitance=c_g1,
         role=:floating_xy_pad_ground_capacitance,
-        label="floating XY Cg1",
+        label=raw"$C_{01}$",
     )
     c_g2_relation = shunt_capacitor!(
         plan;
@@ -286,7 +397,7 @@ function build_floating_lc_xy_line_example(;
         at=pad2,
         capacitance=c_g2,
         role=:floating_xy_pad_ground_capacitance,
-        label="floating XY Cg2",
+        label=raw"$C_{02}$",
     )
     c_q_relation = couple_capacitive!(
         plan;
@@ -295,7 +406,7 @@ function build_floating_lc_xy_line_example(;
         to=pad2,
         capacitance=c_q,
         role=:floating_xy_qubit_capacitance,
-        label="floating XY Cq",
+        label=raw"$C_r$",
     )
     l_q1_relation = series_inductor!(
         plan;
@@ -304,7 +415,7 @@ function build_floating_lc_xy_line_example(;
         to=pad2,
         inductance=l_jun,
         role=:floating_xy_qubit_inductance,
-        label="floating XY Lq1",
+        label=raw"$L_{r,1}$",
     )
     l_q2_relation = series_inductor!(
         plan;
@@ -313,7 +424,7 @@ function build_floating_lc_xy_line_example(;
         to=pad2,
         inductance=l_jun,
         role=:floating_xy_qubit_inductance,
-        label="floating XY Lq2",
+        label=raw"$L_{r,2}$",
     )
     c_xy1_relation = couple_capacitive!(
         plan;
@@ -322,7 +433,7 @@ function build_floating_lc_xy_line_example(;
         to=xy_node,
         capacitance=c_xy1,
         role=:floating_xy_line_coupling,
-        label="floating XY Cxy1",
+        label=raw"$C_{xy,1}$",
     )
     c_xy2_relation = couple_capacitive!(
         plan;
@@ -331,7 +442,60 @@ function build_floating_lc_xy_line_example(;
         to=xy_node,
         capacitance=c_xy2,
         role=:floating_xy_line_coupling,
-        label="floating XY Cxy2",
+        label=raw"$C_{xy,2}$",
+    )
+    record_engineering_component!(
+        plan;
+        id=:floating_lc_xy,
+        display_name="floating_lc_xy",
+        component_type=:FloatingLCXYResonator,
+        role=:resonator,
+        parameters=Dict(
+            :c_g1_f => c_g1,
+            :c_g2_f => c_g2,
+            :c_q_f => c_q,
+            :c_xy1_f => c_xy1,
+            :c_xy2_f => c_xy2,
+            :l_jun_h => l_jun,
+            :inductive_branch_kind => :linear,
+        ),
+        pins=[:pad1, :pad2, :xy],
+    )
+    pad1_port_record = engineering_graph(plan).ports[:pad1_port]
+    pad2_port_record = engineering_graph(plan).ports[:pad2_port]
+    xy_port_record = engineering_graph(plan).ports[:xy_port]
+    _schemdraw_schematic!(
+        plan;
+        id=:pluto_02_floating_lc_xy,
+        component_type=:FloatingLCXYResonator,
+        component_id=:floating_lc_xy,
+        unit_length=2.35,
+        labels=Dict(
+            :c_g1_label => _engineering_relation_label(plan, c_g1_relation.id),
+            :c_g2_label => _engineering_relation_label(plan, c_g2_relation.id),
+            :c_q_label => _engineering_relation_label(plan, c_q_relation.id),
+            :l_q1_label => _engineering_relation_label(plan, l_q1_relation.id),
+            :l_q2_label => _engineering_relation_label(plan, l_q2_relation.id),
+            :c_xy1_label => _engineering_relation_label(plan, c_xy1_relation.id),
+            :c_xy2_label => _engineering_relation_label(plan, c_xy2_relation.id),
+            :pad1_label => _port_label(pad1_port_record),
+            :pad2_label => _port_label(pad2_port_record),
+            :xy_label => raw"$XY$",
+        ),
+        parameters=Dict(
+            :inductive_branch_kind => :linear,
+            :port_resistance_ohm => port_resistance,
+        ),
+        terminals=[
+            (id=:pad1_terminal, endpoint=pad1, side=:left, label=_port_label(pad1_port_record)),
+            (id=:pad2_terminal, endpoint=pad2, side=:left, label=_port_label(pad2_port_record)),
+            (id=:xy_terminal, endpoint=xy_node, side=:right, label=raw"$XY$"),
+        ],
+        node_labels=[
+            (id=:pad1_node_label, target=pad1, label="pad1"),
+            (id=:pad2_node_label, target=pad2, label="pad2"),
+            (id=:xy_node_label, target=xy_node, label="xy_node"),
+        ],
     )
     _port_hb_intent!(plan; ports=[:pad1_port, :pad2_port, :xy_port])
     example = _prepare_example(

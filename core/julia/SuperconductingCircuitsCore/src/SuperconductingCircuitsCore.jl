@@ -1,6 +1,7 @@
 module SuperconductingCircuitsCore
 
 using DataFrames
+using JSON3
 using JosephsonCircuits
 using SHA
 using Statistics
@@ -105,6 +106,9 @@ export record_schematic_anchor!
 export schematic!
 export to_dot
 export to_schematic_export_spec
+export schematic_export_data
+export schematic_export_json
+export write_schematic_export_json
 export @circuit
 export @circuit_component
 export @hbintent

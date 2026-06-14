@@ -248,4 +248,63 @@ end
     @test length(spec.anchors) == 1
     @test spec.layout_hints[:grid] == :aligned_tracks
     @test spec.render_hints[:format] == :renderer_neutral
+
+    data = SCC.schematic_export_data(spec)
+    @test data.schema_version == 1
+    @test only(data.components)["component_type"] == "TestGroundedComponent"
+    @test only(data.ports)["resistance"] == 50.0
+    @test data.render_hints["format"] == "renderer_neutral"
+
+    json = SCC.schematic_export_json(spec)
+    @test occursin("\"schema_version\"", json)
+    @test occursin("\"component_type\": \"TestGroundedComponent\"", json)
+end
+
+@testset "Pluto 00/01/02 schematic exports carry Schemdraw render hints" begin
+    common_kwargs = (
+        point_count=1,
+        optional_hb_kwargs=Dict{Symbol,Any}(:nbatches => 1, :iterations => 1, :ftol => 1e-8),
+    )
+    cases = (
+        (
+            example=build_parallel_lc_resonator_example(; common_kwargs...),
+            component_type="GroundedLCResonator",
+            branch_kind="linear",
+            expected_labels=Set(["\$C_r\$", "\$L_r\$", "\$P_1\$"]),
+        ),
+        (
+            example=build_reflective_jpa_capacitive_coupled_lc_example(;
+                common_kwargs...,
+                pump_current=0.0,
+            ),
+            component_type="CapacitivelyCoupledGroundedLCResonator",
+            branch_kind="josephson",
+            expected_labels=Set(["\$C_c\$", "\$C_r\$", "\$JJ\$", "\$P_1\$"]),
+        ),
+        (
+            example=build_floating_lc_xy_line_example(; common_kwargs...),
+            component_type="FloatingLCXYResonator",
+            branch_kind="linear",
+            expected_labels=Set(["\$C_{01}\$", "\$C_{02}\$", "\$C_r\$", "\$XY\$"]),
+        ),
+    )
+
+    for case in cases
+        spec = SCC.to_schematic_export_spec(case.example.plan)
+        data = SCC.schematic_export_data(spec)
+        schemdraw_hints = data.render_hints["schemdraw"]
+
+        @test schemdraw_hints["component_type"] == case.component_type
+        @test schemdraw_hints["parameters"]["inductive_branch_kind"] == case.branch_kind
+        @test any(component -> component["component_type"] == case.component_type, data.components)
+        @test all(port -> port["resistance"] == 50.0, data.ports)
+        @test !isempty(data.terminals)
+
+        labels = Set(values(schemdraw_hints["labels"]))
+        @test issubset(case.expected_labels, labels)
+
+        json = SCC.schematic_export_json(spec)
+        @test occursin(case.component_type, json)
+        @test occursin(case.branch_kind, json)
+    end
 end

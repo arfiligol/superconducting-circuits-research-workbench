@@ -1053,7 +1053,7 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.8.3+2"
 
 [[deps.SuperconductingCircuitsCore]]
-deps = ["DataFrames", "JosephsonCircuits", "SHA", "Statistics"]
+deps = ["DataFrames", "JSON3", "JosephsonCircuits", "SHA", "Statistics"]
 path = "../SuperconductingCircuitsCore"
 uuid = "b25d36e2-7598-4d7b-9e68-62f725d58ebd"
 version = "0.1.0"

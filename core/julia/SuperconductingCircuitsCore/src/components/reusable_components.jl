@@ -62,7 +62,7 @@ function add_parallel_lc_resonator!(
         at=node,
         capacitance=capacitance,
         role=:parallel_lc_capacitance,
-        label="$(id) C",
+        label=raw"$C_r$",
     )
     inductor = shunt_inductor!(
         plan;
@@ -70,7 +70,20 @@ function add_parallel_lc_resonator!(
         at=node,
         inductance=inductance,
         role=:parallel_lc_inductance,
-        label="$(id) L",
+        label=raw"$L_r$",
+    )
+    record_engineering_component!(
+        plan;
+        id=id,
+        display_name=id,
+        component_type=:GroundedLCResonator,
+        role=:resonator,
+        parameters=Dict(
+            :capacitance_f => capacitance,
+            :inductance_h => inductance,
+            :inductive_branch_kind => :linear,
+        ),
+        pins=[:signal],
     )
     return ParallelLCResonator(string(id), node, capacitor, inductor)
 end
@@ -95,7 +108,7 @@ function add_reflective_jpa!(
         to=resonator_node,
         capacitance=coupling_capacitance,
         role=:jpa_coupling_capacitance,
-        label="$(id) Cc",
+        label=raw"$C_c$",
     )
     capacitance = shunt_capacitor!(
         plan;
@@ -103,7 +116,7 @@ function add_reflective_jpa!(
         at=resonator_node,
         capacitance=resonator_capacitance,
         role=:jpa_resonator_capacitance,
-        label="$(id) C",
+        label=raw"$C_r$",
     )
     junction = josephson_junction!(
         plan;
@@ -112,7 +125,21 @@ function add_reflective_jpa!(
         to=ground(),
         josephson_inductance=josephson_inductance,
         role=:jpa_josephson_junction,
-        label="$(id) JJ",
+        label=raw"$JJ$",
+    )
+    record_engineering_component!(
+        plan;
+        id=id,
+        display_name=id,
+        component_type=:CapacitivelyCoupledGroundedLCResonator,
+        role=:resonator,
+        parameters=Dict(
+            :coupling_capacitance_f => coupling_capacitance,
+            :capacitance_f => resonator_capacitance,
+            :josephson_inductance_h => josephson_inductance,
+            :inductive_branch_kind => :josephson,
+        ),
+        pins=[:port, :resonator],
     )
     return ReflectiveJPA(string(id), port_node, resonator_node, coupling, capacitance, junction)
 end

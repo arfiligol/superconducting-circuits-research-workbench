@@ -795,6 +795,72 @@ function to_schematic_export_spec(graph::EngineeringGraph, layout::SchematicLayo
     )
 end
 
+function schematic_export_data(plan)
+    return schematic_export_data(to_schematic_export_spec(plan))
+end
+
+function schematic_export_data(spec::SchematicExportSpec)
+    return (
+        schema_version=1,
+        components=_json_safe(spec.components),
+        relations=_json_safe(spec.relations),
+        ports=_json_safe(spec.ports),
+        groups=_json_safe(spec.groups),
+        tracks=_json_safe(spec.tracks),
+        segments=_json_safe(spec.segments),
+        coupled_spans=_json_safe(spec.coupled_spans),
+        terminals=_json_safe(spec.terminals),
+        node_labels=_json_safe(spec.node_labels),
+        segment_labels=_json_safe(spec.segment_labels),
+        anchors=_json_safe(spec.anchors),
+        layout_hints=_json_safe(spec.layout_hints),
+        render_hints=_json_safe(spec.render_hints),
+    )
+end
+
+function schematic_export_json(target)::String
+    return sprint(JSON3.pretty, schematic_export_data(target)) * "\n"
+end
+
+function write_schematic_export_json(path, target)
+    output_path = string(path)
+    parent = dirname(output_path)
+    isempty(parent) || mkpath(parent)
+    open(output_path, "w") do io
+        write(io, schematic_export_json(target))
+    end
+    return output_path
+end
+
+function _json_safe(value)
+    isnothing(value) && return nothing
+    value isa Bool && return value
+    value isa Number && return value
+    value isa AbstractString && return string(value)
+    value isa Symbol && return string(value)
+    value isa NamedTuple && return _json_safe_named_tuple(value)
+    value isa AbstractDict && return _json_safe_dict(value)
+    value isa AbstractVector && return Any[_json_safe(item) for item in value]
+    value isa Tuple && return Any[_json_safe(item) for item in value]
+    return string(value)
+end
+
+function _json_safe_named_tuple(value::NamedTuple)
+    result = Dict{String,Any}()
+    for key in keys(value)
+        result[string(key)] = _json_safe(getfield(value, key))
+    end
+    return result
+end
+
+function _json_safe_dict(value::AbstractDict)
+    result = Dict{String,Any}()
+    for (key, item) in value
+        result[string(key)] = _json_safe(item)
+    end
+    return result
+end
+
 function _engineering_symbol(value)
     value isa Symbol && return value
     value isa AbstractString && return Symbol(value)
