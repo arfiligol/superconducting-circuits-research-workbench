@@ -88,6 +88,29 @@ result = run_frequency_sweep(compiled, freqs)
 
 This path is appropriate for quick design iteration and plots that update with one selected parameter point.
 
+## Simple Sweep Teaching Pattern
+
+Before introducing a full `SweepSpec`, teach the sweep idea with one explicit axis and one reusable plan builder:
+
+```julia
+base_params = (
+  capacitance_pF = 1.0,
+  impedance_ohm = 50.0,
+)
+
+inductance_nH = 5.0:1.0:15.0
+
+results = map(inductance_nH) do L_nH
+  params = merge(base_params, (inductance_nH = L_nH,))
+  plan = build_plan(params)
+  validate_authoring(plan)
+  compiled = compile_to_josephson(plan)
+  run_frequency_sweep(compiled, freqs)
+end
+```
+
+This pattern is useful for teaching how parameter values affect the response, but reusable notebooks should still move large, multi-axis, or repeated sweeps into the explicit `SweepSpec` path below.
+
 ## Explicit Batch Sweep
 
 Batch sweeps should use a `SweepSpec`, a compile policy, and an executor.

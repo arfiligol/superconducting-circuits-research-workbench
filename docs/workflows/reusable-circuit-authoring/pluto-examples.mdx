@@ -66,6 +66,22 @@ local teaching fixture or reusable component-library builder
 
 Pluto is the direct Julia research cockpit. It can build, inspect, solve, and plot local research results. It should keep execution explicit inside the notebook kernel.
 
+## Smallest Circuit Check
+
+The first example is a grounded LC resonator. It gives readers a compact physics check before they move into reusable builders, response extraction, and larger circuit families.
+
+The expected resonance estimate is:
+
+$$f_0 = \frac{1}{2\pi\sqrt{LC}}$$
+
+| L (nH) | C (pF) | Estimated $f_0$ (GHz) |
+| --- | --- | --- |
+| 10 | 1.0 | 1.59 |
+| 5 | 1.0 | 2.25 |
+| 10 | 0.5 | 2.25 |
+
+Use this table only as a sanity check. The notebook result must still come from the Julia Core solver path and the extracted response traces.
+
 ## Learning Path
 
 | Notebook | Circuit diagram | Teaching responsibility | Main inspection surface |
@@ -194,4 +210,4 @@ A notebook that claims to be executable should end with the real Julia Core solv
 - [Julia Visualizer PlotlyJS Figures](../../reference/julia-visualizer/plotlyjs-figures.md)
 - [JosephsonCircuits hbsolve Controls](../../reference/julia-core/josephsoncircuits-hbsolve-controls.mdx)
 - [Runner-Safe API](../../reference/julia-core/runner-safe-api.md)
-- [Pluto Authoring Workflow](authoring-workflow.mdx)
+- [Pluto Authoring Workflow](pluto-authoring-workflow.mdx)

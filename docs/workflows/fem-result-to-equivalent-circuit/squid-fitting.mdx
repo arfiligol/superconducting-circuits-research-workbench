@@ -35,6 +35,45 @@ Reusable fitting belongs to Python Analysis Core; exploratory setup belongs in P
 
 ---
 
+## Workflow
+
+```mermaid
+flowchart LR
+  HFSS["HFSS Export"] --> Files["Local Research Files"]
+  Files --> Inspect["Notebook Inspection"]
+  Inspect --> Fit["Python Analysis Core Fit"]
+  Fit --> Result["Figures + Derived Parameters"]
+```
+
+## Prepare HFSS Data
+
+Export only the traces needed by the fitting study:
+
+- admittance files for Im(Y) resonance extraction;
+- scattering files for S-parameter phase or magnitude inspection;
+- enough frequency range to cover the expected modes.
+
+Keep exported files in a local import directory, for example:
+
+```text
+data/import/hfss/LJPAL658_v1/
+```
+
+## Inspect Data
+
+Load the files in a Pluto or Python notebook. Keep source paths, units, and axis conventions next to the analysis cells.
+
+Verify:
+
+- trace family;
+- axes and units;
+- frequency span and resonance coverage;
+- representation: real/imaginary, magnitude/phase, or complex values.
+
+Move to fitting only after the trace family, port definition, and target resonance window are explicit.
+
+---
+
 ## Select fitting strategy
 
 Choose the appropriate fitting mode based on your circuit design and data characteristics:
@@ -64,7 +103,7 @@ Keep notebook-only glue out of package code; keep reusable fitting functions cov
 
 ---
 
-## Result View
+## Record Results
 
 After the fitting is completed, the study results should be recorded:
 
@@ -72,10 +111,13 @@ After the fitting is completed, the study results should be recorded:
 2. fitting mode and fixed parameters
 3. fitted values and uncertainty/error metrics
 4. plots or tables used in the analysis report
+5. figure generation code and table-generation code needed to reproduce the report evidence
+6. notes on whether the fitting logic stayed notebook-local or was promoted into Python Analysis Core
 
 ---
 
 ## Related references
 
-- [Tutorial: End-to-End Fitting](end-to-end-squid-fitting.mdx)
+- [Research Evidence](research-data-evidence.mdx)
+- [Notebook Interface](../../reference/notebooks/index.md)
 - [Python Core](../../reference/core/python-core.mdx)

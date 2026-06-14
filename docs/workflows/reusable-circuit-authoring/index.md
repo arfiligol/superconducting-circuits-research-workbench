@@ -21,7 +21,7 @@ sidebar:
 
 # Reusable Circuit Authoring
 
-This route answers "How do I turn a circuit idea into reusable research code?" It is the Start Here route in full detail: Pluto is the research surface, Julia Core owns reusable component and plan semantics, and JosephsonCircuits.jl provides the circuit-response solve path.
+This route answers "How do I turn a circuit idea into reusable research code?" It is the Start Here route in full detail: Pluto is the direct research cockpit, Julia Core owns reusable component and plan semantics, and JosephsonCircuits.jl provides the circuit-response solve path.
 
 ```text
 Pluto Notebook
@@ -35,13 +35,24 @@ Pluto Notebook
 
 | Page | Use it when |
 | --- | --- |
-| [Pluto Research](pluto-research.md) | You need the notebook-first research lane and its boundaries. |
+| [Authoring Workflow](pluto-authoring-workflow.mdx) | You need to build, inspect, validate, compile, and run one reusable `CircuitPlan` from Pluto. |
+| [Parameter Sweep Workflow](pluto-parameter-sweep-workflow.mdx) | You need explicit batch sweeps after a single-point Pluto path is validated. |
 | [Pluto Examples](pluto-examples.mdx) | You want to continue through the numbered Pluto examples. |
-| [LC Resonator](lc-resonator.md) | You need the smallest reusable circuit example. |
-| [Parameter Sweep](parameter-sweep.md) | You need to scan circuit parameters and compare responses. |
-| [JosephsonCircuits Simulation](josephsoncircuits-simulation.md) | You need the solver-facing response path. |
+| [JosephsonCircuits Response Path](josephsoncircuits-simulation.md) | You need the solver-facing response path or direct Julia debugging material. |
 | [Promote Pluto Prototype To Reusable Core](promote-pluto-prototype-to-reusable-core.md) | A notebook idea appears repeatedly and should become reusable Julia Core or component-library code. |
-| [Research Tooling](research-tooling.md) | You need the package-promotion and notebook-support boundary. |
+| [Extend Julia Functions](extend-julia-functions.mdx) | You need to add a Julia Core helper or reusable simulation utility. |
+
+## Owner Map
+
+| Surface | Owns |
+| --- | --- |
+| Pluto Notebook | direct research execution, inspection cells, figures, sweep selection, and notebook-local teaching fixtures |
+| Julia Core | reusable components, plan builders, validation, compilation intent, solver-facing problem construction, and reusable research helpers |
+| Component libraries | lab-specific or device-family builders that assemble reusable Julia Core plans |
+| SuperconductingCircuitsVisualizer | PlotlyJS figures and notebook presentation helpers |
+| Python Analysis Core / Analysis Bridge | reusable analysis routines and selected Python-backed analysis calls, only when the notebook explicitly needs them |
+
+Keep direct notebook research fast and explicit. Promote only repeated, tested, reusable behavior into package code.
 
 ## Related
 

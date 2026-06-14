@@ -40,9 +40,8 @@ external S/Y/Z trace evidence
 | [Python Notebook Ingestion](python-notebook-ingestion.md) | You need Python-native inspection before reusable fitting code exists. |
 | [Resonance Fitting](resonance-fitting.md) | You need compact resonance-parameter extraction from traces. |
 | [SQUID Fitting](squid-fitting.mdx) | You need to fit SQUID circuit parameters. |
-| [End-to-End SQUID Fitting](end-to-end-squid-fitting.mdx) | You need the complete SQUID fitting flow. |
 | [Flux Dependence Analysis](flux-analysis.md) | You need to analyze flux-dependent sweep evidence. |
-| [Research Data & Evidence](research-data-evidence.mdx) | You need provenance and evidence rules for fitted results. |
+| [Research Evidence](research-data-evidence.mdx) | You need provenance and evidence rules for fitted results. |
 
 ## Owner Model
 

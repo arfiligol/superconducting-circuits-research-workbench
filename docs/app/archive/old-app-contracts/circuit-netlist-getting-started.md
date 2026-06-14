@@ -34,5 +34,5 @@ This page provides a minimal Circuit Netlist Source Form mental model. The main 
 ## Related
 
 - [Circuit Netlist Format](circuit-netlist.mdx)
-- [LC Resonator](../../../workflows/reusable-circuit-authoring/lc-resonator.md)
+- [Pluto Examples](../../../workflows/reusable-circuit-authoring/pluto-examples.mdx)
 - [Repeating Circuit Sections](repeating-circuit-sections.md)
