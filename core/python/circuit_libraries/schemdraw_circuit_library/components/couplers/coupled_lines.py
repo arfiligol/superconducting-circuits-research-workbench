@@ -4,7 +4,8 @@ from typing import Any, ClassVar
 
 import schemdraw.elements as elm
 
-from ...theme import Theme, theme_color
+from schemdraw_circuit_library.rendering.preview import PreviewCase, run_preview_cli
+from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
 
 class CoupledLineLadderSection(elm.ElementCompound):
@@ -57,7 +58,7 @@ class CoupledLineLadderSection(elm.ElementCompound):
         gap = self.track_gap
         stub = self.port_stub
         color = theme_color(self.theme)
-        dot_radius = u / 34
+        dot_radius = SCHEMATIC_DOT_RADIUS
         shunt_drop = u * 0.5
         relation_margin = u * 0.18
 
@@ -206,10 +207,30 @@ class CoupledLineLadderSection(elm.ElementCompound):
 
     def _port_dot(self, anchor: tuple[float, float], label: str | None, loc: str) -> None:
         color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=self.unit_length / 34, color=color).at(anchor)
+        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
         if self.show_labels and label is not None:
             dot = dot.label(label, loc=loc, color=color)
         self.add(dot)
+
+
+PREVIEW_CASES: tuple[PreviewCase, ...] = (
+    PreviewCase(
+        "coupled_line_ladder_section",
+        lambda theme, unit_length: CoupledLineLadderSection(
+            component_id="coupled_line_ladder_section",
+            unit_length=unit_length,
+            theme=theme,
+        ),
+    ),
+)
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_preview_cli(module_name="coupled_line_ladder", cases=PREVIEW_CASES, argv=argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 
 __all__ = ["CoupledLineLadderSection"]

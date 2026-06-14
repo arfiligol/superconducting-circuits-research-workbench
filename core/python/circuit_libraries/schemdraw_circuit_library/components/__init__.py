@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from .couplers import CoupledLineLadderSection
 from .lumped import (
+    CapacitivelyCoupledGroundedLCResonator,
+    FloatingLCResonator,
     FloatingLCXYResonator,
     GroundedLCResonator,
-    ReflectiveJPACapacitiveCoupledLC,
+    InductanceLoop,
+    InductanceLoopElementKind,
+    InductiveBranch,
+    InductiveBranchKind,
+    UnsupportedInductiveBranchError,
 )
+from .ports import LabelLocation, Port50Ohm, PortLoadDirection, PortTerminal
 from .transmission_lines import (
     PiSectionChain,
     PointCoupledReadoutPurcell,
@@ -15,13 +22,23 @@ from .transmission_lines import (
 )
 
 __all__ = [
+    "CapacitivelyCoupledGroundedLCResonator",
     "CoupledLineLadderSection",
+    "FloatingLCResonator",
     "FloatingLCXYResonator",
     "GroundedLCResonator",
+    "InductanceLoop",
+    "InductanceLoopElementKind",
+    "InductiveBranch",
+    "InductiveBranchKind",
+    "LabelLocation",
     "PiSectionChain",
     "PointCoupledReadoutPurcell",
+    "Port50Ohm",
+    "PortLoadDirection",
+    "PortTerminal",
     "ReadoutLineHangingQWRMTL",
     "ReadoutPurcellHangingQWRMTL",
-    "ReflectiveJPACapacitiveCoupledLC",
     "TransmissionLineSegment",
+    "UnsupportedInductiveBranchError",
 ]

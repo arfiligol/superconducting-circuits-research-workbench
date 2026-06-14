@@ -4,7 +4,8 @@ from typing import Any, ClassVar
 
 import schemdraw.elements as elm
 
-from ...theme import Theme, theme_color
+from schemdraw_circuit_library.rendering.preview import PreviewCase, run_preview_cli
+from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
 
 class PointCoupledReadoutPurcell(elm.ElementCompound):
@@ -52,13 +53,12 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
         super().__init__(**kwargs)
 
     def setup(self) -> None:
-        u = self.unit_length
         line = self.line_length
         filter_len = self.filter_length
         gap = self.track_gap
         stub = self.port_stub
         color = theme_color(self.theme)
-        dot_radius = u / 34
+        dot_radius = SCHEMATIC_DOT_RADIUS
 
         filter_x0 = line
         output_x0 = filter_x0 + filter_len
@@ -147,7 +147,7 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
 
     def _port_dot(self, anchor: tuple[float, float], label: str | None, loc: str) -> None:
         color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=self.unit_length / 34, color=color).at(anchor)
+        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
         if self.show_labels and label is not None:
             dot = dot.label(label, loc=loc, color=color)
         self.add(dot)
@@ -157,7 +157,7 @@ class PointCoupledReadoutPurcell(elm.ElementCompound):
             self.add(
                 elm.Dot(
                     open=True,
-                    radius=self.unit_length / 38,
+                    radius=SCHEMATIC_DOT_RADIUS,
                     color=theme_color(self.theme),
                 ).at(anchor)
             )
@@ -217,7 +217,7 @@ class ReadoutLineHangingQWRMTL(elm.ElementCompound):
         win1 = self.window_start + self.window_length
         stub = self.port_stub
         color = theme_color(self.theme)
-        dot_radius = u / 34
+        dot_radius = SCHEMATIC_DOT_RADIUS
         relation_margin = u * 0.16
 
         A = {
@@ -300,7 +300,7 @@ class ReadoutLineHangingQWRMTL(elm.ElementCompound):
 
     def _port_dot(self, anchor: tuple[float, float], label: str | None, loc: str) -> None:
         color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=self.unit_length / 34, color=color).at(anchor)
+        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
         if self.show_labels and label is not None:
             dot = dot.label(label, loc=loc, color=color)
         self.add(dot)
@@ -412,7 +412,7 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
         qwr_gap = self.qwr_gap
         stub = self.port_stub
         color = theme_color(self.theme)
-        dot_radius = u / 34
+        dot_radius = SCHEMATIC_DOT_RADIUS
         relation_margin = u * 0.16
 
         filter_x0 = line
@@ -534,7 +534,7 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
 
     def _port_dot(self, anchor: tuple[float, float], label: str | None, loc: str) -> None:
         color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=self.unit_length / 34, color=color).at(anchor)
+        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
         if self.show_labels and label is not None:
             dot = dot.label(label, loc=loc, color=color)
         self.add(dot)
@@ -578,6 +578,57 @@ class ReadoutPurcellHangingQWRMTL(elm.ElementCompound):
         if self.show_labels:
             relation = relation.label(label, loc=loc, color=color)
         self.add(relation)
+
+
+PREVIEW_CASES: tuple[PreviewCase, ...] = (
+    PreviewCase(
+        "point_coupled_readout_purcell",
+        lambda theme, unit_length: PointCoupledReadoutPurcell(
+            component_id="point_coupled_readout_purcell",
+            unit_length=unit_length,
+            theme=theme,
+            input_line_label=None,
+            filter_label=None,
+            output_line_label=None,
+            left_port_label=r"$P_1$",
+            right_port_label=r"$P_2$",
+        ),
+    ),
+    PreviewCase(
+        "readout_line_hanging_qwr_mtl",
+        lambda theme, unit_length: ReadoutLineHangingQWRMTL(
+            component_id="readout_line_hanging_qwr_mtl",
+            unit_length=unit_length,
+            theme=theme,
+            readout_label=None,
+            qwr_label=None,
+            left_port_label=r"$P_1$",
+            right_port_label=r"$P_2$",
+        ),
+    ),
+    PreviewCase(
+        "readout_purcell_hanging_qwr_mtl",
+        lambda theme, unit_length: ReadoutPurcellHangingQWRMTL(
+            component_id="readout_purcell_hanging_qwr_mtl",
+            unit_length=unit_length,
+            theme=theme,
+            input_line_label=None,
+            filter_label=None,
+            output_line_label=None,
+            qwr_label=None,
+            left_port_label=r"$P_1$",
+            right_port_label=r"$P_2$",
+        ),
+    ),
+)
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_preview_cli(module_name="transmission_line_systems", cases=PREVIEW_CASES, argv=argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 
 __all__ = [

@@ -12,4 +12,6 @@ components. It does not own circuit semantics or solver behavior.
 
 .. automodule:: schemdraw_circuit_library.metadata
 
+.. automodule:: schemdraw_circuit_library.rendering.preview
+
 .. automodule:: schemdraw_circuit_library.rendering.variants

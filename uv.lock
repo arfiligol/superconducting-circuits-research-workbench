@@ -1538,7 +1538,7 @@ wheels = [
 [[package]]
 name = "schemdraw-circuit-library"
 version = "0.1.0"
-source = { editable = "core/python/circuit_libraries/schemdraw_circuit_library" }
+source = { editable = "core/python/circuit_libraries" }
 dependencies = [
     { name = "schemdraw" },
 ]
@@ -1977,7 +1977,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruff", specifier = ">=0.14.13" },
-    { name = "schemdraw-circuit-library", editable = "core/python/circuit_libraries/schemdraw_circuit_library" },
+    { name = "schemdraw-circuit-library", editable = "core/python/circuit_libraries" },
     { name = "sphinx", specifier = ">=9.1.0" },
 ]
 

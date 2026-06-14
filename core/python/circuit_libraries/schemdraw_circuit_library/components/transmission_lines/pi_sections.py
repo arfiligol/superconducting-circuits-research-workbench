@@ -4,7 +4,8 @@ from typing import Any, ClassVar
 
 import schemdraw.elements as elm
 
-from ...theme import Theme, theme_color
+from schemdraw_circuit_library.rendering.preview import PreviewCase, run_preview_cli
+from schemdraw_circuit_library.theme import SCHEMATIC_DOT_RADIUS, Theme, theme_color
 
 
 class PiSectionChain(elm.ElementCompound):
@@ -67,7 +68,7 @@ class PiSectionChain(elm.ElementCompound):
         dx = self.cap_pair_offset
         split_y = -u * 0.18
         color = theme_color(self.theme)
-        dot_radius = u / 34
+        dot_radius = SCHEMATIC_DOT_RADIUS
 
         A: dict[str, tuple[float, float]] = {
             "start": (-stub, 0),
@@ -133,7 +134,7 @@ class PiSectionChain(elm.ElementCompound):
         loc: str,
     ) -> elm.Element:
         color = theme_color(self.theme)
-        dot = elm.Dot(open=True, radius=self.unit_length / 34, color=color).at(anchor)
+        dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(anchor)
         if self.show_labels and label is not None:
             dot = dot.label(label, loc=loc, color=color)
         return self.add(dot)
@@ -240,7 +241,7 @@ class TransmissionLineSegment(elm.ElementCompound):
         u = self.unit_length
         length = self.length
         color = theme_color(self.theme)
-        dot_radius = u / 34
+        dot_radius = SCHEMATIC_DOT_RADIUS
         ground_drop = u * 0.45
 
         A = {
@@ -289,10 +290,61 @@ class TransmissionLineSegment(elm.ElementCompound):
             self.add(elm.Ground(color=color).at(ground))
             return
         if terminal == "open":
-            dot = elm.Dot(open=True, radius=self.unit_length / 34, color=color).at(node)
+            dot = elm.Dot(open=True, radius=SCHEMATIC_DOT_RADIUS, color=color).at(node)
             if self.show_labels and label is not None:
                 dot = dot.label(label, loc=loc, color=color)
             self.add(dot)
+
+
+PREVIEW_CASES: tuple[PreviewCase, ...] = (
+    PreviewCase(
+        "pi_chain_reduced",
+        lambda theme, unit_length: PiSectionChain(
+            component_id="pi_chain_reduced",
+            n=3,
+            unit_length=unit_length,
+            reduce_capacitance=True,
+            theme=theme,
+            left_port_label=r"$P_1$",
+            right_port_label=r"$P_2$",
+        ),
+    ),
+    PreviewCase(
+        "pi_chain_unreduced",
+        lambda theme, unit_length: PiSectionChain(
+            component_id="pi_chain_unreduced",
+            n=3,
+            unit_length=unit_length,
+            reduce_capacitance=False,
+            theme=theme,
+            left_port_label=r"$P_1$",
+            right_port_label=r"$P_2$",
+        ),
+    ),
+    PreviewCase(
+        "transmission_line_segment",
+        lambda theme, unit_length: TransmissionLineSegment(
+            component_id="segment",
+            unit_length=unit_length,
+            theme=theme,
+            label=r"$Z_0,\ell$",
+            left_label=r"$P_1$",
+            right_label=r"$P_2$",
+        ),
+    ),
+)
+
+
+def main(argv: list[str] | None = None) -> int:
+    return run_preview_cli(
+        module_name="transmission_line_pi_sections",
+        cases=PREVIEW_CASES,
+        argv=argv,
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 
 __all__ = [

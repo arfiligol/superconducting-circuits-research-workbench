@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 
 for relative_path in (
     "core/python/analysis/superconducting_circuits_analysis",
-    "core/python/circuit_libraries/schemdraw_circuit_library",
+    "core/python/circuit_libraries",
 ):
     sys.path.insert(0, str(REPO_ROOT / relative_path))
 

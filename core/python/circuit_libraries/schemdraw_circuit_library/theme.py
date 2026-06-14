@@ -4,6 +4,8 @@ from typing import Literal
 
 type Theme = Literal["light", "dark"]
 
+SCHEMATIC_DOT_RADIUS: float = 0.1
+
 
 def theme_color(theme: Theme) -> str:
     if theme == "light":

@@ -12,7 +12,7 @@ package = false
 [tool.uv.workspace]
 members = [
     "core/python/analysis/superconducting_circuits_analysis",
-    "core/python/circuit_libraries/schemdraw_circuit_library",
+    "core/python/circuit_libraries",
     "app/backend",
     "notebooks/python",
 ]
@@ -30,7 +30,7 @@ extraPaths = [
     "app/backend",
     "core/python",
     "core/python/analysis/superconducting_circuits_analysis",
-    "core/python/circuit_libraries/schemdraw_circuit_library",
+    "core/python/circuit_libraries",
 ]
 # Basic presence checks only, as requested
 reportMissingParameterType = "warning"
