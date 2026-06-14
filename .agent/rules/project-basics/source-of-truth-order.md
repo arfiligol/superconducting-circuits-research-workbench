@@ -4,6 +4,7 @@
   - product persisted payload/schema fields -> `docs/app/data-contracts/*`
   - Julia Core authoring invariants -> `docs/reference/julia-core/*`
   - Julia Core / Runner runtime boundary and package invariants -> `docs/reference/core/*`
+  - circuit research route contracts, external-result contract, equivalent-circuit model contract, quantum-model boundary, notebook role boundaries -> `docs/reference/research-contracts/*`
   - page behavior/layout -> `docs/app/frontend/**/*`
   - notebook workflow behavior -> `docs/reference/notebooks/*`
 - Use `docs/app/architecture/contracts/*` only as owner-boundary and canonical contract registry guidance, not as the primary owner when owner docs already exist.

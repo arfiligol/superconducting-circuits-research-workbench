@@ -42,6 +42,9 @@ First use this page to confirm the product mission and core surface, and then lo
 
 Create a superconducting circuit platform that allows researchers to accomplish the following tasks with clear layering:
 
+- Reusable circuit authoring in Julia Core and Pluto
+- GDSFactory ecosystem-compatible result ingestion and equivalent-circuit fitting
+- Quantum-modeling handoff from equivalent circuits
 - Data Browser
 - Dataset / Trace / Result Browser
 - Task / Execution Center
@@ -59,7 +62,7 @@ The core goal of this product is not to simply rewrite the UI, but to establish 
 - Julia Runner is compute plane, owns simulation, parameter sweep, post-processing, analysis, fitting, derived parameter extraction and result package generation
 - Electron Application is productized data, simulation, and analysis workbench, focuses on Simulation Workbench, Analysis Workbench, dataset, ingestion, trace browsing, Task / Execution Center and ResultView
 - Pluto Notebook is a direct Julia research cockpit that can directly execute Julia Core
-- Python Notebook is Product App prototyping and inspection surface. It can directly read data for temporary analysis, and can also verify Backend/task/ResultView assumptions; if you want to change the platform status, you must use Backend contract
+- Python Notebook is a Python-native research and inspection surface. It can normalize external FEM/simulation results, inspect trace/Touchstone/Zarr payloads, prototype equivalent-circuit fitting, explore scqubits quantum-modeling workflows, run QuTiP/qutip-qip dynamics or pulse studies, and verify Backend/task/ResultView assumptions; if you want to change the platform status, you must use Backend contract
 - user-facing command workflow is no longer a product surface; the repo only retains `scripts/` as dev/build/test/maintenance helpers
 
 ## Interface Workflow Goals
@@ -67,6 +70,10 @@ The core goal of this product is not to simply rewrite the UI, but to establish 
 The project must support the following research workflows, rather than just provide piecemeal tools:
 
 - Use Julia Core directly in Pluto for research-based simulation and analysis
+- Build reusable circuit components and `CircuitPlan` builders in Julia Core after the Pluto prototype is understood
+- Consume upstream FEM/layout/simulation result artifacts as trace tables, Touchstone files, or Zarr packages without making this repo run layout, meshing, or FEM jobs
+- Fit equivalent circuit models from normalized external results and prepare quantum-modeling handoff data
+- Explore scqubits workflows and QuTiP/qutip-qip dynamics or pulse workflows in Python notebooks, and keep Julia dynamics experiments isolated from Julia Core
 - Submit persisted simulation tasks from Application Simulation Workbench
 - Submit persisted analysis / fitting / post-processing tasks from Application Analysis Workbench
 - Inspect local/exported/canonical data files directly from the Python Notebook and call the Backend data/task/result APIs when platform semantics or state modification is required
@@ -116,14 +123,15 @@ The completion condition for rewrite is not "change the screen to Next.js", but 
 | Raw Data / Trace Browser |Browse TraceStore metadata, summary, slice and result lineage|
 | Task / Execution Center |Monitor async Runner task, execution history, Runner runtime summary and publication result handoff|
 | Analysis Workbench | Create analysis / fitting / post-processing request, submit persisted task, and present the results through ResultView |
-| Notebook Interface |Pluto direct research cockpit; Python notebooks for Product App prototyping, data/file inspection, Backend API inspection, migration, emergency analysis|
+| Notebook Interface |Pluto direct research cockpit; Python notebooks for external-result normalization, equivalent-circuit fitting, scqubits modeling, QuTiP/qutip-qip dynamics or pulse experiments, Product App prototyping, data/file inspection, Backend API inspection, migration, emergency analysis|
 
 ### Accepted Data Sources
 
 - circuit simulation traces
-- layout simulation traces (e.g. HFSS/Q3D)
+- upstream layout/FEM simulation result artifacts (e.g. HFSS/Q3D, GDSFactory/gsim-compatible outputs)
 - measurement traces (e.g. VNA)
 - Compatible S/Y/Z matrix traces and their derived analysis results
+- Touchstone files, trace tables, and Zarr packages that can be normalized into the analysis contracts
 
 ### Rewrite Direction
 
@@ -173,7 +181,9 @@ User-facing command workflow has been removed from product surface. Actions that
   - Julia Runner is the async compute plane
   - Electron is the local desktop shell around frontend, backend, and runner
   - Pluto is the direct Julia research cockpit
-  - Python Notebook is a Product App prototyping and inspection surface; it may directly read data files, but platform state changes must go through Backend contracts
+  - Python Notebook is the Python-native lane for external FEM result normalization, trace/Touchstone/Zarr ingestion, equivalent-circuit fitting, scqubits modeling, QuTiP/qutip-qip dynamics or pulse experiments, Product App prototyping, and inspection; it may directly read data files, but platform state changes must go through Backend contracts
+  - GDSFactory ecosystem compatibility means consuming compatible result artifacts, not running layout, meshing, or FEM jobs from this repo
+  - Julia Core stays limited to reusable component/plan semantics, JosephsonCircuits.jl wrapper behavior, simulation intent, and circuit response outputs
   - Application Simulation Workbench submits persisted simulation tasks through Backend and Runner
   - legacy command workflow, retired Python UI runtime, separate queue worker runtime, and Python in-process Julia execution are not active product/runtime surfaces
 - **Core values**:

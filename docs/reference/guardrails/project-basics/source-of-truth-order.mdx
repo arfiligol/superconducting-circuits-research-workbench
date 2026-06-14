@@ -42,6 +42,8 @@ If descriptions of the same ability conflict with each other, the decision shall
    `docs/reference/julia-core/*`
 - Julia Core / Runner runtime boundary and package invariants:
    `docs/reference/core/*`
+- Circuit research route contracts, external-result contract, equivalent-circuit model contract, quantum model boundary, and notebook role boundaries:
+   `docs/reference/research-contracts/*`
 - User-visible Product App page behavior / page layout / interaction flow:
    `docs/app/frontend/**/*`
 - Notebook workflow behavior:
@@ -62,6 +64,7 @@ If descriptions of the same ability conflict with each other, the decision shall
 | `docs/app/data-contracts/*` |product persisted record shape, field semantics, storage payload contract|
 | `docs/reference/julia-core/*` |Julia Core authoring model, Circuit Plan, components, endpoints, compiler, compiled output, Runner-safe API|
 | `docs/reference/core/*` |Julia Core / Runner runtime boundary, installable contract, package-level invariants|
+| `docs/reference/research-contracts/*` |external FEM result contract, equivalent-circuit model contract, quantum-model boundary, notebook roles|
 | `docs/app/frontend/**/*` |page purpose, layout, interaction, acceptance|
 | `docs/reference/notebooks/*` | Notebook research cockpit and inspection workflows |
 | `docs/app/architecture/contracts/*` |owner discovery, contract registry, cross-layer boundary map; must not override owner contract|
@@ -77,6 +80,7 @@ If descriptions of the same ability conflict with each other, the decision shall
 | script / old CLI surface conflicts with app/shared | subject to app/shared or backend/runner owner docs; CLI is no longer a product surface |
 | The data formats are different from the frontend/backend payload examples | Based on the field semantics of data formats, modify the frontend/backend surface |
 | Julia Core / Runner is different from backend/frontend adapter | Repair the adapter first; if the core/runner contract lacks specifications, then fill in the docs and implementation simultaneously |
+| External-result or quantum-modeling route conflicts with App data/runtime docs | Use research contracts for research-route boundaries; use App docs only for productized publication/runtime behavior |
 | architecture registry is different from owner docs | subject to owner docs, repair registry first |
 | product behavior needs an exception | Must be explicitly marked in owner docs and canonical contract registry, not just in the code |
 | Retired behavior conflicts with owner SoT | Owner SoT shall prevail; retired behavior does not constitute a product contract |
@@ -119,6 +123,7 @@ This document does not stand alone. If a cross-layer conflict occurs, the follow
   - product persisted payload/schema fields -> `docs/app/data-contracts/*`
   - Julia Core authoring invariants -> `docs/reference/julia-core/*`
   - Julia Core / Runner runtime boundary and package invariants -> `docs/reference/core/*`
+  - circuit research route contracts, external-result contract, equivalent-circuit model contract, quantum-model boundary, notebook role boundaries -> `docs/reference/research-contracts/*`
   - page behavior/layout -> `docs/app/frontend/**/*`
   - notebook workflow behavior -> `docs/reference/notebooks/*`
 - Use `docs/app/architecture/contracts/*` only as owner-boundary and canonical contract registry guidance, not as the primary owner when owner docs already exist.

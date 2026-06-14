@@ -32,6 +32,7 @@
 - **Julia Core**:
   - `core/julia/SuperconductingCircuitsCore/`
   - docs-defined Julia Core authoring model: reusable components, endpoints, Circuit Plan, validation, compiler concepts, `JosephsonCompiledCircuit`, simulation helpers, and analysis helpers
+  - must not depend on scqubits, QuTiP, QuantumToolbox.jl, QuantumOptics.jl, gdsfactory, gsim, gplugins, qpdk, PythonCall, or notebook-only analysis packages
 - **Julia Runner**:
   - `core/julia/SuperconductingCircuitsRunner/`
   - calls Julia Core for deterministic task execution
@@ -48,10 +49,14 @@
   - no separate queue service
   - Local Mode is not a shell-only product mode; UI-only shell previews are developer tools, not product runtime modes.
 - **Interface boundaries**:
+  - Docs expose four route-first research workflows: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
   - Pluto Notebook is the direct Julia Core research interface.
   - Backend task submission is outside the Pluto Notebook role.
-  - Python Notebook is a Product App prototyping and platform-inspection surface; it may directly read data files, but platform state changes must go through Backend contracts.
+  - Python Notebook is a Python-native research and inspection surface for external FEM result normalization, trace/Touchstone/Zarr ingestion, equivalent-circuit fitting, scqubits modeling, QuTiP/qutip-qip dynamics or pulse experiments, and platform inspection.
   - Python Notebook must not directly call Julia Core or use JuliaCall as normal simulation compute.
+  - Python Notebook may directly read data files, but platform state changes must go through Backend contracts.
+  - GDSFactory ecosystem compatibility means artifact compatibility, not running gdsfactory/gsim/gplugins/qpdk layout or FEM jobs from this repo.
+  - Future quantum modeling belongs in Python notebooks or a future separate Python quantum package, not Backend and not Julia Core.
   - Application Simulation Workbench and Analysis Workbench are first-class and submit persisted async tasks through Python Backend and Julia Runner.
   - Python Backend owns task lifecycle, metadata, publication, TraceStore APIs, and result view APIs.
   - Julia Runner owns async compute execution and local Zarr staging.
@@ -63,7 +68,7 @@
   - no active command-line product surface
 - **Topology**:
   - canonical architecture boundaries are `site/`, `app/backend/`, `app/frontend/`, `app/desktop/`, `core/julia/`, `core/python/analysis/`, `core/python/circuit_libraries/`, `notebooks/`, `scripts/`, and `docs/`
-  - `core/python/circuit_libraries/schemdraw_circuit_library/` owns Python Schemdraw visual components that consume renderer-neutral schematic data; it must not define solver semantics or become an App/Backend runtime dependency
+  - `core/python/circuit_libraries/` is the Schemdraw circuit library project root; `core/python/circuit_libraries/schemdraw_circuit_library/` owns Python Schemdraw visual components that consume renderer-neutral schematic data and must not define solver semantics or become an App/Backend runtime dependency
   - `app/backend/app_backend/domain/runtime_contracts/` owns App Backend tasking, execution, and storage runtime contracts; it must stay framework-agnostic and not import FastAPI, SQLAlchemy, repositories, file I/O, or runner process code
   - `site/` is the Astro public introduction site and Starlight docs host
   - `docs/` is the Astro + Starlight technical documentation source mounted at `/docs/`

@@ -6,7 +6,9 @@
 - Every editable docs page must be overridden by sidebar explicit `slug` or `autogenerate.directory`; hidden pages are prohibited
 - Top-level docs maps should be reader/task-first, not Diataxis-first.
 - Start Here should be a two-step student/research path: first Pluto notebook, then reusable circuit design. Product App belongs in its own top-level group, not the onboarding mainline.
-- Product App should be a top-level reader lane for app contracts and Python Notebook app-prototyping boundaries.
+- Workflows should expose four route-first groups: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
+- Concepts should be a curated workflow knowledge base with compact References sections; use primary sources, official docs, and high-authority superconducting-circuit literature first.
+- Product App should be a top-level reader lane for app contracts and app-specific Python Notebook prototyping boundaries.
 - Start Here, Workflows, Concepts, and non-app Reference are strict research-core lanes; do not place Product App, Backend, Frontend, Desktop, Electron, Schema Editor, ResultView, TraceStore, FastAPI, WebUI, Data Search/Data Management, or Product Async workflow procedures there.
 - Product architecture, Backend publication, UI/schema-editor decisions, data contracts/search/management, old App workflows, and product async material belong under `docs/app/**`; obsolete App-specific tutorials belong under `docs/app/archive/**`.
 - The Overview / Index page only lists real existing page links; IA groups must be clearly marked as groups and cannot be written like independent pages

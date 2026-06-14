@@ -97,10 +97,10 @@ The Overview / Index page is most likely to copy the sidebar structure into the 
 In the Astro + Starlight docs, first-level page maps should serve reader intent:
 
 - `Start Here`: The shortest notebook-first path for new readers, only the two-step onboarding of first Pluto notebook and reusable circuit design.
-- `Workflows`: People who want to complete research tasks; the main line only includes Pluto, Julia Core, Python Analysis Core, Python Notebook, research data/evidence and research tooling.
-- `Concepts`: People who want to understand physics, reusable circuit authoring models and research stack.
-- `Product App`: People who want to see productized workbench, Python Notebook App prototyping, Architecture Contracts, Data Contracts, frontend, backend, desktop, shared contracts.
-- `Reference`: For people looking for research-core stable contracts; not production runtime, data search, backend/frontend/desktop, Schema Editor or ResultView contracts.
+- `Workflows`: People who want to complete research tasks; the first-level workflow groups are Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
+- `Concepts`: People who want the workflow knowledge base: pure physics foundations, reusable circuit authoring model, S/Y/Z and equivalent-circuit modeling, quantum modeling, dynamics/pulse concepts, and GDSFactory-compatible artifact boundaries.
+- `Product App`: People who want to see productized workbench, app-specific Python Notebook prototyping, Architecture Contracts, Data Contracts, frontend, backend, desktop, shared contracts.
+- `Reference`: For people looking for research-core stable contracts, including external result, equivalent circuit, quantum model, and notebook role boundaries; not production runtime, data search, backend/frontend/desktop, Schema Editor or ResultView contracts.
 - `Contribute & Govern`: People who want to contribute, review or execute the agent workflow.
 
 <Tabs>
@@ -167,7 +167,9 @@ Readers should be able to distinguish:
 - Every editable docs page must be overridden by sidebar explicit `slug` or `autogenerate.directory`; hidden pages are prohibited
 - Top-level docs maps should be reader/task-first, not Diataxis-first.
 - Start Here should be a two-step student/research path: first Pluto notebook, then reusable circuit design. Product App belongs in its own top-level group, not the onboarding mainline.
-- Product App should be a top-level reader lane for app contracts and Python Notebook app-prototyping boundaries.
+- Workflows should expose four route-first groups: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
+- Concepts should be a curated workflow knowledge base with compact References sections; use primary sources, official docs, and high-authority superconducting-circuit literature first.
+- Product App should be a top-level reader lane for app contracts and app-specific Python Notebook prototyping boundaries.
 - Start Here, Workflows, Concepts, and non-app Reference are strict research-core lanes; do not place Product App, Backend, Frontend, Desktop, Electron, Schema Editor, ResultView, TraceStore, FastAPI, WebUI, Data Search/Data Management, or Product Async workflow procedures there.
 - Product architecture, Backend publication, UI/schema-editor decisions, data contracts/search/management, old App workflows, and product async material belong under `docs/app/**`; obsolete App-specific tutorials belong under `docs/app/archive/**`.
 - The Overview / Index page only lists real existing page links; IA groups must be clearly marked as groups and cannot be written like independent pages

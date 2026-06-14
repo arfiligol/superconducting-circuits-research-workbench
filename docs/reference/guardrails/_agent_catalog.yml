@@ -38,7 +38,7 @@ rules:
     load: when_touched
     activation_mode: model_decision
     description: Apply when changing frameworks, dependencies, or tooling.
-    triggers: ["tech stack", "dependency", "dependencies", "framework", "tooling", "astro", "starlight", "next.js", "fastapi", "runner", "julia", "electron", "desktop"]
+    triggers: ["tech stack", "dependency", "dependencies", "framework", "tooling", "astro", "starlight", "next.js", "fastapi", "runner", "julia", "electron", "desktop", "scqubits", "qutip", "qutip-qip", "pulse simulation", "quantumtoolbox", "quantumoptics", "gdsfactory", "gsim", "gplugins", "qpdk", "sax", "jax"]
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "site/**", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "uv.lock"]
 
   - id: folder-structure
@@ -47,7 +47,7 @@ rules:
     load: when_touched
     activation_mode: model_decision
     description: Apply when changing repo layout or module boundaries.
-    triggers: ["folder structure", "directory", "layout", "path", "rename", "move"]
+    triggers: ["folder structure", "directory", "layout", "path", "rename", "move", "research contracts", "external fem", "equivalent circuit", "quantum model", "quantum dynamics", "pulse simulation", "vector fitting", "passivity", "sax", "jax"]
     touched_paths: ["app/frontend/**", "frontend/**", "app/backend/**", "backend/**", "cli/**", "scripts/**", "app/desktop/**", "desktop/**", "core/**", "legacy/**", "src/**", "tests/**", "docs/**"]
 
   - id: code-quality-index
@@ -262,7 +262,7 @@ rules:
     load: when_touched
     activation_mode: model_decision
     description: Apply when writing or restructuring Starlight-native technical documentation.
-    triggers: ["docs", "documentation", "starlight", "astro docs", "style", "native docs", "writing"]
+    triggers: ["docs", "documentation", "starlight", "astro docs", "style", "native docs", "writing", "research routes", "workflow kb", "route-first"]
     touched_paths: ["docs/**", "site/astro.config.mjs", "site/src/content.config.ts", "scripts/build/prepare_starlight_docs.py"]
 
   - id: documentation-api-reference
@@ -280,5 +280,5 @@ rules:
     load: when_touched
     activation_mode: model_decision
     description: Apply when editing overview pages, documentation page maps, or macro-level documentation layout under Style.
-    triggers: ["docs", "documentation", "overview", "index", "page map", "layout", "readability"]
+    triggers: ["docs", "documentation", "overview", "index", "page map", "layout", "readability", "research routes", "workflow kb", "concepts", "vector fitting", "passivity", "pulse simulation"]
     touched_paths: ["docs/**", "site/astro.config.mjs", "site/src/content.config.ts", "scripts/build/prepare_starlight_docs.py"]

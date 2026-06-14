@@ -12,7 +12,7 @@
 - **App Backend runtime contracts** go to `app/backend/app_backend/domain/runtime_contracts/`; they are backend domain contracts and must stay framework-agnostic.
 - **Notebooks** go to `notebooks/pluto/` or `notebooks/python/`.
 - **Pluto notebooks** may directly use `SuperconductingCircuitsCore`.
-- **Python notebooks** are programmable data-analysis and inspection surfaces; they may directly read data files, but platform state changes must go through Backend contracts.
+- **Python notebooks** are Python-native research and inspection surfaces for external FEM result normalization, trace/Touchstone/Zarr ingestion, equivalent-circuit fitting, scqubits modeling, QuTiP/qutip-qip dynamics or pulse experiments, and platform inspection; they may directly read data files, but platform state changes must go through Backend contracts.
 - **Application Simulation Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
 - **Application Analysis Workbench** work goes to `app/frontend/` and depends on Backend task/result APIs.
 - **No user-facing command-line product surface**; helper automation goes to `scripts/dev/`, `scripts/build/`, `scripts/test/`, or `scripts/maintenance/`.
@@ -23,7 +23,9 @@
 - **Starlight docs** are reader/task-first technical docs mounted under `/docs/`; public introduction pages belong to `site/`.
 - **Starlight source layout** uses `docs/start/`, `docs/workflows/`, `docs/concepts/`, `docs/app/`, `docs/reference/`, and `docs/contribute/`; Diataxis stays in metadata, not top-level directories.
 - **Start Here** is notebook-first and should lead with Pluto research setup, not Product App setup.
-- **Workflows and Concepts** are research-core lanes for physics, Pluto, Julia Core, Python Analysis Core, Python Notebook, research data/evidence, reusable authoring model, and research stack boundaries.
+- **Workflows** are route-first lanes: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
+- **Concepts** are a workflow-supporting knowledge base for Physics Foundations, Circuit Authoring Model, Equivalent Circuit Modeling, Quantum Modeling, Quantum Dynamics & Pulse Simulation, and GDSFactory-Compatible Artifacts.
+- **Circuit research route contracts** go to `docs/reference/research-contracts/`.
 - **Product App docs** go to `docs/app/`; do not bury active app contracts under `docs/reference/app/`, `docs/start/`, `docs/workflows/`, or `docs/concepts/`.
 - **Legacy App-specific tutorials** go to `docs/app/archive/` with an explicit legacy-reference notice.
 - **Generated API reference source** goes to `docs/api-reference/`; Sphinx output deploys to `/api/python/` and Documenter.jl output deploys to `/api/julia/`.
@@ -38,7 +40,10 @@
   - Julia Visualizer may depend on PlotlyJS and Julia numeric traces; Julia Core and Julia Runner must not depend on PlotlyJS
   - Julia Analysis Bridge may depend on PythonCall and Python analysis; Julia Core must not depend on PythonCall
   - Python analysis may own fitting and matrix algorithms; Backend must not execute heavy analysis compute in process
+  - Python analysis and Python notebooks may own external-result normalization, equivalent-circuit fitting, Python-native quantum-modeling preparation, and downstream dynamics/pulse experiments outside Julia Core
   - Python notebook clients may use Backend API contracts and direct data-file readers, but not the Julia scientific core as normal compute
+  - Julia Core must not depend on scqubits, QuTiP, QuantumToolbox.jl, QuantumOptics.jl, gdsfactory, gsim, gplugins, qpdk, PythonCall, or notebook-only analysis packages
+  - GDSFactory ecosystem compatibility means consuming compatible result artifacts, not running layout/FEM jobs from this repo
   - Application Simulation Workbench and Analysis Workbench depend on Backend task/result APIs, not Julia Core
   - Julia Runner owns compute execution and staging result packages, not formal metadata DB records
   - Julia Core must stay framework-agnostic

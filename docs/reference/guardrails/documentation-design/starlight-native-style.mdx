@@ -64,13 +64,17 @@ Use standard Markdown and the repo’s configured Starlight features:
 
 The Starlight sidebar is curated at the top and second level. Do not broad-autogenerate first-level groups.
 
-Use manual groups for `Start Here`, `Workflows`, `Concepts`, `Product App`, `Reference`, and `Contribute & Govern`. Within those groups, use selective `autogenerate` for leaf directories such as `docs/workflows/pluto/`, `docs/app/frontend/`, `docs/concepts/physics/`, or `docs/reference/julia-core/`.
+Use manual groups for `Start Here`, `Workflows`, `Concepts`, `Product App`, `Reference`, and `Contribute & Govern`. Within those groups, use selective `autogenerate` for leaf directories such as `docs/workflows/reusable-circuit-authoring/`, `docs/app/frontend/`, `docs/concepts/physics/`, or `docs/reference/julia-core/`.
 
 Every editable docs page must be reachable from the Starlight sidebar. A page is covered only when its route appears as an explicit `slug` or lives under an `autogenerate.directory` in `site/astro.config.mjs`. Do not create hidden pages that can only be reached by in-page links or direct URL input.
 
 `Start Here` is notebook-first and must stay focused on two onboarding steps: run the first Pluto notebook from a fresh checkout, then understand reusable circuit design through Component Library -> reusable plan builder -> `CircuitPlan` -> schematic/export intent -> simulation. Do not add product setup as a third onboarding step until the product lane is explicitly promoted.
 
-`Product App` is a top-level lane for app contracts, Python Notebook app-prototyping boundaries, Architecture Contracts, Data Contracts, frontend, backend, desktop, and shared app semantics.
+The main research docs should expose four route-first workflow groups: Reusable Circuit Authoring; FEM Result To Equivalent Circuit; Equivalent Circuit To Quantum Model; Quantum Dynamics / Pulse Simulation. Route 2 may be Pluto-visible after normalization, but Python notebooks are the Python-native home for scikit-rf-compatible ingestion, scqubits modeling, QuTiP dynamics, and qutip-qip pulse simulation.
+
+`Concepts` is a workflow-supporting knowledge base, not a second workflow tree. Pure physics stays under Physics Foundations. Workflow-method concepts such as S/Y/Z trace views, poles, zeros, residues, rational fitting, passivity, Hamiltonian handoff, pulse-level simulation, and SAX/JAX-compatible artifacts should live under the matching Concepts knowledge-base group and include compact references.
+
+`Product App` is a top-level lane for app contracts, app-specific Python Notebook prototyping boundaries, Architecture Contracts, Data Contracts, frontend, backend, desktop, and shared app semantics.
 
 `Start Here`, `Workflows`, `Concepts`, and non-app `Reference` are strict research-core lanes. Do not put App implementation procedures, Backend publication instructions, Schema Editor workflows, Product Async flow, ResultView behavior, TraceStore operations, Desktop/Electron/Frontend/FastAPI procedures, data search/data management workflows, or WebUI-specific decisions in those lanes. Move that material to `docs/app/**`; keep old App-specific pages under `docs/app/archive/**` with a clear legacy-reference notice.
 
@@ -121,8 +125,10 @@ If the change touches navigation, frontmatter, links, or a new docs page, also c
 - Every editable docs page must be reachable from the sidebar through an explicit `slug` or an `autogenerate.directory`; hidden pages reachable only by URL or in-page links are forbidden.
 - Use `Product App` as a top-level group for `docs/app/**`; do not keep active app contracts under `docs/reference/app/**`.
 - Keep `Start Here` as a two-step student/research onboarding path: first Pluto notebook, then reusable circuit design. Do not make Product App setup the primary onboarding path.
-- Keep `Workflows` and `Concepts` research-core: physics, Pluto, Julia Core, Python Analysis Core, Python Notebook, research data/evidence, reusable authoring model, and research stack boundaries.
-- Keep non-app `Reference` research-core: API landing, core packages, Julia Core, Julia Visualizer, notebook research interface, utilities, agent skills, contributors, and guardrails. Product architecture/data/search/runtime/UI contracts belong under `docs/app/**`.
+- Keep `Workflows` route-first: Reusable Circuit Authoring, FEM Result To Equivalent Circuit, Equivalent Circuit To Quantum Model, and Quantum Dynamics / Pulse Simulation.
+- Keep `Concepts` as a workflow-supporting knowledge base: Physics Foundations, Circuit Authoring Model, Equivalent Circuit Modeling, Quantum Modeling, Quantum Dynamics & Pulse Simulation, and GDSFactory-Compatible Artifacts.
+- Prefer primary sources, official docs, and high-authority superconducting-circuit literature for Concepts references; keep each References section compact and relevant.
+- Keep non-app `Reference` research-core: API landing, core packages, Julia Core, Julia Visualizer, research contracts, notebook research interface, utilities, agent skills, contributors, and guardrails. Product architecture/data/search/runtime/UI contracts belong under `docs/app/**`.
 - Move Product App, Backend, Frontend, Desktop, Electron, Schema Editor, ResultView, TraceStore, FastAPI, WebUI, Product Async, Data Search/Data Management, and old App workflow procedures to `docs/app/**`; archive superseded App-specific tutorials under `docs/app/archive/**`.
 - Add `sidebar.label` and `sidebar.order` to autogenerated children so labels are human-readable and order is intentional.
 - Use MDX when Starlight components materially improve a landing/page-map, workflow, reference, or optional-detail experience.
